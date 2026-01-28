@@ -6,7 +6,7 @@ import { Effect, pipe } from "effect"
 
 import type { ProjectConfig, TemplateConfig } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
-import { runDockerComposePs } from "../shell/docker.js"
+import { runDockerComposePsFormatted } from "../shell/docker.js"
 import type { ConfigDecodeError, ConfigNotFoundError, DockerCommandError } from "../shell/errors.js"
 import { resolveBaseDir } from "../shell/paths.js"
 import { renderError } from "./errors.js"
@@ -34,6 +34,13 @@ type ProjectSummary = {
 type ProjectStatus = {
   readonly projectDir: string
   readonly config: ProjectConfig
+}
+
+type ComposePsRow = {
+  readonly name: string
+  readonly status: string
+  readonly ports: string
+  readonly image: string
 }
 
 const isDockerGitConfig = (entry: string): boolean => entry.endsWith("docker-git.json")
@@ -107,8 +114,48 @@ const renderProjectSummary = (summary: ProjectSummary): string =>
     summary.sshCommand
   )
 
-const renderProjectStatusHeader = (status: ProjectStatus): string =>
-  `Project: ${status.projectDir} (container: ${status.config.template.containerName})`
+const renderProjectStatusHeader = (status: ProjectStatus): string => `Project: ${status.projectDir}`
+
+const normalizeCell = (value: string | undefined): string => value?.trim() ?? "-"
+
+const parseComposeLine = (line: string): ComposePsRow => {
+  const [name, status, ports, image] = line.split("\t")
+  return {
+    name: normalizeCell(name),
+    status: normalizeCell(status),
+    ports: normalizeCell(ports),
+    image: normalizeCell(image)
+  }
+}
+
+const parseComposePsOutput = (raw: string): ReadonlyArray<ComposePsRow> => {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0)
+  return lines.map((line) => parseComposeLine(line))
+}
+
+const padRight = (value: string, width: number): string =>
+  value.length >= width ? value : `${value}${" ".repeat(width - value.length)}`
+
+const formatComposeRows = (entries: ReadonlyArray<ComposePsRow>): string => {
+  if (entries.length === 0) {
+    return "  status: not running"
+  }
+  const nameWidth = Math.min(24, Math.max(...entries.map((row) => row.name.length), "name".length))
+  const statusWidth = Math.min(28, Math.max(...entries.map((row) => row.status.length), "status".length))
+  const portsWidth = Math.min(28, Math.max(...entries.map((row) => row.ports.length), "ports".length))
+  const header = `  ${padRight("name", nameWidth)}  ${padRight("status", statusWidth)}  ${
+    padRight("ports", portsWidth)
+  }  image`
+  const lines = entries.map((row) =>
+    `  ${padRight(row.name, nameWidth)}  ${padRight(row.status, statusWidth)}  ${
+      padRight(row.ports, portsWidth)
+    }  ${row.image}`
+  )
+  return [header, ...lines].join("\n")
+}
 
 type ProjectIndex = {
   readonly projectsRoot: string
@@ -222,9 +269,14 @@ export const listProjectStatus: Effect.Effect<
       yield* _(Effect.log(renderProjectStatusHeader(status)))
       yield* _(Effect.log(`SSH access: ${buildSshCommand(status.config.template, sshKey)}`))
       yield* _(
-        runDockerComposePs(status.projectDir).pipe(
+        runDockerComposePsFormatted(status.projectDir).pipe(
+          Effect.map((raw) => parseComposePsOutput(raw)),
+          Effect.map((rows) => formatComposeRows(rows)),
+          Effect.flatMap((text) => Effect.log(text)),
           Effect.catchAll((error: DockerCommandError | PlatformError) =>
-            Effect.logWarning(`docker compose ps failed for ${status.projectDir}: ${renderError(error)}`)
+            Effect.logWarning(
+              `docker compose ps failed for ${status.projectDir}: ${renderError(error)}`
+            )
           )
         )
       )
