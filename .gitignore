@@ -5,3 +5,7 @@ dev_ssh_key.pub
 
 # Local auth cache
 .orch/
+
+# Local docker-git work dirs
+.docker-git/
+effect-template1/
