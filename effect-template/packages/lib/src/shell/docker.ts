@@ -1,8 +1,10 @@
 import * as Command from "@effect/platform/Command"
-import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import * as CommandExecutor from "@effect/platform/CommandExecutor"
 import { ExitCode } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Effect, pipe } from "effect"
+import * as Chunk from "effect/Chunk"
+import * as Stream from "effect/Stream"
 
 import { runCommandWithExitCodes } from "./command-runner.js"
 import { DockerCommandError } from "./errors.js"
@@ -16,6 +18,41 @@ const runCompose = (
     { cwd, command: "docker", args: ["compose", ...args] },
     okExitCodes,
     (exitCode) => new DockerCommandError({ exitCode })
+  )
+
+const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
+  Chunk.reduce(chunks, new Uint8Array(), (acc, curr) => {
+    const next = new Uint8Array(acc.length + curr.length)
+    next.set(acc)
+    next.set(curr, acc.length)
+    return next
+  })
+
+const runComposeCapture = (
+  cwd: string,
+  args: ReadonlyArray<string>,
+  okExitCodes: ReadonlyArray<number>
+): Effect.Effect<string, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const executor = yield* _(CommandExecutor.CommandExecutor)
+      const command = pipe(
+        Command.make("docker", "compose", ...args),
+        Command.workingDirectory(cwd),
+        Command.stdout("pipe"),
+        Command.stderr("pipe")
+      )
+      const process = yield* _(executor.start(command))
+      const bytes = yield* _(
+        pipe(process.stdout, Stream.runCollect, Effect.map((chunks) => collectUint8Array(chunks)))
+      )
+      const exitCode = yield* _(process.exitCode)
+      const numericExitCode = Number(exitCode)
+      if (!okExitCodes.includes(numericExitCode)) {
+        return yield* _(Effect.fail(new DockerCommandError({ exitCode: numericExitCode })))
+      }
+      return new TextDecoder("utf-8").decode(bytes)
+    })
   )
 
 // CHANGE: run docker compose up -d --build in the target directory
@@ -80,6 +117,25 @@ export const runDockerComposePs = (
   cwd: string
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCompose(cwd, ["ps"], [Number(ExitCode(0))])
+
+// CHANGE: capture docker compose ps output in a parseable format
+// WHY: allow structured, readable status output for CLI
+// QUOTE(ТЗ): "информация отображалиась удобно"
+// REF: user-request-2026-01-28
+// SOURCE: n/a
+// FORMAT THEOREM: forall dir: ps_fmt(dir) -> tabbed_string
+// PURITY: SHELL
+// EFFECT: Effect<string, DockerCommandError | PlatformError, CommandExecutor>
+// INVARIANT: output is tab-delimited columns from docker compose ps
+// COMPLEXITY: O(command)
+export const runDockerComposePsFormatted = (
+  cwd: string
+): Effect.Effect<string, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runComposeCapture(
+    cwd,
+    ["ps", "--format", "{{.Name}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}"],
+    [Number(ExitCode(0))]
+  )
 
 // CHANGE: run docker compose logs in the target directory
 // WHY: allow quick inspection of container output without leaving the menu
