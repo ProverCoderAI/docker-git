@@ -1,0 +1,18 @@
+services:
+  dev:
+    build: .
+    container_name: dev-ssh
+    environment:
+      REPO_URL: "https://github.com/ProverCoderAI/eslint-plugin-suggest-members.git"
+      REPO_REF: "main"
+      TARGET_DIR: "/home/dev/app"
+      CODEX_HOME: "/home/dev/.codex"
+    ports:
+      - "127.0.0.1:2222:22"
+    volumes:
+      - dev_home:/home/dev
+      - ./authorized_keys:/authorized_keys:ro
+      - ./.orch/auth/codex:/home/dev/.codex
+
+volumes:
+  dev_home:

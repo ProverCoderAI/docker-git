@@ -1,0 +1,101 @@
+import type { PlatformError } from "@effect/platform/Error"
+import { formatParseError, type ParseError, usageText } from "../core/domain.js"
+import type {
+  CloneFailedError,
+  ConfigDecodeError,
+  ConfigNotFoundError,
+  DockerCommandError,
+  FileExistsError,
+  InputCancelledError,
+  InputReadError,
+  PortProbeError
+} from "../shell/errors.js"
+
+export type AppError =
+  | ParseError
+  | FileExistsError
+  | CloneFailedError
+  | DockerCommandError
+  | ConfigNotFoundError
+  | ConfigDecodeError
+  | InputCancelledError
+  | InputReadError
+  | PortProbeError
+  | PlatformError
+
+type NonParseError = Exclude<AppError, ParseError>
+
+const isParseError = (error: AppError): error is ParseError =>
+  error._tag === "UnknownCommand" ||
+  error._tag === "UnknownOption" ||
+  error._tag === "MissingOptionValue" ||
+  error._tag === "MissingRequiredOption" ||
+  error._tag === "InvalidOption" ||
+  error._tag === "UnexpectedArgument"
+
+const renderPrimaryError = (error: NonParseError): string | null => {
+  if (error._tag === "FileExistsError") {
+    return `File already exists: ${error.path} (use --force to overwrite)`
+  }
+
+  if (error._tag === "DockerCommandError") {
+    return `docker compose failed with exit code ${error.exitCode}`
+  }
+
+  if (error._tag === "CloneFailedError") {
+    return `Clone failed for ${error.repoUrl} (${error.repoRef}) into ${error.targetDir}`
+  }
+
+  if (error._tag === "PortProbeError") {
+    return `SSH port check failed for ${error.port}: ${error.message}`
+  }
+
+  return null
+}
+
+const renderConfigError = (error: NonParseError): string | null => {
+  if (error._tag === "ConfigNotFoundError") {
+    return `docker-git.json not found: ${error.path} (run docker-git create in that directory)`
+  }
+
+  if (error._tag === "ConfigDecodeError") {
+    return `Invalid docker-git.json at ${error.path}: ${error.message}`
+  }
+
+  return null
+}
+
+const renderInputError = (error: NonParseError): string | null => {
+  if (error._tag === "InputCancelledError") {
+    return "Input cancelled."
+  }
+
+  if (error._tag === "InputReadError") {
+    return `Input error: ${error.message}`
+  }
+
+  return null
+}
+
+const renderNonParseError = (error: NonParseError): string =>
+  renderPrimaryError(error) ?? renderConfigError(error) ?? renderInputError(error) ?? error.message
+
+// CHANGE: render typed application errors into user-facing text
+// WHY: provide deterministic messaging for CLI and menu flows
+// QUOTE(ТЗ): "вижу всю инфу по ним"
+// REF: user-request-2026-01-07
+// SOURCE: n/a
+// FORMAT THEOREM: forall e: render(e) = s -> deterministic(s)
+// PURITY: CORE
+// EFFECT: Effect<string, never, never>
+// INVARIANT: each AppError maps to exactly one message
+// COMPLEXITY: O(1)
+export const renderError = (error: AppError): string => {
+  if (isParseError(error)) {
+    return `${formatParseError(error)}
+
+${usageText}`
+  }
+
+  return renderNonParseError(error)
+}

@@ -1,0 +1,16 @@
+{
+	"threshold": 0,
+	"minTokens": 30,
+	"minLines": 5,
+	"ignore": [
+		"**/node_modules/**",
+		"**/build/**",
+		"**/dist/**",
+		"**/*.min.js",
+		"**/reports/**"
+	],
+	"skipComments": true,
+	"ignorePattern": [
+		"private readonly \\w+: \\w+;\\s*private readonly \\w+: \\w+;\\s*private \\w+: \\w+ \\| null = null;\\s*private \\w+: \\w+ \\| null = null;"
+	]
+}

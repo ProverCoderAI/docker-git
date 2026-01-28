@@ -1,0 +1,21 @@
+services:
+  dg-eslint-plugin-suggest-members:
+    build: .
+    container_name: dg-eslint-plugin-suggest-members
+    environment:
+      REPO_URL: "https://github.com/ProverCoderAI/eslint-plugin-suggest-members.git"
+      REPO_REF: "refs/pull/12/head"
+      TARGET_DIR: "/provercoderai/eslint-plugin-suggest-members"
+      CODEX_HOME: "/home/dev/.codex"
+    env_file:
+      - ./.orch/env/global.env
+      - ./.orch/env/project.env
+    ports:
+      - "127.0.0.1:2222:22"
+    volumes:
+      - dg-eslint-plugin-suggest-members-home:/home/dev
+      - ./authorized_keys:/authorized_keys:ro
+      - ./.orch/auth/codex:/home/dev/.codex
+
+volumes:
+  dg-eslint-plugin-suggest-members-home:

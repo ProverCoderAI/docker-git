@@ -1,0 +1,21 @@
+services:
+  dg-effect-template:
+    build: .
+    container_name: dg-effect-template
+    environment:
+      REPO_URL: "https://github.com/ProverCoderAI/effect-template"
+      REPO_REF: "main"
+      TARGET_DIR: "/provercoderai/effect-template"
+      CODEX_HOME: "/home/dev/.codex"
+    env_file:
+      - ./.orch/env/global.env
+      - ./.orch/env/project.env
+    ports:
+      - "127.0.0.1:2222:22"
+    volumes:
+      - dg-effect-template-home:/home/dev
+      - ./authorized_keys:/authorized_keys:ro
+      - ./.orch/auth/codex:/home/dev/.codex
+
+volumes:
+  dg-effect-template-home:

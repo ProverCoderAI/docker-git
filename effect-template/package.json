@@ -1,0 +1,51 @@
+{
+  "name": "effect-template-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo workspace for effect-template",
+  "packageManager": "pnpm@10.28.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "pnpm --filter @effect-template/app build",
+    "check": "pnpm --filter @effect-template/app check",
+    "changeset": "changeset",
+    "changeset-publish": "node -e \"if (!process.env.NPM_TOKEN) { console.log('Skipping publish: NPM_TOKEN is not set'); process.exit(0); }\" && changeset publish",
+    "changeset-version": "changeset version",
+    "clone": "pnpm --filter @effect-template/app build && node packages/app/dist/main.js clone",
+    "docker-git": "pnpm --filter @effect-template/app build:docker-git && node packages/app/dist/src/docker-git/main.js",
+    "list": "pnpm --filter @effect-template/app build && node packages/app/dist/main.js list",
+    "dev": "pnpm --filter @effect-template/app dev",
+    "lint": "pnpm --filter @effect-template/app lint",
+    "lint:tests": "pnpm --filter @effect-template/app lint:tests",
+    "lint:effect": "pnpm --filter @effect-template/app lint:effect",
+    "test": "pnpm --filter @effect-template/app test",
+    "typecheck": "pnpm --filter @effect-template/app typecheck",
+    "start": "pnpm --filter @effect-template/app start"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.5.2",
+    "@changesets/cli": "^2.29.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProverCoderAI/effect-template.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ProverCoderAI/effect-template/issues"
+  },
+  "homepage": "https://github.com/ProverCoderAI/effect-template#readme",
+  "license": "ISC",
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "esbuild",
+      "node-pty"
+    ],
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "msgpackr-extract",
+      "unrs-resolver"
+    ]
+  }
+}

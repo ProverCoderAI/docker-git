@@ -1,0 +1,7 @@
+# Local secrets and keys
+authorized_keys
+dev_ssh_key
+dev_ssh_key.pub
+
+# Local auth cache
+.orch/

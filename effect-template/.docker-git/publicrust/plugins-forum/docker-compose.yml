@@ -1,0 +1,21 @@
+services:
+  dg-plugins-forum:
+    build: .
+    container_name: dg-plugins-forum
+    environment:
+      REPO_URL: "https://github.com/publicrust/plugins-forum.git"
+      REPO_REF: "refs/pull/97/head"
+      TARGET_DIR: "/home/dev/publicrust/plugins-forum"
+      CODEX_HOME: "/home/dev/.codex"
+    env_file:
+      - ./.orch/env/global.env
+      - ./.orch/env/project.env
+    ports:
+      - "127.0.0.1:2223:22"
+    volumes:
+      - dg-plugins-forum-home:/home/dev
+      - ./authorized_keys:/authorized_keys:ro
+      - ./.orch/auth/codex:/home/dev/.codex
+
+volumes:
+  dg-plugins-forum-home:
