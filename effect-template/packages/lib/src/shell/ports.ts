@@ -1,15 +1,13 @@
+import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer"
 import { Effect } from "effect"
-import * as net from "node:net"
 
 import { PortProbeError } from "./errors.js"
 
+type ErrnoError = Error & { readonly code?: string }
+
 const normalizeMessage = (error: Error): string => error.message
 
-const closeQuietly = (server: net.Server) => {
-  if (server.listening) {
-    server.close()
-  }
-}
+const isErrnoError = (error: Error): error is ErrnoError => "code" in error
 
 // CHANGE: probe TCP port availability on localhost
 // WHY: avoid docker compose failures due to port collisions
@@ -25,40 +23,16 @@ export const isPortAvailable = (
   port: number,
   host: string = "127.0.0.1"
 ): Effect.Effect<boolean, PortProbeError> =>
-  Effect.async<boolean, PortProbeError>((resume) => {
-    const server = net.createServer()
-    let done = false
-
-    const finish = (effect: Effect.Effect<boolean, PortProbeError>) => {
-      if (done) {
-        return
+  Effect.scoped(NodeSocketServer.make({ host, port })).pipe(
+    Effect.as(true),
+    Effect.catchTag("SocketServerError", (error) => {
+      const { cause } = error
+      if (error.reason === "Open" && cause instanceof Error && isErrnoError(cause) && cause.code === "EADDRINUSE") {
+        return Effect.succeed(false)
       }
-      done = true
-      resume(effect)
-    }
-
-    server.unref()
-    server.once("error", (error) => {
-      const err = error as NodeJS.ErrnoException
-      if (err.code === "EADDRINUSE") {
-        closeQuietly(server)
-        finish(Effect.succeed(false))
-        return
-      }
-      closeQuietly(server)
-      finish(Effect.fail(new PortProbeError({ port, message: normalizeMessage(error) })))
+      return Effect.fail(new PortProbeError({ port, message: normalizeMessage(error) }))
     })
-    server.once("listening", () => {
-      server.close(() => {
-        finish(Effect.succeed(true))
-      })
-    })
-    server.listen(port, host)
-
-    return Effect.sync(() => {
-      closeQuietly(server)
-    })
-  })
+  )
 
 // CHANGE: select the first available port in a range
 // WHY: auto-recover from occupied SSH ports

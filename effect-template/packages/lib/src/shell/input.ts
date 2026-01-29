@@ -1,38 +1,13 @@
+import * as Terminal from "@effect/platform/Terminal"
 import { Effect } from "effect"
-import * as readline from "node:readline"
 
 import { InputCancelledError, InputReadError } from "./errors.js"
 
-const restoreRawMode = (wasRaw: boolean) => {
-  if (process.stdin.isTTY && wasRaw) {
-    process.stdin.setRawMode(true)
-  }
-}
+const normalizeMessage = (error: Error): string => error.message
 
-const setupInterface = () =>
-  Effect.try({
-    try: () => {
-      const stdin = process.stdin
-      const stdout = process.stdout
-      const wasRaw = stdin.isTTY && stdin.isRaw
+const toReadError = (error: Error): InputReadError => new InputReadError({ message: normalizeMessage(error) })
 
-      if (stdin.isTTY && stdin.isRaw) {
-        stdin.setRawMode(false)
-      }
-
-      const rl = readline.createInterface({
-        input: stdin,
-        output: stdout,
-        terminal: stdin.isTTY
-      })
-
-      return { rl, wasRaw }
-    },
-    catch: (error) =>
-      new InputReadError({
-        message: error instanceof Error ? error.message : String(error)
-      })
-  })
+const mapReadLineError = (_error: Terminal.QuitException): InputCancelledError => new InputCancelledError({})
 
 // CHANGE: prompt for a single line of user input
 // WHY: provide an interactive CLI without raw terminal mode issues
@@ -44,37 +19,11 @@ const setupInterface = () =>
 // EFFECT: Effect<string, InputCancelledError | InputReadError, never>
 // INVARIANT: restores raw mode if it was enabled before prompting
 // COMPLEXITY: O(1)
-export const promptLine = (prompt: string): Effect.Effect<string, InputCancelledError | InputReadError> =>
-  Effect.flatMap(
-    setupInterface(),
-    ({ rl, wasRaw }) =>
-      Effect.async<string, InputCancelledError | InputReadError>((resume) => {
-        let closed = false
-
-        const cleanup = () => {
-          if (closed) {
-            return
-          }
-          closed = true
-          rl.close()
-          restoreRawMode(wasRaw)
-        }
-
-        const onSigint = () => {
-          cleanup()
-          resume(Effect.fail(new InputCancelledError({})))
-        }
-
-        rl.once("SIGINT", onSigint)
-        rl.question(prompt, (answer: string) => {
-          rl.off("SIGINT", onSigint)
-          cleanup()
-          resume(Effect.succeed(answer))
-        })
-
-        return Effect.sync(() => {
-          rl.off("SIGINT", onSigint)
-          cleanup()
-        })
-      })
-  )
+export const promptLine = (
+  prompt: string
+): Effect.Effect<string, InputCancelledError | InputReadError, Terminal.Terminal> =>
+  Effect.gen(function*(_) {
+    const terminal = yield* _(Terminal.Terminal)
+    yield* _(terminal.display(prompt).pipe(Effect.mapError(toReadError)))
+    return yield* _(terminal.readLine.pipe(Effect.mapError(mapReadLineError)))
+  })

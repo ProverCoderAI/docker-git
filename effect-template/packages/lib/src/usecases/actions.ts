@@ -7,28 +7,18 @@ import { Duration, Effect, Fiber, Schedule } from "effect"
 import type { CreateCommand } from "../core/domain.js"
 import { runDockerComposeLogsFollow, runDockerComposeUp, runDockerExecExitCode } from "../shell/docker.js"
 import { CloneFailedError } from "../shell/errors.js"
-import type { DockerCommandError, PortProbeError } from "../shell/errors.js"
+import type { DockerCommandError, FileExistsError, PortProbeError } from "../shell/errors.js"
 import { writeProjectFiles } from "../shell/files.js"
 import { findAvailablePort } from "../shell/ports.js"
+import { ensureCodexConfigFile, migrateLegacyOrchLayout, syncAuthArtifacts } from "./auth-sync.js"
 import { findAuthorizedKeysSource, findSshPrivateKey, resolveAuthorizedKeysPath } from "./path-helpers.js"
 import { buildSshCommand } from "./projects.js"
+import { withFsPathContext } from "./runtime.js"
 
 const resolvePathFromBase = (path: Path.Path, baseDir: string, targetPath: string): string =>
   path.isAbsolute(targetPath) ? targetPath : path.resolve(baseDir, targetPath)
 
 type ExistingFileState = "exists" | "missing"
-
-const withFsPath = <A, E, R>(
-  run: (
-    fs: FileSystem.FileSystem,
-    path: Path.Path
-  ) => Effect.Effect<A, E, R>
-): Effect.Effect<A, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =>
-  Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
-    return yield* _(run(fs, path))
-  })
 
 const ensureFileReady = (
   fs: FileSystem.FileSystem,
@@ -56,7 +46,7 @@ const ensureAuthorizedKeys = (
   baseDir: string,
   authorizedKeysPath: string
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
-  withFsPath((fs, path) =>
+  withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
       const resolved = resolveAuthorizedKeysPath(path, baseDir, authorizedKeysPath)
       const state = yield* _(
@@ -83,38 +73,6 @@ const ensureAuthorizedKeys = (
     })
   )
 
-// CHANGE: ensure Codex auth directory exists for shared secrets
-// WHY: enable global auth reuse across containers
-// QUOTE(ТЗ): "удобно настраивать секреты для всех контейнеров"
-// REF: user-request-2026-01-09
-// SOURCE: n/a
-// FORMAT THEOREM: forall p: exists(dir(p)) -> codex_auth_dir(p)
-// PURITY: SHELL
-// EFFECT: Effect<void, PlatformError, FileSystem | Path>
-// INVARIANT: creates directory if missing
-// COMPLEXITY: O(1)
-const ensureCodexAuthDir = (
-  baseDir: string,
-  codexAuthPath: string
-): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
-  withFsPath((fs, path) =>
-    Effect.gen(function*(_) {
-      const resolved = resolvePathFromBase(path, baseDir, codexAuthPath)
-      const exists = yield* _(fs.exists(resolved))
-      if (exists) {
-        const info = yield* _(fs.stat(resolved))
-        if (info.type !== "Directory") {
-          yield* _(
-            Effect.logWarning(`Codex auth path is not a directory: ${resolved}`)
-          )
-        }
-        return
-      }
-
-      yield* _(fs.makeDirectory(resolved, { recursive: true }))
-    })
-  )
-
 const defaultEnvContents = "# docker-git env\n# KEY=value\n"
 
 // CHANGE: ensure env files exist for shared credentials
@@ -131,7 +89,7 @@ const ensureEnvFile = (
   baseDir: string,
   envPath: string
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
-  withFsPath((fs, path) =>
+  withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
       const resolved = resolvePathFromBase(path, baseDir, envPath)
       const state = yield* _(
@@ -149,6 +107,121 @@ const ensureEnvFile = (
       yield* _(fs.writeFileString(resolved, defaultEnvContents))
     })
   )
+
+type ProjectConfigs = {
+  readonly globalConfig: CreateCommand["config"]
+  readonly projectConfig: CreateCommand["config"]
+}
+
+type PrepareProjectFilesError = FileExistsError | PlatformError
+
+// CHANGE: derive global + per-project paths for docker-git config
+// WHY: keep shared auth/env under .docker-git while copying into project-local .orch
+// QUOTE(ТЗ): "по умолчанию все конфиги хранились вместе ... .docker-git"
+// REF: user-request-2026-01-29-orch-layout
+// SOURCE: n/a
+// FORMAT THEOREM: forall cfg: project(cfg) -> global(cfg) + local(cfg)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: project paths always live under outDir/.orch
+// COMPLEXITY: O(1)
+const buildProjectConfigs = (
+  path: Path.Path,
+  baseDir: string,
+  resolvedOutDir: string,
+  resolvedConfig: CreateCommand["config"]
+): ProjectConfigs => {
+  const globalConfig = {
+    ...resolvedConfig,
+    authorizedKeysPath: resolvePathFromBase(path, baseDir, resolvedConfig.authorizedKeysPath),
+    envGlobalPath: resolvePathFromBase(path, baseDir, resolvedConfig.envGlobalPath),
+    envProjectPath: resolvePathFromBase(path, baseDir, resolvedConfig.envProjectPath),
+    codexAuthPath: resolvePathFromBase(path, baseDir, resolvedConfig.codexAuthPath)
+  }
+  const projectConfig = {
+    ...globalConfig,
+    envGlobalPath: path.resolve(resolvedOutDir, ".orch/env/global.env"),
+    envProjectPath: resolvePathFromBase(path, resolvedOutDir, resolvedConfig.envProjectPath),
+    codexAuthPath: path.resolve(resolvedOutDir, ".orch/auth/codex")
+  }
+  return { globalConfig, projectConfig }
+}
+
+// CHANGE: write project files and sync shared auth into the project
+// WHY: ensure each container has local .orch with auth + env data
+// QUOTE(ТЗ): "авторизацию и .env копирует в каждый контейнер"
+// REF: user-request-2026-01-29-auth-copy
+// SOURCE: n/a
+// FORMAT THEOREM: forall p: create(p) -> orch(p)
+// PURITY: SHELL
+// EFFECT: Effect<ReadonlyArray<string>, FileExistsError | PlatformError, FileSystem | Path>
+// INVARIANT: creates files before docker compose up
+// COMPLEXITY: O(n) where n = |files|
+const prepareProjectFiles = (
+  resolvedOutDir: string,
+  baseDir: string,
+  globalConfig: CreateCommand["config"],
+  projectConfig: CreateCommand["config"],
+  force: boolean
+): Effect.Effect<ReadonlyArray<string>, PrepareProjectFilesError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const createdFiles = yield* _(writeProjectFiles(resolvedOutDir, projectConfig, force))
+    yield* _(ensureAuthorizedKeys(resolvedOutDir, projectConfig.authorizedKeysPath))
+    yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envGlobalPath))
+    yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envProjectPath))
+    yield* _(ensureCodexConfigFile(baseDir, globalConfig.codexAuthPath))
+    yield* _(
+      syncAuthArtifacts({
+        sourceBase: baseDir,
+        targetBase: resolvedOutDir,
+        source: {
+          envGlobalPath: globalConfig.envGlobalPath,
+          envProjectPath: globalConfig.envProjectPath,
+          codexAuthPath: globalConfig.codexAuthPath
+        },
+        target: {
+          envGlobalPath: projectConfig.envGlobalPath,
+          envProjectPath: projectConfig.envProjectPath,
+          codexAuthPath: projectConfig.codexAuthPath
+        }
+      })
+    )
+    return createdFiles
+  })
+
+// CHANGE: optionally start docker compose and stream clone logs
+// WHY: keep create flow readable and under lint limits
+// QUOTE(ТЗ): "должен работать синхронно отображая весь процесс"
+// REF: user-request-2026-01-28-clone-logs
+// SOURCE: n/a
+// FORMAT THEOREM: forall cfg: up(cfg) -> docker_up(cfg)
+// PURITY: SHELL
+// EFFECT: Effect<void, CloneFailedError | DockerCommandError | PlatformError, CommandExecutor>
+// INVARIANT: only runs when runUp = true
+// COMPLEXITY: O(1)
+const runDockerUpIfNeeded = (
+  resolvedOutDir: string,
+  projectConfig: CreateCommand["config"],
+  runUp: boolean,
+  waitForClone: boolean
+): Effect.Effect<
+  void,
+  CloneFailedError | DockerCommandError | PlatformError,
+  CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
+> =>
+  Effect.gen(function*(_) {
+    if (!runUp) {
+      return
+    }
+    yield* _(Effect.log("Running: docker compose up -d --build"))
+    yield* _(runDockerComposeUp(resolvedOutDir))
+    if (waitForClone) {
+      yield* _(Effect.log("Streaming container logs until clone completes..."))
+      yield* _(waitForCloneCompletion(resolvedOutDir, projectConfig))
+    }
+    yield* _(Effect.log("Docker environment is up"))
+    yield* _(logSshAccess(resolvedOutDir, projectConfig))
+  })
 
 // CHANGE: log SSH access command after container creation
 // WHY: provide a single copy-paste command for immediate access
@@ -225,7 +298,11 @@ const waitForCloneCompletion = (
   Effect.gen(function*(_) {
     const logsFiber = yield* _(
       runDockerComposeLogsFollow(cwd).pipe(
-        Effect.catchAll(() => Effect.void),
+        Effect.tapError((error) =>
+          Effect.logWarning(
+            `docker compose logs --follow failed: ${error instanceof Error ? error.message : String(error)}`
+          )
+        ),
         Effect.fork
       )
     )
@@ -268,12 +345,27 @@ export const createProject = (command: CreateCommand) =>
     const path = yield* _(Path.Path)
     const resolvedOutDir = path.resolve(command.outDir)
     const resolvedConfig = yield* _(resolveSshPort(command.config))
-    const createdFiles = yield* _(writeProjectFiles(resolvedOutDir, resolvedConfig, command.force))
+    const baseDir = process.cwd()
+    const { globalConfig, projectConfig } = buildProjectConfigs(path, baseDir, resolvedOutDir, resolvedConfig)
 
-    yield* _(ensureAuthorizedKeys(resolvedOutDir, resolvedConfig.authorizedKeysPath))
-    yield* _(ensureEnvFile(resolvedOutDir, resolvedConfig.envGlobalPath))
-    yield* _(ensureEnvFile(resolvedOutDir, resolvedConfig.envProjectPath))
-    yield* _(ensureCodexAuthDir(resolvedOutDir, resolvedConfig.codexAuthPath))
+    yield* _(
+      migrateLegacyOrchLayout(
+        baseDir,
+        globalConfig.envGlobalPath,
+        globalConfig.envProjectPath,
+        globalConfig.codexAuthPath,
+        ".docker-git/.orch/auth/gh"
+      )
+    )
+    const createdFiles = yield* _(
+      prepareProjectFiles(
+        resolvedOutDir,
+        baseDir,
+        globalConfig,
+        projectConfig,
+        command.force
+      )
+    )
 
     yield* _(Effect.log(`Created docker-git project in ${resolvedOutDir}`))
 
@@ -281,14 +373,5 @@ export const createProject = (command: CreateCommand) =>
       yield* _(Effect.log(`  - ${file}`))
     }
 
-    if (command.runUp) {
-      yield* _(Effect.log("Running: docker compose up -d --build"))
-      yield* _(runDockerComposeUp(resolvedOutDir))
-      if (command.waitForClone) {
-        yield* _(Effect.log("Streaming container logs until clone completes..."))
-        yield* _(waitForCloneCompletion(resolvedOutDir, resolvedConfig))
-      }
-      yield* _(Effect.log("Docker environment is up"))
-      yield* _(logSshAccess(resolvedOutDir, resolvedConfig))
-    }
+    yield* _(runDockerUpIfNeeded(resolvedOutDir, projectConfig, command.runUp, command.waitForClone))
   })

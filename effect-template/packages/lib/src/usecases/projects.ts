@@ -12,8 +12,11 @@ import { resolveBaseDir } from "../shell/paths.js"
 import { renderError } from "./errors.js"
 import { defaultProjectsRoot, formatConnectionInfo } from "./menu-helpers.js"
 import { findSshPrivateKey, resolveAuthorizedKeysPath } from "./path-helpers.js"
+import { withFsPathContext } from "./runtime.js"
 
 const sshOptions = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+type ProjectLoadError = PlatformError | ConfigNotFoundError | ConfigDecodeError
 
 export const buildSshCommand = (
   config: TemplateConfig,
@@ -48,19 +51,19 @@ const isDockerGitConfig = (entry: string): boolean => entry.endsWith("docker-git
 const findProjectConfigPaths = (
   projectsRoot: string
 ): Effect.Effect<ReadonlyArray<string>, PlatformError, FileSystem.FileSystem | Path.Path> =>
-  Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
-    const exists = yield* _(fs.exists(projectsRoot))
-    if (!exists) {
-      return []
-    }
+  withFsPathContext(({ fs, path }) =>
+    Effect.gen(function*(_) {
+      const exists = yield* _(fs.exists(projectsRoot))
+      if (!exists) {
+        return []
+      }
 
-    const entries: ReadonlyArray<string> = yield* _(fs.readDirectory(projectsRoot, { recursive: true }))
-    return entries
-      .filter((entry) => isDockerGitConfig(entry))
-      .map((entry) => path.join(projectsRoot, entry))
-  })
+      const entries: ReadonlyArray<string> = yield* _(fs.readDirectory(projectsRoot, { recursive: true }))
+      return entries
+        .filter((entry) => isDockerGitConfig(entry))
+        .map((entry) => path.join(projectsRoot, entry))
+    })
+  )
 
 const loadProjectSummary = (
   configPath: string,
@@ -115,6 +118,12 @@ const renderProjectSummary = (summary: ProjectSummary): string =>
   )
 
 const renderProjectStatusHeader = (status: ProjectStatus): string => `Project: ${status.projectDir}`
+
+const skipWithWarning = <A>(configPath: string) => (error: ProjectLoadError) =>
+  pipe(
+    Effect.logWarning(`Skipping ${configPath}: ${renderError(error)}`),
+    Effect.as<A | null>(null)
+  )
 
 const normalizeCell = (value: string | undefined): string => value?.trim() ?? "-"
 
@@ -211,12 +220,10 @@ export const listProjects: Effect.Effect<
     for (const configPath of index.configPaths) {
       const summary = yield* _(
         loadProjectSummary(configPath, sshKey).pipe(
-          Effect.catchAll((error) =>
-            pipe(
-              Effect.logWarning(`Skipping ${configPath}: ${renderError(error)}`),
-              Effect.as<ProjectSummary | null>(null)
-            )
-          )
+          Effect.matchEffect({
+            onFailure: skipWithWarning<ProjectSummary>(configPath),
+            onSuccess: (value) => Effect.succeed(value)
+          })
         )
       )
       if (summary !== null) {
@@ -254,12 +261,10 @@ export const listProjectStatus: Effect.Effect<
     for (const configPath of index.configPaths) {
       const status = yield* _(
         loadProjectStatus(configPath).pipe(
-          Effect.catchAll((error) =>
-            pipe(
-              Effect.logWarning(`Skipping ${configPath}: ${renderError(error)}`),
-              Effect.as<ProjectStatus | null>(null)
-            )
-          )
+          Effect.matchEffect({
+            onFailure: skipWithWarning<ProjectStatus>(configPath),
+            onSuccess: (value) => Effect.succeed(value)
+          })
         )
       )
       if (status === null) {
@@ -273,11 +278,13 @@ export const listProjectStatus: Effect.Effect<
           Effect.map((raw) => parseComposePsOutput(raw)),
           Effect.map((rows) => formatComposeRows(rows)),
           Effect.flatMap((text) => Effect.log(text)),
-          Effect.catchAll((error: DockerCommandError | PlatformError) =>
-            Effect.logWarning(
-              `docker compose ps failed for ${status.projectDir}: ${renderError(error)}`
-            )
-          )
+          Effect.matchEffect({
+            onFailure: (error: DockerCommandError | PlatformError) =>
+              Effect.logWarning(
+                `docker compose ps failed for ${status.projectDir}: ${renderError(error)}`
+              ),
+            onSuccess: () => Effect.void
+          })
         )
       )
     }

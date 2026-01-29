@@ -1,12 +1,48 @@
 import { Effect, Match, pipe } from "effect"
 
-import type { Command } from "@effect-template/lib/core/domain"
+import type { Command, ParseError } from "@effect-template/lib/core/domain"
 import { readCommand } from "@effect-template/lib/shell/cli"
 import { createProject } from "@effect-template/lib/usecases/actions"
+import {
+  authCodexLogin,
+  authCodexLogout,
+  authCodexStatus,
+  authGithubLogin,
+  authGithubLogout,
+  authGithubStatus
+} from "@effect-template/lib/usecases/auth"
+import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import { listProjectStatus } from "@effect-template/lib/usecases/projects"
 
 import { runMenu } from "./menu.js"
+
+const isParseError = (error: AppError): error is ParseError =>
+  error._tag === "UnknownCommand" ||
+  error._tag === "UnknownOption" ||
+  error._tag === "MissingOptionValue" ||
+  error._tag === "MissingRequiredOption" ||
+  error._tag === "InvalidOption" ||
+  error._tag === "UnexpectedArgument"
+
+const setExitCode = (code: number) =>
+  Effect.sync(() => {
+    process.exitCode = code
+  })
+
+const logWarningAndExit = (error: AppError) =>
+  pipe(
+    Effect.logWarning(renderError(error)),
+    Effect.tap(() => setExitCode(1)),
+    Effect.asVoid
+  )
+
+const logErrorAndExit = (error: AppError) =>
+  pipe(
+    Effect.logError(renderError(error)),
+    Effect.tap(() => setExitCode(1)),
+    Effect.asVoid
+  )
 
 // CHANGE: compose CLI program with typed errors and shell effects
 // WHY: keep a thin entry layer over pure parsing and template generation
@@ -25,6 +61,12 @@ export const program = pipe(
       Match.when({ _tag: "Help" }, ({ message }) => Effect.log(message)),
       Match.when({ _tag: "Create" }, (create) => createProject(create)),
       Match.when({ _tag: "Status" }, () => listProjectStatus),
+      Match.when({ _tag: "AuthGithubLogin" }, (command) => authGithubLogin(command)),
+      Match.when({ _tag: "AuthGithubStatus" }, (command) => authGithubStatus(command)),
+      Match.when({ _tag: "AuthGithubLogout" }, (command) => authGithubLogout(command)),
+      Match.when({ _tag: "AuthCodexLogin" }, (command) => authCodexLogin(command)),
+      Match.when({ _tag: "AuthCodexStatus" }, (command) => authCodexStatus(command)),
+      Match.when({ _tag: "AuthCodexLogout" }, (command) => authCodexLogout(command)),
       Match.when({ _tag: "Menu" }, () => runMenu),
       Match.exhaustive
     )
@@ -34,11 +76,17 @@ export const program = pipe(
       Effect.logWarning(renderError(error)),
       Effect.asVoid
     )),
-  Effect.catchAll((error) =>
-    pipe(
-      Effect.logError(renderError(error)),
-      Effect.flatMap(() => Effect.fail(error))
-    )
-  ),
+  Effect.catchTag("AuthError", logWarningAndExit),
+  Effect.catchTag("CommandFailedError", logWarningAndExit),
+  Effect.matchEffect({
+    onFailure: (error) =>
+      isParseError(error)
+        ? logErrorAndExit(error)
+        : pipe(
+          Effect.logError(renderError(error)),
+          Effect.flatMap(() => Effect.fail(error))
+        ),
+    onSuccess: () => Effect.void
+  }),
   Effect.asVoid
 )

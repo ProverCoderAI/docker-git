@@ -12,6 +12,15 @@ export const resolveAuthorizedKeysPath = (
     ? authorizedKeysPath
     : path.resolve(baseDir, authorizedKeysPath)
 
+export const resolvePathFromCwd = (
+  path: Path.Path,
+  cwd: string,
+  targetPath: string
+): string =>
+  path.isAbsolute(targetPath)
+    ? targetPath
+    : path.resolve(cwd, targetPath)
+
 export const findExistingUpwards = (
   fs: FileSystem.FileSystem,
   path: Path.Path,

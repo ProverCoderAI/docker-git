@@ -1,7 +1,10 @@
 import type { PlatformError } from "@effect/platform/Error"
-import { formatParseError, type ParseError, usageText } from "../core/domain.js"
+import { type ParseError } from "../core/domain.js"
+import { formatParseError, usageText } from "../core/usage.js"
 import type {
+  AuthError,
   CloneFailedError,
+  CommandFailedError,
   ConfigDecodeError,
   ConfigNotFoundError,
   DockerCommandError,
@@ -21,6 +24,8 @@ export type AppError =
   | InputCancelledError
   | InputReadError
   | PortProbeError
+  | AuthError
+  | CommandFailedError
   | PlatformError
 
 type NonParseError = Exclude<AppError, ParseError>
@@ -48,6 +53,14 @@ const renderPrimaryError = (error: NonParseError): string | null => {
 
   if (error._tag === "PortProbeError") {
     return `SSH port check failed for ${error.port}: ${error.message}`
+  }
+
+  if (error._tag === "CommandFailedError") {
+    return `${error.command} failed with exit code ${error.exitCode}`
+  }
+
+  if (error._tag === "AuthError") {
+    return error.message
   }
 
   return null

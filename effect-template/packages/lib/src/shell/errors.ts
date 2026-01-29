@@ -40,3 +40,7 @@ export class CommandFailedError extends Data.TaggedError("CommandFailedError")<{
   readonly command: string
   readonly exitCode: number
 }> {}
+
+export class AuthError extends Data.TaggedError("AuthError")<{
+  readonly message: string
+}> {}

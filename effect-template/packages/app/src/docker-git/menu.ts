@@ -1,18 +1,18 @@
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
+import type * as Terminal from "@effect/platform/Terminal"
 import { Effect, Either, Match, pipe } from "effect"
 
 import {
   type CreateCommand,
   deriveRepoPathParts,
-  formatParseError,
   type MenuAction,
   parseMenuSelection,
-  type ProjectConfig,
-  usageText
+  type ProjectConfig
 } from "@effect-template/lib/core/domain"
 import { parseArgs } from "@effect-template/lib/core/parser"
+import { formatParseError, usageText } from "@effect-template/lib/core/usage"
 import { readProjectConfig } from "@effect-template/lib/shell/config"
 import {
   runDockerComposeDown,
@@ -114,12 +114,13 @@ const withProjectConfig = <R>(
 ) =>
   pipe(
     readProjectConfig(state.activeDir ?? state.cwd),
-    Effect.flatMap((config) => pipe(f(config), Effect.as<MenuOutcome>(continueWith(state)))),
-    Effect.catchAll((error) =>
-      error._tag === "ConfigNotFoundError" || error._tag === "ConfigDecodeError"
-        ? handleMissingConfig(state, error)
-        : Effect.fail(error)
-    )
+    Effect.matchEffect({
+      onFailure: (error) =>
+        error._tag === "ConfigNotFoundError" || error._tag === "ConfigDecodeError"
+          ? handleMissingConfig(state, error)
+          : Effect.fail(error),
+      onSuccess: (config) => pipe(f(config), Effect.as<MenuOutcome>(continueWith(state)))
+    })
   )
 
 type CreateInputs = {
@@ -149,7 +150,7 @@ const buildCreateArgs = (input: CreateInputs): ReadonlyArray<string> => {
 const readCreateInputs = (
   state: MenuState,
   repoUrlOverride?: string
-): Effect.Effect<CreateInputs | null, AppError, Path.Path> =>
+): Effect.Effect<CreateInputs | null, AppError, Path.Path | Terminal.Terminal> =>
   Effect.gen(function*(_) {
     const repoUrlInput = repoUrlOverride ?? (yield* _(promptLine("Repo URL: ")))
     const repoUrl = repoUrlInput.trim()
@@ -198,6 +199,12 @@ const handleCreate = (state: MenuState, repoUrlOverride?: string) =>
               { _tag: "Help" },
               () => pipe(Effect.log(usageText), Effect.as<MenuOutcome>(continueWith(state)))
             ),
+            Match.when({ _tag: "AuthGithubLogin" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
+            Match.when({ _tag: "AuthGithubStatus" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
+            Match.when({ _tag: "AuthGithubLogout" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
+            Match.when({ _tag: "AuthCodexLogin" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
+            Match.when({ _tag: "AuthCodexStatus" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
+            Match.when({ _tag: "AuthCodexLogout" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
             Match.when({ _tag: "Status" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
             Match.when({ _tag: "Menu" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
             Match.exhaustive
@@ -262,7 +269,7 @@ const menuLoop = (
 ): Effect.Effect<
   void,
   AppError | InputCancelledError,
-  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor | Terminal.Terminal
 > =>
   pipe(
     promptLine(renderMenuText(state)),

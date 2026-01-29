@@ -1,4 +1,4 @@
-import { Either, Match } from "effect"
+import { Either } from "effect"
 
 import { trimLeftChar, trimRightChar } from "./strings.js"
 
@@ -46,7 +46,51 @@ export interface StatusCommand {
   readonly _tag: "Status"
 }
 
-export type Command = CreateCommand | MenuCommand | HelpCommand | StatusCommand
+export interface AuthGithubLoginCommand {
+  readonly _tag: "AuthGithubLogin"
+  readonly label: string | null
+  readonly token: string | null
+  readonly envGlobalPath: string
+}
+
+export interface AuthGithubStatusCommand {
+  readonly _tag: "AuthGithubStatus"
+  readonly envGlobalPath: string
+}
+
+export interface AuthGithubLogoutCommand {
+  readonly _tag: "AuthGithubLogout"
+  readonly label: string | null
+  readonly envGlobalPath: string
+}
+
+export interface AuthCodexLoginCommand {
+  readonly _tag: "AuthCodexLogin"
+  readonly label: string | null
+  readonly codexAuthPath: string
+}
+
+export interface AuthCodexStatusCommand {
+  readonly _tag: "AuthCodexStatus"
+  readonly label: string | null
+  readonly codexAuthPath: string
+}
+
+export interface AuthCodexLogoutCommand {
+  readonly _tag: "AuthCodexLogout"
+  readonly label: string | null
+  readonly codexAuthPath: string
+}
+
+export type AuthCommand =
+  | AuthGithubLoginCommand
+  | AuthGithubStatusCommand
+  | AuthGithubLogoutCommand
+  | AuthCodexLoginCommand
+  | AuthCodexStatusCommand
+  | AuthCodexLogoutCommand
+
+export type Command = CreateCommand | MenuCommand | HelpCommand | StatusCommand | AuthCommand
 
 export type MenuAction =
   | { readonly _tag: "Create" }
@@ -73,45 +117,13 @@ export const defaultTemplateConfig = {
   repoRef: "main",
   targetDir: "/home/dev/app",
   volumeName: "dev_home",
-  authorizedKeysPath: "./authorized_keys",
-  envGlobalPath: "./.orch/env/global.env",
+  authorizedKeysPath: "./.docker-git/authorized_keys",
+  envGlobalPath: "./.docker-git/.orch/env/global.env",
   envProjectPath: "./.orch/env/project.env",
-  codexAuthPath: "./.orch/auth/codex",
+  codexAuthPath: "./.docker-git/.orch/auth/codex",
   codexHome: "/home/dev/.codex",
   pnpmVersion: "10.27.0"
 }
-
-export const usageText = `docker-git menu
-docker-git create --repo-url <url> [options]
-docker-git clone <url> [options]
-docker-git ps
-
-Commands:
-  menu                Interactive menu (default when no args)
-  create, init        Generate docker development environment
-  clone               Create + run container and clone repo
-  ps, status          Show docker compose status for all docker-git projects
-
-Options:
-  --repo-ref <ref>          Git ref/branch (default: main)
-  --branch, -b <ref>        Alias for --repo-ref
-  --target-dir <path>       Target dir inside container (create default: /home/dev/app, clone default: /home/dev/<org>/<repo>)
-  --ssh-port <port>         Local SSH port (default: 2222)
-  --ssh-user <user>         SSH user inside container (default: dev)
-  --container-name <name>   Docker container name (default: dg-<repo>)
-  --service-name <name>     Compose service name (default: dg-<repo>)
-  --volume-name <name>      Docker volume name (default: dg-<repo>-home)
-  --secrets-root <path>     Host root for shared secrets (default: n/a)
-  --authorized-keys <path>  Host path to authorized_keys (default: ./authorized_keys)
-  --env-global <path>       Host path to shared env file (default: ./.orch/env/global.env)
-  --env-project <path>      Host path to project env file (default: ./.orch/env/project.env)
-  --codex-auth <path>       Host path for Codex auth cache (default: ./.orch/auth/codex)
-  --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
-  --out-dir <path>          Output directory (create default: ., clone default: .docker-git/<org>/<repo>)
-  --up | --no-up            Run docker compose up after init (default: --up)
-  --force                   Overwrite existing files
-  -h, --help                Show this help
-`
 
 const slugify = (value: string): string => {
   const normalized = value
@@ -372,13 +384,3 @@ export const parseMenuSelection = (input: string): Either.Either<MenuAction, Par
 // EFFECT: Effect<string, never, never>
 // INVARIANT: each ParseError maps to exactly one message
 // COMPLEXITY: O(1)
-export const formatParseError = (error: ParseError): string =>
-  Match.value(error).pipe(
-    Match.when({ _tag: "UnknownCommand" }, ({ command }) => `Unknown command: ${command}`),
-    Match.when({ _tag: "UnknownOption" }, ({ option }) => `Unknown option: ${option}`),
-    Match.when({ _tag: "MissingOptionValue" }, ({ option }) => `Missing value for option: ${option}`),
-    Match.when({ _tag: "MissingRequiredOption" }, ({ option }) => `Missing required option: ${option}`),
-    Match.when({ _tag: "InvalidOption" }, ({ option, reason }) => `Invalid option ${option}: ${reason}`),
-    Match.when({ _tag: "UnexpectedArgument" }, ({ value }) => `Unexpected argument: ${value}`),
-    Match.exhaustive
-  )
