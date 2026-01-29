@@ -17,6 +17,9 @@ export interface RawOptions {
   readonly envProjectPath?: string
   readonly codexAuthPath?: string
   readonly codexHome?: string
+  readonly label?: string
+  readonly token?: string
+  readonly authWeb?: boolean
   readonly outDir?: string
   readonly up?: boolean
   readonly force?: boolean
@@ -39,6 +42,8 @@ interface ValueOptionSpec {
     | "envProjectPath"
     | "codexAuthPath"
     | "codexHome"
+    | "label"
+    | "token"
     | "outDir"
 }
 
@@ -59,17 +64,20 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--env-project", key: "envProjectPath" },
   { flag: "--codex-auth", key: "codexAuthPath" },
   { flag: "--codex-home", key: "codexHome" },
+  { flag: "--label", key: "label" },
+  { flag: "--token", key: "token" },
   { flag: "--out-dir", key: "outDir" }
 ]
 
-const valueOptionSpecByFlag = new Map(
-  valueOptionSpecs.map((spec) => [spec.flag, spec] as const)
+const valueOptionSpecByFlag: ReadonlyMap<string, ValueOptionSpec> = new Map(
+  valueOptionSpecs.map((spec) => [spec.flag, spec])
 )
 
 const booleanFlagUpdaters: Readonly<Record<string, (raw: RawOptions) => RawOptions>> = {
   "--up": (raw) => ({ ...raw, up: true }),
   "--no-up": (raw) => ({ ...raw, up: false }),
-  "--force": (raw) => ({ ...raw, force: true })
+  "--force": (raw) => ({ ...raw, force: true }),
+  "--web": (raw) => ({ ...raw, authWeb: true })
 }
 
 export const applyCommandBooleanFlag = (raw: RawOptions, token: string): RawOptions | null => {
@@ -103,6 +111,8 @@ export const applyCommandValueFlag = (
       Match.when("envProjectPath", () => ({ ...raw, envProjectPath: value })),
       Match.when("codexAuthPath", () => ({ ...raw, codexAuthPath: value })),
       Match.when("codexHome", () => ({ ...raw, codexHome: value })),
+      Match.when("label", () => ({ ...raw, label: value })),
+      Match.when("token", () => ({ ...raw, token: value })),
       Match.when("outDir", () => ({ ...raw, outDir: value })),
       Match.exhaustive
     )

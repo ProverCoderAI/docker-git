@@ -3,6 +3,7 @@ import { Either } from "effect"
 import {
   type CreateCommand,
   defaultTemplateConfig,
+  deriveRepoPathParts,
   deriveRepoSlug,
   type ParseError,
   resolveRepoInput
@@ -49,6 +50,7 @@ const normalizeSecretsRoot = (value: string): string => trimRightChar(value, "/"
 type RepoBasics = {
   readonly repoUrl: string
   readonly repoSlug: string
+  readonly repoPath: string
   readonly repoRef: string
   readonly targetDir: string
   readonly sshUser: string
@@ -61,6 +63,7 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
     const resolvedRepo = resolveRepoInput(rawRepoUrl)
     const repoUrl = resolvedRepo.repoUrl
     const repoSlug = deriveRepoSlug(repoUrl)
+    const repoPath = deriveRepoPathParts(repoUrl).pathParts.join("/")
     const repoRef = yield* _(
       nonEmpty("--repo-ref", raw.repoRef ?? resolvedRepo.repoRef, defaultTemplateConfig.repoRef)
     )
@@ -70,7 +73,7 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
     const sshUser = yield* _(nonEmpty("--ssh-user", raw.sshUser, defaultTemplateConfig.sshUser))
     const sshPort = yield* _(parsePort(raw.sshPort ?? String(defaultTemplateConfig.sshPort)))
 
-    return { repoUrl, repoSlug, repoRef, targetDir, sshUser, sshPort }
+    return { repoUrl, repoSlug, repoPath, repoRef, targetDir, sshUser, sshPort }
   })
 
 type NameConfig = {
@@ -107,7 +110,8 @@ type PathConfig = {
 
 const resolvePaths = (
   raw: RawOptions,
-  repoSlug: string
+  repoSlug: string,
+  repoPath: string
 ): Either.Either<PathConfig, ParseError> =>
   Either.gen(function*(_) {
     const secretsRoot = raw.secretsRoot?.trim()
@@ -135,7 +139,7 @@ const resolvePaths = (
     )
     const codexAuthPath = yield* _(nonEmpty("--codex-auth", raw.codexAuthPath, defaultCodexAuthPath))
     const codexHome = yield* _(nonEmpty("--codex-home", raw.codexHome, defaultTemplateConfig.codexHome))
-    const outDir = yield* _(nonEmpty("--out-dir", raw.outDir, "."))
+    const outDir = yield* _(nonEmpty("--out-dir", raw.outDir, `.docker-git/${repoPath}`))
 
     return { authorizedKeysPath, envGlobalPath, envProjectPath, codexAuthPath, codexHome, outDir }
   })
@@ -156,7 +160,7 @@ export const buildCreateCommand = (
   Either.gen(function*(_) {
     const repo = yield* _(resolveRepoBasics(raw))
     const names = yield* _(resolveNames(raw, repo.repoSlug))
-    const paths = yield* _(resolvePaths(raw, repo.repoSlug))
+    const paths = yield* _(resolvePaths(raw, repo.repoSlug, repo.repoPath))
     const runUp = raw.up ?? true
     const force = raw.force ?? false
 

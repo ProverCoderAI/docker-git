@@ -1,9 +1,11 @@
 import { Either, Match } from "effect"
 
-import { type Command, type ParseError, usageText } from "./domain.js"
+import { type Command, type ParseError } from "./domain.js"
+import { parseAuth } from "./parser-auth.js"
 import { parseClone } from "./parser-clone.js"
 import { buildCreateCommand } from "./parser-create.js"
 import { parseRawOptions } from "./parser-options.js"
+import { usageText } from "./usage.js"
 
 const isHelpFlag = (token: string): boolean => token === "--help" || token === "-h"
 
@@ -49,6 +51,7 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
     Match.when("status", () => Either.right(statusCommand)),
     Match.when("menu", () => Either.right(menuCommand)),
     Match.when("ui", () => Either.right(menuCommand)),
+    Match.when("auth", () => parseAuth(rest)),
     Match.orElse(() => Either.left(unknownCommandError))
   )
 }
