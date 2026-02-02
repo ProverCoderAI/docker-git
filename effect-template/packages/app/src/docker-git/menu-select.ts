@@ -2,7 +2,7 @@ import { connectProjectSshWithUp, type ProjectItem } from "@effect-template/lib/
 
 import { Effect, pipe } from "effect"
 
-import { resetToMenu } from "./menu-shared.js"
+import { resetToMenu, resumeTui, suspendTui } from "./menu-shared.js"
 import type { MenuEnv, MenuKeyInput, MenuRunner, MenuViewContext, ViewState } from "./menu-types.js"
 
 // CHANGE: handle project selection flow in TUI
@@ -96,15 +96,19 @@ const handleSelectReturn = (
   context.setSshActive(true)
   context.runner.runEffect(
     pipe(
-      connectProjectSshWithUp(selected),
+      Effect.sync(() => {
+        suspendTui()
+      }),
+      Effect.zipRight(connectProjectSshWithUp(selected)),
+      Effect.ensuring(
+        Effect.sync(() => {
+          resumeTui()
+          context.setSshActive(false)
+        })
+      ),
       Effect.tap(() =>
         Effect.sync(() => {
           context.setMessage("SSH session ended. Press Esc to return to the menu.")
-        })
-      ),
-      Effect.ensuring(
-        Effect.sync(() => {
-          context.setSshActive(false)
         })
       )
     )
