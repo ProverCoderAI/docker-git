@@ -1,7 +1,8 @@
 import { Effect, Either, pipe } from "effect"
 
-import { type Command, type ParseError } from "../core/domain.js"
-import { parseArgs } from "../core/parser.js"
+import { type Command, type ParseError } from "@effect-template/lib/core/domain"
+
+import { parseArgs } from "./parser.js"
 
 // CHANGE: read and parse CLI arguments from process.argv
 // WHY: keep IO at the boundary and delegate parsing to CORE

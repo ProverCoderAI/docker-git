@@ -8,7 +8,7 @@ import {
   type ParseError,
   resolveRepoInput
 } from "./domain.js"
-import { type RawOptions } from "./parser-options.js"
+import { type RawOptions } from "./command-options.js"
 import { trimRightChar } from "./strings.js"
 
 const parsePort = (value: string): Either.Either<number, ParseError> => {
@@ -137,17 +137,19 @@ const resolvePaths = (
     const envProjectPath = yield* _(
       nonEmpty("--env-project", raw.envProjectPath, defaultEnvProjectPath)
     )
-    const codexAuthPath = yield* _(nonEmpty("--codex-auth", raw.codexAuthPath, defaultCodexAuthPath))
+    const codexAuthPath = yield* _(
+      nonEmpty("--codex-auth", raw.codexAuthPath, defaultCodexAuthPath)
+    )
     const codexHome = yield* _(nonEmpty("--codex-home", raw.codexHome, defaultTemplateConfig.codexHome))
     const outDir = yield* _(nonEmpty("--out-dir", raw.outDir, `.docker-git/${repoPath}`))
 
     return { authorizedKeysPath, envGlobalPath, envProjectPath, codexAuthPath, codexHome, outDir }
   })
 
-// CHANGE: build a typed create command from raw CLI options
-// WHY: keep parsing deterministic and reusable for clone/create flows
-// QUOTE(ТЗ): "docker-git create --repo-url <url> [options]"
-// REF: user-request-2026-01-27
+// CHANGE: build a typed create command from raw options (CLI or API)
+// WHY: share deterministic command construction across CLI and server
+// QUOTE(ТЗ): "В lib ты оставляешь бизнес логику, а все CLI морду хранишь в app"
+// REF: user-request-2026-02-02-cli-split
 // SOURCE: n/a
 // FORMAT THEOREM: forall raw: build(raw) -> deterministic(command)
 // PURITY: CORE

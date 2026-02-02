@@ -1,11 +1,11 @@
 import { type CreateCommand, deriveRepoPathParts } from "@effect-template/lib/core/domain"
-import { parseArgs } from "@effect-template/lib/core/parser"
-import { formatParseError, usageText } from "@effect-template/lib/core/usage"
 import { createProject } from "@effect-template/lib/usecases/actions"
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import * as Path from "@effect/platform/Path"
 import { Effect, Either, Match, pipe } from "effect"
+import { parseArgs } from "./cli/parser.js"
+import { formatParseError, usageText } from "./cli/usage.js"
 
 import { resetToMenu } from "./menu-shared.js"
 import {

@@ -1,4 +1,4 @@
-import { Console, Effect, pipe, Either, Match, Chunk, Ref, Duration } from "effect"
+import { Console, Effect, pipe, Either, Chunk, Ref, Duration } from "effect"
 import * as Stream from "effect/Stream"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as HttpBody from "@effect/platform/HttpBody"
@@ -11,7 +11,13 @@ import * as ParseResult from "effect/ParseResult"
 import * as Schema from "effect/Schema"
 import * as Path from "@effect/platform/Path"
 
-import { type ConfigDecodeError, type ConfigNotFoundError, FileExistsError } from "../shell/errors.js"
+import {
+  type ConfigDecodeError,
+  type ConfigNotFoundError,
+  CloneFailedError,
+  FileExistsError,
+  PortProbeError
+} from "../shell/errors.js"
 import { DockerCommandError } from "../shell/errors.js"
 import { readProjectConfig } from "../shell/config.js"
 import { ProjectNotFoundError, StaticAssetNotFoundError } from "./errors.js"
@@ -54,8 +60,10 @@ import {
   resolveProjectGithubToken
 } from "./github.js"
 import { createProject } from "@effect-template/lib/usecases/actions"
-import { defaultTemplateConfig, deriveRepoSlug, formatParseError } from "../core/domain.js"
-import { parseArgs } from "../core/parser.js"
+import { buildCreateCommand } from "@effect-template/lib/core/command-builders"
+import type { RawOptions } from "@effect-template/lib/core/command-options"
+import { defaultTemplateConfig, deriveRepoSlug } from "../core/domain.js"
+import { formatParseError } from "@effect-template/lib/core/parse-errors"
 import {
   CodexAuthError,
   clearCodexAuthDir,
@@ -86,6 +94,8 @@ type ApiError =
   | ConfigNotFoundError
   | ConfigDecodeError
   | FileExistsError
+  | CloneFailedError
+  | PortProbeError
   | DockerCommandError
   | CodexAuthError
   | ParseResult.ParseError
@@ -653,26 +663,19 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
         const index = yield* _(scanProjects(projectsRoot, cwd))
         const usedPorts = index.projects.map((project) => project.sshPort)
         const selectedPort = chooseSshPort(defaultTemplateConfig.sshPort, usedPorts)
-        const args: Array<string> = [
-          "create",
-          "--repo-url",
-          trimmedRepoUrl,
-          "--secrets-root",
+        const raw: RawOptions = {
+          repoUrl: trimmedRepoUrl,
           secretsRoot,
-          "--codex-auth",
-          projectCodexPath,
-          "--out-dir",
+          codexAuthPath: projectCodexPath,
           outDir,
-          "--no-up"
-        ]
-        if (selectedPort !== defaultTemplateConfig.sshPort) {
-          args.push("--ssh-port", String(selectedPort))
-        }
-        if (trimmedRepoRef.length > 0) {
-          args.push("--repo-ref", trimmedRepoRef)
+          up: false,
+          ...(selectedPort !== defaultTemplateConfig.sshPort
+            ? { sshPort: String(selectedPort) }
+            : {}),
+          ...(trimmedRepoRef.length > 0 ? { repoRef: trimmedRepoRef } : {})
         }
 
-        const parsed = parseArgs(args)
+        const parsed = buildCreateCommand(raw)
 
         return yield* _(
           Either.match(parsed, {
@@ -682,99 +685,73 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
                   renderOutputPage("Invalid clone request", formatParseError(error))
                 )
               ),
-            onRight: (command) =>
-              Match.value(command).pipe(
-                Match.when({ _tag: "Create" }, (create) =>
-                  Effect.gen(function* (_) {
-                    yield* _(createProject(create))
-                    const project = yield* _(loadProject(projectsRoot, repoSlug, cwd))
-                    const selectedLabel = githubLabel?.trim() ?? ""
-                    if (selectedLabel.length > 0) {
-                      const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
-                      const envText = yield* _(readEnvFile(globalEnvPath))
-                      const tokens = listGithubTokens(envText)
-                      const selected = findGithubTokenByLabel(tokens, selectedLabel)
-                      if (selected === null) {
-                        return HttpServerResponse.html(
-                          renderOutputPage(
-                            "GitHub token not found",
-                            `Label not found: ${selectedLabel}`
-                          )
-                        )
-                      }
-                      const projectEnv = yield* _(readEnvFile(project.envProjectPath))
-                      const withGitToken = upsertEnvKey(
-                        projectEnv,
-                        "GIT_AUTH_TOKEN",
-                        selected.token
-                      )
-                      const nextProjectEnv = upsertEnvKey(withGitToken, "GH_TOKEN", selected.token)
-                      yield* _(writeEnvFile(project.envProjectPath, nextProjectEnv))
-                    }
-                    yield* _(syncProjectCodexAuth(projectsRoot, project))
-                    yield* _(clearDeploymentLogs(project.id))
-                    yield* _(setDeploymentStatus(project.id, "build", "docker compose --progress=plain build"))
-                    yield* _(appendDeploymentLog(project.id, "$ docker compose --progress=plain build"))
-                    yield* _(
-                      runComposeWithStatus(
-                        project.directory,
-                        ["--progress", "plain", "build"],
-                        [0],
-                        project.id,
-                        "build"
-                      ).pipe(
-                        Effect.tapError(() =>
-                          setDeploymentStatus(project.id, "error", "docker compose build failed")
-                        )
+            onRight: (create) =>
+              Effect.gen(function* (_) {
+                yield* _(createProject(create))
+                const project = yield* _(loadProject(projectsRoot, repoSlug, cwd))
+                const selectedLabel = githubLabel?.trim() ?? ""
+                if (selectedLabel.length > 0) {
+                  const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
+                  const envText = yield* _(readEnvFile(globalEnvPath))
+                  const tokens = listGithubTokens(envText)
+                  const selected = findGithubTokenByLabel(tokens, selectedLabel)
+                  if (selected === null) {
+                    return HttpServerResponse.html(
+                      renderOutputPage(
+                        "GitHub token not found",
+                        `Label not found: ${selectedLabel}`
                       )
                     )
-                    yield* _(setDeploymentStatus(project.id, "up", "docker compose up -d"))
-                    yield* _(appendDeploymentLog(project.id, "$ docker compose up -d"))
-                    yield* _(
-                      runComposeWithStatus(
-                        project.directory,
-                        ["up", "-d"],
-                        [0],
-                        project.id,
-                        "up"
-                      ).pipe(
-                        Effect.tapError(() =>
-                          setDeploymentStatus(project.id, "error", "docker compose up failed")
-                        )
-                      )
-                    )
-                    yield* _(setDeploymentStatus(project.id, "running", "Container running"))
-                    const index = yield* _(scanProjects(projectsRoot, cwd))
-                    const html = renderDashboard(
-                      index,
-                      `Clone completed for ${repoSlug}.`
-                    )
-                    return HttpServerResponse.html(html)
-                  })
-                ),
-                Match.when({ _tag: "Help" }, () =>
-                  Effect.succeed(
-                    HttpServerResponse.html(
-                      renderOutputPage("Clone request", "Unexpected help command.")
+                  }
+                  const projectEnv = yield* _(readEnvFile(project.envProjectPath))
+                  const withGitToken = upsertEnvKey(
+                    projectEnv,
+                    "GIT_AUTH_TOKEN",
+                    selected.token
+                  )
+                  const nextProjectEnv = upsertEnvKey(withGitToken, "GH_TOKEN", selected.token)
+                  yield* _(writeEnvFile(project.envProjectPath, nextProjectEnv))
+                }
+                yield* _(syncProjectCodexAuth(projectsRoot, project))
+                yield* _(clearDeploymentLogs(project.id))
+                yield* _(setDeploymentStatus(project.id, "build", "docker compose --progress=plain build"))
+                yield* _(appendDeploymentLog(project.id, "$ docker compose --progress=plain build"))
+                yield* _(
+                  runComposeWithStatus(
+                    project.directory,
+                    ["--progress", "plain", "build"],
+                    [0],
+                    project.id,
+                    "build"
+                  ).pipe(
+                    Effect.tapError(() =>
+                      setDeploymentStatus(project.id, "error", "docker compose build failed")
                     )
                   )
-                ),
-                Match.when({ _tag: "Menu" }, () =>
-                  Effect.succeed(
-                    HttpServerResponse.html(
-                      renderOutputPage("Clone request", "Unexpected menu command.")
+                )
+                yield* _(setDeploymentStatus(project.id, "up", "docker compose up -d"))
+                yield* _(appendDeploymentLog(project.id, "$ docker compose up -d"))
+                yield* _(
+                  runComposeWithStatus(
+                    project.directory,
+                    ["up", "-d"],
+                    [0],
+                    project.id,
+                    "up"
+                  ).pipe(
+                    Effect.tapError(() =>
+                      setDeploymentStatus(project.id, "error", "docker compose up failed")
                     )
                   )
-                ),
-                Match.when({ _tag: "Status" }, () =>
-                  Effect.succeed(
-                    HttpServerResponse.html(
-                      renderOutputPage("Clone request", "Unexpected status command.")
-                    )
-                  )
-                ),
-                Match.exhaustive
-              )
+                )
+                yield* _(setDeploymentStatus(project.id, "running", "Container running"))
+                const index = yield* _(scanProjects(projectsRoot, cwd))
+                const html = renderDashboard(
+                  index,
+                  `Clone completed for ${repoSlug}.`
+                )
+                return HttpServerResponse.html(html)
+              })
           })
         )
       }).pipe(Effect.catchAll(htmlErrorResponse))

@@ -1,4 +1,5 @@
-import { NodeRuntime } from "@effect/platform-node"
+import { NodeContext, NodeRuntime } from "@effect/platform-node"
+import { Effect } from "effect"
 
 import { program } from "./program.js"
 
@@ -12,4 +13,4 @@ import { program } from "./program.js"
 // EFFECT: Effect<void, ServeError, NodeRuntime>
 // INVARIANT: program executed exactly once
 // COMPLEXITY: O(1)
-NodeRuntime.runMain(program)
+NodeRuntime.runMain(program.pipe(Effect.provide(NodeContext.layer)))

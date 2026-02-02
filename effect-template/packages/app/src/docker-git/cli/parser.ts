@@ -1,11 +1,13 @@
 import { Either, Match } from "effect"
 
-import { type Command, type ParseError } from "./domain.js"
-import { parseAuth } from "./parser-auth.js"
+import { type Command, type ParseError } from "@effect-template/lib/core/domain"
+
 import { parseAttach } from "./parser-attach.js"
+import { parseAuth } from "./parser-auth.js"
 import { parseClone } from "./parser-clone.js"
 import { buildCreateCommand } from "./parser-create.js"
 import { parseRawOptions } from "./parser-options.js"
+import { parsePanes } from "./parser-panes.js"
 import { usageText } from "./usage.js"
 
 const isHelpFlag = (token: string): boolean => token === "--help" || token === "-h"
@@ -49,6 +51,9 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
     Match.when("clone", () => parseClone(rest)),
     Match.when("attach", () => parseAttach(rest)),
     Match.when("tmux", () => parseAttach(rest)),
+    Match.when("panes", () => parsePanes(rest)),
+    Match.when("terms", () => parsePanes(rest)),
+    Match.when("terminals", () => parsePanes(rest)),
     Match.when("help", () => Either.right(helpCommand)),
     Match.when("ps", () => Either.right(statusCommand)),
     Match.when("status", () => Either.right(statusCommand)),

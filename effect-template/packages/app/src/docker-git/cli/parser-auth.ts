@@ -1,7 +1,14 @@
 import { Either, Match } from "effect"
 
-import { type AuthCommand, type Command, defaultTemplateConfig, type ParseError } from "./domain.js"
-import { parseRawOptions, type RawOptions } from "./parser-options.js"
+import type { RawOptions } from "@effect-template/lib/core/command-options"
+import {
+  type AuthCommand,
+  type Command,
+  defaultTemplateConfig,
+  type ParseError
+} from "@effect-template/lib/core/domain"
+
+import { parseRawOptions } from "./parser-options.js"
 
 type AuthOptions = {
   readonly envGlobalPath: string
