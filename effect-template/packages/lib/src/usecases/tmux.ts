@@ -49,6 +49,19 @@ const sendKeys = (
     Effect.zipRight(runTmux(["send-keys", "-t", `${session}:0.${pane}`, "C-m"]))
   )
 
+const shellEscape = (value: string): string => {
+  if (value.length === 0) {
+    return "''"
+  }
+  if (!/[^\w@%+=:,./-]/.test(value)) {
+    return value
+  }
+  const escaped = value.replaceAll("'", "'\"'\"'")
+  return `'${escaped}'`
+}
+
+const wrapBash = (command: string): string => `bash -lc ${shellEscape(command)}`
+
 const buildJobsCommand = (containerName: string): string =>
   [
     "while true; do",
@@ -65,7 +78,7 @@ const buildActionsCommand = (): string =>
     "echo \"Actions:\";",
     "echo \"  docker-git ps\";",
     "echo \"  docker-git logs\";",
-    "echo \"  docker-git ports\";",
+    "echo \"  docker-git status\";",
     "echo \"  docker exec <container> ps -eo pid,cmd,etime\";",
     "echo \"\";",
     "echo \"Tip: use Ctrl+b z to zoom a pane\";"
@@ -103,11 +116,29 @@ export const attachTmux = (
 
     yield* _(runDockerComposeUp(resolved))
     yield* _(runTmux(["new-session", "-d", "-s", session, "-n", "main"]))
-    yield* _(runTmux(["split-window", "-v", "-p", "25", "-t", `${session}:0`]))
-    yield* _(runTmux(["split-window", "-h", "-p", "35", "-t", `${session}:0.0`]))
+    yield* _(
+      runTmux([
+        "split-window",
+        "-v",
+        "-p",
+        "25",
+        "-t",
+        `${session}:0`,
+        wrapBash(`${buildActionsCommand()}; while true; do sleep 3600; done`)
+      ])
+    )
+    yield* _(
+      runTmux([
+        "split-window",
+        "-h",
+        "-p",
+        "35",
+        "-t",
+        `${session}:0.0`,
+        wrapBash(buildJobsCommand(config.template.containerName))
+      ])
+    )
     yield* _(sendKeys(session, "0", sshCommand))
-    yield* _(sendKeys(session, "1", buildJobsCommand(config.template.containerName)))
-    yield* _(sendKeys(session, "2", buildActionsCommand()))
     yield* _(runTmux(["select-pane", "-t", `${session}:0.0`]))
     yield* _(runTmux(["attach", "-t", session]))
   })
