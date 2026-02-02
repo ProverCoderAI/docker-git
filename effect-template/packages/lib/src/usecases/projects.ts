@@ -21,7 +21,7 @@ import {
 } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 
-const sshOptions = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+const sshOptions = "-tt -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 type ProjectLoadError = PlatformError | ConfigNotFoundError | ConfigDecodeError
 
@@ -443,7 +443,7 @@ export const connectProjectSsh = (
       command: "ssh",
       args: buildSshArgs(item)
     },
-    [0],
+    [0, 130],
     (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
   )
 
