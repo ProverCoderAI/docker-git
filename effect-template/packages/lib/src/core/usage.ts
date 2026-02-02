@@ -5,6 +5,7 @@ import type { ParseError } from "./domain.js"
 export const usageText = `docker-git menu
 docker-git create --repo-url <url> [options]
 docker-git clone <url> [options]
+docker-git attach [<url>] [options]
 docker-git ps
 docker-git auth <provider> <action> [options]
 
@@ -12,6 +13,7 @@ Commands:
   menu                Interactive menu (default when no args)
   create, init        Generate docker development environment
   clone               Create + run container and clone repo
+  attach, tmux        Open tmux workspace for a docker-git project
   ps, status          Show docker compose status for all docker-git projects
   auth                Manage GitHub/Codex auth for docker-git
 
@@ -31,6 +33,7 @@ Options:
   --codex-auth <path>       Host path for Codex auth cache (default: ./.docker-git/.orch/auth/codex)
   --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
   --out-dir <path>          Output directory (default: .docker-git/<org>/<repo>)
+  --project-dir <path>      Project directory for attach (default: .)
   --up | --no-up            Run docker compose up after init (default: --up)
   --force                   Overwrite existing files
   -h, --help                Show this help

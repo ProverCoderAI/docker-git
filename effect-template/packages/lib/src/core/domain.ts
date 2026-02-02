@@ -37,6 +37,11 @@ export interface MenuCommand {
   readonly _tag: "Menu"
 }
 
+export interface AttachCommand {
+  readonly _tag: "Attach"
+  readonly projectDir: string
+}
+
 export interface HelpCommand {
   readonly _tag: "Help"
   readonly message: string
@@ -90,7 +95,7 @@ export type AuthCommand =
   | AuthCodexStatusCommand
   | AuthCodexLogoutCommand
 
-export type Command = CreateCommand | MenuCommand | HelpCommand | StatusCommand | AuthCommand
+export type Command = CreateCommand | MenuCommand | AttachCommand | HelpCommand | StatusCommand | AuthCommand
 
 export type MenuAction =
   | { readonly _tag: "Create" }
