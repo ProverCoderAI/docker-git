@@ -116,29 +116,13 @@ export const attachTmux = (
 
     yield* _(runDockerComposeUp(resolved))
     yield* _(runTmux(["new-session", "-d", "-s", session, "-n", "main"]))
-    yield* _(
-      runTmux([
-        "split-window",
-        "-v",
-        "-p",
-        "25",
-        "-t",
-        `${session}:0`,
-        wrapBash(`${buildActionsCommand()}; while true; do sleep 3600; done`)
-      ])
-    )
-    yield* _(
-      runTmux([
-        "split-window",
-        "-h",
-        "-p",
-        "35",
-        "-t",
-        `${session}:0.0`,
-        wrapBash(buildJobsCommand(config.template.containerName))
-      ])
-    )
+    yield* _(runTmux(["split-window", "-v", "-p", "25", "-t", `${session}:0`]))
+    yield* _(runTmux(["split-window", "-h", "-p", "35", "-t", `${session}:0.0`]))
     yield* _(sendKeys(session, "0", sshCommand))
+    yield* _(sendKeys(session, "2", wrapBash(buildJobsCommand(config.template.containerName))))
+    yield* _(
+      sendKeys(session, "1", wrapBash(`${buildActionsCommand()}; while true; do sleep 3600; done`))
+    )
     yield* _(runTmux(["select-pane", "-t", `${session}:0.0`]))
     yield* _(runTmux(["attach", "-t", session]))
   })

@@ -19,6 +19,7 @@ import type { MenuEnv, MenuKeyInput, MenuRunner, MenuViewContext, ViewState } fr
 type SelectContext = MenuViewContext & {
   readonly runner: MenuRunner
   readonly setSshActive: (active: boolean) => void
+  readonly setSkipInputs: (update: (value: number) => number) => void
 }
 
 export const startSelectView = (
@@ -104,6 +105,7 @@ const handleSelectReturn = (
         Effect.sync(() => {
           resumeTui()
           context.setSshActive(false)
+          context.setSkipInputs(() => 2)
         })
       ),
       Effect.tap(() =>

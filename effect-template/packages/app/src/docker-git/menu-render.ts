@@ -173,16 +173,16 @@ const renderSelectDetails = (
   item: ProjectItem | undefined
 ): ReadonlyArray<React.ReactElement> => {
   if (!item) {
-    return [el(Text, { color: "gray" }, "No project selected.")]
+    return [el(Text, { color: "gray", wrap: "truncate" }, "No project selected.")]
   }
 
   return [
-    el(Text, { color: "cyan", bold: true }, "Details"),
-    el(Text, null, `Repo: ${item.repoUrl}`),
-    el(Text, null, `Ref: ${item.repoRef}`),
-    el(Text, null, `Project dir: ${item.projectDir}`),
-    el(Text, null, `Workspace: ${item.targetDir}`),
-    el(Text, null, `SSH: ${item.sshCommand}`)
+    el(Text, { color: "cyan", bold: true, wrap: "truncate" }, "Details"),
+    el(Text, { wrap: "truncate" }, `Repo: ${item.repoUrl}`),
+    el(Text, { wrap: "truncate" }, `Ref: ${item.repoRef}`),
+    el(Text, { wrap: "truncate" }, `Project dir: ${item.projectDir}`),
+    el(Text, { wrap: "truncate" }, `Workspace: ${item.targetDir}`),
+    el(Text, { wrap: "truncate" }, `SSH: ${item.sshCommand}`)
   ]
 }
 
@@ -192,25 +192,35 @@ export const renderSelect = (
   message: string | null
 ): React.ReactElement => {
   const el = React.createElement
-  const list = items.map((item, index) => {
+  const listLabels = items.map((item, index) => {
     const prefix = index === selected ? ">" : " "
     const refLabel = formatRepoRef(item.repoRef)
-    return el(
-      Text,
-      { key: item.projectDir, color: index === selected ? "green" : "white" },
-      `${prefix} ${index + 1}. ${item.displayName} (${refLabel})`
-    )
+    return `${prefix} ${index + 1}. ${item.displayName} (${refLabel})`
   })
+  const maxLabelWidth = listLabels.length > 0 ? Math.max(...listLabels.map((label) => label.length)) : 24
+  const listWidth = Math.min(Math.max(maxLabelWidth + 2, 28), 54)
+
+  const list = listLabels.map((label, index) =>
+    el(
+      Text,
+      {
+        key: items[index]?.projectDir ?? String(index),
+        color: index === selected ? "green" : "white",
+        wrap: "truncate"
+      },
+      label
+    )
+  )
 
   const listBox = el(
     Box,
-    { flexDirection: "column", minWidth: 36 },
+    { flexDirection: "column", width: listWidth },
     ...(list.length > 0 ? list : [el(Text, { color: "gray" }, "No projects found.")])
   )
   const details = renderSelectDetails(el, items[selected])
   const detailsBox = el(
     Box,
-    { flexDirection: "column", marginLeft: 2 },
+    { flexDirection: "column", marginLeft: 2, flexGrow: 1 },
     ...details
   )
   const hints = el(

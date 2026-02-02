@@ -66,6 +66,7 @@ type MenuInputContext = MenuViewContext & {
   readonly setInputStage: (stage: InputStage) => void
   readonly selected: number
   readonly setSelected: (update: (value: number) => number) => void
+  readonly setSkipInputs: (update: (value: number) => number) => void
   readonly sshActive: boolean
   readonly setSshActive: (active: boolean) => void
   readonly state: MenuState
@@ -155,7 +156,8 @@ const handleUserInput = (
     setMessage: context.setMessage,
     setActiveDir: context.setActiveDir,
     runner: context.runner,
-    setSshActive: context.setSshActive
+    setSshActive: context.setSshActive,
+    setSkipInputs: context.setSkipInputs
   })
 }
 
@@ -274,6 +276,7 @@ const TuiApp = () => {
         setInputStage: menu.setInputStage,
         selected: menu.selected,
         setSelected: menu.setSelected,
+        setSkipInputs: menu.setSkipInputs,
         sshActive: menu.sshActive,
         setSshActive: menu.setSshActive,
         state: menu.state,
