@@ -1,11 +1,12 @@
 import { Match } from "effect"
 
-import type { ParseError } from "./domain.js"
+import type { ParseError } from "@effect-template/lib/core/domain"
 
 export const usageText = `docker-git menu
 docker-git create --repo-url <url> [options]
 docker-git clone <url> [options]
 docker-git attach [<url>] [options]
+docker-git panes [<url>] [options]
 docker-git ps
 docker-git auth <provider> <action> [options]
 
@@ -14,6 +15,7 @@ Commands:
   create, init        Generate docker development environment
   clone               Create + run container and clone repo
   attach, tmux        Open tmux workspace for a docker-git project
+  panes, terms        List tmux panes for a docker-git project
   ps, status          Show docker compose status for all docker-git projects
   auth                Manage GitHub/Codex auth for docker-git
 

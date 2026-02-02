@@ -1,14 +1,17 @@
 import { Either } from "effect"
 
+import { buildCreateCommand, nonEmpty } from "@effect-template/lib/core/command-builders"
+import type { RawOptions } from "@effect-template/lib/core/command-options"
 import {
   type Command,
   defaultTemplateConfig,
   deriveRepoPathParts,
   type ParseError,
   resolveRepoInput
-} from "./domain.js"
-import { buildCreateCommand, nonEmpty } from "./parser-create.js"
-import { parseRawOptions, type RawOptions } from "./parser-options.js"
+} from "@effect-template/lib/core/domain"
+
+import { parseRawOptions } from "./parser-options.js"
+import { splitPositionalRepo } from "./parser-shared.js"
 
 const applyCloneDefaults = (raw: RawOptions, repoUrl: string): RawOptions => {
   const repoPath = deriveRepoPathParts(repoUrl).pathParts.join("/")
@@ -33,9 +36,7 @@ const applyCloneDefaults = (raw: RawOptions, repoUrl: string): RawOptions => {
 // INVARIANT: first positional arg is treated as repo url
 // COMPLEXITY: O(n) where n = |argv|
 export const parseClone = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> => {
-  const first = args[0]
-  const positionalRepoUrl = first !== undefined && !first.startsWith("-") ? first : undefined
-  const restArgs = positionalRepoUrl ? args.slice(1) : args
+  const { positionalRepoUrl, restArgs } = splitPositionalRepo(args)
 
   return Either.gen(function*(_) {
     const raw = yield* _(parseRawOptions(restArgs))

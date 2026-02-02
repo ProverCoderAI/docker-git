@@ -1,30 +1,7 @@
 import { Either, Match } from "effect"
 
-import { type ParseError } from "./domain.js"
-
-export interface RawOptions {
-  readonly repoUrl?: string
-  readonly repoRef?: string
-  readonly targetDir?: string
-  readonly sshPort?: string
-  readonly sshUser?: string
-  readonly containerName?: string
-  readonly serviceName?: string
-  readonly volumeName?: string
-  readonly secretsRoot?: string
-  readonly authorizedKeysPath?: string
-  readonly envGlobalPath?: string
-  readonly envProjectPath?: string
-  readonly codexAuthPath?: string
-  readonly codexHome?: string
-  readonly label?: string
-  readonly token?: string
-  readonly authWeb?: boolean
-  readonly outDir?: string
-  readonly projectDir?: string
-  readonly up?: boolean
-  readonly force?: boolean
-}
+import type { RawOptions } from "@effect-template/lib/core/command-options"
+import type { ParseError } from "@effect-template/lib/core/domain"
 
 interface ValueOptionSpec {
   readonly flag: string
@@ -155,3 +132,5 @@ export const parseRawOptions = (args: ReadonlyArray<string>): Either.Either<RawO
 
   return Either.right(raw)
 }
+
+export { type RawOptions } from "@effect-template/lib/core/command-options"

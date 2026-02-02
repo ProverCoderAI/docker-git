@@ -1,6 +1,6 @@
 import type { PlatformError } from "@effect/platform/Error"
 import { type ParseError } from "../core/domain.js"
-import { formatParseError, usageText } from "../core/usage.js"
+import { formatParseError } from "../core/parse-errors.js"
 import type {
   AuthError,
   CloneFailedError,
@@ -105,9 +105,7 @@ const renderNonParseError = (error: NonParseError): string =>
 // COMPLEXITY: O(1)
 export const renderError = (error: AppError): string => {
   if (isParseError(error)) {
-    return `${formatParseError(error)}
-
-${usageText}`
+    return formatParseError(error)
   }
 
   return renderNonParseError(error)
