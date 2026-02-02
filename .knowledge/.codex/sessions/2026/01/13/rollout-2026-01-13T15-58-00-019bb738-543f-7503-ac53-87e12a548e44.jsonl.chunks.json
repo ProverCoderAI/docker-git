@@ -1,0 +1,11 @@
+{
+  "original": "/home/user/docker-git/.knowledge/.codex/sessions/2026/01/13/rollout-2026-01-13T15-58-00-019bb738-543f-7503-ac53-87e12a548e44.jsonl",
+  "originalSize": 115372483,
+  "parts": [
+    "rollout-2026-01-13T15-58-00-019bb738-543f-7503-ac53-87e12a548e44.jsonl.part1",
+    "rollout-2026-01-13T15-58-00-019bb738-543f-7503-ac53-87e12a548e44.jsonl.part2"
+  ],
+  "splitAt": 99000000,
+  "partsCount": 2,
+  "createdAt": "2026-02-02T09:19:53.284Z"
+}

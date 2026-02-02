@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+node scripts/split-knowledge-large-files.js
+
+if [ -d ".knowledge" ]; then
+  git add -A .knowledge
+fi
+
+if [ -d ".knowlenge" ]; then
+  git add -A .knowlenge
+fi
+
+MAX_BYTES=$((99 * 1000 * 1000))
+too_large=()
+
+while IFS= read -r -d '' path; do
+  if ! git cat-file -e ":$path" 2>/dev/null; then
+    continue
+  fi
+  size=$(git cat-file -s ":$path")
+  if [ "$size" -gt "$MAX_BYTES" ]; then
+    too_large+=("$path ($size bytes)")
+  fi
+done < <(git diff --cached --name-only -z --diff-filter=ACM)
+
+if [ "${#too_large[@]}" -gt 0 ]; then
+  echo "ERROR: Staged files exceed 99 MiB limit."
+  printf ' - %s\n' "${too_large[@]}"
+  exit 1
+fi
