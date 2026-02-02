@@ -255,34 +255,37 @@ const TuiApp = () => {
   useReadyGate(menu.setReady)
   useSigintGuard(exit, menu.sshActive)
 
-  useInput((input, key) => {
-    if (!menu.ready) {
-      return
-    }
-    if (Date.now() < menu.ignoreUntil) {
-      return
-    }
-    if (menu.skipInputs > 0) {
-      menu.setSkipInputs((value) => (value > 0 ? value - 1 : 0))
-      return
-    }
-    handleUserInput(input, key, {
-      busy: menu.busy,
-      view: menu.view,
-      inputStage: menu.inputStage,
-      setInputStage: menu.setInputStage,
-      selected: menu.selected,
-      setSelected: menu.setSelected,
-      sshActive: menu.sshActive,
-      setSshActive: menu.setSshActive,
-      state: menu.state,
-      runner: menu.runner,
-      exit,
-      setView: menu.setView,
-      setMessage: menu.setMessage,
-      setActiveDir: menu.setActiveDir
-    })
-  })
+  useInput(
+    (input, key) => {
+      if (!menu.ready) {
+        return
+      }
+      if (Date.now() < menu.ignoreUntil) {
+        return
+      }
+      if (menu.skipInputs > 0) {
+        menu.setSkipInputs((value) => (value > 0 ? value - 1 : 0))
+        return
+      }
+      handleUserInput(input, key, {
+        busy: menu.busy,
+        view: menu.view,
+        inputStage: menu.inputStage,
+        setInputStage: menu.setInputStage,
+        selected: menu.selected,
+        setSelected: menu.setSelected,
+        sshActive: menu.sshActive,
+        setSshActive: menu.setSshActive,
+        state: menu.state,
+        runner: menu.runner,
+        exit,
+        setView: menu.setView,
+        setMessage: menu.setMessage,
+        setActiveDir: menu.setActiveDir
+      })
+    },
+    { isActive: !menu.sshActive }
+  )
 
   return renderView({
     state: menu.state,
