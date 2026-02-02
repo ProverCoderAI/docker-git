@@ -1,6 +1,5 @@
-import { Console, Effect, Match, pipe } from "effect"
-
 import { listProjects, readCloneRequest, runDockerGitClone } from "@effect-template/lib"
+import { Console, Effect, Match, pipe } from "effect"
 
 import { formatGreeting } from "../core/greeting.js"
 import { readGreetingVariant } from "../shell/cli.js"

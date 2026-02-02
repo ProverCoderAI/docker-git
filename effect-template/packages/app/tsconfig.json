@@ -4,6 +4,7 @@
 		"rootDir": ".",
 		"outDir": "dist",
 		"types": ["vitest"],
+		"jsx": "react-jsx",
 		"baseUrl": ".",
 		"paths": {
 			"@/*": ["src/*"]

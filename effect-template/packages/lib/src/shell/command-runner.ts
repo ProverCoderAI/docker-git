@@ -14,11 +14,13 @@ type RunCommandSpec = {
 const buildCommand = (
   spec: RunCommandSpec,
   stdout: "inherit" | "pipe",
-  stderr: "inherit" | "pipe"
+  stderr: "inherit" | "pipe",
+  stdin: Command.CommandInput = "pipe"
 ) =>
   pipe(
     Command.make(spec.command, ...spec.args),
     Command.workingDirectory(spec.cwd),
+    Command.stdin(stdin),
     Command.stdout(stdout),
     Command.stderr(stderr)
   )
@@ -38,7 +40,7 @@ export const runCommandWithExitCodes = <E>(
   onFailure: (exitCode: number) => E
 ): Effect.Effect<void, E | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
-    const exitCode = yield* _(Command.exitCode(buildCommand(spec, "inherit", "inherit")))
+    const exitCode = yield* _(Command.exitCode(buildCommand(spec, "inherit", "inherit", "inherit")))
     const numericExitCode = Number(exitCode)
     yield* _(ensureExitCode(numericExitCode, okExitCodes, onFailure))
   })
@@ -58,7 +60,7 @@ export const runCommandExitCode = (
 ): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.map(
     Command.exitCode(
-      buildCommand(spec, "inherit", "inherit")
+      buildCommand(spec, "inherit", "inherit", "inherit")
     ),
     Number
   )
@@ -89,7 +91,7 @@ export const runCommandCapture = <E>(
   Effect.scoped(
     Effect.gen(function*(_) {
       const executor = yield* _(CommandExecutor.CommandExecutor)
-      const process = yield* _(executor.start(buildCommand(spec, "pipe", "pipe")))
+      const process = yield* _(executor.start(buildCommand(spec, "pipe", "pipe", "pipe")))
       const bytes = yield* _(
         pipe(process.stdout, Stream.runCollect, Effect.map((chunks) => collectUint8Array(chunks)))
       )

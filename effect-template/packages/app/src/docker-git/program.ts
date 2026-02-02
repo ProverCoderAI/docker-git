@@ -1,5 +1,3 @@
-import { Effect, Match, pipe } from "effect"
-
 import type { Command, ParseError } from "@effect-template/lib/core/domain"
 import { readCommand } from "@effect-template/lib/shell/cli"
 import { createProject } from "@effect-template/lib/usecases/actions"
@@ -14,6 +12,7 @@ import {
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import { listProjectStatus } from "@effect-template/lib/usecases/projects"
+import { Effect, Match, pipe } from "effect"
 
 import { runMenu } from "./menu.js"
 
