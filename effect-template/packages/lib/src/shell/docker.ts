@@ -172,3 +172,35 @@ export const runDockerExecExitCode = (
     const exitCode = yield* _(Command.exitCode(command))
     return Number(exitCode)
   })
+
+// CHANGE: inspect container IP address
+// WHY: enable per-container DNS mapping on the host
+// QUOTE(ТЗ): "У каждого контейнера свой IP т.е свой домен"
+// REF: user-request-2026-01-30-dns
+// SOURCE: n/a
+// FORMAT THEOREM: forall c: inspect(c) -> ip(c)
+// PURITY: SHELL
+// EFFECT: Effect<string, DockerCommandError | PlatformError, CommandExecutor>
+// INVARIANT: returns empty string when not available
+// COMPLEXITY: O(command)
+export const runDockerInspectContainerIp = (
+  cwd: string,
+  containerName: string
+): Effect.Effect<string, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  pipe(
+    runCommandCapture(
+      {
+        cwd,
+        command: "docker",
+        args: [
+          "inspect",
+          "-f",
+          "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+          containerName
+        ]
+      },
+      [Number(ExitCode(0))],
+      (exitCode) => new DockerCommandError({ exitCode })
+    ),
+    Effect.map((output) => output.trim())
+  )

@@ -59,6 +59,9 @@
     "@effect/typeclass": "^0.38.0",
     "@effect/workflow": "^0.16.0",
     "effect": "^3.19.14",
+    "ink": "^5.0.1",
+    "react": "^18.3.1",
+    "react-reconciler": "^0.29.2",
     "ts-morph": "^27.0.2"
   },
   "devDependencies": {
@@ -86,6 +89,7 @@
     "eslint-plugin-sort-destructure-keys": "^2.0.0",
     "eslint-plugin-unicorn": "^62.0.0",
     "@vitest/eslint-plugin": "^1.6.6",
+    "@types/react": "^18.3.12",
     "globals": "^17.0.0",
     "jscpd": "^4.0.7",
     "typescript": "^5.9.3",

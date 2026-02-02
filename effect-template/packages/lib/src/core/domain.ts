@@ -94,6 +94,7 @@ export type Command = CreateCommand | MenuCommand | HelpCommand | StatusCommand 
 
 export type MenuAction =
   | { readonly _tag: "Create" }
+  | { readonly _tag: "Select" }
   | { readonly _tag: "Info" }
   | { readonly _tag: "Up" }
   | { readonly _tag: "Status" }
@@ -309,16 +310,20 @@ export const resolveRepoInput = (repoUrl: string): ResolvedRepoInput =>
 const normalizeMenuInput = (input: string): string => input.trim().toLowerCase()
 
 const createAliases = new Set(["1", "create", "c"])
-const infoAliases = new Set(["2", "info", "i"])
-const upAliases = new Set(["3", "up", "u", "start"])
-const statusAliases = new Set(["4", "status", "ps"])
-const logsAliases = new Set(["5", "logs", "log", "l"])
-const downAliases = new Set(["6", "down", "stop", "d"])
+const selectAliases = new Set(["2", "select", "s"])
+const infoAliases = new Set(["3", "info", "i"])
+const upAliases = new Set(["4", "up", "u", "start"])
+const statusAliases = new Set(["5", "status", "ps"])
+const logsAliases = new Set(["6", "logs", "log", "l"])
+const downAliases = new Set(["7", "down", "stop", "d"])
 const quitAliases = new Set(["0", "quit", "q", "exit"])
 
 const resolveMenuAction = (normalized: string): MenuAction | undefined => {
   if (createAliases.has(normalized)) {
     return { _tag: "Create" }
+  }
+  if (selectAliases.has(normalized)) {
+    return { _tag: "Select" }
   }
   if (infoAliases.has(normalized)) {
     return { _tag: "Info" }

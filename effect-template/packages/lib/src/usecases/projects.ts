@@ -5,13 +5,20 @@ import * as Path from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
 import type { ProjectConfig, TemplateConfig } from "../core/domain.js"
+import { deriveRepoPathParts } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
-import { runDockerComposePsFormatted } from "../shell/docker.js"
+import { runCommandWithExitCodes } from "../shell/command-runner.js"
+import { runDockerComposePsFormatted, runDockerComposeUp } from "../shell/docker.js"
 import type { ConfigDecodeError, ConfigNotFoundError, DockerCommandError } from "../shell/errors.js"
+import { CommandFailedError } from "../shell/errors.js"
 import { resolveBaseDir } from "../shell/paths.js"
 import { renderError } from "./errors.js"
 import { defaultProjectsRoot, formatConnectionInfo } from "./menu-helpers.js"
-import { findSshPrivateKey, resolveAuthorizedKeysPath } from "./path-helpers.js"
+import {
+  findSshPrivateKey,
+  resolveAuthorizedKeysPath,
+  resolvePathFromCwd
+} from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 
 const sshOptions = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
@@ -32,6 +39,26 @@ type ProjectSummary = {
   readonly sshCommand: string
   readonly authorizedKeysPath: string
   readonly authorizedKeysExists: boolean
+}
+
+export type ProjectItem = {
+  readonly projectDir: string
+  readonly displayName: string
+  readonly repoUrl: string
+  readonly repoRef: string
+  readonly containerName: string
+  readonly serviceName: string
+  readonly sshUser: string
+  readonly sshPort: number
+  readonly targetDir: string
+  readonly sshCommand: string
+  readonly sshKeyPath: string | null
+  readonly authorizedKeysPath: string
+  readonly authorizedKeysExists: boolean
+  readonly envGlobalPath: string
+  readonly envProjectPath: string
+  readonly codexAuthPath: string
+  readonly codexHome: string
 }
 
 type ProjectStatus = {
@@ -116,6 +143,53 @@ const renderProjectSummary = (summary: ProjectSummary): string =>
     summary.authorizedKeysExists,
     summary.sshCommand
   )
+
+const formatDisplayName = (repoUrl: string): string => {
+  const parts = deriveRepoPathParts(repoUrl)
+  if (parts.pathParts.length > 0) {
+    return parts.pathParts.join("/")
+  }
+  return repoUrl
+}
+
+const loadProjectItem = (
+  configPath: string,
+  sshKey: string | null
+): Effect.Effect<
+  ProjectItem,
+  PlatformError | ConfigNotFoundError | ConfigDecodeError,
+  FileSystem.FileSystem | Path.Path
+> =>
+  Effect.gen(function*(_) {
+    const { fs, path, resolved } = yield* _(resolveBaseDir(configPath))
+    const projectDir = path.dirname(resolved)
+    const config = yield* _(readProjectConfig(projectDir))
+    const template = config.template
+    const resolvedAuthorizedKeys = resolveAuthorizedKeysPath(path, projectDir, template.authorizedKeysPath)
+    const authExists = yield* _(fs.exists(resolvedAuthorizedKeys))
+    const sshCommand = buildSshCommand(template, sshKey)
+    const displayName = formatDisplayName(template.repoUrl)
+
+    return {
+      projectDir,
+      displayName,
+      repoUrl: template.repoUrl,
+      repoRef: template.repoRef,
+      containerName: template.containerName,
+      serviceName: template.serviceName,
+      sshUser: template.sshUser,
+      sshPort: template.sshPort,
+      targetDir: template.targetDir,
+      sshCommand,
+      sshKeyPath: sshKey,
+      authorizedKeysPath: resolvedAuthorizedKeys,
+      authorizedKeysExists: authExists,
+      envGlobalPath: resolvePathFromCwd(path, projectDir, template.envGlobalPath),
+      envProjectPath: resolvePathFromCwd(path, projectDir, template.envProjectPath),
+      codexAuthPath: resolvePathFromCwd(path, projectDir, template.codexAuthPath),
+      codexHome: template.codexHome
+    }
+  })
 
 const renderProjectStatusHeader = (status: ProjectStatus): string => `Project: ${status.projectDir}`
 
@@ -241,6 +315,159 @@ export const listProjects: Effect.Effect<
     }
   })
 )
+
+// CHANGE: collect docker-git connection info lines without logging
+// WHY: allow TUI to render connection info inline
+// QUOTE(ТЗ): "А кнопка \"Show connection info\" ничего не отображает"
+// REF: user-request-2026-02-01-tui-info
+// SOURCE: n/a
+// FORMAT THEOREM: forall p in projects: summary(p) -> line(p)
+// PURITY: SHELL
+// EFFECT: Effect<ReadonlyArray<string>, PlatformError, FileSystem | Path>
+// INVARIANT: output order matches configPaths order
+// COMPLEXITY: O(n) where n = |projects|
+const emptySummaries = (): ReadonlyArray<string> => []
+
+export const listProjectSummaries: Effect.Effect<
+  ReadonlyArray<string>,
+  PlatformError,
+  FileSystem.FileSystem | Path.Path
+> = pipe(
+  loadProjectIndex(),
+  Effect.flatMap((index) =>
+    index === null
+      ? Effect.succeed(emptySummaries())
+      : Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
+          const available: Array<string> = []
+
+          for (const configPath of index.configPaths) {
+            const summary = yield* _(
+              loadProjectSummary(configPath, sshKey).pipe(
+                Effect.matchEffect({
+                  onFailure: () => Effect.succeed(null),
+                  onSuccess: (value) => Effect.succeed(value)
+                })
+              )
+            )
+            if (summary !== null) {
+              available.push(renderProjectSummary(summary))
+            }
+          }
+
+          return available
+        })
+  )
+)
+
+// CHANGE: load docker-git projects for TUI selection
+// WHY: provide structured project data without noisy logs
+// QUOTE(ТЗ): "А ты можешь сделать удобный выбор проектов?"
+// REF: user-request-2026-02-02-select-project
+// SOURCE: n/a
+// FORMAT THEOREM: forall p in projects: item(p) -> selectable(p)
+// PURITY: SHELL
+// EFFECT: Effect<ReadonlyArray<ProjectItem>, PlatformError, FileSystem | Path>
+// INVARIANT: output order matches configPaths order
+// COMPLEXITY: O(n) where n = |projects|
+export const listProjectItems: Effect.Effect<
+  ReadonlyArray<ProjectItem>,
+  PlatformError,
+  FileSystem.FileSystem | Path.Path
+> = pipe(
+  loadProjectIndex(),
+  Effect.flatMap((index) =>
+    index === null
+      ? Effect.succeed([] as ReadonlyArray<ProjectItem>)
+      : Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
+          const available: Array<ProjectItem> = []
+
+          for (const configPath of index.configPaths) {
+            const item = yield* _(
+              loadProjectItem(configPath, sshKey).pipe(
+                Effect.matchEffect({
+                  onFailure: () => Effect.succeed(null),
+                  onSuccess: (value) => Effect.succeed(value)
+                })
+              )
+            )
+            if (item !== null) {
+              available.push(item)
+            }
+          }
+
+          return available
+        })
+  )
+)
+
+const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
+  const args: Array<string> = []
+  if (item.sshKeyPath !== null) {
+    args.push("-i", item.sshKeyPath)
+  }
+  args.push(
+    "-tt",
+    "-o",
+    "StrictHostKeyChecking=no",
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-p",
+    String(item.sshPort),
+    `${item.sshUser}@localhost`
+  )
+  return args
+}
+
+// CHANGE: connect to a project via SSH using its resolved settings
+// WHY: allow TUI to open a shell immediately after selection
+// QUOTE(ТЗ): "выбор проекта сразу подключает по SSH"
+// REF: user-request-2026-02-02-select-ssh
+// SOURCE: n/a
+// FORMAT THEOREM: forall p: connect(p) -> ssh(p)
+// PURITY: SHELL
+// EFFECT: Effect<void, CommandFailedError | PlatformError, CommandExecutor>
+// INVARIANT: command is ssh with deterministic args
+// COMPLEXITY: O(1)
+export const connectProjectSsh = (
+  item: ProjectItem
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runCommandWithExitCodes(
+    {
+      cwd: process.cwd(),
+      command: "ssh",
+      args: buildSshArgs(item)
+    },
+    [0],
+    (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
+  )
+
+// CHANGE: ensure docker compose is up before SSH connection
+// WHY: selected project should auto-start when not running
+// QUOTE(ТЗ): "Если не поднят то пусть поднимает"
+// REF: user-request-2026-02-02-select-up
+// SOURCE: n/a
+// FORMAT THEOREM: forall p: up(p) -> ssh(p)
+// PURITY: SHELL
+// EFFECT: Effect<void, CommandFailedError | DockerCommandError | PlatformError, CommandExecutor>
+// INVARIANT: docker compose up runs before ssh
+// COMPLEXITY: O(1)
+export const connectProjectSshWithUp = (
+  item: ProjectItem
+): Effect.Effect<
+  void,
+  CommandFailedError | DockerCommandError | PlatformError,
+  CommandExecutor.CommandExecutor
+> =>
+  Effect.flatMap(
+    runDockerComposeUp(item.projectDir),
+    () => connectProjectSsh(item)
+  )
 
 // CHANGE: show docker compose status for all known docker-git projects
 // WHY: allow checking active containers without switching directories

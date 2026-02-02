@@ -1,33 +1,37 @@
-import { type TemplateConfig } from "./domain.js"
+import type { TemplateConfig } from "./domain.js"
 
 export type FileSpec =
   | { readonly _tag: "File"; readonly relativePath: string; readonly contents: string; readonly mode?: number }
   | { readonly _tag: "Dir"; readonly relativePath: string }
 
-// CHANGE: install bun+codex and ensure workspace ownership inside the container
-// WHY: allow tooling + cloning into root-level workspaces outside /home
-// QUOTE(ТЗ): "Клонирует он в \"/\""
-// REF: user-request-2026-01-27
-// SOURCE: n/a
-// FORMAT THEOREM: forall cfg: dockerfile(cfg) exposes bun+codex in PATH
-// PURITY: CORE
-// EFFECT: Effect<string, never, never>
-// INVARIANT: base image and ssh setup preserved
-// COMPLEXITY: O(1)
-const renderDockerfile = (config: TemplateConfig): string =>
+const renderDockerfilePrelude = (): string =>
   `FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV NVM_DIR=/usr/local/nvm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssh-server git gh ca-certificates nodejs npm curl unzip bsdutils sudo \
+    openssh-server git gh ca-certificates curl unzip bsdutils sudo \
+    make docker.io docker-compose \
  && rm -rf /var/lib/apt/lists/*
 
 # Passwordless sudo for all users (container is disposable)
 RUN printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
-  && chmod 0440 /etc/sudoers.d/zz-all
+  && chmod 0440 /etc/sudoers.d/zz-all`
 
-# Tooling: pnpm + Codex CLI (bun)
+const renderDockerfileNode = (config: TemplateConfig): string =>
+  `# Tooling: Node 24 (NodeSource) + nvm
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+  && apt-get install -y --no-install-recommends nodejs \
+  && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p ${config.targetDir}
+RUN mkdir -p /usr/local/nvm \
+  && curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+RUN printf "export NVM_DIR=/usr/local/nvm\\n[ -s /usr/local/nvm/nvm.sh ] && . /usr/local/nvm/nvm.sh\\n" \
+  > /etc/profile.d/nvm.sh && chmod 0644 /etc/profile.d/nvm.sh`
+
+const renderDockerfileBun = (config: TemplateConfig): string =>
+  `# Tooling: pnpm + Codex CLI (bun)
 RUN npm i -g pnpm@${config.pnpmVersion}
 ENV BUN_INSTALL=/usr/local/bun
 ENV TERM=xterm-256color
@@ -37,9 +41,10 @@ RUN ln -sf /usr/local/bun/bin/bun /usr/local/bin/bun
 RUN script -q -e -c "bun add -g @openai/codex@latest" /dev/null
 RUN ln -sf /usr/local/bun/bin/codex /usr/local/bin/codex
 RUN printf "export BUN_INSTALL=/usr/local/bun\\nexport PATH=/usr/local/bun/bin:$PATH\\n" \
-  > /etc/profile.d/bun.sh && chmod 0644 /etc/profile.d/bun.sh
+  > /etc/profile.d/bun.sh && chmod 0644 /etc/profile.d/bun.sh`
 
-# Create non-root user for SSH (align UID/GID with host user 1000)
+const renderDockerfileUsers = (config: TemplateConfig): string =>
+  `# Create non-root user for SSH (align UID/GID with host user 1000)
 RUN groupadd -g 1000 ${config.sshUser} || true
 RUN if id -u ${config.sshUser} >/dev/null 2>&1; then \
       usermod -u 1000 -g 1000 -o ${config.sshUser}; \
@@ -58,9 +63,10 @@ RUN printf "%s\\n" \
   "PermitRootLogin no" \
   "PubkeyAuthentication yes" \
   "AllowUsers ${config.sshUser}" \
-  > /etc/ssh/sshd_config.d/${config.sshUser}.conf
+  > /etc/ssh/sshd_config.d/${config.sshUser}.conf`
 
-# Workspace path (supports root-level dirs like /repo)
+const renderDockerfileWorkspace = (config: TemplateConfig): string =>
+  `# Workspace path (supports root-level dirs like /repo)
 RUN mkdir -p ${config.targetDir} \
   && chown -R 1000:1000 /home/${config.sshUser} \
   && if [ "${config.targetDir}" != "/" ]; then chown -R 1000:1000 "${config.targetDir}"; fi
@@ -69,8 +75,26 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 22
-ENTRYPOINT ["/entrypoint.sh"]
-`
+ENTRYPOINT ["/entrypoint.sh"]`
+
+// CHANGE: install bun+codex and ensure workspace ownership inside the container
+// WHY: allow tooling + cloning into root-level workspaces outside /home
+// QUOTE(ТЗ): "Клонирует он в \"/\""
+// REF: user-request-2026-01-27
+// SOURCE: n/a
+// FORMAT THEOREM: forall cfg: dockerfile(cfg) exposes bun+codex in PATH
+// PURITY: CORE
+// EFFECT: Effect<string, never, never>
+// INVARIANT: base image and ssh setup preserved
+// COMPLEXITY: O(1)
+const renderDockerfile = (config: TemplateConfig): string =>
+  [
+    renderDockerfilePrelude(),
+    renderDockerfileNode(config),
+    renderDockerfileBun(config),
+    renderDockerfileUsers(config),
+    renderDockerfileWorkspace(config)
+  ].join("\n\n")
 
 // CHANGE: ensure target dir ownership and git identity in entrypoint
 // WHY: allow cloning into root-level workspaces + auto-config git for commits
@@ -117,6 +141,19 @@ chown -R 1000:1000 ${config.codexHome}
 HOME_OWNER="$(stat -c "%u:%g" /home/${config.sshUser} 2>/dev/null || echo "")"
 if [[ "$HOME_OWNER" != "1000:1000" ]]; then
   chown -R 1000:1000 /home/${config.sshUser} || true
+fi`
+
+const renderEntrypointDockerSocket = (config: TemplateConfig): string =>
+  `# Ensure docker socket access for ${config.sshUser}
+if [[ -S /var/run/docker.sock ]]; then
+  DOCKER_SOCK_GID="$(stat -c "%g" /var/run/docker.sock)"
+  DOCKER_GROUP="$(getent group "$DOCKER_SOCK_GID" | cut -d: -f1 || true)"
+  if [[ -z "$DOCKER_GROUP" ]]; then
+    DOCKER_GROUP="docker"
+    groupadd -g "$DOCKER_SOCK_GID" "$DOCKER_GROUP" || true
+  fi
+  usermod -aG "$DOCKER_GROUP" ${config.sshUser} || true
+  printf "export DOCKER_HOST=unix:///var/run/docker.sock\n" > /etc/profile.d/docker-host.sh
 fi`
 
 const renderEntrypointAutoUpdate = (): string =>
@@ -229,13 +266,16 @@ const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointHeader(config),
     renderEntrypointAuthorizedKeys(config),
     renderEntrypointCodexHome(config),
+    renderEntrypointDockerSocket(config),
     renderEntrypointGitConfig(config),
     renderEntrypointBackgroundTasks(config),
     renderEntrypointSshd()
   ].join("\n\n")
 
-const renderDockerCompose = (config: TemplateConfig): string =>
-  `services:
+const renderDockerCompose = (config: TemplateConfig): string => {
+  const networkName = `${config.serviceName}-net`
+
+  return `services:
   ${config.serviceName}:
     build: .
     container_name: ${config.containerName}
@@ -253,10 +293,18 @@ const renderDockerCompose = (config: TemplateConfig): string =>
       - ${config.volumeName}:/home/${config.sshUser}
       - ${config.authorizedKeysPath}:/authorized_keys:ro
       - ${config.codexAuthPath}:${config.codexHome}
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - ${networkName}
+
+networks:
+  ${networkName}:
+    driver: bridge
 
 volumes:
   ${config.volumeName}:
 `
+}
 
 const renderGitignore = (): string =>
   `# Local secrets and keys

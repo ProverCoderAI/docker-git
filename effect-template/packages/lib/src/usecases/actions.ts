@@ -6,11 +6,13 @@ import { Duration, Effect, Fiber, Schedule } from "effect"
 
 import type { CreateCommand } from "../core/domain.js"
 import { runDockerComposeLogsFollow, runDockerComposeUp, runDockerExecExitCode } from "../shell/docker.js"
-import { CloneFailedError } from "../shell/errors.js"
 import type { DockerCommandError, FileExistsError, PortProbeError } from "../shell/errors.js"
+import { CloneFailedError } from "../shell/errors.js"
 import { writeProjectFiles } from "../shell/files.js"
 import { findAvailablePort } from "../shell/ports.js"
+import { logContainerIpAccess, logDockerDnsAccess } from "./access-log.js"
 import { ensureCodexConfigFile, migrateLegacyOrchLayout, syncAuthArtifacts } from "./auth-sync.js"
+import { ensureDockerDnsHost } from "./docker-dns.js"
 import { findAuthorizedKeysSource, findSshPrivateKey, resolveAuthorizedKeysPath } from "./path-helpers.js"
 import { buildSshCommand } from "./projects.js"
 import { withFsPathContext } from "./runtime.js"
@@ -374,4 +376,9 @@ export const createProject = (command: CreateCommand) =>
     }
 
     yield* _(runDockerUpIfNeeded(resolvedOutDir, projectConfig, command.runUp, command.waitForClone))
+    if (command.runUp) {
+      yield* _(ensureDockerDnsHost(resolvedOutDir, projectConfig.containerName, projectConfig.repoUrl))
+      yield* _(logDockerDnsAccess(projectConfig))
+      yield* _(logContainerIpAccess(resolvedOutDir, projectConfig))
+    }
   })

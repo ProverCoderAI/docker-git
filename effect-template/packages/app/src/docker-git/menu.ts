@@ -1,310 +1,315 @@
-import type * as CommandExecutor from "@effect/platform/CommandExecutor"
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
-import type * as Terminal from "@effect/platform/Terminal"
-import { Effect, Either, Match, pipe } from "effect"
-
-import {
-  type CreateCommand,
-  deriveRepoPathParts,
-  type MenuAction,
-  parseMenuSelection,
-  type ProjectConfig
-} from "@effect-template/lib/core/domain"
-import { parseArgs } from "@effect-template/lib/core/parser"
-import { formatParseError, usageText } from "@effect-template/lib/core/usage"
-import { readProjectConfig } from "@effect-template/lib/shell/config"
-import {
-  runDockerComposeDown,
-  runDockerComposeLogs,
-  runDockerComposePs,
-  runDockerComposeUp
-} from "@effect-template/lib/shell/docker"
-import type { InputCancelledError } from "@effect-template/lib/shell/errors"
-import { promptLine } from "@effect-template/lib/shell/input"
-import { createProject } from "@effect-template/lib/usecases/actions"
+import { type InputCancelledError, InputReadError } from "@effect-template/lib/shell/errors"
 import { type AppError, renderError } from "@effect-template/lib/usecases/errors"
+import { NodeContext } from "@effect/platform-node"
+import { Effect, pipe } from "effect"
+import { render, useApp, useInput } from "ink"
+import React, { useEffect, useMemo, useState } from "react"
+
+import { handleCreateInput, resolveCreateInputs } from "./menu-create.js"
+import { handleMenuInput } from "./menu-menu.js"
+import { renderCreate, renderMenu, renderSelect, renderStepLabel } from "./menu-render.js"
+import { handleSelectInput } from "./menu-select.js"
 import {
-  defaultProjectsRoot,
-  findSshPrivateKey,
-  formatConnectionInfo,
-  isRepoUrlInput,
-  resolveAuthorizedKeysPath
-} from "@effect-template/lib/usecases/menu-helpers"
+  createSteps,
+  type MenuEnv,
+  type MenuKeyInput,
+  type MenuRunner,
+  type MenuState,
+  type MenuViewContext,
+  type ViewState
+} from "./menu-types.js"
 
-type MenuState = {
-  readonly cwd: string
-  readonly activeDir: string | null
-}
-
-type MenuOutcome =
-  | { readonly _tag: "Continue"; readonly state: MenuState }
-  | { readonly _tag: "Quit" }
-
-const continueWith = (state: MenuState): MenuOutcome => ({ _tag: "Continue", state })
-
-const quitOutcome: MenuOutcome = { _tag: "Quit" }
-
-// CHANGE: handle create commands without nested generator functions
-// WHY: keep menu flow within lint complexity limits while preserving behavior
-// QUOTE(ТЗ): "Хочу что бы открылось менюшка"
-// REF: user-request-2026-01-07
+// CHANGE: keep menu state in the TUI layer
+// WHY: provide a dynamic interface with live selection and inputs
+// QUOTE(ТЗ): "TUI? Красивый, удобный"
+// REF: user-request-2026-02-01-tui
 // SOURCE: n/a
-// FORMAT THEOREM: forall c: create(c) -> activeDir(resolved(c))
-// PURITY: SHELL
-// EFFECT: Effect<MenuOutcome, AppError, FileSystem | Path | CommandExecutor>
-// INVARIANT: activeDir is set to resolved output directory
-// COMPLEXITY: O(1)
-const applyCreateCommand = (
-  state: MenuState,
-  create: CreateCommand
-): Effect.Effect<
-  MenuOutcome,
-  AppError,
-  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
-> =>
-  Effect.gen(function*(_) {
-    const path = yield* _(Path.Path)
-    const resolvedOutDir = path.resolve(create.outDir)
-    yield* _(createProject(create))
-    return continueWith({ ...state, activeDir: resolvedOutDir })
-  })
-
-const renderMenuText = (state: MenuState): string => {
-  const activeLine = state.activeDir === null
-    ? "Active project: (none)"
-    : `Active project: ${state.activeDir}`
-
-  return `docker-git menu
-${activeLine}
-
-1) Create project
-2) Show connection info
-3) docker compose up -d --build
-4) docker compose ps
-5) docker compose logs --tail=200
-6) docker compose down
-0) Quit
-
-Select option: `
-}
-
-const normalizeYesNo = (input: string): string => input.trim().toLowerCase()
-
-const parseYesDefault = (input: string, fallback: boolean): boolean => {
-  const normalized = normalizeYesNo(input)
-  if (normalized === "y" || normalized === "yes") {
-    return true
-  }
-  if (normalized === "n" || normalized === "no") {
-    return false
-  }
-  return fallback
-}
-
-const handleMissingConfig = (state: MenuState, error: AppError) =>
-  pipe(
-    Effect.logError(renderError(error)),
-    Effect.as<MenuOutcome>(continueWith(state))
-  )
-
-const withProjectConfig = <R>(
-  state: MenuState,
-  f: (config: ProjectConfig) => Effect.Effect<void, AppError, R>
-) =>
-  pipe(
-    readProjectConfig(state.activeDir ?? state.cwd),
-    Effect.matchEffect({
-      onFailure: (error) =>
-        error._tag === "ConfigNotFoundError" || error._tag === "ConfigDecodeError"
-          ? handleMissingConfig(state, error)
-          : Effect.fail(error),
-      onSuccess: (config) => pipe(f(config), Effect.as<MenuOutcome>(continueWith(state)))
-    })
-  )
-
-type CreateInputs = {
-  readonly repoUrl: string
-  readonly repoRef: string
-  readonly outDir: string
-  readonly secretsRoot: string
-  readonly runUp: boolean
-  readonly force: boolean
-}
-
-const buildCreateArgs = (input: CreateInputs): ReadonlyArray<string> => {
-  const args: Array<string> = ["create", "--repo-url", input.repoUrl, "--secrets-root", input.secretsRoot]
-  if (input.repoRef.length > 0) {
-    args.push("--repo-ref", input.repoRef)
-  }
-  args.push("--out-dir", input.outDir)
-  if (!input.runUp) {
-    args.push("--no-up")
-  }
-  if (input.force) {
-    args.push("--force")
-  }
-  return args
-}
-
-const readCreateInputs = (
-  state: MenuState,
-  repoUrlOverride?: string
-): Effect.Effect<CreateInputs | null, AppError, Path.Path | Terminal.Terminal> =>
-  Effect.gen(function*(_) {
-    const repoUrlInput = repoUrlOverride ?? (yield* _(promptLine("Repo URL: ")))
-    const repoUrl = repoUrlInput.trim()
-    if (repoUrl.length === 0) {
-      yield* _(Effect.logError("Repo URL is required."))
-      return null
-    }
-
-    const path = yield* _(Path.Path)
-    const projectsRoot = defaultProjectsRoot(state.cwd)
-    const secretsRoot = path.join(projectsRoot, "secrets")
-    const repoPath = deriveRepoPathParts(repoUrl).pathParts
-    const defaultOutDir = path.join(projectsRoot, ...repoPath)
-    const repoRefInput = yield* _(promptLine("Repo ref [main]: "))
-    const repoRef = repoRefInput.trim()
-
-    const outDirInput = yield* _(
-      promptLine(`Output dir for docker files [${defaultOutDir}]: `)
-    )
-    const outDir = outDirInput.trim().length > 0 ? outDirInput.trim() : defaultOutDir
-
-    const runUpInput = yield* _(promptLine("Run docker compose up now? [Y/n]: "))
-    const runUp = parseYesDefault(runUpInput, true)
-
-    const forceInput = yield* _(promptLine("Overwrite existing files? [y/N]: "))
-    const force = parseYesDefault(forceInput, false)
-
-    return { repoUrl, repoRef, outDir, secretsRoot, runUp, force }
-  })
-
-const handleCreate = (state: MenuState, repoUrlOverride?: string) =>
-  Effect.gen(function*(_) {
-    const input = yield* _(readCreateInputs(state, repoUrlOverride))
-    if (input === null) {
-      return continueWith(state)
-    }
-
-    const parsed = parseArgs(buildCreateArgs(input))
-    return yield* _(
-      Either.match(parsed, {
-        onLeft: (error) => pipe(Effect.logError(formatParseError(error)), Effect.as<MenuOutcome>(continueWith(state))),
-        onRight: (command) =>
-          Match.value(command).pipe(
-            Match.when({ _tag: "Create" }, (create) => applyCreateCommand(state, create)),
-            Match.when(
-              { _tag: "Help" },
-              () => pipe(Effect.log(usageText), Effect.as<MenuOutcome>(continueWith(state)))
-            ),
-            Match.when({ _tag: "AuthGithubLogin" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
-            Match.when({ _tag: "AuthGithubStatus" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
-            Match.when({ _tag: "AuthGithubLogout" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
-            Match.when({ _tag: "AuthCodexLogin" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
-            Match.when({ _tag: "AuthCodexStatus" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
-            Match.when({ _tag: "AuthCodexLogout" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
-            Match.when({ _tag: "Status" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
-            Match.when({ _tag: "Menu" }, () => Effect.succeed<MenuOutcome>(continueWith(state))),
-            Match.exhaustive
-          )
-      })
-    )
-  })
-
-const handleMenuAction = (
-  state: MenuState,
-  action: MenuAction
-) =>
-  Match.value(action).pipe(
-    Match.when({ _tag: "Quit" }, () => Effect.succeed<MenuOutcome>(quitOutcome)),
-    Match.when({ _tag: "Create" }, () => handleCreate(state)),
-    Match.when({ _tag: "Info" }, () =>
-      withProjectConfig(state, (config) =>
-        Effect.gen(function*(_) {
-          const fs = yield* _(FileSystem.FileSystem)
-          const path = yield* _(Path.Path)
-          const baseDir = state.activeDir ?? state.cwd
-          const resolvedAuthorizedKeys = resolveAuthorizedKeysPath(
-            path,
-            baseDir,
-            config.template.authorizedKeysPath
-          )
-          const authExists = yield* _(fs.exists(resolvedAuthorizedKeys))
-          const sshKey = yield* _(findSshPrivateKey(fs, path, state.cwd))
-          const sshBase = `ssh -p ${config.template.sshPort} ${config.template.sshUser}@localhost`
-          const sshCommand = sshKey === null
-            ? sshBase
-            : `ssh -i ${sshKey} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${config.template.sshPort} ${config.template.sshUser}@localhost`
-
-          yield* _(
-            Effect.log(
-              formatConnectionInfo(baseDir, config, resolvedAuthorizedKeys, authExists, sshCommand)
-            )
-          )
-
-          if (!authExists) {
-            yield* _(
-              Effect.logError(
-                `Create ${resolvedAuthorizedKeys} with your public key to enable SSH.`
-              )
-            )
-          }
-        }))),
-    Match.when({ _tag: "Up" }, () => withProjectConfig(state, () => runDockerComposeUp(state.activeDir ?? state.cwd))),
-    Match.when({ _tag: "Status" }, () =>
-      withProjectConfig(state, () => runDockerComposePs(state.activeDir ?? state.cwd))),
-    Match.when({ _tag: "Logs" }, () =>
-      withProjectConfig(state, () =>
-        runDockerComposeLogs(state.activeDir ?? state.cwd))),
-    Match.when({ _tag: "Down" }, () =>
-      withProjectConfig(state, () =>
-        runDockerComposeDown(state.activeDir ?? state.cwd))),
-    Match.exhaustive
-  )
-
-const menuLoop = (
-  state: MenuState
-): Effect.Effect<
-  void,
-  AppError | InputCancelledError,
-  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor | Terminal.Terminal
-> =>
-  pipe(
-    promptLine(renderMenuText(state)),
-    Effect.flatMap((input) => {
-      const trimmed = input.trim()
-      if (isRepoUrlInput(trimmed)) {
-        return handleCreate(state, trimmed)
-      }
-      const selection = parseMenuSelection(input)
-      return Either.match(selection, {
-        onLeft: (error) => pipe(Effect.logError(formatParseError(error)), Effect.as<MenuOutcome>(continueWith(state))),
-        onRight: (action) => handleMenuAction(state, action)
-      })
-    }),
-    Effect.flatMap((outcome) =>
-      Match.value(outcome).pipe(
-        Match.when({ _tag: "Quit" }, () => Effect.void),
-        Match.when({ _tag: "Continue" }, ({ state: nextState }) => menuLoop(nextState)),
-        Match.exhaustive
-      )
-    )
-  )
-
-// CHANGE: provide an interactive menu for docker-git management
-// WHY: enable a Codex-like interface without extra flags
-// QUOTE(ТЗ): "Я хочу что бы открылось менюшка"
-// REF: user-request-2026-01-07
-// SOURCE: n/a
-// FORMAT THEOREM: forall s: menu(s) terminates when Quit selected
+// FORMAT THEOREM: forall s: input(s) -> state'(s)
 // PURITY: SHELL
 // EFFECT: Effect<void, AppError, FileSystem | Path | CommandExecutor>
-// INVARIANT: menu loops until explicit quit or ctrl+c
-// COMPLEXITY: O(n) per menu action
+// INVARIANT: activeDir updated only after successful create
+// COMPLEXITY: O(1) per keypress
+
+const useRunner = (
+  setBusy: (busy: boolean) => void,
+  setMessage: (message: string | null) => void
+) => {
+  const runEffect = function<E extends AppError>(effect: Effect.Effect<void, E, MenuEnv>) {
+    setBusy(true)
+    const program = pipe(
+      effect,
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.sync(() => {
+            setMessage(renderError(error))
+          }),
+        onSuccess: () => Effect.void
+      }),
+      Effect.ensuring(
+        Effect.sync(() => {
+          setBusy(false)
+        })
+      )
+    )
+    void Effect.runPromise(Effect.provide(program, NodeContext.layer))
+  }
+
+  return { runEffect }
+}
+
+type InputStage = "cold" | "active"
+
+type MenuInputContext = MenuViewContext & {
+  readonly busy: boolean
+  readonly view: ViewState
+  readonly inputStage: InputStage
+  readonly setInputStage: (stage: InputStage) => void
+  readonly selected: number
+  readonly setSelected: (update: (value: number) => number) => void
+  readonly sshActive: boolean
+  readonly setSshActive: (active: boolean) => void
+  readonly state: MenuState
+  readonly runner: MenuRunner
+  readonly exit: () => void
+}
+
+const activateInput = (
+  input: string,
+  key: Pick<MenuKeyInput, "upArrow" | "downArrow" | "return">,
+  context: Pick<MenuInputContext, "inputStage" | "setInputStage">
+): { readonly activated: boolean; readonly allowProcessing: boolean } => {
+  if (context.inputStage === "active") {
+    return { activated: false, allowProcessing: true }
+  }
+
+  if (input.trim().length > 0) {
+    context.setInputStage("active")
+    return { activated: true, allowProcessing: true }
+  }
+
+  if (key.upArrow || key.downArrow || key.return) {
+    context.setInputStage("active")
+    return { activated: true, allowProcessing: false }
+  }
+
+  if (input.length > 0) {
+    context.setInputStage("active")
+    return { activated: true, allowProcessing: true }
+  }
+
+  return { activated: false, allowProcessing: false }
+}
+
+const shouldHandleMenuInput = (
+  input: string,
+  key: Pick<MenuKeyInput, "upArrow" | "downArrow" | "return">,
+  context: Pick<MenuInputContext, "inputStage" | "setInputStage">
+): boolean => {
+  const activation = activateInput(input, key, context)
+  if (activation.activated && !activation.allowProcessing) {
+    return false
+  }
+  return activation.allowProcessing
+}
+
+const handleUserInput = (
+  input: string,
+  key: MenuKeyInput,
+  context: MenuInputContext
+) => {
+  if (context.busy) {
+    return
+  }
+  if (context.sshActive) {
+    return
+  }
+  if (context.view._tag === "Menu") {
+    if (!shouldHandleMenuInput(input, key, context)) {
+      return
+    }
+    handleMenuInput(input, key, {
+      selected: context.selected,
+      setSelected: context.setSelected,
+      state: context.state,
+      runner: context.runner,
+      exit: context.exit,
+      setView: context.setView,
+      setMessage: context.setMessage
+    })
+    return
+  }
+
+  if (context.view._tag === "Create") {
+    handleCreateInput(input, key, context.view, {
+      state: context.state,
+      setView: context.setView,
+      setMessage: context.setMessage,
+      runner: context.runner,
+      setActiveDir: context.setActiveDir
+    })
+    return
+  }
+
+  handleSelectInput(input, key, context.view, {
+    setView: context.setView,
+    setMessage: context.setMessage,
+    setActiveDir: context.setActiveDir,
+    runner: context.runner,
+    setSshActive: context.setSshActive
+  })
+}
+
+type RenderContext = {
+  readonly state: MenuState
+  readonly view: ViewState
+  readonly activeDir: string | null
+  readonly selected: number
+  readonly busy: boolean
+  readonly message: string | null
+}
+
+const renderView = (context: RenderContext) => {
+  if (context.view._tag === "Menu") {
+    return renderMenu(context.state.cwd, context.activeDir, context.selected, context.busy, context.message)
+  }
+
+  if (context.view._tag === "Create") {
+    const currentDefaults = resolveCreateInputs(context.state.cwd, context.view.values)
+    const step = createSteps[context.view.step] ?? "repoUrl"
+    const label = renderStepLabel(step, currentDefaults)
+
+    return renderCreate(label, context.view.buffer, context.message, context.view.step, currentDefaults)
+  }
+
+  return renderSelect(context.view.items, context.view.selected, context.message)
+}
+
+const useMenuState = () => {
+  const [activeDir, setActiveDir] = useState<string | null>(null)
+  const [selected, setSelected] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [view, setView] = useState<ViewState>({ _tag: "Menu" })
+  const [inputStage, setInputStage] = useState<InputStage>("cold")
+  const [ready, setReady] = useState(false)
+  const [skipInputs, setSkipInputs] = useState(2)
+  const [sshActive, setSshActive] = useState(false)
+  const ignoreUntil = useMemo(() => Date.now() + 400, [])
+  const state = useMemo<MenuState>(() => ({ cwd: process.cwd(), activeDir }), [activeDir])
+  const runner = useRunner(setBusy, setMessage)
+
+  return {
+    activeDir,
+    setActiveDir,
+    selected,
+    setSelected,
+    busy,
+    message,
+    setMessage,
+    view,
+    setView,
+    inputStage,
+    setInputStage,
+    ready,
+    setReady,
+    skipInputs,
+    setSkipInputs,
+    sshActive,
+    setSshActive,
+    ignoreUntil,
+    state,
+    runner
+  }
+}
+
+const useReadyGate = (setReady: (ready: boolean) => void) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setReady(true)
+    }, 150)
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [setReady])
+}
+
+const useSigintGuard = (exit: () => void, sshActive: boolean) => {
+  useEffect(() => {
+    const handleSigint = () => {
+      if (sshActive) {
+        return
+      }
+      exit()
+    }
+    process.on("SIGINT", handleSigint)
+    return () => {
+      process.off("SIGINT", handleSigint)
+    }
+  }, [exit, sshActive])
+}
+
+const TuiApp = () => {
+  const { exit } = useApp()
+  const menu = useMenuState()
+
+  useReadyGate(menu.setReady)
+  useSigintGuard(exit, menu.sshActive)
+
+  useInput((input, key) => {
+    if (!menu.ready) {
+      return
+    }
+    if (Date.now() < menu.ignoreUntil) {
+      return
+    }
+    if (menu.skipInputs > 0) {
+      menu.setSkipInputs((value) => (value > 0 ? value - 1 : 0))
+      return
+    }
+    handleUserInput(input, key, {
+      busy: menu.busy,
+      view: menu.view,
+      inputStage: menu.inputStage,
+      setInputStage: menu.setInputStage,
+      selected: menu.selected,
+      setSelected: menu.setSelected,
+      sshActive: menu.sshActive,
+      setSshActive: menu.setSshActive,
+      state: menu.state,
+      runner: menu.runner,
+      exit,
+      setView: menu.setView,
+      setMessage: menu.setMessage,
+      setActiveDir: menu.setActiveDir
+    })
+  })
+
+  return renderView({
+    state: menu.state,
+    view: menu.view,
+    activeDir: menu.activeDir,
+    selected: menu.selected,
+    busy: menu.busy,
+    message: menu.message
+  })
+}
+
+// CHANGE: provide an interactive TUI menu for docker-git
+// WHY: allow dynamic selection and inline create flow without raw prompts
+// QUOTE(ТЗ): "TUI? Красивый, удобный"
+// REF: user-request-2026-02-01-tui
+// SOURCE: n/a
+// FORMAT THEOREM: forall s: tui(s) -> state transitions
+// PURITY: SHELL
+// EFFECT: Effect<void, AppError, FileSystem | Path | CommandExecutor>
+// INVARIANT: app exits only on Quit or ctrl+c
+// COMPLEXITY: O(1) per input
 export const runMenu = pipe(
-  Effect.sync(() => ({ cwd: process.cwd(), activeDir: null })),
-  Effect.flatMap((state) => menuLoop(state)),
-  Effect.catchTag("InputCancelledError", () => Effect.void)
+  Effect.tryPromise({
+    try: () => render(React.createElement(TuiApp)).waitUntilExit(),
+    catch: (error) => new InputReadError({ message: error instanceof Error ? error.message : String(error) })
+  }),
+  Effect.asVoid
 )
+
+export type MenuError = AppError | InputCancelledError
