@@ -96,15 +96,15 @@ const readLayoutVersion = (
 
 const buildActionsCommand = (): string =>
   [
-    "clear;",
-    "echo \"Actions:\";",
-    "echo \"  docker-git ps\";",
-    "echo \"  docker-git logs\";",
-    "echo \"  docker-git status\";",
-    "echo \"  docker exec <container> ps -eo pid,cmd,etime\";",
-    "echo \"\";",
-    "echo \"Tip: use Ctrl+b z to zoom a pane\";"
-  ].join(" ")
+    "clear",
+    "echo \"Actions:\"",
+    "echo \"  docker-git ps\"",
+    "echo \"  docker-git logs\"",
+    "echo \"  docker-git status\"",
+    "echo \"  docker exec <container> ps -eo pid,cmd,etime\"",
+    "echo \"\"",
+    "echo \"Tip: use Ctrl+b z to zoom a pane\""
+  ].join("; ")
 
 // CHANGE: attach a tmux workspace for a docker-git project
 // WHY: provide multi-pane terminal layout for sandbox work
@@ -144,6 +144,8 @@ export const attachTmux = (
     yield* _(runDockerComposeUp(resolved))
     yield* _(runTmux(["new-session", "-d", "-s", session, "-n", "main"]))
     yield* _(runTmux(["set-option", "-t", session, "@docker-git-layout", layoutVersion]))
+    yield* _(runTmux(["set-option", "-t", session, "window-size", "latest"]))
+    yield* _(runTmux(["set-option", "-t", session, "aggressive-resize", "on"]))
     yield* _(runTmux(["split-window", "-v", "-p", "25", "-t", `${session}:0`]))
     yield* _(runTmux(["split-window", "-h", "-p", "35", "-t", `${session}:0.0`]))
     yield* _(sendKeys(session, "0", sshCommand))
