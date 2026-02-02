@@ -7,7 +7,7 @@ import { Effect, pipe } from "effect"
 import type { AttachCommand } from "../core/domain.js"
 import { deriveRepoSlug } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
-import { runCommandExitCode, runCommandWithExitCodes } from "../shell/command-runner.js"
+import { runCommandCapture, runCommandExitCode, runCommandWithExitCodes } from "../shell/command-runner.js"
 import { runDockerComposeUp } from "../shell/docker.js"
 import type { ConfigDecodeError, ConfigNotFoundError, DockerCommandError } from "../shell/errors.js"
 import { CommandFailedError } from "../shell/errors.js"
@@ -16,6 +16,7 @@ import { buildSshCommand } from "./projects.js"
 import { findSshPrivateKey } from "./path-helpers.js"
 
 const tmuxOk = [0]
+const layoutVersion = "v2"
 
 const runTmux = (
   args: ReadonlyArray<string>
@@ -38,6 +39,19 @@ const runTmuxExitCode = (
     command: "tmux",
     args
   })
+
+const runTmuxCapture = (
+  args: ReadonlyArray<string>
+): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runCommandCapture(
+    {
+      cwd: process.cwd(),
+      command: "tmux",
+      args
+    },
+    tmuxOk,
+    (exitCode) => new CommandFailedError({ command: "tmux", exitCode })
+  )
 
 const sendKeys = (
   session: string,
@@ -71,6 +85,14 @@ const buildJobsCommand = (containerName: string): string =>
     "sleep 1;",
     "done"
   ].join(" ")
+
+const readLayoutVersion = (
+  session: string
+): Effect.Effect<string | null, PlatformError, CommandExecutor.CommandExecutor> =>
+  runTmuxCapture(["show-options", "-t", session, "-v", "@docker-git-layout"]).pipe(
+    Effect.map((value) => value.trim()),
+    Effect.catchAll(() => Effect.succeed(null))
+  )
 
 const buildActionsCommand = (): string =>
   [
@@ -110,12 +132,18 @@ export const attachTmux = (
     const hasSessionCode = yield* _(runTmuxExitCode(["has-session", "-t", session]))
 
     if (hasSessionCode === 0) {
-      yield* _(runTmux(["attach", "-t", session]))
-      return
+      const existingLayout = yield* _(readLayoutVersion(session))
+      if (existingLayout === layoutVersion) {
+        yield* _(runTmux(["attach", "-t", session]))
+        return
+      }
+      yield* _(Effect.logWarning(`tmux session ${session} uses an old layout; recreating.`))
+      yield* _(runTmux(["kill-session", "-t", session]))
     }
 
     yield* _(runDockerComposeUp(resolved))
     yield* _(runTmux(["new-session", "-d", "-s", session, "-n", "main"]))
+    yield* _(runTmux(["set-option", "-t", session, "@docker-git-layout", layoutVersion]))
     yield* _(runTmux(["split-window", "-v", "-p", "25", "-t", `${session}:0`]))
     yield* _(runTmux(["split-window", "-h", "-p", "35", "-t", `${session}:0.0`]))
     yield* _(sendKeys(session, "0", sshCommand))
