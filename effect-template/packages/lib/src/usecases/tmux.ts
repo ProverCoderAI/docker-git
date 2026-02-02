@@ -16,7 +16,7 @@ import { buildSshCommand } from "./projects.js"
 import { findSshPrivateKey } from "./path-helpers.js"
 
 const tmuxOk = [0]
-const layoutVersion = "v2"
+const layoutVersion = "v3"
 
 const runTmux = (
   args: ReadonlyArray<string>
