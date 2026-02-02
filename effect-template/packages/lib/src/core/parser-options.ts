@@ -21,6 +21,7 @@ export interface RawOptions {
   readonly token?: string
   readonly authWeb?: boolean
   readonly outDir?: string
+  readonly projectDir?: string
   readonly up?: boolean
   readonly force?: boolean
 }
@@ -45,6 +46,7 @@ interface ValueOptionSpec {
     | "label"
     | "token"
     | "outDir"
+    | "projectDir"
 }
 
 const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
@@ -66,7 +68,8 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--codex-home", key: "codexHome" },
   { flag: "--label", key: "label" },
   { flag: "--token", key: "token" },
-  { flag: "--out-dir", key: "outDir" }
+  { flag: "--out-dir", key: "outDir" },
+  { flag: "--project-dir", key: "projectDir" }
 ]
 
 const valueOptionSpecByFlag: ReadonlyMap<string, ValueOptionSpec> = new Map(
@@ -114,6 +117,7 @@ export const applyCommandValueFlag = (
       Match.when("label", () => ({ ...raw, label: value })),
       Match.when("token", () => ({ ...raw, token: value })),
       Match.when("outDir", () => ({ ...raw, outDir: value })),
+      Match.when("projectDir", () => ({ ...raw, projectDir: value })),
       Match.exhaustive
     )
   )

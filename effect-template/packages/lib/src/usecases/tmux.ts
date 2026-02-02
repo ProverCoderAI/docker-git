@@ -1,0 +1,113 @@
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import type { PlatformError } from "@effect/platform/Error"
+import * as FileSystem from "@effect/platform/FileSystem"
+import * as Path from "@effect/platform/Path"
+import { Effect, pipe } from "effect"
+
+import type { AttachCommand } from "../core/domain.js"
+import { deriveRepoSlug } from "../core/domain.js"
+import { readProjectConfig } from "../shell/config.js"
+import { runCommandExitCode, runCommandWithExitCodes } from "../shell/command-runner.js"
+import { runDockerComposeUp } from "../shell/docker.js"
+import type { ConfigDecodeError, ConfigNotFoundError, DockerCommandError } from "../shell/errors.js"
+import { CommandFailedError } from "../shell/errors.js"
+import { resolveBaseDir } from "../shell/paths.js"
+import { buildSshCommand } from "./projects.js"
+import { findSshPrivateKey } from "./path-helpers.js"
+
+const tmuxOk = [0]
+
+const runTmux = (
+  args: ReadonlyArray<string>
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runCommandWithExitCodes(
+    {
+      cwd: process.cwd(),
+      command: "tmux",
+      args
+    },
+    tmuxOk,
+    (exitCode) => new CommandFailedError({ command: "tmux", exitCode })
+  )
+
+const runTmuxExitCode = (
+  args: ReadonlyArray<string>
+): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
+  runCommandExitCode({
+    cwd: process.cwd(),
+    command: "tmux",
+    args
+  })
+
+const sendKeys = (
+  session: string,
+  pane: string,
+  text: string
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  pipe(
+    runTmux(["send-keys", "-t", `${session}:0.${pane}`, "-l", text]),
+    Effect.zipRight(runTmux(["send-keys", "-t", `${session}:0.${pane}`, "C-m"]))
+  )
+
+const buildJobsCommand = (containerName: string): string =>
+  [
+    "while true; do",
+    "clear;",
+    "date;",
+    `docker exec ${containerName} ps -eo pid,cmd,etime --sort=start_time 2>/dev/null || echo \"container not running\";`,
+    "sleep 1;",
+    "done"
+  ].join(" ")
+
+const buildActionsCommand = (): string =>
+  [
+    "clear;",
+    "echo \"Actions:\";",
+    "echo \"  docker-git ps\";",
+    "echo \"  docker-git logs\";",
+    "echo \"  docker-git ports\";",
+    "echo \"  docker exec <container> ps -eo pid,cmd,etime\";",
+    "echo \"\";",
+    "echo \"Tip: use Ctrl+b z to zoom a pane\";"
+  ].join(" ")
+
+// CHANGE: attach a tmux workspace for a docker-git project
+// WHY: provide multi-pane terminal layout for sandbox work
+// QUOTE(ТЗ): "окей Давай подключим tmux"
+// REF: user-request-2026-02-02-tmux
+// SOURCE: n/a
+// FORMAT THEOREM: forall p: attach(p) -> tmux(p)
+// PURITY: SHELL
+// EFFECT: Effect<void, CommandFailedError | DockerCommandError | ConfigNotFoundError | ConfigDecodeError | PlatformError, CommandExecutor | FileSystem | Path>
+// INVARIANT: tmux session name is deterministic from repo url
+// COMPLEXITY: O(1)
+export const attachTmux = (
+  command: AttachCommand
+): Effect.Effect<
+  void,
+  CommandFailedError | DockerCommandError | ConfigNotFoundError | ConfigDecodeError | PlatformError,
+  CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
+> =>
+  Effect.gen(function*(_) {
+    const { fs, path, resolved } = yield* _(resolveBaseDir(command.projectDir))
+    const config = yield* _(readProjectConfig(resolved))
+    const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
+    const sshCommand = buildSshCommand(config.template, sshKey)
+    const session = `dg-${deriveRepoSlug(config.template.repoUrl)}`
+    const hasSessionCode = yield* _(runTmuxExitCode(["has-session", "-t", session]))
+
+    if (hasSessionCode === 0) {
+      yield* _(runTmux(["attach", "-t", session]))
+      return
+    }
+
+    yield* _(runDockerComposeUp(resolved))
+    yield* _(runTmux(["new-session", "-d", "-s", session, "-n", "main"]))
+    yield* _(runTmux(["split-window", "-v", "-p", "25", "-t", `${session}:0`]))
+    yield* _(runTmux(["split-window", "-h", "-p", "35", "-t", `${session}:0.0`]))
+    yield* _(sendKeys(session, "0", sshCommand))
+    yield* _(sendKeys(session, "1", buildJobsCommand(config.template.containerName)))
+    yield* _(sendKeys(session, "2", buildActionsCommand()))
+    yield* _(runTmux(["select-pane", "-t", `${session}:0.0`]))
+    yield* _(runTmux(["attach", "-t", session]))
+  })

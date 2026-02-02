@@ -12,6 +12,7 @@ import {
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import { listProjectStatus } from "@effect-template/lib/usecases/projects"
+import { attachTmux } from "@effect-template/lib/usecases/tmux"
 import { Effect, Match, pipe } from "effect"
 
 import { runMenu } from "./menu.js"
@@ -66,6 +67,7 @@ export const program = pipe(
       Match.when({ _tag: "AuthCodexLogin" }, (command) => authCodexLogin(command)),
       Match.when({ _tag: "AuthCodexStatus" }, (command) => authCodexStatus(command)),
       Match.when({ _tag: "AuthCodexLogout" }, (command) => authCodexLogout(command)),
+      Match.when({ _tag: "Attach" }, (command) => attachTmux(command)),
       Match.when({ _tag: "Menu" }, () => runMenu),
       Match.exhaustive
     )
