@@ -32,6 +32,31 @@ if [[ "$HOME_OWNER" != "1000:1000" ]]; then
   chown -R 1000:1000 /home/dev || true
 fi
 
+# Prefer zsh for dev when available
+if command -v zsh >/dev/null 2>&1; then
+  usermod -s /usr/bin/zsh dev || true
+fi
+
+# Ensure dev has a zshrc and disable newuser wizard
+ZSHENV_PATH="/etc/zsh/zshenv"
+if [[ -f "$ZSHENV_PATH" ]]; then
+  if ! grep -q "ZSH_DISABLE_NEWUSER_INSTALL" "$ZSHENV_PATH"; then
+    printf "%s\n" "export ZSH_DISABLE_NEWUSER_INSTALL=1" >> "$ZSHENV_PATH"
+  fi
+else
+  printf "%s\n" "export ZSH_DISABLE_NEWUSER_INSTALL=1" > "$ZSHENV_PATH"
+fi
+USER_ZSHRC="/home/dev/.zshrc"
+if [[ ! -f "$USER_ZSHRC" ]]; then
+  cat <<'EOF' > "$USER_ZSHRC"
+# docker-git default zshrc
+if [ -f /etc/zsh/zshrc ]; then
+  source /etc/zsh/zshrc
+fi
+EOF
+  chown 1000:1000 "$USER_ZSHRC" || true
+fi
+
 # Ensure docker-git prompt is configured for interactive shells
 PROMPT_PATH="/etc/profile.d/zz-prompt.sh"
 if [[ ! -s "$PROMPT_PATH" ]]; then
@@ -40,7 +65,7 @@ docker_git_branch() { git rev-parse --abbrev-ref HEAD 2>/dev/null; }
 docker_git_prompt_apply() {
   local b
   b="$(docker_git_branch)"
-  local base="[\\t] \\w"
+  local base="[\t] \w"
   if [ -n "$b" ]; then
     PS1="${base} (${b})> "
   else
@@ -59,15 +84,137 @@ if ! grep -q "zz-prompt.sh" /etc/bash.bashrc 2>/dev/null; then
   printf "%s\n" "if [ -f /etc/profile.d/zz-prompt.sh ]; then . /etc/profile.d/zz-prompt.sh; fi" >> /etc/bash.bashrc
 fi
 
+# Ensure bash completion is configured for interactive shells
+COMPLETION_PATH="/etc/profile.d/zz-bash-completion.sh"
+if [[ ! -s "$COMPLETION_PATH" ]]; then
+  cat <<'EOF' > "$COMPLETION_PATH"
+if ! shopt -oq posix; then
+  if [ -f /usr/share/bash-completion/bash_completion ]; then
+    . /usr/share/bash-completion/bash_completion
+  elif [ -f /etc/bash_completion ]; then
+    . /etc/bash_completion
+  fi
+fi
+EOF
+  chmod 0644 "$COMPLETION_PATH"
+fi
+if ! grep -q "zz-bash-completion.sh" /etc/bash.bashrc 2>/dev/null; then
+  printf "%s\n" "if [ -f /etc/profile.d/zz-bash-completion.sh ]; then . /etc/profile.d/zz-bash-completion.sh; fi" >> /etc/bash.bashrc
+fi
+
+# Ensure bash history is configured for interactive shells
+HISTORY_PATH="/etc/profile.d/zz-bash-history.sh"
+if [[ ! -s "$HISTORY_PATH" ]]; then
+  cat <<'EOF' > "$HISTORY_PATH"
+if [ -n "$BASH_VERSION" ]; then
+  case "$-" in
+    *i*)
+      HISTFILE="${HISTFILE:-$HOME/.bash_history}"
+      HISTSIZE="${HISTSIZE:-10000}"
+      HISTFILESIZE="${HISTFILESIZE:-20000}"
+      HISTCONTROL="${HISTCONTROL:-ignoredups:erasedups}"
+      export HISTFILE HISTSIZE HISTFILESIZE HISTCONTROL
+      shopt -s histappend
+      if [ -n "${PROMPT_COMMAND-}" ]; then
+        PROMPT_COMMAND="history -a; ${PROMPT_COMMAND}"
+      else
+        PROMPT_COMMAND="history -a"
+      fi
+      ;;
+  esac
+fi
+EOF
+  chmod 0644 "$HISTORY_PATH"
+fi
+if ! grep -q "zz-bash-history.sh" /etc/bash.bashrc 2>/dev/null; then
+  printf "%s\n" "if [ -f /etc/profile.d/zz-bash-history.sh ]; then . /etc/profile.d/zz-bash-history.sh; fi" >> /etc/bash.bashrc
+fi
+
+# Ensure readline history search bindings for dev
+INPUTRC_PATH="/home/dev/.inputrc"
+if [[ ! -f "$INPUTRC_PATH" ]]; then
+  cat <<'EOF' > "$INPUTRC_PATH"
+set show-all-if-ambiguous on
+set completion-ignore-case on
+"\e[A": history-search-backward
+"\e[B": history-search-forward
+EOF
+  chown 1000:1000 "$INPUTRC_PATH" || true
+fi
+
+# Ensure zsh config exists for autosuggestions
+ZSHRC_PATH="/etc/zsh/zshrc"
+if [[ ! -s "$ZSHRC_PATH" ]]; then
+  mkdir -p /etc/zsh
+  cat <<'EOF' > "$ZSHRC_PATH"
+setopt PROMPT_SUBST
+autoload -Uz compinit
+compinit
+
+autoload -Uz add-zsh-hook
+docker_git_branch() { git rev-parse --abbrev-ref HEAD 2>/dev/null; }
+docker_git_prompt_apply() {
+  local b
+  b="$(docker_git_branch)"
+  local base="[%*] %~"
+  if [[ -n "$b" ]]; then
+    PROMPT="$base ($b)> "
+  else
+    PROMPT="$base> "
+  fi
+}
+add-zsh-hook precmd docker_git_prompt_apply
+
+HISTFILE="${HISTFILE:-$HOME/.zsh_history}"
+HISTSIZE="${HISTSIZE:-10000}"
+SAVEHIST="${SAVEHIST:-20000}"
+setopt HIST_IGNORE_ALL_DUPS
+setopt SHARE_HISTORY
+setopt INC_APPEND_HISTORY
+
+if [ -f "$HISTFILE" ]; then
+  fc -R "$HISTFILE" 2>/dev/null || true
+fi
+if [ -f "$HOME/.bash_history" ] && [ "$HISTFILE" != "$HOME/.bash_history" ]; then
+  fc -R "$HOME/.bash_history" 2>/dev/null || true
+fi
+
+bindkey '^[[A' history-search-backward
+bindkey '^[[B' history-search-forward
+
+if [ -f /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]; then
+  ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=244"
+  ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+  source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+fi
+EOF
+fi
+
 # Ensure global AGENTS.md exists for container context
 AGENTS_PATH="/home/dev/.codex/AGENTS.md"
 LEGACY_AGENTS_PATH="/home/dev/AGENTS.md"
+PROJECT_LINE="Рабочая папка проекта (git clone): /home/dev/publicrust/plugins-forum"
+INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
 if [[ ! -f "$AGENTS_PATH" ]]; then
   cat <<'AGENTS_EOF' > "$AGENTS_PATH"
 Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
+Рабочая папка проекта (git clone): /home/dev/publicrust/plugins-forum
+Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
 Если ты видишь файлы AGENTS.md внутри проекта, ты обязан их читать и соблюдать инструкции.
 AGENTS_EOF
   chown 1000:1000 "$AGENTS_PATH" || true
+fi
+if [[ -f "$AGENTS_PATH" ]]; then
+  if grep -q "^Рабочая папка проекта (git clone):" "$AGENTS_PATH"; then
+    sed -i "s|^Рабочая папка проекта (git clone):.*$|$PROJECT_LINE|" "$AGENTS_PATH"
+  else
+    printf "%s\n" "$PROJECT_LINE" >> "$AGENTS_PATH"
+  fi
+  if grep -q "^Доступ к интернету:" "$AGENTS_PATH"; then
+    sed -i "s|^Доступ к интернету:.*$|$INTERNET_LINE|" "$AGENTS_PATH"
+  else
+    printf "%s\n" "$INTERNET_LINE" >> "$AGENTS_PATH"
+  fi
 fi
 if [[ -f "$LEGACY_AGENTS_PATH" && -f "$AGENTS_PATH" ]]; then
   LEGACY_SUM="$(cksum "$LEGACY_AGENTS_PATH" 2>/dev/null | awk '{print $1 ":" $2}')"

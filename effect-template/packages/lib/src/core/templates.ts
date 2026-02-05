@@ -14,7 +14,7 @@ ENV NVM_DIR=/usr/local/nvm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server git gh ca-certificates curl unzip bsdutils sudo \
-    make docker.io docker-compose \
+    make docker.io docker-compose bash-completion zsh zsh-autosuggestions \
  && rm -rf /var/lib/apt/lists/*
 
 # Passwordless sudo for all users (container is disposable)
@@ -61,13 +61,13 @@ RUN if id -u ubuntu >/dev/null 2>&1; then \
         EXISTING_GROUP="$(getent group 1000 | cut -d: -f1)"; \
         if [ "$EXISTING_GROUP" != "${config.sshUser}" ]; then groupmod -n ${config.sshUser} "$EXISTING_GROUP" || true; fi; \
       fi; \
-      usermod -l ${config.sshUser} -d /home/${config.sshUser} -m ubuntu || true; \
+      usermod -l ${config.sshUser} -d /home/${config.sshUser} -m -s /usr/bin/zsh ubuntu || true; \
     fi
 RUN if id -u ${config.sshUser} >/dev/null 2>&1; then \
       usermod -u 1000 -g 1000 -o ${config.sshUser}; \
     else \
       groupadd -g 1000 ${config.sshUser} || true; \
-      useradd -m -s /bin/bash -u 1000 -g 1000 -o ${config.sshUser}; \
+      useradd -m -s /usr/bin/zsh -u 1000 -g 1000 -o ${config.sshUser}; \
     fi
 RUN printf "%s\\n" "${config.sshUser} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${config.sshUser} \
   && chmod 0440 /etc/sudoers.d/${config.sshUser}
