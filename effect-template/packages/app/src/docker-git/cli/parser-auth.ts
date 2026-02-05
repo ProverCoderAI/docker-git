@@ -15,6 +15,7 @@ type AuthOptions = {
   readonly codexAuthPath: string
   readonly label: string | null
   readonly token: string | null
+  readonly scopes: string | null
 }
 
 const missingArgument = (name: string): ParseError => ({
@@ -37,7 +38,8 @@ const resolveAuthOptions = (raw: RawOptions): AuthOptions => ({
   envGlobalPath: raw.envGlobalPath ?? defaultTemplateConfig.envGlobalPath,
   codexAuthPath: raw.codexAuthPath ?? defaultTemplateConfig.codexAuthPath,
   label: normalizeLabel(raw.label),
-  token: normalizeLabel(raw.token)
+  token: normalizeLabel(raw.token),
+  scopes: normalizeLabel(raw.scopes)
 })
 
 const buildGithubCommand = (action: string, options: AuthOptions): Either.Either<AuthCommand, ParseError> =>
@@ -47,6 +49,7 @@ const buildGithubCommand = (action: string, options: AuthOptions): Either.Either
         _tag: "AuthGithubLogin",
         label: options.label,
         token: options.token,
+        scopes: options.scopes,
         envGlobalPath: options.envGlobalPath
       })),
     Match.when("status", () =>

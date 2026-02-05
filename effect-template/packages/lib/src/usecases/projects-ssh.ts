@@ -28,6 +28,7 @@ const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
   }
   args.push(
     "-tt",
+    "-Y",
     "-o",
     "StrictHostKeyChecking=no",
     "-o",

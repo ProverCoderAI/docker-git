@@ -58,6 +58,7 @@ Auth actions:
 Auth options:
   --label <label>        Account label (default: default)
   --token <token>        GitHub token override (login only)
+  --scopes <scopes>      GitHub scopes (login only, default: repo,workflow,read:org)
   --env-global <path>    Env file path for GitHub tokens (default: ./.docker-git/.orch/env/global.env)
   --codex-auth <path>    Codex auth root path (default: ./.docker-git/.orch/auth/codex)
 `

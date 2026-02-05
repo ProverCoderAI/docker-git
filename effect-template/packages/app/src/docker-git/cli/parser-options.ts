@@ -22,6 +22,7 @@ interface ValueOptionSpec {
     | "codexHome"
     | "label"
     | "token"
+    | "scopes"
     | "outDir"
     | "projectDir"
     | "lines"
@@ -46,6 +47,7 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--codex-home", key: "codexHome" },
   { flag: "--label", key: "label" },
   { flag: "--token", key: "token" },
+  { flag: "--scopes", key: "scopes" },
   { flag: "--out-dir", key: "outDir" },
   { flag: "--project-dir", key: "projectDir" },
   { flag: "--lines", key: "lines" }
@@ -94,8 +96,11 @@ export const applyCommandValueFlag = (
       Match.when("envProjectPath", () => ({ ...raw, envProjectPath: value })),
       Match.when("codexAuthPath", () => ({ ...raw, codexAuthPath: value })),
       Match.when("codexHome", () => ({ ...raw, codexHome: value })),
-      Match.when("label", () => ({ ...raw, label: value })),
-      Match.when("token", () => ({ ...raw, token: value })),
+      Match.when(
+        (key): key is "label" | "token" => key === "label" || key === "token",
+        (key) => key === "label" ? { ...raw, label: value } : { ...raw, token: value }
+      ),
+      Match.when("scopes", () => ({ ...raw, scopes: value })),
       Match.when("outDir", () => ({ ...raw, outDir: value })),
       Match.when("projectDir", () => ({ ...raw, projectDir: value })),
       Match.when("lines", () => ({ ...raw, lines: value })),

@@ -254,11 +254,28 @@ fi`
 const renderEntrypointClone = (config: TemplateConfig): string =>
   [renderClonePreamble(), renderCloneBody(config), renderCloneFinalize()].join("\n\n")
 
+// CHANGE: propagate GitHub tokens into SSH sessions for gh/git usage
+// WHY: ensure gh and git can authenticate using configured tokens
+// QUOTE(ТЗ): "git, gh должны получать наши ключи которые у нас заданы"
+// REF: user-request-2026-02-05-gh-auth-env
+// SOURCE: n/a
+// FORMAT THEOREM: ∀t: token(t) → env(GH_TOKEN)=t
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: does not write env files when token is empty
+// COMPLEXITY: O(1)
 const renderEntrypointGitConfig = (config: TemplateConfig): string =>
   String.raw`# 2) Ensure GH_TOKEN is available for SSH sessions if provided
 if [[ -n "$GH_TOKEN" ]]; then
   printf "export GH_TOKEN=%q\n" "$GH_TOKEN" > /etc/profile.d/gh-token.sh
   chmod 0644 /etc/profile.d/gh-token.sh
+  SSH_ENV_PATH="/home/${config.sshUser}/.ssh/environment"
+  printf "%s\n" "GH_TOKEN=$GH_TOKEN" > "$SSH_ENV_PATH"
+  if [[ -n "$GITHUB_TOKEN" ]]; then
+    printf "%s\n" "GITHUB_TOKEN=$GITHUB_TOKEN" >> "$SSH_ENV_PATH"
+  fi
+  chmod 600 "$SSH_ENV_PATH"
+  chown 1000:1000 "$SSH_ENV_PATH" || true
 fi
 
 # 3) Configure git identity for the dev user if provided
@@ -271,6 +288,53 @@ if [[ -n "$GIT_USER_EMAIL" ]]; then
   SAFE_GIT_USER_EMAIL="$(printf "%q" "$GIT_USER_EMAIL")"
   su - ${config.sshUser} -c "git config --global user.email $SAFE_GIT_USER_EMAIL"
 fi`
+
+// CHANGE: enforce protected branches via global git hooks in container
+// WHY: prevent AI from pushing to main/master or deleting branches
+// QUOTE(ТЗ): "Пусть создаёт ветки"
+// REF: user-request-2026-02-05-git-hooks
+// SOURCE: n/a
+// FORMAT THEOREM: ∀p: push(p) ∧ protected(p) → reject(p)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: hook is installed once and is executable
+// COMPLEXITY: O(1)
+const renderEntrypointGitHooks = (): string =>
+  String.raw`# 3) Install global git hooks to protect main/master
+HOOKS_DIR="/opt/docker-git/hooks"
+PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"
+mkdir -p "$HOOKS_DIR"
+if [[ ! -f "$PRE_PUSH_HOOK" ]]; then
+  cat <<'EOF' > "$PRE_PUSH_HOOK"
+#!/usr/bin/env bash
+set -euo pipefail
+
+protected_branches=("refs/heads/main" "refs/heads/master")
+allow_delete="${"${"}DOCKER_GIT_ALLOW_DELETE:-}"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ -z "$remote_ref" ]]; then
+    continue
+  fi
+  for protected in "${"${"}protected_branches[@]}"; do
+    if [[ "$remote_ref" == "$protected" || "$local_ref" == "$protected" ]]; then
+      echo "docker-git: push to protected branch '${"${"}protected##*/}' is disabled."
+      echo "docker-git: create a new branch: git checkout -b <name>"
+      exit 1
+    fi
+  done
+  if [[ "$local_sha" == "0000000000000000000000000000000000000000" && "$remote_ref" == refs/heads/* ]]; then
+    if [[ "$allow_delete" != "1" ]]; then
+      echo "docker-git: deleting remote branches is disabled (set DOCKER_GIT_ALLOW_DELETE=1 to override)."
+      exit 1
+    fi
+  fi
+done
+EOF
+  chmod 0755 "$PRE_PUSH_HOOK"
+fi
+git config --system core.hooksPath "$HOOKS_DIR" || true
+git config --global core.hooksPath "$HOOKS_DIR" || true`
 
 const renderEntrypointBackgroundTasks = (config: TemplateConfig): string =>
   `# 4) Start background tasks so SSH can come up immediately
@@ -317,6 +381,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointAgentsNotice(config),
     renderEntrypointDockerSocket(config),
     renderEntrypointGitConfig(config),
+    renderEntrypointGitHooks(),
     renderEntrypointBackgroundTasks(config),
     renderEntrypointBaseline(),
     renderEntrypointSshd()

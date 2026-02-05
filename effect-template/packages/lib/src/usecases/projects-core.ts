@@ -13,7 +13,7 @@ import { defaultProjectsRoot, formatConnectionInfo } from "./menu-helpers.js"
 import { findSshPrivateKey, resolveAuthorizedKeysPath, resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 
-const sshOptions = "-tt -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+const sshOptions = "-tt -Y -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 export type ProjectLoadError = PlatformError | ConfigNotFoundError | ConfigDecodeError
 
