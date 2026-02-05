@@ -100,7 +100,7 @@ const ProjectProcessSnapshotSchema = Schema.Union(
   })
 )
 
-const TerminalSessionStatusSchema = Schema.Literal("connecting", "connected")
+const TerminalSessionStatusSchema = Schema.Literal("connecting", "connected", "detached")
 
 const TerminalSessionModeSchema = Schema.Literal("default", "recreate")
 

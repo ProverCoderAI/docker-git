@@ -7,6 +7,9 @@ docker-git create --repo-url <url> [options]
 docker-git clone <url> [options]
 docker-git attach [<url>] [options]
 docker-git panes [<url>] [options]
+docker-git sessions [list] [<url>] [options]
+docker-git sessions kill <pid> [<url>] [options]
+docker-git sessions logs <pid> [<url>] [options]
 docker-git ps
 docker-git auth <provider> <action> [options]
 
@@ -16,6 +19,7 @@ Commands:
   clone               Create + run container and clone repo
   attach, tmux        Open tmux workspace for a docker-git project
   panes, terms        List tmux panes for a docker-git project
+  sessions            List/kill/log container terminal processes
   ps, status          Show docker compose status for all docker-git projects
   auth                Manage GitHub/Codex auth for docker-git
 
@@ -36,6 +40,8 @@ Options:
   --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
   --out-dir <path>          Output directory (default: .docker-git/<org>/<repo>)
   --project-dir <path>      Project directory for attach (default: .)
+  --lines <n>               Tail last N lines for sessions logs (default: 200)
+  --include-default         Show default/system processes in sessions list
   --up | --no-up            Run docker compose up after init (default: --up)
   --force                   Overwrite existing files
   -h, --help                Show this help

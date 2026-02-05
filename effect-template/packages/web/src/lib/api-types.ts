@@ -57,7 +57,7 @@ export type ApiError = {
   readonly error: string
 }
 
-export type TerminalSessionStatus = "connecting" | "connected"
+export type TerminalSessionStatus = "connecting" | "connected" | "detached"
 
 export type TerminalSessionMode = "default" | "recreate"
 

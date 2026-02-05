@@ -24,6 +24,7 @@ interface ValueOptionSpec {
     | "token"
     | "outDir"
     | "projectDir"
+    | "lines"
 }
 
 const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
@@ -46,7 +47,8 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--label", key: "label" },
   { flag: "--token", key: "token" },
   { flag: "--out-dir", key: "outDir" },
-  { flag: "--project-dir", key: "projectDir" }
+  { flag: "--project-dir", key: "projectDir" },
+  { flag: "--lines", key: "lines" }
 ]
 
 const valueOptionSpecByFlag: ReadonlyMap<string, ValueOptionSpec> = new Map(
@@ -57,7 +59,8 @@ const booleanFlagUpdaters: Readonly<Record<string, (raw: RawOptions) => RawOptio
   "--up": (raw) => ({ ...raw, up: true }),
   "--no-up": (raw) => ({ ...raw, up: false }),
   "--force": (raw) => ({ ...raw, force: true }),
-  "--web": (raw) => ({ ...raw, authWeb: true })
+  "--web": (raw) => ({ ...raw, authWeb: true }),
+  "--include-default": (raw) => ({ ...raw, includeDefault: true })
 }
 
 export const applyCommandBooleanFlag = (raw: RawOptions, token: string): RawOptions | null => {
@@ -95,6 +98,7 @@ export const applyCommandValueFlag = (
       Match.when("token", () => ({ ...raw, token: value })),
       Match.when("outDir", () => ({ ...raw, outDir: value })),
       Match.when("projectDir", () => ({ ...raw, projectDir: value })),
+      Match.when("lines", () => ({ ...raw, lines: value })),
       Match.exhaustive
     )
   )

@@ -1,0 +1,136 @@
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import type { PlatformError } from "@effect/platform/Error"
+import type { FileSystem as Fs } from "@effect/platform/FileSystem"
+import type { Path as PathService } from "@effect/platform/Path"
+import { Effect, pipe } from "effect"
+
+import { runCommandWithExitCodes } from "../shell/command-runner.js"
+import { runDockerComposePsFormatted, runDockerComposeUp } from "../shell/docker.js"
+import type { DockerCommandError } from "../shell/errors.js"
+import { CommandFailedError } from "../shell/errors.js"
+import { renderError } from "./errors.js"
+import {
+  buildSshCommand,
+  formatComposeRows,
+  loadProjectStatus,
+  parseComposePsOutput,
+  type ProjectItem,
+  type ProjectStatus,
+  renderProjectStatusHeader,
+  skipWithWarning,
+  withProjectIndexAndSsh
+} from "./projects-core.js"
+
+const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
+  const args: Array<string> = []
+  if (item.sshKeyPath !== null) {
+    args.push("-i", item.sshKeyPath)
+  }
+  args.push(
+    "-tt",
+    "-o",
+    "StrictHostKeyChecking=no",
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-p",
+    String(item.sshPort),
+    `${item.sshUser}@localhost`
+  )
+  return args
+}
+
+// CHANGE: connect to a project via SSH using its resolved settings
+// WHY: allow TUI to open a shell immediately after selection
+// QUOTE(ТЗ): "выбор проекта сразу подключает по SSH"
+// REF: user-request-2026-02-02-select-ssh
+// SOURCE: n/a
+// FORMAT THEOREM: forall p: connect(p) -> ssh(p)
+// PURITY: SHELL
+// EFFECT: Effect<void, CommandFailedError | PlatformError, CommandExecutor>
+// INVARIANT: command is ssh with deterministic args
+// COMPLEXITY: O(1)
+export const connectProjectSsh = (
+  item: ProjectItem
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runCommandWithExitCodes(
+    {
+      cwd: process.cwd(),
+      command: "ssh",
+      args: buildSshArgs(item)
+    },
+    [0, 130],
+    (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
+  )
+
+// CHANGE: ensure docker compose is up before SSH connection
+// WHY: selected project should auto-start when not running
+// QUOTE(ТЗ): "Если не поднят то пусть поднимает"
+// REF: user-request-2026-02-02-select-up
+// SOURCE: n/a
+// FORMAT THEOREM: forall p: up(p) -> ssh(p)
+// PURITY: SHELL
+// EFFECT: Effect<void, CommandFailedError | DockerCommandError | PlatformError, CommandExecutor>
+// INVARIANT: docker compose up runs before ssh
+// COMPLEXITY: O(1)
+export const connectProjectSshWithUp = (
+  item: ProjectItem
+): Effect.Effect<
+  void,
+  CommandFailedError | DockerCommandError | PlatformError,
+  CommandExecutor.CommandExecutor
+> =>
+  pipe(
+    runDockerComposeUp(item.projectDir),
+    Effect.flatMap(() => connectProjectSsh(item))
+  )
+
+// CHANGE: show docker compose status for all known docker-git projects
+// WHY: allow checking active containers without switching directories
+// QUOTE(ТЗ): "как посмотреть какие активны?"
+// REF: user-request-2026-01-27-status
+// SOURCE: n/a
+// FORMAT THEOREM: forall p in projects: status(p) -> output(p)
+// PURITY: SHELL
+// EFFECT: Effect<void, PlatformError, FileSystem | Path | CommandExecutor>
+// INVARIANT: each project emits a header before docker compose output
+// COMPLEXITY: O(n) where n = |projects|
+export const listProjectStatus: Effect.Effect<
+  void,
+  PlatformError,
+  Fs | PathService | CommandExecutor.CommandExecutor
+> = Effect.asVoid(
+  withProjectIndexAndSsh((index, sshKey) =>
+    Effect.gen(function*(_) {
+      for (const configPath of index.configPaths) {
+        const status = yield* _(
+          loadProjectStatus(configPath).pipe(
+            Effect.matchEffect({
+              onFailure: skipWithWarning<ProjectStatus>(configPath),
+              onSuccess: (value) => Effect.succeed(value)
+            })
+          )
+        )
+        if (status === null) {
+          continue
+        }
+
+        yield* _(Effect.log(renderProjectStatusHeader(status)))
+        yield* _(Effect.log(`SSH access: ${buildSshCommand(status.config.template, sshKey)}`))
+        yield* _(
+          runDockerComposePsFormatted(status.projectDir).pipe(
+            Effect.map((raw) => parseComposePsOutput(raw)),
+            Effect.map((rows) => formatComposeRows(rows)),
+            Effect.flatMap((text) => Effect.log(text)),
+            Effect.matchEffect({
+              onFailure: (error: DockerCommandError | PlatformError) =>
+                Effect.logWarning(
+                  `docker compose ps failed for ${status.projectDir}: ${renderError(error)}`
+                ),
+              onSuccess: () => Effect.void
+            })
+          )
+        )
+      }
+    })
+  )
+)

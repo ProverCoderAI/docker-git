@@ -120,10 +120,10 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 16px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-height: 0;
   overflow: hidden;
 }
@@ -206,27 +206,30 @@ body {
 
 .topbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px 18px;
+  flex-wrap: nowrap;
+  gap: 10px 14px;
   align-items: center;
   justify-content: space-between;
 }
 
 .topbar-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-wrap: nowrap;
+  gap: 8px;
   align-items: center;
   color: var(--muted);
   font-size: 13px;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding-bottom: 2px;
 }
 
 .pill {
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: rgba(17, 24, 35, 0.8);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text);
 }
 
@@ -250,8 +253,13 @@ body {
 
 .topbar-actions {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.topbar-actions .button {
+  padding: 6px 12px;
+  font-size: 12px;
 }
 
 .button {
@@ -326,6 +334,12 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .panel-divider {
@@ -407,7 +421,7 @@ body {
 .list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -416,17 +430,50 @@ body {
 .list.projects-list {
   flex: 1;
   min-height: 0;
+  flex-direction: row;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
 }
 
 .list-item {
-  padding: 10px 12px;
+  padding: 6px 10px 6px 26px;
   border-radius: var(--radius-xs);
   border: 1px solid transparent;
   background: rgba(17, 24, 35, 0.6);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   cursor: pointer;
+  position: relative;
+}
+
+.projects-list .list-item::before {
+  content: "▸";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.projects-list .list-item.active::before {
+  content: "▾";
+  color: var(--accent);
+}
+
+.projects-list .list-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  white-space: nowrap;
+}
+
+.projects-list .list-item-row {
+  gap: 8px;
 }
 
 .list-item-row {
@@ -434,6 +481,12 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.list-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .icon-button {
@@ -458,6 +511,12 @@ body {
 
 .list-item small {
   color: var(--muted);
+  font-size: 11px;
+}
+
+.projects-list .list-item small {
+  display: inline;
+  margin-left: auto;
 }
 
 .terminal-shell {

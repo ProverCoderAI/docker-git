@@ -32,6 +32,64 @@ if [[ "$HOME_OWNER" != "1000:1000" ]]; then
   chown -R 1000:1000 /home/dev || true
 fi
 
+# Ensure docker-git prompt is configured for interactive shells
+PROMPT_PATH="/etc/profile.d/zz-prompt.sh"
+if [[ ! -s "$PROMPT_PATH" ]]; then
+  cat <<'EOF' > "$PROMPT_PATH"
+docker_git_branch() { git rev-parse --abbrev-ref HEAD 2>/dev/null; }
+docker_git_prompt_apply() {
+  local b
+  b="$(docker_git_branch)"
+  local base="[\\t] \\w"
+  if [ -n "$b" ]; then
+    PS1="${base} (${b})> "
+  else
+    PS1="${base}> "
+  fi
+}
+if [ -n "$PROMPT_COMMAND" ]; then
+  PROMPT_COMMAND="docker_git_prompt_apply;$PROMPT_COMMAND"
+else
+  PROMPT_COMMAND="docker_git_prompt_apply"
+fi
+EOF
+  chmod 0644 "$PROMPT_PATH"
+fi
+if ! grep -q "zz-prompt.sh" /etc/bash.bashrc 2>/dev/null; then
+  printf "%s\n" "if [ -f /etc/profile.d/zz-prompt.sh ]; then . /etc/profile.d/zz-prompt.sh; fi" >> /etc/bash.bashrc
+fi
+
+# Ensure global AGENTS.md exists for container context
+AGENTS_PATH="/home/dev/.codex/AGENTS.md"
+LEGACY_AGENTS_PATH="/home/dev/AGENTS.md"
+if [[ ! -f "$AGENTS_PATH" ]]; then
+  cat <<'AGENTS_EOF' > "$AGENTS_PATH"
+Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
+Если ты видишь файлы AGENTS.md внутри проекта, ты обязан их читать и соблюдать инструкции.
+AGENTS_EOF
+  chown 1000:1000 "$AGENTS_PATH" || true
+fi
+if [[ -f "$LEGACY_AGENTS_PATH" && -f "$AGENTS_PATH" ]]; then
+  LEGACY_SUM="$(cksum "$LEGACY_AGENTS_PATH" 2>/dev/null | awk '{print $1 ":" $2}')"
+  CODEX_SUM="$(cksum "$AGENTS_PATH" 2>/dev/null | awk '{print $1 ":" $2}')"
+  if [[ -n "$LEGACY_SUM" && "$LEGACY_SUM" == "$CODEX_SUM" ]]; then
+    rm -f "$LEGACY_AGENTS_PATH"
+  fi
+fi
+
+# Ensure docker socket access for dev
+if [[ -S /var/run/docker.sock ]]; then
+  DOCKER_SOCK_GID="$(stat -c "%g" /var/run/docker.sock)"
+  DOCKER_GROUP="$(getent group "$DOCKER_SOCK_GID" | cut -d: -f1 || true)"
+  if [[ -z "$DOCKER_GROUP" ]]; then
+    DOCKER_GROUP="docker"
+    groupadd -g "$DOCKER_SOCK_GID" "$DOCKER_GROUP" || true
+  fi
+  usermod -aG "$DOCKER_GROUP" dev || true
+  printf "export DOCKER_HOST=unix:///var/run/docker.sock
+" > /etc/profile.d/docker-host.sh
+fi
+
 # 2) Ensure GH_TOKEN is available for SSH sessions if provided
 if [[ -n "$GH_TOKEN" ]]; then
   printf "export GH_TOKEN=%q\n" "$GH_TOKEN" > /etc/profile.d/gh-token.sh
@@ -119,6 +177,13 @@ else
   touch "$CLONE_FAIL_PATH"
 fi
 ) &
+
+# 4.5) Snapshot baseline processes for terminal session filtering
+mkdir -p /run/docker-git
+BASELINE_PATH="/run/docker-git/terminal-baseline.pids"
+if [[ ! -f "$BASELINE_PATH" ]]; then
+  ps -eo pid= > "$BASELINE_PATH" || true
+fi
 
 # 5) Run sshd in foreground
 exec /usr/sbin/sshd -D

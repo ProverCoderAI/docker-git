@@ -11,6 +11,11 @@ import {
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import { listProjectStatus } from "@effect-template/lib/usecases/projects"
+import {
+  killTerminalProcess,
+  listTerminalSessions,
+  tailTerminalLogs
+} from "@effect-template/lib/usecases/terminal-sessions"
 import { Effect, Match, pipe } from "effect"
 import { readCommand } from "./cli/read-command.js"
 import { attachTmux, listTmuxPanes } from "./tmux.js"
@@ -69,6 +74,9 @@ export const program = pipe(
       Match.when({ _tag: "AuthCodexLogout" }, (command) => authCodexLogout(command)),
       Match.when({ _tag: "Attach" }, (command) => attachTmux(command)),
       Match.when({ _tag: "Panes" }, (command) => listTmuxPanes(command)),
+      Match.when({ _tag: "SessionsList" }, (command) => listTerminalSessions(command)),
+      Match.when({ _tag: "SessionsKill" }, (command) => killTerminalProcess(command)),
+      Match.when({ _tag: "SessionsLogs" }, (command) => tailTerminalLogs(command)),
       Match.when({ _tag: "Menu" }, () => runMenu),
       Match.exhaustive
     )

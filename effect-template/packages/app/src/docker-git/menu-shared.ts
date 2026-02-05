@@ -13,6 +13,62 @@ import type { MenuViewContext, ViewState } from "./menu-types.js"
 
 type MenuResetContext = Pick<MenuViewContext, "setView" | "setMessage">
 
+type StdoutWrite = typeof process.stdout.write
+
+let stdoutPatched = false
+let stdoutMuted = false
+
+// CHANGE: mute Ink stdout writes while SSH is active
+// WHY: prevent Ink resize re-renders from corrupting the SSH terminal buffer
+// QUOTE(ТЗ): "при изменении разершения он всё ломает?"
+// REF: user-request-2026-02-05-ssh-resize
+// SOURCE: n/a
+// FORMAT THEOREM: ∀w: muted(w) → ¬writes(ink, stdout)
+// PURITY: SHELL
+// EFFECT: n/a
+// INVARIANT: wrapper preserves original stdout write when not muted
+// COMPLEXITY: O(1)
+const ensureStdoutPatched = (): void => {
+  if (stdoutPatched) {
+    return
+  }
+  const baseWrite: StdoutWrite = process.stdout.write.bind(process.stdout)
+  const mutedWrite: StdoutWrite = (
+    chunk: string | Uint8Array,
+    encoding?: BufferEncoding | ((err?: Error | null) => void),
+    cb?: (err?: Error | null) => void
+  ) => {
+    if (stdoutMuted) {
+      const callback = typeof encoding === "function" ? encoding : cb
+      if (typeof callback === "function") {
+        callback()
+      }
+      return true
+    }
+    if (typeof encoding === "function") {
+      return baseWrite(chunk, encoding)
+    }
+    return baseWrite(chunk, encoding, cb)
+  }
+  process.stdout.write = mutedWrite
+  stdoutPatched = true
+}
+
+// CHANGE: toggle stdout write muting for Ink rendering
+// WHY: allow SSH sessions to own the terminal without TUI redraws
+// QUOTE(ТЗ): "при изменении разершения он всё ломает?"
+// REF: user-request-2026-02-05-ssh-resize
+// SOURCE: n/a
+// FORMAT THEOREM: ∀m ∈ {true,false}: muted = m
+// PURITY: SHELL
+// EFFECT: n/a
+// INVARIANT: stdout wrapper is installed at most once
+// COMPLEXITY: O(1)
+const setStdoutMuted = (muted: boolean): void => {
+  ensureStdoutPatched()
+  stdoutMuted = muted
+}
+
 // CHANGE: temporarily suspend TUI rendering when running interactive commands
 // WHY: avoid mixed output from docker/ssh and the Ink UI
 // QUOTE(ТЗ): "Почему так кривокосо всё отображается?"
@@ -31,6 +87,7 @@ export const suspendTui = (): void => {
     process.stdin.setRawMode(false)
   }
   process.stdout.write("\u001B[?1049l\u001B[2J\u001B[H")
+  setStdoutMuted(true)
 }
 
 // CHANGE: restore TUI rendering after interactive commands
@@ -47,6 +104,7 @@ export const resumeTui = (): void => {
   if (!process.stdout.isTTY) {
     return
   }
+  setStdoutMuted(false)
   process.stdout.write("\u001B[?1049h\u001B[2J\u001B[H")
   if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
     process.stdin.setRawMode(true)
