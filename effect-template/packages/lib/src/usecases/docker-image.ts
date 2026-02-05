@@ -1,8 +1,8 @@
 import * as Command from "@effect/platform/Command"
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
-import type * as FileSystem from "@effect/platform/FileSystem"
-import type * as Path from "@effect/platform/Path"
+import type { FileSystem } from "@effect/platform/FileSystem"
+import type { Path } from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
 import { runCommandWithExitCodes } from "../shell/command-runner.js"
@@ -27,8 +27,8 @@ export type DockerImageSpec = {
 // INVARIANT: image name is stable for docker-git auth
 // COMPLEXITY: O(command)
 export const ensureDockerImage = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
+  fs: FileSystem,
+  path: Path,
   cwd: string,
   spec: DockerImageSpec
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>

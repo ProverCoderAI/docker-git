@@ -30,6 +30,8 @@ export interface RawOptions {
   readonly authWeb?: boolean
   readonly outDir?: string
   readonly projectDir?: string
+  readonly lines?: string
+  readonly includeDefault?: boolean
   readonly up?: boolean
   readonly force?: boolean
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Either, Effect } from "effect"
+import { Effect, Either } from "effect"
 
-import { parseArgs } from "../../src/docker-git/cli/parser.js"
 import { defaultTemplateConfig } from "@effect-template/lib/core/domain"
+import { parseArgs } from "../../src/docker-git/cli/parser.js"
 
 describe("parseArgs", () => {
   it.effect("parses create command with defaults", () =>

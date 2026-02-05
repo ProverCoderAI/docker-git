@@ -2,7 +2,7 @@ import { Either } from "effect"
 
 import { deriveRepoPathParts, type ParseError, resolveRepoInput } from "@effect-template/lib/core/domain"
 
-import { parseRawOptions } from "./parser-options.js"
+import { parseRawOptions, type RawOptions } from "./parser-options.js"
 
 type PositionalRepo = {
   readonly positionalRepoUrl: string | undefined
@@ -16,10 +16,10 @@ export const splitPositionalRepo = (args: ReadonlyArray<string>): PositionalRepo
   return { positionalRepoUrl, restArgs }
 }
 
-export const parseProjectDirArgs = (
+export const parseProjectDirWithOptions = (
   args: ReadonlyArray<string>,
   defaultProjectDir: string = "."
-): Either.Either<{ readonly projectDir: string }, ParseError> =>
+): Either.Either<{ readonly projectDir: string; readonly raw: RawOptions }, ParseError> =>
   Either.gen(function*(_) {
     const { positionalRepoUrl, restArgs } = splitPositionalRepo(args)
     const raw = yield* _(parseRawOptions(restArgs))
@@ -30,5 +30,14 @@ export const parseProjectDirArgs = (
         ? `.docker-git/${deriveRepoPathParts(resolvedRepo).pathParts.join("/")}`
         : defaultProjectDir)
 
-    return { projectDir }
+    return { projectDir, raw }
   })
+
+export const parseProjectDirArgs = (
+  args: ReadonlyArray<string>,
+  defaultProjectDir: string = "."
+): Either.Either<{ readonly projectDir: string }, ParseError> =>
+  Either.map(
+    parseProjectDirWithOptions(args, defaultProjectDir),
+    ({ projectDir }) => ({ projectDir })
+  )

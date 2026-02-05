@@ -8,6 +8,7 @@ import { parseClone } from "./parser-clone.js"
 import { buildCreateCommand } from "./parser-create.js"
 import { parseRawOptions } from "./parser-options.js"
 import { parsePanes } from "./parser-panes.js"
+import { parseSessions } from "./parser-sessions.js"
 import { usageText } from "./usage.js"
 
 const isHelpFlag = (token: string): boolean => token === "--help" || token === "-h"
@@ -54,6 +55,7 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
     Match.when("panes", () => parsePanes(rest)),
     Match.when("terms", () => parsePanes(rest)),
     Match.when("terminals", () => parsePanes(rest)),
+    Match.when("sessions", () => parseSessions(rest)),
     Match.when("help", () => Either.right(helpCommand)),
     Match.when("ps", () => Either.right(statusCommand)),
     Match.when("status", () => Either.right(statusCommand)),

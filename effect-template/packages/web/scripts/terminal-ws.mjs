@@ -15,6 +15,7 @@ const maxAttempts = 20;
 const infoFile = "/tmp/docker-git-terminal-ws.json";
 const sessionsFile = "/tmp/docker-git-terminal-sessions.json";
 const sessions = new Map();
+const liveSessions = new Map();
 
 const nowIso = () => new Date().toISOString();
 
@@ -79,6 +80,12 @@ const sendMessage = (socket, payload) => {
   socket.send(JSON.stringify(payload));
 };
 
+const broadcastSession = (session, payload) => {
+  for (const socket of session.sockets) {
+    sendMessage(socket, payload);
+  }
+};
+
 const decodeMessage = (raw) => {
   try {
     const parsed = JSON.parse(raw);
@@ -86,6 +93,9 @@ const decodeMessage = (raw) => {
       return parsed;
     }
     if (parsed.type === "resize" && typeof parsed.cols === "number" && typeof parsed.rows === "number") {
+      return parsed;
+    }
+    if (parsed.type === "control" && parsed.action === "close") {
       return parsed;
     }
     return null;
@@ -133,18 +143,18 @@ const runComposeUp = (projectDir) =>
     child.on("error", reject);
   });
 
-const runComposeWithLogs = (projectDir, args, socket, label) =>
+const runComposeWithLogs = (projectDir, args, send, label) =>
   new Promise((resolve, reject) => {
-    sendMessage(socket, { type: "info", data: `[recreate] ${label}` });
+    send({ type: "info", data: `[recreate] ${label}` });
     const child = spawn("docker", ["compose", ...args], {
       cwd: projectDir,
       stdio: ["ignore", "pipe", "pipe"]
     });
     child.stdout.on("data", (data) => {
-      sendMessage(socket, { type: "output", data: data.toString("utf8") });
+      send({ type: "output", data: data.toString("utf8") });
     });
     child.stderr.on("data", (data) => {
-      sendMessage(socket, { type: "output", data: data.toString("utf8") });
+      send({ type: "output", data: data.toString("utf8") });
     });
     child.on("exit", (code) => {
       if (code === 0) {
@@ -158,9 +168,9 @@ const runComposeWithLogs = (projectDir, args, socket, label) =>
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const runRecreateFlow = async (projectDir, socket) => {
-  await runComposeWithLogs(projectDir, ["down", "--volumes"], socket, "docker compose down --volumes");
-  sendMessage(socket, { type: "info", data: "[recreate] syncing project files" });
+const runRecreateFlow = async (projectDir, send) => {
+  await runComposeWithLogs(projectDir, ["down", "--volumes"], send, "docker compose down --volumes");
+  send({ type: "info", data: "[recreate] syncing project files" });
   const program = Effect.gen(function*(_) {
     const config = yield* _(readProjectConfigEffect(projectDir));
     yield* _(
@@ -175,21 +185,21 @@ const runRecreateFlow = async (projectDir, socket) => {
     );
   });
   await Effect.runPromise(Effect.provide(program, NodeContext.layer));
-  await runComposeWithLogs(projectDir, ["--progress", "plain", "build"], socket, "docker compose --progress plain build");
-  await runComposeWithLogs(projectDir, ["up", "-d"], socket, "docker compose up -d");
+  await runComposeWithLogs(projectDir, ["--progress", "plain", "build"], send, "docker compose --progress plain build");
+  await runComposeWithLogs(projectDir, ["up", "-d"], send, "docker compose up -d");
 };
 
-const runComposeLogsFollow = (projectDir, socket) => {
-  sendMessage(socket, { type: "info", data: "[recreate] docker compose logs --follow --tail 0" });
+const runComposeLogsFollow = (projectDir, send) => {
+  send({ type: "info", data: "[recreate] docker compose logs --follow --tail 0" });
   const child = spawn("docker", ["compose", "logs", "--follow", "--tail", "0"], {
     cwd: projectDir,
     stdio: ["ignore", "pipe", "pipe"]
   });
   child.stdout.on("data", (data) => {
-    sendMessage(socket, { type: "output", data: data.toString("utf8") });
+    send({ type: "output", data: data.toString("utf8") });
   });
   child.stderr.on("data", (data) => {
-    sendMessage(socket, { type: "output", data: data.toString("utf8") });
+    send({ type: "output", data: data.toString("utf8") });
   });
   return child;
 };
@@ -214,7 +224,7 @@ const postRecreateStatus = async (projectId, phase, message) => {
   }
 };
 
-const connectSshWithRetry = async (config, socket, retries = 30, delayMs = 2000) => {
+const connectSshWithRetry = async (config, send, retries = 30, delayMs = 2000) => {
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     try {
       const client = await new Promise((resolve, reject) => {
@@ -237,7 +247,7 @@ const connectSshWithRetry = async (config, socket, retries = 30, delayMs = 2000)
       if (attempt === retries) {
         throw error;
       }
-      sendMessage(socket, {
+      send({
         type: "info",
         data: `[recreate] waiting for SSH (${attempt}/${retries})...`
       });
@@ -260,6 +270,219 @@ const startSshSession = async (projectDir) => {
   };
 };
 
+const openShell = (client, displayName, send) =>
+  new Promise((resolve, reject) => {
+    send({ type: "info", data: `[docker-git] attached to ${displayName}` });
+    client.shell(
+      {
+        term: "xterm-256color",
+        cols: 120,
+        rows: 32
+      },
+      (error, stream) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(stream);
+      }
+    );
+  });
+
+const connectWithMode = async (projectId, mode, send) => {
+  if (mode === "recreate") {
+    send({ type: "info", data: "[recreate] mode=on" });
+    void postRecreateStatus(projectId, "running", "Recreate started");
+    send({ type: "info", data: "[recreate] starting..." });
+    const config = readProjectTemplate(projectId);
+    const keyPath = findKeyPath(projectId);
+    let logsChild = null;
+    try {
+      await runRecreateFlow(projectId, send);
+      logsChild = runComposeLogsFollow(projectId, send);
+      void postRecreateStatus(projectId, "success", "Recreate completed");
+    } catch (error) {
+      void postRecreateStatus(projectId, "error", String(error));
+      throw error;
+    }
+    let client;
+    try {
+      client = await connectSshWithRetry(
+        {
+          sshUser: config.sshUser ?? "dev",
+          sshPort: Number(config.sshPort ?? 2222),
+          keyPath
+        },
+        send
+      );
+    } finally {
+      stopComposeLogsFollow(logsChild);
+    }
+    const displayName = config.repoUrl ? config.repoUrl.split("/").slice(-2).join("/") : projectId;
+    const stream = await openShell(client, displayName, send);
+    return { client, stream, displayName };
+  }
+
+  send({ type: "info", data: "[terminal] mode=default" });
+  const { sshUser, sshPort, keyPath, displayName } = await startSshSession(projectId);
+  const client = new Client();
+  const privateKey = fs.readFileSync(keyPath);
+  await new Promise((resolve, reject) => {
+    client.on("ready", resolve);
+    client.on("error", reject);
+    client.connect({
+      host: "localhost",
+      port: sshPort,
+      username: sshUser,
+      privateKey,
+      readyTimeout: 15000,
+      hostHash: "sha256",
+      hostVerifier: () => true
+    });
+  });
+  const stream = await openShell(client, displayName, send);
+  return { client, stream, displayName };
+};
+
+const closeRuntimeSession = (sessionId, reason) => {
+  const session = liveSessions.get(sessionId);
+  if (!session) {
+    removeSession(sessionId);
+    return;
+  }
+  liveSessions.delete(sessionId);
+  if (reason) {
+    broadcastSession(session, { type: "info", data: reason });
+  }
+  for (const socket of session.sockets) {
+    try {
+      socket.close();
+    } catch {
+      // ignore
+    }
+  }
+  session.sockets.clear();
+  if (session.stream?.close) {
+    try {
+      session.stream.close();
+    } catch {
+      // ignore
+    }
+  }
+  if (session.stream?.end) {
+    try {
+      session.stream.end();
+    } catch {
+      // ignore
+    }
+  }
+  if (session.client) {
+    session.client.end();
+  }
+  removeSession(sessionId);
+};
+
+const detachSocket = (session, socket) => {
+  session.sockets.delete(socket);
+  if (session.sockets.size === 0) {
+    updateSession(session.id, { status: "detached" });
+  }
+};
+
+const attachSocket = (session, socket) => {
+  session.sockets.add(socket);
+  updateSession(session.id, { status: "connected" });
+
+  socket.on("message", (payload) => {
+    const raw = typeof payload === "string" ? payload : payload.toString("utf8");
+    const command = decodeMessage(raw);
+    if (!command) {
+      return;
+    }
+    if (command.type === "control" && command.action === "close") {
+      closeRuntimeSession(session.id, "[terminal] session closed");
+      return;
+    }
+    if (!session.stream) {
+      return;
+    }
+    if (command.type === "input") {
+      session.stream.write(command.data);
+    }
+    if (command.type === "resize") {
+      session.stream.setWindow(command.rows, command.cols, 0, 0);
+    }
+  });
+
+  socket.on("close", () => detachSocket(session, socket));
+  socket.on("error", () => detachSocket(session, socket));
+};
+
+const ensureRuntimeSession = (sessionId, projectId, mode, source, send) => {
+  const existing = liveSessions.get(sessionId);
+  if (existing) {
+    return existing.ready.then(() => existing);
+  }
+
+  const session = {
+    id: sessionId,
+    projectId,
+    mode,
+    source,
+    sockets: new Set(),
+    client: null,
+    stream: null,
+    displayName: projectId,
+    ready: null
+  };
+
+  registerSession({
+    id: sessionId,
+    projectId,
+    displayName: projectId,
+    mode,
+    source,
+    status: "connecting",
+    connectedAt: nowIso()
+  });
+
+  session.ready = connectWithMode(projectId, mode, send)
+    .then(({ client, stream, displayName }) => {
+      session.client = client;
+      session.stream = stream;
+      session.displayName = displayName;
+      updateSession(sessionId, { status: "connected", displayName });
+
+      stream.on("data", (data) => {
+        broadcastSession(session, { type: "output", data: data.toString("utf8") });
+      });
+
+      stream.stderr.on("data", (data) => {
+        broadcastSession(session, { type: "output", data: data.toString("utf8") });
+      });
+
+      client.on("error", (error) => {
+        broadcastSession(session, { type: "error", data: String(error) });
+        closeRuntimeSession(sessionId, "[terminal] connection error");
+      });
+
+      client.on("close", () => {
+        closeRuntimeSession(sessionId, "[terminal] connection closed");
+      });
+
+      return session;
+    })
+    .catch((error) => {
+      broadcastSession(session, { type: "error", data: String(error) });
+      liveSessions.delete(sessionId);
+      removeSession(sessionId);
+      throw error;
+    });
+
+  liveSessions.set(sessionId, session);
+  return session.ready.then(() => session);
+};
+
 const server = createServer((_req, res) => {
   res.writeHead(200);
   res.end("docker-git terminal ws");
@@ -279,8 +502,15 @@ wss.on("connection", (socket, request) => {
   const url = new URL(requestUrl, "http://localhost");
   const projectId = url.searchParams.get("projectId");
   const sessionId = url.searchParams.get("sessionId") ?? nextSessionId();
+  const action = url.searchParams.get("action");
   const source = url.searchParams.get("source") ?? "web";
   const mode = url.searchParams.get("mode") === "recreate" ? "recreate" : "default";
+
+  if (action === "close") {
+    closeRuntimeSession(sessionId, "[terminal] closed by request");
+    socket.close();
+    return;
+  }
 
   if (!projectId) {
     sendMessage(socket, { type: "error", data: "projectId is required" });
@@ -288,133 +518,35 @@ wss.on("connection", (socket, request) => {
     return;
   }
 
-  registerSession({
-    id: sessionId,
-    projectId,
-    displayName: projectId,
-    mode,
-    source,
-    status: "connecting",
-    connectedAt: nowIso()
-  });
-
-  sendMessage(socket, { type: "info", data: "[docker-git] connecting terminal…" });
-
-  const attachShell = (client, displayName) => {
-    updateSession(sessionId, { status: "connected", displayName });
-    sendMessage(socket, { type: "info", data: `[docker-git] attached to ${displayName}` });
-
-    client.shell(
-      {
-        term: "xterm-256color",
-        cols: 120,
-        rows: 32
-      },
-      (error, stream) => {
-        if (error) {
-          sendMessage(socket, { type: "error", data: String(error) });
-          socket.close();
-          client.end();
-          return;
-        }
-
-        stream.on("data", (data) => {
-          sendMessage(socket, { type: "output", data: data.toString("utf8") });
-        });
-
-        stream.stderr.on("data", (data) => {
-          sendMessage(socket, { type: "output", data: data.toString("utf8") });
-        });
-
-        socket.on("message", (payload) => {
-          const raw = typeof payload === "string" ? payload : payload.toString("utf8");
-          const command = decodeMessage(raw);
-          if (!command) {
-            return;
-          }
-          if (command.type === "input") {
-            stream.write(command.data);
-          }
-          if (command.type === "resize") {
-            stream.setWindow(command.rows, command.cols, 0, 0);
-          }
-        });
-
-        socket.on("close", () => {
-          stream.close();
-          client.end();
-          removeSession(sessionId);
-        });
-
-        socket.on("error", () => {
-          stream.close();
-          client.end();
-          removeSession(sessionId);
-        });
-      }
-    );
-  };
-
-  const attachError = (error) => {
-    sendMessage(socket, { type: "error", data: String(error) });
+  const existing = liveSessions.get(sessionId);
+  if (existing && existing.projectId !== projectId) {
+    sendMessage(socket, { type: "error", data: "sessionId belongs to another project" });
     socket.close();
-    removeSession(sessionId);
+    return;
+  }
+
+  const send = (payload) => sendMessage(socket, payload);
+  send({ type: "info", data: "[docker-git] connecting terminal…" });
+
+  const attachAfterReady = (session) => {
+    attachSocket(session, socket);
   };
 
-  const connectWithMode = async () => {
-    if (mode === "recreate") {
-      sendMessage(socket, { type: "info", data: "[recreate] mode=on" });
-      void postRecreateStatus(projectId, "running", "Recreate started");
-      sendMessage(socket, { type: "info", data: "[recreate] starting..." });
-      const config = readProjectTemplate(projectId);
-      const keyPath = findKeyPath(projectId);
-      let logsChild = null;
-      try {
-        await runRecreateFlow(projectId, socket);
-        logsChild = runComposeLogsFollow(projectId, socket);
-        void postRecreateStatus(projectId, "success", "Recreate completed");
-      } catch (error) {
-        void postRecreateStatus(projectId, "error", String(error));
-        throw error;
-      }
-      let client;
-      try {
-        client = await connectSshWithRetry(
-          {
-            sshUser: config.sshUser ?? "dev",
-            sshPort: Number(config.sshPort ?? 2222),
-            keyPath
-          },
-          socket
-        );
-      } finally {
-        stopComposeLogsFollow(logsChild);
-      }
-      attachShell(client, config.repoUrl ? config.repoUrl.split("/").slice(-2).join("/") : projectId);
-      return;
-    }
-    sendMessage(socket, { type: "info", data: "[terminal] mode=default" });
-    const { sshUser, sshPort, keyPath, displayName } = await startSshSession(projectId);
-    const client = new Client();
-    const privateKey = fs.readFileSync(keyPath);
-    client.on("ready", () => attachShell(client, displayName));
-    client.on("error", attachError);
-    client.connect({
-      host: "localhost",
-      port: sshPort,
-      username: sshUser,
-      privateKey,
-      readyTimeout: 15000,
-      hostHash: "sha256",
-      hostVerifier: () => true
-    });
-  };
+  if (existing) {
+    existing.ready
+      .then(() => attachAfterReady(existing))
+      .catch((error) => {
+        sendMessage(socket, { type: "error", data: String(error) });
+        socket.close();
+      });
+    return;
+  }
 
-  connectWithMode()
+  ensureRuntimeSession(sessionId, projectId, mode, source, send)
+    .then((session) => attachAfterReady(session))
     .catch((error) => {
       sendMessage(socket, { type: "error", data: String(error) });
       socket.close();
-      removeSession(sessionId);
     });
 });
 

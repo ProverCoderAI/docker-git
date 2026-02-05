@@ -8,10 +8,21 @@ import { withFsPathContext } from "./runtime.js"
 type CopyDecision = "skip" | "copy"
 
 const defaultEnvContents = "# docker-git env\n# KEY=value\n"
+// CHANGE: enable web search tool in default Codex config (top-level)
+// WHY: avoid deprecated legacy flags and keep config minimal
+// QUOTE(ТЗ): "да убери легаси"
+// REF: user-request-2026-02-05-remove-legacy-web-search
+// SOURCE: n/a
+// FORMAT THEOREM: ∀c: config(c) -> web_search(c)="live"
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: default config stays deterministic
+// COMPLEXITY: O(1)
 const defaultCodexConfig = [
   "# docker-git codex config",
   "approval_policy = \"never\"",
   "sandbox_mode = \"danger-full-access\"",
+  "web_search = \"live\"",
   "",
   "[features]",
   "shell_tool = true"
