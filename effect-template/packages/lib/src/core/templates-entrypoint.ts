@@ -1,5 +1,11 @@
 import type { TemplateConfig } from "./domain.js"
-import { renderEntrypointPrompt } from "./templates-prompt.js"
+import {
+  renderEntrypointBashCompletion,
+  renderEntrypointBashHistory,
+  renderEntrypointPrompt,
+  renderEntrypointZshConfig,
+  renderInputRc
+} from "./templates-prompt.js"
 
 // CHANGE: ensure target dir ownership and git identity in entrypoint
 // WHY: allow cloning into root-level workspaces + auto-config git for commits
@@ -46,6 +52,73 @@ chown -R 1000:1000 ${config.codexHome}
 HOME_OWNER="$(stat -c "%u:%g" /home/${config.sshUser} 2>/dev/null || echo "")"
 if [[ "$HOME_OWNER" != "1000:1000" ]]; then
   chown -R 1000:1000 /home/${config.sshUser} || true
+fi`
+
+// CHANGE: ensure readline config exists for history search and completion
+// WHY: provide prefix history search and predictable completion UX
+// QUOTE(ТЗ): "когда я напишу cd он мне предложит"
+// REF: user-request-2026-02-05-inputrc
+// SOURCE: n/a
+// FORMAT THEOREM: forall s in InteractiveShells: inputrc(s) -> history_search(s)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: does not overwrite existing ~/.inputrc
+// COMPLEXITY: O(1)
+const renderEntrypointInputRc = (config: TemplateConfig): string =>
+  String.raw`# Ensure readline history search bindings for ${config.sshUser}
+INPUTRC_PATH="/home/${config.sshUser}/.inputrc"
+if [[ ! -f "$INPUTRC_PATH" ]]; then
+  cat <<'EOF' > "$INPUTRC_PATH"
+${renderInputRc()}
+EOF
+  chown 1000:1000 "$INPUTRC_PATH" || true
+fi`
+
+// CHANGE: ensure the ssh user defaults to zsh when available
+// WHY: enable autosuggestions and zsh prompt for interactive sessions
+// QUOTE(ТЗ): "пусть будет zzh если он сделате то что я хочу"
+// REF: user-request-2026-02-05-zsh-autosuggest
+// SOURCE: n/a
+// FORMAT THEOREM: ∀u: zsh(u) -> shell(u)=zsh
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: only changes shell if zsh exists
+// COMPLEXITY: O(1)
+const renderEntrypointZshShell = (config: TemplateConfig): string =>
+  String.raw`# Prefer zsh for ${config.sshUser} when available
+if command -v zsh >/dev/null 2>&1; then
+  usermod -s /usr/bin/zsh ${config.sshUser} || true
+fi`
+
+// CHANGE: prevent zsh new-user wizard and ensure user zshrc exists
+// WHY: avoid interactive zsh-newuser-install prompt on SSH login
+// QUOTE(ТЗ): "Что за дичь меня встречает при подключение через SSH?"
+// REF: user-request-2026-02-05-zsh-newuser
+// SOURCE: n/a
+// FORMAT THEOREM: ∀u: zsh(u) → exists(u/.zshrc)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: does not overwrite existing ~/.zshrc
+// COMPLEXITY: O(1)
+const renderEntrypointZshUserRc = (config: TemplateConfig): string =>
+  String.raw`# Ensure ${config.sshUser} has a zshrc and disable newuser wizard
+ZSHENV_PATH="/etc/zsh/zshenv"
+if [[ -f "$ZSHENV_PATH" ]]; then
+  if ! grep -q "ZSH_DISABLE_NEWUSER_INSTALL" "$ZSHENV_PATH"; then
+    printf "%s\n" "export ZSH_DISABLE_NEWUSER_INSTALL=1" >> "$ZSHENV_PATH"
+  fi
+else
+  printf "%s\n" "export ZSH_DISABLE_NEWUSER_INSTALL=1" > "$ZSHENV_PATH"
+fi
+USER_ZSHRC="/home/${config.sshUser}/.zshrc"
+if [[ ! -f "$USER_ZSHRC" ]]; then
+  cat <<'EOF' > "$USER_ZSHRC"
+# docker-git default zshrc
+if [ -f /etc/zsh/zshrc ]; then
+  source /etc/zsh/zshrc
+fi
+EOF
+  chown 1000:1000 "$USER_ZSHRC" || true
 fi`
 
 // CHANGE: create a global AGENTS.md under the Codex home
@@ -234,7 +307,13 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointHeader(config),
     renderEntrypointAuthorizedKeys(config),
     renderEntrypointCodexHome(config),
+    renderEntrypointZshShell(config),
+    renderEntrypointZshUserRc(config),
     renderEntrypointPrompt(),
+    renderEntrypointBashCompletion(),
+    renderEntrypointBashHistory(),
+    renderEntrypointInputRc(config),
+    renderEntrypointZshConfig(),
     renderEntrypointAgentsNotice(config),
     renderEntrypointDockerSocket(config),
     renderEntrypointGitConfig(config),
