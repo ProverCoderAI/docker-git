@@ -14,7 +14,7 @@ ENV NVM_DIR=/usr/local/nvm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server git gh ca-certificates curl unzip bsdutils sudo \
-    make docker.io docker-compose bash-completion zsh zsh-autosuggestions \
+    make docker.io docker-compose bash-completion zsh zsh-autosuggestions xauth \
  && rm -rf /var/lib/apt/lists/*
 
 # Passwordless sudo for all users (container is disposable)
@@ -80,6 +80,9 @@ RUN printf "%s\\n" \
   "PasswordAuthentication no" \
   "PermitRootLogin no" \
   "PubkeyAuthentication yes" \
+  "X11Forwarding yes" \
+  "X11UseLocalhost yes" \
+  "PermitUserEnvironment yes" \
   "AllowUsers ${config.sshUser}" \
   > /etc/ssh/sshd_config.d/${config.sshUser}.conf`
 

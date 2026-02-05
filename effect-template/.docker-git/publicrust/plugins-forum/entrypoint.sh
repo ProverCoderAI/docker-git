@@ -241,6 +241,13 @@ fi
 if [[ -n "$GH_TOKEN" ]]; then
   printf "export GH_TOKEN=%q\n" "$GH_TOKEN" > /etc/profile.d/gh-token.sh
   chmod 0644 /etc/profile.d/gh-token.sh
+  SSH_ENV_PATH="/home/dev/.ssh/environment"
+  printf "%s\n" "GH_TOKEN=$GH_TOKEN" > "$SSH_ENV_PATH"
+  if [[ -n "$GITHUB_TOKEN" ]]; then
+    printf "%s\n" "GITHUB_TOKEN=$GITHUB_TOKEN" >> "$SSH_ENV_PATH"
+  fi
+  chmod 600 "$SSH_ENV_PATH"
+  chown 1000:1000 "$SSH_ENV_PATH" || true
 fi
 
 # 3) Configure git identity for the dev user if provided

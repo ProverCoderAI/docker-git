@@ -79,6 +79,7 @@ export interface AuthGithubLoginCommand {
   readonly _tag: "AuthGithubLogin"
   readonly label: string | null
   readonly token: string | null
+  readonly scopes: string | null
   readonly envGlobalPath: string
 }
 

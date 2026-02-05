@@ -3,7 +3,7 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NVM_DIR=/usr/local/nvm
 
-RUN apt-get update && apt-get install -y --no-install-recommends     openssh-server git gh ca-certificates curl unzip bsdutils sudo     make docker.io docker-compose bash-completion zsh zsh-autosuggestions  && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends     openssh-server git gh ca-certificates curl unzip bsdutils sudo     make docker.io docker-compose bash-completion zsh zsh-autosuggestions xauth  && rm -rf /var/lib/apt/lists/*
 
 # Passwordless sudo for all users (container is disposable)
 RUN printf "%s\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all   && chmod 0440 /etc/sudoers.d/zz-all
@@ -136,7 +136,7 @@ RUN printf "%s\n" "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev   && chmod 0
 RUN mkdir -p /run/sshd
 
 # Harden sshd: disable password auth and root login
-RUN printf "%s\n"   "PasswordAuthentication no"   "PermitRootLogin no"   "PubkeyAuthentication yes"   "AllowUsers dev"   > /etc/ssh/sshd_config.d/dev.conf
+RUN printf "%s\n"   "PasswordAuthentication no"   "PermitRootLogin no"   "PubkeyAuthentication yes"   "X11Forwarding yes"   "X11UseLocalhost yes"   "PermitUserEnvironment yes"   "AllowUsers dev"   > /etc/ssh/sshd_config.d/dev.conf
 
 # Workspace path (supports root-level dirs like /repo)
 RUN mkdir -p /home/dev/publicrust/plugins-forum   && chown -R 1000:1000 /home/dev   && if [ "/home/dev/publicrust/plugins-forum" != "/" ]; then chown -R 1000:1000 "/home/dev/publicrust/plugins-forum"; fi

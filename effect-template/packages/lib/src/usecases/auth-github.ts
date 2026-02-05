@@ -101,6 +101,28 @@ const listGithubTokens = (envText: string): ReadonlyArray<GithubTokenEntry> =>
     }))
     .filter((entry) => entry.token.trim().length > 0)
 
+const defaultGithubScopes = "repo,workflow,read:org"
+
+// CHANGE: normalize GitHub scopes for gh auth login
+// WHY: ensure required scopes are requested without delete_repo
+// QUOTE(ТЗ): "Передай все нужные скопы"
+// REF: user-request-2026-02-05-gh-scopes
+// SOURCE: n/a
+// FORMAT THEOREM: ∀s: normalize(s) -> scopes(s) ⊆ required
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: empty input yields default scopes
+// COMPLEXITY: O(n) where n = |scopes|
+const normalizeGithubScopes = (value: string | null | undefined): ReadonlyArray<string> => {
+  const raw = value?.trim() ?? ""
+  const input = raw.length === 0 ? defaultGithubScopes : raw
+  const scopes = input
+    .split(/[,\s]+/g)
+    .map((scope) => scope.trim())
+    .filter((scope) => scope.length > 0 && scope !== "delete_repo")
+  return scopes.length === 0 ? defaultGithubScopes.split(",") : scopes
+}
+
 const withEnvContext = <A, E>(
   envGlobalPath: string,
   run: (context: EnvContext) => Effect.Effect<A, E, FileSystem.FileSystem>
@@ -139,7 +161,8 @@ const resolveGithubTokenFromGh = (
 
 const runGithubLogin = (
   cwd: string,
-  accountPath: string
+  accountPath: string,
+  scopes: ReadonlyArray<string>
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   runDockerAuth(
     buildDockerAuthSpec({
@@ -148,7 +171,16 @@ const runGithubLogin = (
       hostPath: accountPath,
       containerPath: ghAuthDir,
       env: "BROWSER=echo",
-      args: ["auth", "login", "--web", "-h", "github.com", "-p", "https"],
+      args: [
+        "auth",
+        "login",
+        "--web",
+        "-h",
+        "github.com",
+        "-p",
+        "https",
+        ...(scopes.length > 0 ? ["--scopes", scopes.join(",")] : [])
+      ],
       interactive: false
     }),
     [0],
@@ -193,6 +225,7 @@ const runGithubInteractiveLogin = (
     const rootPath = resolvePathFromCwd(path, cwd, ghAuthRoot)
     const accountLabel = normalizeAccountLabel(command.label, "default")
     const accountPath = path.join(rootPath, accountLabel)
+    const scopes = normalizeGithubScopes(command.scopes)
     yield* _(fs.makeDirectory(accountPath, { recursive: true }))
     yield* _(
       ensureDockerImage(fs, path, cwd, {
@@ -202,8 +235,8 @@ const runGithubInteractiveLogin = (
         buildLabel: "gh auth"
       })
     )
-    yield* _(Effect.log("Starting GH auth login in container..."))
-    yield* _(retryGithubLogin(runGithubLogin(cwd, accountPath)))
+    yield* _(Effect.log(`Starting GH auth login in container (scopes: ${scopes.join(", ")})...`))
+    yield* _(retryGithubLogin(runGithubLogin(cwd, accountPath, scopes)))
     const resolved = yield* _(resolveGithubTokenFromGh(cwd, accountPath))
     yield* _(ensureEnvFile(fs, path, envPath))
     const key = buildGithubTokenKey(command.label)
