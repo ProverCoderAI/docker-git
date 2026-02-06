@@ -131,6 +131,38 @@ if ! grep -q "zz-bash-history.sh" /etc/bash.bashrc 2>/dev/null; then
   printf "%s\n" "if [ -f /etc/profile.d/zz-bash-history.sh ]; then . /etc/profile.d/zz-bash-history.sh; fi" >> /etc/bash.bashrc
 fi
 
+# Ensure codex resume hint is shown for interactive shells
+CODEX_HINT_PATH="/etc/profile.d/zz-codex-resume.sh"
+if [[ ! -s "$CODEX_HINT_PATH" ]]; then
+  cat <<'EOF' > "$CODEX_HINT_PATH"
+if [ -n "$BASH_VERSION" ]; then
+  case "$-" in
+    *i*)
+      if [ -z "${CODEX_RESUME_HINT_SHOWN-}" ]; then
+        echo "Старые сессии можно запустить с помощью codex resume или codex resume <id>, если знаешь айди."
+        export CODEX_RESUME_HINT_SHOWN=1
+      fi
+      ;;
+  esac
+fi
+if [ -n "$ZSH_VERSION" ]; then
+  if [[ "$-" == *i* ]]; then
+    if [[ -z "${CODEX_RESUME_HINT_SHOWN-}" ]]; then
+      echo "Старые сессии можно запустить с помощью codex resume или codex resume <id>, если знаешь айди."
+      export CODEX_RESUME_HINT_SHOWN=1
+    fi
+  fi
+fi
+EOF
+  chmod 0644 "$CODEX_HINT_PATH"
+fi
+if ! grep -q "zz-codex-resume.sh" /etc/bash.bashrc 2>/dev/null; then
+  printf "%s\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then . /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/bash.bashrc
+fi
+if [[ -f /etc/zsh/zshrc ]] && ! grep -q "zz-codex-resume.sh" /etc/zsh/zshrc 2>/dev/null; then
+  printf "%s\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then source /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/zsh/zshrc
+fi
+
 # Ensure readline history search bindings for dev
 INPUTRC_PATH="/home/dev/.inputrc"
 if [[ ! -f "$INPUTRC_PATH" ]]; then
