@@ -23,6 +23,7 @@ set -euo pipefail
 
 REPO_URL="\${REPO_URL:-}"
 REPO_REF="\${REPO_REF:-}"
+FORK_REPO_URL="\${FORK_REPO_URL:-}"
 TARGET_DIR="\${TARGET_DIR:-${config.targetDir}}"
 GIT_AUTH_USER="\${GIT_AUTH_USER:-\${GITHUB_USER:-x-access-token}}"
 GIT_AUTH_TOKEN="\${GIT_AUTH_TOKEN:-\${GITHUB_TOKEN:-}}"
@@ -199,7 +200,29 @@ rm -f "$CLONE_DONE_PATH" "$CLONE_FAIL_PATH"
 
 CLONE_OK=1`
 
-const renderCloneBody = (config: TemplateConfig): string =>
+// CHANGE: configure fork/upstream remotes after clone
+// WHY: allow auto-fork to become the default push target
+// QUOTE(ТЗ): "Сразу на issues и он бы делал форк репы если это надо"
+// REF: user-request-2026-02-05-issues-fork
+// SOURCE: n/a
+// FORMAT THEOREM: ∀r: fork(r) → origin=fork ∧ upstream=repo
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: only runs when clone succeeded
+// COMPLEXITY: O(1)
+const renderCloneRemotes = (config: TemplateConfig): string =>
+  `if [[ "$CLONE_OK" -eq 1 && -n "$FORK_REPO_URL" && -d "$TARGET_DIR/.git" ]]; then
+  AUTH_FORK_URL="$FORK_REPO_URL"
+  if [[ -n "$GIT_AUTH_TOKEN" && "$FORK_REPO_URL" == https://* ]]; then
+    AUTH_FORK_URL="$(printf "%s" "$FORK_REPO_URL" | sed "s#^https://#https://\${GIT_AUTH_USER}:\${GIT_AUTH_TOKEN}@#")"
+  fi
+  if [[ "$FORK_REPO_URL" != "$REPO_URL" ]]; then
+    su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote set-url origin '$AUTH_FORK_URL'" || true
+    su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote add upstream '$AUTH_REPO_URL' 2>/dev/null || git remote set-url upstream '$AUTH_REPO_URL'" || true
+  fi
+fi`
+
+const renderCloneBodyStart = (config: TemplateConfig): string =>
   `if [[ -z "$REPO_URL" ]]; then
   echo "[clone] skip (no repo url)"
 elif [[ -d "$TARGET_DIR/.git" ]]; then
@@ -214,9 +237,20 @@ else
   AUTH_REPO_URL="$REPO_URL"
   if [[ -n "$GIT_AUTH_TOKEN" && "$REPO_URL" == https://* ]]; then
     AUTH_REPO_URL="$(printf "%s" "$REPO_URL" | sed "s#^https://#https://\${GIT_AUTH_USER}:\${GIT_AUTH_TOKEN}@#")"
-  fi
+  fi`
 
-  if [[ -n "$REPO_REF" ]]; then
+// CHANGE: fallback to the remote default branch when requested branch is missing
+// WHY: allow cloning repos whose default branch is not "main"
+// QUOTE(ТЗ): "fatal: Remote branch main not found in upstream origin"
+// REF: user-request-2026-02-05-default-branch
+// SOURCE: n/a
+// FORMAT THEOREM: ∀r: missing(ref) → clone(default_ref)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: fallback only runs after a failed branch clone
+// COMPLEXITY: O(1)
+const renderCloneBodyRef = (config: TemplateConfig): string =>
+  `  if [[ -n "$REPO_REF" ]]; then
     if [[ "$REPO_REF" == refs/pull/* ]]; then
       REF_BRANCH="pr-$(printf "%s" "$REPO_REF" | tr '/:' '--')"
       if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress '$AUTH_REPO_URL' '$TARGET_DIR'"; then
@@ -230,8 +264,18 @@ else
       fi
     else
       if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress --branch '$REPO_REF' '$AUTH_REPO_URL' '$TARGET_DIR'"; then
-        echo "[clone] git clone failed for $REPO_URL"
-        CLONE_OK=0
+        DEFAULT_REF="$(git ls-remote --symref "$AUTH_REPO_URL" HEAD 2>/dev/null | awk '/^ref:/ {print $2}' | head -n 1)"
+        DEFAULT_BRANCH="$(printf "%s" "$DEFAULT_REF" | sed 's#^refs/heads/##')"
+        if [[ -n "$DEFAULT_BRANCH" ]]; then
+          echo "[clone] branch '$REPO_REF' missing; retrying with '$DEFAULT_BRANCH'"
+          if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress --branch '$DEFAULT_BRANCH' '$AUTH_REPO_URL' '$TARGET_DIR'"; then
+            echo "[clone] git clone failed for $REPO_URL"
+            CLONE_OK=0
+          fi
+        else
+          echo "[clone] git clone failed for $REPO_URL"
+          CLONE_OK=0
+        fi
       fi
     fi
   else
@@ -239,8 +283,10 @@ else
       echo "[clone] git clone failed for $REPO_URL"
       CLONE_OK=0
     fi
-  fi
-fi`
+  fi`
+
+const renderCloneBody = (config: TemplateConfig): string =>
+  [renderCloneBodyStart(config), renderCloneBodyRef(config), "", renderCloneRemotes(config), "fi"].join("\n")
 
 const renderCloneFinalize = (): string =>
   `if [[ "$CLONE_OK" -eq 1 ]]; then
@@ -362,9 +408,7 @@ if [[ ! -f "$BASELINE_PATH" ]]; then
   ps -eo pid= > "$BASELINE_PATH" || true
 fi`
 
-const renderEntrypointSshd = (): string =>
-  `# 5) Run sshd in foreground
-exec /usr/sbin/sshd -D`
+const renderEntrypointSshd = (): string => `# 5) Run sshd in foreground\nexec /usr/sbin/sshd -D`
 
 export const renderEntrypoint = (config: TemplateConfig): string =>
   [

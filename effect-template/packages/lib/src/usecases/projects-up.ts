@@ -1,0 +1,82 @@
+import type { CommandExecutor } from "@effect/platform/CommandExecutor"
+import type { PlatformError } from "@effect/platform/Error"
+import type { FileSystem } from "@effect/platform/FileSystem"
+import type { Path } from "@effect/platform/Path"
+import { Effect } from "effect"
+
+import type { ProjectConfig, TemplateConfig } from "../core/domain.js"
+import { readProjectConfig } from "../shell/config.js"
+import { runDockerComposeUp } from "../shell/docker.js"
+import type {
+  ConfigDecodeError,
+  ConfigNotFoundError,
+  DockerCommandError,
+  FileExistsError,
+  PortProbeError
+} from "../shell/errors.js"
+import { writeProjectFiles } from "../shell/files.js"
+import { loadReservedPorts, selectAvailablePort } from "./ports-reserve.js"
+
+const maxPortAttempts = 25
+
+// CHANGE: update template port when the preferred SSH port is reserved or busy
+// WHY: keep each project on a unique port even across restarts
+// QUOTE(ТЗ): "Почему контейнер пытается подниматься на существующий порт?"
+// REF: user-request-2026-02-05-port-conflict
+// SOURCE: n/a
+// FORMAT THEOREM: ∀p: reserved(p) ∨ occupied(p) → selected(p') ∧ available(p')
+// PURITY: SHELL
+// EFFECT: Effect<TemplateConfig, PortProbeError | PlatformError | FileExistsError, FileSystem | Path>
+// INVARIANT: config is rewritten when port changes
+// COMPLEXITY: O(n) where n = maxPortAttempts
+const ensureAvailableSshPort = (
+  projectDir: string,
+  config: ProjectConfig
+): Effect.Effect<
+  TemplateConfig,
+  PortProbeError | PlatformError | FileExistsError,
+  FileSystem | Path
+> =>
+  Effect.gen(function*(_) {
+    const reserved = yield* _(loadReservedPorts(projectDir))
+    const reservedPorts = new Set(reserved.map((entry) => entry.port))
+    const selected = yield* _(selectAvailablePort(config.template.sshPort, maxPortAttempts, reservedPorts))
+    if (selected === config.template.sshPort) {
+      return config.template
+    }
+    const reason = reservedPorts.has(config.template.sshPort)
+      ? "already reserved by another docker-git project"
+      : "already in use"
+    yield* _(
+      Effect.logWarning(
+        `SSH port ${config.template.sshPort} is ${reason}; using ${selected} instead.`
+      )
+    )
+    const updatedTemplate: TemplateConfig = { ...config.template, sshPort: selected }
+    yield* _(writeProjectFiles(projectDir, updatedTemplate, true))
+    return updatedTemplate
+  })
+
+// CHANGE: start docker compose with a fresh port check for existing projects
+// WHY: keep "docker compose up" resilient to later port collisions
+// QUOTE(ТЗ): "Почему контейнер пытается подниматься на существующий порт?"
+// REF: user-request-2026-02-05-port-conflict
+// SOURCE: n/a
+// FORMAT THEOREM: ∀p: up(p) → available(ssh_port(p))
+// PURITY: SHELL
+// EFFECT: Effect<TemplateConfig, ConfigNotFoundError | ConfigDecodeError | PortProbeError | FileExistsError | DockerCommandError | PlatformError, FileSystem | Path | CommandExecutor>
+// INVARIANT: docker compose runs after port is validated
+// COMPLEXITY: O(n) where n = maxPortAttempts
+export const runDockerComposeUpWithPortCheck = (
+  projectDir: string
+): Effect.Effect<
+  TemplateConfig,
+  ConfigNotFoundError | ConfigDecodeError | PortProbeError | FileExistsError | DockerCommandError | PlatformError,
+  FileSystem | Path | CommandExecutor
+> =>
+  Effect.gen(function*(_) {
+    const config = yield* _(readProjectConfig(projectDir))
+    const updated = yield* _(ensureAvailableSshPort(projectDir, config))
+    yield* _(runDockerComposeUp(projectDir))
+    return updated
+  })

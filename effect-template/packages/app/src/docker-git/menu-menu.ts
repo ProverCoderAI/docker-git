@@ -1,11 +1,6 @@
 import { type MenuAction, parseMenuSelection, type ProjectConfig } from "@effect-template/lib/core/domain"
 import { readProjectConfig } from "@effect-template/lib/shell/config"
-import {
-  runDockerComposeDown,
-  runDockerComposeLogs,
-  runDockerComposePs,
-  runDockerComposeUp
-} from "@effect-template/lib/shell/docker"
+import { runDockerComposeDown, runDockerComposeLogs, runDockerComposePs } from "@effect-template/lib/shell/docker"
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import {
@@ -15,12 +10,14 @@ import {
   resolveAuthorizedKeysPath
 } from "@effect-template/lib/usecases/menu-helpers"
 import { buildSshCommand, listProjectItems, listProjectSummaries } from "@effect-template/lib/usecases/projects"
+import { runDockerComposeUpWithPortCheck } from "@effect-template/lib/usecases/projects-up"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect, Either, Match, pipe } from "effect"
 
 import { startCreateView } from "./menu-create.js"
 import { loadSelectView } from "./menu-select.js"
+import { resumeTui, suspendTui } from "./menu-shared.js"
 import { type MenuEnv, menuItems, type MenuRunner, type MenuState, type ViewState } from "./menu-types.js"
 
 // CHANGE: keep menu actions and input parsing in a dedicated module
@@ -52,6 +49,42 @@ type MenuContext = {
 type MenuSelectionContext = MenuContext & {
   readonly selected: number
   readonly setSelected: (update: (value: number) => number) => void
+}
+
+const actionLabel = (action: MenuAction): string =>
+  Match.value(action).pipe(
+    Match.when({ _tag: "Up" }, () => "docker compose up"),
+    Match.when({ _tag: "Status" }, () => "docker compose ps"),
+    Match.when({ _tag: "Logs" }, () => "docker compose logs"),
+    Match.when({ _tag: "Down" }, () => "docker compose down"),
+    Match.orElse(() => "action")
+  )
+
+const runWithSuspendedTui = (
+  effect: Effect.Effect<void, AppError, MenuEnv>,
+  context: MenuContext,
+  label: string
+) => {
+  context.runner.runEffect(
+    pipe(
+      Effect.sync(() => {
+        context.setMessage(`${label}...`)
+        suspendTui()
+      }),
+      Effect.zipRight(effect),
+      Effect.tap(() =>
+        Effect.sync(() => {
+          context.setMessage(`${label} finished.`)
+        })
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          resumeTui()
+        })
+      ),
+      Effect.asVoid
+    )
+  )
 }
 
 const requireActiveProject = (context: MenuContext): boolean => {
@@ -111,7 +144,8 @@ const handleMenuAction = (
     Match.when({ _tag: "Select" }, () => Effect.succeed(continueOutcome(state))),
     Match.when({ _tag: "Info" }, () => Effect.succeed(continueOutcome(state))),
     Match.when({ _tag: "Up" }, () =>
-      withProjectConfig(state, setMessage, () => runDockerComposeUp(state.activeDir ?? state.cwd))),
+      withProjectConfig(state, setMessage, () =>
+        runDockerComposeUpWithPortCheck(state.activeDir ?? state.cwd).pipe(Effect.asVoid))),
     Match.when({ _tag: "Status" }, () =>
       withProjectConfig(state, setMessage, () =>
         runDockerComposePs(state.activeDir ?? state.cwd))),
@@ -168,33 +202,66 @@ const showAllConnectionInfo = (
       })
     )
   )
-const handleMenuActionSelection = (action: MenuAction, context: MenuContext) => {
-  if (action._tag === "Create") {
-    startCreateView(context.setView, context.setMessage)
+const runCreateAction = (context: MenuContext) => {
+  startCreateView(context.setView, context.setMessage)
+}
+
+const runSelectAction = (context: MenuContext) => {
+  context.setMessage(null)
+  context.runner.runEffect(loadSelectView(listProjectItems, context))
+}
+
+const runInfoAction = (context: MenuContext) => {
+  context.setMessage(null)
+  const effect = context.state.activeDir === null
+    ? showAllConnectionInfo(context.setMessage)
+    : showActiveConnectionInfo(context.state, context.setMessage)
+  context.runner.runEffect(effect)
+}
+
+const runComposeAction = (action: MenuAction, context: MenuContext) => {
+  if (!requireActiveProject(context)) {
     return
   }
-  if (action._tag === "Select") {
-    context.setMessage(null)
-    context.runner.runEffect(loadSelectView(listProjectItems, context))
-    return
-  }
-  if (action._tag === "Info") {
-    context.setMessage(null)
-    const effect = context.state.activeDir === null
-      ? showAllConnectionInfo(context.setMessage)
-      : showActiveConnectionInfo(context.state, context.setMessage)
-    context.runner.runEffect(effect)
-    return
-  }
-  if (action._tag !== "Quit" && !requireActiveProject(context)) {
-    return
-  }
+  const effect = pipe(handleMenuAction(context.state, context.setMessage, action), Effect.asVoid)
+  runWithSuspendedTui(effect, context, actionLabel(action))
+}
+
+const runQuitAction = (context: MenuContext, action: MenuAction) => {
   context.runner.runEffect(
     pipe(handleMenuAction(context.state, context.setMessage, action), Effect.asVoid)
   )
-  if (action._tag === "Quit") {
-    context.exit()
-  }
+  context.exit()
+}
+
+const handleMenuActionSelection = (action: MenuAction, context: MenuContext) => {
+  Match.value(action).pipe(
+    Match.when({ _tag: "Create" }, () => {
+      runCreateAction(context)
+    }),
+    Match.when({ _tag: "Select" }, () => {
+      runSelectAction(context)
+    }),
+    Match.when({ _tag: "Info" }, () => {
+      runInfoAction(context)
+    }),
+    Match.when({ _tag: "Up" }, (selected) => {
+      runComposeAction(selected, context)
+    }),
+    Match.when({ _tag: "Status" }, (selected) => {
+      runComposeAction(selected, context)
+    }),
+    Match.when({ _tag: "Logs" }, (selected) => {
+      runComposeAction(selected, context)
+    }),
+    Match.when({ _tag: "Down" }, (selected) => {
+      runComposeAction(selected, context)
+    }),
+    Match.when({ _tag: "Quit" }, (selected) => {
+      runQuitAction(context, selected)
+    }),
+    Match.exhaustive
+  )
 }
 
 const handleMenuNavigation = (

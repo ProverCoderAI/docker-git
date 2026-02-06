@@ -12,12 +12,18 @@ import {
   runCommandWithExitCodes
 } from "@effect-template/lib/shell/command-runner"
 import { readProjectConfig } from "@effect-template/lib/shell/config"
-import { runDockerComposeUp } from "@effect-template/lib/shell/docker"
-import type { ConfigDecodeError, ConfigNotFoundError, DockerCommandError } from "@effect-template/lib/shell/errors"
+import type {
+  ConfigDecodeError,
+  ConfigNotFoundError,
+  DockerCommandError,
+  FileExistsError,
+  PortProbeError
+} from "@effect-template/lib/shell/errors"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { resolveBaseDir } from "@effect-template/lib/shell/paths"
 import { findSshPrivateKey } from "@effect-template/lib/usecases/path-helpers"
 import { buildSshCommand } from "@effect-template/lib/usecases/projects"
+import { runDockerComposeUpWithPortCheck } from "@effect-template/lib/usecases/projects-up"
 
 const tmuxOk = [0]
 const layoutVersion = "v14"
@@ -241,28 +247,32 @@ export const listTmuxPanes = (
 // SOURCE: n/a
 // FORMAT THEOREM: forall p: attach(p) -> tmux(p)
 // PURITY: SHELL
-// EFFECT: Effect<void, CommandFailedError | DockerCommandError | ConfigNotFoundError | ConfigDecodeError | PlatformError, CommandExecutor | FileSystem | Path>
+// EFFECT: Effect<void, CommandFailedError | DockerCommandError | ConfigNotFoundError | ConfigDecodeError | FileExistsError | PortProbeError | PlatformError, CommandExecutor | FileSystem | Path>
 // INVARIANT: tmux session name is deterministic from repo url
 // COMPLEXITY: O(1)
 export const attachTmux = (
   command: AttachCommand
 ): Effect.Effect<
   void,
-  CommandFailedError | DockerCommandError | ConfigNotFoundError | ConfigDecodeError | PlatformError,
+  | CommandFailedError
+  | DockerCommandError
+  | ConfigNotFoundError
+  | ConfigDecodeError
+  | FileExistsError
+  | PortProbeError
+  | PlatformError,
   CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
 > =>
   Effect.gen(function*(_) {
     const { fs, path, resolved } = yield* _(resolveBaseDir(command.projectDir))
-    const config = yield* _(readProjectConfig(resolved))
     const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
-    const sshCommand = buildSshCommand(config.template, sshKey)
-    const repoDisplayName = formatRepoDisplayName(config.template.repoUrl)
-    const refLabel = formatRepoRefLabel(config.template.repoRef)
+    const template = yield* _(runDockerComposeUpWithPortCheck(resolved))
+    const sshCommand = buildSshCommand(template, sshKey)
+    const repoDisplayName = formatRepoDisplayName(template.repoUrl)
+    const refLabel = formatRepoRefLabel(template.repoRef)
     const statusRight =
-      `SSH: ${config.template.sshUser}@localhost:${config.template.sshPort} | Repo: ${repoDisplayName} | Ref: ${refLabel} | Status: Running`
-    const session = `dg-${deriveRepoSlug(config.template.repoUrl)}`
-
-    yield* _(runDockerComposeUp(resolved))
+      `SSH: ${template.sshUser}@localhost:${template.sshPort} | Repo: ${repoDisplayName} | Ref: ${refLabel} | Status: Running`
+    const session = `dg-${deriveRepoSlug(template.repoUrl)}`
     const hasSessionCode = yield* _(runTmuxExitCode(["has-session", "-t", session]))
 
     if (hasSessionCode === 0) {
@@ -277,6 +287,6 @@ export const attachTmux = (
 
     yield* _(createLayout(session))
     yield* _(configureSession(session, repoDisplayName, statusRight))
-    yield* _(setupPanes(session, sshCommand, config.template.containerName))
+    yield* _(setupPanes(session, sshCommand, template.containerName))
     yield* _(runTmux(["attach", "-t", session]))
   })
