@@ -223,6 +223,38 @@ fi
 EOF
 fi
 
+# Ensure codex resume hint is shown for interactive shells
+CODEX_HINT_PATH="/etc/profile.d/zz-codex-resume.sh"
+if [[ ! -s "$CODEX_HINT_PATH" ]]; then
+  cat <<'EOF' > "$CODEX_HINT_PATH"
+if [ -n "$BASH_VERSION" ]; then
+  case "$-" in
+    *i*)
+      if [ -z "${CODEX_RESUME_HINT_SHOWN-}" ]; then
+        echo "Старые сессии можно запустить с помощью codex resume или codex resume <id>, если знаешь айди."
+        export CODEX_RESUME_HINT_SHOWN=1
+      fi
+      ;;
+  esac
+fi
+if [ -n "$ZSH_VERSION" ]; then
+  if [[ "$-" == *i* ]]; then
+    if [[ -z "${CODEX_RESUME_HINT_SHOWN-}" ]]; then
+      echo "Старые сессии можно запустить с помощью codex resume или codex resume <id>, если знаешь айди."
+      export CODEX_RESUME_HINT_SHOWN=1
+    fi
+  fi
+fi
+EOF
+  chmod 0644 "$CODEX_HINT_PATH"
+fi
+if ! grep -q "zz-codex-resume.sh" /etc/bash.bashrc 2>/dev/null; then
+  printf "%s\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then . /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/bash.bashrc
+fi
+if [[ -s /etc/zsh/zshrc ]] && ! grep -q "zz-codex-resume.sh" /etc/zsh/zshrc 2>/dev/null; then
+  printf "%s\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then source /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/zsh/zshrc
+fi
+
 # Ensure global AGENTS.md exists for container context
 AGENTS_PATH="/home/dev/.codex/AGENTS.md"
 LEGACY_AGENTS_PATH="/home/dev/AGENTS.md"
@@ -427,6 +459,22 @@ BASELINE_PATH="/run/docker-git/terminal-baseline.pids"
 if [[ ! -f "$BASELINE_PATH" ]]; then
   ps -eo pid= > "$BASELINE_PATH" || true
 fi
+
+# 4.75) Disable Ubuntu MOTD noise for SSH sessions
+PAM_SSHD="/etc/pam.d/sshd"
+if [[ -f "$PAM_SSHD" ]]; then
+  sed -i 's/^[[:space:]]*session[[:space:]]\+optional[[:space:]]\+pam_motd\.so/#&/' "$PAM_SSHD" || true
+  sed -i 's/^[[:space:]]*session[[:space:]]\+optional[[:space:]]\+pam_lastlog\.so/#&/' "$PAM_SSHD" || true
+fi
+
+# Also disable sshd's own banners (e.g. "Last login")
+mkdir -p /etc/ssh/sshd_config.d || true
+DOCKER_GIT_SSHD_CONF="/etc/ssh/sshd_config.d/zz-docker-git-clean.conf"
+cat <<'EOF' > "$DOCKER_GIT_SSHD_CONF"
+PrintMotd no
+PrintLastLog no
+EOF
+chmod 0644 "$DOCKER_GIT_SSHD_CONF" || true
 
 # 5) Run sshd in foreground
 exec /usr/sbin/sshd -D

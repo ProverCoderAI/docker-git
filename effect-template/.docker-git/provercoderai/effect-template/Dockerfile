@@ -139,7 +139,7 @@ RUN mkdir -p /run/sshd
 RUN printf "%s\n"   "PasswordAuthentication no"   "PermitRootLogin no"   "PubkeyAuthentication yes"   "X11Forwarding yes"   "X11UseLocalhost yes"   "PermitUserEnvironment yes"   "AllowUsers dev"   > /etc/ssh/sshd_config.d/dev.conf
 
 # Workspace path (supports root-level dirs like /repo)
-RUN mkdir -p /provercoderai/effect-template   && chown -R 1000:1000 /home/dev   && if [ "/provercoderai/effect-template" != "/" ]; then chown -R 1000:1000 "/provercoderai/effect-template"; fi
+RUN mkdir -p /home/dev/provercoderai/effect-template   && chown -R 1000:1000 /home/dev   && if [ "/home/dev/provercoderai/effect-template" != "/" ]; then chown -R 1000:1000 "/home/dev/provercoderai/effect-template"; fi
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
