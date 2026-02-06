@@ -20,6 +20,8 @@ import { withFsPathContext } from "./runtime.js"
 const resolvePathFromBase = (path: Path.Path, baseDir: string, targetPath: string): string =>
   path.isAbsolute(targetPath) ? targetPath : path.resolve(baseDir, targetPath)
 
+const toPosixPath = (value: string): string => value.replaceAll("\\", "/")
+
 type ExistingFileState = "exists" | "missing"
 
 const ensureFileReady = (
@@ -133,6 +135,11 @@ const buildProjectConfigs = (
   resolvedOutDir: string,
   resolvedConfig: CreateCommand["config"]
 ): ProjectConfigs => {
+  // docker-compose resolves relative host paths from the project directory (where docker-compose.yml lives).
+  // To keep generated projects portable across host OSes, we avoid embedding absolute host paths in templates.
+  const relativeFromOutDir = (absolutePath: string): string =>
+    toPosixPath(path.relative(resolvedOutDir, absolutePath))
+
   const globalConfig = {
     ...resolvedConfig,
     authorizedKeysPath: resolvePathFromBase(path, baseDir, resolvedConfig.authorizedKeysPath),
@@ -141,10 +148,14 @@ const buildProjectConfigs = (
     codexAuthPath: resolvePathFromBase(path, baseDir, resolvedConfig.codexAuthPath)
   }
   const projectConfig = {
-    ...globalConfig,
-    envGlobalPath: path.resolve(resolvedOutDir, ".orch/env/global.env"),
-    envProjectPath: resolvePathFromBase(path, resolvedOutDir, resolvedConfig.envProjectPath),
-    codexAuthPath: path.resolve(resolvedOutDir, ".orch/auth/codex")
+    ...resolvedConfig,
+    authorizedKeysPath: relativeFromOutDir(globalConfig.authorizedKeysPath),
+    envGlobalPath: "./.orch/env/global.env",
+    envProjectPath: path.isAbsolute(resolvedConfig.envProjectPath)
+      ? relativeFromOutDir(resolvedConfig.envProjectPath)
+      : toPosixPath(resolvedConfig.envProjectPath),
+    // Project-local copy of shared Codex auth is created under .orch and mounted into CODEX_HOME.
+    codexAuthPath: "./.orch/auth/codex"
   }
   return { globalConfig, projectConfig }
 }
