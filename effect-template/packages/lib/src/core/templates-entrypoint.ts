@@ -75,6 +75,49 @@ EOF
   chown 1000:1000 "$INPUTRC_PATH" || true
 fi`
 
+// CHANGE: show codex resume hint on interactive shells
+// WHY: remind users how to resume older Codex sessions after SSH login
+// QUOTE(ТЗ): "Старые сесси можно запустить с помощью codex resume или codex resume id если знаю айди"
+// REF: user-request-2026-02-06-codex-resume-hint
+// SOURCE: n/a
+// FORMAT THEOREM: ∀s ∈ InteractiveShells: hint(s) → visible(s)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: hint prints at most once per shell session
+// COMPLEXITY: O(1)
+const renderEntrypointCodexResumeHint = (): string =>
+  String.raw`# Ensure codex resume hint is shown for interactive shells
+CODEX_HINT_PATH="/etc/profile.d/zz-codex-resume.sh"
+if [[ ! -s "$CODEX_HINT_PATH" ]]; then
+  cat <<'EOF' > "$CODEX_HINT_PATH"
+if [ -n "$BASH_VERSION" ]; then
+  case "$-" in
+    *i*)
+      if [ -z "\${CODEX_RESUME_HINT_SHOWN-}" ]; then
+        echo "Старые сессии можно запустить с помощью codex resume или codex resume <id>, если знаешь айди."
+        export CODEX_RESUME_HINT_SHOWN=1
+      fi
+      ;;
+  esac
+fi
+if [ -n "$ZSH_VERSION" ]; then
+  if [[ "$-" == *i* ]]; then
+    if [[ -z "\${CODEX_RESUME_HINT_SHOWN-}" ]]; then
+      echo "Старые сессии можно запустить с помощью codex resume или codex resume <id>, если знаешь айди."
+      export CODEX_RESUME_HINT_SHOWN=1
+    fi
+  fi
+fi
+EOF
+  chmod 0644 "$CODEX_HINT_PATH"
+fi
+if ! grep -q "zz-codex-resume.sh" /etc/bash.bashrc 2>/dev/null; then
+  printf "%s\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then . /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/bash.bashrc
+fi
+if [[ -f /etc/zsh/zshrc ]] && ! grep -q "zz-codex-resume.sh" /etc/zsh/zshrc 2>/dev/null; then
+  printf "%s\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then source /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/zsh/zshrc
+fi`
+
 // CHANGE: ensure the ssh user defaults to zsh when available
 // WHY: enable autosuggestions and zsh prompt for interactive sessions
 // QUOTE(ТЗ): "пусть будет zzh если он сделате то что я хочу"
@@ -420,6 +463,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointPrompt(),
     renderEntrypointBashCompletion(),
     renderEntrypointBashHistory(),
+    renderEntrypointCodexResumeHint(),
     renderEntrypointInputRc(config),
     renderEntrypointZshConfig(),
     renderEntrypointAgentsNotice(config),
