@@ -26,30 +26,35 @@ const withArgv = (nextArgv: ReadonlyArray<string>) =>
       })
   )
 
-describe("main program", () => {
-  it.effect("logs default greeting when no args", () =>
-    Effect.scoped(
-      Effect.gen(function*(_) {
-        const logSpy = yield* _(withLogSpy)
-        yield* _(withArgv(["node", "main"]))
-        yield* _(pipe(program, Effect.provide(NodeContext.layer)))
-        yield* _(Effect.sync(() => {
-          expect(logSpy).toHaveBeenCalledTimes(1)
-          expect(logSpy).toHaveBeenLastCalledWith("Hello from Effect!")
-        }))
-      })
-    ))
+const usageCases = [
+  { argv: ["node", "main"], needle: "pnpm docker-git" as const },
+  { argv: ["node", "main", "Alice"], needle: "Usage:" as const }
+] as const
 
-  it.effect("logs named greeting when name is provided", () =>
-    Effect.scoped(
-      Effect.gen(function*(_) {
-        const logSpy = yield* _(withLogSpy)
-        yield* _(withArgv(["node", "main", "Alice"]))
-        yield* _(pipe(program, Effect.provide(NodeContext.layer)))
-        yield* _(Effect.sync(() => {
+const runUsageCase = ({
+  argv,
+  needle
+}: (typeof usageCases)[number]) =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const logSpy = yield* _(withLogSpy)
+      yield* _(withArgv(argv))
+      yield* _(pipe(program, Effect.provide(NodeContext.layer)))
+      yield* _(
+        Effect.sync(() => {
           expect(logSpy).toHaveBeenCalledTimes(1)
-          expect(logSpy).toHaveBeenLastCalledWith("Hello, Alice!")
-        }))
-      })
+          expect(logSpy).toHaveBeenLastCalledWith(
+            expect.stringContaining(needle)
+          )
+        })
+      )
+    })
+  )
+
+describe("main program", () => {
+  it.effect("prints usage for invalid invocations", () =>
+    pipe(
+      Effect.forEach(usageCases, runUsageCase, { concurrency: 1 }),
+      Effect.asVoid
     ))
 })
