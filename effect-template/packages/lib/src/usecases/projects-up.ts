@@ -6,7 +6,7 @@ import { Effect } from "effect"
 
 import type { ProjectConfig, TemplateConfig } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
-import { runDockerComposeUp } from "../shell/docker.js"
+import { runDockerComposePsFormatted, runDockerComposeUp } from "../shell/docker.js"
 import type {
   ConfigDecodeError,
   ConfigNotFoundError,
@@ -16,6 +16,7 @@ import type {
 } from "../shell/errors.js"
 import { writeProjectFiles } from "../shell/files.js"
 import { loadReservedPorts, selectAvailablePort } from "./ports-reserve.js"
+import { parseComposePsOutput } from "./projects-core.js"
 
 const maxPortAttempts = 25
 
@@ -75,7 +76,17 @@ export const runDockerComposeUpWithPortCheck = (
 > =>
   Effect.gen(function*(_) {
     const config = yield* _(readProjectConfig(projectDir))
-    const updated = yield* _(ensureAvailableSshPort(projectDir, config))
+    const alreadyRunning = yield* _(
+      runDockerComposePsFormatted(projectDir).pipe(
+        Effect.map((raw) => parseComposePsOutput(raw)),
+        Effect.map((rows) => rows.length > 0)
+      )
+    )
+
+    // Avoid port churn when the project's compose environment is already running.
+    const updated = alreadyRunning
+      ? config.template
+      : yield* _(ensureAvailableSshPort(projectDir, config))
     // Keep generated templates in sync with the running CLI version.
     yield* _(writeProjectFiles(projectDir, updated, true))
     yield* _(runDockerComposeUp(projectDir))
