@@ -1,3 +1,5 @@
+import { runDockerComposeDown } from "@effect-template/lib/shell/docker"
+import type { AppError } from "@effect-template/lib/usecases/errors"
 import { connectProjectSshWithUp, type ProjectItem } from "@effect-template/lib/usecases/projects"
 
 import { Effect, pipe } from "effect"
@@ -24,10 +26,11 @@ type SelectContext = MenuViewContext & {
 
 export const startSelectView = (
   items: ReadonlyArray<ProjectItem>,
+  purpose: "Connect" | "Down",
   context: Pick<SelectContext, "setView" | "setMessage">
 ) => {
   context.setMessage(null)
-  context.setView({ _tag: "SelectProject", items, selected: 0 })
+  context.setView({ _tag: "SelectProject", purpose, items, selected: 0 })
 }
 
 const clampIndex = (value: number, size: number): number => {
@@ -81,6 +84,55 @@ const handleSelectNavigation = (
   return false
 }
 
+const runWithSuspendedTui = (
+  context: Pick<SelectContext, "runner" | "setMessage" | "setSkipInputs">,
+  effect: Effect.Effect<void, AppError, MenuEnv>,
+  onResume: () => void,
+  doneMessage: string
+) => {
+  context.runner.runEffect(
+    pipe(
+      Effect.sync(suspendTui),
+      Effect.zipRight(effect),
+      Effect.ensuring(
+        Effect.sync(() => {
+          resumeTui()
+          onResume()
+          context.setSkipInputs(() => 2)
+        })
+      ),
+      Effect.tap(() =>
+        Effect.sync(() => {
+          context.setMessage(doneMessage)
+        })
+      )
+    )
+  )
+}
+
+const runConnectSelection = (selected: ProjectItem, context: SelectContext) => {
+  context.setMessage(`Connecting to ${selected.displayName}...`)
+  context.setSshActive(true)
+  runWithSuspendedTui(
+    context,
+    connectProjectSshWithUp(selected),
+    () => {
+      context.setSshActive(false)
+    },
+    "SSH session ended. Press Esc to return to the menu."
+  )
+}
+
+const runDownSelection = (selected: ProjectItem, context: SelectContext) => {
+  context.setMessage(`Stopping ${selected.displayName}...`)
+  runWithSuspendedTui(
+    context,
+    runDockerComposeDown(selected.projectDir),
+    () => {},
+    "Container stopped. Press Esc to return to the menu."
+  )
+}
+
 const handleSelectReturn = (
   view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
   context: SelectContext
@@ -93,28 +145,13 @@ const handleSelectReturn = (
   }
 
   context.setActiveDir(selected.projectDir)
-  context.setMessage(`Connecting to ${selected.displayName}...`)
-  context.setSshActive(true)
-  context.runner.runEffect(
-    pipe(
-      Effect.sync(() => {
-        suspendTui()
-      }),
-      Effect.zipRight(connectProjectSshWithUp(selected)),
-      Effect.ensuring(
-        Effect.sync(() => {
-          resumeTui()
-          context.setSshActive(false)
-          context.setSkipInputs(() => 2)
-        })
-      ),
-      Effect.tap(() =>
-        Effect.sync(() => {
-          context.setMessage("SSH session ended. Press Esc to return to the menu.")
-        })
-      )
-    )
-  )
+
+  if (view.purpose === "Connect") {
+    runConnectSelection(selected, context)
+    return
+  }
+
+  runDownSelection(selected, context)
 }
 
 const handleSelectHint = (input: string, context: SelectContext) => {
@@ -125,6 +162,7 @@ const handleSelectHint = (input: string, context: SelectContext) => {
 
 export const loadSelectView = <E>(
   effect: Effect.Effect<ReadonlyArray<ProjectItem>, E, MenuEnv>,
+  purpose: "Connect" | "Down",
   context: Pick<SelectContext, "setView" | "setMessage">
 ): Effect.Effect<void, E, MenuEnv> =>
   pipe(
@@ -135,7 +173,7 @@ export const loadSelectView = <E>(
           context.setMessage("No docker-git projects found in .docker-git.")
           return
         }
-        startSelectView(items, context)
+        startSelectView(items, purpose, context)
       })
     )
   )

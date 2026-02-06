@@ -16,6 +16,7 @@ const isHelpFlag = (token: string): boolean => token === "--help" || token === "
 const helpCommand: Command = { _tag: "Help", message: usageText }
 const menuCommand: Command = { _tag: "Menu" }
 const statusCommand: Command = { _tag: "Status" }
+const downAllCommand: Command = { _tag: "DownAll" }
 
 const parseCreate = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> =>
   Either.flatMap(parseRawOptions(args), buildCreateCommand)
@@ -59,6 +60,9 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
     Match.when("help", () => Either.right(helpCommand)),
     Match.when("ps", () => Either.right(statusCommand)),
     Match.when("status", () => Either.right(statusCommand)),
+    Match.when("down-all", () => Either.right(downAllCommand)),
+    Match.when("stop-all", () => Either.right(downAllCommand)),
+    Match.when("kill-all", () => Either.right(downAllCommand)),
     Match.when("menu", () => Either.right(menuCommand)),
     Match.when("ui", () => Either.right(menuCommand)),
     Match.when("auth", () => parseAuth(rest)),

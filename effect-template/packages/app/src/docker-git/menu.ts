@@ -183,7 +183,7 @@ const renderView = (context: RenderContext) => {
     return renderCreate(label, context.view.buffer, context.message, context.view.step, currentDefaults)
   }
 
-  return renderSelect(context.view.items, context.view.selected, context.message)
+  return renderSelect(context.view.purpose, context.view.items, context.view.selected, context.message)
 }
 
 const useMenuState = () => {

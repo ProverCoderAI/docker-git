@@ -63,4 +63,16 @@ describe("parseArgs", () => {
     expectCreateCommand(["clone", "https://github.com/org/repo.git", "--branch", "feature-x"], (command) => {
       expect(command.config.repoRef).toBe("feature-x")
     }))
+
+  it.effect("parses down-all command", () =>
+    Effect.sync(() => {
+      Either.match(parseArgs(["down-all"]), {
+        onLeft: (error) => {
+          throw new Error(`unexpected error ${error._tag}`)
+        },
+        onRight: (command: Command) => {
+          expect(command._tag).toBe("DownAll")
+        }
+      })
+    }))
 })

@@ -9,3 +9,4 @@ export {
 } from "./projects-core.js"
 export { listProjectItems, listProjects, listProjectSummaries } from "./projects-list.js"
 export { connectProjectSsh, connectProjectSshWithUp, listProjectStatus } from "./projects-ssh.js"
+export { downAllDockerGitProjects } from "./projects-down.js"

@@ -65,7 +65,11 @@ const renderMenuHints = (el: typeof React.createElement): React.ReactElement =>
     { marginTop: 1, flexDirection: "column" },
     el(Text, { color: "gray" }, "Hints:"),
     el(Text, { color: "gray" }, "  - Paste repo URL to create directly."),
-    el(Text, { color: "gray" }, "  - Aliases: create/c, select/s, info/i, up/u, status/ps, logs/l, down/d, quit/q"),
+    el(
+      Text,
+      { color: "gray" },
+      "  - Aliases: create/c, select/s, info/i, up/u, status/ps, logs/l, down/d, down-all/da, quit/q"
+    ),
     el(Text, { color: "gray" }, "  - Use arrows and Enter to run.")
   )
 
@@ -186,21 +190,45 @@ const renderSelectDetails = (
   ]
 }
 
-export const renderSelect = (
+type SelectPurpose = "Connect" | "Down"
+
+const selectTitle = (purpose: SelectPurpose): string =>
+  Match.value(purpose).pipe(
+    Match.when("Connect", () => "docker-git / Select project"),
+    Match.when("Down", () => "docker-git / Stop container"),
+    Match.exhaustive
+  )
+
+const selectHint = (purpose: SelectPurpose): string =>
+  Match.value(purpose).pipe(
+    Match.when("Connect", () => "Enter = select + SSH, Esc = back"),
+    Match.when("Down", () => "Enter = stop container, Esc = back"),
+    Match.exhaustive
+  )
+
+const buildSelectLabels = (
   items: ReadonlyArray<ProjectItem>,
-  selected: number,
-  message: string | null
-): React.ReactElement => {
-  const el = React.createElement
-  const listLabels = items.map((item, index) => {
+  selected: number
+): ReadonlyArray<string> =>
+  items.map((item, index) => {
     const prefix = index === selected ? ">" : " "
     const refLabel = formatRepoRef(item.repoRef)
     return `${prefix} ${index + 1}. ${item.displayName} (${refLabel})`
   })
-  const maxLabelWidth = listLabels.length > 0 ? Math.max(...listLabels.map((label) => label.length)) : 24
-  const listWidth = Math.min(Math.max(maxLabelWidth + 2, 28), 54)
 
-  const list = listLabels.map((label, index) =>
+const computeListWidth = (labels: ReadonlyArray<string>): number => {
+  const maxLabelWidth = labels.length > 0 ? Math.max(...labels.map((label) => label.length)) : 24
+  return Math.min(Math.max(maxLabelWidth + 2, 28), 54)
+}
+
+const renderSelectListBox = (
+  el: typeof React.createElement,
+  items: ReadonlyArray<ProjectItem>,
+  selected: number,
+  labels: ReadonlyArray<string>,
+  width: number
+): React.ReactElement => {
+  const list = labels.map((label, index) =>
     el(
       Text,
       {
@@ -212,25 +240,41 @@ export const renderSelect = (
     )
   )
 
-  const listBox = el(
+  return el(
     Box,
-    { flexDirection: "column", width: listWidth },
+    { flexDirection: "column", width },
     ...(list.length > 0 ? list : [el(Text, { color: "gray" }, "No projects found.")])
   )
+}
+
+const renderSelectDetailsBox = (
+  el: typeof React.createElement,
+  items: ReadonlyArray<ProjectItem>,
+  selected: number
+): React.ReactElement => {
   const details = renderSelectDetails(el, items[selected])
-  const detailsBox = el(
+  return el(
     Box,
     { flexDirection: "column", marginLeft: 2, flexGrow: 1 },
     ...details
   )
-  const hints = el(
-    Box,
-    { marginTop: 1, flexDirection: "column" },
-    el(Text, { color: "gray" }, "Enter = select + SSH, Esc = back")
-  )
+}
+
+export const renderSelect = (
+  purpose: SelectPurpose,
+  items: ReadonlyArray<ProjectItem>,
+  selected: number,
+  message: string | null
+): React.ReactElement => {
+  const el = React.createElement
+  const listLabels = buildSelectLabels(items, selected)
+  const listWidth = computeListWidth(listLabels)
+  const listBox = renderSelectListBox(el, items, selected, listLabels, listWidth)
+  const detailsBox = renderSelectDetailsBox(el, items, selected)
+  const hints = el(Box, { marginTop: 1 }, el(Text, { color: "gray" }, selectHint(purpose)))
 
   return renderLayout(
-    "docker-git / Select project",
+    selectTitle(purpose),
     [
       el(Box, { flexDirection: "row", marginTop: 1 }, listBox, detailsBox),
       hints
