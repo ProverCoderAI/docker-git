@@ -2,11 +2,17 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type { FileSystem as Fs } from "@effect/platform/FileSystem"
 import type { Path as PathService } from "@effect/platform/Path"
-import { Effect, pipe } from "effect"
+import { Duration, Effect, Schedule, pipe } from "effect"
 
-import { runCommandWithExitCodes } from "../shell/command-runner.js"
-import { runDockerComposePsFormatted, runDockerComposeUp } from "../shell/docker.js"
-import type { DockerCommandError } from "../shell/errors.js"
+import { runCommandExitCode, runCommandWithExitCodes } from "../shell/command-runner.js"
+import { runDockerComposePsFormatted } from "../shell/docker.js"
+import type {
+  ConfigDecodeError,
+  ConfigNotFoundError,
+  DockerCommandError,
+  FileExistsError,
+  PortProbeError
+} from "../shell/errors.js"
 import { CommandFailedError } from "../shell/errors.js"
 import { renderError } from "./errors.js"
 import {
@@ -20,6 +26,7 @@ import {
   skipWithWarning,
   withProjectIndexAndSsh
 } from "./projects-core.js"
+import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
 
 const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
   const args: Array<string> = []
@@ -38,6 +45,62 @@ const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
     `${item.sshUser}@localhost`
   )
   return args
+}
+
+const buildSshProbeArgs = (item: ProjectItem): ReadonlyArray<string> => {
+  const args: Array<string> = []
+  if (item.sshKeyPath !== null) {
+    args.push("-i", item.sshKeyPath)
+  }
+  args.push(
+    "-T",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "ConnectTimeout=2",
+    "-o",
+    "ConnectionAttempts=1",
+    "-o",
+    "StrictHostKeyChecking=no",
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-p",
+    String(item.sshPort),
+    `${item.sshUser}@localhost`,
+    "true"
+  )
+  return args
+}
+
+const waitForSshReady = (
+  item: ProjectItem
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const probe = Effect.gen(function*(_) {
+    const exitCode = yield* _(
+      runCommandExitCode({
+        cwd: process.cwd(),
+        command: "ssh",
+        args: buildSshProbeArgs(item)
+      })
+    )
+    if (exitCode !== 0) {
+      return yield* _(Effect.fail(new CommandFailedError({ command: "ssh wait", exitCode })))
+    }
+  })
+
+  return pipe(
+    Effect.log(`Waiting for SSH on localhost:${item.sshPort} ...`),
+    Effect.zipRight(
+      Effect.retry(
+        probe,
+        pipe(
+          Schedule.spaced(Duration.seconds(2)),
+          Schedule.intersect(Schedule.recurs(30))
+        )
+      )
+    ),
+    Effect.tap(() => Effect.log("SSH is ready."))
+  )
 }
 
 // CHANGE: connect to a project via SSH using its resolved settings
@@ -70,19 +133,28 @@ export const connectProjectSsh = (
 // SOURCE: n/a
 // FORMAT THEOREM: forall p: up(p) -> ssh(p)
 // PURITY: SHELL
-// EFFECT: Effect<void, CommandFailedError | DockerCommandError | PlatformError, CommandExecutor>
+// EFFECT: Effect<void, CommandFailedError | DockerCommandError | PlatformError, CommandExecutor | FileSystem | Path>
 // INVARIANT: docker compose up runs before ssh
 // COMPLEXITY: O(1)
 export const connectProjectSshWithUp = (
   item: ProjectItem
 ): Effect.Effect<
   void,
-  CommandFailedError | DockerCommandError | PlatformError,
-  CommandExecutor.CommandExecutor
+  | CommandFailedError
+  | ConfigNotFoundError
+  | ConfigDecodeError
+  | FileExistsError
+  | PortProbeError
+  | DockerCommandError
+  | PlatformError,
+  CommandExecutor.CommandExecutor | Fs | PathService
 > =>
   pipe(
-    runDockerComposeUp(item.projectDir),
-    Effect.flatMap(() => connectProjectSsh(item))
+    Effect.log(`Starting docker compose for ${item.displayName} ...`),
+    Effect.zipRight(runDockerComposeUpWithPortCheck(item.projectDir)),
+    Effect.map((template) => ({ ...item, sshPort: template.sshPort })),
+    Effect.tap((updated) => waitForSshReady(updated)),
+    Effect.flatMap((updated) => connectProjectSsh(updated))
   )
 
 // CHANGE: show docker compose status for all known docker-git projects

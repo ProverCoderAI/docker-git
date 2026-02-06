@@ -13,8 +13,8 @@ import type { AuthError } from "../shell/errors.js"
 import { CommandFailedError } from "../shell/errors.js"
 import { buildDockerAuthSpec, normalizeAccountLabel } from "./auth-helpers.js"
 import { migrateLegacyOrchLayout } from "./auth-sync.js"
-import { ensureDockerImage } from "./docker-image.js"
 import { ensureEnvFile, parseEnvEntries, readEnvText, removeEnvKey, upsertEnvKey } from "./env-file.js"
+import { ensureGhAuthImage, ghAuthDir, ghAuthRoot, ghImageName } from "./github-auth-image.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 
@@ -33,11 +33,6 @@ type EnvContext = {
   readonly current: string
 }
 
-const ghAuthRoot = ".docker-git/.orch/auth/gh"
-const ghAuthDir = "/root/.config/gh"
-const ghImageName = "docker-git-auth-gh:latest"
-const ghImageDir = ".docker-git/.orch/auth/gh/.image"
-
 const ensureGithubOrchLayout = (
   cwd: string,
   envGlobalPath: string
@@ -49,23 +44,6 @@ const ensureGithubOrchLayout = (
     defaultTemplateConfig.codexAuthPath,
     ghAuthRoot
   )
-
-const renderGhDockerfile = (): string =>
-  String.raw`FROM ubuntu:24.04
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl gnupg bsdutils \
-  && mkdir -p /etc/apt/keyrings \
-  && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    | gpg --dearmor -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-  && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-    > /etc/apt/sources.list.d/github-cli.list \
-  && apt-get update \
-  && apt-get install -y --no-install-recommends gh git \
-  && rm -rf /var/lib/apt/lists/*
-ENTRYPOINT ["gh"]
-`
 
 const normalizeGithubLabel = (value: string | null): string => {
   const trimmed = value?.trim() ?? ""
@@ -227,14 +205,7 @@ const runGithubInteractiveLogin = (
     const accountPath = path.join(rootPath, accountLabel)
     const scopes = normalizeGithubScopes(command.scopes)
     yield* _(fs.makeDirectory(accountPath, { recursive: true }))
-    yield* _(
-      ensureDockerImage(fs, path, cwd, {
-        imageName: ghImageName,
-        imageDir: ghImageDir,
-        dockerfile: renderGhDockerfile(),
-        buildLabel: "gh auth"
-      })
-    )
+    yield* _(ensureGhAuthImage(fs, path, cwd, "gh auth"))
     yield* _(Effect.log(`Starting GH auth login in container (scopes: ${scopes.join(", ")})...`))
     yield* _(retryGithubLogin(runGithubLogin(cwd, accountPath, scopes)))
     const resolved = yield* _(resolveGithubTokenFromGh(cwd, accountPath))

@@ -140,38 +140,140 @@ export const deriveRepoPathParts = (repoUrl: string): RepoPathParts => {
   return { ownerParts, repo, pathParts }
 }
 
+export type GithubRepo = {
+  readonly owner: string
+  readonly repo: string
+}
+
+const stripQueryHash = (value: string): string => {
+  const queryIndex = value.indexOf("?")
+  const hashIndex = value.indexOf("#")
+  const indices = [queryIndex, hashIndex].filter((index) => index >= 0)
+  if (indices.length === 0) {
+    return value
+  }
+  const cutIndex = Math.min(...indices)
+  return value.slice(0, cutIndex)
+}
+
+const splitGithubPath = (input: string): ReadonlyArray<string> | null => {
+  const trimmed = input.trim()
+  const httpsPrefix = "https://github.com/"
+  const sshPrefix = "ssh://git@github.com/"
+  const gitPrefix = "git@github.com:"
+  let rest: string | null = null
+  if (trimmed.startsWith(httpsPrefix)) {
+    rest = trimmed.slice(httpsPrefix.length)
+  } else if (trimmed.startsWith(sshPrefix)) {
+    rest = trimmed.slice(sshPrefix.length)
+  } else if (trimmed.startsWith(gitPrefix)) {
+    rest = trimmed.slice(gitPrefix.length)
+  }
+  if (rest === null) {
+    return null
+  }
+  const cleaned = trimRightChar(stripQueryHash(rest), "/")
+  if (cleaned.length === 0) {
+    return []
+  }
+  return cleaned.split("/").filter((part) => part.length > 0)
+}
+
+// CHANGE: parse GitHub owner/repo from common URL formats
+// WHY: enable auto-fork logic without relying on slugified paths
+// QUOTE(ТЗ): "Сразу на issues и он бы делал форк репы если это надо"
+// REF: user-request-2026-02-05-issues-fork
+// SOURCE: n/a
+// FORMAT THEOREM: ∀u: github(u) → repo(u) = {owner, repo}
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: returns null for non-GitHub inputs
+// COMPLEXITY: O(n) where n = |input|
+export const parseGithubRepoUrl = (input: string): GithubRepo | null => {
+  const parts = splitGithubPath(input)
+  if (!parts || parts.length < 2) {
+    return null
+  }
+
+  const owner = parts[0]?.trim()
+  const repoRaw = parts[1]?.trim()
+  if (!owner || !repoRaw) {
+    return null
+  }
+
+  const repo = stripGitSuffix(repoRaw)
+  return { owner, repo }
+}
+
 type ResolvedRepoInput = {
   readonly repoUrl: string
   readonly repoRef?: string
 }
 
+type GithubRefParts = {
+  readonly owner: string
+  readonly repoRaw: string
+  readonly marker: string
+  readonly ref: string
+}
+
+const readGithubPart = (value: string | undefined): string | null => {
+  const trimmed = value?.trim() ?? ""
+  return trimmed.length > 0 ? trimmed : null
+}
+
+const parseGithubRefParts = (input: string): GithubRefParts | null => {
+  const parts = splitGithubPath(input)
+  if (!parts || parts.length < 4) {
+    return null
+  }
+  const owner = readGithubPart(parts[0])
+  const repoRaw = readGithubPart(parts[1])
+  const markerRaw = readGithubPart(parts[2])
+  const ref = readGithubPart(parts[3])
+  if (!owner || !repoRaw || !markerRaw || !ref) {
+    return null
+  }
+  return { owner, repoRaw, marker: markerRaw.toLowerCase(), ref }
+}
+
 const parseGithubPrUrl = (input: string): ResolvedRepoInput | null => {
-  const trimmed = input.trim()
-  const pattern = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:[/?#].*)?$/i
-  const match = pattern.exec(trimmed)
-  if (!match) {
+  const parsed = parseGithubRefParts(input)
+  if (!parsed || parsed.marker !== "pull") {
     return null
   }
 
-  const owner = match[1]?.trim()
-  const repoRaw = match[2]?.trim()
-  const prNumber = match[3]?.trim()
-
-  if (!owner || !repoRaw || !prNumber) {
-    return null
-  }
-
-  const repo = stripGitSuffix(repoRaw)
+  const repo = stripGitSuffix(parsed.repoRaw)
   return {
-    repoUrl: `https://github.com/${owner}/${repo}.git`,
-    repoRef: `refs/pull/${prNumber}/head`
+    repoUrl: `https://github.com/${parsed.owner}/${repo}.git`,
+    repoRef: `refs/pull/${parsed.ref}/head`
   }
 }
 
-// CHANGE: normalize repo input and PR URLs into repo + ref
-// WHY: allow cloning GitHub PR links directly
-// QUOTE(ТЗ): "клонировть по cсылке на PR"
-// REF: user-request-2026-01-28-pr
+// CHANGE: normalize GitHub issue URLs into repo URLs
+// WHY: allow docker-git clone to accept issue links directly
+// QUOTE(ТЗ): "Сразу на issues"
+// REF: user-request-2026-02-05-issues
+// SOURCE: n/a
+// FORMAT THEOREM: ∀u: issue(u) → repo(u)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: issue URL yields repoUrl without repoRef
+// COMPLEXITY: O(n) where n = |url|
+const parseGithubIssueUrl = (input: string): ResolvedRepoInput | null => {
+  const parsed = parseGithubRefParts(input)
+  if (!parsed || parsed.marker !== "issues") {
+    return null
+  }
+
+  const repo = stripGitSuffix(parsed.repoRaw)
+  return { repoUrl: `https://github.com/${parsed.owner}/${repo}.git` }
+}
+
+// CHANGE: normalize repo input and PR/issue URLs into repo + ref
+// WHY: allow cloning GitHub PR links and issue links directly
+// QUOTE(ТЗ): "клонировть по cсылке на PR" | "Сразу на issues"
+// REF: user-request-2026-01-28-pr | user-request-2026-02-05-issues
 // SOURCE: n/a
 // FORMAT THEOREM: forall url: resolve(url) -> deterministic(url, ref)
 // PURITY: CORE
@@ -179,4 +281,6 @@ const parseGithubPrUrl = (input: string): ResolvedRepoInput | null => {
 // INVARIANT: PR URL yields repoUrl + refs/pull/<id>/head
 // COMPLEXITY: O(n) where n = |url|
 export const resolveRepoInput = (repoUrl: string): ResolvedRepoInput =>
-  parseGithubPrUrl(repoUrl) ?? { repoUrl: repoUrl.trim() }
+  parseGithubPrUrl(repoUrl)
+    ?? parseGithubIssueUrl(repoUrl)
+    ?? { repoUrl: repoUrl.trim() }

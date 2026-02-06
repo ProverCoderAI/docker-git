@@ -9,6 +9,7 @@ export interface TemplateConfig {
   readonly sshPort: number
   readonly repoUrl: string
   readonly repoRef: string
+  readonly forkRepoUrl?: string
   readonly targetDir: string
   readonly volumeName: string
   readonly authorizedKeysPath: string

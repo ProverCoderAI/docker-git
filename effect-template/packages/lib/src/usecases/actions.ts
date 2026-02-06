@@ -9,11 +9,11 @@ import { runDockerComposeLogsFollow, runDockerComposeUp, runDockerExecExitCode }
 import type { DockerCommandError, FileExistsError, PortProbeError } from "../shell/errors.js"
 import { CloneFailedError } from "../shell/errors.js"
 import { writeProjectFiles } from "../shell/files.js"
-import { findAvailablePort } from "../shell/ports.js"
-import { logContainerIpAccess, logDockerDnsAccess } from "./access-log.js"
+import { logDockerAccessInfo } from "./access-log.js"
 import { ensureCodexConfigFile, migrateLegacyOrchLayout, syncAuthArtifacts } from "./auth-sync.js"
-import { ensureDockerDnsHost } from "./docker-dns.js"
+import { applyGithubForkConfig } from "./github-fork.js"
 import { findAuthorizedKeysSource, findSshPrivateKey, resolveAuthorizedKeysPath } from "./path-helpers.js"
+import { loadReservedPorts, selectAvailablePort } from "./ports-reserve.js"
 import { buildSshCommand } from "./projects.js"
 import { withFsPathContext } from "./runtime.js"
 
@@ -262,15 +262,35 @@ const clonePollInterval = Duration.seconds(1)
 const cloneDonePath = "/run/docker-git/clone.done"
 const cloneFailPath = "/run/docker-git/clone.failed"
 
+// CHANGE: reserve a stable SSH port per docker-git project
+// WHY: prevent later conflicts when older projects are started
+// QUOTE(ТЗ): "для каждого докера брать должен свой порт"
+// REF: user-request-2026-02-05-port-reserve
+// SOURCE: n/a
+// FORMAT THEOREM: ∀p: create(p) → reserved(port(p)) ∧ available(port(p))
+// PURITY: SHELL
+// EFFECT: Effect<CreateCommand["config"], PortProbeError | PlatformError, FileSystem | Path>
+// INVARIANT: does not reuse ports already assigned in other docker-git configs
+// COMPLEXITY: O(n) where n = maxPortAttempts
 const resolveSshPort = (
-  config: CreateCommand["config"]
-): Effect.Effect<CreateCommand["config"], PortProbeError> =>
+  config: CreateCommand["config"],
+  outDir: string
+): Effect.Effect<
+  CreateCommand["config"],
+  PortProbeError | PlatformError,
+  FileSystem.FileSystem | Path.Path
+> =>
   Effect.gen(function*(_) {
-    const selected = yield* _(findAvailablePort(config.sshPort, maxPortAttempts))
+    const reserved = yield* _(loadReservedPorts(outDir))
+    const reservedPorts = new Set(reserved.map((entry) => entry.port))
+    const selected = yield* _(selectAvailablePort(config.sshPort, maxPortAttempts, reservedPorts))
     if (selected !== config.sshPort) {
+      const reason = reservedPorts.has(config.sshPort)
+        ? "already reserved by another docker-git project"
+        : "already in use"
       yield* _(
         Effect.logWarning(
-          `SSH port ${config.sshPort} is already in use; using ${selected} instead.`
+          `SSH port ${config.sshPort} is ${reason}; using ${selected} instead.`
         )
       )
     }
@@ -346,39 +366,30 @@ export const createProject = (command: CreateCommand) =>
   Effect.gen(function*(_) {
     const path = yield* _(Path.Path)
     const resolvedOutDir = path.resolve(command.outDir)
-    const resolvedConfig = yield* _(resolveSshPort(command.config))
+    const resolvedConfig = yield* _(resolveSshPort(command.config, resolvedOutDir))
     const baseDir = process.cwd()
-    const { globalConfig, projectConfig } = buildProjectConfigs(path, baseDir, resolvedOutDir, resolvedConfig)
-
-    yield* _(
-      migrateLegacyOrchLayout(
-        baseDir,
-        globalConfig.envGlobalPath,
-        globalConfig.envProjectPath,
-        globalConfig.codexAuthPath,
-        ".docker-git/.orch/auth/gh"
-      )
-    )
-    const createdFiles = yield* _(
-      prepareProjectFiles(
-        resolvedOutDir,
-        baseDir,
-        globalConfig,
-        projectConfig,
-        command.force
-      )
-    )
-
+    const forkedConfig = yield* _(applyGithubForkConfig(resolvedConfig))
+    const { globalConfig, projectConfig } = buildProjectConfigs(path, baseDir, resolvedOutDir, forkedConfig)
+    yield* _(migrateLegacyOrchLayout(
+      baseDir,
+      globalConfig.envGlobalPath,
+      globalConfig.envProjectPath,
+      globalConfig.codexAuthPath,
+      ".docker-git/.orch/auth/gh"
+    ))
+    const createdFiles = yield* _(prepareProjectFiles(
+      resolvedOutDir,
+      baseDir,
+      globalConfig,
+      projectConfig,
+      command.force
+    ))
     yield* _(Effect.log(`Created docker-git project in ${resolvedOutDir}`))
-
     for (const file of createdFiles) {
       yield* _(Effect.log(`  - ${file}`))
     }
-
     yield* _(runDockerUpIfNeeded(resolvedOutDir, projectConfig, command.runUp, command.waitForClone))
     if (command.runUp) {
-      yield* _(ensureDockerDnsHost(resolvedOutDir, projectConfig.containerName, projectConfig.repoUrl))
-      yield* _(logDockerDnsAccess(projectConfig))
-      yield* _(logContainerIpAccess(resolvedOutDir, projectConfig))
+      yield* _(logDockerAccessInfo(resolvedOutDir, projectConfig))
     }
   })

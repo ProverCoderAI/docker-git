@@ -120,6 +120,7 @@ const renderDockerfile = (config: TemplateConfig): string =>
 
 const renderDockerCompose = (config: TemplateConfig): string => {
   const networkName = `${config.serviceName}-net`
+  const forkRepoUrl = config.forkRepoUrl ?? ""
 
   return `services:
   ${config.serviceName}:
@@ -128,6 +129,7 @@ const renderDockerCompose = (config: TemplateConfig): string => {
     environment:
       REPO_URL: "${config.repoUrl}"
       REPO_REF: "${config.repoRef}"
+      FORK_REPO_URL: "${forkRepoUrl}"
       TARGET_DIR: "${config.targetDir}"
       CODEX_HOME: "${config.codexHome}"
     env_file:
