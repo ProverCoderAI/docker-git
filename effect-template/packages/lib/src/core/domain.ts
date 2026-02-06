@@ -76,6 +76,10 @@ export interface StatusCommand {
   readonly _tag: "Status"
 }
 
+export interface DownAllCommand {
+  readonly _tag: "DownAll"
+}
+
 export interface AuthGithubLoginCommand {
   readonly _tag: "AuthGithubLogin"
   readonly label: string | null
@@ -134,6 +138,7 @@ export type Command =
   | SessionsCommand
   | HelpCommand
   | StatusCommand
+  | DownAllCommand
   | AuthCommand
 
 export const defaultTemplateConfig = {

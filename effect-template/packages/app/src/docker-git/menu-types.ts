@@ -63,7 +63,12 @@ export const createSteps: ReadonlyArray<CreateStep> = ["repoUrl", "repoRef", "ou
 export type ViewState =
   | { readonly _tag: "Menu" }
   | { readonly _tag: "Create"; readonly step: number; readonly buffer: string; readonly values: Partial<CreateInputs> }
-  | { readonly _tag: "SelectProject"; readonly items: ReadonlyArray<ProjectItem>; readonly selected: number }
+  | {
+    readonly _tag: "SelectProject"
+    readonly purpose: "Connect" | "Down"
+    readonly items: ReadonlyArray<ProjectItem>
+    readonly selected: number
+  }
 
 export const menuItems: ReadonlyArray<{ readonly id: MenuAction; readonly label: string }> = [
   { id: { _tag: "Create" }, label: "Create project" },
@@ -73,5 +78,6 @@ export const menuItems: ReadonlyArray<{ readonly id: MenuAction; readonly label:
   { id: { _tag: "Status" }, label: "docker compose ps" },
   { id: { _tag: "Logs" }, label: "docker compose logs --tail=200" },
   { id: { _tag: "Down" }, label: "docker compose down" },
+  { id: { _tag: "DownAll" }, label: "docker compose down (ALL projects)" },
   { id: { _tag: "Quit" }, label: "Quit" }
 ]

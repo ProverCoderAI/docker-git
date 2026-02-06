@@ -11,6 +11,7 @@ docker-git sessions [list] [<url>] [options]
 docker-git sessions kill <pid> [<url>] [options]
 docker-git sessions logs <pid> [<url>] [options]
 docker-git ps
+docker-git down-all
 docker-git auth <provider> <action> [options]
 
 Commands:
@@ -21,6 +22,7 @@ Commands:
   panes, terms        List tmux panes for a docker-git project
   sessions            List/kill/log container terminal processes
   ps, status          Show docker compose status for all docker-git projects
+  down-all            Stop all docker-git containers (docker compose down)
   auth                Manage GitHub/Codex auth for docker-git
 
 Options:

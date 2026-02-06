@@ -10,7 +10,7 @@ import {
 } from "@effect-template/lib/usecases/auth"
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
-import { listProjectStatus } from "@effect-template/lib/usecases/projects"
+import { downAllDockerGitProjects, listProjectStatus } from "@effect-template/lib/usecases/projects"
 import {
   killTerminalProcess,
   listTerminalSessions,
@@ -66,6 +66,7 @@ export const program = pipe(
       Match.when({ _tag: "Help" }, ({ message }) => Effect.log(message)),
       Match.when({ _tag: "Create" }, (create) => createProject(create)),
       Match.when({ _tag: "Status" }, () => listProjectStatus),
+      Match.when({ _tag: "DownAll" }, () => downAllDockerGitProjects),
       Match.when({ _tag: "AuthGithubLogin" }, (command) => authGithubLogin(command)),
       Match.when({ _tag: "AuthGithubStatus" }, (command) => authGithubStatus(command)),
       Match.when({ _tag: "AuthGithubLogout" }, (command) => authGithubLogout(command)),
