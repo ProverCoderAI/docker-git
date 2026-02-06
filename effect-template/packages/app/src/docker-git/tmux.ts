@@ -96,7 +96,7 @@ const readLayoutVersion = (
 ): Effect.Effect<string | null, PlatformError, CommandExecutor.CommandExecutor> =>
   runTmuxCapture(["show-options", "-t", session, "-v", "@docker-git-layout"]).pipe(
     Effect.map((value) => value.trim()),
-    Effect.catchAll(() => Effect.succeed(null))
+    Effect.catchTag("CommandFailedError", () => Effect.succeed(null))
   )
 
 const buildBottomBarCommand = (): string =>

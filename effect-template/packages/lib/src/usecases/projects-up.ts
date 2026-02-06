@@ -53,7 +53,6 @@ const ensureAvailableSshPort = (
       )
     )
     const updatedTemplate: TemplateConfig = { ...config.template, sshPort: selected }
-    yield* _(writeProjectFiles(projectDir, updatedTemplate, true))
     return updatedTemplate
   })
 
@@ -77,6 +76,8 @@ export const runDockerComposeUpWithPortCheck = (
   Effect.gen(function*(_) {
     const config = yield* _(readProjectConfig(projectDir))
     const updated = yield* _(ensureAvailableSshPort(projectDir, config))
+    // Keep generated templates in sync with the running CLI version.
+    yield* _(writeProjectFiles(projectDir, updated, true))
     yield* _(runDockerComposeUp(projectDir))
     return updated
   })

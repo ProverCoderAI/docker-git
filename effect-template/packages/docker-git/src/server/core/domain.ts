@@ -131,5 +131,5 @@ export const resolveSshHost = (env: Record<string, string | undefined>): string 
 // COMPLEXITY: O(1)
 export const buildSshCommand = (input: SshCommandInput): string =>
   input.sshKeyPath === null
-    ? `ssh -p ${input.sshPort} ${input.sshUser}@${input.sshHost}`
-    : `ssh -i ${input.sshKeyPath} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${input.sshPort} ${input.sshUser}@${input.sshHost}`
+    ? `ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${input.sshPort} ${input.sshUser}@${input.sshHost}`
+    : `ssh -i ${input.sshKeyPath} -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${input.sshPort} ${input.sshUser}@${input.sshHost}`

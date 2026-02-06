@@ -145,6 +145,8 @@ const buildSshArgs = (project: ProjectSummary): Array<string> => {
     "-p",
     String(project.sshPort),
     "-o",
+    "LogLevel=ERROR",
+    "-o",
     "StrictHostKeyChecking=no",
     "-o",
     "UserKnownHostsFile=/dev/null",

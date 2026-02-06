@@ -53,7 +53,7 @@ const runGhApiCloneUrl = (
   args: ReadonlyArray<string>
 ): Effect.Effect<string | null, PlatformError, CommandExecutor.CommandExecutor> =>
   runGhApiCapture(cwd, hostPath, token, args).pipe(
-    Effect.catchAll(() => Effect.succeed("")),
+    Effect.catchTag("CommandFailedError", () => Effect.succeed("")),
     Effect.map((raw) => (raw.length === 0 ? null : raw))
   )
 

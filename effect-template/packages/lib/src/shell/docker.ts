@@ -10,7 +10,7 @@ import { DockerCommandError } from "./errors.js"
 const composeSpec = (cwd: string, args: ReadonlyArray<string>) => ({
   cwd,
   command: "docker",
-  args: ["compose", ...args]
+  args: ["compose", "--ansi", "never", "--progress", "plain", ...args]
 })
 
 const runCompose = (

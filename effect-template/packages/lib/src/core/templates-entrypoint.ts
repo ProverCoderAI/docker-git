@@ -86,7 +86,7 @@ fi`
 // INVARIANT: hint prints at most once per shell session
 // COMPLEXITY: O(1)
 const renderEntrypointCodexResumeHint = (): string =>
-  String.raw`# Ensure codex resume hint is shown for interactive shells
+  `# Ensure codex resume hint is shown for interactive shells
 CODEX_HINT_PATH="/etc/profile.d/zz-codex-resume.sh"
 if [[ ! -s "$CODEX_HINT_PATH" ]]; then
   cat <<'EOF' > "$CODEX_HINT_PATH"
@@ -114,7 +114,7 @@ fi
 if ! grep -q "zz-codex-resume.sh" /etc/bash.bashrc 2>/dev/null; then
   printf "%s\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then . /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/bash.bashrc
 fi
-if [[ -f /etc/zsh/zshrc ]] && ! grep -q "zz-codex-resume.sh" /etc/zsh/zshrc 2>/dev/null; then
+if [[ -s /etc/zsh/zshrc ]] && ! grep -q "zz-codex-resume.sh" /etc/zsh/zshrc 2>/dev/null; then
   printf "%s\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then source /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/zsh/zshrc
 fi`
 
@@ -451,6 +451,33 @@ if [[ ! -f "$BASELINE_PATH" ]]; then
   ps -eo pid= > "$BASELINE_PATH" || true
 fi`
 
+// CHANGE: disable noisy Ubuntu MOTD for SSH logins
+// WHY: keep SSH login clean, docker-git shows its own UX hints
+// QUOTE(ТЗ): "Нашей информации не вижу ЗА то вижу кучу мусора"
+// REF: user-request-2026-02-06-disable-motd
+// SOURCE: n/a
+// FORMAT THEOREM: ∀login: motd_disabled(login) → ¬ubuntu_banner(login)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: edits /etc/pam.d/sshd idempotently (comments only)
+// COMPLEXITY: O(n) where n = number of pam lines
+const renderEntrypointDisableMotd = (): string =>
+  `# 4.75) Disable Ubuntu MOTD noise for SSH sessions
+PAM_SSHD="/etc/pam.d/sshd"
+if [[ -f "$PAM_SSHD" ]]; then
+  sed -i 's/^[[:space:]]*session[[:space:]]\\+optional[[:space:]]\\+pam_motd\\.so/#&/' "$PAM_SSHD" || true
+  sed -i 's/^[[:space:]]*session[[:space:]]\\+optional[[:space:]]\\+pam_lastlog\\.so/#&/' "$PAM_SSHD" || true
+fi
+
+# Also disable sshd's own banners (e.g. "Last login")
+mkdir -p /etc/ssh/sshd_config.d || true
+DOCKER_GIT_SSHD_CONF="/etc/ssh/sshd_config.d/zz-docker-git-clean.conf"
+cat <<'EOF' > "$DOCKER_GIT_SSHD_CONF"
+PrintMotd no
+PrintLastLog no
+EOF
+chmod 0644 "$DOCKER_GIT_SSHD_CONF" || true`
+
 const renderEntrypointSshd = (): string => `# 5) Run sshd in foreground\nexec /usr/sbin/sshd -D`
 
 export const renderEntrypoint = (config: TemplateConfig): string =>
@@ -463,14 +490,15 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointPrompt(),
     renderEntrypointBashCompletion(),
     renderEntrypointBashHistory(),
-    renderEntrypointCodexResumeHint(),
     renderEntrypointInputRc(config),
     renderEntrypointZshConfig(),
+    renderEntrypointCodexResumeHint(),
     renderEntrypointAgentsNotice(config),
     renderEntrypointDockerSocket(config),
     renderEntrypointGitConfig(config),
     renderEntrypointGitHooks(),
     renderEntrypointBackgroundTasks(config),
     renderEntrypointBaseline(),
+    renderEntrypointDisableMotd(),
     renderEntrypointSshd()
   ].join("\n\n")
