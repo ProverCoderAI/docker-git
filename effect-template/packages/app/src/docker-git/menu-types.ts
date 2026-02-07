@@ -65,7 +65,7 @@ export type ViewState =
   | { readonly _tag: "Create"; readonly step: number; readonly buffer: string; readonly values: Partial<CreateInputs> }
   | {
     readonly _tag: "SelectProject"
-    readonly purpose: "Connect" | "Down"
+    readonly purpose: "Connect" | "Down" | "Info"
     readonly items: ReadonlyArray<ProjectItem>
     readonly selected: number
   }

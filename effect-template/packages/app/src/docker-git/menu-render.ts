@@ -174,28 +174,48 @@ const formatRepoRef = (repoRef: string): string => {
 
 const renderSelectDetails = (
   el: typeof React.createElement,
+  purpose: SelectPurpose,
   item: ProjectItem | undefined
 ): ReadonlyArray<React.ReactElement> => {
   if (!item) {
     return [el(Text, { color: "gray", wrap: "truncate" }, "No project selected.")]
   }
 
-  return [
-    el(Text, { color: "cyan", bold: true, wrap: "truncate" }, "Details"),
-    el(Text, { wrap: "truncate" }, `Repo: ${item.repoUrl}`),
-    el(Text, { wrap: "truncate" }, `Ref: ${item.repoRef}`),
-    el(Text, { wrap: "truncate" }, `Project dir: ${item.projectDir}`),
-    el(Text, { wrap: "truncate" }, `Workspace: ${item.targetDir}`),
-    el(Text, { wrap: "truncate" }, `SSH: ${item.sshCommand}`)
-  ]
+  const refLabel = formatRepoRef(item.repoRef)
+  const authSuffix = item.authorizedKeysExists ? "" : " (missing)"
+
+  return Match.value(purpose).pipe(
+    Match.when("Info", () => [
+      el(Text, { color: "cyan", bold: true, wrap: "truncate" }, "Connection info"),
+      el(Text, { wrap: "wrap" }, `Project directory: ${item.projectDir}`),
+      el(Text, { wrap: "wrap" }, `Container: ${item.containerName}`),
+      el(Text, { wrap: "wrap" }, `Service: ${item.serviceName}`),
+      el(Text, { wrap: "wrap" }, `SSH command: ${item.sshCommand}`),
+      el(Text, { wrap: "wrap" }, `Repo: ${item.repoUrl} (${refLabel})`),
+      el(Text, { wrap: "wrap" }, `Workspace: ${item.targetDir}`),
+      el(Text, { wrap: "wrap" }, `Authorized keys: ${item.authorizedKeysPath}${authSuffix}`),
+      el(Text, { wrap: "wrap" }, `Env global: ${item.envGlobalPath}`),
+      el(Text, { wrap: "wrap" }, `Env project: ${item.envProjectPath}`),
+      el(Text, { wrap: "wrap" }, `Codex auth: ${item.codexAuthPath} -> ${item.codexHome}`)
+    ]),
+    Match.orElse(() => [
+      el(Text, { color: "cyan", bold: true, wrap: "truncate" }, "Details"),
+      el(Text, { wrap: "truncate" }, `Repo: ${item.repoUrl}`),
+      el(Text, { wrap: "truncate" }, `Ref: ${item.repoRef}`),
+      el(Text, { wrap: "truncate" }, `Project dir: ${item.projectDir}`),
+      el(Text, { wrap: "truncate" }, `Workspace: ${item.targetDir}`),
+      el(Text, { wrap: "truncate" }, `SSH: ${item.sshCommand}`)
+    ])
+  )
 }
 
-type SelectPurpose = "Connect" | "Down"
+type SelectPurpose = "Connect" | "Down" | "Info"
 
 const selectTitle = (purpose: SelectPurpose): string =>
   Match.value(purpose).pipe(
     Match.when("Connect", () => "docker-git / Select project"),
     Match.when("Down", () => "docker-git / Stop container"),
+    Match.when("Info", () => "docker-git / Show connection info"),
     Match.exhaustive
   )
 
@@ -203,6 +223,7 @@ const selectHint = (purpose: SelectPurpose): string =>
   Match.value(purpose).pipe(
     Match.when("Connect", () => "Enter = select + SSH, Esc = back"),
     Match.when("Down", () => "Enter = stop container, Esc = back"),
+    Match.when("Info", () => "Use arrows to browse details, Enter = set active, Esc = back"),
     Match.exhaustive
   )
 
@@ -249,10 +270,11 @@ const renderSelectListBox = (
 
 const renderSelectDetailsBox = (
   el: typeof React.createElement,
+  purpose: SelectPurpose,
   items: ReadonlyArray<ProjectItem>,
   selected: number
 ): React.ReactElement => {
-  const details = renderSelectDetails(el, items[selected])
+  const details = renderSelectDetails(el, purpose, items[selected])
   return el(
     Box,
     { flexDirection: "column", marginLeft: 2, flexGrow: 1 },
@@ -270,7 +292,7 @@ export const renderSelect = (
   const listLabels = buildSelectLabels(items, selected)
   const listWidth = computeListWidth(listLabels)
   const listBox = renderSelectListBox(el, items, selected, listLabels, listWidth)
-  const detailsBox = renderSelectDetailsBox(el, items, selected)
+  const detailsBox = renderSelectDetailsBox(el, purpose, items, selected)
   const hints = el(Box, { marginTop: 1 }, el(Text, { color: "gray" }, selectHint(purpose)))
 
   return renderLayout(

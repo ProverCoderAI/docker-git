@@ -2,7 +2,7 @@ import { runDockerComposeDown } from "@effect-template/lib/shell/docker"
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { connectProjectSshWithUp, type ProjectItem } from "@effect-template/lib/usecases/projects"
 
-import { Effect, pipe } from "effect"
+import { Effect, Match, pipe } from "effect"
 
 import { resetToMenu, resumeTui, suspendTui } from "./menu-shared.js"
 import type { MenuEnv, MenuKeyInput, MenuRunner, MenuViewContext, ViewState } from "./menu-types.js"
@@ -26,7 +26,7 @@ type SelectContext = MenuViewContext & {
 
 export const startSelectView = (
   items: ReadonlyArray<ProjectItem>,
-  purpose: "Connect" | "Down",
+  purpose: "Connect" | "Down" | "Info",
   context: Pick<SelectContext, "setView" | "setMessage">
 ) => {
   context.setMessage(null)
@@ -133,6 +133,10 @@ const runDownSelection = (selected: ProjectItem, context: SelectContext) => {
   )
 }
 
+const runInfoSelection = (selected: ProjectItem, context: SelectContext) => {
+  context.setMessage(`Details for ${selected.displayName} are shown on the right. Press Esc to return to the menu.`)
+}
+
 const handleSelectReturn = (
   view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
   context: SelectContext
@@ -146,12 +150,18 @@ const handleSelectReturn = (
 
   context.setActiveDir(selected.projectDir)
 
-  if (view.purpose === "Connect") {
-    runConnectSelection(selected, context)
-    return
-  }
-
-  runDownSelection(selected, context)
+  Match.value(view.purpose).pipe(
+    Match.when("Connect", () => {
+      runConnectSelection(selected, context)
+    }),
+    Match.when("Down", () => {
+      runDownSelection(selected, context)
+    }),
+    Match.when("Info", () => {
+      runInfoSelection(selected, context)
+    }),
+    Match.exhaustive
+  )
 }
 
 const handleSelectHint = (input: string, context: SelectContext) => {
@@ -162,7 +172,7 @@ const handleSelectHint = (input: string, context: SelectContext) => {
 
 export const loadSelectView = <E>(
   effect: Effect.Effect<ReadonlyArray<ProjectItem>, E, MenuEnv>,
-  purpose: "Connect" | "Down",
+  purpose: "Connect" | "Down" | "Info",
   context: Pick<SelectContext, "setView" | "setMessage">
 ): Effect.Effect<void, E, MenuEnv> =>
   pipe(

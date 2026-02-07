@@ -4,20 +4,11 @@ import { runDockerComposeDown, runDockerComposeLogs, runDockerComposePs } from "
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import {
-  findSshPrivateKey,
-  formatConnectionInfo,
-  resolveAuthorizedKeysPath
-} from "@effect-template/lib/usecases/menu-helpers"
-import {
-  buildSshCommand,
   downAllDockerGitProjects,
   listProjectItems,
-  listProjectSummaries,
   listRunningProjectItems
 } from "@effect-template/lib/usecases/projects"
 import { runDockerComposeUpWithPortCheck } from "@effect-template/lib/usecases/projects-up"
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
 import { Effect, Match, pipe } from "effect"
 
 import { startCreateView } from "./menu-create.js"
@@ -169,52 +160,6 @@ const handleMenuAction = (
     Match.exhaustive
   )
 
-const showActiveConnectionInfo = (
-  state: MenuState,
-  setMessage: (message: string | null) => void
-): Effect.Effect<void, AppError, MenuEnv> =>
-  withProjectConfig(state, setMessage, (config) =>
-    Effect.gen(function*(_) {
-      const path = yield* _(Path.Path)
-      const fs = yield* _(FileSystem.FileSystem)
-      const baseDir = state.activeDir ?? state.cwd
-      const resolvedAuthorizedKeys = resolveAuthorizedKeysPath(path, baseDir, config.template.authorizedKeysPath)
-      const authExists = yield* _(fs.exists(resolvedAuthorizedKeys))
-      const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
-      const sshCommand = buildSshCommand(config.template, sshKey)
-      const info = formatConnectionInfo(baseDir, config, resolvedAuthorizedKeys, authExists, sshCommand)
-
-      yield* _(
-        Effect.sync(() => {
-          setMessage(info)
-        })
-      )
-
-      if (!authExists) {
-        yield* _(
-          Effect.sync(() => {
-            setMessage(`${info}\n\nCreate ${resolvedAuthorizedKeys} with your public key to enable SSH.`)
-          })
-        )
-      }
-    })).pipe(Effect.asVoid)
-
-const showAllConnectionInfo = (
-  setMessage: (message: string | null) => void
-): Effect.Effect<void, AppError, MenuEnv> =>
-  pipe(
-    listProjectSummaries,
-    Effect.flatMap((summaries) =>
-      Effect.sync(() => {
-        if (summaries.length === 0) {
-          setMessage("No docker-git projects found in .docker-git.")
-          return
-        }
-        setMessage(["Available projects:", ...summaries].join("\n\n"))
-      })
-    )
-  )
-
 const runCreateAction = (context: MenuContext) => {
   startCreateView(context.setView, context.setMessage)
 }
@@ -240,10 +185,7 @@ const runDownAction = (context: MenuContext, action: MenuAction) => {
 
 const runInfoAction = (context: MenuContext) => {
   context.setMessage(null)
-  const effect = context.state.activeDir === null
-    ? showAllConnectionInfo(context.setMessage)
-    : showActiveConnectionInfo(context.state, context.setMessage)
-  context.runner.runEffect(effect)
+  context.runner.runEffect(loadSelectView(listProjectItems, "Info", context))
 }
 
 const runComposeAction = (action: MenuAction, context: MenuContext) => {
