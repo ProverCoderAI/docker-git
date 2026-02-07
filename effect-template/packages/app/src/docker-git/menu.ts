@@ -9,6 +9,7 @@ import { handleCreateInput, resolveCreateInputs } from "./menu-create.js"
 import { handleMenuInput } from "./menu-menu.js"
 import { renderCreate, renderMenu, renderSelect, renderStepLabel } from "./menu-render.js"
 import { handleSelectInput } from "./menu-select.js"
+import { leaveTui, resumeTui } from "./menu-shared.js"
 import {
   createSteps,
   type MenuEnv,
@@ -311,10 +312,20 @@ const TuiApp = () => {
 // INVARIANT: app exits only on Quit or ctrl+c
 // COMPLEXITY: O(1) per input
 export const runMenu = pipe(
-  Effect.tryPromise({
-    try: () => render(React.createElement(TuiApp)).waitUntilExit(),
-    catch: (error) => new InputReadError({ message: error instanceof Error ? error.message : String(error) })
+  Effect.sync(() => {
+    resumeTui()
   }),
+  Effect.zipRight(
+    Effect.tryPromise({
+      try: () => render(React.createElement(TuiApp)).waitUntilExit(),
+      catch: (error) => new InputReadError({ message: error instanceof Error ? error.message : String(error) })
+    })
+  ),
+  Effect.ensuring(
+    Effect.sync(() => {
+      leaveTui()
+    })
+  ),
   Effect.asVoid
 )
 
