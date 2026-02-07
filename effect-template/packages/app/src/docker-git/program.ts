@@ -12,6 +12,14 @@ import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import { downAllDockerGitProjects, listProjectStatus } from "@effect-template/lib/usecases/projects"
 import {
+  stateCommit,
+  stateInit,
+  statePath,
+  statePull,
+  statePush,
+  stateStatus
+} from "@effect-template/lib/usecases/state-repo"
+import {
   killTerminalProcess,
   listTerminalSessions,
   tailTerminalLogs
@@ -49,6 +57,37 @@ const logErrorAndExit = (error: AppError) =>
     Effect.asVoid
   )
 
+type NonBaseCommand = Exclude<
+  Command,
+  | { readonly _tag: "Help" }
+  | { readonly _tag: "Create" }
+  | { readonly _tag: "Status" }
+  | { readonly _tag: "DownAll" }
+  | { readonly _tag: "Menu" }
+>
+
+const handleNonBaseCommand = (command: NonBaseCommand) =>
+  Match.value(command).pipe(
+    Match.when({ _tag: "StatePath" }, () => statePath),
+    Match.when({ _tag: "StateInit" }, (cmd) => stateInit(cmd)),
+    Match.when({ _tag: "StateStatus" }, () => stateStatus),
+    Match.when({ _tag: "StatePull" }, () => statePull),
+    Match.when({ _tag: "StateCommit" }, (cmd) => stateCommit(cmd.message)),
+    Match.when({ _tag: "StatePush" }, () => statePush),
+    Match.when({ _tag: "AuthGithubLogin" }, (cmd) => authGithubLogin(cmd)),
+    Match.when({ _tag: "AuthGithubStatus" }, (cmd) => authGithubStatus(cmd)),
+    Match.when({ _tag: "AuthGithubLogout" }, (cmd) => authGithubLogout(cmd)),
+    Match.when({ _tag: "AuthCodexLogin" }, (cmd) => authCodexLogin(cmd)),
+    Match.when({ _tag: "AuthCodexStatus" }, (cmd) => authCodexStatus(cmd)),
+    Match.when({ _tag: "AuthCodexLogout" }, (cmd) => authCodexLogout(cmd)),
+    Match.when({ _tag: "Attach" }, (cmd) => attachTmux(cmd)),
+    Match.when({ _tag: "Panes" }, (cmd) => listTmuxPanes(cmd)),
+    Match.when({ _tag: "SessionsList" }, (cmd) => listTerminalSessions(cmd)),
+    Match.when({ _tag: "SessionsKill" }, (cmd) => killTerminalProcess(cmd)),
+    Match.when({ _tag: "SessionsLogs" }, (cmd) => tailTerminalLogs(cmd)),
+    Match.exhaustive
+  )
+
 // CHANGE: compose CLI program with typed errors and shell effects
 // WHY: keep a thin entry layer over pure parsing and template generation
 // QUOTE(ТЗ): "CLI команду... создавать докер образы"
@@ -67,19 +106,8 @@ export const program = pipe(
       Match.when({ _tag: "Create" }, (create) => createProject(create)),
       Match.when({ _tag: "Status" }, () => listProjectStatus),
       Match.when({ _tag: "DownAll" }, () => downAllDockerGitProjects),
-      Match.when({ _tag: "AuthGithubLogin" }, (command) => authGithubLogin(command)),
-      Match.when({ _tag: "AuthGithubStatus" }, (command) => authGithubStatus(command)),
-      Match.when({ _tag: "AuthGithubLogout" }, (command) => authGithubLogout(command)),
-      Match.when({ _tag: "AuthCodexLogin" }, (command) => authCodexLogin(command)),
-      Match.when({ _tag: "AuthCodexStatus" }, (command) => authCodexStatus(command)),
-      Match.when({ _tag: "AuthCodexLogout" }, (command) => authCodexLogout(command)),
-      Match.when({ _tag: "Attach" }, (command) => attachTmux(command)),
-      Match.when({ _tag: "Panes" }, (command) => listTmuxPanes(command)),
-      Match.when({ _tag: "SessionsList" }, (command) => listTerminalSessions(command)),
-      Match.when({ _tag: "SessionsKill" }, (command) => killTerminalProcess(command)),
-      Match.when({ _tag: "SessionsLogs" }, (command) => tailTerminalLogs(command)),
       Match.when({ _tag: "Menu" }, () => runMenu),
-      Match.exhaustive
+      Match.orElse((cmd) => handleNonBaseCommand(cmd))
     )
   ),
   Effect.catchTag("FileExistsError", (error) =>

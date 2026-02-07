@@ -2,10 +2,24 @@ import type { ProjectConfig } from "../core/domain.js"
 
 export { findSshPrivateKey } from "./path-helpers.js"
 
+const expandHome = (value: string): string => {
+  const home = process.env["HOME"] ?? process.env["USERPROFILE"]
+  if (!home || home.length === 0) {
+    return value
+  }
+  if (value === "~") {
+    return home
+  }
+  if (value.startsWith("~/") || value.startsWith("~\\")) {
+    return `${home}${value.slice(1)}`
+  }
+  return value
+}
+
 export const defaultProjectsRoot = (cwd: string): string => {
   const explicit = process.env["DOCKER_GIT_PROJECTS_ROOT"]?.trim()
   if (explicit && explicit.length > 0) {
-    return explicit
+    return expandHome(explicit)
   }
 
   return `${cwd}/.docker-git`

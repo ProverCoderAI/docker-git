@@ -9,6 +9,7 @@ import { buildCreateCommand } from "./parser-create.js"
 import { parseRawOptions } from "./parser-options.js"
 import { parsePanes } from "./parser-panes.js"
 import { parseSessions } from "./parser-sessions.js"
+import { parseState } from "./parser-state.js"
 import { usageText } from "./usage.js"
 
 const isHelpFlag = (token: string): boolean => token === "--help" || token === "-h"
@@ -66,6 +67,7 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
     Match.when("menu", () => Either.right(menuCommand)),
     Match.when("ui", () => Either.right(menuCommand)),
     Match.when("auth", () => parseAuth(rest)),
+    Match.when("state", () => parseState(rest)),
     Match.orElse(() => Either.left(unknownCommandError))
   )
 }
