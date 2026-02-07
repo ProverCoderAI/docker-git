@@ -18,6 +18,13 @@ type StdoutWrite = typeof process.stdout.write
 let stdoutPatched = false
 let stdoutMuted = false
 
+const disableMouseModes = (): void => {
+  // Disable xterm/urxvt mouse tracking and "alternate scroll" mode (wheel -> arrow keys).
+  process.stdout.write(
+    "\u001B[?1000l\u001B[?1002l\u001B[?1003l\u001B[?1005l\u001B[?1006l\u001B[?1015l\u001B[?1007l"
+  )
+}
+
 // CHANGE: mute Ink stdout writes while SSH is active
 // WHY: prevent Ink resize re-renders from corrupting the SSH terminal buffer
 // QUOTE(ТЗ): "при изменении разершения он всё ломает?"
@@ -83,6 +90,7 @@ export const suspendTui = (): void => {
   if (!process.stdout.isTTY) {
     return
   }
+  disableMouseModes()
   if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
     process.stdin.setRawMode(false)
   }
@@ -105,9 +113,24 @@ export const resumeTui = (): void => {
     return
   }
   setStdoutMuted(false)
+  disableMouseModes()
   process.stdout.write("\u001B[?1049h\u001B[2J\u001B[H")
   if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
     process.stdin.setRawMode(true)
+  }
+  disableMouseModes()
+}
+
+export const leaveTui = (): void => {
+  if (!process.stdout.isTTY) {
+    return
+  }
+  // Ensure we don't leave the terminal in a broken "mouse reporting" mode.
+  setStdoutMuted(false)
+  disableMouseModes()
+  process.stdout.write("\u001B[?1049l\u001B[2J\u001B[H")
+  if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
+    process.stdin.setRawMode(false)
   }
 }
 
