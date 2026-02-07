@@ -1,8 +1,11 @@
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
+import { runDockerPsNames } from "../shell/docker.js"
+import type { CommandFailedError } from "../shell/errors.js"
 import {
   loadProjectItem,
   loadProjectSummary,
@@ -129,3 +132,24 @@ export const listProjectItems: Effect.Effect<
   PlatformError,
   FileSystem.FileSystem | Path.Path
 > = listProjectValues(loadProjectItem, (value) => value, emptyItems)
+
+// CHANGE: list only running docker-git projects (for "Stop container" UI)
+// WHY: stopping already-stopped projects is confusing and noisy
+// QUOTE(ТЗ): "Смысл мне пытаться остановить тот контейнер который уже остановлен?"
+// REF: user-request-2026-02-07-stop-only-running
+// SOURCE: n/a
+// FORMAT THEOREM: forall p in result: running(container(p))
+// PURITY: SHELL
+// EFFECT: Effect<ReadonlyArray<ProjectItem>, PlatformError | CommandFailedError, FileSystem | Path | CommandExecutor>
+// INVARIANT: result order follows listProjectItems order
+// COMPLEXITY: O(n + command)
+export const listRunningProjectItems: Effect.Effect<
+  ReadonlyArray<ProjectItem>,
+  PlatformError | CommandFailedError,
+  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+> = pipe(
+  Effect.all([listProjectItems, runDockerPsNames(process.cwd())]),
+  Effect.map(([items, runningNames]) =>
+    items.filter((item) => runningNames.includes(item.containerName))
+  )
+)

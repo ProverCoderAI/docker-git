@@ -12,7 +12,8 @@ import {
   buildSshCommand,
   downAllDockerGitProjects,
   listProjectItems,
-  listProjectSummaries
+  listProjectSummaries,
+  listRunningProjectItems
 } from "@effect-template/lib/usecases/projects"
 import { runDockerComposeUpWithPortCheck } from "@effect-template/lib/usecases/projects-up"
 import * as FileSystem from "@effect/platform/FileSystem"
@@ -231,7 +232,7 @@ const runDownAllAction = (context: MenuContext) => {
 const runDownAction = (context: MenuContext, action: MenuAction) => {
   context.setMessage(null)
   if (context.state.activeDir === null) {
-    context.runner.runEffect(loadSelectView(listProjectItems, "Down", context))
+    context.runner.runEffect(loadSelectView(listRunningProjectItems, "Down", context))
     return
   }
   runComposeAction(action, context)
