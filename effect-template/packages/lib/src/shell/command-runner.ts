@@ -9,6 +9,7 @@ type RunCommandSpec = {
   readonly cwd: string
   readonly command: string
   readonly args: ReadonlyArray<string>
+  readonly env?: Readonly<Record<string, string | undefined>>
 }
 
 const buildCommand = (
@@ -20,6 +21,7 @@ const buildCommand = (
   pipe(
     Command.make(spec.command, ...spec.args),
     Command.workingDirectory(spec.cwd),
+    spec.env ? Command.env(spec.env) : (value) => value,
     Command.stdin(stdin),
     Command.stdout(stdout),
     Command.stderr(stderr)

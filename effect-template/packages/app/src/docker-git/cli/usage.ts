@@ -13,6 +13,7 @@ docker-git sessions logs <pid> [<url>] [options]
 docker-git ps
 docker-git down-all
 docker-git auth <provider> <action> [options]
+docker-git state <action> [options]
 
 Commands:
   menu                Interactive menu (default when no args)
@@ -24,6 +25,7 @@ Commands:
   ps, status          Show docker compose status for all docker-git projects
   down-all            Stop all docker-git containers (docker compose down)
   auth                Manage GitHub/Codex auth for docker-git
+  state               Manage docker-git state directory via git (sync across machines)
 
 Options:
   --repo-ref <ref>          Git ref/branch (default: main)
@@ -63,6 +65,17 @@ Auth options:
   --scopes <scopes>      GitHub scopes (login only, default: repo,workflow,read:org)
   --env-global <path>    Env file path for GitHub tokens (default: ./.docker-git/.orch/env/global.env)
   --codex-auth <path>    Codex auth root path (default: ./.docker-git/.orch/auth/codex)
+
+State actions:
+  state path                         Print current projects root (defaults to ./.docker-git; override via DOCKER_GIT_PROJECTS_ROOT)
+  state init --repo-url <url> [-b]   Init / bind state dir to a git remote (use a private repo)
+  state status                       Show git status for the state dir
+  state pull                         git pull (state dir)
+  state commit -m <message>          Commit all changes in the state dir
+  state push                         git push (state dir)
+
+State options:
+  --message, -m <message>    Commit message for state commit
 `
 
 // CHANGE: normalize parse errors into user-facing messages

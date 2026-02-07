@@ -28,6 +28,7 @@ export interface RawOptions {
   readonly label?: string
   readonly token?: string
   readonly scopes?: string
+  readonly message?: string
   readonly authWeb?: boolean
   readonly outDir?: string
   readonly projectDir?: string

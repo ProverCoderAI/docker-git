@@ -1,4 +1,4 @@
-import { Either, Match } from "effect"
+import { Either } from "effect"
 
 import type { RawOptions } from "@effect-template/lib/core/command-options"
 import type { ParseError } from "@effect-template/lib/core/domain"
@@ -23,6 +23,7 @@ interface ValueOptionSpec {
     | "label"
     | "token"
     | "scopes"
+    | "message"
     | "outDir"
     | "projectDir"
     | "lines"
@@ -48,6 +49,8 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--label", key: "label" },
   { flag: "--token", key: "token" },
   { flag: "--scopes", key: "scopes" },
+  { flag: "--message", key: "message" },
+  { flag: "-m", key: "message" },
   { flag: "--out-dir", key: "outDir" },
   { flag: "--project-dir", key: "projectDir" },
   { flag: "--lines", key: "lines" }
@@ -57,12 +60,38 @@ const valueOptionSpecByFlag: ReadonlyMap<string, ValueOptionSpec> = new Map(
   valueOptionSpecs.map((spec) => [spec.flag, spec])
 )
 
+type ValueKey = ValueOptionSpec["key"]
+
 const booleanFlagUpdaters: Readonly<Record<string, (raw: RawOptions) => RawOptions>> = {
   "--up": (raw) => ({ ...raw, up: true }),
   "--no-up": (raw) => ({ ...raw, up: false }),
   "--force": (raw) => ({ ...raw, force: true }),
   "--web": (raw) => ({ ...raw, authWeb: true }),
   "--include-default": (raw) => ({ ...raw, includeDefault: true })
+}
+
+const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: string) => RawOptions } = {
+  repoUrl: (raw, value) => ({ ...raw, repoUrl: value }),
+  repoRef: (raw, value) => ({ ...raw, repoRef: value }),
+  targetDir: (raw, value) => ({ ...raw, targetDir: value }),
+  sshPort: (raw, value) => ({ ...raw, sshPort: value }),
+  sshUser: (raw, value) => ({ ...raw, sshUser: value }),
+  containerName: (raw, value) => ({ ...raw, containerName: value }),
+  serviceName: (raw, value) => ({ ...raw, serviceName: value }),
+  volumeName: (raw, value) => ({ ...raw, volumeName: value }),
+  secretsRoot: (raw, value) => ({ ...raw, secretsRoot: value }),
+  authorizedKeysPath: (raw, value) => ({ ...raw, authorizedKeysPath: value }),
+  envGlobalPath: (raw, value) => ({ ...raw, envGlobalPath: value }),
+  envProjectPath: (raw, value) => ({ ...raw, envProjectPath: value }),
+  codexAuthPath: (raw, value) => ({ ...raw, codexAuthPath: value }),
+  codexHome: (raw, value) => ({ ...raw, codexHome: value }),
+  label: (raw, value) => ({ ...raw, label: value }),
+  token: (raw, value) => ({ ...raw, token: value }),
+  scopes: (raw, value) => ({ ...raw, scopes: value }),
+  message: (raw, value) => ({ ...raw, message: value }),
+  outDir: (raw, value) => ({ ...raw, outDir: value }),
+  projectDir: (raw, value) => ({ ...raw, projectDir: value }),
+  lines: (raw, value) => ({ ...raw, lines: value })
 }
 
 export const applyCommandBooleanFlag = (raw: RawOptions, token: string): RawOptions | null => {
@@ -80,33 +109,8 @@ export const applyCommandValueFlag = (
     return Either.left({ _tag: "UnknownOption", option: token })
   }
 
-  return Either.right(
-    Match.value(valueSpec.key).pipe(
-      Match.when("repoUrl", () => ({ ...raw, repoUrl: value })),
-      Match.when("repoRef", () => ({ ...raw, repoRef: value })),
-      Match.when("targetDir", () => ({ ...raw, targetDir: value })),
-      Match.when("sshPort", () => ({ ...raw, sshPort: value })),
-      Match.when("sshUser", () => ({ ...raw, sshUser: value })),
-      Match.when("containerName", () => ({ ...raw, containerName: value })),
-      Match.when("serviceName", () => ({ ...raw, serviceName: value })),
-      Match.when("volumeName", () => ({ ...raw, volumeName: value })),
-      Match.when("secretsRoot", () => ({ ...raw, secretsRoot: value })),
-      Match.when("authorizedKeysPath", () => ({ ...raw, authorizedKeysPath: value })),
-      Match.when("envGlobalPath", () => ({ ...raw, envGlobalPath: value })),
-      Match.when("envProjectPath", () => ({ ...raw, envProjectPath: value })),
-      Match.when("codexAuthPath", () => ({ ...raw, codexAuthPath: value })),
-      Match.when("codexHome", () => ({ ...raw, codexHome: value })),
-      Match.when(
-        (key): key is "label" | "token" => key === "label" || key === "token",
-        (key) => key === "label" ? { ...raw, label: value } : { ...raw, token: value }
-      ),
-      Match.when("scopes", () => ({ ...raw, scopes: value })),
-      Match.when("outDir", () => ({ ...raw, outDir: value })),
-      Match.when("projectDir", () => ({ ...raw, projectDir: value })),
-      Match.when("lines", () => ({ ...raw, lines: value })),
-      Match.exhaustive
-    )
-  )
+  const update = valueFlagUpdaters[valueSpec.key]
+  return Either.right(update(raw, value))
 }
 
 export const parseRawOptions = (args: ReadonlyArray<string>): Either.Either<RawOptions, ParseError> => {

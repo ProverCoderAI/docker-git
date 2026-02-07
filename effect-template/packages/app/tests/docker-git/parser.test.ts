@@ -6,22 +6,26 @@ import { parseArgs } from "../../src/docker-git/cli/parser.js"
 
 type CreateCommand = Extract<Command, { _tag: "Create" }>
 
+const parseOrThrow = (args: ReadonlyArray<string>): Command => {
+  const parsed = parseArgs(args)
+  return Either.match(parsed, {
+    onLeft: (error) => {
+      throw new Error(`unexpected error ${error._tag}`)
+    },
+    onRight: (command) => command
+  })
+}
+
 const expectCreateCommand = (
   args: ReadonlyArray<string>,
   onRight: (command: CreateCommand) => void
 ) =>
   Effect.sync(() => {
-    Either.match(parseArgs(args), {
-      onLeft: (error) => {
-        throw new Error(`unexpected error ${error._tag}`)
-      },
-      onRight: (command) => {
-        if (command._tag !== "Create") {
-          throw new Error("expected Create command")
-        }
-        onRight(command)
-      }
-    })
+    const command = parseOrThrow(args)
+    if (command._tag !== "Create") {
+      throw new Error("expected Create command")
+    }
+    onRight(command)
   })
 
 const expectCreateDefaults = (command: CreateCommand) => {
@@ -66,13 +70,32 @@ describe("parseArgs", () => {
 
   it.effect("parses down-all command", () =>
     Effect.sync(() => {
-      Either.match(parseArgs(["down-all"]), {
-        onLeft: (error) => {
-          throw new Error(`unexpected error ${error._tag}`)
-        },
-        onRight: (command: Command) => {
-          expect(command._tag).toBe("DownAll")
-        }
-      })
+      const command = parseOrThrow(["down-all"])
+      expect(command._tag).toBe("DownAll")
+    }))
+
+  it.effect("parses state path command", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["state", "path"])
+      expect(command._tag).toBe("StatePath")
+    }))
+
+  it.effect("parses state init command", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["state", "init", "--repo-url", "https://github.com/org/state.git"])
+      if (command._tag !== "StateInit") {
+        throw new Error("expected StateInit command")
+      }
+      expect(command.repoUrl).toBe("https://github.com/org/state.git")
+      expect(command.repoRef).toBe("main")
+    }))
+
+  it.effect("parses state commit command", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["state", "commit", "-m", "sync state"])
+      if (command._tag !== "StateCommit") {
+        throw new Error("expected StateCommit command")
+      }
+      expect(command.message).toBe("sync state")
     }))
 })

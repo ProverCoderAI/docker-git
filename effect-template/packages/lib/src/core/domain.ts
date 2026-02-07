@@ -80,6 +80,33 @@ export interface DownAllCommand {
   readonly _tag: "DownAll"
 }
 
+export interface StatePathCommand {
+  readonly _tag: "StatePath"
+}
+
+export interface StateInitCommand {
+  readonly _tag: "StateInit"
+  readonly repoUrl: string
+  readonly repoRef: string
+}
+
+export interface StatePullCommand {
+  readonly _tag: "StatePull"
+}
+
+export interface StatePushCommand {
+  readonly _tag: "StatePush"
+}
+
+export interface StateStatusCommand {
+  readonly _tag: "StateStatus"
+}
+
+export interface StateCommitCommand {
+  readonly _tag: "StateCommit"
+  readonly message: string
+}
+
 export interface AuthGithubLoginCommand {
   readonly _tag: "AuthGithubLogin"
   readonly label: string | null
@@ -130,6 +157,14 @@ export type AuthCommand =
   | AuthCodexStatusCommand
   | AuthCodexLogoutCommand
 
+export type StateCommand =
+  | StatePathCommand
+  | StateInitCommand
+  | StatePullCommand
+  | StatePushCommand
+  | StateStatusCommand
+  | StateCommitCommand
+
 export type Command =
   | CreateCommand
   | MenuCommand
@@ -139,6 +174,7 @@ export type Command =
   | HelpCommand
   | StatusCommand
   | DownAllCommand
+  | StateCommand
   | AuthCommand
 
 export const defaultTemplateConfig = {
