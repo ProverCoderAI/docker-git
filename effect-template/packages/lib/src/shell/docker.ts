@@ -5,7 +5,7 @@ import type { PlatformError } from "@effect/platform/Error"
 import { Effect, pipe } from "effect"
 
 import { runCommandCapture, runCommandWithExitCodes } from "./command-runner.js"
-import { DockerCommandError } from "./errors.js"
+import { CommandFailedError, DockerCommandError } from "./errors.js"
 
 const composeSpec = (cwd: string, args: ReadonlyArray<string>) => ({
   cwd,
@@ -203,4 +203,35 @@ export const runDockerInspectContainerIp = (
       (exitCode) => new DockerCommandError({ exitCode })
     ),
     Effect.map((output) => output.trim())
+  )
+
+// CHANGE: list names of running Docker containers
+// WHY: support TUI filtering (e.g. stop only running docker-git containers)
+// QUOTE(ТЗ): "Если я выбираю остановку контейнера значит он мне должен показывать контейнеры которые запущены"
+// REF: user-request-2026-02-07-stop-only-running
+// SOURCE: n/a
+// FORMAT THEOREM: forall c: c in ps -> running(c)
+// PURITY: SHELL
+// EFFECT: Effect<ReadonlyArray<string>, CommandFailedError | PlatformError, CommandExecutor>
+// INVARIANT: result contains only non-empty container names
+// COMPLEXITY: O(command)
+export const runDockerPsNames = (
+  cwd: string
+): Effect.Effect<ReadonlyArray<string>, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  pipe(
+    runCommandCapture(
+      {
+        cwd,
+        command: "docker",
+        args: ["ps", "--format", "{{.Names}}"]
+      },
+      [Number(ExitCode(0))],
+      (exitCode) => new CommandFailedError({ command: "docker ps", exitCode })
+    ),
+    Effect.map((output) =>
+      output
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+    )
   )

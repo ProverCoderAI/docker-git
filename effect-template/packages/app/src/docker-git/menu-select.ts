@@ -170,7 +170,11 @@ export const loadSelectView = <E>(
     Effect.flatMap((items) =>
       Effect.sync(() => {
         if (items.length === 0) {
-          context.setMessage("No docker-git projects found in .docker-git.")
+          context.setMessage(
+            purpose === "Down"
+              ? "No running docker-git containers."
+              : "No docker-git projects found in .docker-git."
+          )
           return
         }
         startSelectView(items, purpose, context)
