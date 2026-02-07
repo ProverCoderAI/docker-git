@@ -83,6 +83,21 @@ export const stateInit = (
     const gitDir = path.join(root, ".git")
     const hasGit = yield* _(fs.exists(gitDir))
     if (!hasGit) {
+      const entries = yield* _(fs.readDirectory(root))
+      if (entries.length === 0) {
+        const cloneArgs = ["clone", "--branch", input.repoRef, input.repoUrl, root]
+        yield* _(
+          runCommandWithExitCodes(
+            { cwd: root, command: "git", args: cloneArgs, env: gitEnv },
+            [successExitCode],
+            (exitCode) => new CommandFailedError({ command: "git clone", exitCode })
+          )
+        )
+        yield* _(Effect.log(`State dir cloned: ${root}`))
+        yield* _(Effect.log(`Remote: ${input.repoUrl}`))
+        return
+      }
+
       yield* _(git(root, ["init"]))
     }
 
@@ -117,7 +132,7 @@ export const statePull = Effect.gen(function*(_) {
 export const statePush = Effect.gen(function*(_) {
   const path = yield* _(Path.Path)
   const root = resolveStateRoot(path, process.cwd())
-  yield* _(git(root, ["push"]))
+  yield* _(git(root, ["push", "-u", "origin", "HEAD"]))
 }).pipe(Effect.asVoid)
 
 export const stateCommit = (
