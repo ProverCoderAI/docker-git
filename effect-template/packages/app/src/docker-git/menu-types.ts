@@ -74,7 +74,6 @@ export const menuItems: ReadonlyArray<{ readonly id: MenuAction; readonly label:
   { id: { _tag: "Create" }, label: "Create project" },
   { id: { _tag: "Select" }, label: "Select project" },
   { id: { _tag: "Info" }, label: "Show connection info" },
-  { id: { _tag: "Up" }, label: "docker compose up -d --build" },
   { id: { _tag: "Status" }, label: "docker compose ps" },
   { id: { _tag: "Logs" }, label: "docker compose logs --tail=200" },
   { id: { _tag: "Down" }, label: "docker compose down" },

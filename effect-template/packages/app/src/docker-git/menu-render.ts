@@ -68,7 +68,7 @@ const renderMenuHints = (el: typeof React.createElement): React.ReactElement =>
     el(
       Text,
       { color: "gray" },
-      "  - Aliases: create/c, select/s, info/i, up/u, status/ps, logs/l, down/d, down-all/da, quit/q"
+      "  - Aliases: create/c, select/s, info/i, status/ps, logs/l, down/d, down-all/da, quit/q"
     ),
     el(Text, { color: "gray" }, "  - Use arrows and Enter to run.")
   )
