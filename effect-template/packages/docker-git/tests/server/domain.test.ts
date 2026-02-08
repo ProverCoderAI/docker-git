@@ -21,6 +21,12 @@ describe("resolveProjectsRoot", () => {
       const root = resolveProjectsRoot("/cwd", {})
       expect(root).toBe("/cwd/.docker-git")
     }))
+
+  it.effect("falls back to home", () =>
+    Effect.sync(() => {
+      const root = resolveProjectsRoot("/cwd", { HOME: "/home/me" })
+      expect(root).toBe("/home/me/.docker-git")
+    }))
 })
 
 describe("secrets helpers", () => {

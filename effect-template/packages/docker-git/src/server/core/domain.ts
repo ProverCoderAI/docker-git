@@ -41,6 +41,20 @@ export interface SshCommandInput {
 }
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, "")
+const expandHome = (value: string, env: Record<string, string | undefined>): string => {
+  const home = env["HOME"] ?? env["USERPROFILE"]
+  if (!home || home.trim().length === 0) {
+    return value
+  }
+  const trimmedHome = trimTrailingSlash(home.trim())
+  if (value === "~") {
+    return trimmedHome
+  }
+  if (value.startsWith("~/") || value.startsWith("~\\")) {
+    return `${trimmedHome}${value.slice(1)}`
+  }
+  return value
+}
 
 // CHANGE: resolve the projects root from environment or cwd
 // WHY: keep root selection pure and consistent across CLI and API
@@ -55,7 +69,12 @@ const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, "")
 export const resolveProjectsRoot = (cwd: string, env: Record<string, string | undefined>): string => {
   const explicit = env["DOCKER_GIT_PROJECTS_ROOT"]?.trim()
   if (explicit && explicit.length > 0) {
-    return explicit
+    return expandHome(explicit, env)
+  }
+
+  const home = env["HOME"] ?? env["USERPROFILE"]
+  if (home && home.trim().length > 0) {
+    return `${trimTrailingSlash(home.trim())}/.docker-git`
   }
 
   return `${cwd}/.docker-git`
