@@ -25,6 +25,9 @@ const renderDockerfileNode = (): string =>
   `# Tooling: Node 24 (NodeSource) + nvm
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
   && apt-get install -y --no-install-recommends nodejs \
+  && node -v \
+  && npm -v \
+  && corepack --version \
   && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /usr/local/nvm \
   && curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
@@ -33,7 +36,7 @@ RUN printf "export NVM_DIR=/usr/local/nvm\\n[ -s /usr/local/nvm/nvm.sh ] && . /u
 
 const renderDockerfileBun = (config: TemplateConfig): string =>
   `# Tooling: pnpm + Codex CLI (bun)
-RUN npm i -g pnpm@${config.pnpmVersion}
+RUN corepack enable && corepack prepare pnpm@${config.pnpmVersion} --activate
 ENV BUN_INSTALL=/usr/local/bun
 ENV TERM=xterm-256color
 ENV PATH="/usr/local/bun/bin:$PATH"

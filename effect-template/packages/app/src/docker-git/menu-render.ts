@@ -23,7 +23,10 @@ export const renderStepLabel = (step: CreateStep, defaults: CreateInputs): strin
     Match.when("repoRef", () => `Repo ref [${defaults.repoRef}]`),
     Match.when("outDir", () => `Output dir [${defaults.outDir}]`),
     Match.when("runUp", () => `Run docker compose up now? [${defaults.runUp ? "Y" : "n"}]`),
-    Match.when("force", () => `Overwrite existing files? [${defaults.force ? "y" : "N"}]`),
+    Match.when(
+      "force",
+      () => `Force recreate (overwrite files + wipe volumes)? [${defaults.force ? "y" : "N"}]`
+    ),
     Match.exhaustive
   )
 

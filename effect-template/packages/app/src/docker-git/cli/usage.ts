@@ -47,7 +47,7 @@ Options:
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list
   --up | --no-up            Run docker compose up after init (default: --up)
-  --force                   Overwrite existing files
+  --force                   Overwrite existing files and wipe compose volumes (docker compose down -v)
   -h, --help                Show this help
 
 Auth providers:
