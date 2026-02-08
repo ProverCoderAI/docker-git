@@ -5,7 +5,12 @@ import * as Path from "@effect/platform/Path"
 import { Duration, Effect, Fiber, Schedule } from "effect"
 
 import type { CreateCommand } from "../core/domain.js"
-import { runDockerComposeLogsFollow, runDockerComposeUp, runDockerExecExitCode } from "../shell/docker.js"
+import {
+  runDockerComposeDownVolumes,
+  runDockerComposeLogsFollow,
+  runDockerComposeUp,
+  runDockerExecExitCode
+} from "../shell/docker.js"
 import type { DockerCommandError, FileExistsError, PortProbeError } from "../shell/errors.js"
 import { CloneFailedError } from "../shell/errors.js"
 import { writeProjectFiles } from "../shell/files.js"
@@ -216,7 +221,8 @@ const runDockerUpIfNeeded = (
   resolvedOutDir: string,
   projectConfig: CreateCommand["config"],
   runUp: boolean,
-  waitForClone: boolean
+  waitForClone: boolean,
+  force: boolean
 ): Effect.Effect<
   void,
   CloneFailedError | DockerCommandError | PlatformError,
@@ -225,6 +231,10 @@ const runDockerUpIfNeeded = (
   Effect.gen(function*(_) {
     if (!runUp) {
       return
+    }
+    if (force) {
+      yield* _(Effect.log("Force enabled: wiping docker compose volumes (docker compose down -v)..."))
+      yield* _(runDockerComposeDownVolumes(resolvedOutDir))
     }
     yield* _(Effect.log("Running: docker compose up -d --build"))
     yield* _(runDockerComposeUp(resolvedOutDir))
@@ -399,7 +409,15 @@ export const createProject = (command: CreateCommand) =>
     for (const file of createdFiles) {
       yield* _(Effect.log(`  - ${file}`))
     }
-    yield* _(runDockerUpIfNeeded(resolvedOutDir, projectConfig, command.runUp, command.waitForClone))
+    yield* _(
+      runDockerUpIfNeeded(
+        resolvedOutDir,
+        projectConfig,
+        command.runUp,
+        command.waitForClone,
+        command.force
+      )
+    )
     if (command.runUp) {
       yield* _(logDockerAccessInfo(resolvedOutDir, projectConfig))
     }

@@ -65,6 +65,21 @@ export const runDockerComposeDown = (
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCompose(cwd, ["down"], [Number(ExitCode(0))])
 
+// CHANGE: run docker compose down -v in the target directory
+// WHY: allow a truly fresh environment by wiping the named volumes (e.g. /home/dev)
+// QUOTE(ТЗ): "контейнер полностью должен же очищаться при --force"
+// REF: user-request-2026-02-07-force-wipe-volumes
+// SOURCE: n/a
+// FORMAT THEOREM: ∀dir: down_v(dir) → removed(volumes(dir))
+// PURITY: SHELL
+// EFFECT: Effect<void, DockerCommandError | PlatformError, CommandExecutor>
+// INVARIANT: removes only resources within the compose project (containers, networks, volumes)
+// COMPLEXITY: O(command)
+export const runDockerComposeDownVolumes = (
+  cwd: string
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runCompose(cwd, ["down", "-v"], [Number(ExitCode(0))])
+
 // CHANGE: recreate docker compose environment in the target directory
 // WHY: allow a clean rebuild of the container from the UI
 // QUOTE(ТЗ): "дропнул контейнер и заново его создал"
