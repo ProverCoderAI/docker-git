@@ -16,10 +16,17 @@ const expandHome = (value: string): string => {
   return value
 }
 
+const trimTrailingSlash = (value: string): string => value.replace(/[\\/]+$/, "")
+
 export const defaultProjectsRoot = (cwd: string): string => {
   const explicit = process.env["DOCKER_GIT_PROJECTS_ROOT"]?.trim()
   if (explicit && explicit.length > 0) {
     return expandHome(explicit)
+  }
+
+  const home = process.env["HOME"] ?? process.env["USERPROFILE"]
+  if (home && home.trim().length > 0) {
+    return `${trimTrailingSlash(home.trim())}/.docker-git`
   }
 
   return `${cwd}/.docker-git`

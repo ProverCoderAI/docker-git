@@ -183,7 +183,7 @@ export const loadSelectView = <E>(
           context.setMessage(
             purpose === "Down"
               ? "No running docker-git containers."
-              : "No docker-git projects found in .docker-git."
+              : "No docker-git projects found."
           )
           return
         }

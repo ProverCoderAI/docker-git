@@ -18,7 +18,10 @@ export const ensureProjectsRoot = (): string => {
     return existing
   }
 
-  const root = path.resolve(process.cwd(), "..", "..", ".docker-git")
+  const home = process.env["HOME"] ?? process.env["USERPROFILE"]
+  const root = home && home.trim().length > 0
+    ? path.resolve(home.trim(), ".docker-git")
+    : path.resolve(process.cwd(), "..", "..", ".docker-git")
   process.env[envKey] = root
   return root
 }

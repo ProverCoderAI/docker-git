@@ -68,6 +68,8 @@ type ComposePsRow = {
 
 const isDockerGitConfig = (entry: string): boolean => entry.endsWith("docker-git.json")
 
+const shouldSkipDir = (entry: string): boolean => entry === ".git" || entry === ".orch"
+
 type ProjectBase = {
   readonly fs: FileSystem.FileSystem
   readonly path: Path.Path
@@ -95,10 +97,29 @@ const findProjectConfigPaths = (
         return []
       }
 
-      const entries: ReadonlyArray<string> = yield* _(fs.readDirectory(projectsRoot, { recursive: true }))
-      return entries
-        .filter((entry) => isDockerGitConfig(entry))
-        .map((entry) => path.join(projectsRoot, entry))
+      // Avoid traversing git metadata (state root can be a git repo).
+      const results: Array<string> = []
+      const stack: Array<string> = [projectsRoot]
+      while (stack.length > 0) {
+        const dir = stack.pop()
+        if (dir === undefined) {
+          break
+        }
+        const entries = yield* _(fs.readDirectory(dir))
+        for (const entry of entries) {
+          if (shouldSkipDir(entry)) {
+            continue
+          }
+          const resolved = path.join(dir, entry)
+          const info = yield* _(fs.stat(resolved))
+          if (info.type === "Directory") {
+            stack.push(resolved)
+          } else if (info.type === "File" && isDockerGitConfig(entry)) {
+            results.push(resolved)
+          }
+        }
+      }
+      return results
     })
   )
 

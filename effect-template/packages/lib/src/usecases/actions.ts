@@ -17,6 +17,7 @@ import { writeProjectFiles } from "../shell/files.js"
 import { logDockerAccessInfo } from "./access-log.js"
 import { ensureCodexConfigFile, migrateLegacyOrchLayout, syncAuthArtifacts } from "./auth-sync.js"
 import { applyGithubForkConfig } from "./github-fork.js"
+import { defaultProjectsRoot } from "./menu-helpers.js"
 import { findAuthorizedKeysSource, findSshPrivateKey, resolveAuthorizedKeysPath } from "./path-helpers.js"
 import { loadReservedPorts, selectAvailablePort } from "./ports-reserve.js"
 import { buildSshCommand } from "./projects.js"
@@ -26,6 +27,27 @@ const resolvePathFromBase = (path: Path.Path, baseDir: string, targetPath: strin
   path.isAbsolute(targetPath) ? targetPath : path.resolve(baseDir, targetPath)
 
 const toPosixPath = (value: string): string => value.replaceAll("\\", "/")
+
+const resolveDockerGitRootRelativePath = (
+  path: Path.Path,
+  projectsRoot: string,
+  inputPath: string
+): string => {
+  if (path.isAbsolute(inputPath)) {
+    return inputPath
+  }
+  const normalized = inputPath
+    .replaceAll("\\", "/")
+    .replace(/^\.\//, "")
+  if (normalized === ".docker-git") {
+    return projectsRoot
+  }
+  const prefix = ".docker-git/"
+  if (normalized.startsWith(prefix)) {
+    return path.join(projectsRoot, normalized.slice(prefix.length))
+  }
+  return inputPath
+}
 
 type ExistingFileState = "exists" | "missing"
 
@@ -386,9 +408,23 @@ const waitForCloneCompletion = (
 export const createProject = (command: CreateCommand) =>
   Effect.gen(function*(_) {
     const path = yield* _(Path.Path)
-    const resolvedOutDir = path.resolve(command.outDir)
-    const resolvedConfig = yield* _(resolveSshPort(command.config, resolvedOutDir))
     const baseDir = process.cwd()
+    const projectsRoot = path.resolve(defaultProjectsRoot(baseDir))
+    const resolveRootPath = (value: string): string => resolveDockerGitRootRelativePath(path, projectsRoot, value)
+
+    const resolvedOutDir = path.resolve(resolveRootPath(command.outDir))
+    const resolvedConfig = yield* _(
+      resolveSshPort(
+        {
+          ...command.config,
+          authorizedKeysPath: resolveRootPath(command.config.authorizedKeysPath),
+          envGlobalPath: resolveRootPath(command.config.envGlobalPath),
+          envProjectPath: resolveRootPath(command.config.envProjectPath),
+          codexAuthPath: resolveRootPath(command.config.codexAuthPath)
+        },
+        resolvedOutDir
+      )
+    )
     const forkedConfig = yield* _(applyGithubForkConfig(resolvedConfig))
     const { globalConfig, projectConfig } = buildProjectConfigs(path, baseDir, resolvedOutDir, forkedConfig)
     yield* _(migrateLegacyOrchLayout(
@@ -396,7 +432,7 @@ export const createProject = (command: CreateCommand) =>
       globalConfig.envGlobalPath,
       globalConfig.envProjectPath,
       globalConfig.codexAuthPath,
-      ".docker-git/.orch/auth/gh"
+      resolveRootPath(".docker-git/.orch/auth/gh")
     ))
     const createdFiles = yield* _(prepareProjectFiles(
       resolvedOutDir,

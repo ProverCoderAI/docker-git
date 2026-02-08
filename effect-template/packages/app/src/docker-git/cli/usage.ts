@@ -37,12 +37,12 @@ Options:
   --service-name <name>     Compose service name (default: dg-<repo>)
   --volume-name <name>      Docker volume name (default: dg-<repo>-home)
   --secrets-root <path>     Host root for shared secrets (default: n/a)
-  --authorized-keys <path>  Host path to authorized_keys (default: ./.docker-git/authorized_keys)
-  --env-global <path>       Host path to shared env file (default: ./.docker-git/.orch/env/global.env)
+  --authorized-keys <path>  Host path to authorized_keys (default: <projectsRoot>/authorized_keys)
+  --env-global <path>       Host path to shared env file (default: <projectsRoot>/.orch/env/global.env)
   --env-project <path>      Host path to project env file (default: ./.orch/env/project.env)
-  --codex-auth <path>       Host path for Codex auth cache (default: ./.docker-git/.orch/auth/codex)
+  --codex-auth <path>       Host path for Codex auth cache (default: <projectsRoot>/.orch/auth/codex)
   --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
-  --out-dir <path>          Output directory (default: .docker-git/<org>/<repo>)
+  --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>)
   --project-dir <path>      Project directory for attach (default: .)
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list
@@ -63,11 +63,11 @@ Auth options:
   --label <label>        Account label (default: default)
   --token <token>        GitHub token override (login only)
   --scopes <scopes>      GitHub scopes (login only, default: repo,workflow,read:org)
-  --env-global <path>    Env file path for GitHub tokens (default: ./.docker-git/.orch/env/global.env)
-  --codex-auth <path>    Codex auth root path (default: ./.docker-git/.orch/auth/codex)
+  --env-global <path>    Env file path for GitHub tokens (default: <projectsRoot>/.orch/env/global.env)
+  --codex-auth <path>    Codex auth root path (default: <projectsRoot>/.orch/auth/codex)
 
 State actions:
-  state path                         Print current projects root (defaults to ./.docker-git; override via DOCKER_GIT_PROJECTS_ROOT)
+  state path                         Print current projects root (default: ~/.docker-git; override via DOCKER_GIT_PROJECTS_ROOT)
   state init --repo-url <url> [-b]   Init / bind state dir to a git remote (use a private repo)
   state status                       Show git status for the state dir
   state pull                         git pull (state dir)
