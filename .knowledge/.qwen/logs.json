@@ -1,0 +1,30 @@
+[
+  {
+    "sessionId": "e91b70ab-3051-4bf7-9075-4f0c66b27543",
+    "messageId": 0,
+    "type": "user",
+    "message": "Как мы можем подключить текущий проект к https://github.com/ProverCoderAI/docker-git ? Я как вижу у нас поломался .git папка. Можешь изучить?",
+    "timestamp": "2026-02-04T14:46:53.494Z"
+  },
+  {
+    "sessionId": "e91b70ab-3051-4bf7-9075-4f0c66b27543",
+    "messageId": 1,
+    "type": "user",
+    "message": "Подожди мне надо закомитить все мои текущие данные, я не хочу их сбрасывать если что",
+    "timestamp": "2026-02-04T14:49:30.501Z"
+  },
+  {
+    "sessionId": "e91b70ab-3051-4bf7-9075-4f0c66b27543",
+    "messageId": 2,
+    "type": "user",
+    "message": "Почему папка web стала пустой?\n/home/user/docker-git/effect-template/packages/web",
+    "timestamp": "2026-02-04T14:53:19.889Z"
+  },
+  {
+    "sessionId": "e91b70ab-3051-4bf7-9075-4f0c66b27543",
+    "messageId": 3,
+    "type": "user",
+    "message": "Подожди\n.next это билд. А где сам код?",
+    "timestamp": "2026-02-04T14:53:50.696Z"
+  }
+]
