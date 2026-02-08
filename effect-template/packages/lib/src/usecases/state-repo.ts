@@ -146,21 +146,30 @@ export const stateInit = (
     if (!hasGit) {
       const entries = yield* _(fs.readDirectory(root))
       if (entries.length === 0) {
-        const cloneArgs = ["clone", "--branch", input.repoRef, input.repoUrl, root]
-        yield* _(
-          runCommandWithExitCodes(
-            { cwd: root, command: "git", args: cloneArgs, env: gitEnv },
-            [successExitCode],
-            (exitCode) => new CommandFailedError({ command: "git clone", exitCode })
-          )
+        const cloneWithBranch = ["clone", "--branch", input.repoRef, input.repoUrl, root]
+        const cloneBranchExit = yield* _(
+          runCommandExitCode({ cwd: root, command: "git", args: cloneWithBranch, env: gitEnv })
         )
-        yield* _(ensureStateGitignore(fs, path, root))
+        if (cloneBranchExit !== successExitCode) {
+          // Empty remotes (no branch yet) and remotes without the requested branch can fail here.
+          // Fall back to cloning the default branch so we can still set up the repo and create the branch locally.
+          yield* _(
+            Effect.logWarning(
+              `git clone --branch ${input.repoRef} failed (exit ${cloneBranchExit}); retrying without --branch`
+            )
+          )
+          const cloneDefault = ["clone", input.repoUrl, root]
+          const cloneDefaultExit = yield* _(
+            runCommandExitCode({ cwd: root, command: "git", args: cloneDefault, env: gitEnv })
+          )
+          if (cloneDefaultExit !== successExitCode) {
+            return yield* _(Effect.fail(new CommandFailedError({ command: "git clone", exitCode: cloneDefaultExit })))
+          }
+        }
         yield* _(Effect.log(`State dir cloned: ${root}`))
-        yield* _(Effect.log(`Remote: ${input.repoUrl}`))
-        return
+      } else {
+        yield* _(git(root, ["init"]))
       }
-
-      yield* _(git(root, ["init"]))
     }
 
     const setUrlExit = yield* _(gitExitCode(root, ["remote", "set-url", "origin", input.repoUrl]))
