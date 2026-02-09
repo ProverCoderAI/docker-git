@@ -35,7 +35,7 @@ export const startSelectView = (
   context: Pick<SelectContext, "setView" | "setMessage">
 ) => {
   context.setMessage(null)
-  context.setView({ _tag: "SelectProject", purpose, items, selected: 0 })
+  context.setView({ _tag: "SelectProject", purpose, items, selected: 0, confirmDelete: false })
 }
 
 const clampIndex = (value: number, size: number): number => {
@@ -78,12 +78,12 @@ const handleSelectNavigation = (
 ): boolean => {
   if (key.upArrow) {
     const next = clampIndex(view.selected - 1, view.items.length)
-    context.setView({ ...view, selected: next })
+    context.setView({ ...view, selected: next, confirmDelete: false })
     return true
   }
   if (key.downArrow) {
     const next = clampIndex(view.selected + 1, view.items.length)
-    context.setView({ ...view, selected: next })
+    context.setView({ ...view, selected: next, confirmDelete: false })
     return true
   }
   return false
@@ -146,12 +146,18 @@ const runDeleteSelection = (selected: ProjectItem, context: SelectContext) => {
   context.setMessage(`Deleting ${selected.displayName}...`)
   runWithSuspendedTui(
     context,
-    deleteDockerGitProject(selected),
+    deleteDockerGitProject(selected).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          if (context.activeDir === selected.projectDir) {
+            context.setActiveDir(null)
+          }
+          context.setView({ _tag: "Menu" })
+        })
+      )
+    ),
     () => {
-      if (context.activeDir === selected.projectDir) {
-        context.setActiveDir(null)
-      }
-      context.setView({ _tag: "Menu" })
+      // Only return to menu on success (see Effect.tap above).
     },
     "Project deleted."
   )
@@ -182,6 +188,13 @@ const handleSelectReturn = (
       runInfoSelection(selected, context)
     }),
     Match.when("Delete", () => {
+      if (!view.confirmDelete) {
+        context.setMessage(
+          `Really delete ${selected.displayName}? Press Enter again to confirm, Esc to cancel.`
+        )
+        context.setView({ ...view, confirmDelete: true })
+        return
+      }
       runDeleteSelection(selected, context)
     }),
     Match.exhaustive

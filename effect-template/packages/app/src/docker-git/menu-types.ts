@@ -68,6 +68,7 @@ export type ViewState =
     readonly purpose: "Connect" | "Down" | "Info" | "Delete"
     readonly items: ReadonlyArray<ProjectItem>
     readonly selected: number
+    readonly confirmDelete: boolean
   }
 
 export const menuItems: ReadonlyArray<{ readonly id: MenuAction; readonly label: string }> = [
