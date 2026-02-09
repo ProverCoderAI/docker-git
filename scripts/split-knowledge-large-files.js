@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import fs from "node:fs";
-import path from "node:path";
+const fs = require("node:fs");
+const path = require("node:path");
 
 const MAX_BYTES = 99 * 1000 * 1000;
 const ROOTS = [".knowledge", ".knowlenge"].filter((dir) =>
@@ -10,8 +10,7 @@ const ROOTS = [".knowledge", ".knowlenge"].filter((dir) =>
 const MANIFEST_SUFFIX = ".chunks.json";
 const CHUNK_BYTES = 1024 * 1024;
 
-const escapeRegExp = (value) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const isPartFile = (fileName) => /\.part\d+$/.test(fileName);
 
@@ -46,7 +45,7 @@ const walk = (dir) => {
       continue;
     }
     if (!entry.isFile()) continue;
-  if (isPartFile(entry.name) || isManifest(entry.name)) continue;
+    if (isPartFile(entry.name) || isManifest(entry.name)) continue;
     splitIfLarge(fullPath);
   }
 };
@@ -119,9 +118,7 @@ const splitIfLarge = (filePath) => {
   );
   fs.rmSync(filePath);
 
-  console.log(
-    `[knowledge-split] Split ${filePath} -> ${partsCount} part(s)`
-  );
+  console.log(`[knowledge-split] Split ${filePath} -> ${partsCount} part(s)`);
 };
 
 for (const root of ROOTS) {

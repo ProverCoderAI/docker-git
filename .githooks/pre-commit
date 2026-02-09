@@ -25,7 +25,7 @@ while IFS= read -r -d '' path; do
 done < <(git diff --cached --name-only -z --diff-filter=ACM)
 
 if [ "${#too_large[@]}" -gt 0 ]; then
-  echo "ERROR: Staged files exceed 99 MiB limit."
+  echo "ERROR: Staged files exceed 99MB limit (99,000,000 bytes)."
   printf ' - %s\n' "${too_large[@]}"
   exit 1
 fi
