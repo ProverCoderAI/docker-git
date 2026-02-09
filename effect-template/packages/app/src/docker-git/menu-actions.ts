@@ -140,6 +140,7 @@ const handleMenuAction = (
     Match.when({ _tag: "Create" }, () => Effect.succeed(continueOutcome(state))),
     Match.when({ _tag: "Select" }, () => Effect.succeed(continueOutcome(state))),
     Match.when({ _tag: "Info" }, () => Effect.succeed(continueOutcome(state))),
+    Match.when({ _tag: "Delete" }, () => Effect.succeed(continueOutcome(state))),
     Match.when({ _tag: "Up" }, () =>
       withProjectConfig(state, setMessage, () =>
         runDockerComposeUpWithPortCheck(state.activeDir ?? state.cwd).pipe(Effect.asVoid))),
@@ -188,6 +189,11 @@ const runInfoAction = (context: MenuContext) => {
   context.runner.runEffect(loadSelectView(listProjectItems, "Info", context))
 }
 
+const runDeleteAction = (context: MenuContext) => {
+  context.setMessage(null)
+  context.runner.runEffect(loadSelectView(listProjectItems, "Delete", context))
+}
+
 const runComposeAction = (action: MenuAction, context: MenuContext) => {
   if (!requireActiveProject(context)) {
     return
@@ -213,6 +219,9 @@ export const handleMenuActionSelection = (action: MenuAction, context: MenuConte
     }),
     Match.when({ _tag: "Info" }, () => {
       runInfoAction(context)
+    }),
+    Match.when({ _tag: "Delete" }, () => {
+      runDeleteAction(context)
     }),
     Match.when({ _tag: "Up" }, (selected) => {
       runComposeAction(selected, context)

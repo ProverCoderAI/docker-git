@@ -9,6 +9,7 @@ export type MenuAction =
   | { readonly _tag: "Logs" }
   | { readonly _tag: "Down" }
   | { readonly _tag: "DownAll" }
+  | { readonly _tag: "Delete" }
   | { readonly _tag: "Quit" }
 
 export type ParseError =
@@ -53,8 +54,12 @@ const menuAliasMap = new Map<string, MenuAction>([
   ["kill-all", { _tag: "DownAll" }],
   ["killall", { _tag: "DownAll" }],
   ["da", { _tag: "DownAll" }],
+  ["8", { _tag: "Delete" }],
+  ["delete", { _tag: "Delete" }],
+  ["del", { _tag: "Delete" }],
+  ["remove", { _tag: "Delete" }],
+  ["rm", { _tag: "Delete" }],
   ["0", { _tag: "Quit" }],
-  ["8", { _tag: "Quit" }],
   ["9", { _tag: "Quit" }],
   ["quit", { _tag: "Quit" }],
   ["q", { _tag: "Quit" }],

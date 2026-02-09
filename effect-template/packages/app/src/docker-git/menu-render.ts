@@ -71,7 +71,7 @@ const renderMenuHints = (el: typeof React.createElement): React.ReactElement =>
     el(
       Text,
       { color: "gray" },
-      "  - Aliases: create/c, select/s, info/i, status/ps, logs/l, down/d, down-all/da, quit/q"
+      "  - Aliases: create/c, select/s, info/i, status/ps, logs/l, down/d, down-all/da, delete/del, quit/q"
     ),
     el(Text, { color: "gray" }, "  - Use arrows and Enter to run.")
   )
@@ -201,6 +201,13 @@ const renderSelectDetails = (
       el(Text, { wrap: "wrap" }, `Env project: ${item.envProjectPath}`),
       el(Text, { wrap: "wrap" }, `Codex auth: ${item.codexAuthPath} -> ${item.codexHome}`)
     ]),
+    Match.when("Delete", () => [
+      el(Text, { color: "cyan", bold: true, wrap: "truncate" }, "Delete project"),
+      el(Text, { wrap: "wrap" }, `Project directory: ${item.projectDir}`),
+      el(Text, { wrap: "wrap" }, `Container: ${item.containerName}`),
+      el(Text, { wrap: "wrap" }, `Repo: ${item.repoUrl} (${refLabel})`),
+      el(Text, { wrap: "wrap" }, "Removes the project folder (no git history rewrite).")
+    ]),
     Match.orElse(() => [
       el(Text, { color: "cyan", bold: true, wrap: "truncate" }, "Details"),
       el(Text, { wrap: "truncate" }, `Repo: ${item.repoUrl}`),
@@ -212,13 +219,14 @@ const renderSelectDetails = (
   )
 }
 
-type SelectPurpose = "Connect" | "Down" | "Info"
+type SelectPurpose = "Connect" | "Down" | "Info" | "Delete"
 
 const selectTitle = (purpose: SelectPurpose): string =>
   Match.value(purpose).pipe(
     Match.when("Connect", () => "docker-git / Select project"),
     Match.when("Down", () => "docker-git / Stop container"),
     Match.when("Info", () => "docker-git / Show connection info"),
+    Match.when("Delete", () => "docker-git / Delete project"),
     Match.exhaustive
   )
 
@@ -227,6 +235,7 @@ const selectHint = (purpose: SelectPurpose): string =>
     Match.when("Connect", () => "Enter = select + SSH, Esc = back"),
     Match.when("Down", () => "Enter = stop container, Esc = back"),
     Match.when("Info", () => "Use arrows to browse details, Enter = set active, Esc = back"),
+    Match.when("Delete", () => "Enter = delete project folder, Esc = back"),
     Match.exhaustive
   )
 
