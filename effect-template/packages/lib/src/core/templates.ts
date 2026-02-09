@@ -165,9 +165,6 @@ dev_ssh_key.pub
 
 # Local auth cache
 .orch/
-
-# Local docker-git config
-docker-git.json
 `
 
 // CHANGE: ignore local secrets in docker build context

@@ -3,6 +3,7 @@ import type { AppError } from "@effect-template/lib/usecases/errors"
 import {
   connectProjectSshWithUp,
   deleteDockerGitProject,
+  listRunningProjectItems,
   type ProjectItem
 } from "@effect-template/lib/usecases/projects"
 
@@ -130,11 +131,30 @@ const runConnectSelection = (selected: ProjectItem, context: SelectContext) => {
 
 const runDownSelection = (selected: ProjectItem, context: SelectContext) => {
   context.setMessage(`Stopping ${selected.displayName}...`)
-  runWithSuspendedTui(
-    context,
-    runDockerComposeDown(selected.projectDir),
-    () => {},
-    "Container stopped. Press Esc to return to the menu."
+  context.runner.runEffect(
+    pipe(
+      Effect.sync(suspendTui),
+      Effect.zipRight(runDockerComposeDown(selected.projectDir)),
+      Effect.zipRight(listRunningProjectItems),
+      Effect.tap((items) =>
+        Effect.sync(() => {
+          if (items.length === 0) {
+            resetToMenu(context)
+            context.setMessage("No running docker-git containers.")
+            return
+          }
+          startSelectView(items, "Down", context)
+          context.setMessage("Container stopped. Select another to stop, or Esc to return.")
+        })
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          resumeTui()
+          context.setSkipInputs(() => 2)
+        })
+      ),
+      Effect.asVoid
+    )
   )
 }
 
