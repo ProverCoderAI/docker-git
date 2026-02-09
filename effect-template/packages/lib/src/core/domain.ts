@@ -107,6 +107,11 @@ export interface StateCommitCommand {
   readonly message: string
 }
 
+export interface StateSyncCommand {
+  readonly _tag: "StateSync"
+  readonly message: string | null
+}
+
 export interface AuthGithubLoginCommand {
   readonly _tag: "AuthGithubLogin"
   readonly label: string | null
@@ -164,6 +169,7 @@ export type StateCommand =
   | StatePushCommand
   | StateStatusCommand
   | StateCommitCommand
+  | StateSyncCommand
 
 export type Command =
   | CreateCommand

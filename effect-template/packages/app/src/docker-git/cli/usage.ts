@@ -72,6 +72,7 @@ State actions:
   state status                       Show git status for the state dir
   state pull                         git pull (state dir)
   state commit -m <message>          Commit all changes in the state dir
+  state sync [-m <message>]          Commit (if needed) + fetch/rebase + push (state dir); on conflict pushes a PR branch
   state push                         git push (state dir)
 
 State options:

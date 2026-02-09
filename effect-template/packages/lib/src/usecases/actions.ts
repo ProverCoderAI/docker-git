@@ -5,6 +5,7 @@ import * as Path from "@effect/platform/Path"
 import { Duration, Effect, Fiber, Schedule } from "effect"
 
 import type { CreateCommand } from "../core/domain.js"
+import { deriveRepoPathParts } from "../core/domain.js"
 import {
   runDockerComposeDownVolumes,
   runDockerComposeLogsFollow,
@@ -22,6 +23,7 @@ import { findAuthorizedKeysSource, findSshPrivateKey, resolveAuthorizedKeysPath 
 import { loadReservedPorts, selectAvailablePort } from "./ports-reserve.js"
 import { buildSshCommand } from "./projects.js"
 import { withFsPathContext } from "./runtime.js"
+import { autoSyncState } from "./state-repo.js"
 
 const resolvePathFromBase = (path: Path.Path, baseDir: string, targetPath: string): string =>
   path.isAbsolute(targetPath) ? targetPath : path.resolve(baseDir, targetPath)
@@ -457,4 +459,8 @@ export const createProject = (command: CreateCommand) =>
     if (command.runUp) {
       yield* _(logDockerAccessInfo(resolvedOutDir, projectConfig))
     }
+
+    const repoPath = deriveRepoPathParts(projectConfig.repoUrl).pathParts.join("/")
+    const syncLabel = repoPath.length > 0 ? repoPath : projectConfig.repoUrl
+    yield* _(autoSyncState(`chore(state): update ${syncLabel}`))
   })
