@@ -235,7 +235,7 @@ const selectHint = (purpose: SelectPurpose): string =>
     Match.when("Connect", () => "Enter = select + SSH, Esc = back"),
     Match.when("Down", () => "Enter = stop container, Esc = back"),
     Match.when("Info", () => "Use arrows to browse details, Enter = set active, Esc = back"),
-    Match.when("Delete", () => "Enter = delete project folder, Esc = back"),
+    Match.when("Delete", () => "Enter = ask/confirm delete, Esc = cancel"),
     Match.exhaustive
   )
 
@@ -298,6 +298,7 @@ export const renderSelect = (
   purpose: SelectPurpose,
   items: ReadonlyArray<ProjectItem>,
   selected: number,
+  confirmDelete: boolean,
   message: string | null
 ): React.ReactElement => {
   const el = React.createElement
@@ -305,7 +306,11 @@ export const renderSelect = (
   const listWidth = computeListWidth(listLabels)
   const listBox = renderSelectListBox(el, items, selected, listLabels, listWidth)
   const detailsBox = renderSelectDetailsBox(el, purpose, items, selected)
-  const hints = el(Box, { marginTop: 1 }, el(Text, { color: "gray" }, selectHint(purpose)))
+  const baseHint = selectHint(purpose)
+  const deleteHint = purpose === "Delete" && confirmDelete
+    ? "Confirm mode: Enter = delete now, Esc = cancel"
+    : baseHint
+  const hints = el(Box, { marginTop: 1 }, el(Text, { color: "gray" }, deleteHint))
 
   return renderLayout(
     selectTitle(purpose),
