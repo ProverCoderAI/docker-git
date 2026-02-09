@@ -98,4 +98,13 @@ describe("parseArgs", () => {
       }
       expect(command.message).toBe("sync state")
     }))
+
+  it.effect("parses state sync command", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["state", "sync", "-m", "sync state"])
+      if (command._tag !== "StateSync") {
+        throw new Error("expected StateSync command")
+      }
+      expect(command.message).toBe("sync state")
+    }))
 })

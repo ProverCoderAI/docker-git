@@ -35,6 +35,12 @@ const parseStateCommit = (args: ReadonlyArray<string>): Either.Either<Command, P
     return Either.right({ _tag: "StateCommit", message })
   })
 
+const parseStateSync = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> =>
+  Either.map(parseRawOptions(args), (raw) => {
+    const message = raw.message?.trim()
+    return { _tag: "StateSync", message: message && message.length > 0 ? message : null }
+  })
+
 export const parseState = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> => {
   const action = args[0]?.trim()
   if (!action || action.length === 0) {
@@ -74,6 +80,7 @@ export const parseState = (args: ReadonlyArray<string>): Either.Either<Command, 
       return Either.right(command)
     }),
     Match.when("commit", () => parseStateCommit(rest)),
+    Match.when("sync", () => parseStateSync(rest)),
     Match.orElse(() => Either.left(invalidStateAction(action)))
   )
 }

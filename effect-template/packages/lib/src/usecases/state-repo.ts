@@ -127,6 +127,269 @@ const gitCapture = (
     (exitCode) => new CommandFailedError({ command: `git ${args[0] ?? ""}`, exitCode })
   )
 
+const isTruthyEnv = (value: string): boolean =>
+  value.trim().toLowerCase() === "1" ||
+  value.trim().toLowerCase() === "true" ||
+  value.trim().toLowerCase() === "yes" ||
+  value.trim().toLowerCase() === "on"
+
+const isFalsyEnv = (value: string): boolean =>
+  value.trim().toLowerCase() === "0" ||
+  value.trim().toLowerCase() === "false" ||
+  value.trim().toLowerCase() === "no" ||
+  value.trim().toLowerCase() === "off"
+
+const autoSyncEnvKey = "DOCKER_GIT_STATE_AUTO_SYNC"
+const autoSyncStrictEnvKey = "DOCKER_GIT_STATE_AUTO_SYNC_STRICT"
+
+const defaultSyncMessage = "chore(state): sync"
+
+const isGitRepo = (root: string) =>
+  Effect.map(gitExitCode(root, ["rev-parse", "--is-inside-work-tree"]), (exit) => exit === successExitCode)
+
+const hasOriginRemote = (root: string) =>
+  Effect.map(gitExitCode(root, ["remote", "get-url", "origin"]), (exit) => exit === successExitCode)
+
+const commitAllIfNeeded = (
+  root: string,
+  message: string
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    yield* _(git(root, ["add", "-A"]))
+    const diffExit = yield* _(gitExitCode(root, ["diff", "--cached", "--quiet"]))
+    if (diffExit === successExitCode) {
+      return
+    }
+    yield* _(git(root, ["commit", "-m", message]))
+  })
+
+const sanitizeBranchComponent = (value: string): string =>
+  value
+    .trim()
+    .replaceAll(" ", "-")
+    .replaceAll(":", "-")
+    .replaceAll("..", "-")
+    .replaceAll("@{", "-")
+    .replaceAll("\\", "-")
+    .replaceAll("^", "-")
+    .replaceAll("~", "-")
+
+const tryBuildGithubCompareUrl = (
+  originUrl: string,
+  baseBranch: string,
+  headBranch: string
+): string | null => {
+  const trimmed = originUrl.trim()
+  const httpsMatch = trimmed.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/)
+  if (httpsMatch) {
+    const owner = httpsMatch[1] ?? ""
+    const repo = httpsMatch[2] ?? ""
+    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(headBranch)}?expand=1`
+  }
+
+  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/)
+  if (sshMatch) {
+    const owner = sshMatch[1] ?? ""
+    const repo = sshMatch[2] ?? ""
+    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(headBranch)}?expand=1`
+  }
+
+  const sshUrlMatch = trimmed.match(/^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/)
+  if (sshUrlMatch) {
+    const owner = sshUrlMatch[1] ?? ""
+    const repo = sshUrlMatch[2] ?? ""
+    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(headBranch)}?expand=1`
+  }
+
+  return null
+}
+
+const rebaseOntoOriginIfPossible = (
+  root: string,
+  baseBranch: string
+): Effect.Effect<"ok" | "skipped" | "conflict", CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    // Ensure we see the latest remote branch tip before attempting to rebase.
+    const fetchExit = yield* _(gitExitCode(root, ["fetch", "origin", "--prune"]))
+    if (fetchExit !== successExitCode) {
+      return yield* _(Effect.fail(new CommandFailedError({ command: "git fetch origin --prune", exitCode: fetchExit })))
+    }
+
+    const remoteRef = `refs/remotes/origin/${baseBranch}`
+    const hasRemoteBranchExit = yield* _(gitExitCode(root, ["show-ref", "--verify", "--quiet", remoteRef]))
+    if (hasRemoteBranchExit !== successExitCode) {
+      return "skipped"
+    }
+
+    const rebaseExit = yield* _(gitExitCode(root, ["rebase", `origin/${baseBranch}`]))
+    if (rebaseExit === successExitCode) {
+      return "ok"
+    }
+
+    // Best-effort: avoid leaving the repo in a rebase-in-progress state.
+    yield* _(gitExitCode(root, ["rebase", "--abort"]))
+    return "conflict"
+  })
+
+const pushToNewBranch = (
+  root: string,
+  baseBranch: string
+): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const headShort = yield* _(gitCapture(root, ["rev-parse", "--short", "HEAD"]).pipe(Effect.map((s) => s.trim())))
+    const timestamp = yield* _(Effect.sync(() => new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-")))
+    const branch = sanitizeBranchComponent(`state-sync/${baseBranch}/${timestamp}-${headShort}`)
+
+    yield* _(git(root, ["push", "origin", `HEAD:refs/heads/${branch}`]))
+    return branch
+  })
+
+// CHANGE: sync state repo with remote (commit + pull --rebase + push)
+// WHY: provide a single command to keep git-synced state up to date across machines
+// QUOTE(ТЗ): "иметь команд синхронизации с гит версией"
+// REF: user-request-2026-02-08-state-sync
+// SOURCE: n/a
+// FORMAT THEOREM: forall root: sync(root) -> (local == remote) or typed_error
+// PURITY: SHELL
+// EFFECT: Effect<void, CommandFailedError | PlatformError, Path | CommandExecutor>
+// INVARIANT: never commits ignored files (relies on .gitignore)
+// COMPLEXITY: O(git)
+export const stateSync = (
+  message: string | null
+): Effect.Effect<void, CommandFailedError | PlatformError, Path.Path | CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const path = yield* _(Path.Path)
+    const root = resolveStateRoot(path, process.cwd())
+
+    const repoExit = yield* _(gitExitCode(root, ["rev-parse", "--is-inside-work-tree"]))
+    if (repoExit !== successExitCode) {
+      yield* _(Effect.logWarning(`State dir is not a git repository: ${root}`))
+      yield* _(Effect.logWarning(`Run: docker-git state init --repo-url <url>`))
+      return yield* _(
+        Effect.fail(
+          new CommandFailedError({ command: "git rev-parse --is-inside-work-tree", exitCode: repoExit })
+        )
+      )
+    }
+
+    const originExit = yield* _(gitExitCode(root, ["remote", "get-url", "origin"]))
+    if (originExit !== successExitCode) {
+      yield* _(Effect.logWarning(`State dir has no origin remote: ${root}`))
+      yield* _(Effect.logWarning(`Run: docker-git state init --repo-url <url>`))
+      return yield* _(
+        Effect.fail(new CommandFailedError({ command: "git remote get-url origin", exitCode: originExit }))
+      )
+    }
+
+    const commitMessage = message && message.trim().length > 0 ? message.trim() : defaultSyncMessage
+    yield* _(commitAllIfNeeded(root, commitMessage))
+
+    const branch = yield* _(gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"]).pipe(Effect.map((s) => s.trim())))
+    const baseBranch = branch === "HEAD" ? "main" : branch
+
+    const rebaseResult = yield* _(rebaseOntoOriginIfPossible(root, baseBranch))
+    if (rebaseResult === "conflict") {
+      const prBranch = yield* _(pushToNewBranch(root, baseBranch))
+      const originUrl = yield* _(gitCapture(root, ["remote", "get-url", "origin"]).pipe(Effect.map((s) => s.trim())))
+      const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
+
+      yield* _(Effect.logWarning(`State sync needs manual merge: pushed changes to branch '${prBranch}'.`))
+      if (compareUrl) {
+        yield* _(Effect.log(`Open PR: ${compareUrl}`))
+      } else {
+        yield* _(Effect.log(`Open PR from '${prBranch}' into '${baseBranch}' (origin: ${originUrl}).`))
+      }
+      return
+    }
+
+    const pushExit = yield* _(gitExitCode(root, ["push", "-u", "origin", "HEAD"]))
+    if (pushExit === successExitCode) {
+      return
+    }
+
+    // Race / divergence: fall back to pushing a PR branch instead of failing the sync.
+    const prBranch = yield* _(pushToNewBranch(root, baseBranch))
+    const originUrl = yield* _(gitCapture(root, ["remote", "get-url", "origin"]).pipe(Effect.map((s) => s.trim())))
+    const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
+    yield* _(Effect.logWarning(`State push failed (exit ${pushExit}); pushed changes to branch '${prBranch}'.`))
+    if (compareUrl) {
+      yield* _(Effect.log(`Open PR: ${compareUrl}`))
+      return
+    }
+    yield* _(Effect.log(`Open PR from '${prBranch}' into '${baseBranch}' (origin: ${originUrl}).`))
+  }).pipe(Effect.asVoid)
+
+const isAutoSyncEnabled = (
+  envValue: string | undefined,
+  hasRemote: boolean
+): boolean => {
+  if (envValue === undefined) {
+    return hasRemote
+  }
+  if (envValue.trim().length === 0) {
+    return hasRemote
+  }
+  if (isFalsyEnv(envValue)) {
+    return false
+  }
+  if (isTruthyEnv(envValue)) {
+    return true
+  }
+  // Non-empty values default to enabled.
+  return true
+}
+
+// CHANGE: automatically sync state after docker-git operations
+// WHY: keep state repo always pushed when containers/projects are added
+// QUOTE(ТЗ): "любое обновление .docker-git папки комитило и пушило её на гит"
+// REF: user-request-2026-02-08-auto-sync
+// SOURCE: n/a
+// FORMAT THEOREM: forall op: updates(op) -> eventually_synced(op)
+// PURITY: SHELL
+// EFFECT: Effect<void, never, Path | CommandExecutor>
+// INVARIANT: best-effort; never fails the main operation
+// COMPLEXITY: O(git)
+export const autoSyncState = (
+  message: string
+): Effect.Effect<void, never, Path.Path | CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const path = yield* _(Path.Path)
+    const root = resolveStateRoot(path, process.cwd())
+
+    const repoOk = yield* _(isGitRepo(root))
+    if (!repoOk) {
+      return
+    }
+
+    const originOk = yield* _(hasOriginRemote(root))
+    const enabled = isAutoSyncEnabled(process.env[autoSyncEnvKey], originOk)
+    if (!enabled) {
+      return
+    }
+
+    const strictValue = process.env[autoSyncStrictEnvKey]
+    const strict = strictValue !== undefined && strictValue.trim().length > 0 ? isTruthyEnv(strictValue) : false
+    const effect = stateSync(message)
+    if (strict) {
+      yield* _(effect)
+      return
+    }
+    yield* _(
+      effect.pipe(
+        Effect.catchAll((error) =>
+          Effect.logWarning(
+            `State auto-sync failed: ${error._tag === "CommandFailedError"
+              ? `${error.command} (exit ${error.exitCode})`
+              : String(error)}`
+          )
+        )
+      )
+    )
+  }).pipe(
+    Effect.catchAll((error) => Effect.logWarning(`State auto-sync failed: ${String(error)}`)),
+    Effect.asVoid
+  )
+
 export const stateInit = (
   input: {
     readonly repoUrl: string

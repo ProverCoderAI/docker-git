@@ -17,7 +17,8 @@ import {
   statePath,
   statePull,
   statePush,
-  stateStatus
+  stateStatus,
+  stateSync
 } from "@effect-template/lib/usecases/state-repo"
 import {
   killTerminalProcess,
@@ -74,6 +75,7 @@ const handleNonBaseCommand = (command: NonBaseCommand) =>
     Match.when({ _tag: "StatePull" }, () => statePull),
     Match.when({ _tag: "StateCommit" }, (cmd) => stateCommit(cmd.message)),
     Match.when({ _tag: "StatePush" }, () => statePush),
+    Match.when({ _tag: "StateSync" }, (cmd) => stateSync(cmd.message)),
     Match.when({ _tag: "AuthGithubLogin" }, (cmd) => authGithubLogin(cmd)),
     Match.when({ _tag: "AuthGithubStatus" }, (cmd) => authGithubStatus(cmd)),
     Match.when({ _tag: "AuthGithubLogout" }, (cmd) => authGithubLogout(cmd)),
