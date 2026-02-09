@@ -7,6 +7,7 @@ import { Effect } from "effect"
 
 import { defaultProjectsRoot } from "./menu-helpers.js"
 import { parseEnvEntries } from "./env-file.js"
+import { normalizeLegacyStateProjects } from "./state-normalize.js"
 import { runCommandCapture, runCommandExitCode, runCommandWithExitCodes } from "../shell/command-runner.js"
 import { CommandFailedError } from "../shell/errors.js"
 
@@ -374,6 +375,7 @@ export const stateSync = (
           token,
           (env) =>
             Effect.gen(function*(__) {
+              yield* __(normalizeLegacyStateProjects(root))
               const commitMessage = message && message.trim().length > 0 ? message.trim() : defaultSyncMessage
               yield* __(commitAllIfNeeded(root, commitMessage, env))
 
@@ -414,6 +416,7 @@ export const stateSync = (
             })
         )
         : Effect.gen(function*(__) {
+          yield* __(normalizeLegacyStateProjects(root))
           const commitMessage = message && message.trim().length > 0 ? message.trim() : defaultSyncMessage
           yield* __(commitAllIfNeeded(root, commitMessage, baseEnv))
 
