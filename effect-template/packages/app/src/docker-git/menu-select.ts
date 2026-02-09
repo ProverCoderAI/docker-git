@@ -1,6 +1,10 @@
 import { runDockerComposeDown } from "@effect-template/lib/shell/docker"
 import type { AppError } from "@effect-template/lib/usecases/errors"
-import { connectProjectSshWithUp, type ProjectItem } from "@effect-template/lib/usecases/projects"
+import {
+  connectProjectSshWithUp,
+  deleteDockerGitProject,
+  type ProjectItem
+} from "@effect-template/lib/usecases/projects"
 
 import { Effect, Match, pipe } from "effect"
 
@@ -19,6 +23,7 @@ import type { MenuEnv, MenuKeyInput, MenuRunner, MenuViewContext, ViewState } fr
 // COMPLEXITY: O(1) per keypress
 
 type SelectContext = MenuViewContext & {
+  readonly activeDir: string | null
   readonly runner: MenuRunner
   readonly setSshActive: (active: boolean) => void
   readonly setSkipInputs: (update: (value: number) => number) => void
@@ -26,7 +31,7 @@ type SelectContext = MenuViewContext & {
 
 export const startSelectView = (
   items: ReadonlyArray<ProjectItem>,
-  purpose: "Connect" | "Down" | "Info",
+  purpose: "Connect" | "Down" | "Info" | "Delete",
   context: Pick<SelectContext, "setView" | "setMessage">
 ) => {
   context.setMessage(null)
@@ -137,6 +142,21 @@ const runInfoSelection = (selected: ProjectItem, context: SelectContext) => {
   context.setMessage(`Details for ${selected.displayName} are shown on the right. Press Esc to return to the menu.`)
 }
 
+const runDeleteSelection = (selected: ProjectItem, context: SelectContext) => {
+  context.setMessage(`Deleting ${selected.displayName}...`)
+  runWithSuspendedTui(
+    context,
+    deleteDockerGitProject(selected),
+    () => {
+      if (context.activeDir === selected.projectDir) {
+        context.setActiveDir(null)
+      }
+      context.setView({ _tag: "Menu" })
+    },
+    "Project deleted."
+  )
+}
+
 const handleSelectReturn = (
   view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
   context: SelectContext
@@ -148,17 +168,21 @@ const handleSelectReturn = (
     return
   }
 
-  context.setActiveDir(selected.projectDir)
-
   Match.value(view.purpose).pipe(
     Match.when("Connect", () => {
+      context.setActiveDir(selected.projectDir)
       runConnectSelection(selected, context)
     }),
     Match.when("Down", () => {
+      context.setActiveDir(selected.projectDir)
       runDownSelection(selected, context)
     }),
     Match.when("Info", () => {
+      context.setActiveDir(selected.projectDir)
       runInfoSelection(selected, context)
+    }),
+    Match.when("Delete", () => {
+      runDeleteSelection(selected, context)
     }),
     Match.exhaustive
   )
@@ -172,7 +196,7 @@ const handleSelectHint = (input: string, context: SelectContext) => {
 
 export const loadSelectView = <E>(
   effect: Effect.Effect<ReadonlyArray<ProjectItem>, E, MenuEnv>,
-  purpose: "Connect" | "Down" | "Info",
+  purpose: "Connect" | "Down" | "Info" | "Delete",
   context: Pick<SelectContext, "setView" | "setMessage">
 ): Effect.Effect<void, E, MenuEnv> =>
   pipe(

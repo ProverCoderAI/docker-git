@@ -156,6 +156,7 @@ const handleUserInput = (
     setView: context.setView,
     setMessage: context.setMessage,
     setActiveDir: context.setActiveDir,
+    activeDir: context.state.activeDir,
     runner: context.runner,
     setSshActive: context.setSshActive,
     setSkipInputs: context.setSkipInputs
