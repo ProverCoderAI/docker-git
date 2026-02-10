@@ -17,13 +17,11 @@ import {
 import { renderError } from "./errors.js"
 import {
   buildSshCommand,
+  forEachProjectStatus,
   formatComposeRows,
-  loadProjectStatus,
   parseComposePsOutput,
   type ProjectItem,
-  type ProjectStatus,
   renderProjectStatusHeader,
-  skipWithWarning,
   withProjectIndexAndSsh
 } from "./projects-core.js"
 import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
@@ -177,23 +175,13 @@ export const listProjectStatus: Effect.Effect<
   Fs | PathService | CommandExecutor.CommandExecutor
 > = Effect.asVoid(
   withProjectIndexAndSsh((index, sshKey) =>
-    Effect.gen(function*(_) {
-      for (const configPath of index.configPaths) {
-        const status = yield* _(
-          loadProjectStatus(configPath).pipe(
-            Effect.matchEffect({
-              onFailure: skipWithWarning<ProjectStatus>(configPath),
-              onSuccess: (value) => Effect.succeed(value)
-            })
-          )
-        )
-        if (status === null) {
-          continue
-        }
-
-        yield* _(Effect.log(renderProjectStatusHeader(status)))
-        yield* _(Effect.log(`SSH access: ${buildSshCommand(status.config.template, sshKey)}`))
-        yield* _(
+    forEachProjectStatus(index.configPaths, (status) =>
+      pipe(
+        Effect.log(renderProjectStatusHeader(status)),
+        Effect.zipRight(
+          Effect.log(`SSH access: ${buildSshCommand(status.config.template, sshKey)}`)
+        ),
+        Effect.zipRight(
           runDockerComposePsFormatted(status.projectDir).pipe(
             Effect.map((raw) => parseComposePsOutput(raw)),
             Effect.map((rows) => formatComposeRows(rows)),
@@ -207,7 +195,6 @@ export const listProjectStatus: Effect.Effect<
             })
           )
         )
-      }
-    })
+      ))
   )
 )

@@ -1,120 +1,28 @@
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
-import { ExitCode } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
-import { runCommandCapture, runCommandExitCode, runCommandWithExitCodes } from "../shell/command-runner.js"
+import { runCommandExitCode } from "../shell/command-runner.js"
 import { CommandFailedError } from "../shell/errors.js"
-import { parseEnvEntries } from "./env-file.js"
 import { defaultProjectsRoot } from "./menu-helpers.js"
-import { normalizeLegacyStateProjects } from "./state-normalize.js"
+import { autoSyncEnvKey, autoSyncStrictEnvKey, isAutoSyncEnabled, isTruthyEnv } from "./state-repo/env.js"
+import {
+  git,
+  gitBaseEnv,
+  gitCapture,
+  gitExitCode,
+  hasOriginRemote,
+  isGitRepo,
+  successExitCode
+} from "./state-repo/git-commands.js"
+import { isGithubHttpsRemote, resolveGithubToken, withGithubAskpassEnv } from "./state-repo/github-auth.js"
+import { ensureStateGitignore } from "./state-repo/gitignore.js"
+import { runStateSyncOps, runStateSyncWithToken } from "./state-repo/sync-ops.js"
 
-const successExitCode = Number(ExitCode(0))
+type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 
-const gitBaseEnv: Readonly<Record<string, string>> = {
-  // Avoid blocking on interactive credential prompts in CI / TUI contexts.
-  GIT_TERMINAL_PROMPT: "0"
-}
-
-const githubTokenKey = "GITHUB_TOKEN"
-
-const resolveStateRoot = (
-  path: Path.Path,
-  cwd: string
-): string => path.resolve(defaultProjectsRoot(cwd))
-
-const stateGitignoreMarker = "# docker-git state repository"
-
-const legacySecretIgnorePatterns: ReadonlyArray<string> = [
-  "**/.orch/env/",
-  "**/.orch/auth/"
-]
-
-const volatileCodexIgnorePatterns: ReadonlyArray<string> = [
-  "**/.orch/auth/codex/log/",
-  "**/.orch/auth/codex/tmp/",
-  "**/.orch/auth/codex/sessions/",
-  "**/.orch/auth/codex/models_cache.json"
-]
-
-const defaultStateGitignore = [
-  stateGitignoreMarker,
-  "# NOTE: this repo intentionally tracks EVERYTHING under the state dir, including .orch/env and .orch/auth.",
-  "# Keep the remote private; treat it as sensitive infrastructure state.",
-  "",
-  "# Volatile Codex artifacts (do not commit)",
-  ...volatileCodexIgnorePatterns,
-  ""
-].join("\n")
-
-const normalizeGitignoreText = (text: string): string =>
-  text
-    .replaceAll("\r\n", "\n")
-    .trim()
-
-// CHANGE: ensure state repo has a safe .gitignore for syncing full state via git
-// WHY: track .orch/auth and .orch/env, but ignore volatile Codex cache/log directories
-// QUOTE(ТЗ): "да не надо сохранять log/, /tmp, /sessions, models_cache.json"
-// REF: user-request-2026-02-10-state-ignore-volatile
-// SOURCE: n/a
-// FORMAT THEOREM: forall root: ensureGitignore(root) -> exists(.gitignore(root)) and ignoresVolatileCodex(root)
-// PURITY: SHELL
-// EFFECT: Effect<void, PlatformError, FileSystem | Path>
-// INVARIANT: updates only docker-git-managed .gitignore files
-// COMPLEXITY: O(n) where n = |.gitignore|
-const ensureStateGitignore = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  root: string
-): Effect.Effect<void, PlatformError> =>
-  Effect.gen(function*(_) {
-    const gitignorePath = path.join(root, ".gitignore")
-    const exists = yield* _(fs.exists(gitignorePath))
-    if (!exists) {
-      yield* _(fs.writeFileString(gitignorePath, defaultStateGitignore))
-      return
-    }
-
-    const stat = yield* _(fs.stat(gitignorePath))
-    if (stat.type !== "File") {
-      yield* _(Effect.logWarning(`${gitignorePath} exists but is not a file; skipping`))
-      return
-    }
-
-    const prev = yield* _(fs.readFileString(gitignorePath))
-    const normalized = normalizeGitignoreText(prev)
-    if (!normalized.startsWith(stateGitignoreMarker)) {
-      return
-    }
-
-    // If the file is docker-git managed but still ignores secrets (legacy default), rewrite it.
-    const prevLines = new Set(prev.replaceAll("\r", "").split("\n").map((l) => l.trimEnd()))
-    const hasLegacySecretIgnores = legacySecretIgnorePatterns.some((p) => prevLines.has(p))
-    if (hasLegacySecretIgnores) {
-      yield* _(fs.writeFileString(gitignorePath, defaultStateGitignore))
-      return
-    }
-
-    // Ensure volatile Codex artifacts are ignored; append if missing.
-    const missingVolatile = volatileCodexIgnorePatterns.filter((p) => !prevLines.has(p))
-    if (missingVolatile.length === 0) {
-      return
-    }
-    const next = `${prev.trimEnd()}\n\n# Volatile Codex artifacts (do not commit)\n${missingVolatile.join("\n")}\n`
-    yield* _(fs.writeFileString(gitignorePath, next))
-  })
-
-// CHANGE: manage docker-git state dir as a git repository
-// WHY: allow sharing docker-git state across machines using a private git repo
-// QUOTE(ТЗ): "общая память через гит" / "иметь возможность комитить его на гит"
-// REF: user-request-2026-02-07-state-repo
-// SOURCE: n/a
-// FORMAT THEOREM: forall op: state(op) -> deterministic(root)
-// PURITY: SHELL
-// EFFECT: Effect<void, CommandFailedError | PlatformError, FileSystem | Path | CommandExecutor>
-// INVARIANT: never deletes user data; only runs git commands in the state root
-// COMPLEXITY: O(command)
+const resolveStateRoot = (path: Path.Path, cwd: string): string => path.resolve(defaultProjectsRoot(cwd))
 
 export const statePath: Effect.Effect<void, PlatformError, Path.Path> = Effect.gen(function*(_) {
   const path = yield* _(Path.Path)
@@ -123,332 +31,24 @@ export const statePath: Effect.Effect<void, PlatformError, Path.Path> = Effect.g
   yield* _(Effect.log(root))
 }).pipe(Effect.asVoid)
 
-const git = (
-  cwd: string,
-  args: ReadonlyArray<string>,
-  env: Readonly<Record<string, string | undefined>> = gitBaseEnv
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  runCommandWithExitCodes(
-    { cwd, command: "git", args, env },
-    [successExitCode],
-    (exitCode) => new CommandFailedError({ command: `git ${args[0] ?? ""}`, exitCode })
-  )
-
-const gitExitCode = (
-  cwd: string,
-  args: ReadonlyArray<string>,
-  env: Readonly<Record<string, string | undefined>> = gitBaseEnv
-): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
-  runCommandExitCode({ cwd, command: "git", args, env })
-
-const gitCapture = (
-  cwd: string,
-  args: ReadonlyArray<string>,
-  env: Readonly<Record<string, string | undefined>> = gitBaseEnv
-): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  runCommandCapture(
-    { cwd, command: "git", args, env },
-    [successExitCode],
-    (exitCode) => new CommandFailedError({ command: `git ${args[0] ?? ""}`, exitCode })
-  )
-
-const isTruthyEnv = (value: string): boolean =>
-  value.trim().toLowerCase() === "1" ||
-  value.trim().toLowerCase() === "true" ||
-  value.trim().toLowerCase() === "yes" ||
-  value.trim().toLowerCase() === "on"
-
-const isFalsyEnv = (value: string): boolean =>
-  value.trim().toLowerCase() === "0" ||
-  value.trim().toLowerCase() === "false" ||
-  value.trim().toLowerCase() === "no" ||
-  value.trim().toLowerCase() === "off"
-
-const autoSyncEnvKey = "DOCKER_GIT_STATE_AUTO_SYNC"
-const autoSyncStrictEnvKey = "DOCKER_GIT_STATE_AUTO_SYNC_STRICT"
-
-const defaultSyncMessage = "chore(state): sync"
-
-const isGitRepo = (root: string) =>
-  Effect.map(gitExitCode(root, ["rev-parse", "--is-inside-work-tree"]), (exit) => exit === successExitCode)
-
-const hasOriginRemote = (root: string) =>
-  Effect.map(gitExitCode(root, ["remote", "get-url", "origin"]), (exit) => exit === successExitCode)
-
-const commitAllIfNeeded = (
-  root: string,
-  message: string,
-  env: Readonly<Record<string, string | undefined>>
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  Effect.gen(function*(_) {
-    yield* _(git(root, ["add", "-A"], env))
-    const diffExit = yield* _(gitExitCode(root, ["diff", "--cached", "--quiet"], env))
-    if (diffExit === successExitCode) {
-      return
-    }
-    yield* _(git(root, ["commit", "-m", message], env))
-  })
-
-const sanitizeBranchComponent = (value: string): string =>
-  value
-    .trim()
-    .replaceAll(" ", "-")
-    .replaceAll(":", "-")
-    .replaceAll("..", "-")
-    .replaceAll("@{", "-")
-    .replaceAll("\\", "-")
-    .replaceAll("^", "-")
-    .replaceAll("~", "-")
-
-const githubHttpsRemoteRe = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/
-const githubSshRemoteRe = /^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/
-const githubSshUrlRemoteRe = /^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/
-
-const tryBuildGithubCompareUrl = (
-  originUrl: string,
-  baseBranch: string,
-  headBranch: string
-): string | null => {
-  const trimmed = originUrl.trim()
-  const httpsMatch = githubHttpsRemoteRe.exec(trimmed)
-  if (httpsMatch) {
-    const owner = httpsMatch[1] ?? ""
-    const repo = httpsMatch[2] ?? ""
-    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${
-      encodeURIComponent(headBranch)
-    }?expand=1`
-  }
-
-  const sshMatch = githubSshRemoteRe.exec(trimmed)
-  if (sshMatch) {
-    const owner = sshMatch[1] ?? ""
-    const repo = sshMatch[2] ?? ""
-    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${
-      encodeURIComponent(headBranch)
-    }?expand=1`
-  }
-
-  const sshUrlMatch = githubSshUrlRemoteRe.exec(trimmed)
-  if (sshUrlMatch) {
-    const owner = sshUrlMatch[1] ?? ""
-    const repo = sshUrlMatch[2] ?? ""
-    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${
-      encodeURIComponent(headBranch)
-    }?expand=1`
-  }
-
-  return null
-}
-
-const rebaseOntoOriginIfPossible = (
-  root: string,
-  baseBranch: string,
-  env: Readonly<Record<string, string | undefined>>
-): Effect.Effect<"ok" | "skipped" | "conflict", CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  Effect.gen(function*(_) {
-    // Ensure we see the latest remote branch tip before attempting to rebase.
-    const fetchExit = yield* _(gitExitCode(root, ["fetch", "origin", "--prune"], env))
-    if (fetchExit !== successExitCode) {
-      return yield* _(Effect.fail(new CommandFailedError({ command: "git fetch origin --prune", exitCode: fetchExit })))
-    }
-
-    const remoteRef = `refs/remotes/origin/${baseBranch}`
-    const hasRemoteBranchExit = yield* _(gitExitCode(root, ["show-ref", "--verify", "--quiet", remoteRef], env))
-    if (hasRemoteBranchExit !== successExitCode) {
-      return "skipped"
-    }
-
-    const rebaseExit = yield* _(gitExitCode(root, ["rebase", `origin/${baseBranch}`], env))
-    if (rebaseExit === successExitCode) {
-      return "ok"
-    }
-
-    // Best-effort: avoid leaving the repo in a rebase-in-progress state.
-    yield* _(gitExitCode(root, ["rebase", "--abort"], env))
-    return "conflict"
-  })
-
-const pushToNewBranch = (
-  root: string,
-  baseBranch: string,
-  env: Readonly<Record<string, string | undefined>>
-): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  Effect.gen(function*(_) {
-    const headShort = yield* _(
-      gitCapture(root, ["rev-parse", "--short", "HEAD"], env).pipe(Effect.map((value) => value.trim()))
-    )
-    const timestamp = yield* _(Effect.sync(() => new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-")))
-    const branch = sanitizeBranchComponent(`state-sync/${baseBranch}/${timestamp}-${headShort}`)
-
-    yield* _(git(root, ["push", "origin", `HEAD:refs/heads/${branch}`], env))
-    return branch
-  })
-
-const isGithubHttpsRemote = (url: string): boolean => /^https:\/\/github\.com\//.test(url.trim())
-
-// CHANGE: resolve GitHub token for git HTTPS auth (env > state global.env)
-// WHY: enable non-interactive git push/pull for private state repositories
-// QUOTE(ТЗ): "Он должен был сделать пуш на гит что бы держать синхронизацию данных"
-// REF: user-request-2026-02-09-state-push-auth
-// SOURCE: n/a
-// FORMAT THEOREM: forall root: token(root) -> auth_possible(root)
-// PURITY: SHELL
-// EFFECT: Effect<string | null, PlatformError, FileSystem | Path>
-// INVARIANT: never logs the token
-// COMPLEXITY: O(n) where n = |global.env|
-const resolveGithubToken = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  root: string
-): Effect.Effect<string | null, PlatformError> =>
-  Effect.gen(function*(_) {
-    const fromEnv = process.env["GITHUB_TOKEN"]?.trim() ?? process.env["GH_TOKEN"]?.trim() ?? ""
-    if (fromEnv.length > 0) {
-      return fromEnv
-    }
-
-    const envPath = path.join(root, ".orch", "env", "global.env")
-    const exists = yield* _(fs.exists(envPath))
-    if (!exists) {
-      return null
-    }
-
-    const text = yield* _(fs.readFileString(envPath))
-    const entries = parseEnvEntries(text)
-    const direct = entries.find((e) => e.key === githubTokenKey)?.value.trim() ?? ""
-    if (direct.length > 0) {
-      return direct
-    }
-
-    const labeled = entries.find((e) => e.key.startsWith("GITHUB_TOKEN__"))?.value.trim() ?? ""
-    return labeled.length > 0 ? labeled : null
-  })
-
-const withGithubAskpassEnv = <A, E, R>(
-  token: string,
-  use: (env: Readonly<Record<string, string | undefined>>) => Effect.Effect<A, E, R>
-): Effect.Effect<A, E | PlatformError, FileSystem.FileSystem | R> =>
-  Effect.scoped(
-    Effect.gen(function*(_) {
-      const fs = yield* _(FileSystem.FileSystem)
-      const askpassPath = yield* _(fs.makeTempFileScoped({ prefix: "docker-git-askpass-" }))
-      const contents = [
-        "#!/bin/sh",
-        "case \"$1\" in",
-        "  *Username*) echo \"x-access-token\" ;;",
-        "  *Password*) echo \"${DOCKER_GIT_GITHUB_TOKEN}\" ;;",
-        "  *) echo \"${DOCKER_GIT_GITHUB_TOKEN}\" ;;",
-        "esac",
-        ""
-      ].join("\n")
-      yield* _(fs.writeFileString(askpassPath, contents))
-      yield* _(fs.chmod(askpassPath, 0o700))
-      const env: Readonly<Record<string, string | undefined>> = {
-        ...gitBaseEnv,
-        DOCKER_GIT_GITHUB_TOKEN: token,
-        GIT_ASKPASS: askpassPath,
-        GIT_ASKPASS_REQUIRE: "force"
-      }
-      return yield* _(use(env))
-    })
-  )
-
-type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
-
-type GitAuthEnv = Readonly<Record<string, string | undefined>>
-
-const resolveBaseBranch = (value: string): string => (value === "HEAD" ? "main" : value)
-
-const getCurrentBranch = (
-  root: string,
-  env: GitAuthEnv
-): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"], env).pipe(Effect.map((value) => value.trim()))
-
-const runStateSyncOps = (
-  root: string,
-  originUrl: string,
-  message: string | null,
-  env: GitAuthEnv
-): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
-  Effect.gen(function*(_) {
-    yield* _(normalizeLegacyStateProjects(root))
-    const commitMessage = message && message.trim().length > 0 ? message.trim() : defaultSyncMessage
-    yield* _(commitAllIfNeeded(root, commitMessage, env))
-
-    const branch = yield* _(getCurrentBranch(root, env))
-    const baseBranch = resolveBaseBranch(branch)
-
-    const rebaseResult = yield* _(rebaseOntoOriginIfPossible(root, baseBranch, env))
-    if (rebaseResult === "conflict") {
-      const prBranch = yield* _(pushToNewBranch(root, baseBranch, env))
-      const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
-
-      yield* _(Effect.logWarning(`State sync needs manual merge: pushed changes to branch '${prBranch}'.`))
-      yield* (compareUrl
-        ? _(Effect.log(`Open PR: ${compareUrl}`))
-        : _(Effect.log(`Open PR from '${prBranch}' into '${baseBranch}' (origin: ${originUrl}).`)))
-      return
-    }
-
-    const pushExit = yield* _(gitExitCode(root, ["push", "-u", "origin", "HEAD"], env))
-    if (pushExit === successExitCode) {
-      return
-    }
-
-    const prBranch = yield* _(pushToNewBranch(root, baseBranch, env))
-    const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
-    yield* _(Effect.logWarning(`State push failed (exit ${pushExit}); pushed changes to branch '${prBranch}'.`))
-    if (compareUrl) {
-      yield* _(Effect.log(`Open PR: ${compareUrl}`))
-      return
-    }
-    yield* _(Effect.log(`Open PR from '${prBranch}' into '${baseBranch}' (origin: ${originUrl}).`))
-  }).pipe(Effect.asVoid)
-
-const runStateSyncWithToken = (
-  token: string,
-  root: string,
-  originUrl: string,
-  message: string | null
-): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
-  withGithubAskpassEnv(token, (env) => runStateSyncOps(root, originUrl, message, env))
-
-// CHANGE: sync state repo with remote (commit + pull --rebase + push)
-// WHY: provide a single command to keep git-synced state up to date across machines
-// QUOTE(ТЗ): "иметь команд синхронизации с гит версией"
-// REF: user-request-2026-02-08-state-sync
-// SOURCE: n/a
-// FORMAT THEOREM: forall root: sync(root) -> (local == remote) or typed_error
-// PURITY: SHELL
-// EFFECT: Effect<void, CommandFailedError | PlatformError, Path | CommandExecutor>
-// INVARIANT: never commits ignored files (relies on .gitignore)
-// COMPLEXITY: O(git)
 export const stateSync = (
   message: string | null
-): Effect.Effect<
-  void,
-  CommandFailedError | PlatformError,
-  StateRepoEnv
-> =>
+): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const root = resolveStateRoot(path, process.cwd())
-    const baseEnv = gitBaseEnv
 
-    const repoExit = yield* _(gitExitCode(root, ["rev-parse", "--is-inside-work-tree"], baseEnv))
+    const repoExit = yield* _(gitExitCode(root, ["rev-parse", "--is-inside-work-tree"], gitBaseEnv))
     if (repoExit !== successExitCode) {
       yield* _(Effect.logWarning(`State dir is not a git repository: ${root}`))
       yield* _(Effect.logWarning(`Run: docker-git state init --repo-url <url>`))
       return yield* _(
-        Effect.fail(
-          new CommandFailedError({ command: "git rev-parse --is-inside-work-tree", exitCode: repoExit })
-        )
+        Effect.fail(new CommandFailedError({ command: "git rev-parse --is-inside-work-tree", exitCode: repoExit }))
       )
     }
 
-    const originUrlExit = yield* _(gitExitCode(root, ["remote", "get-url", "origin"], baseEnv))
+    const originUrlExit = yield* _(gitExitCode(root, ["remote", "get-url", "origin"], gitBaseEnv))
     if (originUrlExit !== successExitCode) {
       yield* _(Effect.logWarning(`State dir has no origin remote: ${root}`))
       yield* _(Effect.logWarning(`Run: docker-git state init --repo-url <url>`))
@@ -457,49 +57,17 @@ export const stateSync = (
       )
     }
     const originUrl = yield* _(
-      gitCapture(root, ["remote", "get-url", "origin"], baseEnv).pipe(Effect.map((value) => value.trim()))
+      gitCapture(root, ["remote", "get-url", "origin"], gitBaseEnv).pipe(Effect.map((value) => value.trim()))
     )
     const token = yield* _(resolveGithubToken(fs, path, root))
     const syncEffect = token && token.length > 0 && isGithubHttpsRemote(originUrl)
       ? runStateSyncWithToken(token, root, originUrl, message)
-      : runStateSyncOps(root, originUrl, message, baseEnv)
+      : runStateSyncOps(root, originUrl, message, gitBaseEnv)
 
     yield* _(syncEffect)
   }).pipe(Effect.asVoid)
 
-const isAutoSyncEnabled = (
-  envValue: string | undefined,
-  hasRemote: boolean
-): boolean => {
-  if (envValue === undefined) {
-    return hasRemote
-  }
-  if (envValue.trim().length === 0) {
-    return hasRemote
-  }
-  if (isFalsyEnv(envValue)) {
-    return false
-  }
-  if (isTruthyEnv(envValue)) {
-    return true
-  }
-  // Non-empty values default to enabled.
-  return true
-}
-
-// CHANGE: automatically sync state after docker-git operations
-// WHY: keep state repo always pushed when containers/projects are added
-// QUOTE(ТЗ): "любое обновление .docker-git папки комитило и пушило её на гит"
-// REF: user-request-2026-02-08-auto-sync
-// SOURCE: n/a
-// FORMAT THEOREM: forall op: updates(op) -> eventually_synced(op)
-// PURITY: SHELL
-// EFFECT: Effect<void, never, Path | CommandExecutor>
-// INVARIANT: best-effort; never fails the main operation
-// COMPLEXITY: O(git)
-export const autoSyncState = (
-  message: string
-): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor> =>
+export const autoSyncState = (message: string): Effect.Effect<void, never, StateRepoEnv> =>
   Effect.gen(function*(_) {
     const path = yield* _(Path.Path)
     const root = resolveStateRoot(path, process.cwd())
@@ -545,67 +113,102 @@ export const autoSyncState = (
     Effect.asVoid
   )
 
-export const stateInit = (
-  input: {
-    readonly repoUrl: string
-    readonly repoRef: string
-  }
-): Effect.Effect<
-  void,
-  CommandFailedError | PlatformError,
-  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
-> =>
-  Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
-    const cwd = process.cwd()
-    const root = resolveStateRoot(path, cwd)
+type StateInitInput = {
+  readonly repoUrl: string
+  readonly repoRef: string
+}
 
+const cloneStateRepo = (
+  root: string,
+  input: StateInitInput
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const cloneWithBranch = ["clone", "--branch", input.repoRef, input.repoUrl, root]
+    const cloneBranchExit = yield* _(
+      runCommandExitCode({ cwd: root, command: "git", args: cloneWithBranch, env: gitBaseEnv })
+    )
+    if (cloneBranchExit === successExitCode) {
+      return
+    }
+
+    // Empty remotes (no branch yet) and remotes without the requested branch can fail here.
+    // Fall back to cloning the default branch so we can still set up the repo and create the branch locally.
+    yield* _(
+      Effect.logWarning(
+        `git clone --branch ${input.repoRef} failed (exit ${cloneBranchExit}); retrying without --branch`
+      )
+    )
+    const cloneDefault = ["clone", input.repoUrl, root]
+    const cloneDefaultExit = yield* _(
+      runCommandExitCode({ cwd: root, command: "git", args: cloneDefault, env: gitBaseEnv })
+    )
+    if (cloneDefaultExit !== successExitCode) {
+      return yield* _(Effect.fail(new CommandFailedError({ command: "git clone", exitCode: cloneDefaultExit })))
+    }
+  }).pipe(Effect.asVoid)
+
+const initRepoIfNeeded = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  root: string,
+  input: StateInitInput
+): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
+  Effect.gen(function*(_) {
     yield* _(fs.makeDirectory(root, { recursive: true }))
 
     const gitDir = path.join(root, ".git")
     const hasGit = yield* _(fs.exists(gitDir))
-    if (!hasGit) {
-      const entries = yield* _(fs.readDirectory(root))
-      if (entries.length === 0) {
-        const cloneWithBranch = ["clone", "--branch", input.repoRef, input.repoUrl, root]
-        const cloneBranchExit = yield* _(
-          runCommandExitCode({ cwd: root, command: "git", args: cloneWithBranch, env: gitBaseEnv })
-        )
-        if (cloneBranchExit !== successExitCode) {
-          // Empty remotes (no branch yet) and remotes without the requested branch can fail here.
-          // Fall back to cloning the default branch so we can still set up the repo and create the branch locally.
-          yield* _(
-            Effect.logWarning(
-              `git clone --branch ${input.repoRef} failed (exit ${cloneBranchExit}); retrying without --branch`
-            )
-          )
-          const cloneDefault = ["clone", input.repoUrl, root]
-          const cloneDefaultExit = yield* _(
-            runCommandExitCode({ cwd: root, command: "git", args: cloneDefault, env: gitBaseEnv })
-          )
-          if (cloneDefaultExit !== successExitCode) {
-            return yield* _(Effect.fail(new CommandFailedError({ command: "git clone", exitCode: cloneDefaultExit })))
-          }
-        }
-        yield* _(Effect.log(`State dir cloned: ${root}`))
-      } else {
-        yield* _(git(root, ["init"], gitBaseEnv))
-      }
+    if (hasGit) {
+      return
     }
 
-    const setUrlExit = yield* _(gitExitCode(root, ["remote", "set-url", "origin", input.repoUrl], gitBaseEnv))
-    if (setUrlExit !== successExitCode) {
-      yield* _(git(root, ["remote", "add", "origin", input.repoUrl], gitBaseEnv))
+    const entries = yield* _(fs.readDirectory(root))
+    if (entries.length === 0) {
+      yield* _(cloneStateRepo(root, input))
+      yield* _(Effect.log(`State dir cloned: ${root}`))
+      return
     }
 
-    // Best-effort: ensure the local branch exists and can be tracked later.
-    const checkoutExit = yield* _(gitExitCode(root, ["checkout", "-B", input.repoRef], gitBaseEnv))
-    if (checkoutExit !== successExitCode) {
-      yield* _(Effect.logWarning(`git checkout -B ${input.repoRef} failed (exit ${checkoutExit})`))
-    }
+    yield* _(git(root, ["init"], gitBaseEnv))
+  }).pipe(Effect.asVoid)
 
+const ensureOriginRemote = (
+  root: string,
+  repoUrl: string
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const setUrlExit = yield* _(gitExitCode(root, ["remote", "set-url", "origin", repoUrl], gitBaseEnv))
+    if (setUrlExit === successExitCode) {
+      return
+    }
+    yield* _(git(root, ["remote", "add", "origin", repoUrl], gitBaseEnv))
+  })
+
+const checkoutBranchBestEffort = (
+  root: string,
+  repoRef: string
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const checkoutExit = yield* _(gitExitCode(root, ["checkout", "-B", repoRef], gitBaseEnv))
+    if (checkoutExit === successExitCode) {
+      return
+    }
+    yield* _(Effect.logWarning(`git checkout -B ${repoRef} failed (exit ${checkoutExit})`))
+  })
+
+export const stateInit = (
+  input: StateInitInput
+): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const root = resolveStateRoot(path, process.cwd())
+
+    yield* _(initRepoIfNeeded(fs, path, root, input))
+    yield* _(ensureOriginRemote(root, input.repoUrl))
+    yield* _(checkoutBranchBestEffort(root, input.repoRef))
     yield* _(ensureStateGitignore(fs, path, root))
+
     yield* _(Effect.log(`State dir ready: ${root}`))
     yield* _(Effect.log(`Remote: ${input.repoUrl}`))
   }).pipe(Effect.asVoid)

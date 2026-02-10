@@ -7,13 +7,7 @@ import { Effect, pipe } from "effect"
 import { runDockerComposeDown } from "../shell/docker.js"
 import type { DockerCommandError } from "../shell/errors.js"
 import { renderError } from "./errors.js"
-import {
-  loadProjectIndex,
-  loadProjectStatus,
-  type ProjectStatus,
-  renderProjectStatusHeader,
-  skipWithWarning
-} from "./projects-core.js"
+import { forEachProjectStatus, loadProjectIndex, renderProjectStatusHeader } from "./projects-core.js"
 
 // CHANGE: provide a "stop all" helper for docker-git managed projects
 // WHY: allow quickly stopping all running docker-git containers from the CLI/TUI
@@ -34,22 +28,10 @@ export const downAllDockerGitProjects: Effect.Effect<
   Effect.flatMap((index) =>
     index === null
       ? Effect.void
-      : Effect.gen(function*(_) {
-        for (const configPath of index.configPaths) {
-          const status = yield* _(
-            loadProjectStatus(configPath).pipe(
-              Effect.matchEffect({
-                onFailure: skipWithWarning<ProjectStatus>(configPath),
-                onSuccess: (value) => Effect.succeed(value)
-              })
-            )
-          )
-          if (status === null) {
-            continue
-          }
-
-          yield* _(Effect.log(renderProjectStatusHeader(status)))
-          yield* _(
+      : forEachProjectStatus(index.configPaths, (status) =>
+        pipe(
+          Effect.log(renderProjectStatusHeader(status)),
+          Effect.zipRight(
             runDockerComposeDown(status.projectDir).pipe(
               Effect.catchTag("DockerCommandError", (error: DockerCommandError) =>
                 Effect.logWarning(
@@ -57,8 +39,7 @@ export const downAllDockerGitProjects: Effect.Effect<
                 ))
             )
           )
-        }
-      })
+        ))
   ),
   Effect.asVoid
 )
