@@ -210,7 +210,67 @@ export const runDockerInspectContainerIp = (
         args: [
           "inspect",
           "-f",
-          "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+          // Prefer the built-in `bridge` network IP when present so the printed IP
+          // works from "external" containers that default to `bridge`.
+          // Example output:
+          //   bridge=172.17.0.4
+          //   <project>_dg-<repo>-net=192.168.64.3
+          '{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s=%s\\n" $k $v.IPAddress}}{{end}}',
+          containerName
+        ]
+      },
+      [Number(ExitCode(0))],
+      (exitCode) => new DockerCommandError({ exitCode })
+    ),
+    Effect.map((output) => {
+      const lines = output
+        .trim()
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+
+      const entries = lines.flatMap((line) => {
+        const idx = line.indexOf("=")
+        if (idx <= 0) {
+          return []
+        }
+        const network = line.slice(0, idx).trim()
+        const ip = line.slice(idx + 1).trim()
+        return network.length > 0 && ip.length > 0 ? ([[network, ip]] as const) : []
+      })
+
+      if (entries.length === 0) {
+        return ""
+      }
+
+      const map = new Map(entries)
+      return map.get("bridge") ?? entries[0]![1]
+    })
+  )
+
+// CHANGE: inspect the container IP address on the default `bridge` network
+// WHY: allow callers to decide whether `docker network connect bridge` is needed
+// QUOTE(ТЗ): "подключиться с внешнего контейнера"
+// REF: user-request-2026-02-10-bridge-ip
+// SOURCE: n/a
+// FORMAT THEOREM: ∀c: bridge(c) → ip_bridge(c) ≠ ""
+// PURITY: SHELL
+// EFFECT: Effect<string, DockerCommandError | PlatformError, CommandExecutor>
+// INVARIANT: returns "" when the container is not connected to `bridge`
+// COMPLEXITY: O(command)
+export const runDockerInspectContainerBridgeIp = (
+  cwd: string,
+  containerName: string
+): Effect.Effect<string, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  pipe(
+    runCommandCapture(
+      {
+        cwd,
+        command: "docker",
+        args: [
+          "inspect",
+          "-f",
+          '{{with (index .NetworkSettings.Networks "bridge")}}{{.IPAddress}}{{end}}',
           containerName
         ]
       },
@@ -218,6 +278,33 @@ export const runDockerInspectContainerIp = (
       (exitCode) => new DockerCommandError({ exitCode })
     ),
     Effect.map((output) => output.trim())
+  )
+
+// CHANGE: connect an existing container to the default `bridge` network
+// WHY: allow "external" containers (which default to `bridge`) to reach services by container IP
+// QUOTE(ТЗ): "Всё что запущено в докере должно быть публично наружу"
+// REF: user-request-2026-02-10-public-ports
+// SOURCE: n/a
+// FORMAT THEOREM: ∀c: up(c) → reachable(bridge_ip(c), ports(c))
+// PURITY: SHELL
+// EFFECT: Effect<void, DockerCommandError | PlatformError, CommandExecutor>
+// INVARIANT: does not fail the overall flow when already connected (handled by caller)
+// COMPLEXITY: O(command)
+export const runDockerNetworkConnectBridge = (
+  cwd: string,
+  containerName: string
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  pipe(
+    runCommandCapture(
+      {
+        cwd,
+        command: "docker",
+        args: ["network", "connect", "bridge", containerName]
+      },
+      [Number(ExitCode(0))],
+      (exitCode) => new DockerCommandError({ exitCode })
+    ),
+    Effect.asVoid
   )
 
 // CHANGE: list names of running Docker containers

@@ -10,7 +10,9 @@ import {
   runDockerComposeDownVolumes,
   runDockerComposeLogsFollow,
   runDockerComposeUp,
-  runDockerExecExitCode
+  runDockerExecExitCode,
+  runDockerInspectContainerBridgeIp,
+  runDockerNetworkConnectBridge
 } from "../shell/docker.js"
 import type { DockerCommandError, FileExistsError, PortProbeError } from "../shell/errors.js"
 import { CloneFailedError } from "../shell/errors.js"
@@ -265,6 +267,27 @@ const runDockerUpIfNeeded = (
     }
     yield* _(Effect.log("Running: docker compose up -d --build"))
     yield* _(runDockerComposeUp(resolvedOutDir))
+
+    const ensureBridgeAccess = (containerName: string) =>
+      runDockerInspectContainerBridgeIp(resolvedOutDir, containerName).pipe(
+        Effect.flatMap((bridgeIp) =>
+          bridgeIp.length > 0
+            ? Effect.void
+            : runDockerNetworkConnectBridge(resolvedOutDir, containerName)
+        ),
+        Effect.catchAll((error) =>
+          Effect.logWarning(
+            `Failed to connect ${containerName} to bridge network: ${error instanceof Error ? error.message : String(error)}`
+          ).pipe(Effect.asVoid)
+        )
+      )
+
+    // Make container ports reachable from other (non-compose) containers by IP.
+    yield* _(ensureBridgeAccess(projectConfig.containerName))
+    if (projectConfig.enableMcpPlaywright) {
+      yield* _(ensureBridgeAccess(`${projectConfig.containerName}-browser`))
+    }
+
     if (waitForClone) {
       yield* _(Effect.log("Streaming container logs until clone completes..."))
       yield* _(waitForCloneCompletion(resolvedOutDir, projectConfig))
