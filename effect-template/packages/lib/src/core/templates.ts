@@ -80,7 +80,12 @@ fi
 BASE_WS="$(CDP_ENDPOINT="$CDP_ENDPOINT" node -e 'const { URL } = require(\"url\"); const u=new URL(process.env.CDP_ENDPOINT); const proto=u.protocol===\"https:\"?\"wss:\":\"ws:\"; process.stdout.write(proto + \"//\" + u.host)')"
 WS_REWRITTEN="$(BASE_WS="$BASE_WS" WS_URL="$WS_URL" node -e 'const { URL } = require(\"url\"); const base=new URL(process.env.BASE_WS); const ws=new URL(process.env.WS_URL); ws.protocol=base.protocol; ws.host=base.host; process.stdout.write(ws.toString())')"
 
-exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" "$@"
+EXTRA_ARGS=()
+if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-1}" == "1" ]]; then
+  EXTRA_ARGS+=(--isolated)
+fi
+
+exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" "\${EXTRA_ARGS[@]}" "$@"
 EOF
 RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
     : ""}
