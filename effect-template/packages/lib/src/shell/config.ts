@@ -31,6 +31,9 @@ const TemplateConfigSchema = Schema.Struct({
     default: () => defaultTemplateConfig.codexSharedAuthPath
   }),
   codexHome: Schema.String,
+  enableMcpPlaywright: Schema.optionalWith(Schema.Boolean, {
+    default: () => defaultTemplateConfig.enableMcpPlaywright
+  }),
   pnpmVersion: Schema.String
 })
 

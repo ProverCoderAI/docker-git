@@ -47,6 +47,7 @@ Options:
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list
   --up | --no-up            Run docker compose up after init (default: --up)
+  --mcp-playwright | --no-mcp-playwright  Enable Playwright MCP + Chromium sidecar (default: --no-mcp-playwright)
   --force                   Overwrite existing files and wipe compose volumes (docker compose down -v)
   -h, --help                Show this help
 

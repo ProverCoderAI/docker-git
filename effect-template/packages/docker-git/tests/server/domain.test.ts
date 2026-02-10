@@ -60,6 +60,8 @@ describe("buildSshCommand", () => {
         sshPort: 2222,
         sshKeyPath: null
       })
-      expect(command).toBe("ssh -p 2222 dev@localhost")
+      expect(command).toBe(
+        "ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 dev@localhost"
+      )
     }))
 })
