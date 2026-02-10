@@ -48,6 +48,7 @@ export type CreateInputs = {
   readonly outDir: string
   readonly secretsRoot: string
   readonly runUp: boolean
+  readonly enableMcpPlaywright: boolean
   readonly force: boolean
 }
 
@@ -56,9 +57,17 @@ export type CreateStep =
   | "repoRef"
   | "outDir"
   | "runUp"
+  | "mcpPlaywright"
   | "force"
 
-export const createSteps: ReadonlyArray<CreateStep> = ["repoUrl", "repoRef", "outDir", "runUp", "force"]
+export const createSteps: ReadonlyArray<CreateStep> = [
+  "repoUrl",
+  "repoRef",
+  "outDir",
+  "runUp",
+  "mcpPlaywright",
+  "force"
+]
 
 export type ViewState =
   | { readonly _tag: "Menu" }
