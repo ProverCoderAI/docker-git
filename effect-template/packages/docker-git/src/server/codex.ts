@@ -69,14 +69,20 @@ const codexApprovalPolicyKey = "approval_policy"
 const codexApprovalPolicyLine = `${codexApprovalPolicyKey} = "never"`
 const codexSandboxModeKey = "sandbox_mode"
 const codexSandboxModeLine = `${codexSandboxModeKey} = "danger-full-access"`
-const codexConfigTomlContents = `model = "gpt-5.2-codex"
+const codexConfigTomlContents = `model = "gpt-5.3-codex"
 model_reasoning_effort = "xhigh"
+personality = "pragmatic"
+
 ${codexApprovalPolicyLine}
 ${codexSandboxModeLine}
+web_search = "live"
 ${codexConfigLine}
 
 [features]
 web_search_request = true
+shell_snapshot = true
+collab = true
+apps = true
 
 [projects."/home/dev"]
 trust_level = "trusted"
@@ -87,13 +93,18 @@ trust_level = "trusted"
 [projects."/home/dev/.codex"]
 trust_level = "trusted"
 `
-const codexConfigYamlContents = `model = "gpt-5.2-codex"
+const codexConfigYamlContents = `model = "gpt-5.3-codex"
 model_reasoning_effort = "xhigh"
+personality = "pragmatic"
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
+web_search = "live"
 
 [features]
 web_search_request = true
+shell_snapshot = true
+collab = true
+apps = true
 `
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, "")

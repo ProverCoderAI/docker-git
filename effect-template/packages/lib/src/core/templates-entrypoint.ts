@@ -123,11 +123,19 @@ else
     mkdir -p "$(dirname "$CODEX_CONFIG_FILE")" || true
     cat <<'EOF' > "$CODEX_CONFIG_FILE"
 # docker-git codex config
+model = "gpt-5.3-codex"
+model_reasoning_effort = "xhigh"
+personality = "pragmatic"
+
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
 web_search = "live"
 
 [features]
+web_search_request = true
+shell_snapshot = true
+collab = true
+apps = true
 shell_tool = true
 EOF
     chown 1000:1000 "$CODEX_CONFIG_FILE" || true
