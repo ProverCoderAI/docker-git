@@ -32,7 +32,8 @@ GIT_USER_NAME="\${GIT_USER_NAME:-}"
 GIT_USER_EMAIL="\${GIT_USER_EMAIL:-}"
 CODEX_AUTO_UPDATE="\${CODEX_AUTO_UPDATE:-1}"
 MCP_PLAYWRIGHT_ENABLE="\${MCP_PLAYWRIGHT_ENABLE:-${config.enableMcpPlaywright ? "1" : "0"}}"
-MCP_PLAYWRIGHT_CDP_ENDPOINT="\${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"`
+MCP_PLAYWRIGHT_CDP_ENDPOINT="\${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"
+MCP_PLAYWRIGHT_ISOLATED="\${MCP_PLAYWRIGHT_ISOLATED:-1}"`
 
 const renderEntrypointAuthorizedKeys = (config: TemplateConfig): string =>
   `# 1) Authorized keys are mounted from host at /authorized_keys
