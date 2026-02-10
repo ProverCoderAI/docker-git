@@ -259,13 +259,9 @@ ${maybeBrowserVolume}`
 }
 
 const renderGitignore = (): string =>
-  `# Local secrets and keys
-authorized_keys
-dev_ssh_key
-dev_ssh_key.pub
-
-# Local auth cache
-.orch/
+  `# docker-git project files
+# NOTE: this directory is intended to be committed to the docker-git state repository.
+# It intentionally does not ignore .orch/ or auth files; keep the state repo private.
 `
 
 // CHANGE: ignore local secrets in docker build context
