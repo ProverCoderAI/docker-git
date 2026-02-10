@@ -12,7 +12,6 @@ Key goals:
 From this repo:
 
 ```bash
-cd effect-template
 pnpm install
 
 # Interactive TUI menu (default)
@@ -109,4 +108,3 @@ The generated Codex config uses:
 - `approval_policy = "never"`
 
 This is intended for local disposable containers. Do not reuse these defaults for untrusted code.
-
