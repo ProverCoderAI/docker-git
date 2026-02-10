@@ -1,7 +1,7 @@
 {
 	"threshold": 0,
-	"minTokens": 30,
-	"minLines": 5,
+	"minTokens": 50,
+	"minLines": 15,
 	"ignore": [
 		"**/node_modules/**",
 		"**/build/**",

@@ -1,46 +1,6 @@
 import type { ProjectConfig } from "../core/domain.js"
 
-export { findSshPrivateKey } from "./path-helpers.js"
-
-const expandHome = (value: string): string => {
-  const home = process.env["HOME"] ?? process.env["USERPROFILE"]
-  if (!home || home.length === 0) {
-    return value
-  }
-  if (value === "~") {
-    return home
-  }
-  if (value.startsWith("~/") || value.startsWith("~\\")) {
-    return `${home}${value.slice(1)}`
-  }
-  return value
-}
-
-const trimTrailingSlash = (value: string): string => {
-  let end = value.length
-  while (end > 0) {
-    const char = value[end - 1]
-    if (char !== "/" && char !== "\\") {
-      break
-    }
-    end -= 1
-  }
-  return value.slice(0, end)
-}
-
-export const defaultProjectsRoot = (cwd: string): string => {
-  const explicit = process.env["DOCKER_GIT_PROJECTS_ROOT"]?.trim()
-  if (explicit && explicit.length > 0) {
-    return expandHome(explicit)
-  }
-
-  const home = process.env["HOME"] ?? process.env["USERPROFILE"]
-  if (home && home.trim().length > 0) {
-    return `${trimTrailingSlash(home.trim())}/.docker-git`
-  }
-
-  return `${cwd}/.docker-git`
-}
+export { defaultProjectsRoot, findSshPrivateKey, resolveAuthorizedKeysPath } from "./path-helpers.js"
 
 export const isRepoUrlInput = (input: string): boolean => {
   const trimmed = input.trim().toLowerCase()
@@ -76,5 +36,3 @@ export const formatConnectionInfo = (
   `Env project: ${config.template.envProjectPath}
 ` +
   `Codex auth: ${config.template.codexAuthPath} -> ${config.template.codexHome}`
-
-export { resolveAuthorizedKeysPath } from "./path-helpers.js"
