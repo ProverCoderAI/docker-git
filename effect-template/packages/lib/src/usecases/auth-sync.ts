@@ -20,11 +20,19 @@ const defaultEnvContents = "# docker-git env\n# KEY=value\n"
 // COMPLEXITY: O(1)
 const defaultCodexConfig = [
   "# docker-git codex config",
+  "model = \"gpt-5.3-codex\"",
+  "model_reasoning_effort = \"xhigh\"",
+  "personality = \"pragmatic\"",
+  "",
   "approval_policy = \"never\"",
   "sandbox_mode = \"danger-full-access\"",
   "web_search = \"live\"",
   "",
   "[features]",
+  "web_search_request = true",
+  "shell_snapshot = true",
+  "collab = true",
+  "apps = true",
   "shell_tool = true"
 ].join("\n")
 
