@@ -51,8 +51,7 @@ jobs:
       - name: Install global linter dependencies
         run: npm install -g typescript @biomejs/biome
       - run: pnpm lint
-      - name: Lint (lib, informational)
-        continue-on-error: true
+      - name: Lint (lib)
         run: pnpm --filter @effect-template/lib lint
 
   test:
