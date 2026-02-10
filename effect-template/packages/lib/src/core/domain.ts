@@ -16,6 +16,7 @@ export interface TemplateConfig {
   readonly envGlobalPath: string
   readonly envProjectPath: string
   readonly codexAuthPath: string
+  readonly codexSharedAuthPath: string
   readonly codexHome: string
   readonly pnpmVersion: string
 }
@@ -195,6 +196,7 @@ export const defaultTemplateConfig = {
   envGlobalPath: "./.docker-git/.orch/env/global.env",
   envProjectPath: "./.orch/env/project.env",
   codexAuthPath: "./.docker-git/.orch/auth/codex",
+  codexSharedAuthPath: "./.docker-git/.orch/auth/codex",
   codexHome: "/home/dev/.codex",
   pnpmVersion: "10.27.0"
 }

@@ -104,6 +104,7 @@ type PathConfig = {
   readonly envGlobalPath: string
   readonly envProjectPath: string
   readonly codexAuthPath: string
+  readonly codexSharedAuthPath: string
   readonly codexHome: string
   readonly outDir: string
 }
@@ -140,10 +141,11 @@ const resolvePaths = (
     const codexAuthPath = yield* _(
       nonEmpty("--codex-auth", raw.codexAuthPath, defaultCodexAuthPath)
     )
+    const codexSharedAuthPath = codexAuthPath
     const codexHome = yield* _(nonEmpty("--codex-home", raw.codexHome, defaultTemplateConfig.codexHome))
     const outDir = yield* _(nonEmpty("--out-dir", raw.outDir, `.docker-git/${repoPath}`))
 
-    return { authorizedKeysPath, envGlobalPath, envProjectPath, codexAuthPath, codexHome, outDir }
+    return { authorizedKeysPath, envGlobalPath, envProjectPath, codexAuthPath, codexSharedAuthPath, codexHome, outDir }
   })
 
 // CHANGE: build a typed create command from raw options (CLI or API)
@@ -185,6 +187,7 @@ export const buildCreateCommand = (
         envGlobalPath: paths.envGlobalPath,
         envProjectPath: paths.envProjectPath,
         codexAuthPath: paths.codexAuthPath,
+        codexSharedAuthPath: paths.codexSharedAuthPath,
         codexHome: paths.codexHome,
         pnpmVersion: defaultTemplateConfig.pnpmVersion
       }

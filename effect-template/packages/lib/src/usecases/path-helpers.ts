@@ -19,7 +19,51 @@ export const resolvePathFromCwd = (
 ): string =>
   path.isAbsolute(targetPath)
     ? targetPath
-    : path.resolve(cwd, targetPath)
+    : (() => {
+      const expandHome = (value: string): string => {
+        const home = process.env["HOME"] ?? process.env["USERPROFILE"]
+        if (!home || home.length === 0) {
+          return value
+        }
+        if (value === "~") {
+          return home
+        }
+        if (value.startsWith("~/") || value.startsWith("~\\")) {
+          return `${home}${value.slice(1)}`
+        }
+        return value
+      }
+
+      const trimTrailingSlash = (value: string): string => value.replace(/[\\/]+$/, "")
+
+      const defaultProjectsRoot = (): string => {
+        const explicit = process.env["DOCKER_GIT_PROJECTS_ROOT"]?.trim()
+        if (explicit && explicit.length > 0) {
+          return expandHome(explicit)
+        }
+        const home = process.env["HOME"] ?? process.env["USERPROFILE"]
+        if (home && home.trim().length > 0) {
+          return `${trimTrailingSlash(home.trim())}/.docker-git`
+        }
+        return `${cwd}/.docker-git`
+      }
+
+      const projectsRoot = path.resolve(defaultProjectsRoot())
+      const normalized = targetPath
+        .replaceAll("\\", "/")
+        .replace(/^\.\//, "")
+        .trim()
+
+      if (normalized === ".docker-git") {
+        return projectsRoot
+      }
+      const prefix = ".docker-git/"
+      if (normalized.startsWith(prefix)) {
+        return path.join(projectsRoot, normalized.slice(prefix.length))
+      }
+
+      return path.resolve(cwd, targetPath)
+    })()
 
 export const findExistingUpwards = (
   fs: FileSystem.FileSystem,

@@ -15,6 +15,7 @@ ENV NVM_DIR=/usr/local/nvm
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server git gh ca-certificates curl unzip bsdutils sudo \
     make docker.io docker-compose bash-completion zsh zsh-autosuggestions xauth \
+    ncurses-term \
  && rm -rf /var/lib/apt/lists/*
 
 # Passwordless sudo for all users (container is disposable)
@@ -144,6 +145,7 @@ const renderDockerCompose = (config: TemplateConfig): string => {
       - ${config.volumeName}:/home/${config.sshUser}
       - ${config.authorizedKeysPath}:/authorized_keys:ro
       - ${config.codexAuthPath}:${config.codexHome}
+      - ${config.codexSharedAuthPath}:${config.codexHome}-shared
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - ${networkName}

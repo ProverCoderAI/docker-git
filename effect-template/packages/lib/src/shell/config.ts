@@ -27,6 +27,9 @@ const TemplateConfigSchema = Schema.Struct({
     default: () => defaultTemplateConfig.envProjectPath
   }),
   codexAuthPath: Schema.String,
+  codexSharedAuthPath: Schema.optionalWith(Schema.String, {
+    default: () => defaultTemplateConfig.codexSharedAuthPath
+  }),
   codexHome: Schema.String,
   pnpmVersion: Schema.String
 })

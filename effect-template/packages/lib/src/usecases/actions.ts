@@ -174,7 +174,8 @@ const buildProjectConfigs = (
     authorizedKeysPath: resolvePathFromBase(path, baseDir, resolvedConfig.authorizedKeysPath),
     envGlobalPath: resolvePathFromBase(path, baseDir, resolvedConfig.envGlobalPath),
     envProjectPath: resolvePathFromBase(path, baseDir, resolvedConfig.envProjectPath),
-    codexAuthPath: resolvePathFromBase(path, baseDir, resolvedConfig.codexAuthPath)
+    codexAuthPath: resolvePathFromBase(path, baseDir, resolvedConfig.codexAuthPath),
+    codexSharedAuthPath: resolvePathFromBase(path, baseDir, resolvedConfig.codexSharedAuthPath)
   }
   const projectConfig = {
     ...resolvedConfig,
@@ -183,8 +184,10 @@ const buildProjectConfigs = (
     envProjectPath: path.isAbsolute(resolvedConfig.envProjectPath)
       ? relativeFromOutDir(resolvedConfig.envProjectPath)
       : toPosixPath(resolvedConfig.envProjectPath),
-    // Project-local copy of shared Codex auth is created under .orch and mounted into CODEX_HOME.
-    codexAuthPath: "./.orch/auth/codex"
+    // Project-local Codex state (sessions/logs/etc) is kept under .orch.
+    codexAuthPath: "./.orch/auth/codex",
+    // Shared credentials root is mounted separately; entrypoint links auth.json into CODEX_HOME.
+    codexSharedAuthPath: relativeFromOutDir(globalConfig.codexSharedAuthPath)
   }
   return { globalConfig, projectConfig }
 }
@@ -422,7 +425,8 @@ export const createProject = (command: CreateCommand) =>
           authorizedKeysPath: resolveRootPath(command.config.authorizedKeysPath),
           envGlobalPath: resolveRootPath(command.config.envGlobalPath),
           envProjectPath: resolveRootPath(command.config.envProjectPath),
-          codexAuthPath: resolveRootPath(command.config.codexAuthPath)
+          codexAuthPath: resolveRootPath(command.config.codexAuthPath),
+          codexSharedAuthPath: resolveRootPath(command.config.codexSharedAuthPath)
         },
         resolvedOutDir
       )

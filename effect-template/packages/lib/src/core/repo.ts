@@ -250,6 +250,26 @@ const parseGithubPrUrl = (input: string): ResolvedRepoInput | null => {
   }
 }
 
+// CHANGE: normalize GitHub tree/blob URLs into repo + ref
+// WHY: allow docker-git clone to accept branch URLs like /tree/<branch>
+// QUOTE(ТЗ): "вызови --force на https://github.com/agiens/crm/tree/vova-fork"
+// REF: user-request-2026-02-10-github-tree-url
+// SOURCE: n/a
+// FORMAT THEOREM: ∀u: tree(u) → repo(u)=git(u) ∧ ref(u)=branch(u)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: ignores additional path segments after the ref
+// COMPLEXITY: O(n) where n = |url|
+const parseGithubTreeUrl = (input: string): ResolvedRepoInput | null => {
+  const parsed = parseGithubRefParts(input)
+  if (!parsed || (parsed.marker !== "tree" && parsed.marker !== "blob")) {
+    return null
+  }
+
+  const repo = stripGitSuffix(parsed.repoRaw)
+  return { repoUrl: `https://github.com/${parsed.owner}/${repo}.git`, repoRef: parsed.ref }
+}
+
 // CHANGE: normalize GitHub issue URLs into repo URLs
 // WHY: allow docker-git clone to accept issue links directly
 // QUOTE(ТЗ): "Сразу на issues"
@@ -282,5 +302,6 @@ const parseGithubIssueUrl = (input: string): ResolvedRepoInput | null => {
 // COMPLEXITY: O(n) where n = |url|
 export const resolveRepoInput = (repoUrl: string): ResolvedRepoInput =>
   parseGithubPrUrl(repoUrl)
+    ?? parseGithubTreeUrl(repoUrl)
     ?? parseGithubIssueUrl(repoUrl)
     ?? { repoUrl: repoUrl.trim() }
