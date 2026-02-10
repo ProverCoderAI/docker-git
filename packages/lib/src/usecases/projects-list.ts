@@ -149,7 +149,5 @@ export const listRunningProjectItems: Effect.Effect<
   FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 > = pipe(
   Effect.all([listProjectItems, runDockerPsNames(process.cwd())]),
-  Effect.map(([items, runningNames]) =>
-    items.filter((item) => runningNames.includes(item.containerName))
-  )
+  Effect.map(([items, runningNames]) => items.filter((item) => runningNames.includes(item.containerName)))
 )

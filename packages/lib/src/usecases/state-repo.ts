@@ -4,12 +4,11 @@ import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
-
-import { defaultProjectsRoot } from "./menu-helpers.js"
-import { parseEnvEntries } from "./env-file.js"
-import { normalizeLegacyStateProjects } from "./state-normalize.js"
 import { runCommandCapture, runCommandExitCode, runCommandWithExitCodes } from "../shell/command-runner.js"
 import { CommandFailedError } from "../shell/errors.js"
+import { parseEnvEntries } from "./env-file.js"
+import { defaultProjectsRoot } from "./menu-helpers.js"
+import { normalizeLegacyStateProjects } from "./state-normalize.js"
 
 const successExitCode = Number(ExitCode(0))
 
@@ -117,13 +116,12 @@ const ensureStateGitignore = (
 // INVARIANT: never deletes user data; only runs git commands in the state root
 // COMPLEXITY: O(command)
 
-export const statePath: Effect.Effect<void, PlatformError, Path.Path> =
-  Effect.gen(function*(_) {
-    const path = yield* _(Path.Path)
-    const cwd = process.cwd()
-    const root = resolveStateRoot(path, cwd)
-    yield* _(Effect.log(root))
-  }).pipe(Effect.asVoid)
+export const statePath: Effect.Effect<void, PlatformError, Path.Path> = Effect.gen(function*(_) {
+  const path = yield* _(Path.Path)
+  const cwd = process.cwd()
+  const root = resolveStateRoot(path, cwd)
+  yield* _(Effect.log(root))
+}).pipe(Effect.asVoid)
 
 const git = (
   cwd: string,
@@ -202,31 +200,41 @@ const sanitizeBranchComponent = (value: string): string =>
     .replaceAll("^", "-")
     .replaceAll("~", "-")
 
+const githubHttpsRemoteRe = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/
+const githubSshRemoteRe = /^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/
+const githubSshUrlRemoteRe = /^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/
+
 const tryBuildGithubCompareUrl = (
   originUrl: string,
   baseBranch: string,
   headBranch: string
 ): string | null => {
   const trimmed = originUrl.trim()
-  const httpsMatch = trimmed.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/)
+  const httpsMatch = githubHttpsRemoteRe.exec(trimmed)
   if (httpsMatch) {
     const owner = httpsMatch[1] ?? ""
     const repo = httpsMatch[2] ?? ""
-    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(headBranch)}?expand=1`
+    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${
+      encodeURIComponent(headBranch)
+    }?expand=1`
   }
 
-  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/)
+  const sshMatch = githubSshRemoteRe.exec(trimmed)
   if (sshMatch) {
     const owner = sshMatch[1] ?? ""
     const repo = sshMatch[2] ?? ""
-    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(headBranch)}?expand=1`
+    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${
+      encodeURIComponent(headBranch)
+    }?expand=1`
   }
 
-  const sshUrlMatch = trimmed.match(/^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/)
+  const sshUrlMatch = githubSshUrlRemoteRe.exec(trimmed)
   if (sshUrlMatch) {
     const owner = sshUrlMatch[1] ?? ""
     const repo = sshUrlMatch[2] ?? ""
-    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(headBranch)}?expand=1`
+    return `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(baseBranch)}...${
+      encodeURIComponent(headBranch)
+    }?expand=1`
   }
 
   return null
@@ -267,7 +275,7 @@ const pushToNewBranch = (
 ): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
     const headShort = yield* _(
-      gitCapture(root, ["rev-parse", "--short", "HEAD"], env).pipe(Effect.map((s) => s.trim()))
+      gitCapture(root, ["rev-parse", "--short", "HEAD"], env).pipe(Effect.map((value) => value.trim()))
     )
     const timestamp = yield* _(Effect.sync(() => new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-")))
     const branch = sanitizeBranchComponent(`state-sync/${baseBranch}/${timestamp}-${headShort}`)
@@ -307,12 +315,12 @@ const resolveGithubToken = (
 
     const text = yield* _(fs.readFileString(envPath))
     const entries = parseEnvEntries(text)
-    const direct = entries.find((e) => e.key === githubTokenKey)?.value?.trim() ?? ""
+    const direct = entries.find((e) => e.key === githubTokenKey)?.value.trim() ?? ""
     if (direct.length > 0) {
       return direct
     }
 
-    const labeled = entries.find((e) => e.key.startsWith("GITHUB_TOKEN__"))?.value?.trim() ?? ""
+    const labeled = entries.find((e) => e.key.startsWith("GITHUB_TOKEN__"))?.value.trim() ?? ""
     return labeled.length > 0 ? labeled : null
   })
 
@@ -345,6 +353,67 @@ const withGithubAskpassEnv = <A, E, R>(
     })
   )
 
+type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+
+type GitAuthEnv = Readonly<Record<string, string | undefined>>
+
+const resolveBaseBranch = (value: string): string => (value === "HEAD" ? "main" : value)
+
+const getCurrentBranch = (
+  root: string,
+  env: GitAuthEnv
+): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"], env).pipe(Effect.map((value) => value.trim()))
+
+const runStateSyncOps = (
+  root: string,
+  originUrl: string,
+  message: string | null,
+  env: GitAuthEnv
+): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
+  Effect.gen(function*(_) {
+    yield* _(normalizeLegacyStateProjects(root))
+    const commitMessage = message && message.trim().length > 0 ? message.trim() : defaultSyncMessage
+    yield* _(commitAllIfNeeded(root, commitMessage, env))
+
+    const branch = yield* _(getCurrentBranch(root, env))
+    const baseBranch = resolveBaseBranch(branch)
+
+    const rebaseResult = yield* _(rebaseOntoOriginIfPossible(root, baseBranch, env))
+    if (rebaseResult === "conflict") {
+      const prBranch = yield* _(pushToNewBranch(root, baseBranch, env))
+      const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
+
+      yield* _(Effect.logWarning(`State sync needs manual merge: pushed changes to branch '${prBranch}'.`))
+      yield* (compareUrl
+        ? _(Effect.log(`Open PR: ${compareUrl}`))
+        : _(Effect.log(`Open PR from '${prBranch}' into '${baseBranch}' (origin: ${originUrl}).`)))
+      return
+    }
+
+    const pushExit = yield* _(gitExitCode(root, ["push", "-u", "origin", "HEAD"], env))
+    if (pushExit === successExitCode) {
+      return
+    }
+
+    const prBranch = yield* _(pushToNewBranch(root, baseBranch, env))
+    const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
+    yield* _(Effect.logWarning(`State push failed (exit ${pushExit}); pushed changes to branch '${prBranch}'.`))
+    if (compareUrl) {
+      yield* _(Effect.log(`Open PR: ${compareUrl}`))
+      return
+    }
+    yield* _(Effect.log(`Open PR from '${prBranch}' into '${baseBranch}' (origin: ${originUrl}).`))
+  }).pipe(Effect.asVoid)
+
+const runStateSyncWithToken = (
+  token: string,
+  root: string,
+  originUrl: string,
+  message: string | null
+): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
+  withGithubAskpassEnv(token, (env) => runStateSyncOps(root, originUrl, message, env))
+
 // CHANGE: sync state repo with remote (commit + pull --rebase + push)
 // WHY: provide a single command to keep git-synced state up to date across machines
 // QUOTE(ТЗ): "иметь команд синхронизации с гит версией"
@@ -360,7 +429,7 @@ export const stateSync = (
 ): Effect.Effect<
   void,
   CommandFailedError | PlatformError,
-  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+  StateRepoEnv
 > =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
@@ -387,94 +456,15 @@ export const stateSync = (
         Effect.fail(new CommandFailedError({ command: "git remote get-url origin", exitCode: originUrlExit }))
       )
     }
-    const originUrl = yield* _(gitCapture(root, ["remote", "get-url", "origin"], baseEnv).pipe(Effect.map((s) => s.trim())))
+    const originUrl = yield* _(
+      gitCapture(root, ["remote", "get-url", "origin"], baseEnv).pipe(Effect.map((value) => value.trim()))
+    )
     const token = yield* _(resolveGithubToken(fs, path, root))
-    const envEffect =
-      token && token.length > 0 && isGithubHttpsRemote(originUrl)
-        ? withGithubAskpassEnv(
-          token,
-          (env) =>
-            Effect.gen(function*(__) {
-              yield* __(normalizeLegacyStateProjects(root))
-              const commitMessage = message && message.trim().length > 0 ? message.trim() : defaultSyncMessage
-              yield* __(commitAllIfNeeded(root, commitMessage, env))
+    const syncEffect = token && token.length > 0 && isGithubHttpsRemote(originUrl)
+      ? runStateSyncWithToken(token, root, originUrl, message)
+      : runStateSyncOps(root, originUrl, message, baseEnv)
 
-              const branch = yield* __(
-                gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"], env).pipe(Effect.map((s) => s.trim()))
-              )
-              const baseBranch = branch === "HEAD" ? "main" : branch
-
-              const rebaseResult = yield* __(rebaseOntoOriginIfPossible(root, baseBranch, env))
-              if (rebaseResult === "conflict") {
-                const prBranch = yield* __(pushToNewBranch(root, baseBranch, env))
-                const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
-
-                yield* __(Effect.logWarning(`State sync needs manual merge: pushed changes to branch '${prBranch}'.`))
-                if (compareUrl) {
-                  yield* __(Effect.log(`Open PR: ${compareUrl}`))
-                } else {
-                  yield* __(Effect.log(`Open PR from '${prBranch}' into '${baseBranch}' (origin: ${originUrl}).`))
-                }
-                return
-              }
-
-              const pushExit = yield* __(gitExitCode(root, ["push", "-u", "origin", "HEAD"], env))
-              if (pushExit === successExitCode) {
-                return
-              }
-
-              const prBranch = yield* __(pushToNewBranch(root, baseBranch, env))
-              const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
-              yield* __(
-                Effect.logWarning(`State push failed (exit ${pushExit}); pushed changes to branch '${prBranch}'.`)
-              )
-              if (compareUrl) {
-                yield* __(Effect.log(`Open PR: ${compareUrl}`))
-                return
-              }
-              yield* __(Effect.log(`Open PR from '${prBranch}' into '${baseBranch}' (origin: ${originUrl}).`))
-            })
-        )
-        : Effect.gen(function*(__) {
-          yield* __(normalizeLegacyStateProjects(root))
-          const commitMessage = message && message.trim().length > 0 ? message.trim() : defaultSyncMessage
-          yield* __(commitAllIfNeeded(root, commitMessage, baseEnv))
-
-          const branch = yield* __(
-            gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"], baseEnv).pipe(Effect.map((s) => s.trim()))
-          )
-          const baseBranch = branch === "HEAD" ? "main" : branch
-
-          const rebaseResult = yield* __(rebaseOntoOriginIfPossible(root, baseBranch, baseEnv))
-          if (rebaseResult === "conflict") {
-            const prBranch = yield* __(pushToNewBranch(root, baseBranch, baseEnv))
-            const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
-
-            yield* __(Effect.logWarning(`State sync needs manual merge: pushed changes to branch '${prBranch}'.`))
-            if (compareUrl) {
-              yield* __(Effect.log(`Open PR: ${compareUrl}`))
-            } else {
-              yield* __(Effect.log(`Open PR from '${prBranch}' into '${baseBranch}' (origin: ${originUrl}).`))
-            }
-            return
-          }
-
-          const pushExit = yield* __(gitExitCode(root, ["push", "-u", "origin", "HEAD"], baseEnv))
-          if (pushExit === successExitCode) {
-            return
-          }
-
-          const prBranch = yield* __(pushToNewBranch(root, baseBranch, baseEnv))
-          const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
-          yield* __(Effect.logWarning(`State push failed (exit ${pushExit}); pushed changes to branch '${prBranch}'.`))
-          if (compareUrl) {
-            yield* __(Effect.log(`Open PR: ${compareUrl}`))
-            return
-          }
-          yield* __(Effect.log(`Open PR from '${prBranch}' into '${baseBranch}' (origin: ${originUrl}).`))
-        })
-
-    yield* _(envEffect)
+    yield* _(syncEffect)
   }).pipe(Effect.asVoid)
 
 const isAutoSyncEnabled = (
@@ -534,17 +524,24 @@ export const autoSyncState = (
     }
     yield* _(
       effect.pipe(
-        Effect.catchAll((error) =>
-          Effect.logWarning(
-            `State auto-sync failed: ${error._tag === "CommandFailedError"
-              ? `${error.command} (exit ${error.exitCode})`
-              : String(error)}`
-          )
-        )
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.logWarning(
+              `State auto-sync failed: ${
+                error._tag === "CommandFailedError"
+                  ? `${error.command} (exit ${error.exitCode})`
+                  : String(error)
+              }`
+            ),
+          onSuccess: () => Effect.void
+        })
       )
     )
   }).pipe(
-    Effect.catchAll((error) => Effect.logWarning(`State auto-sync failed: ${String(error)}`)),
+    Effect.matchEffect({
+      onFailure: (error) => Effect.logWarning(`State auto-sync failed: ${String(error)}`),
+      onSuccess: () => Effect.void
+    }),
     Effect.asVoid
   )
 
@@ -553,7 +550,11 @@ export const stateInit = (
     readonly repoUrl: string
     readonly repoRef: string
   }
-): Effect.Effect<void, CommandFailedError | PlatformError, FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor> =>
+): Effect.Effect<
+  void,
+  CommandFailedError | PlatformError,
+  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
@@ -625,12 +626,13 @@ export const statePull = Effect.gen(function*(_) {
     yield* _(git(root, ["pull", "--rebase"], gitBaseEnv))
     return
   }
-  const originUrl = yield* _(gitCapture(root, ["remote", "get-url", "origin"], gitBaseEnv).pipe(Effect.map((s) => s.trim())))
+  const originUrl = yield* _(
+    gitCapture(root, ["remote", "get-url", "origin"], gitBaseEnv).pipe(Effect.map((value) => value.trim()))
+  )
   const token = yield* _(resolveGithubToken(fs, path, root))
-  const effect =
-    token && token.length > 0 && isGithubHttpsRemote(originUrl)
-      ? withGithubAskpassEnv(token, (env) => git(root, ["pull", "--rebase"], env))
-      : git(root, ["pull", "--rebase"], gitBaseEnv)
+  const effect = token && token.length > 0 && isGithubHttpsRemote(originUrl)
+    ? withGithubAskpassEnv(token, (env) => git(root, ["pull", "--rebase"], env))
+    : git(root, ["pull", "--rebase"], gitBaseEnv)
   yield* _(effect)
 }).pipe(Effect.asVoid)
 
@@ -643,12 +645,13 @@ export const statePush = Effect.gen(function*(_) {
     yield* _(git(root, ["push", "-u", "origin", "HEAD"], gitBaseEnv))
     return
   }
-  const originUrl = yield* _(gitCapture(root, ["remote", "get-url", "origin"], gitBaseEnv).pipe(Effect.map((s) => s.trim())))
+  const originUrl = yield* _(
+    gitCapture(root, ["remote", "get-url", "origin"], gitBaseEnv).pipe(Effect.map((value) => value.trim()))
+  )
   const token = yield* _(resolveGithubToken(fs, path, root))
-  const effect =
-    token && token.length > 0 && isGithubHttpsRemote(originUrl)
-      ? withGithubAskpassEnv(token, (env) => git(root, ["push", "-u", "origin", "HEAD"], env))
-      : git(root, ["push", "-u", "origin", "HEAD"], gitBaseEnv)
+  const effect = token && token.length > 0 && isGithubHttpsRemote(originUrl)
+    ? withGithubAskpassEnv(token, (env) => git(root, ["push", "-u", "origin", "HEAD"], env))
+    : git(root, ["push", "-u", "origin", "HEAD"], gitBaseEnv)
   yield* _(effect)
 }).pipe(Effect.asVoid)
 

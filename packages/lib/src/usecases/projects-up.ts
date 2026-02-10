@@ -105,11 +105,15 @@ export const runDockerComposeUpWithPortCheck = (
             ? Effect.void
             : runDockerNetworkConnectBridge(projectDir, containerName)
         ),
-        Effect.catchAll((error) =>
-          Effect.logWarning(
-            `Failed to connect ${containerName} to bridge network: ${error instanceof Error ? error.message : String(error)}`
-          ).pipe(Effect.asVoid)
-        )
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.logWarning(
+              `Failed to connect ${containerName} to bridge network: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            ),
+          onSuccess: () => Effect.void
+        })
       )
 
     yield* _(ensureBridgeAccess(updated.containerName))

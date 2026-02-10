@@ -54,8 +54,7 @@ export const downAllDockerGitProjects: Effect.Effect<
               Effect.catchTag("DockerCommandError", (error: DockerCommandError) =>
                 Effect.logWarning(
                   `docker compose down failed for ${status.projectDir}: ${renderError(error)}`
-                )
-              )
+                ))
             )
           )
         }
@@ -63,4 +62,3 @@ export const downAllDockerGitProjects: Effect.Effect<
   ),
   Effect.asVoid
 )
-
