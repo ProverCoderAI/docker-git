@@ -53,6 +53,9 @@ export const buildCreateArgs = (input: CreateInputs): ReadonlyArray<string> => {
   if (!input.runUp) {
     args.push("--no-up")
   }
+  if (input.enableMcpPlaywright) {
+    args.push("--mcp-playwright")
+  }
   if (input.force) {
     args.push("--force")
   }
@@ -106,6 +109,7 @@ export const resolveCreateInputs = (
     outDir,
     secretsRoot,
     runUp: values.runUp ?? true,
+    enableMcpPlaywright: values.enableMcpPlaywright ?? false,
     force: values.force ?? false
   }
 }
@@ -187,6 +191,13 @@ const applyCreateStep = (input: {
     }),
     Match.when("runUp", () => {
       input.nextValues.runUp = parseYesDefault(input.buffer, input.currentDefaults.runUp)
+      return true
+    }),
+    Match.when("mcpPlaywright", () => {
+      input.nextValues.enableMcpPlaywright = parseYesDefault(
+        input.buffer,
+        input.currentDefaults.enableMcpPlaywright
+      )
       return true
     }),
     Match.when("force", () => {

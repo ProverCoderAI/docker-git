@@ -51,6 +51,15 @@ Options:
   --force                   Overwrite existing files and wipe compose volumes (docker compose down -v)
   -h, --help                Show this help
 
+Container runtime env (set via .orch/env/project.env):
+  CODEX_SHARE_AUTH=1|0                  Share Codex auth.json across projects (default: 1)
+  CODEX_AUTO_UPDATE=1|0                 Auto-update Codex CLI on container start (default: 1)
+  DOCKER_GIT_ZSH_AUTOSUGGEST=1|0        Enable zsh-autosuggestions (default: 1)
+  DOCKER_GIT_ZSH_AUTOSUGGEST_STYLE=...  zsh-autosuggestions highlight style (default: fg=8,italic)
+  DOCKER_GIT_ZSH_AUTOSUGGEST_STRATEGY=...  Suggestion sources (default: history completion)
+  MCP_PLAYWRIGHT_ISOLATED=1|0           Isolated browser contexts (recommended for many Codex; default: 1)
+  MCP_PLAYWRIGHT_CDP_ENDPOINT=http://...  Override CDP endpoint (default: http://dg-<repo>-browser:9223)
+
 Auth providers:
   github, gh         GitHub CLI auth (tokens saved to env file)
   codex             Codex CLI auth (stored under .orch/auth/codex)
