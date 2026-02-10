@@ -102,8 +102,23 @@ fi`
 // COMPLEXITY: O(1)
 const renderEntrypointMcpPlaywright = (config: TemplateConfig): string =>
   `# Optional: configure Playwright MCP for Codex (browser automation)
-if [[ "$MCP_PLAYWRIGHT_ENABLE" == "1" ]]; then
-  CODEX_CONFIG_FILE="${config.codexHome}/config.toml"
+CODEX_CONFIG_FILE="${config.codexHome}/config.toml"
+
+# Keep config.toml consistent with the container build.
+# If Playwright MCP is disabled for this container, remove the block so Codex
+# doesn't try (and fail) to spawn docker-git-playwright-mcp.
+if [[ "$MCP_PLAYWRIGHT_ENABLE" != "1" ]]; then
+  if [[ -f "$CODEX_CONFIG_FILE" ]] && grep -q "^\\[mcp_servers\\.playwright" "$CODEX_CONFIG_FILE" 2>/dev/null; then
+    awk '
+      BEGIN { skip=0 }
+      /^# docker-git: Playwright MCP/ { next }
+      /^\\[mcp_servers[.]playwright([.]|\\])/ { skip=1; next }
+      skip==1 && /^\\[/ { skip=0 }
+      skip==0 { print }
+    ' "$CODEX_CONFIG_FILE" > "$CODEX_CONFIG_FILE.tmp"
+    mv "$CODEX_CONFIG_FILE.tmp" "$CODEX_CONFIG_FILE"
+  fi
+else
   if [[ ! -f "$CODEX_CONFIG_FILE" ]]; then
     mkdir -p "$(dirname "$CODEX_CONFIG_FILE")" || true
     cat <<'EOF' > "$CODEX_CONFIG_FILE"
