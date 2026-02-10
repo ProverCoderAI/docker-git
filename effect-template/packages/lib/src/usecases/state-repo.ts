@@ -27,10 +27,25 @@ const resolveStateRoot = (
 
 const stateGitignoreMarker = "# docker-git state repository"
 
+const legacySecretIgnorePatterns: ReadonlyArray<string> = [
+  "**/.orch/env/",
+  "**/.orch/auth/"
+]
+
+const volatileCodexIgnorePatterns: ReadonlyArray<string> = [
+  "**/.orch/auth/codex/log/",
+  "**/.orch/auth/codex/tmp/",
+  "**/.orch/auth/codex/sessions/",
+  "**/.orch/auth/codex/models_cache.json"
+]
+
 const defaultStateGitignore = [
   stateGitignoreMarker,
   "# NOTE: this repo intentionally tracks EVERYTHING under the state dir, including .orch/env and .orch/auth.",
   "# Keep the remote private; treat it as sensitive infrastructure state.",
+  "",
+  "# Volatile Codex artifacts (do not commit)",
+  ...volatileCodexIgnorePatterns,
   ""
 ].join("\n")
 
@@ -39,29 +54,15 @@ const normalizeGitignoreText = (text: string): string =>
     .replaceAll("\r\n", "\n")
     .trim()
 
-const shouldRewriteDockerGitStateGitignore = (existing: string): boolean => {
-  const normalized = normalizeGitignoreText(existing)
-  if (!normalized.startsWith(stateGitignoreMarker)) {
-    return false
-  }
-  // Old docker-git default tried to prevent committing secrets. If we still see those patterns,
-  // rewrite to the new "track everything" default.
-  const hadSecretIgnores = normalized.includes("**/.orch/env/") || normalized.includes("**/.orch/auth/")
-  if (!hadSecretIgnores) {
-    return false
-  }
-  return normalized !== normalizeGitignoreText(defaultStateGitignore)
-}
-
-// CHANGE: ensure state repo has a .gitignore that allows committing the full state directory
-// WHY: user wants the whole ~/.docker-git (including .orch/auth) to be synced via git
-// QUOTE(ТЗ): "чтобы вся папка .docker-git уходила на гит Даже .orch/auth и тд"
-// REF: user-request-2026-02-10-state-track-all
+// CHANGE: ensure state repo has a safe .gitignore for syncing full state via git
+// WHY: track .orch/auth and .orch/env, but ignore volatile Codex cache/log directories
+// QUOTE(ТЗ): "да не надо сохранять log/, /tmp, /sessions, models_cache.json"
+// REF: user-request-2026-02-10-state-ignore-volatile
 // SOURCE: n/a
-// FORMAT THEOREM: forall root: ensureGitignore(root) -> exists(.gitignore(root))
+// FORMAT THEOREM: forall root: ensureGitignore(root) -> exists(.gitignore(root)) and ignoresVolatileCodex(root)
 // PURITY: SHELL
 // EFFECT: Effect<void, PlatformError, FileSystem | Path>
-// INVARIANT: rewrites only docker-git-managed .gitignore that previously ignored secrets
+// INVARIANT: updates only docker-git-managed .gitignore files
 // COMPLEXITY: O(n) where n = |.gitignore|
 const ensureStateGitignore = (
   fs: FileSystem.FileSystem,
@@ -83,10 +84,26 @@ const ensureStateGitignore = (
     }
 
     const prev = yield* _(fs.readFileString(gitignorePath))
-    if (!shouldRewriteDockerGitStateGitignore(prev)) {
+    const normalized = normalizeGitignoreText(prev)
+    if (!normalized.startsWith(stateGitignoreMarker)) {
       return
     }
-    yield* _(fs.writeFileString(gitignorePath, defaultStateGitignore))
+
+    // If the file is docker-git managed but still ignores secrets (legacy default), rewrite it.
+    const prevLines = new Set(prev.replaceAll("\r", "").split("\n").map((l) => l.trimEnd()))
+    const hasLegacySecretIgnores = legacySecretIgnorePatterns.some((p) => prevLines.has(p))
+    if (hasLegacySecretIgnores) {
+      yield* _(fs.writeFileString(gitignorePath, defaultStateGitignore))
+      return
+    }
+
+    // Ensure volatile Codex artifacts are ignored; append if missing.
+    const missingVolatile = volatileCodexIgnorePatterns.filter((p) => !prevLines.has(p))
+    if (missingVolatile.length === 0) {
+      return
+    }
+    const next = `${prev.trimEnd()}\n\n# Volatile Codex artifacts (do not commit)\n${missingVolatile.join("\n")}\n`
+    yield* _(fs.writeFileString(gitignorePath, next))
   })
 
 // CHANGE: manage docker-git state dir as a git repository
