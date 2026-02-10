@@ -6,7 +6,12 @@ import { Effect } from "effect"
 
 import type { ProjectConfig, TemplateConfig } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
-import { runDockerComposePsFormatted, runDockerComposeUp } from "../shell/docker.js"
+import {
+  runDockerComposePsFormatted,
+  runDockerComposeUp,
+  runDockerInspectContainerBridgeIp,
+  runDockerNetworkConnectBridge
+} from "../shell/docker.js"
 import type {
   ConfigDecodeError,
   ConfigNotFoundError,
@@ -90,5 +95,25 @@ export const runDockerComposeUpWithPortCheck = (
     // Keep generated templates in sync with the running CLI version.
     yield* _(writeProjectFiles(projectDir, updated, true))
     yield* _(runDockerComposeUp(projectDir))
+
+    const ensureBridgeAccess = (containerName: string) =>
+      runDockerInspectContainerBridgeIp(projectDir, containerName).pipe(
+        Effect.flatMap((bridgeIp) =>
+          bridgeIp.length > 0
+            ? Effect.void
+            : runDockerNetworkConnectBridge(projectDir, containerName)
+        ),
+        Effect.catchAll((error) =>
+          Effect.logWarning(
+            `Failed to connect ${containerName} to bridge network: ${error instanceof Error ? error.message : String(error)}`
+          ).pipe(Effect.asVoid)
+        )
+      )
+
+    yield* _(ensureBridgeAccess(updated.containerName))
+    if (updated.enableMcpPlaywright) {
+      yield* _(ensureBridgeAccess(`${updated.containerName}-browser`))
+    }
+
     return updated
   })
