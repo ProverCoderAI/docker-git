@@ -45,8 +45,84 @@ RUN curl -fsSL https://bun.sh/install | bash
 RUN ln -sf /usr/local/bun/bin/bun /usr/local/bin/bun
 RUN script -q -e -c "bun add -g @openai/codex@latest" /dev/null
 RUN ln -sf /usr/local/bun/bin/codex /usr/local/bin/codex
+${config.enableMcpPlaywright
+    ? `RUN npm install -g @playwright/mcp@latest
+
+# docker-git: wrapper that converts a CDP HTTP endpoint into a usable WS endpoint
+# Some Chromium images return webSocketDebuggerUrl pointing at 127.0.0.1 (container-local).
+RUN cat <<'EOF' > /usr/local/bin/docker-git-playwright-mcp
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fast-path for help/version (avoid waiting for the browser sidecar).
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help|-V|--version)
+      exec playwright-mcp "$@"
+      ;;
+  esac
+done
+
+CDP_ENDPOINT="\${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"
+if [[ -z "$CDP_ENDPOINT" ]]; then
+  CDP_ENDPOINT="http://${config.serviceName}-browser:9223"
+fi
+
+# kechangdev/browser-vnc binds Chromium CDP on 127.0.0.1:9222; it also host-checks HTTP requests.
+JSON="$(curl -sSf --connect-timeout 3 --max-time 10 -H 'Host: 127.0.0.1:9222' "\${CDP_ENDPOINT%/}/json/version")"
+WS_URL="$(printf "%s" "$JSON" | node -e 'const fs=require(\"fs\"); const j=JSON.parse(fs.readFileSync(0,\"utf8\")); process.stdout.write(j.webSocketDebuggerUrl || \"\")')"
+if [[ -z "$WS_URL" ]]; then
+  echo "docker-git-playwright-mcp: webSocketDebuggerUrl missing" >&2
+  exit 1
+fi
+
+# Rewrite ws origin to match the CDP endpoint origin (docker DNS).
+BASE_WS="$(CDP_ENDPOINT="$CDP_ENDPOINT" node -e 'const { URL } = require(\"url\"); const u=new URL(process.env.CDP_ENDPOINT); const proto=u.protocol===\"https:\"?\"wss:\":\"ws:\"; process.stdout.write(proto + \"//\" + u.host)')"
+WS_REWRITTEN="$(BASE_WS="$BASE_WS" WS_URL="$WS_URL" node -e 'const { URL } = require(\"url\"); const base=new URL(process.env.BASE_WS); const ws=new URL(process.env.WS_URL); ws.protocol=base.protocol; ws.host=base.host; process.stdout.write(ws.toString())')"
+
+exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" "$@"
+EOF
+RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
+    : ""}
 RUN printf "export BUN_INSTALL=/usr/local/bun\\nexport PATH=/usr/local/bun/bin:$PATH\\n" \
   > /etc/profile.d/bun.sh && chmod 0644 /etc/profile.d/bun.sh`
+
+const renderPlaywrightBrowserDockerfile = (): string =>
+  `FROM kechangdev/browser-vnc:latest
+
+# bash for noVNC startup, procps for ps -p used by novnc_proxy, socat for CDP proxy
+# python3/net-tools for diagnostics
+RUN apk add --no-cache bash procps socat python3 net-tools
+
+COPY mcp-playwright-start-extra.sh /usr/local/bin/mcp-playwright-start-extra.sh
+RUN chmod +x /usr/local/bin/mcp-playwright-start-extra.sh
+
+# Start extra services in background, keep base stack in foreground
+# Clear stale Chromium profile locks before boot
+ENTRYPOINT ["/bin/sh", "-lc", "rm -f /data/SingletonLock /data/SingletonCookie /data/SingletonSocket || true; /usr/local/bin/mcp-playwright-start-extra.sh & exec /start.sh"]`
+
+const renderPlaywrightStartExtra = (): string =>
+  `#!/bin/sh
+set -eu
+
+# Clear stale Chromium locks from previous container runs
+rm -f /data/SingletonLock /data/SingletonCookie /data/SingletonSocket || true
+
+# Wait for chromium/x11vnc/noVNC to come up
+sleep 2
+
+# CDP proxy: expose 9223 on the docker network, forward to 127.0.0.1:9222 inside the browser container
+socat TCP-LISTEN:9223,fork,reuseaddr TCP:127.0.0.1:9222 >/var/log/socat-9223.log 2>&1 &
+
+# Optional VNC password disabling (useful if you publish VNC/noVNC ports)
+if [ "\${VNC_NOPW:-1}" = "1" ]; then
+  pkill x11vnc || true
+  x11vnc -display :99 -rfbport 5900 -nopw -forever -shared -bg -o /var/log/x11vnc-nopw.log
+fi
+
+echo "extra services started"
+exit 0
+`
 
 // CHANGE: normalize default ubuntu user to configured ssh user
 // WHY: ensure ssh sessions show the configured username and prompt
@@ -126,6 +202,23 @@ const renderDockerCompose = (config: TemplateConfig): string => {
   const networkName = `${config.serviceName}-net`
   const forkRepoUrl = config.forkRepoUrl ?? ""
 
+  const browserServiceName = `${config.serviceName}-browser`
+  const browserContainerName = `${config.containerName}-browser`
+  const browserVolumeName = `${config.volumeName}-browser`
+  const browserDockerfile = "Dockerfile.browser"
+  const browserCdpEndpoint = `http://${browserServiceName}:9223`
+
+  const maybeDependsOn = config.enableMcpPlaywright
+    ? `    depends_on:\n      - ${browserServiceName}\n`
+    : ""
+  const maybePlaywrightEnv = config.enableMcpPlaywright
+    ? `      MCP_PLAYWRIGHT_ENABLE: "1"\n      MCP_PLAYWRIGHT_CDP_ENDPOINT: "${browserCdpEndpoint}"\n`
+    : ""
+  const maybeBrowserService = config.enableMcpPlaywright
+    ? `\n  ${browserServiceName}:\n    build:\n      context: .\n      dockerfile: ${browserDockerfile}\n    container_name: ${browserContainerName}\n    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`
+    : ""
+  const maybeBrowserVolume = config.enableMcpPlaywright ? `  ${browserVolumeName}:\n` : ""
+
   return `services:
   ${config.serviceName}:
     build: .
@@ -136,7 +229,7 @@ const renderDockerCompose = (config: TemplateConfig): string => {
       FORK_REPO_URL: "${forkRepoUrl}"
       TARGET_DIR: "${config.targetDir}"
       CODEX_HOME: "${config.codexHome}"
-    env_file:
+${maybePlaywrightEnv}${maybeDependsOn}    env_file:
       - ${config.envGlobalPath}
       - ${config.envProjectPath}
     ports:
@@ -149,6 +242,7 @@ const renderDockerCompose = (config: TemplateConfig): string => {
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - ${networkName}
+${maybeBrowserService}
 
 networks:
   ${networkName}:
@@ -156,7 +250,7 @@ networks:
 
 volumes:
   ${config.volumeName}:
-`
+${maybeBrowserVolume}`
 }
 
 const renderGitignore = (): string =>
@@ -199,13 +293,28 @@ const renderConfigJson = (config: TemplateConfig): string =>
 // EFFECT: Effect<ReadonlyArray<FileSpec>, never, never>
 // INVARIANT: same cfg yields identical file specs
 // COMPLEXITY: O(1)
-export const planFiles = (config: TemplateConfig): ReadonlyArray<FileSpec> => [
-  { _tag: "File", relativePath: "Dockerfile", contents: renderDockerfile(config) },
-  { _tag: "File", relativePath: "entrypoint.sh", contents: renderEntrypoint(config), mode: 0o755 },
-  { _tag: "File", relativePath: "docker-compose.yml", contents: renderDockerCompose(config) },
-  { _tag: "File", relativePath: ".dockerignore", contents: renderDockerignore() },
-  { _tag: "File", relativePath: "docker-git.json", contents: renderConfigJson(config) },
-  { _tag: "File", relativePath: ".gitignore", contents: renderGitignore() },
-  { _tag: "Dir", relativePath: ".orch/auth/codex" },
-  { _tag: "Dir", relativePath: ".orch/env" }
-]
+export const planFiles = (config: TemplateConfig): ReadonlyArray<FileSpec> => {
+  const maybePlaywrightFiles = config.enableMcpPlaywright
+    ? ([
+        { _tag: "File", relativePath: "Dockerfile.browser", contents: renderPlaywrightBrowserDockerfile() },
+        {
+          _tag: "File",
+          relativePath: "mcp-playwright-start-extra.sh",
+          contents: renderPlaywrightStartExtra(),
+          mode: 0o755
+        }
+      ] satisfies ReadonlyArray<FileSpec>)
+    : ([] satisfies ReadonlyArray<FileSpec>)
+
+  return [
+    { _tag: "File", relativePath: "Dockerfile", contents: renderDockerfile(config) },
+    { _tag: "File", relativePath: "entrypoint.sh", contents: renderEntrypoint(config), mode: 0o755 },
+    { _tag: "File", relativePath: "docker-compose.yml", contents: renderDockerCompose(config) },
+    { _tag: "File", relativePath: ".dockerignore", contents: renderDockerignore() },
+    { _tag: "File", relativePath: "docker-git.json", contents: renderConfigJson(config) },
+    { _tag: "File", relativePath: ".gitignore", contents: renderGitignore() },
+    ...maybePlaywrightFiles,
+    { _tag: "Dir", relativePath: ".orch/auth/codex" },
+    { _tag: "Dir", relativePath: ".orch/env" }
+  ]
+}

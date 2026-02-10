@@ -167,6 +167,7 @@ export const buildCreateCommand = (
     const paths = yield* _(resolvePaths(raw, repo.repoSlug, repo.repoPath))
     const runUp = raw.up ?? true
     const force = raw.force ?? false
+    const enableMcpPlaywright = raw.enableMcpPlaywright ?? false
 
     return {
       _tag: "Create",
@@ -189,6 +190,7 @@ export const buildCreateCommand = (
         codexAuthPath: paths.codexAuthPath,
         codexSharedAuthPath: paths.codexSharedAuthPath,
         codexHome: paths.codexHome,
+        enableMcpPlaywright,
         pnpmVersion: defaultTemplateConfig.pnpmVersion
       }
     }

@@ -30,7 +30,9 @@ GIT_AUTH_TOKEN="\${GIT_AUTH_TOKEN:-\${GITHUB_TOKEN:-}}"
 GH_TOKEN="\${GH_TOKEN:-\${GIT_AUTH_TOKEN:-}}"
 GIT_USER_NAME="\${GIT_USER_NAME:-}"
 GIT_USER_EMAIL="\${GIT_USER_EMAIL:-}"
-CODEX_AUTO_UPDATE="\${CODEX_AUTO_UPDATE:-1}"`
+CODEX_AUTO_UPDATE="\${CODEX_AUTO_UPDATE:-1}"
+MCP_PLAYWRIGHT_ENABLE="\${MCP_PLAYWRIGHT_ENABLE:-${config.enableMcpPlaywright ? "1" : "0"}}"
+MCP_PLAYWRIGHT_CDP_ENDPOINT="\${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"`
 
 const renderEntrypointAuthorizedKeys = (config: TemplateConfig): string =>
   `# 1) Authorized keys are mounted from host at /authorized_keys
@@ -85,6 +87,59 @@ if [[ "$CODEX_SHARE_AUTH" == "1" ]]; then
   fi
 
   ln -sf "$SHARED_AUTH_FILE" "$AUTH_FILE"
+fi`
+
+// CHANGE: configure Playwright MCP inside Codex when enabled
+// WHY: allow browser automation in containers via an MCP server connected to Chromium (CDP)
+// QUOTE(ТЗ): "подключить mcp playright ... нужен хром браузер" | "подключать доп контейнеры с хромом"
+// REF: user-request-2026-02-10-mcp-playwright
+// SOURCE: n/a
+// FORMAT THEOREM: ∀c: MCP_ENABLE(c) → ∃srv: mcp(playwright,srv) ∧ cdp(srv)=endpoint(c)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: config.toml is only appended once per container (idempotent)
+// COMPLEXITY: O(1)
+const renderEntrypointMcpPlaywright = (config: TemplateConfig): string =>
+  `# Optional: configure Playwright MCP for Codex (browser automation)
+if [[ "$MCP_PLAYWRIGHT_ENABLE" == "1" ]]; then
+  CODEX_CONFIG_FILE="${config.codexHome}/config.toml"
+  if [[ ! -f "$CODEX_CONFIG_FILE" ]]; then
+    mkdir -p "$(dirname "$CODEX_CONFIG_FILE")" || true
+    cat <<'EOF' > "$CODEX_CONFIG_FILE"
+# docker-git codex config
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+web_search = "live"
+
+[features]
+shell_tool = true
+EOF
+    chown 1000:1000 "$CODEX_CONFIG_FILE" || true
+  fi
+
+  if [[ -z "$MCP_PLAYWRIGHT_CDP_ENDPOINT" ]]; then
+    MCP_PLAYWRIGHT_CDP_ENDPOINT="http://${config.serviceName}-browser:9223"
+  fi
+
+  # Replace the docker-git Playwright block to allow upgrades via --force without manual edits.
+  if grep -q "^\\[mcp_servers\\.playwright" "$CODEX_CONFIG_FILE" 2>/dev/null; then
+    awk '
+      BEGIN { skip=0 }
+      /^# docker-git: Playwright MCP/ { next }
+      /^\\[mcp_servers[.]playwright([.]|\\])/ { skip=1; next }
+      skip==1 && /^\\[/ { skip=0 }
+      skip==0 { print }
+    ' "$CODEX_CONFIG_FILE" > "$CODEX_CONFIG_FILE.tmp"
+    mv "$CODEX_CONFIG_FILE.tmp" "$CODEX_CONFIG_FILE"
+  fi
+
+  cat <<EOF >> "$CODEX_CONFIG_FILE"
+
+# docker-git: Playwright MCP (connects to Chromium via CDP)
+[mcp_servers.playwright]
+command = "docker-git-playwright-mcp"
+args = []
+EOF
 fi`
 
 // CHANGE: ensure readline config exists for history search and completion
@@ -518,6 +573,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointAuthorizedKeys(config),
     renderEntrypointCodexHome(config),
     renderEntrypointCodexSharedAuth(config),
+    renderEntrypointMcpPlaywright(config),
     renderEntrypointZshShell(config),
     renderEntrypointZshUserRc(config),
     renderEntrypointPrompt(),

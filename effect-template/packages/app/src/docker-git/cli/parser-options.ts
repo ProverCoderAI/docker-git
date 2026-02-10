@@ -66,6 +66,8 @@ const booleanFlagUpdaters: Readonly<Record<string, (raw: RawOptions) => RawOptio
   "--up": (raw) => ({ ...raw, up: true }),
   "--no-up": (raw) => ({ ...raw, up: false }),
   "--force": (raw) => ({ ...raw, force: true }),
+  "--mcp-playwright": (raw) => ({ ...raw, enableMcpPlaywright: true }),
+  "--no-mcp-playwright": (raw) => ({ ...raw, enableMcpPlaywright: false }),
   "--web": (raw) => ({ ...raw, authWeb: true }),
   "--include-default": (raw) => ({ ...raw, includeDefault: true })
 }
