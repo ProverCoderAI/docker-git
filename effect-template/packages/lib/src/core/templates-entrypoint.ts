@@ -55,6 +55,38 @@ if [[ "$HOME_OWNER" != "1000:1000" ]]; then
   chown -R 1000:1000 /home/${config.sshUser} || true
 fi`
 
+// CHANGE: share Codex credentials across projects while keeping per-project sessions
+// WHY: ChatGPT refresh tokens are rotating; copying auth.json into each project causes stale refresh tokens
+// QUOTE(ТЗ): "везде в контейнерах хотим использовать наши креды из .docker-git" | "каждый проект использовал бы свою папку .orch"
+// REF: user-request-2026-02-09-orch-per-project-codex-shared-auth
+// SOURCE: n/a
+// FORMAT THEOREM: ∀p: start(p) → codex_auth(p)=shared ∧ codex_state(p)=local
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: CODEX_HOME/auth.json is a symlink into CODEX_HOME-shared/auth.json when enabled
+// COMPLEXITY: O(1)
+const renderEntrypointCodexSharedAuth = (config: TemplateConfig): string =>
+  `# Share Codex auth.json across projects (avoids refresh_token_reused)
+CODEX_SHARE_AUTH="\${CODEX_SHARE_AUTH:-1}"
+if [[ "$CODEX_SHARE_AUTH" == "1" ]]; then
+  CODEX_SHARED_HOME="${config.codexHome}-shared"
+  mkdir -p "$CODEX_SHARED_HOME"
+  chown -R 1000:1000 "$CODEX_SHARED_HOME" || true
+
+  AUTH_FILE="${config.codexHome}/auth.json"
+  SHARED_AUTH_FILE="$CODEX_SHARED_HOME/auth.json"
+
+  # Guard against a bad bind mount creating a directory at auth.json.
+  if [[ -d "$AUTH_FILE" ]]; then
+    mv "$AUTH_FILE" "$AUTH_FILE.bak-$(date +%s)" || true
+  fi
+  if [[ -e "$AUTH_FILE" && ! -L "$AUTH_FILE" ]]; then
+    rm -f "$AUTH_FILE" || true
+  fi
+
+  ln -sf "$SHARED_AUTH_FILE" "$AUTH_FILE"
+fi`
+
 // CHANGE: ensure readline config exists for history search and completion
 // WHY: provide prefix history search and predictable completion UX
 // QUOTE(ТЗ): "когда я напишу cd он мне предложит"
@@ -307,7 +339,7 @@ const renderCloneBodyRef = (config: TemplateConfig): string =>
       fi
     else
       if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress --branch '$REPO_REF' '$AUTH_REPO_URL' '$TARGET_DIR'"; then
-        DEFAULT_REF="$(git ls-remote --symref "$AUTH_REPO_URL" HEAD 2>/dev/null | awk '/^ref:/ {print $2}' | head -n 1)"
+        DEFAULT_REF="$(git ls-remote --symref "$AUTH_REPO_URL" HEAD 2>/dev/null | awk '/^ref:/ {print $2}' | head -n 1 || true)"
         DEFAULT_BRANCH="$(printf "%s" "$DEFAULT_REF" | sed 's#^refs/heads/##')"
         if [[ -n "$DEFAULT_BRANCH" ]]; then
           echo "[clone] branch '$REPO_REF' missing; retrying with '$DEFAULT_BRANCH'"
@@ -485,6 +517,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointHeader(config),
     renderEntrypointAuthorizedKeys(config),
     renderEntrypointCodexHome(config),
+    renderEntrypointCodexSharedAuth(config),
     renderEntrypointZshShell(config),
     renderEntrypointZshUserRc(config),
     renderEntrypointPrompt(),

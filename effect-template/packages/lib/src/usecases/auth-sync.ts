@@ -123,7 +123,6 @@ const copyCodexFile = (
       return
     }
     yield* _(fs.copyFile(sourceFile, targetFile))
-    yield* _(fs.copyFile(sourceFile, targetFile))
     yield* _(Effect.log(`Copied Codex ${spec.label} from ${sourceFile} to ${targetFile}`))
   })
 
@@ -230,14 +229,8 @@ export const syncAuthArtifacts = (
             if (!targetExists) {
               yield* _(fs.makeDirectory(targetCodex, { recursive: true }))
             }
-            yield* _(
-              copyCodexFile(fs, path, {
-                sourceDir: sourceCodex,
-                targetDir: targetCodex,
-                fileName: "auth.json",
-                label: "auth"
-              })
-            )
+            // NOTE: We intentionally do not copy auth.json.
+            // ChatGPT refresh tokens are rotating; copying them into each project causes refresh_token_reused.
             yield* _(
               copyCodexFile(fs, path, {
                 sourceDir: sourceCodex,
@@ -246,11 +239,6 @@ export const syncAuthArtifacts = (
                 label: "config"
               })
             )
-            const targetEntries = yield* _(fs.readDirectory(targetCodex))
-            if (targetEntries.length === 0) {
-              yield* _(copyDirRecursive(fs, path, sourceCodex, targetCodex))
-              yield* _(Effect.log(`Copied Codex auth from ${sourceCodex} to ${targetCodex}`))
-            }
           }
         }
       }

@@ -68,6 +68,14 @@ describe("parseArgs", () => {
       expect(command.config.repoRef).toBe("feature-x")
     }))
 
+  it.effect("parses GitHub tree url as repo + ref", () =>
+    expectCreateCommand(["clone", "https://github.com/agiens/crm/tree/vova-fork"], (command) => {
+      expect(command.config.repoUrl).toBe("https://github.com/agiens/crm.git")
+      expect(command.config.repoRef).toBe("vova-fork")
+      expect(command.outDir).toBe(".docker-git/agiens/crm")
+      expect(command.config.targetDir).toBe("/home/dev/agiens/crm")
+    }))
+
   it.effect("parses down-all command", () =>
     Effect.sync(() => {
       const command = parseOrThrow(["down-all"])

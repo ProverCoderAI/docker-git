@@ -34,7 +34,8 @@ const normalizeTemplateConfig = (
     shouldNormalizePath(path, template.authorizedKeysPath) ||
     shouldNormalizePath(path, template.envGlobalPath) ||
     shouldNormalizePath(path, template.envProjectPath) ||
-    shouldNormalizePath(path, template.codexAuthPath)
+    shouldNormalizePath(path, template.codexAuthPath) ||
+    shouldNormalizePath(path, template.codexSharedAuthPath)
 
   if (!needs) {
     return null
@@ -47,13 +48,16 @@ const normalizeTemplateConfig = (
   const envGlobalPath = "./.orch/env/global.env"
   const envProjectPath = "./.orch/env/project.env"
   const codexAuthPath = "./.orch/auth/codex"
+  const codexSharedAbs = path.join(projectsRoot, ".orch", "auth", "codex")
+  const codexSharedRel = toPosixPath(path.relative(projectDir, codexSharedAbs))
 
   return {
     ...template,
     authorizedKeysPath: authorizedKeysRel.length > 0 ? authorizedKeysRel : "./authorized_keys",
     envGlobalPath: envGlobalPath,
     envProjectPath: envProjectPath,
-    codexAuthPath: codexAuthPath
+    codexAuthPath: codexAuthPath,
+    codexSharedAuthPath: codexSharedRel.length > 0 ? codexSharedRel : "./.orch/auth/codex"
   }
 }
 

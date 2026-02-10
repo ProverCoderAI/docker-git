@@ -90,20 +90,38 @@ set completion-ignore-case on
 "\e[A": history-search-backward
 "\e[B": history-search-forward`
 
-// CHANGE: configure zsh with autosuggestions and history search
-// WHY: provide inline autosuggestions like fish/zsh for SSH sessions
-// QUOTE(ТЗ): "пусть будет zzh если он сделате то что я хочу"
-// REF: user-request-2026-02-05-zsh-autosuggest
+// CHANGE: configure zsh with autosuggestions, history search, and non-noisy completion UX
+// WHY: avoid dumping completion candidates into the terminal scrollback on ambiguous prefixes
+// QUOTE(ТЗ): "пусть будет zzh если он сделате то что я хочу" | "Почему при наборе текста он пишет в моём терминале какую-то билиберду?"
+// REF: user-request-2026-02-05-zsh-autosuggest | user-request-2026-02-10-zsh-completion-noise
 // SOURCE: n/a
-// FORMAT THEOREM: forall s in ZshInteractive: autosuggest(s) -> enabled(s)
+// FORMAT THEOREM: forall s in ZshInteractive: autosuggest(s) -> enabled(s) ∧ completion(s) -> non_noisy(s)
 // PURITY: CORE
 // EFFECT: n/a
 // INVARIANT: zsh config does not depend on user dotfiles
 // COMPLEXITY: O(1)
 export const renderZshConfig = (): string =>
   `setopt PROMPT_SUBST
+
+# Terminal compatibility: if terminfo for $TERM is missing (common over SSH),
+# fall back to xterm-256color so ZLE doesn't garble the display.
+if command -v infocmp >/dev/null 2>&1; then
+  if ! infocmp "$TERM" >/dev/null 2>&1; then
+    export TERM=xterm-256color
+  fi
+fi
+
 autoload -Uz compinit
 compinit
+
+# Completion UX: cycle matches instead of listing them into scrollback.
+setopt AUTO_MENU
+setopt MENU_COMPLETE
+unsetopt AUTO_LIST
+unsetopt LIST_BEEP
+
+# Command completion ordering: prefer real commands/builtins over internal helper functions.
+zstyle ':completion:*' tag-order builtins commands aliases reserved-words functions
 
 autoload -Uz add-zsh-hook
 docker_git_branch() { git rev-parse --abbrev-ref HEAD 2>/dev/null; }
@@ -136,9 +154,15 @@ fi
 bindkey '^[[A' history-search-backward
 bindkey '^[[B' history-search-forward
 
-if [ -f /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]; then
-  ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=244"
-  ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+if [[ "\${DOCKER_GIT_ZSH_AUTOSUGGEST:-1}" == "1" ]] && [ -f /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]; then
+  # Suggest from history first, then fall back to completion (commands + paths).
+  # This gives "ghost text" suggestions without needing to press <Tab>.
+  ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="\${DOCKER_GIT_ZSH_AUTOSUGGEST_STYLE:-fg=8,italic}"
+  if [[ -n "\${DOCKER_GIT_ZSH_AUTOSUGGEST_STRATEGY-}" ]]; then
+    ZSH_AUTOSUGGEST_STRATEGY=(\${=DOCKER_GIT_ZSH_AUTOSUGGEST_STRATEGY})
+  else
+    ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+  fi
   source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 fi`
 
