@@ -39,6 +39,24 @@ const defaultCodexConfig = [
 const resolvePathFromBase = (path: Path.Path, baseDir: string, targetPath: string): string =>
   path.isAbsolute(targetPath) ? targetPath : path.resolve(baseDir, targetPath)
 
+const codexConfigMarker = "# docker-git codex config"
+
+const normalizeConfigText = (text: string): string =>
+  text
+    .replaceAll("\r\n", "\n")
+    .trim()
+
+const shouldRewriteDockerGitCodexConfig = (existing: string): boolean => {
+  const normalized = normalizeConfigText(existing)
+  if (normalized.length === 0) {
+    return true
+  }
+  if (!normalized.startsWith(codexConfigMarker)) {
+    return false
+  }
+  return normalized !== normalizeConfigText(defaultCodexConfig)
+}
+
 const shouldCopyEnv = (sourceText: string, targetText: string): CopyDecision => {
   if (sourceText.trim().length === 0) {
     return "skip"
@@ -142,8 +160,8 @@ const copyCodexFile = (
 // FORMAT THEOREM: forall p: missing(config(p)) -> config(p)=defaults
 // PURITY: SHELL
 // EFFECT: Effect<void, PlatformError, FileSystem | Path>
-// INVARIANT: does not overwrite existing config.toml
-// COMPLEXITY: O(1)
+// INVARIANT: rewrites only docker-git-managed configs to keep defaults in sync
+// COMPLEXITY: O(n) where n = |config|
 export const ensureCodexConfigFile = (
   baseDir: string,
   codexAuthPath: string
@@ -154,6 +172,12 @@ export const ensureCodexConfigFile = (
       const configPath = path.join(resolved, "config.toml")
       const exists = yield* _(fs.exists(configPath))
       if (exists) {
+        const current = yield* _(fs.readFileString(configPath))
+        if (!shouldRewriteDockerGitCodexConfig(current)) {
+          return
+        }
+        yield* _(fs.writeFileString(configPath, defaultCodexConfig))
+        yield* _(Effect.log(`Updated Codex config at ${configPath}`))
         return
       }
       yield* _(fs.makeDirectory(resolved, { recursive: true }))

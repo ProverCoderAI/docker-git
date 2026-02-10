@@ -233,6 +233,8 @@ const prepareProjectFiles = (
         }
       })
     )
+    // Ensure per-project config stays in sync even when `.orch/auth/codex` already exists.
+    yield* _(ensureCodexConfigFile(resolvedOutDir, projectConfig.codexAuthPath))
     return createdFiles
   })
 
