@@ -13,6 +13,20 @@ const composeSpec = (cwd: string, args: ReadonlyArray<string>) => ({
   args: ["compose", "--ansi", "never", "--progress", "plain", ...args]
 })
 
+const parseInspectNetworkEntry = (line: string): ReadonlyArray<readonly [string, string]> => {
+  const idx = line.indexOf("=")
+  if (idx <= 0) {
+    return []
+  }
+  const network = line.slice(0, idx).trim()
+  const ip = line.slice(idx + 1).trim()
+  if (network.length === 0 || ip.length === 0) {
+    return []
+  }
+  const entry: readonly [string, string] = [network, ip]
+  return [entry]
+}
+
 const runCompose = (
   cwd: string,
   args: ReadonlyArray<string>,
@@ -215,7 +229,7 @@ export const runDockerInspectContainerIp = (
           // Example output:
           //   bridge=172.17.0.4
           //   <project>_dg-<repo>-net=192.168.64.3
-          '{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s=%s\\n" $k $v.IPAddress}}{{end}}',
+          String.raw`{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s=%s\n" $k $v.IPAddress}}{{end}}`,
           containerName
         ]
       },
@@ -229,15 +243,7 @@ export const runDockerInspectContainerIp = (
         .map((line) => line.trim())
         .filter((line) => line.length > 0)
 
-      const entries = lines.flatMap((line) => {
-        const idx = line.indexOf("=")
-        if (idx <= 0) {
-          return []
-        }
-        const network = line.slice(0, idx).trim()
-        const ip = line.slice(idx + 1).trim()
-        return network.length > 0 && ip.length > 0 ? ([[network, ip]] as const) : []
-      })
+      const entries = lines.flatMap((line) => parseInspectNetworkEntry(line))
 
       if (entries.length === 0) {
         return ""
@@ -270,7 +276,7 @@ export const runDockerInspectContainerBridgeIp = (
         args: [
           "inspect",
           "-f",
-          '{{with (index .NetworkSettings.Networks "bridge")}}{{.IPAddress}}{{end}}',
+          "{{with (index .NetworkSettings.Networks \"bridge\")}}{{.IPAddress}}{{end}}",
           containerName
         ]
       },

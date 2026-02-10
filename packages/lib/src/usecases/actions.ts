@@ -168,8 +168,7 @@ const buildProjectConfigs = (
 ): ProjectConfigs => {
   // docker-compose resolves relative host paths from the project directory (where docker-compose.yml lives).
   // To keep generated projects portable across host OSes, we avoid embedding absolute host paths in templates.
-  const relativeFromOutDir = (absolutePath: string): string =>
-    toPosixPath(path.relative(resolvedOutDir, absolutePath))
+  const relativeFromOutDir = (absolutePath: string): string => toPosixPath(path.relative(resolvedOutDir, absolutePath))
 
   const globalConfig = {
     ...resolvedConfig,
@@ -277,11 +276,15 @@ const runDockerUpIfNeeded = (
             ? Effect.void
             : runDockerNetworkConnectBridge(resolvedOutDir, containerName)
         ),
-        Effect.catchAll((error) =>
-          Effect.logWarning(
-            `Failed to connect ${containerName} to bridge network: ${error instanceof Error ? error.message : String(error)}`
-          ).pipe(Effect.asVoid)
-        )
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.logWarning(
+              `Failed to connect ${containerName} to bridge network: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            ),
+          onSuccess: () => Effect.void
+        })
       )
 
     // Make container ports reachable from other (non-compose) containers by IP.

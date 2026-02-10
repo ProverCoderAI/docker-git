@@ -101,19 +101,19 @@ fi`
 // INVARIANT: config.toml is only appended once per container (idempotent)
 // COMPLEXITY: O(1)
 const renderEntrypointMcpPlaywright = (config: TemplateConfig): string =>
-  `# Optional: configure Playwright MCP for Codex (browser automation)
+  String.raw`# Optional: configure Playwright MCP for Codex (browser automation)
 CODEX_CONFIG_FILE="${config.codexHome}/config.toml"
 
 # Keep config.toml consistent with the container build.
 # If Playwright MCP is disabled for this container, remove the block so Codex
 # doesn't try (and fail) to spawn docker-git-playwright-mcp.
 if [[ "$MCP_PLAYWRIGHT_ENABLE" != "1" ]]; then
-  if [[ -f "$CODEX_CONFIG_FILE" ]] && grep -q "^\\[mcp_servers\\.playwright" "$CODEX_CONFIG_FILE" 2>/dev/null; then
+  if [[ -f "$CODEX_CONFIG_FILE" ]] && grep -q "^\[mcp_servers\.playwright" "$CODEX_CONFIG_FILE" 2>/dev/null; then
     awk '
       BEGIN { skip=0 }
       /^# docker-git: Playwright MCP/ { next }
-      /^\\[mcp_servers[.]playwright([.]|\\])/ { skip=1; next }
-      skip==1 && /^\\[/ { skip=0 }
+      /^\[mcp_servers[.]playwright([.]|\])/ { skip=1; next }
+      skip==1 && /^\[/ { skip=0 }
       skip==0 { print }
     ' "$CODEX_CONFIG_FILE" > "$CODEX_CONFIG_FILE.tmp"
     mv "$CODEX_CONFIG_FILE.tmp" "$CODEX_CONFIG_FILE"
@@ -146,12 +146,12 @@ EOF
   fi
 
   # Replace the docker-git Playwright block to allow upgrades via --force without manual edits.
-  if grep -q "^\\[mcp_servers\\.playwright" "$CODEX_CONFIG_FILE" 2>/dev/null; then
+  if grep -q "^\[mcp_servers\.playwright" "$CODEX_CONFIG_FILE" 2>/dev/null; then
     awk '
       BEGIN { skip=0 }
       /^# docker-git: Playwright MCP/ { next }
-      /^\\[mcp_servers[.]playwright([.]|\\])/ { skip=1; next }
-      skip==1 && /^\\[/ { skip=0 }
+      /^\[mcp_servers[.]playwright([.]|\])/ { skip=1; next }
+      skip==1 && /^\[/ { skip=0 }
       skip==0 { print }
     ' "$CODEX_CONFIG_FILE" > "$CODEX_CONFIG_FILE.tmp"
     mv "$CODEX_CONFIG_FILE.tmp" "$CODEX_CONFIG_FILE"
@@ -573,11 +573,11 @@ fi`
 // INVARIANT: edits /etc/pam.d/sshd idempotently (comments only)
 // COMPLEXITY: O(n) where n = number of pam lines
 const renderEntrypointDisableMotd = (): string =>
-  `# 4.75) Disable Ubuntu MOTD noise for SSH sessions
+  String.raw`# 4.75) Disable Ubuntu MOTD noise for SSH sessions
 PAM_SSHD="/etc/pam.d/sshd"
 if [[ -f "$PAM_SSHD" ]]; then
-  sed -i 's/^[[:space:]]*session[[:space:]]\\+optional[[:space:]]\\+pam_motd\\.so/#&/' "$PAM_SSHD" || true
-  sed -i 's/^[[:space:]]*session[[:space:]]\\+optional[[:space:]]\\+pam_lastlog\\.so/#&/' "$PAM_SSHD" || true
+  sed -i 's/^[[:space:]]*session[[:space:]]\+optional[[:space:]]\+pam_motd\.so/#&/' "$PAM_SSHD" || true
+  sed -i 's/^[[:space:]]*session[[:space:]]\+optional[[:space:]]\+pam_lastlog\.so/#&/' "$PAM_SSHD" || true
 fi
 
 # Also disable sshd's own banners (e.g. "Last login")

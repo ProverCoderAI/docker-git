@@ -16,7 +16,17 @@ const expandHome = (value: string): string => {
   return value
 }
 
-const trimTrailingSlash = (value: string): string => value.replace(/[\\/]+$/, "")
+const trimTrailingSlash = (value: string): string => {
+  let end = value.length
+  while (end > 0) {
+    const char = value[end - 1]
+    if (char !== "/" && char !== "\\") {
+      break
+    }
+    end -= 1
+  }
+  return value.slice(0, end)
+}
 
 export const defaultProjectsRoot = (cwd: string): string => {
   const explicit = process.env["DOCKER_GIT_PROJECTS_ROOT"]?.trim()

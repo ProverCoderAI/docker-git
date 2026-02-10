@@ -30,8 +30,7 @@ const normalizeTemplateConfig = (
   projectDir: string,
   template: TemplateConfig
 ): TemplateConfig | null => {
-  const needs =
-    shouldNormalizePath(path, template.authorizedKeysPath) ||
+  const needs = shouldNormalizePath(path, template.authorizedKeysPath) ||
     shouldNormalizePath(path, template.envGlobalPath) ||
     shouldNormalizePath(path, template.envProjectPath) ||
     shouldNormalizePath(path, template.codexAuthPath) ||
@@ -54,9 +53,9 @@ const normalizeTemplateConfig = (
   return {
     ...template,
     authorizedKeysPath: authorizedKeysRel.length > 0 ? authorizedKeysRel : "./authorized_keys",
-    envGlobalPath: envGlobalPath,
-    envProjectPath: envProjectPath,
-    codexAuthPath: codexAuthPath,
+    envGlobalPath,
+    envProjectPath,
+    codexAuthPath,
     codexSharedAuthPath: codexSharedRel.length > 0 ? codexSharedRel : "./.orch/auth/codex"
   }
 }
@@ -125,7 +124,10 @@ export const normalizeLegacyStateProjects = (
       const projectDir = path.dirname(configPath)
       const config = yield* _(
         readProjectConfig(projectDir).pipe(
-          Effect.catchAll(() => Effect.succeed(null))
+          Effect.matchEffect({
+            onFailure: () => Effect.succeed(null),
+            onSuccess: (value) => Effect.succeed(value)
+          })
         )
       )
       if (config === null) {

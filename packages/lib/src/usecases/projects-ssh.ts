@@ -2,18 +2,18 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type { FileSystem as Fs } from "@effect/platform/FileSystem"
 import type { Path as PathService } from "@effect/platform/Path"
-import { Duration, Effect, Schedule, pipe } from "effect"
+import { Duration, Effect, pipe, Schedule } from "effect"
 
 import { runCommandExitCode, runCommandWithExitCodes } from "../shell/command-runner.js"
 import { runDockerComposePsFormatted } from "../shell/docker.js"
-import type {
-  ConfigDecodeError,
-  ConfigNotFoundError,
-  DockerCommandError,
-  FileExistsError,
-  PortProbeError
+import {
+  CommandFailedError,
+  type ConfigDecodeError,
+  type ConfigNotFoundError,
+  type DockerCommandError,
+  type FileExistsError,
+  type PortProbeError
 } from "../shell/errors.js"
-import { CommandFailedError } from "../shell/errors.js"
 import { renderError } from "./errors.js"
 import {
   buildSshCommand,
