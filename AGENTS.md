@@ -30,6 +30,14 @@
 - Всегда начинать с изучения задачи инструментами: состояние проекта, существующие паттерны, интеграционные точки, регрессии.
 - Всегда завершать верификацией инструментами: сборка/типчек/тесты/линтеры/минимальные проверки инвариантов.
 - Команды/вызовы должны быть реальными и проверяемыми; никаких вымышленных/placeholder-команд.
+- Агент может (и должен при необходимости) использовать `sleep <seconds>` для ожидания удалённых/асинхронных процессов
+  (CI, деплой, индексация, репликация) и затем повторять проверку состояния до выполнения условия или таймаута.
+  Запрещён busy-loop без паузы.
+- Для GitHub/CI использовать GitHub CLI `gh` (если доступна) вместо браузера:
+  - прочитать issues/PR: `gh issue list`, `gh issue view`, `gh pr list`, `gh pr view`
+  - проверить CI после push/PR: `gh run list`, `gh run view`, `gh run watch --exit-status "$RUN_ID"` (где `RUN_ID` получен из `gh run list`), `gh pr checks --watch`
+  - если `gh` отсутствует в текущей среде — выполнить команды через dev-контейнер, где `gh` установлен
+    (например: `docker exec <container> gh ...`).
 
 ПЕТЛЯ РЕСЁРЧА (ПРИ НЕОПРЕДЕЛЁННОСТИ ИЛИ СБОЯХ):
 
@@ -53,6 +61,8 @@ assistant:
 - [run_terminal_cmd("git add <files_or_paths>")]
 - [run_terminal_cmd("git commit -m \"<message>\"")]
 - [run_terminal_cmd("git push")]
+- инструменты: дождусь завершения GitHub Actions/Workers для последнего коммита (если они есть в репозитории).
+- [run_terminal_cmd("SHA=$(git rev-parse HEAD) && RUN_ID=$(gh run list --commit \"$SHA\" --json databaseId --jq '.[0].databaseId' 2>/dev/null) && if [ -n \"$RUN_ID\" ]; then gh run watch --exit-status \"$RUN_ID\"; else echo \"No workflow runs found for $SHA\"; fi")]
 - результат: изменения закоммичены; проверки прошли; шаги воспроизводимы командами выше.
 </example>
 
