@@ -122,9 +122,10 @@ export const prepareProjectFiles = (
   options: PrepareProjectFilesOptions
 ): Effect.Effect<ReadonlyArray<string>, PrepareProjectFilesError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
+    const rewriteManagedFiles = options.force || options.forceEnv
     const envOnlyRefresh = options.forceEnv && !options.force
     const createdFiles = yield* _(
-      writeProjectFiles(resolvedOutDir, projectConfig, options.force, envOnlyRefresh)
+      writeProjectFiles(resolvedOutDir, projectConfig, rewriteManagedFiles)
     )
     yield* _(ensureAuthorizedKeys(resolvedOutDir, projectConfig.authorizedKeysPath))
     yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envGlobalPath, defaultGlobalEnvContents))
