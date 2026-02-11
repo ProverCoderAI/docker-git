@@ -55,14 +55,14 @@ export const runCommandWithExitCodes = <E>(
 // FORMAT THEOREM: forall cmd: exitCode(cmd) = n
 // PURITY: SHELL
 // EFFECT: Effect<number, PlatformError, CommandExecutor>
-// INVARIANT: stdout/stderr are inherited
+// INVARIANT: stdout/stderr are suppressed for status checks
 // COMPLEXITY: O(command)
 export const runCommandExitCode = (
   spec: RunCommandSpec
 ): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.map(
     Command.exitCode(
-      buildCommand(spec, "inherit", "inherit", "inherit")
+      buildCommand(spec, "pipe", "pipe", "inherit")
     ),
     Number
   )

@@ -50,6 +50,7 @@ const normalizeSecretsRoot = (value: string): string => trimRightChar(value, "/"
 type RepoBasics = {
   readonly repoUrl: string
   readonly repoSlug: string
+  readonly projectSlug: string
   readonly repoPath: string
   readonly repoRef: string
   readonly targetDir: string
@@ -63,7 +64,10 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
     const resolvedRepo = resolveRepoInput(rawRepoUrl)
     const repoUrl = resolvedRepo.repoUrl
     const repoSlug = deriveRepoSlug(repoUrl)
-    const repoPath = deriveRepoPathParts(repoUrl).pathParts.join("/")
+    const repoPathParts = deriveRepoPathParts(repoUrl).pathParts
+    const workspaceSuffix = resolvedRepo.workspaceSuffix
+    const projectSlug = workspaceSuffix ? `${repoSlug}-${workspaceSuffix}` : repoSlug
+    const repoPath = workspaceSuffix ? [...repoPathParts, workspaceSuffix].join("/") : repoPathParts.join("/")
     const repoRef = yield* _(
       nonEmpty("--repo-ref", raw.repoRef ?? resolvedRepo.repoRef, defaultTemplateConfig.repoRef)
     )
@@ -73,7 +77,7 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
     const sshUser = yield* _(nonEmpty("--ssh-user", raw.sshUser, defaultTemplateConfig.sshUser))
     const sshPort = yield* _(parsePort(raw.sshPort ?? String(defaultTemplateConfig.sshPort)))
 
-    return { repoUrl, repoSlug, repoPath, repoRef, targetDir, sshUser, sshPort }
+    return { repoUrl, repoSlug, projectSlug, repoPath, repoRef, targetDir, sshUser, sshPort }
   })
 
 type NameConfig = {
@@ -84,12 +88,12 @@ type NameConfig = {
 
 const resolveNames = (
   raw: RawOptions,
-  repoSlug: string
+  projectSlug: string
 ): Either.Either<NameConfig, ParseError> =>
   Either.gen(function*(_) {
-    const derivedContainerName = `dg-${repoSlug}`
-    const derivedServiceName = `dg-${repoSlug}`
-    const derivedVolumeName = `dg-${repoSlug}-home`
+    const derivedContainerName = `dg-${projectSlug}`
+    const derivedServiceName = `dg-${projectSlug}`
+    const derivedVolumeName = `dg-${projectSlug}-home`
     const containerName = yield* _(
       nonEmpty("--container-name", raw.containerName, derivedContainerName)
     )
@@ -111,7 +115,7 @@ type PathConfig = {
 
 const resolvePaths = (
   raw: RawOptions,
-  repoSlug: string,
+  projectSlug: string,
   repoPath: string
 ): Either.Either<PathConfig, ParseError> =>
   Either.gen(function*(_) {
@@ -127,7 +131,7 @@ const resolvePaths = (
       : `${normalizedSecretsRoot}/global.env`
     const defaultEnvProjectPath = normalizedSecretsRoot === undefined
       ? defaultTemplateConfig.envProjectPath
-      : `${normalizedSecretsRoot}/${repoSlug}.env`
+      : `${normalizedSecretsRoot}/${projectSlug}.env`
     const defaultCodexAuthPath = normalizedSecretsRoot === undefined
       ? defaultTemplateConfig.codexAuthPath
       : `${normalizedSecretsRoot}/codex`
@@ -163,10 +167,11 @@ export const buildCreateCommand = (
 ): Either.Either<CreateCommand, ParseError> =>
   Either.gen(function*(_) {
     const repo = yield* _(resolveRepoBasics(raw))
-    const names = yield* _(resolveNames(raw, repo.repoSlug))
-    const paths = yield* _(resolvePaths(raw, repo.repoSlug, repo.repoPath))
+    const names = yield* _(resolveNames(raw, repo.projectSlug))
+    const paths = yield* _(resolvePaths(raw, repo.projectSlug, repo.repoPath))
     const runUp = raw.up ?? true
     const force = raw.force ?? false
+    const forceEnv = raw.forceEnv ?? false
     const enableMcpPlaywright = raw.enableMcpPlaywright ?? false
 
     return {
@@ -174,6 +179,7 @@ export const buildCreateCommand = (
       outDir: paths.outDir,
       runUp,
       force,
+      forceEnv,
       waitForClone: false,
       config: {
         containerName: names.containerName,

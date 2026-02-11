@@ -180,6 +180,7 @@ const runRecreateFlow = async (projectDir, send) => {
         outDir: projectDir,
         runUp: false,
         force: true,
+        forceEnv: false,
         waitForClone: false
       })
     );

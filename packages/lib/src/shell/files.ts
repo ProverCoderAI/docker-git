@@ -11,6 +11,14 @@ import { resolveBaseDir } from "./paths.js"
 const ensureParentDir = (path: Path.Path, fs: FileSystem.FileSystem, filePath: string) =>
   fs.makeDirectory(path.dirname(filePath), { recursive: true })
 
+const isFileSpec = (spec: FileSpec): spec is Extract<FileSpec, { readonly _tag: "File" }> => spec._tag === "File"
+
+const resolveSpecPath = (
+  path: Path.Path,
+  baseDir: string,
+  spec: Extract<FileSpec, { readonly _tag: "File" }>
+): string => path.join(baseDir, spec.relativePath)
+
 const writeSpec = (
   path: Path.Path,
   fs: FileSystem.FileSystem,
@@ -36,6 +44,41 @@ const writeSpec = (
   )
 }
 
+const collectExistingFilePaths = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  baseDir: string,
+  specs: ReadonlyArray<FileSpec>
+): Effect.Effect<ReadonlyArray<string>, PlatformError> =>
+  Effect.gen(function*(_) {
+    const existingPaths: Array<string> = []
+    for (const spec of specs) {
+      if (!isFileSpec(spec)) {
+        continue
+      }
+      const filePath = resolveSpecPath(path, baseDir, spec)
+      const exists = yield* _(fs.exists(filePath))
+      if (exists) {
+        existingPaths.push(filePath)
+      }
+    }
+    return existingPaths
+  })
+
+const failOnExistingFiles = (
+  existingFilePaths: ReadonlyArray<string>,
+  skipExistingFiles: boolean
+): Effect.Effect<void, FileExistsError> => {
+  if (skipExistingFiles || existingFilePaths.length === 0) {
+    return Effect.void
+  }
+  const firstPath = existingFilePaths[0]
+  if (!firstPath) {
+    return Effect.void
+  }
+  return Effect.fail(new FileExistsError({ path: firstPath }))
+}
+
 // CHANGE: write generated docker-git files to disk
 // WHY: isolate all filesystem effects in a thin shell
 // QUOTE(ТЗ): "создавать докер образы"
@@ -49,7 +92,8 @@ const writeSpec = (
 export const writeProjectFiles = (
   outDir: string,
   config: TemplateConfig,
-  force: boolean
+  force: boolean,
+  skipExistingFiles: boolean = false
 ): Effect.Effect<
   ReadonlyArray<string>,
   FileExistsError | PlatformError,
@@ -62,23 +106,21 @@ export const writeProjectFiles = (
 
     const specs = planFiles(config)
     const created: Array<string> = []
+    const existingFilePaths = force ? [] : yield* _(collectExistingFilePaths(fs, path, baseDir, specs))
+    const existingSet = new Set(existingFilePaths)
 
-    if (!force) {
-      for (const spec of specs) {
-        if (spec._tag === "File") {
-          const filePath = path.join(baseDir, spec.relativePath)
-          const exists = yield* _(fs.exists(filePath))
-          if (exists) {
-            return yield* _(Effect.fail(new FileExistsError({ path: filePath })))
-          }
-        }
-      }
-    }
+    yield* _(failOnExistingFiles(existingFilePaths, skipExistingFiles))
 
     for (const spec of specs) {
+      if (!force && skipExistingFiles && isFileSpec(spec)) {
+        const filePath = resolveSpecPath(path, baseDir, spec)
+        if (existingSet.has(filePath)) {
+          continue
+        }
+      }
       yield* _(writeSpec(path, fs, baseDir, spec))
-      if (spec._tag === "File") {
-        created.push(path.join(baseDir, spec.relativePath))
+      if (isFileSpec(spec)) {
+        created.push(resolveSpecPath(path, baseDir, spec))
       }
     }
 

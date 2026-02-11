@@ -1116,6 +1116,7 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
                 outDir: project.directory,
                 runUp: false,
                 force: true,
+                forceEnv: false,
                 waitForClone: false
               }))
               yield* _(syncProjectCodexAuth(projectsRoot, project))
@@ -1455,6 +1456,7 @@ data: ${JSON.stringify(data)}
                 outDir: project.directory,
                 runUp: false,
                 force: true,
+                forceEnv: false,
                 waitForClone: false
               }))
               yield* _(syncProjectCodexAuth(projectsRoot, project))

@@ -9,6 +9,14 @@ type PositionalRepo = {
   readonly restArgs: ReadonlyArray<string>
 }
 
+export const resolveWorkspaceRepoPath = (
+  resolvedRepo: ReturnType<typeof resolveRepoInput>
+): string => {
+  const baseParts = deriveRepoPathParts(resolvedRepo.repoUrl).pathParts
+  const projectParts = resolvedRepo.workspaceSuffix ? [...baseParts, resolvedRepo.workspaceSuffix] : baseParts
+  return projectParts.join("/")
+}
+
 export const splitPositionalRepo = (args: ReadonlyArray<string>): PositionalRepo => {
   const first = args[0]
   const positionalRepoUrl = first !== undefined && !first.startsWith("-") ? first : undefined
@@ -24,10 +32,10 @@ export const parseProjectDirWithOptions = (
     const { positionalRepoUrl, restArgs } = splitPositionalRepo(args)
     const raw = yield* _(parseRawOptions(restArgs))
     const rawRepoUrl = raw.repoUrl ?? positionalRepoUrl
-    const resolvedRepo = rawRepoUrl ? resolveRepoInput(rawRepoUrl).repoUrl : null
+    const repoPath = rawRepoUrl ? resolveWorkspaceRepoPath(resolveRepoInput(rawRepoUrl)) : null
     const projectDir = raw.projectDir ??
-      (resolvedRepo
-        ? `.docker-git/${deriveRepoPathParts(resolvedRepo).pathParts.join("/")}`
+      (repoPath
+        ? `.docker-git/${repoPath}`
         : defaultProjectDir)
 
     return { projectDir, raw }

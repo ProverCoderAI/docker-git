@@ -64,6 +64,21 @@ export const runDockerComposeUp = (
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCompose(cwd, ["up", "-d", "--build"], [Number(ExitCode(0))])
 
+// CHANGE: recreate running containers without rebuilding images
+// WHY: apply env-file changes while preserving workspace volumes and docker layer cache
+// QUOTE(ТЗ): "сбросит только окружение"
+// REF: user-request-2026-02-11-force-env
+// SOURCE: n/a
+// FORMAT THEOREM: ∀dir: up_force_recreate(dir) → recreated(containers(dir)) ∧ preserved(volumes(dir))
+// PURITY: SHELL
+// EFFECT: Effect<void, DockerCommandError | PlatformError, CommandExecutor>
+// INVARIANT: does not invoke image build and does not remove volumes
+// COMPLEXITY: O(command)
+export const runDockerComposeUpRecreate = (
+  cwd: string
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runCompose(cwd, ["up", "-d", "--force-recreate"], [Number(ExitCode(0))])
+
 // CHANGE: run docker compose down in the target directory
 // WHY: allow stopping managed containers from the CLI/menu
 // QUOTE(ТЗ): "Могу удалить / Отключить"
