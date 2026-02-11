@@ -15,10 +15,10 @@ import {
   renderEntrypointCodexHome,
   renderEntrypointCodexResumeHint,
   renderEntrypointCodexSharedAuth,
-  renderEntrypointDockerGitBootstrap,
   renderEntrypointMcpPlaywright
 } from "./templates-entrypoint/codex.js"
 import { renderEntrypointGitConfig, renderEntrypointGitHooks } from "./templates-entrypoint/git.js"
+import { renderEntrypointDockerGitBootstrap } from "./templates-entrypoint/nested-docker-git.js"
 import { renderEntrypointBackgroundTasks } from "./templates-entrypoint/tasks.js"
 import {
   renderEntrypointBashCompletion,
