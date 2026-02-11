@@ -136,7 +136,7 @@ const restrictedSyntaxBaseNoServiceFactory = [
 export default tseslint.config(
   {
     name: "effect-ts-compliance-check",
-    files: ["src/**/*.ts", "scripts/**/*.ts"],
+    files: ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
     languageOptions: {
       parser: tseslint.parser,
       globals: { ...globals.node }
