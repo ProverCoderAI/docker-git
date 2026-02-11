@@ -6,10 +6,7 @@ import { Effect } from "effect"
 import type { TemplateConfig } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
 import { writeProjectFiles } from "../shell/files.js"
-
-const isDockerGitConfig = (entry: string): boolean => entry.endsWith("docker-git.json")
-
-const shouldSkipDir = (entry: string): boolean => entry === ".git" || entry === ".orch"
+import { findDockerGitConfigPaths } from "./docker-git-config-search.js"
 
 const toPosixPath = (value: string): string => value.replaceAll("\\", "/")
 
@@ -30,8 +27,7 @@ const normalizeTemplateConfig = (
   projectDir: string,
   template: TemplateConfig
 ): TemplateConfig | null => {
-  const needs =
-    shouldNormalizePath(path, template.authorizedKeysPath) ||
+  const needs = shouldNormalizePath(path, template.authorizedKeysPath) ||
     shouldNormalizePath(path, template.envGlobalPath) ||
     shouldNormalizePath(path, template.envProjectPath) ||
     shouldNormalizePath(path, template.codexAuthPath) ||
@@ -54,48 +50,12 @@ const normalizeTemplateConfig = (
   return {
     ...template,
     authorizedKeysPath: authorizedKeysRel.length > 0 ? authorizedKeysRel : "./authorized_keys",
-    envGlobalPath: envGlobalPath,
-    envProjectPath: envProjectPath,
-    codexAuthPath: codexAuthPath,
+    envGlobalPath,
+    envProjectPath,
+    codexAuthPath,
     codexSharedAuthPath: codexSharedRel.length > 0 ? codexSharedRel : "./.orch/auth/codex"
   }
 }
-
-const findProjectConfigPaths = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  projectsRoot: string
-): Effect.Effect<ReadonlyArray<string>, PlatformError> =>
-  Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(projectsRoot))
-    if (!exists) {
-      return []
-    }
-
-    // Avoid traversing git metadata (projectsRoot can itself be a git repo).
-    const results: Array<string> = []
-    const stack: Array<string> = [projectsRoot]
-    while (stack.length > 0) {
-      const dir = stack.pop()
-      if (dir === undefined) {
-        break
-      }
-      const entries = yield* _(fs.readDirectory(dir))
-      for (const entry of entries) {
-        if (shouldSkipDir(entry)) {
-          continue
-        }
-        const resolved = path.join(dir, entry)
-        const info = yield* _(fs.stat(resolved))
-        if (info.type === "Directory") {
-          stack.push(resolved)
-        } else if (info.type === "File" && isDockerGitConfig(entry)) {
-          results.push(resolved)
-        }
-      }
-    }
-    return results
-  })
 
 // CHANGE: normalize legacy docker-git project files inside the git-synced state repo
 // WHY: state is stored in git and must be portable across machines/OSes (no absolute host paths)
@@ -115,7 +75,7 @@ export const normalizeLegacyStateProjects = (
     const path = yield* _(Path.Path)
 
     const root = path.resolve(projectsRoot)
-    const configPaths = yield* _(findProjectConfigPaths(fs, path, root))
+    const configPaths = yield* _(findDockerGitConfigPaths(fs, path, root))
     if (configPaths.length === 0) {
       return
     }
@@ -125,7 +85,10 @@ export const normalizeLegacyStateProjects = (
       const projectDir = path.dirname(configPath)
       const config = yield* _(
         readProjectConfig(projectDir).pipe(
-          Effect.catchAll(() => Effect.succeed(null))
+          Effect.matchEffect({
+            onFailure: () => Effect.succeed(null),
+            onSuccess: (value) => Effect.succeed(value)
+          })
         )
       )
       if (config === null) {

@@ -12,6 +12,55 @@ export const resolveAuthorizedKeysPath = (
     ? authorizedKeysPath
     : path.resolve(baseDir, authorizedKeysPath)
 
+const resolveHomeDir = (): string | null => {
+  const raw = process.env["HOME"] ?? process.env["USERPROFILE"]
+  const home = raw?.trim() ?? ""
+  return home.length > 0 ? home : null
+}
+
+const expandHome = (value: string, home: string | null): string => {
+  if (home === null) {
+    return value
+  }
+  if (value === "~") {
+    return home
+  }
+  if (value.startsWith("~/") || value.startsWith("~\\")) {
+    return `${home}${value.slice(1)}`
+  }
+  return value
+}
+
+const trimTrailingSlash = (value: string): string => {
+  let end = value.length
+  while (end > 0) {
+    const char = value[end - 1]
+    if (char !== "/" && char !== "\\") {
+      break
+    }
+    end -= 1
+  }
+  return value.slice(0, end)
+}
+
+export const defaultProjectsRoot = (cwd: string): string => {
+  const home = resolveHomeDir()
+  const explicit = process.env["DOCKER_GIT_PROJECTS_ROOT"]?.trim()
+  if (explicit && explicit.length > 0) {
+    return expandHome(explicit, home)
+  }
+  if (home !== null) {
+    return `${trimTrailingSlash(home)}/.docker-git`
+  }
+  return `${cwd}/.docker-git`
+}
+
+const normalizeRelativePath = (value: string): string =>
+  value
+    .replaceAll("\\", "/")
+    .replace(/^\.\//, "")
+    .trim()
+
 export const resolvePathFromCwd = (
   path: Path.Path,
   cwd: string,
@@ -20,40 +69,8 @@ export const resolvePathFromCwd = (
   path.isAbsolute(targetPath)
     ? targetPath
     : (() => {
-      const expandHome = (value: string): string => {
-        const home = process.env["HOME"] ?? process.env["USERPROFILE"]
-        if (!home || home.length === 0) {
-          return value
-        }
-        if (value === "~") {
-          return home
-        }
-        if (value.startsWith("~/") || value.startsWith("~\\")) {
-          return `${home}${value.slice(1)}`
-        }
-        return value
-      }
-
-      const trimTrailingSlash = (value: string): string => value.replace(/[\\/]+$/, "")
-
-      const defaultProjectsRoot = (): string => {
-        const explicit = process.env["DOCKER_GIT_PROJECTS_ROOT"]?.trim()
-        if (explicit && explicit.length > 0) {
-          return expandHome(explicit)
-        }
-        const home = process.env["HOME"] ?? process.env["USERPROFILE"]
-        if (home && home.trim().length > 0) {
-          return `${trimTrailingSlash(home.trim())}/.docker-git`
-        }
-        return `${cwd}/.docker-git`
-      }
-
-      const projectsRoot = path.resolve(defaultProjectsRoot())
-      const normalized = targetPath
-        .replaceAll("\\", "/")
-        .replace(/^\.\//, "")
-        .trim()
-
+      const projectsRoot = path.resolve(defaultProjectsRoot(cwd))
+      const normalized = normalizeRelativePath(targetPath)
       if (normalized === ".docker-git") {
         return projectsRoot
       }
@@ -61,7 +78,6 @@ export const resolvePathFromCwd = (
       if (normalized.startsWith(prefix)) {
         return path.join(projectsRoot, normalized.slice(prefix.length))
       }
-
       return path.resolve(cwd, targetPath)
     })()
 

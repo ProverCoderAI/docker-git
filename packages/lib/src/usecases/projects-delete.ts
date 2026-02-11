@@ -3,14 +3,13 @@ import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
-
+import { deriveRepoPathParts } from "../core/domain.js"
 import { runDockerComposeDown } from "../shell/docker.js"
 import type { DockerCommandError } from "../shell/errors.js"
-import { deriveRepoPathParts } from "../core/domain.js"
-import { autoSyncState } from "./state-repo.js"
+import { renderError } from "./errors.js"
 import { defaultProjectsRoot } from "./menu-helpers.js"
 import type { ProjectItem } from "./projects-core.js"
-import { renderError } from "./errors.js"
+import { autoSyncState } from "./state-repo.js"
 
 const isWithinProjectsRoot = (path: Path.Path, root: string, target: string): boolean => {
   const relative = path.relative(root, target)
@@ -60,8 +59,10 @@ export const deleteDockerGitProject = (
     // Best-effort: stop the container if possible before removing the compose dir.
     yield* _(
       runDockerComposeDown(targetDir).pipe(
-        Effect.catchTag("DockerCommandError", (error: DockerCommandError) =>
-          Effect.logWarning(`docker compose down failed before delete: ${renderError(error)}`)
+        Effect.catchTag(
+          "DockerCommandError",
+          (error: DockerCommandError) =>
+            Effect.logWarning(`docker compose down failed before delete: ${renderError(error)}`)
         )
       )
     )
@@ -72,4 +73,3 @@ export const deleteDockerGitProject = (
     const label = repoParts.length > 0 ? repoParts.join("/") : item.repoUrl
     yield* _(autoSyncState(`chore(state): delete ${label}`))
   }).pipe(Effect.asVoid)
-

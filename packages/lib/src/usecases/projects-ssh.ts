@@ -2,28 +2,26 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type { FileSystem as Fs } from "@effect/platform/FileSystem"
 import type { Path as PathService } from "@effect/platform/Path"
-import { Duration, Effect, Schedule, pipe } from "effect"
+import { Duration, Effect, pipe, Schedule } from "effect"
 
 import { runCommandExitCode, runCommandWithExitCodes } from "../shell/command-runner.js"
 import { runDockerComposePsFormatted } from "../shell/docker.js"
-import type {
-  ConfigDecodeError,
-  ConfigNotFoundError,
-  DockerCommandError,
-  FileExistsError,
-  PortProbeError
+import {
+  CommandFailedError,
+  type ConfigDecodeError,
+  type ConfigNotFoundError,
+  type DockerCommandError,
+  type FileExistsError,
+  type PortProbeError
 } from "../shell/errors.js"
-import { CommandFailedError } from "../shell/errors.js"
 import { renderError } from "./errors.js"
 import {
   buildSshCommand,
+  forEachProjectStatus,
   formatComposeRows,
-  loadProjectStatus,
   parseComposePsOutput,
   type ProjectItem,
-  type ProjectStatus,
   renderProjectStatusHeader,
-  skipWithWarning,
   withProjectIndexAndSsh
 } from "./projects-core.js"
 import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
@@ -177,23 +175,13 @@ export const listProjectStatus: Effect.Effect<
   Fs | PathService | CommandExecutor.CommandExecutor
 > = Effect.asVoid(
   withProjectIndexAndSsh((index, sshKey) =>
-    Effect.gen(function*(_) {
-      for (const configPath of index.configPaths) {
-        const status = yield* _(
-          loadProjectStatus(configPath).pipe(
-            Effect.matchEffect({
-              onFailure: skipWithWarning<ProjectStatus>(configPath),
-              onSuccess: (value) => Effect.succeed(value)
-            })
-          )
-        )
-        if (status === null) {
-          continue
-        }
-
-        yield* _(Effect.log(renderProjectStatusHeader(status)))
-        yield* _(Effect.log(`SSH access: ${buildSshCommand(status.config.template, sshKey)}`))
-        yield* _(
+    forEachProjectStatus(index.configPaths, (status) =>
+      pipe(
+        Effect.log(renderProjectStatusHeader(status)),
+        Effect.zipRight(
+          Effect.log(`SSH access: ${buildSshCommand(status.config.template, sshKey)}`)
+        ),
+        Effect.zipRight(
           runDockerComposePsFormatted(status.projectDir).pipe(
             Effect.map((raw) => parseComposePsOutput(raw)),
             Effect.map((rows) => formatComposeRows(rows)),
@@ -207,7 +195,6 @@ export const listProjectStatus: Effect.Effect<
             })
           )
         )
-      }
-    })
+      ))
   )
 )
