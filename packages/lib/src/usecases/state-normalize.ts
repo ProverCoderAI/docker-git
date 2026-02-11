@@ -21,20 +21,28 @@ const isLegacyDockerGitRelativePath = (value: string): boolean => {
 const shouldNormalizePath = (path: Path.Path, value: string): boolean =>
   path.isAbsolute(value) || isLegacyDockerGitRelativePath(value)
 
+const withFallback = (value: string, fallback: string): string =>
+  value.length > 0 ? value : fallback
+
+const pathFieldsForNormalization = (template: TemplateConfig): ReadonlyArray<string> => [
+  template.dockerGitPath,
+  template.authorizedKeysPath,
+  template.envGlobalPath,
+  template.envProjectPath,
+  template.codexAuthPath,
+  template.codexSharedAuthPath
+]
+
+const hasLegacyTemplatePaths = (path: Path.Path, template: TemplateConfig): boolean =>
+  pathFieldsForNormalization(template).some((value) => shouldNormalizePath(path, value))
+
 const normalizeTemplateConfig = (
   path: Path.Path,
   projectsRoot: string,
   projectDir: string,
   template: TemplateConfig
 ): TemplateConfig | null => {
-  const needs = shouldNormalizePath(path, template.dockerGitPath) ||
-    shouldNormalizePath(path, template.authorizedKeysPath) ||
-    shouldNormalizePath(path, template.envGlobalPath) ||
-    shouldNormalizePath(path, template.envProjectPath) ||
-    shouldNormalizePath(path, template.codexAuthPath) ||
-    shouldNormalizePath(path, template.codexSharedAuthPath)
-
-  if (!needs) {
+  if (!hasLegacyTemplatePaths(path, template)) {
     return null
   }
 
@@ -51,12 +59,12 @@ const normalizeTemplateConfig = (
 
   return {
     ...template,
-    dockerGitPath: dockerGitRel.length > 0 ? dockerGitRel : "./.docker-git",
-    authorizedKeysPath: authorizedKeysRel.length > 0 ? authorizedKeysRel : "./authorized_keys",
+    dockerGitPath: withFallback(dockerGitRel, "./.docker-git"),
+    authorizedKeysPath: withFallback(authorizedKeysRel, "./authorized_keys"),
     envGlobalPath,
     envProjectPath,
     codexAuthPath,
-    codexSharedAuthPath: codexSharedRel.length > 0 ? codexSharedRel : "./.orch/auth/codex"
+    codexSharedAuthPath: withFallback(codexSharedRel, "./.orch/auth/codex")
   }
 }
 
