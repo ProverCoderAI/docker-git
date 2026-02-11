@@ -49,6 +49,12 @@ const logSshAccess = (
 type CloneState = "pending" | "done" | "failed"
 type DockerUpError = CloneFailedError | DockerCommandError | PlatformError
 type DockerUpEnvironment = CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
+type DockerUpOptions = {
+  readonly runUp: boolean
+  readonly waitForClone: boolean
+  readonly force: boolean
+  readonly forceEnv: boolean
+}
 
 const checkCloneState = (
   cwd: string,
@@ -161,19 +167,16 @@ const ensureBridgeAccess = (
 export const runDockerUpIfNeeded = (
   resolvedOutDir: string,
   projectConfig: CreateCommand["config"],
-  runUp: boolean,
-  waitForClone: boolean,
-  force: boolean,
-  forceEnv: boolean
+  options: DockerUpOptions
 ): Effect.Effect<void, DockerUpError, DockerUpEnvironment> =>
   Effect.gen(function*(_) {
-    if (!runUp) {
+    if (!options.runUp) {
       return
     }
-    yield* _(runDockerComposeUpByMode(resolvedOutDir, force, forceEnv))
+    yield* _(runDockerComposeUpByMode(resolvedOutDir, options.force, options.forceEnv))
     yield* _(ensureBridgeAccess(resolvedOutDir, projectConfig))
 
-    if (waitForClone) {
+    if (options.waitForClone) {
       yield* _(Effect.log("Streaming container logs until clone completes..."))
       yield* _(waitForCloneCompletion(resolvedOutDir, projectConfig))
     }

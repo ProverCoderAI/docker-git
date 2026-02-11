@@ -109,18 +109,23 @@ const ensureEnvFile = (
   )
 
 export type PrepareProjectFilesError = FileExistsError | PlatformError
+type PrepareProjectFilesOptions = {
+  readonly force: boolean
+  readonly forceEnv: boolean
+}
 
 export const prepareProjectFiles = (
   resolvedOutDir: string,
   baseDir: string,
   globalConfig: CreateCommand["config"],
   projectConfig: CreateCommand["config"],
-  force: boolean,
-  forceEnv: boolean
+  options: PrepareProjectFilesOptions
 ): Effect.Effect<ReadonlyArray<string>, PrepareProjectFilesError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
-    const envOnlyRefresh = forceEnv && !force
-    const createdFiles = yield* _(writeProjectFiles(resolvedOutDir, projectConfig, force, envOnlyRefresh))
+    const envOnlyRefresh = options.forceEnv && !options.force
+    const createdFiles = yield* _(
+      writeProjectFiles(resolvedOutDir, projectConfig, options.force, envOnlyRefresh)
+    )
     yield* _(ensureAuthorizedKeys(resolvedOutDir, projectConfig.authorizedKeysPath))
     yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envGlobalPath, defaultGlobalEnvContents))
     yield* _(

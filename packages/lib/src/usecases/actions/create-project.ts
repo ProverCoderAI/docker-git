@@ -81,24 +81,25 @@ const runCreateProject = (
 
     const resolvedConfig = yield* _(resolveCreateConfig(command, ctx, resolvedOutDir))
     const { globalConfig, projectConfig } = buildProjectConfigs(path, ctx.baseDir, resolvedOutDir, resolvedConfig)
+    const filePrepareOptions = {
+      force: command.force,
+      forceEnv: command.forceEnv
+    } as const
+    const dockerUpOptions = {
+      runUp: command.runUp,
+      waitForClone: command.waitForClone,
+      force: command.force,
+      forceEnv: command.forceEnv
+    } as const
 
     yield* _(migrateProjectOrchLayout(ctx.baseDir, globalConfig, ctx.resolveRootPath))
 
     const createdFiles = yield* _(
-      prepareProjectFiles(resolvedOutDir, ctx.baseDir, globalConfig, projectConfig, command.force, command.forceEnv)
+      prepareProjectFiles(resolvedOutDir, ctx.baseDir, globalConfig, projectConfig, filePrepareOptions)
     )
     yield* _(logCreatedProject(resolvedOutDir, createdFiles))
 
-    yield* _(
-      runDockerUpIfNeeded(
-        resolvedOutDir,
-        projectConfig,
-        command.runUp,
-        command.waitForClone,
-        command.force,
-        command.forceEnv
-      )
-    )
+    yield* _(runDockerUpIfNeeded(resolvedOutDir, projectConfig, dockerUpOptions))
     if (command.runUp) {
       yield* _(logDockerAccessInfo(resolvedOutDir, projectConfig))
     }
