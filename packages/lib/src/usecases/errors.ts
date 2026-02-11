@@ -44,7 +44,10 @@ const renderPrimaryError = (error: NonParseError): string | null => {
   }
 
   if (error._tag === "DockerCommandError") {
-    return `docker compose failed with exit code ${error.exitCode}`
+    return [
+      `docker compose failed with exit code ${error.exitCode}`,
+      "Hint: ensure Docker daemon is running and current user can access /var/run/docker.sock (for example via the docker group)."
+    ].join("\n")
   }
 
   if (error._tag === "CloneFailedError") {

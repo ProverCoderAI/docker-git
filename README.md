@@ -123,6 +123,47 @@ MCP errors in `codex` UI:
 - `handshaking ... initialize response`:
   - The configured MCP command is not a real MCP server (example: `command="echo"`).
 
+Docker permission error (`/var/run/docker.sock`):
+- Symptom:
+  - `permission denied while trying to connect to the docker API at unix:///var/run/docker.sock`
+- Check:
+  ```bash
+  id
+  ls -l /var/run/docker.sock
+  docker version
+  ```
+- Fix (works in `fish` and `bash`):
+  ```bash
+  sudo chgrp docker /var/run/docker.sock
+  sudo chmod 660 /var/run/docker.sock
+  sudo mkdir -p /etc/systemd/system/docker.socket.d
+  printf '[Socket]\nSocketGroup=docker\nSocketMode=0660\n' | sudo tee /etc/systemd/system/docker.socket.d/override.conf >/dev/null
+  sudo systemctl daemon-reload
+  sudo systemctl restart docker.socket docker
+  ```
+- Verify:
+  ```bash
+  ls -l /var/run/docker.sock
+  docker version
+  ```
+- Note:
+  - Do not run `pnpm run docker-git ...` with `sudo`.
+
+Clone auth error (`Invalid username or token`):
+- Symptom:
+  - `remote: Invalid username or token. Password authentication is not supported for Git operations.`
+- Check and fix token:
+  ```bash
+  pnpm run docker-git auth github status
+  pnpm run docker-git auth github logout
+  pnpm run docker-git auth github login --token '<GITHUB_TOKEN>'
+  pnpm run docker-git auth github status
+  ```
+- Token requirements:
+  - Token must have access to the target repository.
+  - For org repositories with SSO/SAML, authorize the token for that organization.
+  - Recommended scopes: `repo,workflow,read:org`.
+
 ## Security Notes
 
 The generated Codex config uses:
