@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "pnpm --filter ./packages/app build",
-    "check": "pnpm --filter ./packages/app check",
+    "check": "pnpm --filter ./packages/app check && pnpm --filter ./packages/lib typecheck",
     "changeset": "changeset",
     "changeset-publish": "node -e \"if (!process.env.NPM_TOKEN) { console.log('Skipping publish: NPM_TOKEN is not set'); process.exit(0); }\" && changeset publish",
     "changeset-version": "changeset version",
@@ -17,11 +17,11 @@
     "docker-git": "pnpm --filter ./packages/app build:docker-git && node packages/app/dist/src/docker-git/main.js",
     "list": "pnpm --filter ./packages/app build && node packages/app/dist/main.js list",
     "dev": "pnpm --filter ./packages/app dev",
-    "lint": "pnpm --filter ./packages/app lint",
+    "lint": "pnpm --filter ./packages/app lint && pnpm --filter ./packages/lib lint",
     "lint:tests": "pnpm --filter ./packages/app lint:tests",
-    "lint:effect": "pnpm --filter ./packages/app lint:effect",
-    "test": "pnpm --filter ./packages/app test",
-    "typecheck": "pnpm --filter ./packages/app typecheck",
+    "lint:effect": "pnpm --filter ./packages/app lint:effect && pnpm --filter ./packages/lib lint:effect",
+    "test": "pnpm --filter ./packages/app test && pnpm --filter ./packages/lib test",
+    "typecheck": "pnpm --filter ./packages/app typecheck && pnpm --filter ./packages/lib typecheck",
     "start": "pnpm --filter ./packages/app start"
   },
   "devDependencies": {
