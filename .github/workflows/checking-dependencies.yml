@@ -1,0 +1,29 @@
+name: Checking Dependencies
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  dist-deps-prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.13.0
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C packages/app build
+
+      - name: Dist deps prune (lint)
+        run: |
+          pnpm dlx @prover-coder-ai/dist-deps-prune scan \
+            --package ./packages/app/package.json \
+            --prune-dev true \
+            --silent
