@@ -17,6 +17,36 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      - name: Detect npm publish eligibility
+        id: npm_gate
+        shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "publish_npm=false" >> "$GITHUB_OUTPUT"
+
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            echo "::notice::NPM_TOKEN is empty; npm publish disabled for this run."
+            exit 0
+          fi
+
+          printf '%s\n' "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+
+          if ! npm whoami >/dev/null 2>&1; then
+            echo "::warning::NPM_TOKEN is invalid/revoked; npm publish disabled for this run."
+            exit 0
+          fi
+
+          # Current workspace publishes @effect-template/* packages.
+          if ! npm access ls-packages effect-template >/dev/null 2>&1; then
+            echo "::warning::No publish access to npm scope 'effect-template'; npm publish disabled for this run."
+            exit 0
+          fi
+
+          echo "publish_npm=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::npm publish is enabled for this run."
+
       - uses: ProverCoderAI/action-release@v1.0.17
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -26,7 +56,7 @@ jobs:
           package_json_path: packages/app/package.json
           pnpm_filter: ./packages/app
           bump_type: patch
-          publish_npm: false
+          publish_npm: ${{ steps.npm_gate.outputs.publish_npm }}
           publish_github_packages: true
           skip_if_unchanged: true
           cancel_on_no_changes: true
