@@ -149,7 +149,7 @@ if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
   ISSUE_URL=""
   if [[ "$REPO_URL" == https://github.com/* ]]; then
-    ISSUE_REPO="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#\.git$##; s#/*$##')"
+    ISSUE_REPO="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##')"
     if [[ -n "$ISSUE_REPO" ]]; then
       ISSUE_URL="https://github.com/\${ISSUE_REPO}/issues/\${ISSUE_ID}"
     fi
