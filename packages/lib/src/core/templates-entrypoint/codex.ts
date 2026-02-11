@@ -140,11 +140,42 @@ export const renderEntrypointAgentsNotice = (config: TemplateConfig): string =>
 AGENTS_PATH="${config.codexHome}/AGENTS.md"
 LEGACY_AGENTS_PATH="/home/${config.sshUser}/AGENTS.md"
 PROJECT_LINE="Рабочая папка проекта (git clone): ${config.targetDir}"
+WORKSPACES_LINE="Доступные workspace пути: ${config.targetDir}"
+WORKSPACE_INFO_LINE="Контекст workspace: repository"
+FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: ${config.targetDir}"
+ISSUE_AGENTS_HINT_LINE="Issue AGENTS.md: n/a"
 INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
+if [[ "$REPO_REF" == issue-* ]]; then
+  ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
+  ISSUE_URL=""
+  if [[ "$REPO_URL" == https://github.com/* ]]; then
+    ISSUE_REPO="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#\.git$##; s#/*$##')"
+    if [[ -n "$ISSUE_REPO" ]]; then
+      ISSUE_URL="https://github.com/\${ISSUE_REPO}/issues/\${ISSUE_ID}"
+    fi
+  fi
+  if [[ -n "$ISSUE_URL" ]]; then
+    WORKSPACE_INFO_LINE="Контекст workspace: issue #\${ISSUE_ID} (\${ISSUE_URL})"
+  else
+    WORKSPACE_INFO_LINE="Контекст workspace: issue #\${ISSUE_ID}"
+  fi
+  ISSUE_AGENTS_HINT_LINE="Issue AGENTS.md: ${config.targetDir}/AGENTS.md"
+elif [[ "$REPO_REF" == refs/pull/*/head ]]; then
+  PR_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^refs/pull/([0-9]+)/head$#\1#')"
+  if [[ -n "$PR_ID" ]]; then
+    WORKSPACE_INFO_LINE="Контекст workspace: PR #\${PR_ID}"
+  else
+    WORKSPACE_INFO_LINE="Контекст workspace: pull request (\${REPO_REF})"
+  fi
+fi
 if [[ ! -f "$AGENTS_PATH" ]]; then
   cat <<'AGENTS_EOF' > "$AGENTS_PATH"
 Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
 Рабочая папка проекта (git clone): ${config.targetDir}
+Доступные workspace пути: ${config.targetDir}
+Контекст workspace: repository
+Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: ${config.targetDir}
+Issue AGENTS.md: n/a
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
 Если ты видишь файлы AGENTS.md внутри проекта, ты обязан их читать и соблюдать инструкции.
 AGENTS_EOF
@@ -155,6 +186,26 @@ if [[ -f "$AGENTS_PATH" ]]; then
     sed -i "s|^Рабочая папка проекта (git clone):.*$|$PROJECT_LINE|" "$AGENTS_PATH"
   else
     printf "%s\n" "$PROJECT_LINE" >> "$AGENTS_PATH"
+  fi
+  if grep -q "^Доступные workspace пути:" "$AGENTS_PATH"; then
+    sed -i "s|^Доступные workspace пути:.*$|$WORKSPACES_LINE|" "$AGENTS_PATH"
+  else
+    printf "%s\n" "$WORKSPACES_LINE" >> "$AGENTS_PATH"
+  fi
+  if grep -q "^Контекст workspace:" "$AGENTS_PATH"; then
+    sed -i "s|^Контекст workspace:.*$|$WORKSPACE_INFO_LINE|" "$AGENTS_PATH"
+  else
+    printf "%s\n" "$WORKSPACE_INFO_LINE" >> "$AGENTS_PATH"
+  fi
+  if grep -q "^Фокус задачи:" "$AGENTS_PATH"; then
+    sed -i "s|^Фокус задачи:.*$|$FOCUS_LINE|" "$AGENTS_PATH"
+  else
+    printf "%s\n" "$FOCUS_LINE" >> "$AGENTS_PATH"
+  fi
+  if grep -q "^Issue AGENTS.md:" "$AGENTS_PATH"; then
+    sed -i "s|^Issue AGENTS.md:.*$|$ISSUE_AGENTS_HINT_LINE|" "$AGENTS_PATH"
+  else
+    printf "%s\n" "$ISSUE_AGENTS_HINT_LINE" >> "$AGENTS_PATH"
   fi
   if grep -q "^Доступ к интернету:" "$AGENTS_PATH"; then
     sed -i "s|^Доступ к интернету:.*$|$INTERNET_LINE|" "$AGENTS_PATH"

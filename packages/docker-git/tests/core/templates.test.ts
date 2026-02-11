@@ -95,4 +95,39 @@ describe("planFiles", () => {
       expect(browserDockerfile !== undefined && browserDockerfile._tag === "File").toBe(true)
       expect(browserScript !== undefined && browserScript._tag === "File").toBe(true)
     }))
+
+  it.effect("embeds issue workspace AGENTS context in entrypoint", () =>
+    Effect.sync(() => {
+      const config: TemplateConfig = {
+        containerName: "dg-repo-issue-5",
+        serviceName: "dg-repo-issue-5",
+        sshUser: "dev",
+        sshPort: 2222,
+        repoUrl: "https://github.com/org/repo.git",
+        repoRef: "issue-5",
+        targetDir: "/home/dev/org/repo/issue-5",
+        volumeName: "dg-repo-issue-5-home",
+        authorizedKeysPath: "./authorized_keys",
+        envGlobalPath: "./.orch/env/global.env",
+        envProjectPath: "./.orch/env/project.env",
+        codexAuthPath: "./.orch/auth/codex",
+        codexSharedAuthPath: "../../.orch/auth/codex",
+        codexHome: "/home/dev/.codex",
+        enableMcpPlaywright: false,
+        pnpmVersion: "10.27.0"
+      }
+
+      const specs = planFiles(config)
+      const entrypointSpec = specs.find(
+        (spec) => spec._tag === "File" && spec.relativePath === "entrypoint.sh"
+      )
+      expect(entrypointSpec !== undefined && entrypointSpec._tag === "File").toBe(true)
+      if (entrypointSpec && entrypointSpec._tag === "File") {
+        expect(entrypointSpec.contents).toContain("Доступные workspace пути:")
+        expect(entrypointSpec.contents).toContain("Контекст workspace:")
+        expect(entrypointSpec.contents).toContain("Issue AGENTS.md:")
+        expect(entrypointSpec.contents).toContain("ISSUE_AGENTS_PATH=\"$TARGET_DIR/AGENTS.md\"")
+        expect(entrypointSpec.contents).toContain("grep -qx \"AGENTS.md\" \"$EXCLUDE_PATH\"")
+      }
+    }))
 })

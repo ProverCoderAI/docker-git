@@ -35,6 +35,10 @@ When you clone GitHub issue or PR URLs, docker-git creates isolated project path
 
 This lets you run multiple issues/PRs for the same repository in parallel without container/path collisions.
 
+Agent context for issue workspaces:
+- Global `${CODEX_HOME}/AGENTS.md` includes workspace path + issue/PR context.
+- For `issue-*` workspaces, docker-git creates `${TARGET_DIR}/AGENTS.md` (if missing) with issue context and auto-adds it to `.git/info/exclude`.
+
 ## Projects Root Layout
 
 The projects root is:

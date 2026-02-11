@@ -90,8 +90,50 @@ const renderCloneBodyRef = (config: TemplateConfig): string =>
     fi
   fi`
 
+const renderIssueWorkspaceAgents = (): string =>
+  `if [[ "$CLONE_OK" -eq 1 && "$REPO_REF" == issue-* && -d "$TARGET_DIR/.git" ]]; then
+  ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
+  ISSUE_URL=""
+  if [[ "$REPO_URL" == https://github.com/* ]]; then
+    ISSUE_REPO="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#\.git$##; s#/*$##')"
+    if [[ -n "$ISSUE_REPO" ]]; then
+      ISSUE_URL="https://github.com/\${ISSUE_REPO}/issues/\${ISSUE_ID}"
+    fi
+  fi
+
+  ISSUE_AGENTS_PATH="$TARGET_DIR/AGENTS.md"
+  if [[ ! -e "$ISSUE_AGENTS_PATH" ]]; then
+    cat <<EOF > "$ISSUE_AGENTS_PATH"
+# docker-git issue workspace
+Issue workspace: #\${ISSUE_ID}
+Issue URL: \${ISSUE_URL:-n/a}
+Workspace path: $TARGET_DIR
+
+Работай только над этим issue, если пользователь не попросил другое.
+Если нужен первоисточник требований, открой Issue URL.
+EOF
+    chown 1000:1000 "$ISSUE_AGENTS_PATH" || true
+  fi
+
+  EXCLUDE_PATH="$TARGET_DIR/.git/info/exclude"
+  if [[ -f "$ISSUE_AGENTS_PATH" ]]; then
+    touch "$EXCLUDE_PATH"
+    if ! grep -qx "AGENTS.md" "$EXCLUDE_PATH"; then
+      printf "%s\n" "AGENTS.md" >> "$EXCLUDE_PATH"
+    fi
+  fi
+fi`
+
 const renderCloneBody = (config: TemplateConfig): string =>
-  [renderCloneBodyStart(config), renderCloneBodyRef(config), "", renderCloneRemotes(config), "fi"].join("\n")
+  [
+    renderCloneBodyStart(config),
+    renderCloneBodyRef(config),
+    "",
+    renderCloneRemotes(config),
+    "",
+    renderIssueWorkspaceAgents(),
+    "fi"
+  ].join("\n")
 
 const renderCloneFinalize = (): string =>
   `if [[ "$CLONE_OK" -eq 1 ]]; then
