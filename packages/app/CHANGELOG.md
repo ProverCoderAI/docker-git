@@ -1,4 +1,4 @@
-# @effect-template/app
+# @prover-coder-ai/docker-git
 
 ## 1.0.2
 
