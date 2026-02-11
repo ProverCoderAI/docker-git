@@ -37,6 +37,7 @@ export interface RawOptions {
   readonly includeDefault?: boolean
   readonly up?: boolean
   readonly force?: boolean
+  readonly forceEnv?: boolean
 }
 
 // CHANGE: helper type alias for builder signatures that produce parse errors

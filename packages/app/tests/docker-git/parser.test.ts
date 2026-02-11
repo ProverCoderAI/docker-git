@@ -33,6 +33,7 @@ const expectCreateDefaults = (command: CreateCommand) => {
   expect(command.config.repoRef).toBe(defaultTemplateConfig.repoRef)
   expect(command.outDir).toBe(".docker-git/org/repo")
   expect(command.runUp).toBe(true)
+  expect(command.forceEnv).toBe(false)
 }
 
 describe("parseArgs", () => {
@@ -76,6 +77,18 @@ describe("parseArgs", () => {
   it.effect("parses clone branch alias", () =>
     expectCreateCommand(["clone", "https://github.com/org/repo.git", "--branch", "feature-x"], (command) => {
       expect(command.config.repoRef).toBe("feature-x")
+    }))
+
+  it.effect("parses force-env flag for clone", () =>
+    expectCreateCommand(["clone", "https://github.com/org/repo.git", "--force-env"], (command) => {
+      expect(command.force).toBe(false)
+      expect(command.forceEnv).toBe(true)
+    }))
+
+  it.effect("supports force + force-env together", () =>
+    expectCreateCommand(["clone", "https://github.com/org/repo.git", "--force", "--force-env"], (command) => {
+      expect(command.force).toBe(true)
+      expect(command.forceEnv).toBe(true)
     }))
 
   it.effect("parses GitHub tree url as repo + ref", () =>

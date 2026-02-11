@@ -85,11 +85,20 @@ const runCreateProject = (
     yield* _(migrateProjectOrchLayout(ctx.baseDir, globalConfig, ctx.resolveRootPath))
 
     const createdFiles = yield* _(
-      prepareProjectFiles(resolvedOutDir, ctx.baseDir, globalConfig, projectConfig, command.force)
+      prepareProjectFiles(resolvedOutDir, ctx.baseDir, globalConfig, projectConfig, command.force, command.forceEnv)
     )
     yield* _(logCreatedProject(resolvedOutDir, createdFiles))
 
-    yield* _(runDockerUpIfNeeded(resolvedOutDir, projectConfig, command.runUp, command.waitForClone, command.force))
+    yield* _(
+      runDockerUpIfNeeded(
+        resolvedOutDir,
+        projectConfig,
+        command.runUp,
+        command.waitForClone,
+        command.force,
+        command.forceEnv
+      )
+    )
     if (command.runUp) {
       yield* _(logDockerAccessInfo(resolvedOutDir, projectConfig))
     }

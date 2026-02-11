@@ -171,6 +171,7 @@ export const buildCreateCommand = (
     const paths = yield* _(resolvePaths(raw, repo.projectSlug, repo.repoPath))
     const runUp = raw.up ?? true
     const force = raw.force ?? false
+    const forceEnv = raw.forceEnv ?? false
     const enableMcpPlaywright = raw.enableMcpPlaywright ?? false
 
     return {
@@ -178,6 +179,7 @@ export const buildCreateCommand = (
       outDir: paths.outDir,
       runUp,
       force,
+      forceEnv,
       waitForClone: false,
       config: {
         containerName: names.containerName,

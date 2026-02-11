@@ -23,6 +23,9 @@ pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force
 # Clone an issue URL (creates isolated workspace + issue branch)
 pnpm run docker-git clone https://github.com/agiens/crm/issues/123 --force
 
+# Reset only project env defaults (keep workspace volume/data)
+pnpm run docker-git clone https://github.com/agiens/crm/issues/123 --force-env
+
 # Same, but also enable Playwright MCP + Chromium sidecar for Codex
 pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force --mcp-playwright
 ```
@@ -34,6 +37,10 @@ When you clone GitHub issue or PR URLs, docker-git creates isolated project path
 - `.../pull/45` -> `<projectsRoot>/<owner>/<repo>/pr-45` (ref `refs/pull/45/head`)
 
 This lets you run multiple issues/PRs for the same repository in parallel without container/path collisions.
+
+Force modes:
+- `--force`: overwrite managed files and wipe compose volumes (`docker compose down -v`).
+- `--force-env`: reset only project env defaults and recreate containers without wiping volumes.
 
 Agent context for issue workspaces:
 - Global `${CODEX_HOME}/AGENTS.md` includes workspace path + issue/PR context.

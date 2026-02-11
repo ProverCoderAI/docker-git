@@ -9,6 +9,7 @@ import {
   runDockerComposeDownVolumes,
   runDockerComposeLogsFollow,
   runDockerComposeUp,
+  runDockerComposeUpRecreate,
   runDockerExecExitCode,
   runDockerInspectContainerBridgeIp,
   runDockerNetworkConnectBridge
@@ -105,7 +106,8 @@ export const runDockerUpIfNeeded = (
   projectConfig: CreateCommand["config"],
   runUp: boolean,
   waitForClone: boolean,
-  force: boolean
+  force: boolean,
+  forceEnv: boolean
 ): Effect.Effect<
   void,
   CloneFailedError | DockerCommandError | PlatformError,
@@ -118,9 +120,15 @@ export const runDockerUpIfNeeded = (
     if (force) {
       yield* _(Effect.log("Force enabled: wiping docker compose volumes (docker compose down -v)..."))
       yield* _(runDockerComposeDownVolumes(resolvedOutDir))
+      yield* _(Effect.log("Running: docker compose up -d --build"))
+      yield* _(runDockerComposeUp(resolvedOutDir))
+    } else if (forceEnv) {
+      yield* _(Effect.log("Force env enabled: resetting env defaults and recreating containers (volumes preserved)..."))
+      yield* _(runDockerComposeUpRecreate(resolvedOutDir))
+    } else {
+      yield* _(Effect.log("Running: docker compose up -d --build"))
+      yield* _(runDockerComposeUp(resolvedOutDir))
     }
-    yield* _(Effect.log("Running: docker compose up -d --build"))
-    yield* _(runDockerComposeUp(resolvedOutDir))
 
     const ensureBridgeAccess = (containerName: string) =>
       runDockerInspectContainerBridgeIp(resolvedOutDir, containerName).pipe(

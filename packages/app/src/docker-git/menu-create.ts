@@ -59,6 +59,9 @@ export const buildCreateArgs = (input: CreateInputs): ReadonlyArray<string> => {
   if (input.force) {
     args.push("--force")
   }
+  if (input.forceEnv) {
+    args.push("--force-env")
+  }
   return args
 }
 
@@ -113,7 +116,8 @@ export const resolveCreateInputs = (
     secretsRoot,
     runUp: values.runUp !== false,
     enableMcpPlaywright: values.enableMcpPlaywright === true,
-    force: values.force === true
+    force: values.force === true,
+    forceEnv: values.forceEnv === true
   }
 }
 

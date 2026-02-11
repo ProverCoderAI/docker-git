@@ -49,7 +49,8 @@ const writeSpec = (
 export const writeProjectFiles = (
   outDir: string,
   config: TemplateConfig,
-  force: boolean
+  force: boolean,
+  skipExistingFiles: boolean = false
 ): Effect.Effect<
   ReadonlyArray<string>,
   FileExistsError | PlatformError,
@@ -69,6 +70,9 @@ export const writeProjectFiles = (
           const filePath = path.join(baseDir, spec.relativePath)
           const exists = yield* _(fs.exists(filePath))
           if (exists) {
+            if (skipExistingFiles) {
+              continue
+            }
             return yield* _(Effect.fail(new FileExistsError({ path: filePath })))
           }
         }
@@ -76,6 +80,13 @@ export const writeProjectFiles = (
     }
 
     for (const spec of specs) {
+      if (!force && skipExistingFiles && spec._tag === "File") {
+        const filePath = path.join(baseDir, spec.relativePath)
+        const exists = yield* _(fs.exists(filePath))
+        if (exists) {
+          continue
+        }
+      }
       yield* _(writeSpec(path, fs, baseDir, spec))
       if (spec._tag === "File") {
         created.push(path.join(baseDir, spec.relativePath))
