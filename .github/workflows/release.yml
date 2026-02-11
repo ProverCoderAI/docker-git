@@ -1,31 +1,32 @@
 name: Release
 on:
-  push:
+  workflow_run:
+    workflows: ["Check"]
     branches: [main]
+    types: [completed]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-
-permissions: {}
+permissions:
+  contents: write
+  actions: write
+  id-token: write
+  pull-requests: write
+  packages: write
 
 jobs:
   release:
-    name: Release
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-      id-token: write
-      pull-requests: write
     steps:
-      - uses: actions/checkout@v6
-      - name: Install dependencies
-        uses: ./.github/actions/setup
-      - name: Create Release Pull Request or Publish
-        uses: changesets/action@v1
+      - uses: ProverCoderAI/action-release@v1.0.17
         with:
-          version: pnpm changeset-version
-          publish: pnpm changeset-publish
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          npm_token: ${{ secrets.NPM_TOKEN }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          branch: ${{ github.event.workflow_run.head_branch }}
+          package_json_path: packages/app/package.json
+          pnpm_filter: ./packages/app
+          bump_type: patch
+          publish_npm: true
+          publish_github_packages: true
+          skip_if_unchanged: true
+          cancel_on_no_changes: true
