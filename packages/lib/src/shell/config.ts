@@ -19,6 +19,9 @@ const TemplateConfigSchema = Schema.Struct({
   repoRef: Schema.String,
   targetDir: Schema.String,
   volumeName: Schema.String,
+  dockerGitPath: Schema.optionalWith(Schema.String, {
+    default: () => defaultTemplateConfig.dockerGitPath
+  }),
   authorizedKeysPath: Schema.String,
   envGlobalPath: Schema.optionalWith(Schema.String, {
     default: () => defaultTemplateConfig.envGlobalPath

@@ -44,6 +44,7 @@ export const buildProjectConfigs = (
 
   const globalConfig = {
     ...resolvedConfig,
+    dockerGitPath: resolvePathFromBase(path, baseDir, resolvedConfig.dockerGitPath),
     authorizedKeysPath: resolvePathFromBase(path, baseDir, resolvedConfig.authorizedKeysPath),
     envGlobalPath: resolvePathFromBase(path, baseDir, resolvedConfig.envGlobalPath),
     envProjectPath: resolvePathFromBase(path, baseDir, resolvedConfig.envProjectPath),
@@ -52,6 +53,7 @@ export const buildProjectConfigs = (
   }
   const projectConfig = {
     ...resolvedConfig,
+    dockerGitPath: relativeFromOutDir(globalConfig.dockerGitPath),
     authorizedKeysPath: relativeFromOutDir(globalConfig.authorizedKeysPath),
     envGlobalPath: "./.orch/env/global.env",
     envProjectPath: path.isAbsolute(resolvedConfig.envProjectPath)

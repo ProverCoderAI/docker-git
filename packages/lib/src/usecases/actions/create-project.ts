@@ -46,6 +46,7 @@ const makeCreateContext = (path: Path.Path, baseDir: string): CreateContext => {
 
 const resolveRootedConfig = (command: CreateCommand, ctx: CreateContext): CreateCommand["config"] => ({
   ...command.config,
+  dockerGitPath: ctx.resolveRootPath(command.config.dockerGitPath),
   authorizedKeysPath: ctx.resolveRootPath(command.config.authorizedKeysPath),
   envGlobalPath: ctx.resolveRootPath(command.config.envGlobalPath),
   envProjectPath: ctx.resolveRootPath(command.config.envProjectPath),

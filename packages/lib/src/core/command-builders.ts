@@ -104,6 +104,7 @@ const resolveNames = (
   })
 
 type PathConfig = {
+  readonly dockerGitPath: string
   readonly authorizedKeysPath: string
   readonly envGlobalPath: string
   readonly envProjectPath: string
@@ -126,6 +127,9 @@ const resolvePaths = (
     const defaultAuthorizedKeysPath = normalizedSecretsRoot === undefined
       ? defaultTemplateConfig.authorizedKeysPath
       : `${normalizedSecretsRoot}/authorized_keys`
+    const defaultDockerGitPath = normalizedSecretsRoot === undefined
+      ? defaultTemplateConfig.dockerGitPath
+      : normalizedSecretsRoot
     const defaultEnvGlobalPath = normalizedSecretsRoot === undefined
       ? defaultTemplateConfig.envGlobalPath
       : `${normalizedSecretsRoot}/global.env`
@@ -135,6 +139,7 @@ const resolvePaths = (
     const defaultCodexAuthPath = normalizedSecretsRoot === undefined
       ? defaultTemplateConfig.codexAuthPath
       : `${normalizedSecretsRoot}/codex`
+    const dockerGitPath = defaultDockerGitPath
     const authorizedKeysPath = yield* _(
       nonEmpty("--authorized-keys", raw.authorizedKeysPath, defaultAuthorizedKeysPath)
     )
@@ -149,7 +154,16 @@ const resolvePaths = (
     const codexHome = yield* _(nonEmpty("--codex-home", raw.codexHome, defaultTemplateConfig.codexHome))
     const outDir = yield* _(nonEmpty("--out-dir", raw.outDir, `.docker-git/${repoPath}`))
 
-    return { authorizedKeysPath, envGlobalPath, envProjectPath, codexAuthPath, codexSharedAuthPath, codexHome, outDir }
+    return {
+      dockerGitPath,
+      authorizedKeysPath,
+      envGlobalPath,
+      envProjectPath,
+      codexAuthPath,
+      codexSharedAuthPath,
+      codexHome,
+      outDir
+    }
   })
 
 // CHANGE: build a typed create command from raw options (CLI or API)
@@ -190,6 +204,7 @@ export const buildCreateCommand = (
         repoRef: repo.repoRef,
         targetDir: repo.targetDir,
         volumeName: names.volumeName,
+        dockerGitPath: paths.dockerGitPath,
         authorizedKeysPath: paths.authorizedKeysPath,
         envGlobalPath: paths.envGlobalPath,
         envProjectPath: paths.envProjectPath,

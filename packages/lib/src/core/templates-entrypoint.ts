@@ -15,6 +15,7 @@ import {
   renderEntrypointCodexHome,
   renderEntrypointCodexResumeHint,
   renderEntrypointCodexSharedAuth,
+  renderEntrypointDockerGitBootstrap,
   renderEntrypointMcpPlaywright
 } from "./templates-entrypoint/codex.js"
 import { renderEntrypointGitConfig, renderEntrypointGitHooks } from "./templates-entrypoint/git.js"
@@ -32,6 +33,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointAuthorizedKeys(config),
     renderEntrypointCodexHome(config),
     renderEntrypointCodexSharedAuth(config),
+    renderEntrypointDockerGitBootstrap(config),
     renderEntrypointMcpPlaywright(config),
     renderEntrypointZshShell(config),
     renderEntrypointZshUserRc(config),

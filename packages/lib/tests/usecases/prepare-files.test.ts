@@ -31,6 +31,7 @@ const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   repoRef: "main",
   targetDir: "/home/dev/org/repo",
   volumeName: "dg-test-home",
+  dockerGitPath: path.join(root, ".docker-git"),
   authorizedKeysPath: path.join(root, "authorized_keys"),
   envGlobalPath: path.join(root, ".orch/env/global.env"),
   envProjectPath: path.join(root, ".orch/env/project.env"),
@@ -54,6 +55,7 @@ const makeProjectConfig = (
   repoRef: "main",
   targetDir: "/home/dev/org/repo",
   volumeName: "dg-test-home",
+  dockerGitPath: path.join(outDir, ".docker-git"),
   authorizedKeysPath: path.join(outDir, "authorized_keys"),
   envGlobalPath: path.join(outDir, ".orch/env/global.env"),
   envProjectPath: path.join(outDir, ".orch/env/project.env"),
@@ -99,7 +101,13 @@ describe("prepareProjectFiles", () => {
           })
         )
 
+        const dockerfile = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
+        const entrypoint = yield* _(fs.readFileString(path.join(outDir, "entrypoint.sh")))
         const composeBefore = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+        expect(dockerfile).toContain("docker-compose-v2")
+        expect(entrypoint).toContain('DOCKER_GIT_HOME="/home/dev/.docker-git"')
+        expect(entrypoint).toContain('SOURCE_SHARED_AUTH="/home/dev/.codex-shared/auth.json"')
+        expect(composeBefore).toContain(":/home/dev/.docker-git")
         expect(composeBefore).not.toContain("dg-test-browser")
 
         yield* _(
