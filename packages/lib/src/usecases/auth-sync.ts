@@ -3,6 +3,7 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
+import { parseEnvEntries, removeEnvKey, upsertEnvKey } from "./env-file.js"
 import { withFsPathContext } from "./runtime.js"
 
 type CopyDecision = "skip" | "copy"
@@ -68,6 +69,69 @@ const shouldCopyEnv = (sourceText: string, targetText: string): CopyDecision => 
   }
   return "skip"
 }
+
+const isGithubTokenKey = (key: string): boolean =>
+  key === "GITHUB_TOKEN" || key === "GH_TOKEN" || key.startsWith("GITHUB_TOKEN__")
+
+// CHANGE: synchronize GitHub auth keys between env files
+// WHY: avoid stale per-project tokens that cause clone auth failures after token rotation
+// QUOTE(ТЗ): n/a
+// REF: user-request-2026-02-11-clone-invalid-token
+// SOURCE: n/a
+// FORMAT THEOREM: ∀k ∈ github_token_keys: source(k)=v → merged(k)=v
+// PURITY: CORE
+// INVARIANT: non-auth keys in target are preserved
+// COMPLEXITY: O(n) where n = |env entries|
+export const syncGithubAuthKeys = (sourceText: string, targetText: string): string => {
+  const sourceTokenEntries = parseEnvEntries(sourceText).filter((entry) => isGithubTokenKey(entry.key))
+  if (sourceTokenEntries.length === 0) {
+    return targetText
+  }
+
+  const targetTokenKeys = parseEnvEntries(targetText)
+    .filter((entry) => isGithubTokenKey(entry.key))
+    .map((entry) => entry.key)
+
+  let next = targetText
+  for (const key of targetTokenKeys) {
+    next = removeEnvKey(next, key)
+  }
+  for (const entry of sourceTokenEntries) {
+    next = upsertEnvKey(next, entry.key, entry.value)
+  }
+
+  return next
+}
+
+const syncGithubTokenKeysInFile = (
+  sourcePath: string,
+  targetPath: string
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  withFsPathContext(({ fs }) =>
+    Effect.gen(function*(_) {
+      const sourceExists = yield* _(fs.exists(sourcePath))
+      if (!sourceExists) {
+        return
+      }
+      const targetExists = yield* _(fs.exists(targetPath))
+      if (!targetExists) {
+        return
+      }
+      const sourceInfo = yield* _(fs.stat(sourcePath))
+      const targetInfo = yield* _(fs.stat(targetPath))
+      if (sourceInfo.type !== "File" || targetInfo.type !== "File") {
+        return
+      }
+
+      const sourceText = yield* _(fs.readFileString(sourcePath))
+      const targetText = yield* _(fs.readFileString(targetPath))
+      const mergedText = syncGithubAuthKeys(sourceText, targetText)
+      if (mergedText !== targetText) {
+        yield* _(fs.writeFileString(targetPath, mergedText))
+        yield* _(Effect.log(`Synced GitHub auth keys from ${sourcePath} to ${targetPath}`))
+      }
+    })
+  )
 
 const copyFileIfNeeded = (
   sourcePath: string,
@@ -249,6 +313,7 @@ export const syncAuthArtifacts = (
       const targetCodex = resolvePathFromBase(path, spec.targetBase, spec.target.codexAuthPath)
 
       yield* _(copyFileIfNeeded(sourceGlobal, targetGlobal))
+      yield* _(syncGithubTokenKeysInFile(sourceGlobal, targetGlobal))
       yield* _(copyFileIfNeeded(sourceProject, targetProject))
       yield* _(fs.makeDirectory(targetCodex, { recursive: true }))
       if (sourceCodex !== targetCodex) {
