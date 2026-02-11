@@ -40,6 +40,11 @@ const isParseError = (error: AppError): error is ParseError =>
   error._tag === "InvalidOption" ||
   error._tag === "UnexpectedArgument"
 
+const renderDockerAccessHeadline = (issue: DockerAccessError["issue"]): string =>
+  issue === "PermissionDenied"
+    ? "Cannot access Docker daemon socket: permission denied."
+    : "Cannot connect to Docker daemon."
+
 const renderPrimaryError = (error: NonParseError): string | null => {
   if (error._tag === "FileExistsError") {
     return `File already exists: ${error.path} (use --force to overwrite)`
@@ -53,12 +58,8 @@ const renderPrimaryError = (error: NonParseError): string | null => {
   }
 
   if (error._tag === "DockerAccessError") {
-    const headline =
-      error.issue === "PermissionDenied"
-        ? "Cannot access Docker daemon socket: permission denied."
-        : "Cannot connect to Docker daemon."
     return [
-      headline,
+      renderDockerAccessHeadline(error.issue),
       "Hint: ensure Docker daemon is running and current user can access the docker socket.",
       "Hint: if you use rootless Docker, set DOCKER_HOST to your user socket (for example unix:///run/user/$UID/docker.sock).",
       `Details: ${error.details}`
