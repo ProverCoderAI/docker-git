@@ -1,7 +1,5 @@
-import * as fs from "node:fs"
-import * as os from "node:os"
-import * as path from "node:path"
-
+import * as FileSystem from "@effect/platform/FileSystem"
+import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
@@ -9,20 +7,22 @@ import { Effect } from "effect"
 import type { TemplateConfig } from "../../src/core/domain.js"
 import { prepareProjectFiles } from "../../src/usecases/actions/prepare-files.js"
 
-const withTempDir = <A, E, R>(use: (tempDir: string) => Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+const withTempDir = <A, E, R>(
+  use: (tempDir: string) => Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R | FileSystem.FileSystem> =>
   Effect.scoped(
     Effect.gen(function*(_) {
+      const fs = yield* _(FileSystem.FileSystem)
       const tempDir = yield* _(
-        Effect.acquireRelease(
-          Effect.sync(() => fs.mkdtempSync(path.join(os.tmpdir(), "docker-git-force-env-"))),
-          (dir) => Effect.sync(() => fs.rmSync(dir, { recursive: true, force: true }))
-        )
+        fs.makeTempDirectoryScoped({
+          prefix: "docker-git-force-env-"
+        })
       )
       return yield* _(use(tempDir))
     })
   )
 
-const makeGlobalConfig = (root: string): TemplateConfig => ({
+const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   containerName: "dg-test",
   serviceName: "dg-test",
   sshUser: "dev",
@@ -41,7 +41,11 @@ const makeGlobalConfig = (root: string): TemplateConfig => ({
   pnpmVersion: "10.27.0"
 })
 
-const makeProjectConfig = (outDir: string, enableMcpPlaywright: boolean): TemplateConfig => ({
+const makeProjectConfig = (
+  outDir: string,
+  enableMcpPlaywright: boolean,
+  path: Path.Path
+): TemplateConfig => ({
   containerName: "dg-test",
   serviceName: "dg-test",
   sshUser: "dev",
@@ -60,14 +64,33 @@ const makeProjectConfig = (outDir: string, enableMcpPlaywright: boolean): Templa
   pnpmVersion: "10.27.0"
 })
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null
+
+const readEnableMcpPlaywrightFlag = (value: unknown): boolean | undefined => {
+  if (!isRecord(value)) {
+    return undefined
+  }
+
+  const template = value.template
+  if (!isRecord(template)) {
+    return undefined
+  }
+
+  const flag = template.enableMcpPlaywright
+  return typeof flag === "boolean" ? flag : undefined
+}
+
 describe("prepareProjectFiles", () => {
   it.effect("force-env refresh rewrites managed templates", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
         const outDir = path.join(root, "project")
-        const globalConfig = makeGlobalConfig(root)
-        const withoutMcp = makeProjectConfig(outDir, false)
-        const withMcp = makeProjectConfig(outDir, true)
+        const globalConfig = makeGlobalConfig(root, path)
+        const withoutMcp = makeProjectConfig(outDir, false, path)
+        const withMcp = makeProjectConfig(outDir, true, path)
 
         yield* _(
           prepareProjectFiles(outDir, root, globalConfig, withoutMcp, {
@@ -76,9 +99,7 @@ describe("prepareProjectFiles", () => {
           })
         )
 
-        const composeBefore = yield* _(
-          Effect.sync(() => fs.readFileSync(path.join(outDir, "docker-compose.yml"), "utf8"))
-        )
+        const composeBefore = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
         expect(composeBefore).not.toContain("dg-test-browser")
 
         yield* _(
@@ -88,16 +109,13 @@ describe("prepareProjectFiles", () => {
           })
         )
 
-        const composeAfter = yield* _(
-          Effect.sync(() => fs.readFileSync(path.join(outDir, "docker-compose.yml"), "utf8"))
-        )
-        const configAfter = yield* _(
-          Effect.sync(() => JSON.parse(fs.readFileSync(path.join(outDir, "docker-git.json"), "utf8")))
-        )
+        const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+        const configAfterText = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
+        const configAfter = yield* _(Effect.sync((): unknown => JSON.parse(configAfterText)))
 
         expect(composeAfter).toContain("dg-test-browser")
         expect(composeAfter).toContain('MCP_PLAYWRIGHT_ENABLE: "1"')
-        expect(configAfter.template.enableMcpPlaywright).toBe(true)
+        expect(readEnableMcpPlaywrightFlag(configAfter)).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })
