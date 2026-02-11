@@ -39,11 +39,15 @@ describe("planFiles", () => {
       const dockerfileSpec = specs.find(
         (spec) => spec._tag === "File" && spec.relativePath === "Dockerfile"
       )
+      const entrypointSpec = specs.find(
+        (spec) => spec._tag === "File" && spec.relativePath === "entrypoint.sh"
+      )
 
       expect(composeSpec !== undefined && composeSpec._tag === "File").toBe(true)
       expect(ignoreSpec !== undefined && ignoreSpec._tag === "File").toBe(true)
       expect(configSpec !== undefined && configSpec._tag === "File").toBe(true)
       expect(dockerfileSpec !== undefined && dockerfileSpec._tag === "File").toBe(true)
+      expect(entrypointSpec !== undefined && entrypointSpec._tag === "File").toBe(true)
 
       if (configSpec && configSpec._tag === "File") {
         expect(configSpec.contents).toContain(config.repoUrl)
@@ -60,6 +64,11 @@ describe("planFiles", () => {
         expect(dockerfileSpec.contents).toContain("AUTO_MENU")
         expect(dockerfileSpec.contents).toContain("ncurses-term")
         expect(dockerfileSpec.contents).toContain("tag-order builtins commands")
+      }
+
+      if (entrypointSpec && entrypointSpec._tag === "File") {
+        expect(entrypointSpec.contents).toContain("gh auth setup-git --hostname github.com --force")
+        expect(entrypointSpec.contents).toContain("GIT_USER_EMAIL=\"${GH_ID}+${GH_LOGIN}@users.noreply.github.com\"")
       }
     }))
 
