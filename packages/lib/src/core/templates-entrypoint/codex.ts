@@ -168,49 +168,64 @@ elif [[ "$REPO_REF" == refs/pull/*/head ]]; then
   fi
 fi
 if [[ ! -f "$AGENTS_PATH" ]]; then
-  cat <<'AGENTS_EOF' > "$AGENTS_PATH"
+  MANAGED_START="<!-- docker-git:managed:start -->"
+  MANAGED_END="<!-- docker-git:managed:end -->"
+  MANAGED_BLOCK="$(cat <<EOF
+$MANAGED_START
+$PROJECT_LINE
+$WORKSPACES_LINE
+$WORKSPACE_INFO_LINE
+$FOCUS_LINE
+$ISSUE_AGENTS_HINT_LINE
+$INTERNET_LINE
+$MANAGED_END
+EOF
+)"
+  cat <<EOF > "$AGENTS_PATH"
 Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
-Рабочая папка проекта (git clone): __TARGET_DIR__
-Доступные workspace пути: __TARGET_DIR__
-Контекст workspace: repository
-Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
-Issue AGENTS.md: n/a
-Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
+$MANAGED_BLOCK
 Если ты видишь файлы AGENTS.md внутри проекта, ты обязан их читать и соблюдать инструкции.
-AGENTS_EOF
+EOF
   chown 1000:1000 "$AGENTS_PATH" || true
 fi
 if [[ -f "$AGENTS_PATH" ]]; then
-  if grep -q "^Рабочая папка проекта (git clone):" "$AGENTS_PATH"; then
-    sed -i "s|^Рабочая папка проекта (git clone):.*$|$PROJECT_LINE|" "$AGENTS_PATH"
+  MANAGED_START="<!-- docker-git:managed:start -->"
+  MANAGED_END="<!-- docker-git:managed:end -->"
+  MANAGED_BLOCK="$(cat <<EOF
+$MANAGED_START
+$PROJECT_LINE
+$WORKSPACES_LINE
+$WORKSPACE_INFO_LINE
+$FOCUS_LINE
+$ISSUE_AGENTS_HINT_LINE
+$INTERNET_LINE
+$MANAGED_END
+EOF
+)"
+  TMP_AGENTS_PATH="$(mktemp)"
+  if grep -qF "$MANAGED_START" "$AGENTS_PATH" && grep -qF "$MANAGED_END" "$AGENTS_PATH"; then
+    awk -v start="$MANAGED_START" -v end="$MANAGED_END" -v repl="$MANAGED_BLOCK" '
+      BEGIN { in_block = 0 }
+      $0 == start { print repl; in_block = 1; next }
+      $0 == end { in_block = 0; next }
+      in_block == 0 { print }
+    ' "$AGENTS_PATH" > "$TMP_AGENTS_PATH"
   else
-    printf "%s\n" "$PROJECT_LINE" >> "$AGENTS_PATH"
+    sed \
+      -e '/^Рабочая папка проекта (git clone):/d' \
+      -e '/^Доступные workspace пути:/d' \
+      -e '/^Контекст workspace:/d' \
+      -e '/^Фокус задачи:/d' \
+      -e '/^Issue AGENTS.md:/d' \
+      -e '/^Доступ к интернету:/d' \
+      "$AGENTS_PATH" > "$TMP_AGENTS_PATH"
+    if [[ -s "$TMP_AGENTS_PATH" ]]; then
+      printf "\n" >> "$TMP_AGENTS_PATH"
+    fi
+    printf "%s\n" "$MANAGED_BLOCK" >> "$TMP_AGENTS_PATH"
   fi
-  if grep -q "^Доступные workspace пути:" "$AGENTS_PATH"; then
-    sed -i "s|^Доступные workspace пути:.*$|$WORKSPACES_LINE|" "$AGENTS_PATH"
-  else
-    printf "%s\n" "$WORKSPACES_LINE" >> "$AGENTS_PATH"
-  fi
-  if grep -q "^Контекст workspace:" "$AGENTS_PATH"; then
-    sed -i "s|^Контекст workspace:.*$|$WORKSPACE_INFO_LINE|" "$AGENTS_PATH"
-  else
-    printf "%s\n" "$WORKSPACE_INFO_LINE" >> "$AGENTS_PATH"
-  fi
-  if grep -q "^Фокус задачи:" "$AGENTS_PATH"; then
-    sed -i "s|^Фокус задачи:.*$|$FOCUS_LINE|" "$AGENTS_PATH"
-  else
-    printf "%s\n" "$FOCUS_LINE" >> "$AGENTS_PATH"
-  fi
-  if grep -q "^Issue AGENTS.md:" "$AGENTS_PATH"; then
-    sed -i "s|^Issue AGENTS.md:.*$|$ISSUE_AGENTS_HINT_LINE|" "$AGENTS_PATH"
-  else
-    printf "%s\n" "$ISSUE_AGENTS_HINT_LINE" >> "$AGENTS_PATH"
-  fi
-  if grep -q "^Доступ к интернету:" "$AGENTS_PATH"; then
-    sed -i "s|^Доступ к интернету:.*$|$INTERNET_LINE|" "$AGENTS_PATH"
-  else
-    printf "%s\n" "$INTERNET_LINE" >> "$AGENTS_PATH"
-  fi
+  mv "$TMP_AGENTS_PATH" "$AGENTS_PATH"
+  chown 1000:1000 "$AGENTS_PATH" || true
 fi
 if [[ -f "$LEGACY_AGENTS_PATH" && -f "$AGENTS_PATH" ]]; then
   LEGACY_SUM="$(cksum "$LEGACY_AGENTS_PATH" 2>/dev/null | awk '{print $1 \":\" $2}')"
