@@ -5,26 +5,19 @@ import type { RawOptions } from "@effect-template/lib/core/command-options"
 import {
   type Command,
   defaultTemplateConfig,
-  deriveRepoPathParts,
   type ParseError,
   resolveRepoInput
 } from "@effect-template/lib/core/domain"
 
 import { parseRawOptions } from "./parser-options.js"
-import { splitPositionalRepo } from "./parser-shared.js"
-
-const resolveCloneRepoPath = (resolvedRepo: ReturnType<typeof resolveRepoInput>): string => {
-  const baseParts = deriveRepoPathParts(resolvedRepo.repoUrl).pathParts
-  const projectParts = resolvedRepo.workspaceSuffix ? [...baseParts, resolvedRepo.workspaceSuffix] : baseParts
-  return projectParts.join("/")
-}
+import { resolveWorkspaceRepoPath, splitPositionalRepo } from "./parser-shared.js"
 
 const applyCloneDefaults = (
   raw: RawOptions,
   rawRepoUrl: string,
   resolvedRepo: ReturnType<typeof resolveRepoInput>
 ): RawOptions => {
-  const repoPath = resolveCloneRepoPath(resolvedRepo)
+  const repoPath = resolveWorkspaceRepoPath(resolvedRepo)
   const sshUser = raw.sshUser?.trim() ?? defaultTemplateConfig.sshUser
   const homeDir = `/home/${sshUser}`
   return {
