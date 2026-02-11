@@ -3,6 +3,7 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
+import { copyCodexFile, copyDirIfEmpty } from "./auth-copy.js"
 import { parseEnvEntries, removeEnvKey, upsertEnvKey } from "./env-file.js"
 import { withFsPathContext } from "./runtime.js"
 
@@ -163,58 +164,6 @@ const copyFileIfNeeded = (
     })
   )
 
-const copyDirRecursive = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  sourcePath: string,
-  targetPath: string
-): Effect.Effect<void, PlatformError> =>
-  Effect.gen(function*(_) {
-    const sourceInfo = yield* _(fs.stat(sourcePath))
-    if (sourceInfo.type !== "Directory") {
-      return
-    }
-    yield* _(fs.makeDirectory(targetPath, { recursive: true }))
-    const entries = yield* _(fs.readDirectory(sourcePath))
-    for (const entry of entries) {
-      const sourceEntry = path.join(sourcePath, entry)
-      const targetEntry = path.join(targetPath, entry)
-      const entryInfo = yield* _(fs.stat(sourceEntry))
-      if (entryInfo.type === "Directory") {
-        yield* _(copyDirRecursive(fs, path, sourceEntry, targetEntry))
-      } else if (entryInfo.type === "File") {
-        yield* _(fs.copyFile(sourceEntry, targetEntry))
-      }
-    }
-  })
-
-type CodexFileCopySpec = {
-  readonly sourceDir: string
-  readonly targetDir: string
-  readonly fileName: string
-  readonly label: string
-}
-
-const copyCodexFile = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  spec: CodexFileCopySpec
-): Effect.Effect<void, PlatformError> =>
-  Effect.gen(function*(_) {
-    const sourceFile = path.join(spec.sourceDir, spec.fileName)
-    const targetFile = path.join(spec.targetDir, spec.fileName)
-    const sourceExists = yield* _(fs.exists(sourceFile))
-    if (!sourceExists) {
-      return
-    }
-    const targetExists = yield* _(fs.exists(targetFile))
-    if (targetExists) {
-      return
-    }
-    yield* _(fs.copyFile(sourceFile, targetFile))
-    yield* _(Effect.log(`Copied Codex ${spec.label} from ${sourceFile} to ${targetFile}`))
-  })
-
 // CHANGE: ensure Codex config exists with full-access defaults
 // WHY: enable all codex commands without extra prompts inside containers
 // QUOTE(ТЗ): "сразу настраивал полностью весь доступ ко всем командам"
@@ -249,44 +198,6 @@ export const ensureCodexConfigFile = (
     })
   )
 
-const copyDirIfEmpty = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  sourceDir: string,
-  targetDir: string,
-  label: string
-): Effect.Effect<void, PlatformError> =>
-  Effect.gen(function*(_) {
-    if (sourceDir === targetDir) {
-      return
-    }
-    const sourceExists = yield* _(fs.exists(sourceDir))
-    if (!sourceExists) {
-      return
-    }
-    const sourceInfo = yield* _(fs.stat(sourceDir))
-    if (sourceInfo.type !== "Directory") {
-      return
-    }
-    yield* _(fs.makeDirectory(targetDir, { recursive: true }))
-    const targetEntries = yield* _(fs.readDirectory(targetDir))
-    if (targetEntries.length > 0) {
-      return
-    }
-    yield* _(copyDirRecursive(fs, path, sourceDir, targetDir))
-    yield* _(Effect.log(`Copied ${label} from ${sourceDir} to ${targetDir}`))
-  })
-
-// CHANGE: sync shared auth artifacts into new project directory
-// WHY: reuse global GH/Codex auth across containers automatically
-// QUOTE(ТЗ): "автоматически всё копировали на наш контейнер? и gh тоже"
-// REF: user-request-2026-01-29-auth-sync
-// SOURCE: n/a
-// FORMAT THEOREM: forall p: sync(p) -> env,codex_auth available(p)
-// PURITY: SHELL
-// EFFECT: Effect<void, PlatformError, FileSystem | Path>
-// INVARIANT: only copies when target is empty or placeholder
-// COMPLEXITY: O(n) where n = |files|
 type AuthPaths = {
   readonly envGlobalPath: string
   readonly envProjectPath: string
@@ -341,16 +252,6 @@ export const syncAuthArtifacts = (
     })
   )
 
-// CHANGE: migrate legacy .orch layout into the new .docker-git/.orch location
-// WHY: keep all shared auth/config files under .docker-git by default
-// QUOTE(ТЗ): "по умолчанию все конфиги хранились вместе ... .docker-git"
-// REF: user-request-2026-01-29-orch-layout
-// SOURCE: n/a
-// FORMAT THEOREM: forall s: legacy(s) -> migrated(s)
-// PURITY: SHELL
-// EFFECT: Effect<void, PlatformError, FileSystem | Path>
-// INVARIANT: never overwrites existing non-empty targets
-// COMPLEXITY: O(n) where n = |files|
 export const migrateLegacyOrchLayout = (
   baseDir: string,
   envGlobalPath: string,

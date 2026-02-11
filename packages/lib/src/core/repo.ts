@@ -205,9 +205,10 @@ export const parseGithubRepoUrl = (input: string): GithubRepo | null => {
   return { owner, repo }
 }
 
-type ResolvedRepoInput = {
+export type ResolvedRepoInput = {
   readonly repoUrl: string
   readonly repoRef?: string
+  readonly workspaceSuffix?: string
 }
 
 type GithubRefParts = {
@@ -244,9 +245,11 @@ const parseGithubPrUrl = (input: string): ResolvedRepoInput | null => {
   }
 
   const repo = stripGitSuffix(parsed.repoRaw)
+  const workspaceSuffix = `pr-${slugify(parsed.ref)}`
   return {
     repoUrl: `https://github.com/${parsed.owner}/${repo}.git`,
-    repoRef: `refs/pull/${parsed.ref}/head`
+    repoRef: `refs/pull/${parsed.ref}/head`,
+    workspaceSuffix
   }
 }
 
@@ -278,7 +281,7 @@ const parseGithubTreeUrl = (input: string): ResolvedRepoInput | null => {
 // FORMAT THEOREM: ∀u: issue(u) → repo(u)
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: issue URL yields repoUrl without repoRef
+// INVARIANT: issue URL yields repoUrl + deterministic issue branch
 // COMPLEXITY: O(n) where n = |url|
 const parseGithubIssueUrl = (input: string): ResolvedRepoInput | null => {
   const parsed = parseGithubRefParts(input)
@@ -287,7 +290,12 @@ const parseGithubIssueUrl = (input: string): ResolvedRepoInput | null => {
   }
 
   const repo = stripGitSuffix(parsed.repoRaw)
-  return { repoUrl: `https://github.com/${parsed.owner}/${repo}.git` }
+  const workspaceSuffix = `issue-${slugify(parsed.ref)}`
+  return {
+    repoUrl: `https://github.com/${parsed.owner}/${repo}.git`,
+    repoRef: workspaceSuffix,
+    workspaceSuffix
+  }
 }
 
 // CHANGE: normalize repo input and PR/issue URLs into repo + ref

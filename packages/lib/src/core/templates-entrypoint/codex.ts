@@ -135,32 +135,97 @@ if [[ -s /etc/zsh/zshrc ]] && ! grep -q "zz-codex-resume.sh" /etc/zsh/zshrc 2>/d
   printf "%s\\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then source /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/zsh/zshrc
 fi`
 
-export const renderEntrypointAgentsNotice = (config: TemplateConfig): string =>
-  String.raw`# Ensure global AGENTS.md exists for container context
-AGENTS_PATH="${config.codexHome}/AGENTS.md"
-LEGACY_AGENTS_PATH="/home/${config.sshUser}/AGENTS.md"
-PROJECT_LINE="Рабочая папка проекта (git clone): ${config.targetDir}"
+const entrypointAgentsNoticeTemplate = String.raw`# Ensure global AGENTS.md exists for container context
+AGENTS_PATH="__CODEX_HOME__/AGENTS.md"
+LEGACY_AGENTS_PATH="/home/__SSH_USER__/AGENTS.md"
+PROJECT_LINE="Рабочая папка проекта (git clone): __TARGET_DIR__"
+WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
+WORKSPACE_INFO_LINE="Контекст workspace: repository"
+FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__"
+ISSUE_AGENTS_HINT_LINE="Issue AGENTS.md: n/a"
 INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
+if [[ "$REPO_REF" == issue-* ]]; then
+  ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
+  ISSUE_URL=""
+  if [[ "$REPO_URL" == https://github.com/* ]]; then
+    ISSUE_REPO="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##')"
+    if [[ -n "$ISSUE_REPO" ]]; then
+      ISSUE_URL="https://github.com/$ISSUE_REPO/issues/$ISSUE_ID"
+    fi
+  fi
+  if [[ -n "$ISSUE_URL" ]]; then
+    WORKSPACE_INFO_LINE="Контекст workspace: issue #$ISSUE_ID ($ISSUE_URL)"
+  else
+    WORKSPACE_INFO_LINE="Контекст workspace: issue #$ISSUE_ID"
+  fi
+  ISSUE_AGENTS_HINT_LINE="Issue AGENTS.md: __TARGET_DIR__/AGENTS.md"
+elif [[ "$REPO_REF" == refs/pull/*/head ]]; then
+  PR_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^refs/pull/([0-9]+)/head$#\1#')"
+  if [[ -n "$PR_ID" ]]; then
+    WORKSPACE_INFO_LINE="Контекст workspace: PR #$PR_ID"
+  else
+    WORKSPACE_INFO_LINE="Контекст workspace: pull request ($REPO_REF)"
+  fi
+fi
 if [[ ! -f "$AGENTS_PATH" ]]; then
-  cat <<'AGENTS_EOF' > "$AGENTS_PATH"
+  MANAGED_START="<!-- docker-git:managed:start -->"
+  MANAGED_END="<!-- docker-git:managed:end -->"
+  MANAGED_BLOCK="$(cat <<EOF
+$MANAGED_START
+$PROJECT_LINE
+$WORKSPACES_LINE
+$WORKSPACE_INFO_LINE
+$FOCUS_LINE
+$ISSUE_AGENTS_HINT_LINE
+$INTERNET_LINE
+$MANAGED_END
+EOF
+)"
+  cat <<EOF > "$AGENTS_PATH"
 Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
-Рабочая папка проекта (git clone): ${config.targetDir}
-Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
+$MANAGED_BLOCK
 Если ты видишь файлы AGENTS.md внутри проекта, ты обязан их читать и соблюдать инструкции.
-AGENTS_EOF
+EOF
   chown 1000:1000 "$AGENTS_PATH" || true
 fi
 if [[ -f "$AGENTS_PATH" ]]; then
-  if grep -q "^Рабочая папка проекта (git clone):" "$AGENTS_PATH"; then
-    sed -i "s|^Рабочая папка проекта (git clone):.*$|$PROJECT_LINE|" "$AGENTS_PATH"
+  MANAGED_START="<!-- docker-git:managed:start -->"
+  MANAGED_END="<!-- docker-git:managed:end -->"
+  MANAGED_BLOCK="$(cat <<EOF
+$MANAGED_START
+$PROJECT_LINE
+$WORKSPACES_LINE
+$WORKSPACE_INFO_LINE
+$FOCUS_LINE
+$ISSUE_AGENTS_HINT_LINE
+$INTERNET_LINE
+$MANAGED_END
+EOF
+)"
+  TMP_AGENTS_PATH="$(mktemp)"
+  if grep -qF "$MANAGED_START" "$AGENTS_PATH" && grep -qF "$MANAGED_END" "$AGENTS_PATH"; then
+    awk -v start="$MANAGED_START" -v end="$MANAGED_END" -v repl="$MANAGED_BLOCK" '
+      BEGIN { in_block = 0 }
+      $0 == start { print repl; in_block = 1; next }
+      $0 == end { in_block = 0; next }
+      in_block == 0 { print }
+    ' "$AGENTS_PATH" > "$TMP_AGENTS_PATH"
   else
-    printf "%s\n" "$PROJECT_LINE" >> "$AGENTS_PATH"
+    sed \
+      -e '/^Рабочая папка проекта (git clone):/d' \
+      -e '/^Доступные workspace пути:/d' \
+      -e '/^Контекст workspace:/d' \
+      -e '/^Фокус задачи:/d' \
+      -e '/^Issue AGENTS.md:/d' \
+      -e '/^Доступ к интернету:/d' \
+      "$AGENTS_PATH" > "$TMP_AGENTS_PATH"
+    if [[ -s "$TMP_AGENTS_PATH" ]]; then
+      printf "\n" >> "$TMP_AGENTS_PATH"
+    fi
+    printf "%s\n" "$MANAGED_BLOCK" >> "$TMP_AGENTS_PATH"
   fi
-  if grep -q "^Доступ к интернету:" "$AGENTS_PATH"; then
-    sed -i "s|^Доступ к интернету:.*$|$INTERNET_LINE|" "$AGENTS_PATH"
-  else
-    printf "%s\n" "$INTERNET_LINE" >> "$AGENTS_PATH"
-  fi
+  mv "$TMP_AGENTS_PATH" "$AGENTS_PATH"
+  chown 1000:1000 "$AGENTS_PATH" || true
 fi
 if [[ -f "$LEGACY_AGENTS_PATH" && -f "$AGENTS_PATH" ]]; then
   LEGACY_SUM="$(cksum "$LEGACY_AGENTS_PATH" 2>/dev/null | awk '{print $1 \":\" $2}')"
@@ -169,3 +234,9 @@ if [[ -f "$LEGACY_AGENTS_PATH" && -f "$AGENTS_PATH" ]]; then
     rm -f "$LEGACY_AGENTS_PATH"
   fi
 fi`
+
+export const renderEntrypointAgentsNotice = (config: TemplateConfig): string =>
+  entrypointAgentsNoticeTemplate
+    .replaceAll("__CODEX_HOME__", config.codexHome)
+    .replaceAll("__SSH_USER__", config.sshUser)
+    .replaceAll("__TARGET_DIR__", config.targetDir)

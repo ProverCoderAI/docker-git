@@ -9,6 +9,7 @@ import {
   runDockerComposeDownVolumes,
   runDockerComposeLogsFollow,
   runDockerComposeUp,
+  runDockerComposeUpRecreate,
   runDockerExecExitCode,
   runDockerInspectContainerBridgeIp,
   runDockerNetworkConnectBridge
@@ -46,6 +47,14 @@ const logSshAccess = (
   })
 
 type CloneState = "pending" | "done" | "failed"
+type DockerUpError = CloneFailedError | DockerCommandError | PlatformError
+type DockerUpEnvironment = CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
+type DockerUpOptions = {
+  readonly runUp: boolean
+  readonly waitForClone: boolean
+  readonly force: boolean
+  readonly forceEnv: boolean
+}
 
 const checkCloneState = (
   cwd: string,
@@ -100,53 +109,74 @@ const waitForCloneCompletion = (
     }
   })
 
-export const runDockerUpIfNeeded = (
+const runDockerComposeUpByMode = (
   resolvedOutDir: string,
-  projectConfig: CreateCommand["config"],
-  runUp: boolean,
-  waitForClone: boolean,
-  force: boolean
-): Effect.Effect<
-  void,
-  CloneFailedError | DockerCommandError | PlatformError,
-  CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
-> =>
+  force: boolean,
+  forceEnv: boolean
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
-    if (!runUp) {
-      return
-    }
     if (force) {
       yield* _(Effect.log("Force enabled: wiping docker compose volumes (docker compose down -v)..."))
       yield* _(runDockerComposeDownVolumes(resolvedOutDir))
+      yield* _(Effect.log("Running: docker compose up -d --build"))
+      yield* _(runDockerComposeUp(resolvedOutDir))
+      return
+    }
+    if (forceEnv) {
+      yield* _(Effect.log("Force env enabled: resetting env defaults and recreating containers (volumes preserved)..."))
+      yield* _(runDockerComposeUpRecreate(resolvedOutDir))
+      return
     }
     yield* _(Effect.log("Running: docker compose up -d --build"))
     yield* _(runDockerComposeUp(resolvedOutDir))
+  })
 
-    const ensureBridgeAccess = (containerName: string) =>
-      runDockerInspectContainerBridgeIp(resolvedOutDir, containerName).pipe(
-        Effect.flatMap((bridgeIp) =>
-          bridgeIp.length > 0
-            ? Effect.void
-            : runDockerNetworkConnectBridge(resolvedOutDir, containerName)
+const ensureContainerBridgeAccess = (
+  resolvedOutDir: string,
+  containerName: string
+): Effect.Effect<void, never, CommandExecutor.CommandExecutor> =>
+  runDockerInspectContainerBridgeIp(resolvedOutDir, containerName).pipe(
+    Effect.flatMap((bridgeIp) =>
+      bridgeIp.length > 0
+        ? Effect.void
+        : runDockerNetworkConnectBridge(resolvedOutDir, containerName)
+    ),
+    Effect.matchEffect({
+      onFailure: (error) =>
+        Effect.logWarning(
+          `Failed to connect ${containerName} to bridge network: ${
+            error instanceof Error ? error.message : String(error)
+          }`
         ),
-        Effect.matchEffect({
-          onFailure: (error) =>
-            Effect.logWarning(
-              `Failed to connect ${containerName} to bridge network: ${
-                error instanceof Error ? error.message : String(error)
-              }`
-            ),
-          onSuccess: () => Effect.void
-        })
-      )
+      onSuccess: () => Effect.void
+    })
+  )
 
+const ensureBridgeAccess = (
+  resolvedOutDir: string,
+  projectConfig: CreateCommand["config"]
+): Effect.Effect<void, never, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
     // Make container ports reachable from other (non-compose) containers by IP.
-    yield* _(ensureBridgeAccess(projectConfig.containerName))
+    yield* _(ensureContainerBridgeAccess(resolvedOutDir, projectConfig.containerName))
     if (projectConfig.enableMcpPlaywright) {
-      yield* _(ensureBridgeAccess(`${projectConfig.containerName}-browser`))
+      yield* _(ensureContainerBridgeAccess(resolvedOutDir, `${projectConfig.containerName}-browser`))
     }
+  })
 
-    if (waitForClone) {
+export const runDockerUpIfNeeded = (
+  resolvedOutDir: string,
+  projectConfig: CreateCommand["config"],
+  options: DockerUpOptions
+): Effect.Effect<void, DockerUpError, DockerUpEnvironment> =>
+  Effect.gen(function*(_) {
+    if (!options.runUp) {
+      return
+    }
+    yield* _(runDockerComposeUpByMode(resolvedOutDir, options.force, options.forceEnv))
+    yield* _(ensureBridgeAccess(resolvedOutDir, projectConfig))
+
+    if (options.waitForClone) {
       yield* _(Effect.log("Streaming container logs until clone completes..."))
       yield* _(waitForCloneCompletion(resolvedOutDir, projectConfig))
     }

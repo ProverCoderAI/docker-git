@@ -50,6 +50,7 @@ export type CreateInputs = {
   readonly runUp: boolean
   readonly enableMcpPlaywright: boolean
   readonly force: boolean
+  readonly forceEnv: boolean
 }
 
 export type CreateStep =

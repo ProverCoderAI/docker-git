@@ -33,6 +33,7 @@ export interface CreateCommand {
   readonly outDir: string
   readonly runUp: boolean
   readonly force: boolean
+  readonly forceEnv: boolean
   readonly waitForClone: boolean
 }
 
