@@ -1,6 +1,6 @@
 import type { TemplateConfig } from "../domain.js"
 
-export const renderEntrypointGitConfig = (config: TemplateConfig): string =>
+const renderEntrypointAuthEnvBridge = (config: TemplateConfig): string =>
   String.raw`# 2) Ensure GitHub auth vars are available for SSH sessions if provided
 if [[ -n "$GH_TOKEN" || -n "$GITHUB_TOKEN" ]]; then
   EFFECTIVE_GITHUB_TOKEN="$GITHUB_TOKEN"
@@ -37,9 +37,10 @@ if [[ -n "$GH_TOKEN" || -n "$GITHUB_TOKEN" ]]; then
   if [[ -z "$GIT_USER_EMAIL" && -n "$GH_LOGIN" && -n "$GH_ID" ]]; then
     GIT_USER_EMAIL="${"${"}GH_ID}+${"${"}GH_LOGIN}@users.noreply.github.com"
   fi
-fi
+fi`
 
-# 3) Configure git credential helper for HTTPS remotes
+const renderEntrypointGitCredentialHelper = (config: TemplateConfig): string =>
+  String.raw`# 3) Configure git credential helper for HTTPS remotes
 GIT_CREDENTIAL_HELPER_PATH="/usr/local/bin/docker-git-credential-helper"
 cat <<'EOF' > "$GIT_CREDENTIAL_HELPER_PATH"
 #!/usr/bin/env bash
@@ -62,9 +63,10 @@ printf "%s\n" "username=x-access-token"
 printf "%s\n" "password=$token"
 EOF
 chmod 0755 "$GIT_CREDENTIAL_HELPER_PATH"
-su - ${config.sshUser} -c "git config --global credential.helper '$GIT_CREDENTIAL_HELPER_PATH'"
+su - ${config.sshUser} -c "git config --global credential.helper '$GIT_CREDENTIAL_HELPER_PATH'"`
 
-# 4) Configure git identity for the dev user if provided
+const renderEntrypointGitIdentity = (config: TemplateConfig): string =>
+  String.raw`# 4) Configure git identity for the dev user if provided
 if [[ -n "$GIT_USER_NAME" ]]; then
   SAFE_GIT_USER_NAME="$(printf "%q" "$GIT_USER_NAME")"
   su - ${config.sshUser} -c "git config --global user.name $SAFE_GIT_USER_NAME"
@@ -74,6 +76,13 @@ if [[ -n "$GIT_USER_EMAIL" ]]; then
   SAFE_GIT_USER_EMAIL="$(printf "%q" "$GIT_USER_EMAIL")"
   su - ${config.sshUser} -c "git config --global user.email $SAFE_GIT_USER_EMAIL"
 fi`
+
+export const renderEntrypointGitConfig = (config: TemplateConfig): string =>
+  [
+    renderEntrypointAuthEnvBridge(config),
+    renderEntrypointGitCredentialHelper(config),
+    renderEntrypointGitIdentity(config)
+  ].join("\n\n")
 
 export const renderEntrypointGitHooks = (): string =>
   String.raw`# 3) Install global git hooks to protect main/master
