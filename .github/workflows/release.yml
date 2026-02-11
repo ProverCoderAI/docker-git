@@ -26,7 +26,7 @@ jobs:
           package_json_path: packages/app/package.json
           pnpm_filter: ./packages/app
           bump_type: patch
-          publish_npm: true
+          publish_npm: false
           publish_github_packages: true
           skip_if_unchanged: true
           cancel_on_no_changes: true
