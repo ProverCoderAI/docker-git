@@ -1,6 +1,7 @@
 {
   "name": "@effect-template/docker-git",
   "version": "0.1.0",
+  "private": true,
   "description": "docker-git orchestrator (CLI + server)",
   "main": "dist/src/server/main.js",
   "type": "module",
