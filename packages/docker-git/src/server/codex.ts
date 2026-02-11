@@ -79,7 +79,6 @@ web_search = "live"
 ${codexConfigLine}
 
 [features]
-web_search_request = true
 shell_snapshot = true
 collab = true
 apps = true
@@ -101,7 +100,6 @@ sandbox_mode = "danger-full-access"
 web_search = "live"
 
 [features]
-web_search_request = true
 shell_snapshot = true
 collab = true
 apps = true
