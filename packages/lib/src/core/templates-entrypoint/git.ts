@@ -1,20 +1,72 @@
 import type { TemplateConfig } from "../domain.js"
 
-export const renderEntrypointGitConfig = (config: TemplateConfig): string =>
-  String.raw`# 2) Ensure GH_TOKEN is available for SSH sessions if provided
-if [[ -n "$GH_TOKEN" ]]; then
-  printf "export GH_TOKEN=%q\n" "$GH_TOKEN" > /etc/profile.d/gh-token.sh
+const renderEntrypointAuthEnvBridge = (config: TemplateConfig): string =>
+  String.raw`# 2) Ensure GitHub auth vars are available for SSH sessions if provided
+if [[ -n "$GH_TOKEN" || -n "$GITHUB_TOKEN" ]]; then
+  EFFECTIVE_GITHUB_TOKEN="$GITHUB_TOKEN"
+  if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
+    EFFECTIVE_GITHUB_TOKEN="$GH_TOKEN"
+  fi
+
+  EFFECTIVE_GH_TOKEN="$GH_TOKEN"
+  if [[ -z "$EFFECTIVE_GH_TOKEN" ]]; then
+    EFFECTIVE_GH_TOKEN="$EFFECTIVE_GITHUB_TOKEN"
+  fi
+
+  printf "export GH_TOKEN=%q\n" "$EFFECTIVE_GH_TOKEN" > /etc/profile.d/gh-token.sh
+  printf "export GITHUB_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN" >> /etc/profile.d/gh-token.sh
   chmod 0644 /etc/profile.d/gh-token.sh
   SSH_ENV_PATH="/home/${config.sshUser}/.ssh/environment"
-  printf "%s\n" "GH_TOKEN=$GH_TOKEN" > "$SSH_ENV_PATH"
-  if [[ -n "$GITHUB_TOKEN" ]]; then
-    printf "%s\n" "GITHUB_TOKEN=$GITHUB_TOKEN" >> "$SSH_ENV_PATH"
-  fi
+  printf "%s\n" "GH_TOKEN=$EFFECTIVE_GH_TOKEN" > "$SSH_ENV_PATH"
+  printf "%s\n" "GITHUB_TOKEN=$EFFECTIVE_GITHUB_TOKEN" >> "$SSH_ENV_PATH"
   chmod 600 "$SSH_ENV_PATH"
   chown 1000:1000 "$SSH_ENV_PATH" || true
+
+  SAFE_GH_TOKEN="$(printf "%q" "$GH_TOKEN")"
+  # Keep git+https auth in sync with gh auth so push/pull works without manual setup.
+  su - ${config.sshUser} -c "GH_TOKEN=$SAFE_GH_TOKEN gh auth setup-git --hostname github.com --force" || true
+
+  GH_LOGIN="$(su - ${config.sshUser} -c "GH_TOKEN=$SAFE_GH_TOKEN gh api user --jq .login" 2>/dev/null || true)"
+  GH_ID="$(su - ${config.sshUser} -c "GH_TOKEN=$SAFE_GH_TOKEN gh api user --jq .id" 2>/dev/null || true)"
+  GH_LOGIN="$(printf "%s" "$GH_LOGIN" | tr -d '\r\n')"
+  GH_ID="$(printf "%s" "$GH_ID" | tr -d '\r\n')"
+
+  if [[ -z "$GIT_USER_NAME" && -n "$GH_LOGIN" ]]; then
+    GIT_USER_NAME="$GH_LOGIN"
+  fi
+  if [[ -z "$GIT_USER_EMAIL" && -n "$GH_LOGIN" && -n "$GH_ID" ]]; then
+    GIT_USER_EMAIL="${"${"}GH_ID}+${"${"}GH_LOGIN}@users.noreply.github.com"
+  fi
+fi`
+
+const renderEntrypointGitCredentialHelper = (config: TemplateConfig): string =>
+  String.raw`# 3) Configure git credential helper for HTTPS remotes
+GIT_CREDENTIAL_HELPER_PATH="/usr/local/bin/docker-git-credential-helper"
+cat <<'EOF' > "$GIT_CREDENTIAL_HELPER_PATH"
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$#" -lt 1 || "$1" != "get" ]]; then
+  exit 0
 fi
 
-# 3) Configure git identity for the dev user if provided
+token="$GITHUB_TOKEN"
+if [[ -z "$token" ]]; then
+  token="$GH_TOKEN"
+fi
+
+if [[ -z "$token" ]]; then
+  exit 0
+fi
+
+printf "%s\n" "username=x-access-token"
+printf "%s\n" "password=$token"
+EOF
+chmod 0755 "$GIT_CREDENTIAL_HELPER_PATH"
+su - ${config.sshUser} -c "git config --global credential.helper '$GIT_CREDENTIAL_HELPER_PATH'"`
+
+const renderEntrypointGitIdentity = (config: TemplateConfig): string =>
+  String.raw`# 4) Configure git identity for the dev user if provided
 if [[ -n "$GIT_USER_NAME" ]]; then
   SAFE_GIT_USER_NAME="$(printf "%q" "$GIT_USER_NAME")"
   su - ${config.sshUser} -c "git config --global user.name $SAFE_GIT_USER_NAME"
@@ -24,6 +76,13 @@ if [[ -n "$GIT_USER_EMAIL" ]]; then
   SAFE_GIT_USER_EMAIL="$(printf "%q" "$GIT_USER_EMAIL")"
   su - ${config.sshUser} -c "git config --global user.email $SAFE_GIT_USER_EMAIL"
 fi`
+
+export const renderEntrypointGitConfig = (config: TemplateConfig): string =>
+  [
+    renderEntrypointAuthEnvBridge(config),
+    renderEntrypointGitCredentialHelper(config),
+    renderEntrypointGitIdentity(config)
+  ].join("\n\n")
 
 export const renderEntrypointGitHooks = (): string =>
   String.raw`# 3) Install global git hooks to protect main/master
