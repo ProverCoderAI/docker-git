@@ -26,15 +26,20 @@ const withArgv = (nextArgv: ReadonlyArray<string>) =>
       })
   )
 
-const usageCases = [
-  { argv: ["node", "main"], needle: "pnpm docker-git" as const },
-  { argv: ["node", "main", "Alice"], needle: "Usage:" as const }
-] as const
+type UsageCase = {
+  readonly argv: ReadonlyArray<string>
+  readonly needle: string
+}
+
+const usageCases: ReadonlyArray<UsageCase> = [
+  { argv: ["node", "main"], needle: "pnpm docker-git" },
+  { argv: ["node", "main", "Alice"], needle: "Usage:" }
+]
 
 const runUsageCase = ({
   argv,
   needle
-}: (typeof usageCases)[number]) =>
+}: UsageCase) =>
   Effect.scoped(
     Effect.gen(function*(_) {
       const logSpy = yield* _(withLogSpy)
