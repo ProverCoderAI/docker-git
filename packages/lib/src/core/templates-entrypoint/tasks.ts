@@ -21,14 +21,13 @@ rm -f "$CLONE_DONE_PATH" "$CLONE_FAIL_PATH"
 CLONE_OK=1`
 
 const renderCloneRemotes = (config: TemplateConfig): string =>
-  `if [[ "$CLONE_OK" -eq 1 && -n "$FORK_REPO_URL" && -d "$TARGET_DIR/.git" ]]; then
-  AUTH_FORK_URL="$FORK_REPO_URL"
-  if [[ -n "$GIT_AUTH_TOKEN" && "$FORK_REPO_URL" == https://* ]]; then
-    AUTH_FORK_URL="$(printf "%s" "$FORK_REPO_URL" | sed "s#^https://#https://\${GIT_AUTH_USER}:\${GIT_AUTH_TOKEN}@#")"
-  fi
-  if [[ "$FORK_REPO_URL" != "$REPO_URL" ]]; then
-    su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote set-url origin '$AUTH_FORK_URL'" || true
-    su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote add upstream '$AUTH_REPO_URL' 2>/dev/null || git remote set-url upstream '$AUTH_REPO_URL'" || true
+  `if [[ "$CLONE_OK" -eq 1 && -d "$TARGET_DIR/.git" ]]; then
+  if [[ -n "$FORK_REPO_URL" && "$FORK_REPO_URL" != "$REPO_URL" ]]; then
+    su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote set-url origin '$FORK_REPO_URL'" || true
+    su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote add upstream '$REPO_URL' 2>/dev/null || git remote set-url upstream '$REPO_URL'" || true
+  else
+    su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote set-url origin '$REPO_URL'" || true
+    su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote remove upstream >/dev/null 2>&1 || true" || true
   fi
 fi`
 
@@ -97,16 +96,19 @@ const renderIssueWorkspaceAgents = (): string =>
   if [[ "$REPO_URL" == https://github.com/* ]]; then
     ISSUE_REPO="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##')"
     if [[ -n "$ISSUE_REPO" ]]; then
-      ISSUE_URL="https://github.com/\${ISSUE_REPO}/issues/\${ISSUE_ID}"
+      ISSUE_URL="https://github.com/$ISSUE_REPO/issues/$ISSUE_ID"
     fi
+  fi
+  if [[ -z "$ISSUE_URL" ]]; then
+    ISSUE_URL="n/a"
   fi
 
   ISSUE_AGENTS_PATH="$TARGET_DIR/AGENTS.md"
   if [[ ! -e "$ISSUE_AGENTS_PATH" ]]; then
     cat <<EOF > "$ISSUE_AGENTS_PATH"
 # docker-git issue workspace
-Issue workspace: #\${ISSUE_ID}
-Issue URL: \${ISSUE_URL:-n/a}
+Issue workspace: #$ISSUE_ID
+Issue URL: $ISSUE_URL
 Workspace path: $TARGET_DIR
 
 Работай только над этим issue, если пользователь не попросил другое.
@@ -128,11 +130,11 @@ const renderCloneBody = (config: TemplateConfig): string =>
   [
     renderCloneBodyStart(config),
     renderCloneBodyRef(config),
+    "fi",
     "",
     renderCloneRemotes(config),
     "",
-    renderIssueWorkspaceAgents(),
-    "fi"
+    renderIssueWorkspaceAgents()
   ].join("\n")
 
 const renderCloneFinalize = (): string =>

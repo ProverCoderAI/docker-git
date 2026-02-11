@@ -150,21 +150,21 @@ if [[ "$REPO_REF" == issue-* ]]; then
   if [[ "$REPO_URL" == https://github.com/* ]]; then
     ISSUE_REPO="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##')"
     if [[ -n "$ISSUE_REPO" ]]; then
-      ISSUE_URL="https://github.com/\${ISSUE_REPO}/issues/\${ISSUE_ID}"
+      ISSUE_URL="https://github.com/$ISSUE_REPO/issues/$ISSUE_ID"
     fi
   fi
   if [[ -n "$ISSUE_URL" ]]; then
-    WORKSPACE_INFO_LINE="Контекст workspace: issue #\${ISSUE_ID} (\${ISSUE_URL})"
+    WORKSPACE_INFO_LINE="Контекст workspace: issue #$ISSUE_ID ($ISSUE_URL)"
   else
-    WORKSPACE_INFO_LINE="Контекст workspace: issue #\${ISSUE_ID}"
+    WORKSPACE_INFO_LINE="Контекст workspace: issue #$ISSUE_ID"
   fi
   ISSUE_AGENTS_HINT_LINE="Issue AGENTS.md: __TARGET_DIR__/AGENTS.md"
 elif [[ "$REPO_REF" == refs/pull/*/head ]]; then
   PR_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^refs/pull/([0-9]+)/head$#\1#')"
   if [[ -n "$PR_ID" ]]; then
-    WORKSPACE_INFO_LINE="Контекст workspace: PR #\${PR_ID}"
+    WORKSPACE_INFO_LINE="Контекст workspace: PR #$PR_ID"
   else
-    WORKSPACE_INFO_LINE="Контекст workspace: pull request (\${REPO_REF})"
+    WORKSPACE_INFO_LINE="Контекст workspace: pull request ($REPO_REF)"
   fi
 fi
 if [[ ! -f "$AGENTS_PATH" ]]; then
