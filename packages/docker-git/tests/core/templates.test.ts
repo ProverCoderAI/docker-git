@@ -67,8 +67,10 @@ describe("planFiles", () => {
       }
 
       if (entrypointSpec && entrypointSpec._tag === "File") {
-        expect(entrypointSpec.contents).toContain("gh auth setup-git --hostname github.com --force")
-        expect(entrypointSpec.contents).toContain("GIT_USER_EMAIL=\"${GH_ID}+${GH_LOGIN}@users.noreply.github.com\"")
+        expect(entrypointSpec.contents).toContain(
+          "GIT_CREDENTIAL_HELPER_PATH=\"/usr/local/bin/docker-git-credential-helper\""
+        )
+        expect(entrypointSpec.contents).toContain("token=\"$GITHUB_TOKEN\"")
       }
     }))
 
