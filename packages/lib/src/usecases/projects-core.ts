@@ -8,13 +8,13 @@ import { deriveRepoPathParts } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
 import type { ConfigDecodeError, ConfigNotFoundError } from "../shell/errors.js"
 import { resolveBaseDir } from "../shell/paths.js"
+import { findDockerGitConfigPaths } from "./docker-git-config-search.js"
 import { renderError } from "./errors.js"
 import { defaultProjectsRoot, formatConnectionInfo } from "./menu-helpers.js"
 import { findSshPrivateKey, resolveAuthorizedKeysPath, resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 
-const sshOptions =
-  "-tt -Y -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+const sshOptions = "-tt -Y -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 export type ProjectLoadError = PlatformError | ConfigNotFoundError | ConfigDecodeError
 
@@ -66,10 +66,6 @@ type ComposePsRow = {
   readonly image: string
 }
 
-const isDockerGitConfig = (entry: string): boolean => entry.endsWith("docker-git.json")
-
-const shouldSkipDir = (entry: string): boolean => entry === ".git" || entry === ".orch"
-
 type ProjectBase = {
   readonly fs: FileSystem.FileSystem
   readonly path: Path.Path
@@ -90,38 +86,7 @@ const loadProjectBase = (
 const findProjectConfigPaths = (
   projectsRoot: string
 ): Effect.Effect<ReadonlyArray<string>, PlatformError, FileSystem.FileSystem | Path.Path> =>
-  withFsPathContext(({ fs, path }) =>
-    Effect.gen(function*(_) {
-      const exists = yield* _(fs.exists(projectsRoot))
-      if (!exists) {
-        return []
-      }
-
-      // Avoid traversing git metadata (state root can be a git repo).
-      const results: Array<string> = []
-      const stack: Array<string> = [projectsRoot]
-      while (stack.length > 0) {
-        const dir = stack.pop()
-        if (dir === undefined) {
-          break
-        }
-        const entries = yield* _(fs.readDirectory(dir))
-        for (const entry of entries) {
-          if (shouldSkipDir(entry)) {
-            continue
-          }
-          const resolved = path.join(dir, entry)
-          const info = yield* _(fs.stat(resolved))
-          if (info.type === "Directory") {
-            stack.push(resolved)
-          } else if (info.type === "File" && isDockerGitConfig(entry)) {
-            results.push(resolved)
-          }
-        }
-      }
-      return results
-    })
-  )
+  withFsPathContext(({ fs, path }) => findDockerGitConfigPaths(fs, path, path.resolve(projectsRoot)))
 
 export const loadProjectSummary = (
   configPath: string,
@@ -211,6 +176,27 @@ export const skipWithWarning = <A>(configPath: string) => (error: ProjectLoadErr
     Effect.logWarning(`Skipping ${configPath}: ${renderError(error)}`),
     Effect.as<A | null>(null)
   )
+
+export const forEachProjectStatus = <E, R>(
+  configPaths: ReadonlyArray<string>,
+  run: (status: ProjectStatus) => Effect.Effect<void, E, R>
+): Effect.Effect<void, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    for (const configPath of configPaths) {
+      const status = yield* _(
+        loadProjectStatus(configPath).pipe(
+          Effect.matchEffect({
+            onFailure: skipWithWarning<ProjectStatus>(configPath),
+            onSuccess: (value) => Effect.succeed(value)
+          })
+        )
+      )
+      if (status === null) {
+        continue
+      }
+      yield* _(run(status))
+    }
+  }).pipe(Effect.asVoid)
 
 const normalizeCell = (value: string | undefined): string => value?.trim() ?? "-"
 

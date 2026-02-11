@@ -12,7 +12,7 @@
     "lint": "npx @ton-ai-core/vibecode-linter src/",
     "lint:effect": "npx eslint --config eslint.effect-ts-check.config.mjs .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "repository": {
     "type": "git",

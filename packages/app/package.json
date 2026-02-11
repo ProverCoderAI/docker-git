@@ -22,6 +22,7 @@
     "list": "pnpm -C ../.. run list",
     "prestart": "pnpm run build",
     "start": "node dist/main.js",
+    "pretest": "pnpm -C ../lib build",
     "test": "pnpm run lint:tests && vitest run",
     "pretypecheck": "pnpm -C ../lib build",
     "typecheck": "tsc --noEmit"

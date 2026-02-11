@@ -108,9 +108,9 @@ export const resolveCreateInputs = (
     repoRef: values.repoRef ?? "main",
     outDir,
     secretsRoot,
-    runUp: values.runUp ?? true,
-    enableMcpPlaywright: values.enableMcpPlaywright ?? false,
-    force: values.force ?? false
+    runUp: values.runUp !== false,
+    enableMcpPlaywright: values.enableMcpPlaywright === true,
+    force: values.force === true
   }
 }
 

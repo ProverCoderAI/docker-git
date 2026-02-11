@@ -100,8 +100,7 @@ set completion-ignore-case on
 // EFFECT: n/a
 // INVARIANT: zsh config does not depend on user dotfiles
 // COMPLEXITY: O(1)
-export const renderZshConfig = (): string =>
-  `setopt PROMPT_SUBST
+const dockerGitZshConfig = `setopt PROMPT_SUBST
 
 # Terminal compatibility: if terminfo for $TERM is missing (common over SSH),
 # fall back to xterm-256color so ZLE doesn't garble the display.
@@ -165,6 +164,8 @@ if [[ "\${DOCKER_GIT_ZSH_AUTOSUGGEST:-1}" == "1" ]] && [ -f /usr/share/zsh-autos
   fi
   source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 fi`
+
+export const renderZshConfig = (): string => dockerGitZshConfig
 
 // CHANGE: add git branch info to interactive shell prompt
 // WHY: restore docker-git prompt with time + path + branch
