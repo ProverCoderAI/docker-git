@@ -26,6 +26,10 @@ jobs:
           set -euo pipefail
           echo "publish_npm=false" >> "$GITHUB_OUTPUT"
 
+          PKG_PATH="packages/app/package.json"
+          PKG_NAME="$(node -p "require('./${PKG_PATH}').name")"
+          PKG_SCOPE="$(printf "%s" "$PKG_NAME" | sed -n 's#^@\([^/]*\)/.*#\1#p')"
+
           if [ -z "${NPM_TOKEN:-}" ]; then
             echo "::notice::NPM_TOKEN is empty; npm publish disabled for this run."
             exit 0
@@ -38,14 +42,15 @@ jobs:
             exit 0
           fi
 
-          # Current workspace publishes @effect-template/* packages.
-          if ! npm access ls-packages effect-template >/dev/null 2>&1; then
-            echo "::warning::No publish access to npm scope 'effect-template'; npm publish disabled for this run."
-            exit 0
+          if [ -n "$PKG_SCOPE" ]; then
+            if ! npm access ls-packages "$PKG_SCOPE" >/dev/null 2>&1; then
+              echo "::warning::No publish access to npm scope '$PKG_SCOPE'; npm publish disabled for this run."
+              exit 0
+            fi
           fi
 
           echo "publish_npm=true" >> "$GITHUB_OUTPUT"
-          echo "::notice::npm publish is enabled for this run."
+          echo "::notice::npm publish is enabled for package ${PKG_NAME}."
 
       - uses: ProverCoderAI/action-release@v1.0.17
         with:

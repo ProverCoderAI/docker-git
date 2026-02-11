@@ -1,14 +1,18 @@
 {
-  "name": "@effect-template/app",
+  "name": "@prover-coder-ai/docker-git",
   "version": "1.0.2",
   "description": "Minimal Vite-powered TypeScript console starter using Effect",
-  "main": "dist/main.js",
+  "main": "dist/src/docker-git/main.js",
+  "bin": {
+    "docker-git": "dist/src/docker-git/main.js"
+  },
   "directories": {
     "doc": "doc"
   },
   "scripts": {
     "prebuild": "pnpm -C ../lib build",
-    "build": "vite build --ssr src/app/main.ts",
+    "build": "pnpm run build:app && pnpm run build:docker-git",
+    "build:app": "vite build --ssr src/app/main.ts",
     "dev": "vite build --watch --ssr src/app/main.ts",
     "prelint": "pnpm -C ../lib build",
     "lint": "npx @ton-ai-core/vibecode-linter src/",
@@ -18,7 +22,7 @@
     "build:docker-git": "tsc -p tsconfig.json",
     "check": "pnpm run typecheck",
     "clone": "pnpm -C ../.. run clone",
-    "docker-git": "pnpm -C ../.. run docker-git",
+    "docker-git": "node dist/src/docker-git/main.js",
     "list": "pnpm -C ../.. run list",
     "prestart": "pnpm run build",
     "start": "node dist/main.js",
@@ -29,7 +33,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ProverCoderAI/effect-template.git"
+    "url": "git+https://github.com/ProverCoderAI/docker-git.git"
   },
   "keywords": [
     "effect",
@@ -41,9 +45,9 @@
   "license": "ISC",
   "type": "module",
   "bugs": {
-    "url": "https://github.com/ProverCoderAI/effect-template/issues"
+    "url": "https://github.com/ProverCoderAI/docker-git/issues"
   },
-  "homepage": "https://github.com/ProverCoderAI/effect-template#readme",
+  "homepage": "https://github.com/ProverCoderAI/docker-git#readme",
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
     "@effect-template/lib": "workspace:*",
