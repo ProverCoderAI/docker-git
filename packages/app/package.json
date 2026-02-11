@@ -47,6 +47,9 @@
   "bugs": {
     "url": "https://github.com/ProverCoderAI/docker-git/issues"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "homepage": "https://github.com/ProverCoderAI/docker-git#readme",
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
