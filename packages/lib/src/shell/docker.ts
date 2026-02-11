@@ -1,11 +1,13 @@
 import * as Command from "@effect/platform/Command"
-import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import * as CommandExecutor from "@effect/platform/CommandExecutor"
 import { ExitCode } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Effect, pipe } from "effect"
+import * as Chunk from "effect/Chunk"
+import * as Stream from "effect/Stream"
 
 import { runCommandCapture, runCommandWithExitCodes } from "./command-runner.js"
-import { CommandFailedError, DockerCommandError } from "./errors.js"
+import { CommandFailedError, DockerAccessError, type DockerAccessIssue, DockerCommandError } from "./errors.js"
 
 const composeSpec = (cwd: string, args: ReadonlyArray<string>) => ({
   cwd,
@@ -26,6 +28,79 @@ const parseInspectNetworkEntry = (line: string): ReadonlyArray<readonly [string,
   const entry: readonly [string, string] = [network, ip]
   return [entry]
 }
+
+const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
+  Chunk.reduce(chunks, new Uint8Array(), (acc, curr) => {
+    const next = new Uint8Array(acc.length + curr.length)
+    next.set(acc)
+    next.set(curr, acc.length)
+    return next
+  })
+
+const permissionDeniedPattern = /permission denied/i
+
+// CHANGE: classify docker daemon access failure into deterministic typed reasons
+// WHY: allow callers to render actionable recovery guidance for socket permission issues
+// QUOTE(ТЗ): "docker-git handles Docker socket permission problems predictably"
+// REF: issue-11
+// SOURCE: n/a
+// FORMAT THEOREM: ∀m: classify(m) ∈ {"PermissionDenied","DaemonUnavailable"}
+// PURITY: CORE
+// EFFECT: Effect<DockerAccessIssue, never, never>
+// INVARIANT: classification is stable for equal input
+// COMPLEXITY: O(|m|)
+export const classifyDockerAccessIssue = (message: string): DockerAccessIssue =>
+  permissionDeniedPattern.test(message) ? "PermissionDenied" : "DaemonUnavailable"
+
+// CHANGE: verify docker daemon access before compose/auth flows
+// WHY: fail fast on socket permission errors instead of cascading into opaque command failures
+// QUOTE(ТЗ): "permission denied to /var/run/docker.sock"
+// REF: issue-11
+// SOURCE: n/a
+// FORMAT THEOREM: ∀cwd: access(cwd)=ok ∨ DockerAccessError
+// PURITY: SHELL
+// EFFECT: Effect<void, DockerAccessError | PlatformError, CommandExecutor>
+// INVARIANT: non-zero docker info exit always maps to DockerAccessError
+// COMPLEXITY: O(command)
+export const ensureDockerDaemonAccess = (
+  cwd: string
+): Effect.Effect<void, DockerAccessError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const executor = yield* _(CommandExecutor.CommandExecutor)
+      const process = yield* _(
+        executor.start(
+          pipe(
+            Command.make("docker", "info"),
+            Command.workingDirectory(cwd),
+            Command.stdin("pipe"),
+            Command.stdout("pipe"),
+            Command.stderr("pipe")
+          )
+        )
+      )
+
+      const stderrBytes = yield* _(
+        pipe(process.stderr, Stream.runCollect, Effect.map((chunks) => collectUint8Array(chunks)))
+      )
+      const exitCode = Number(yield* _(process.exitCode))
+
+      if (exitCode === 0) {
+        return
+      }
+
+      const stderr = new TextDecoder("utf-8").decode(stderrBytes).trim()
+      const details = stderr.length > 0 ? stderr : `docker info failed with exit code ${exitCode}`
+      return yield* _(
+        Effect.fail(
+          new DockerAccessError({
+            issue: classifyDockerAccessIssue(details),
+            details
+          })
+        )
+      )
+    })
+  )
 
 const runCompose = (
   cwd: string,

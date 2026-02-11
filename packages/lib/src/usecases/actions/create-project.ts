@@ -6,7 +6,14 @@ import { Effect } from "effect"
 
 import type { CreateCommand } from "../../core/domain.js"
 import { deriveRepoPathParts } from "../../core/domain.js"
-import type { CloneFailedError, DockerCommandError, FileExistsError, PortProbeError } from "../../shell/errors.js"
+import { ensureDockerDaemonAccess } from "../../shell/docker.js"
+import type {
+  CloneFailedError,
+  DockerAccessError,
+  DockerCommandError,
+  FileExistsError,
+  PortProbeError
+} from "../../shell/errors.js"
 import { logDockerAccessInfo } from "../access-log.js"
 import { applyGithubForkConfig } from "../github-fork.js"
 import { defaultProjectsRoot } from "../menu-helpers.js"
@@ -21,6 +28,7 @@ type CreateProjectRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.
 type CreateProjectError =
   | FileExistsError
   | CloneFailedError
+  | DockerAccessError
   | DockerCommandError
   | PortProbeError
   | PlatformError
@@ -76,6 +84,10 @@ const runCreateProject = (
   command: CreateCommand
 ): Effect.Effect<void, CreateProjectError, CreateProjectRuntime> =>
   Effect.gen(function*(_) {
+    if (command.runUp) {
+      yield* _(ensureDockerDaemonAccess(process.cwd()))
+    }
+
     const ctx = makeCreateContext(path, process.cwd())
     const resolvedOutDir = path.resolve(ctx.resolveRootPath(command.outDir))
 

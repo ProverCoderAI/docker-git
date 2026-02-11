@@ -7,6 +7,7 @@ import type {
   CommandFailedError,
   ConfigDecodeError,
   ConfigNotFoundError,
+  DockerAccessError,
   DockerCommandError,
   FileExistsError,
   InputCancelledError,
@@ -18,6 +19,7 @@ export type AppError =
   | ParseError
   | FileExistsError
   | CloneFailedError
+  | DockerAccessError
   | DockerCommandError
   | ConfigNotFoundError
   | ConfigDecodeError
@@ -47,6 +49,19 @@ const renderPrimaryError = (error: NonParseError): string | null => {
     return [
       `docker compose failed with exit code ${error.exitCode}`,
       "Hint: ensure Docker daemon is running and current user can access /var/run/docker.sock (for example via the docker group)."
+    ].join("\n")
+  }
+
+  if (error._tag === "DockerAccessError") {
+    const headline =
+      error.issue === "PermissionDenied"
+        ? "Cannot access Docker daemon socket: permission denied."
+        : "Cannot connect to Docker daemon."
+    return [
+      headline,
+      "Hint: ensure Docker daemon is running and current user can access the docker socket.",
+      "Hint: if you use rootless Docker, set DOCKER_HOST to your user socket (for example unix:///run/user/$UID/docker.sock).",
+      `Details: ${error.details}`
     ].join("\n")
   }
 

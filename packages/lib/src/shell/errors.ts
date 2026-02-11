@@ -25,6 +25,13 @@ export class DockerCommandError extends Data.TaggedError("DockerCommandError")<{
   readonly exitCode: number
 }> {}
 
+export type DockerAccessIssue = "PermissionDenied" | "DaemonUnavailable"
+
+export class DockerAccessError extends Data.TaggedError("DockerAccessError")<{
+  readonly issue: DockerAccessIssue
+  readonly details: string
+}> {}
+
 export class CloneFailedError extends Data.TaggedError("CloneFailedError")<{
   readonly repoUrl: string
   readonly repoRef: string

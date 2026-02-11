@@ -117,6 +117,7 @@ export const program = pipe(
       Effect.logWarning(renderError(error)),
       Effect.asVoid
     )),
+  Effect.catchTag("DockerAccessError", logWarningAndExit),
   Effect.catchTag("DockerCommandError", logWarningAndExit),
   Effect.catchTag("AuthError", logWarningAndExit),
   Effect.catchTag("CommandFailedError", logWarningAndExit),
