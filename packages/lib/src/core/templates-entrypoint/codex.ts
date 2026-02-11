@@ -135,14 +135,13 @@ if [[ -s /etc/zsh/zshrc ]] && ! grep -q "zz-codex-resume.sh" /etc/zsh/zshrc 2>/d
   printf "%s\\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then source /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/zsh/zshrc
 fi`
 
-export const renderEntrypointAgentsNotice = (config: TemplateConfig): string =>
-  String.raw`# Ensure global AGENTS.md exists for container context
-AGENTS_PATH="${config.codexHome}/AGENTS.md"
-LEGACY_AGENTS_PATH="/home/${config.sshUser}/AGENTS.md"
-PROJECT_LINE="Рабочая папка проекта (git clone): ${config.targetDir}"
-WORKSPACES_LINE="Доступные workspace пути: ${config.targetDir}"
+const entrypointAgentsNoticeTemplate = String.raw`# Ensure global AGENTS.md exists for container context
+AGENTS_PATH="__CODEX_HOME__/AGENTS.md"
+LEGACY_AGENTS_PATH="/home/__SSH_USER__/AGENTS.md"
+PROJECT_LINE="Рабочая папка проекта (git clone): __TARGET_DIR__"
+WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
 WORKSPACE_INFO_LINE="Контекст workspace: repository"
-FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: ${config.targetDir}"
+FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__"
 ISSUE_AGENTS_HINT_LINE="Issue AGENTS.md: n/a"
 INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
 if [[ "$REPO_REF" == issue-* ]]; then
@@ -159,7 +158,7 @@ if [[ "$REPO_REF" == issue-* ]]; then
   else
     WORKSPACE_INFO_LINE="Контекст workspace: issue #\${ISSUE_ID}"
   fi
-  ISSUE_AGENTS_HINT_LINE="Issue AGENTS.md: ${config.targetDir}/AGENTS.md"
+  ISSUE_AGENTS_HINT_LINE="Issue AGENTS.md: __TARGET_DIR__/AGENTS.md"
 elif [[ "$REPO_REF" == refs/pull/*/head ]]; then
   PR_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^refs/pull/([0-9]+)/head$#\1#')"
   if [[ -n "$PR_ID" ]]; then
@@ -171,10 +170,10 @@ fi
 if [[ ! -f "$AGENTS_PATH" ]]; then
   cat <<'AGENTS_EOF' > "$AGENTS_PATH"
 Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
-Рабочая папка проекта (git clone): ${config.targetDir}
-Доступные workspace пути: ${config.targetDir}
+Рабочая папка проекта (git clone): __TARGET_DIR__
+Доступные workspace пути: __TARGET_DIR__
 Контекст workspace: repository
-Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: ${config.targetDir}
+Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
 Issue AGENTS.md: n/a
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
 Если ты видишь файлы AGENTS.md внутри проекта, ты обязан их читать и соблюдать инструкции.
@@ -220,3 +219,9 @@ if [[ -f "$LEGACY_AGENTS_PATH" && -f "$AGENTS_PATH" ]]; then
     rm -f "$LEGACY_AGENTS_PATH"
   fi
 fi`
+
+export const renderEntrypointAgentsNotice = (config: TemplateConfig): string =>
+  entrypointAgentsNoticeTemplate
+    .replaceAll("__CODEX_HOME__", config.codexHome)
+    .replaceAll("__SSH_USER__", config.sshUser)
+    .replaceAll("__TARGET_DIR__", config.targetDir)
