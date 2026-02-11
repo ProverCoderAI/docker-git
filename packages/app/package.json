@@ -19,7 +19,7 @@
     "lint:tests": "npx @ton-ai-core/vibecode-linter tests/",
     "lint:effect": "npx eslint --config eslint.effect-ts-check.config.mjs .",
     "prebuild:docker-git": "pnpm -C ../lib build",
-    "build:docker-git": "tsc -p tsconfig.json",
+    "build:docker-git": "tsc -p tsconfig.build.json",
     "check": "pnpm run typecheck",
     "clone": "pnpm -C ../.. run clone",
     "docker-git": "node dist/src/docker-git/main.js",
