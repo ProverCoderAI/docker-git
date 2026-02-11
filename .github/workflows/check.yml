@@ -32,9 +32,10 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
-      - run: pnpm check
-      - name: Types (lib)
-        run: pnpm --filter @effect-template/lib typecheck
+      - name: Typecheck (app)
+        run: pnpm --filter ./packages/app check
+      - name: Typecheck (lib)
+        run: pnpm --filter ./packages/lib typecheck
 
   lint:
     name: Lint
@@ -50,9 +51,10 @@ jobs:
       # See: https://github.com/ton-ai-core/vibecode-linter/issues (pending issue)
       - name: Install global linter dependencies
         run: npm install -g typescript @biomejs/biome
-      - run: pnpm lint
+      - name: Lint (app)
+        run: pnpm --filter ./packages/app lint
       - name: Lint (lib)
-        run: pnpm --filter @effect-template/lib lint
+        run: pnpm --filter ./packages/lib lint
 
   test:
     name: Test
@@ -65,9 +67,10 @@ jobs:
       # vibecode-linter uses npx internally for dependency checks (lint:tests runs first)
       - name: Install global linter dependencies
         run: npm install -g typescript @biomejs/biome
-      - run: pnpm test
+      - name: Test (app)
+        run: pnpm --filter ./packages/app test
       - name: Test (lib)
-        run: pnpm --filter @effect-template/lib test
+        run: pnpm --filter ./packages/lib test
 
   lint-effect:
     name: Lint Effect-TS
@@ -77,6 +80,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
-      - run: pnpm lint:effect
+      - name: Lint Effect-TS (app)
+        run: pnpm --filter ./packages/app lint:effect
       - name: Lint Effect-TS (lib)
-        run: pnpm --filter @effect-template/lib lint:effect
+        run: pnpm --filter ./packages/lib lint:effect
