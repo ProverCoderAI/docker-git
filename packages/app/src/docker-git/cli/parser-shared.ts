@@ -24,10 +24,19 @@ export const parseProjectDirWithOptions = (
     const { positionalRepoUrl, restArgs } = splitPositionalRepo(args)
     const raw = yield* _(parseRawOptions(restArgs))
     const rawRepoUrl = raw.repoUrl ?? positionalRepoUrl
-    const resolvedRepo = rawRepoUrl ? resolveRepoInput(rawRepoUrl).repoUrl : null
+    const resolvedRepo = rawRepoUrl ? resolveRepoInput(rawRepoUrl) : null
+    const repoPath = resolvedRepo
+      ? (() => {
+          const baseParts = deriveRepoPathParts(resolvedRepo.repoUrl).pathParts
+          const projectParts = resolvedRepo.workspaceSuffix
+            ? [...baseParts, resolvedRepo.workspaceSuffix]
+            : baseParts
+          return projectParts.join("/")
+        })()
+      : null
     const projectDir = raw.projectDir ??
-      (resolvedRepo
-        ? `.docker-git/${deriveRepoPathParts(resolvedRepo).pathParts.join("/")}`
+      (repoPath
+        ? `.docker-git/${repoPath}`
         : defaultProjectDir)
 
     return { projectDir, raw }

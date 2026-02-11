@@ -20,9 +20,20 @@ pnpm run docker-git
 # Clone a repo into its own container (creates under ~/.docker-git)
 pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force
 
+# Clone an issue URL (creates isolated workspace + issue branch)
+pnpm run docker-git clone https://github.com/agiens/crm/issues/123 --force
+
 # Same, but also enable Playwright MCP + Chromium sidecar for Codex
 pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force --mcp-playwright
 ```
+
+## Parallel Issues / PRs
+
+When you clone GitHub issue or PR URLs, docker-git creates isolated project paths and container names:
+- `.../issues/123` -> `<projectsRoot>/<owner>/<repo>/issue-123` (branch `issue-123`)
+- `.../pull/45` -> `<projectsRoot>/<owner>/<repo>/pr-45` (ref `refs/pull/45/head`)
+
+This lets you run multiple issues/PRs for the same repository in parallel without container/path collisions.
 
 ## Projects Root Layout
 

@@ -1,4 +1,4 @@
-import { type CreateCommand, deriveRepoPathParts } from "@effect-template/lib/core/domain"
+import { type CreateCommand, deriveRepoPathParts, resolveRepoInput } from "@effect-template/lib/core/domain"
 import { createProject } from "@effect-template/lib/usecases/actions"
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
@@ -91,8 +91,10 @@ const joinPath = (...parts: ReadonlyArray<string>): string => {
 }
 
 const resolveDefaultOutDir = (cwd: string, repoUrl: string): string => {
-  const repoPath = deriveRepoPathParts(repoUrl).pathParts
-  return joinPath(defaultProjectsRoot(cwd), ...repoPath)
+  const resolvedRepo = resolveRepoInput(repoUrl)
+  const baseParts = deriveRepoPathParts(resolvedRepo.repoUrl).pathParts
+  const projectParts = resolvedRepo.workspaceSuffix ? [...baseParts, resolvedRepo.workspaceSuffix] : baseParts
+  return joinPath(defaultProjectsRoot(cwd), ...projectParts)
 }
 
 export const resolveCreateInputs = (
@@ -100,12 +102,13 @@ export const resolveCreateInputs = (
   values: Partial<CreateInputs>
 ): CreateInputs => {
   const repoUrl = values.repoUrl ?? ""
+  const resolvedRepoRef = repoUrl.length > 0 ? resolveRepoInput(repoUrl).repoRef : undefined
   const secretsRoot = values.secretsRoot ?? joinPath(defaultProjectsRoot(cwd), "secrets")
   const outDir = values.outDir ?? (repoUrl.length > 0 ? resolveDefaultOutDir(cwd, repoUrl) : "")
 
   return {
     repoUrl,
-    repoRef: values.repoRef ?? "main",
+    repoRef: values.repoRef ?? resolvedRepoRef ?? "main",
     outDir,
     secretsRoot,
     runUp: values.runUp !== false,

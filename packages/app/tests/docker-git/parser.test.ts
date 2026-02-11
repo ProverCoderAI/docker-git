@@ -45,6 +45,16 @@ describe("parseArgs", () => {
       expect(command.config.sshPort).toBe(defaultTemplateConfig.sshPort)
     }))
 
+  it.effect("parses create command with issue url into isolated defaults", () =>
+    expectCreateCommand(["create", "--repo-url", "https://github.com/org/repo/issues/9"], (command) => {
+      expect(command.config.repoUrl).toBe("https://github.com/org/repo.git")
+      expect(command.config.repoRef).toBe("issue-9")
+      expect(command.outDir).toBe(".docker-git/org/repo/issue-9")
+      expect(command.config.containerName).toBe("dg-repo-issue-9")
+      expect(command.config.serviceName).toBe("dg-repo-issue-9")
+      expect(command.config.volumeName).toBe("dg-repo-issue-9-home")
+    }))
+
   it.effect("fails on missing repo url", () =>
     Effect.sync(() => {
       Either.match(parseArgs(["create"]), {
@@ -74,6 +84,37 @@ describe("parseArgs", () => {
       expect(command.config.repoRef).toBe("vova-fork")
       expect(command.outDir).toBe(".docker-git/agiens/crm")
       expect(command.config.targetDir).toBe("/home/dev/agiens/crm")
+    }))
+
+  it.effect("parses GitHub issue url as isolated project + issue branch", () =>
+    expectCreateCommand(["clone", "https://github.com/org/repo/issues/5"], (command) => {
+      expect(command.config.repoUrl).toBe("https://github.com/org/repo.git")
+      expect(command.config.repoRef).toBe("issue-5")
+      expect(command.outDir).toBe(".docker-git/org/repo/issue-5")
+      expect(command.config.targetDir).toBe("/home/dev/org/repo/issue-5")
+      expect(command.config.containerName).toBe("dg-repo-issue-5")
+      expect(command.config.serviceName).toBe("dg-repo-issue-5")
+      expect(command.config.volumeName).toBe("dg-repo-issue-5-home")
+    }))
+
+  it.effect("parses GitHub PR url as isolated project", () =>
+    expectCreateCommand(["clone", "https://github.com/org/repo/pull/42"], (command) => {
+      expect(command.config.repoUrl).toBe("https://github.com/org/repo.git")
+      expect(command.config.repoRef).toBe("refs/pull/42/head")
+      expect(command.outDir).toBe(".docker-git/org/repo/pr-42")
+      expect(command.config.targetDir).toBe("/home/dev/org/repo/pr-42")
+      expect(command.config.containerName).toBe("dg-repo-pr-42")
+      expect(command.config.serviceName).toBe("dg-repo-pr-42")
+      expect(command.config.volumeName).toBe("dg-repo-pr-42-home")
+    }))
+
+  it.effect("parses attach with GitHub issue url into issue workspace", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["attach", "https://github.com/org/repo/issues/7"])
+      if (command._tag !== "Attach") {
+        throw new Error("expected Attach command")
+      }
+      expect(command.projectDir).toBe(".docker-git/org/repo/issue-7")
     }))
 
   it.effect("parses down-all command", () =>

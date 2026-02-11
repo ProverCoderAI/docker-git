@@ -13,13 +13,23 @@ import {
 import { parseRawOptions } from "./parser-options.js"
 import { splitPositionalRepo } from "./parser-shared.js"
 
-const applyCloneDefaults = (raw: RawOptions, repoUrl: string): RawOptions => {
-  const repoPath = deriveRepoPathParts(repoUrl).pathParts.join("/")
+const resolveCloneRepoPath = (resolvedRepo: ReturnType<typeof resolveRepoInput>): string => {
+  const baseParts = deriveRepoPathParts(resolvedRepo.repoUrl).pathParts
+  const projectParts = resolvedRepo.workspaceSuffix ? [...baseParts, resolvedRepo.workspaceSuffix] : baseParts
+  return projectParts.join("/")
+}
+
+const applyCloneDefaults = (
+  raw: RawOptions,
+  rawRepoUrl: string,
+  resolvedRepo: ReturnType<typeof resolveRepoInput>
+): RawOptions => {
+  const repoPath = resolveCloneRepoPath(resolvedRepo)
   const sshUser = raw.sshUser?.trim() ?? defaultTemplateConfig.sshUser
   const homeDir = `/home/${sshUser}`
   return {
     ...raw,
-    repoUrl,
+    repoUrl: rawRepoUrl,
     outDir: raw.outDir ?? `.docker-git/${repoPath}`,
     targetDir: raw.targetDir ?? `${homeDir}/${repoPath}`
   }
@@ -42,7 +52,7 @@ export const parseClone = (args: ReadonlyArray<string>): Either.Either<Command, 
     const raw = yield* _(parseRawOptions(restArgs))
     const rawRepoUrl = yield* _(nonEmpty("--repo-url", raw.repoUrl ?? positionalRepoUrl))
     const resolvedRepo = resolveRepoInput(rawRepoUrl)
-    const withDefaults = applyCloneDefaults(raw, resolvedRepo.repoUrl)
+    const withDefaults = applyCloneDefaults(raw, rawRepoUrl, resolvedRepo)
     const withRef = resolvedRepo.repoRef !== undefined && raw.repoRef === undefined
       ? { ...withDefaults, repoRef: resolvedRepo.repoRef }
       : withDefaults

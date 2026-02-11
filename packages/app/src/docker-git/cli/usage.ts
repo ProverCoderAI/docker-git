@@ -30,7 +30,7 @@ Commands:
 Options:
   --repo-ref <ref>          Git ref/branch (default: main)
   --branch, -b <ref>        Alias for --repo-ref
-  --target-dir <path>       Target dir inside container (create default: /home/dev/app, clone default: /home/dev/<org>/<repo>)
+  --target-dir <path>       Target dir inside container (create default: /home/dev/app, clone default: /home/dev/<org>/<repo>[/issue-<id>|/pr-<id>])
   --ssh-port <port>         Local SSH port (default: 2222)
   --ssh-user <user>         SSH user inside container (default: dev)
   --container-name <name>   Docker container name (default: dg-<repo>)
@@ -42,7 +42,7 @@ Options:
   --env-project <path>      Host path to project env file (default: ./.orch/env/project.env)
   --codex-auth <path>       Host path for Codex auth cache (default: <projectsRoot>/.orch/auth/codex)
   --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
-  --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>)
+  --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>[/issue-<id>|/pr-<id>])
   --project-dir <path>      Project directory for attach (default: .)
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list
