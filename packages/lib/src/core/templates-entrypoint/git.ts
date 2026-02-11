@@ -21,6 +21,22 @@ if [[ -n "$GH_TOKEN" || -n "$GITHUB_TOKEN" ]]; then
   printf "%s\n" "GITHUB_TOKEN=$EFFECTIVE_GITHUB_TOKEN" >> "$SSH_ENV_PATH"
   chmod 600 "$SSH_ENV_PATH"
   chown 1000:1000 "$SSH_ENV_PATH" || true
+
+  SAFE_GH_TOKEN="$(printf "%q" "$GH_TOKEN")"
+  # Keep git+https auth in sync with gh auth so push/pull works without manual setup.
+  su - ${config.sshUser} -c "GH_TOKEN=$SAFE_GH_TOKEN gh auth setup-git --hostname github.com --force" || true
+
+  GH_LOGIN="$(su - ${config.sshUser} -c "GH_TOKEN=$SAFE_GH_TOKEN gh api user --jq .login" 2>/dev/null || true)"
+  GH_ID="$(su - ${config.sshUser} -c "GH_TOKEN=$SAFE_GH_TOKEN gh api user --jq .id" 2>/dev/null || true)"
+  GH_LOGIN="$(printf "%s" "$GH_LOGIN" | tr -d '\r\n')"
+  GH_ID="$(printf "%s" "$GH_ID" | tr -d '\r\n')"
+
+  if [[ -z "$GIT_USER_NAME" && -n "$GH_LOGIN" ]]; then
+    GIT_USER_NAME="$GH_LOGIN"
+  fi
+  if [[ -z "$GIT_USER_EMAIL" && -n "$GH_LOGIN" && -n "$GH_ID" ]]; then
+    GIT_USER_EMAIL="${"${"}GH_ID}+${"${"}GH_LOGIN}@users.noreply.github.com"
+  fi
 fi
 
 # 3) Configure git credential helper for HTTPS remotes
