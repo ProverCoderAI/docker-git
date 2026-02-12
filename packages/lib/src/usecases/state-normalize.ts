@@ -21,25 +21,35 @@ const isLegacyDockerGitRelativePath = (value: string): boolean => {
 const shouldNormalizePath = (path: Path.Path, value: string): boolean =>
   path.isAbsolute(value) || isLegacyDockerGitRelativePath(value)
 
+const withFallback = (value: string, fallback: string): string =>
+  value.length > 0 ? value : fallback
+
+const pathFieldsForNormalization = (template: TemplateConfig): ReadonlyArray<string> => [
+  template.dockerGitPath,
+  template.authorizedKeysPath,
+  template.envGlobalPath,
+  template.envProjectPath,
+  template.codexAuthPath,
+  template.codexSharedAuthPath
+]
+
+const hasLegacyTemplatePaths = (path: Path.Path, template: TemplateConfig): boolean =>
+  pathFieldsForNormalization(template).some((value) => shouldNormalizePath(path, value))
+
 const normalizeTemplateConfig = (
   path: Path.Path,
   projectsRoot: string,
   projectDir: string,
   template: TemplateConfig
 ): TemplateConfig | null => {
-  const needs = shouldNormalizePath(path, template.authorizedKeysPath) ||
-    shouldNormalizePath(path, template.envGlobalPath) ||
-    shouldNormalizePath(path, template.envProjectPath) ||
-    shouldNormalizePath(path, template.codexAuthPath) ||
-    shouldNormalizePath(path, template.codexSharedAuthPath)
-
-  if (!needs) {
+  if (!hasLegacyTemplatePaths(path, template)) {
     return null
   }
 
   // The state repo is shared across machines, so never persist absolute host paths in tracked files.
   const authorizedKeysAbs = path.join(projectsRoot, "authorized_keys")
   const authorizedKeysRel = toPosixPath(path.relative(projectDir, authorizedKeysAbs))
+  const dockerGitRel = toPosixPath(path.relative(projectDir, projectsRoot))
 
   const envGlobalPath = "./.orch/env/global.env"
   const envProjectPath = "./.orch/env/project.env"
@@ -49,11 +59,12 @@ const normalizeTemplateConfig = (
 
   return {
     ...template,
-    authorizedKeysPath: authorizedKeysRel.length > 0 ? authorizedKeysRel : "./authorized_keys",
+    dockerGitPath: withFallback(dockerGitRel, "./.docker-git"),
+    authorizedKeysPath: withFallback(authorizedKeysRel, "./authorized_keys"),
     envGlobalPath,
     envProjectPath,
     codexAuthPath,
-    codexSharedAuthPath: codexSharedRel.length > 0 ? codexSharedRel : "./.orch/auth/codex"
+    codexSharedAuthPath: withFallback(codexSharedRel, "./.orch/auth/codex")
   }
 }
 

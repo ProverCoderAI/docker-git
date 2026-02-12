@@ -38,6 +38,7 @@ ${maybePlaywrightEnv}${maybeDependsOn}    env_file:
       - "127.0.0.1:${config.sshPort}:22"
     volumes:
       - ${config.volumeName}:/home/${config.sshUser}
+      - ${config.dockerGitPath}:/home/${config.sshUser}/.docker-git
       - ${config.authorizedKeysPath}:/authorized_keys:ro
       - ${config.codexAuthPath}:${config.codexHome}
       - ${config.codexSharedAuthPath}:${config.codexHome}-shared
