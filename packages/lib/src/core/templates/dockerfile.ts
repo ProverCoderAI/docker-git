@@ -9,7 +9,7 @@ ENV NVM_DIR=/usr/local/nvm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server git gh ca-certificates curl unzip bsdutils sudo \
-    make docker.io docker-compose bash-completion zsh zsh-autosuggestions xauth \
+    make docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
     ncurses-term \
  && rm -rf /var/lib/apt/lists/*
 

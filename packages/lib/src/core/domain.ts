@@ -12,6 +12,7 @@ export interface TemplateConfig {
   readonly forkRepoUrl?: string
   readonly targetDir: string
   readonly volumeName: string
+  readonly dockerGitPath: string
   readonly authorizedKeysPath: string
   readonly envGlobalPath: string
   readonly envProjectPath: string
@@ -194,6 +195,7 @@ export const defaultTemplateConfig = {
   repoRef: "main",
   targetDir: "/home/dev/app",
   volumeName: "dev_home",
+  dockerGitPath: "./.docker-git",
   authorizedKeysPath: "./.docker-git/authorized_keys",
   envGlobalPath: "./.docker-git/.orch/env/global.env",
   envProjectPath: "./.orch/env/project.env",

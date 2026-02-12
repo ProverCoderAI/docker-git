@@ -104,6 +104,7 @@ const resolveNames = (
   })
 
 type PathConfig = {
+  readonly dockerGitPath: string
   readonly authorizedKeysPath: string
   readonly envGlobalPath: string
   readonly envProjectPath: string
@@ -113,43 +114,72 @@ type PathConfig = {
   readonly outDir: string
 }
 
+type DefaultPathConfig = {
+  readonly dockerGitPath: string
+  readonly authorizedKeysPath: string
+  readonly envGlobalPath: string
+  readonly envProjectPath: string
+  readonly codexAuthPath: string
+}
+
+const resolveNormalizedSecretsRoot = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim() ?? ""
+  return trimmed.length === 0 ? undefined : normalizeSecretsRoot(trimmed)
+}
+
+const buildDefaultPathConfig = (
+  normalizedSecretsRoot: string | undefined,
+  projectSlug: string
+): DefaultPathConfig =>
+  normalizedSecretsRoot === undefined
+    ? {
+      dockerGitPath: defaultTemplateConfig.dockerGitPath,
+      authorizedKeysPath: defaultTemplateConfig.authorizedKeysPath,
+      envGlobalPath: defaultTemplateConfig.envGlobalPath,
+      envProjectPath: defaultTemplateConfig.envProjectPath,
+      codexAuthPath: defaultTemplateConfig.codexAuthPath
+    }
+    : {
+      dockerGitPath: normalizedSecretsRoot,
+      authorizedKeysPath: `${normalizedSecretsRoot}/authorized_keys`,
+      envGlobalPath: `${normalizedSecretsRoot}/global.env`,
+      envProjectPath: `${normalizedSecretsRoot}/${projectSlug}.env`,
+      codexAuthPath: `${normalizedSecretsRoot}/codex`
+    }
+
 const resolvePaths = (
   raw: RawOptions,
   projectSlug: string,
   repoPath: string
 ): Either.Either<PathConfig, ParseError> =>
   Either.gen(function*(_) {
-    const secretsRoot = raw.secretsRoot?.trim()
-    const normalizedSecretsRoot = secretsRoot === undefined || secretsRoot.length === 0
-      ? undefined
-      : normalizeSecretsRoot(secretsRoot)
-    const defaultAuthorizedKeysPath = normalizedSecretsRoot === undefined
-      ? defaultTemplateConfig.authorizedKeysPath
-      : `${normalizedSecretsRoot}/authorized_keys`
-    const defaultEnvGlobalPath = normalizedSecretsRoot === undefined
-      ? defaultTemplateConfig.envGlobalPath
-      : `${normalizedSecretsRoot}/global.env`
-    const defaultEnvProjectPath = normalizedSecretsRoot === undefined
-      ? defaultTemplateConfig.envProjectPath
-      : `${normalizedSecretsRoot}/${projectSlug}.env`
-    const defaultCodexAuthPath = normalizedSecretsRoot === undefined
-      ? defaultTemplateConfig.codexAuthPath
-      : `${normalizedSecretsRoot}/codex`
+    const normalizedSecretsRoot = resolveNormalizedSecretsRoot(raw.secretsRoot)
+    const defaults = buildDefaultPathConfig(normalizedSecretsRoot, projectSlug)
+    const dockerGitPath = defaults.dockerGitPath
     const authorizedKeysPath = yield* _(
-      nonEmpty("--authorized-keys", raw.authorizedKeysPath, defaultAuthorizedKeysPath)
+      nonEmpty("--authorized-keys", raw.authorizedKeysPath, defaults.authorizedKeysPath)
     )
-    const envGlobalPath = yield* _(nonEmpty("--env-global", raw.envGlobalPath, defaultEnvGlobalPath))
+    const envGlobalPath = yield* _(nonEmpty("--env-global", raw.envGlobalPath, defaults.envGlobalPath))
     const envProjectPath = yield* _(
-      nonEmpty("--env-project", raw.envProjectPath, defaultEnvProjectPath)
+      nonEmpty("--env-project", raw.envProjectPath, defaults.envProjectPath)
     )
     const codexAuthPath = yield* _(
-      nonEmpty("--codex-auth", raw.codexAuthPath, defaultCodexAuthPath)
+      nonEmpty("--codex-auth", raw.codexAuthPath, defaults.codexAuthPath)
     )
     const codexSharedAuthPath = codexAuthPath
     const codexHome = yield* _(nonEmpty("--codex-home", raw.codexHome, defaultTemplateConfig.codexHome))
     const outDir = yield* _(nonEmpty("--out-dir", raw.outDir, `.docker-git/${repoPath}`))
 
-    return { authorizedKeysPath, envGlobalPath, envProjectPath, codexAuthPath, codexSharedAuthPath, codexHome, outDir }
+    return {
+      dockerGitPath,
+      authorizedKeysPath,
+      envGlobalPath,
+      envProjectPath,
+      codexAuthPath,
+      codexSharedAuthPath,
+      codexHome,
+      outDir
+    }
   })
 
 // CHANGE: build a typed create command from raw options (CLI or API)
@@ -190,6 +220,7 @@ export const buildCreateCommand = (
         repoRef: repo.repoRef,
         targetDir: repo.targetDir,
         volumeName: names.volumeName,
+        dockerGitPath: paths.dockerGitPath,
         authorizedKeysPath: paths.authorizedKeysPath,
         envGlobalPath: paths.envGlobalPath,
         envProjectPath: paths.envProjectPath,
