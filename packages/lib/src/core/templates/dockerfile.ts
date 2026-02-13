@@ -92,7 +92,9 @@ const renderDockerfileBun = (config: TemplateConfig): string =>
   [
     renderDockerfileBunPrelude(config),
     config.enableMcpPlaywright
-      ? dockerfilePlaywrightMcpBlock.replaceAll("__SERVICE_NAME__", config.serviceName)
+      ? dockerfilePlaywrightMcpBlock
+          .replaceAll("\\${", "${")
+          .replaceAll("__SERVICE_NAME__", config.serviceName)
       : "",
     renderDockerfileBunProfile()
   ]
