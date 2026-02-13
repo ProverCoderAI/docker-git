@@ -11,6 +11,7 @@ import {
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import { downAllDockerGitProjects, listProjectStatus } from "@effect-template/lib/usecases/projects"
+import { mcpPlaywrightUp } from "@effect-template/lib/usecases/mcp-playwright"
 import {
   stateCommit,
   stateInit,
@@ -87,6 +88,7 @@ const handleNonBaseCommand = (command: NonBaseCommand) =>
     Match.when({ _tag: "SessionsList" }, (cmd) => listTerminalSessions(cmd)),
     Match.when({ _tag: "SessionsKill" }, (cmd) => killTerminalProcess(cmd)),
     Match.when({ _tag: "SessionsLogs" }, (cmd) => tailTerminalLogs(cmd)),
+    Match.when({ _tag: "McpPlaywrightUp" }, (cmd) => mcpPlaywrightUp(cmd)),
     Match.exhaustive
   )
 
