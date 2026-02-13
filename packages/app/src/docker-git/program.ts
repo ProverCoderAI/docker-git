@@ -11,6 +11,7 @@ import {
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import { downAllDockerGitProjects, listProjectStatus } from "@effect-template/lib/usecases/projects"
+import { exportScrap, importScrap } from "@effect-template/lib/usecases/scrap"
 import {
   stateCommit,
   stateInit,
@@ -25,7 +26,6 @@ import {
   listTerminalSessions,
   tailTerminalLogs
 } from "@effect-template/lib/usecases/terminal-sessions"
-import { exportScrap, importScrap } from "@effect-template/lib/usecases/scrap"
 import { Effect, Match, pipe } from "effect"
 import { readCommand } from "./cli/read-command.js"
 import { attachTmux, listTmuxPanes } from "./tmux.js"

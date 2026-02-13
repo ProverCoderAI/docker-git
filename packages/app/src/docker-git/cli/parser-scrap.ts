@@ -53,14 +53,17 @@ export const parseScrap = (args: ReadonlyArray<string>): Either.Either<Command, 
   const rest = args.slice(1)
 
   return Match.value(action).pipe(
-    Match.when("export", () =>
-      Either.map(parseProjectDirWithOptions(rest), ({ projectDir, raw }) =>
-        makeScrapExportCommand(
-          projectDir,
-          raw.archivePath?.trim() && raw.archivePath.trim().length > 0
-            ? raw.archivePath.trim()
-            : defaultArchivePath
-        ))),
+    Match.when(
+      "export",
+      () =>
+        Either.map(parseProjectDirWithOptions(rest), ({ projectDir, raw }) =>
+          makeScrapExportCommand(
+            projectDir,
+            raw.archivePath?.trim() && raw.archivePath.trim().length > 0
+              ? raw.archivePath.trim()
+              : defaultArchivePath
+          ))
+    ),
     Match.when("import", () =>
       Either.flatMap(parseProjectDirWithOptions(rest), ({ projectDir, raw }) => {
         const archivePath = raw.archivePath?.trim()
