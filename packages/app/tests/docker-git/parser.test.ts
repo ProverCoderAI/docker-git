@@ -136,6 +136,34 @@ describe("parseArgs", () => {
       expect(command.projectDir).toBe(".docker-git/org/repo/issue-7")
     }))
 
+  it.effect("parses mcp-playwright command in current directory", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["mcp-playwright"])
+      if (command._tag !== "McpPlaywrightUp") {
+        throw new Error("expected McpPlaywrightUp command")
+      }
+      expect(command.projectDir).toBe(".")
+      expect(command.runUp).toBe(true)
+    }))
+
+  it.effect("parses mcp-playwright command with --no-up", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["mcp-playwright", "--no-up"])
+      if (command._tag !== "McpPlaywrightUp") {
+        throw new Error("expected McpPlaywrightUp command")
+      }
+      expect(command.runUp).toBe(false)
+    }))
+
+  it.effect("parses mcp-playwright with positional repo url into project dir", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["mcp-playwright", "https://github.com/org/repo.git"])
+      if (command._tag !== "McpPlaywrightUp") {
+        throw new Error("expected McpPlaywrightUp command")
+      }
+      expect(command.projectDir).toBe(".docker-git/org/repo")
+    }))
+
   it.effect("parses down-all command", () =>
     Effect.sync(() => {
       const command = parseOrThrow(["down-all"])

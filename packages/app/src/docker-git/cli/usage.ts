@@ -5,6 +5,7 @@ import type { ParseError } from "@effect-template/lib/core/domain"
 export const usageText = `docker-git menu
 docker-git create --repo-url <url> [options]
 docker-git clone <url> [options]
+docker-git mcp-playwright [<url>] [options]
 docker-git attach [<url>] [options]
 docker-git panes [<url>] [options]
 docker-git scrap <action> [<url>] [options]
@@ -20,6 +21,7 @@ Commands:
   menu                Interactive menu (default when no args)
   create, init        Generate docker development environment
   clone               Create + run container and clone repo
+  mcp-playwright      Enable Playwright MCP + Chromium sidecar for an existing project dir
   attach, tmux        Open tmux workspace for a docker-git project
   panes, terms        List tmux panes for a docker-git project
   scrap               Export/import project scrap (session snapshot + rebuildable deps)

@@ -98,6 +98,12 @@ export interface ScrapImportCommand {
   readonly mode: ScrapMode
 }
 
+export interface McpPlaywrightUpCommand {
+  readonly _tag: "McpPlaywrightUp"
+  readonly projectDir: string
+  readonly runUp: boolean
+}
+
 export interface HelpCommand {
   readonly _tag: "Help"
   readonly message: string
@@ -213,6 +219,7 @@ export type Command =
   | PanesCommand
   | SessionsCommand
   | ScrapCommand
+  | McpPlaywrightUpCommand
   | HelpCommand
   | StatusCommand
   | DownAllCommand

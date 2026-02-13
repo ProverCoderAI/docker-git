@@ -10,6 +10,7 @@ import {
 } from "@effect-template/lib/usecases/auth"
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
+import { mcpPlaywrightUp } from "@effect-template/lib/usecases/mcp-playwright"
 import { downAllDockerGitProjects, listProjectStatus } from "@effect-template/lib/usecases/projects"
 import { exportScrap, importScrap } from "@effect-template/lib/usecases/scrap"
 import {
@@ -92,7 +93,10 @@ const handleNonBaseCommand = (command: NonBaseCommand) =>
       Match.when({ _tag: "ScrapExport" }, (cmd) => exportScrap(cmd)),
       Match.when({ _tag: "ScrapImport" }, (cmd) => importScrap(cmd))
     )
-    .pipe(Match.exhaustive)
+    .pipe(
+      Match.when({ _tag: "McpPlaywrightUp" }, (cmd) => mcpPlaywrightUp(cmd)),
+      Match.exhaustive
+    )
 
 // CHANGE: compose CLI program with typed errors and shell effects
 // WHY: keep a thin entry layer over pure parsing and template generation
