@@ -8,6 +8,7 @@ import { parseClone } from "./parser-clone.js"
 import { buildCreateCommand } from "./parser-create.js"
 import { parseRawOptions } from "./parser-options.js"
 import { parsePanes } from "./parser-panes.js"
+import { parseScrap } from "./parser-scrap.js"
 import { parseSessions } from "./parser-sessions.js"
 import { parseState } from "./parser-state.js"
 import { usageText } from "./usage.js"
@@ -48,26 +49,28 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
     command: command ?? ""
   }
 
-  return Match.value(command).pipe(
-    Match.when("create", () => parseCreate(rest)),
-    Match.when("init", () => parseCreate(rest)),
-    Match.when("clone", () => parseClone(rest)),
-    Match.when("attach", () => parseAttach(rest)),
-    Match.when("tmux", () => parseAttach(rest)),
-    Match.when("panes", () => parsePanes(rest)),
-    Match.when("terms", () => parsePanes(rest)),
-    Match.when("terminals", () => parsePanes(rest)),
-    Match.when("sessions", () => parseSessions(rest)),
-    Match.when("help", () => Either.right(helpCommand)),
-    Match.when("ps", () => Either.right(statusCommand)),
-    Match.when("status", () => Either.right(statusCommand)),
-    Match.when("down-all", () => Either.right(downAllCommand)),
-    Match.when("stop-all", () => Either.right(downAllCommand)),
-    Match.when("kill-all", () => Either.right(downAllCommand)),
-    Match.when("menu", () => Either.right(menuCommand)),
-    Match.when("ui", () => Either.right(menuCommand)),
-    Match.when("auth", () => parseAuth(rest)),
-    Match.when("state", () => parseState(rest)),
-    Match.orElse(() => Either.left(unknownCommandError))
-  )
+  return Match.value(command)
+    .pipe(
+      Match.when("create", () => parseCreate(rest)),
+      Match.when("init", () => parseCreate(rest)),
+      Match.when("clone", () => parseClone(rest)),
+      Match.when("attach", () => parseAttach(rest)),
+      Match.when("tmux", () => parseAttach(rest)),
+      Match.when("panes", () => parsePanes(rest)),
+      Match.when("terms", () => parsePanes(rest)),
+      Match.when("terminals", () => parsePanes(rest)),
+      Match.when("sessions", () => parseSessions(rest)),
+      Match.when("scrap", () => parseScrap(rest)),
+      Match.when("help", () => Either.right(helpCommand)),
+      Match.when("ps", () => Either.right(statusCommand)),
+      Match.when("status", () => Either.right(statusCommand)),
+      Match.when("down-all", () => Either.right(downAllCommand)),
+      Match.when("stop-all", () => Either.right(downAllCommand)),
+      Match.when("kill-all", () => Either.right(downAllCommand)),
+      Match.when("menu", () => Either.right(menuCommand)),
+      Match.when("ui", () => Either.right(menuCommand)),
+      Match.when("auth", () => parseAuth(rest)),
+      Match.when("state", () => parseState(rest))
+    )
+    .pipe(Match.orElse(() => Either.left(unknownCommandError)))
 }

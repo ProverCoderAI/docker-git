@@ -25,6 +25,7 @@ import {
   listTerminalSessions,
   tailTerminalLogs
 } from "@effect-template/lib/usecases/terminal-sessions"
+import { exportScrap, importScrap } from "@effect-template/lib/usecases/scrap"
 import { Effect, Match, pipe } from "effect"
 import { readCommand } from "./cli/read-command.js"
 import { attachTmux, listTmuxPanes } from "./tmux.js"
@@ -68,27 +69,30 @@ type NonBaseCommand = Exclude<
 >
 
 const handleNonBaseCommand = (command: NonBaseCommand) =>
-  Match.value(command).pipe(
-    Match.when({ _tag: "StatePath" }, () => statePath),
-    Match.when({ _tag: "StateInit" }, (cmd) => stateInit(cmd)),
-    Match.when({ _tag: "StateStatus" }, () => stateStatus),
-    Match.when({ _tag: "StatePull" }, () => statePull),
-    Match.when({ _tag: "StateCommit" }, (cmd) => stateCommit(cmd.message)),
-    Match.when({ _tag: "StatePush" }, () => statePush),
-    Match.when({ _tag: "StateSync" }, (cmd) => stateSync(cmd.message)),
-    Match.when({ _tag: "AuthGithubLogin" }, (cmd) => authGithubLogin(cmd)),
-    Match.when({ _tag: "AuthGithubStatus" }, (cmd) => authGithubStatus(cmd)),
-    Match.when({ _tag: "AuthGithubLogout" }, (cmd) => authGithubLogout(cmd)),
-    Match.when({ _tag: "AuthCodexLogin" }, (cmd) => authCodexLogin(cmd)),
-    Match.when({ _tag: "AuthCodexStatus" }, (cmd) => authCodexStatus(cmd)),
-    Match.when({ _tag: "AuthCodexLogout" }, (cmd) => authCodexLogout(cmd)),
-    Match.when({ _tag: "Attach" }, (cmd) => attachTmux(cmd)),
-    Match.when({ _tag: "Panes" }, (cmd) => listTmuxPanes(cmd)),
-    Match.when({ _tag: "SessionsList" }, (cmd) => listTerminalSessions(cmd)),
-    Match.when({ _tag: "SessionsKill" }, (cmd) => killTerminalProcess(cmd)),
-    Match.when({ _tag: "SessionsLogs" }, (cmd) => tailTerminalLogs(cmd)),
-    Match.exhaustive
-  )
+  Match.value(command)
+    .pipe(
+      Match.when({ _tag: "StatePath" }, () => statePath),
+      Match.when({ _tag: "StateInit" }, (cmd) => stateInit(cmd)),
+      Match.when({ _tag: "StateStatus" }, () => stateStatus),
+      Match.when({ _tag: "StatePull" }, () => statePull),
+      Match.when({ _tag: "StateCommit" }, (cmd) => stateCommit(cmd.message)),
+      Match.when({ _tag: "StatePush" }, () => statePush),
+      Match.when({ _tag: "StateSync" }, (cmd) => stateSync(cmd.message)),
+      Match.when({ _tag: "AuthGithubLogin" }, (cmd) => authGithubLogin(cmd)),
+      Match.when({ _tag: "AuthGithubStatus" }, (cmd) => authGithubStatus(cmd)),
+      Match.when({ _tag: "AuthGithubLogout" }, (cmd) => authGithubLogout(cmd)),
+      Match.when({ _tag: "AuthCodexLogin" }, (cmd) => authCodexLogin(cmd)),
+      Match.when({ _tag: "AuthCodexStatus" }, (cmd) => authCodexStatus(cmd)),
+      Match.when({ _tag: "AuthCodexLogout" }, (cmd) => authCodexLogout(cmd)),
+      Match.when({ _tag: "Attach" }, (cmd) => attachTmux(cmd)),
+      Match.when({ _tag: "Panes" }, (cmd) => listTmuxPanes(cmd)),
+      Match.when({ _tag: "SessionsList" }, (cmd) => listTerminalSessions(cmd)),
+      Match.when({ _tag: "SessionsKill" }, (cmd) => killTerminalProcess(cmd)),
+      Match.when({ _tag: "SessionsLogs" }, (cmd) => tailTerminalLogs(cmd)),
+      Match.when({ _tag: "ScrapExport" }, (cmd) => exportScrap(cmd)),
+      Match.when({ _tag: "ScrapImport" }, (cmd) => importScrap(cmd))
+    )
+    .pipe(Match.exhaustive)
 
 // CHANGE: compose CLI program with typed errors and shell effects
 // WHY: keep a thin entry layer over pure parsing and template generation
@@ -121,6 +125,9 @@ export const program = pipe(
   Effect.catchTag("DockerCommandError", logWarningAndExit),
   Effect.catchTag("AuthError", logWarningAndExit),
   Effect.catchTag("CommandFailedError", logWarningAndExit),
+  Effect.catchTag("ScrapArchiveNotFoundError", logErrorAndExit),
+  Effect.catchTag("ScrapTargetDirUnsupportedError", logErrorAndExit),
+  Effect.catchTag("ScrapWipeRefusedError", logErrorAndExit),
   Effect.matchEffect({
     onFailure: (error) =>
       isParseError(error)

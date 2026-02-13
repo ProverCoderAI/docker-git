@@ -12,7 +12,10 @@ import type {
   FileExistsError,
   InputCancelledError,
   InputReadError,
-  PortProbeError
+  PortProbeError,
+  ScrapArchiveNotFoundError,
+  ScrapTargetDirUnsupportedError,
+  ScrapWipeRefusedError
 } from "../shell/errors.js"
 
 export type AppError =
@@ -23,6 +26,9 @@ export type AppError =
   | DockerCommandError
   | ConfigNotFoundError
   | ConfigDecodeError
+  | ScrapArchiveNotFoundError
+  | ScrapTargetDirUnsupportedError
+  | ScrapWipeRefusedError
   | InputCancelledError
   | InputReadError
   | PortProbeError
@@ -76,6 +82,26 @@ const renderPrimaryError = (error: NonParseError): string | null => {
 
   if (error._tag === "CommandFailedError") {
     return `${error.command} failed with exit code ${error.exitCode}`
+  }
+
+  if (error._tag === "ScrapArchiveNotFoundError") {
+    return `Scrap archive not found: ${error.path} (run docker-git scrap export first)`
+  }
+
+  if (error._tag === "ScrapTargetDirUnsupportedError") {
+    return [
+      `Cannot use scrap with targetDir ${error.targetDir}.`,
+      `Reason: ${error.reason}`,
+      `Hint: scrap currently supports workspaces under /home/${error.sshUser}/... only.`
+    ].join("\n")
+  }
+
+  if (error._tag === "ScrapWipeRefusedError") {
+    return [
+      `Refusing to wipe workspace for scrap import (targetDir ${error.targetDir}).`,
+      `Reason: ${error.reason}`,
+      "Hint: re-run with --no-wipe, or set a narrower --target-dir when creating the project."
+    ].join("\n")
   }
 
   if (error._tag === "AuthError") {

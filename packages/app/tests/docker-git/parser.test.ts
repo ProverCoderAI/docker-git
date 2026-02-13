@@ -6,6 +6,22 @@ import { parseArgs } from "../../src/docker-git/cli/parser.js"
 
 type CreateCommand = Extract<Command, { _tag: "Create" }>
 
+const expectParseErrorTag = (
+  args: ReadonlyArray<string>,
+  expectedTag: string
+) =>
+  Effect.sync(() => {
+    const parsed = parseArgs(args)
+    Either.match(parsed, {
+      onLeft: (error) => {
+        expect(error._tag).toBe(expectedTag)
+      },
+      onRight: () => {
+        throw new Error("expected parse error")
+      }
+    })
+  })
+
 const parseOrThrow = (args: ReadonlyArray<string>): Command => {
   const parsed = parseArgs(args)
   return Either.match(parsed, {
@@ -56,17 +72,7 @@ describe("parseArgs", () => {
       expect(command.config.volumeName).toBe("dg-repo-issue-9-home")
     }))
 
-  it.effect("fails on missing repo url", () =>
-    Effect.sync(() => {
-      Either.match(parseArgs(["create"]), {
-        onLeft: (error) => {
-          expect(error._tag).toBe("MissingRequiredOption")
-        },
-        onRight: () => {
-          throw new Error("expected parse error")
-        }
-      })
-    }))
+  it.effect("fails on missing repo url", () => expectParseErrorTag(["create"], "MissingRequiredOption"))
 
   it.effect("parses clone command with positional repo url", () =>
     expectCreateCommand(["clone", "https://github.com/org/repo.git"], (command) => {
@@ -168,5 +174,36 @@ describe("parseArgs", () => {
         throw new Error("expected StateSync command")
       }
       expect(command.message).toBe("sync state")
+    }))
+
+  it.effect("parses scrap export with defaults", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["scrap", "export"])
+      if (command._tag !== "ScrapExport") {
+        throw new Error("expected ScrapExport command")
+      }
+      expect(command.projectDir).toBe(".")
+      expect(command.archivePath).toBe(".orch/scrap/workspace.tar.gz")
+    }))
+
+  it.effect("fails scrap import without archive", () =>
+    expectParseErrorTag(["scrap", "import"], "MissingRequiredOption"))
+
+  it.effect("parses scrap import wipe defaults", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["scrap", "import", "--archive", "workspace.tar.gz"])
+      if (command._tag !== "ScrapImport") {
+        throw new Error("expected ScrapImport command")
+      }
+      expect(command.wipe).toBe(true)
+    }))
+
+  it.effect("parses scrap import --no-wipe", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["scrap", "import", "--archive", "workspace.tar.gz", "--no-wipe"])
+      if (command._tag !== "ScrapImport") {
+        throw new Error("expected ScrapImport command")
+      }
+      expect(command.wipe).toBe(false)
     }))
 })
