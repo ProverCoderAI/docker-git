@@ -71,6 +71,19 @@ export interface SessionsLogsCommand {
   readonly lines: number
 }
 
+export interface ScrapExportCommand {
+  readonly _tag: "ScrapExport"
+  readonly projectDir: string
+  readonly archivePath: string
+}
+
+export interface ScrapImportCommand {
+  readonly _tag: "ScrapImport"
+  readonly projectDir: string
+  readonly archivePath: string
+  readonly wipe: boolean
+}
+
 export interface HelpCommand {
   readonly _tag: "Help"
   readonly message: string
@@ -158,6 +171,10 @@ export type SessionsCommand =
   | SessionsKillCommand
   | SessionsLogsCommand
 
+export type ScrapCommand =
+  | ScrapExportCommand
+  | ScrapImportCommand
+
 export type AuthCommand =
   | AuthGithubLoginCommand
   | AuthGithubStatusCommand
@@ -181,6 +198,7 @@ export type Command =
   | AttachCommand
   | PanesCommand
   | SessionsCommand
+  | ScrapCommand
   | HelpCommand
   | StatusCommand
   | DownAllCommand
