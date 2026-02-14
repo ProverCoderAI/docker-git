@@ -10,8 +10,8 @@ import {
 } from "@effect-template/lib/usecases/auth"
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
-import { downAllDockerGitProjects, listProjectStatus } from "@effect-template/lib/usecases/projects"
 import { mcpPlaywrightUp } from "@effect-template/lib/usecases/mcp-playwright"
+import { downAllDockerGitProjects, listProjectStatus } from "@effect-template/lib/usecases/projects"
 import {
   stateCommit,
   stateInit,
