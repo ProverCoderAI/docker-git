@@ -1,6 +1,7 @@
 import type { TemplateConfig } from "../domain.js"
 
-const entrypointDockerGitBootstrapTemplate = String.raw`# Bootstrap ~/.docker-git for nested docker-git usage inside this container.
+const entrypointDockerGitBootstrapTemplate = String
+  .raw`# Bootstrap ~/.docker-git for nested docker-git usage inside this container.
 DOCKER_GIT_HOME="/home/__SSH_USER__/.docker-git"
 DOCKER_GIT_AUTH_DIR="$DOCKER_GIT_HOME/.orch/auth/codex"
 DOCKER_GIT_ENV_DIR="$DOCKER_GIT_HOME/.orch/env"

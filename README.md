@@ -93,6 +93,9 @@ Disable sharing (per-project auth):
 Enable during create/clone:
 - Add `--mcp-playwright`
 
+Enable for an existing project directory (preserves `.orch/env/project.env` and volumes):
+- `docker-git mcp-playwright [<url>] [--project-dir <path>]`
+
 This will:
 - Create a Chromium sidecar container: `dg-<repo>-browser`
 - Configure Codex MCP server `playwright` inside the dev container
@@ -119,7 +122,8 @@ Common toggles:
 MCP errors in `codex` UI:
 - `No such file or directory (os error 2)` for `playwright`:
   - `~/.codex/config.toml` contains `[mcp_servers.playwright]`, but the container was created without `--mcp-playwright`.
-  - Fix: recreate with `--force --mcp-playwright` (or remove the block from `config.toml`).
+  - Fix (recommended): run `docker-git mcp-playwright [<url>]` to enable it for the existing project.
+  - Fix (recreate): recreate with `--force-env --mcp-playwright` (keeps volumes) or `--force --mcp-playwright` (wipes volumes).
 - `handshaking ... initialize response`:
   - The configured MCP command is not a real MCP server (example: `command="echo"`).
 

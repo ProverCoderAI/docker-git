@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# CHANGE: provide an npx shim compatible with pnpm workspaces
+# WHY: vibecode-linter shells out to `npx biome` / `npx tsc`, but npm's `npx` does not
+# reliably resolve pnpm-installed local binaries; `pnpm exec` does.
+# QUOTE(ТЗ): n/a
+# REF: issue-29 (test runner)
+# SOURCE: n/a
+# PURITY: SHELL
+# EFFECT: exec(1)
+exec pnpm exec "$@"
+
