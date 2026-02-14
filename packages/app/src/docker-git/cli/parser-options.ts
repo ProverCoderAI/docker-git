@@ -21,6 +21,7 @@ interface ValueOptionSpec {
     | "codexAuthPath"
     | "codexHome"
     | "archivePath"
+    | "scrapMode"
     | "label"
     | "token"
     | "scopes"
@@ -48,6 +49,7 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--codex-auth", key: "codexAuthPath" },
   { flag: "--codex-home", key: "codexHome" },
   { flag: "--archive", key: "archivePath" },
+  { flag: "--mode", key: "scrapMode" },
   { flag: "--label", key: "label" },
   { flag: "--token", key: "token" },
   { flag: "--scopes", key: "scopes" },
@@ -93,6 +95,7 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   codexAuthPath: (raw, value) => ({ ...raw, codexAuthPath: value }),
   codexHome: (raw, value) => ({ ...raw, codexHome: value }),
   archivePath: (raw, value) => ({ ...raw, archivePath: value }),
+  scrapMode: (raw, value) => ({ ...raw, scrapMode: value }),
   label: (raw, value) => ({ ...raw, label: value }),
   token: (raw, value) => ({ ...raw, token: value }),
   scopes: (raw, value) => ({ ...raw, scopes: value }),
