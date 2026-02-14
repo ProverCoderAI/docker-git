@@ -14,6 +14,7 @@ import type {
   InputCancelledError,
   InputReadError,
   PortProbeError,
+  ScrapArchiveInvalidError,
   ScrapArchiveNotFoundError,
   ScrapTargetDirUnsupportedError,
   ScrapWipeRefusedError
@@ -27,6 +28,7 @@ export type AppError =
   | DockerCommandError
   | ConfigNotFoundError
   | ConfigDecodeError
+  | ScrapArchiveInvalidError
   | ScrapArchiveNotFoundError
   | ScrapTargetDirUnsupportedError
   | ScrapWipeRefusedError
@@ -78,6 +80,10 @@ const renderPrimaryError = (error: NonParseError): string | null =>
     Match.when(
       { _tag: "ScrapArchiveNotFoundError" },
       ({ path }) => `Scrap archive not found: ${path} (run docker-git scrap export first)`
+    ),
+    Match.when(
+      { _tag: "ScrapArchiveInvalidError" },
+      ({ message, path }) => `Invalid scrap archive: ${path}\nDetails: ${message}`
     ),
     Match.when({ _tag: "ScrapTargetDirUnsupportedError" }, ({ reason, sshUser, targetDir }) =>
       [

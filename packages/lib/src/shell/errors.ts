@@ -56,6 +56,11 @@ export class ScrapArchiveNotFoundError extends Data.TaggedError("ScrapArchiveNot
   readonly path: string
 }> {}
 
+export class ScrapArchiveInvalidError extends Data.TaggedError("ScrapArchiveInvalidError")<{
+  readonly path: string
+  readonly message: string
+}> {}
+
 export class ScrapTargetDirUnsupportedError extends Data.TaggedError("ScrapTargetDirUnsupportedError")<{
   readonly sshUser: string
   readonly targetDir: string

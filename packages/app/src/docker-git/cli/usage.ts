@@ -22,7 +22,7 @@ Commands:
   clone               Create + run container and clone repo
   attach, tmux        Open tmux workspace for a docker-git project
   panes, terms        List tmux panes for a docker-git project
-  scrap               Export/import workspace cache (dependencies, .env, build artifacts)
+  scrap               Export/import project scrap (cache archive or session snapshot)
   sessions            List/kill/log container terminal processes
   ps, status          Show docker compose status for all docker-git projects
   down-all            Stop all docker-git containers (docker compose down)
@@ -46,7 +46,8 @@ Options:
   --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
   --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>[/issue-<id>|/pr-<id>])
   --project-dir <path>      Project directory for attach (default: .)
-  --archive <path>          Scrap archive path (export: output, import: input; default: .orch/scrap/workspace.tar.gz)
+  --archive <path>          Scrap archive path (cache: file, session: directory)
+  --mode <cache|session>    Scrap mode (default: cache)
   --wipe | --no-wipe        Wipe workspace before scrap import (default: --wipe)
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list

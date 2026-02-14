@@ -71,10 +71,13 @@ export interface SessionsLogsCommand {
   readonly lines: number
 }
 
+export type ScrapMode = "cache" | "session"
+
 export interface ScrapExportCommand {
   readonly _tag: "ScrapExport"
   readonly projectDir: string
   readonly archivePath: string
+  readonly mode: ScrapMode
 }
 
 export interface ScrapImportCommand {
@@ -82,6 +85,7 @@ export interface ScrapImportCommand {
   readonly projectDir: string
   readonly archivePath: string
   readonly wipe: boolean
+  readonly mode: ScrapMode
 }
 
 export interface HelpCommand {

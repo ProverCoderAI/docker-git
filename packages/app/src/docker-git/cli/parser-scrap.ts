@@ -15,23 +15,44 @@ const invalidScrapAction = (value: string): ParseError => ({
   reason: `unknown action: ${value}`
 })
 
-const defaultArchivePath = ".orch/scrap/workspace.tar.gz"
+const defaultCacheArchivePath = ".orch/scrap/workspace.tar.gz"
+const defaultSessionArchiveDir = ".orch/scrap/session"
 
-const makeScrapExportCommand = (projectDir: string, archivePath: string): Command => ({
+const invalidScrapMode = (value: string): ParseError => ({
+  _tag: "InvalidOption",
+  option: "--mode",
+  reason: `unknown value: ${value} (expected cache|session)`
+})
+
+const parseScrapMode = (raw: string | undefined): Either.Either<"cache" | "session", ParseError> => {
+  const value = raw?.trim()
+  if (!value || value.length === 0) {
+    return Either.right("cache")
+  }
+  if (value === "cache" || value === "session") {
+    return Either.right(value)
+  }
+  return Either.left(invalidScrapMode(value))
+}
+
+const makeScrapExportCommand = (projectDir: string, archivePath: string, mode: "cache" | "session"): Command => ({
   _tag: "ScrapExport",
   projectDir,
-  archivePath
+  archivePath,
+  mode
 })
 
 const makeScrapImportCommand = (
   projectDir: string,
   archivePath: string,
-  wipe: boolean
+  wipe: boolean,
+  mode: "cache" | "session"
 ): Command => ({
   _tag: "ScrapImport",
   projectDir,
   archivePath,
-  wipe
+  wipe,
+  mode
 })
 
 // CHANGE: parse scrap (workspace cache) export/import commands
@@ -56,13 +77,18 @@ export const parseScrap = (args: ReadonlyArray<string>): Either.Either<Command, 
     Match.when(
       "export",
       () =>
-        Either.map(parseProjectDirWithOptions(rest), ({ projectDir, raw }) =>
-          makeScrapExportCommand(
-            projectDir,
-            raw.archivePath?.trim() && raw.archivePath.trim().length > 0
-              ? raw.archivePath.trim()
-              : defaultArchivePath
-          ))
+        Either.flatMap(
+          parseProjectDirWithOptions(rest),
+          ({ projectDir, raw }) =>
+            Either.map(parseScrapMode(raw.scrapMode), (mode) => {
+              const archivePathRaw = raw.archivePath?.trim()
+              if (archivePathRaw && archivePathRaw.length > 0) {
+                return makeScrapExportCommand(projectDir, archivePathRaw, mode)
+              }
+              const defaultPath = mode === "session" ? defaultSessionArchiveDir : defaultCacheArchivePath
+              return makeScrapExportCommand(projectDir, defaultPath, mode)
+            })
+        )
     ),
     Match.when("import", () =>
       Either.flatMap(parseProjectDirWithOptions(rest), ({ projectDir, raw }) => {
@@ -70,7 +96,8 @@ export const parseScrap = (args: ReadonlyArray<string>): Either.Either<Command, 
         if (!archivePath || archivePath.length === 0) {
           return Either.left(missingRequired("--archive"))
         }
-        return Either.right(makeScrapImportCommand(projectDir, archivePath, raw.wipe ?? true))
+        return Either.map(parseScrapMode(raw.scrapMode), (mode) =>
+          makeScrapImportCommand(projectDir, archivePath, raw.wipe ?? true, mode))
       })),
     Match.orElse(() => Either.left(invalidScrapAction(action)))
   )
