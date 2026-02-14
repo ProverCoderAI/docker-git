@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "mode": "session",
+  "snapshotId": "20260214T085652Z",
+  "createdAtUtc": "2026-02-14T08:56:52.463Z",
+  "repo": {
+    "originUrl": "https://github.com/ProverCoderAI/docker-git.git",
+    "head": "d24de221f1a92c3ff4fbfc3e2b80135642625541",
+    "branch": "main"
+  },
+  "artifacts": {
+    "worktreePatchChunks": "worktree.patch.gz.chunks.json",
+    "codexChunks": "codex.tar.gz.chunks.json",
+    "codexSharedChunks": "codex-shared.tar.gz.chunks.json"
+  }
+}

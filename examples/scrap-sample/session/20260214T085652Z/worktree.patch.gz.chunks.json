@@ -1,0 +1,8 @@
+{
+  "original": "worktree.patch.gz",
+  "originalSize": 200,
+  "parts": ["worktree.patch.gz.part00000"],
+  "splitAt": 99000000,
+  "partsCount": 1,
+  "createdAt": "2026-02-14T08:56:52.463Z"
+}
