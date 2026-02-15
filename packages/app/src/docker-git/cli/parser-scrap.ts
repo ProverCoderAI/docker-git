@@ -15,27 +15,30 @@ const invalidScrapAction = (value: string): ParseError => ({
   reason: `unknown action: ${value}`
 })
 
-const defaultCacheArchivePath = ".orch/scrap/workspace.tar.gz"
 const defaultSessionArchiveDir = ".orch/scrap/session"
 
 const invalidScrapMode = (value: string): ParseError => ({
   _tag: "InvalidOption",
   option: "--mode",
-  reason: `unknown value: ${value} (expected cache|session)`
+  reason: `unknown value: ${value} (expected session)`
 })
 
-const parseScrapMode = (raw: string | undefined): Either.Either<"cache" | "session", ParseError> => {
+const parseScrapMode = (raw: string | undefined): Either.Either<"session", ParseError> => {
   const value = raw?.trim()
   if (!value || value.length === 0) {
-    return Either.right("cache")
+    return Either.right("session")
   }
-  if (value === "cache" || value === "session") {
-    return Either.right(value)
+  if (value === "session") {
+    return Either.right("session")
+  }
+  if (value === "recipe") {
+    // Backwards/semantic alias: "recipe" behaves like "session" (git state + rebuildable deps).
+    return Either.right("session")
   }
   return Either.left(invalidScrapMode(value))
 }
 
-const makeScrapExportCommand = (projectDir: string, archivePath: string, mode: "cache" | "session"): Command => ({
+const makeScrapExportCommand = (projectDir: string, archivePath: string, mode: "session"): Command => ({
   _tag: "ScrapExport",
   projectDir,
   archivePath,
@@ -46,7 +49,7 @@ const makeScrapImportCommand = (
   projectDir: string,
   archivePath: string,
   wipe: boolean,
-  mode: "cache" | "session"
+  mode: "session"
 ): Command => ({
   _tag: "ScrapImport",
   projectDir,
@@ -55,10 +58,10 @@ const makeScrapImportCommand = (
   mode
 })
 
-// CHANGE: parse scrap (workspace cache) export/import commands
-// WHY: allow copying docker-git workspace caches (deps, .env, build artifacts) across machines
-// QUOTE(ТЗ): "мог копировать скрап (кеш) от докер контейнеров"
-// REF: issue-27
+// CHANGE: parse scrap session export/import commands
+// WHY: store a small reproducible snapshot (git state + secrets) instead of large caches like node_modules
+// QUOTE(ТЗ): "не должно быть старого режима где он качает весь шлак типо node_modules"
+// REF: user-request-2026-02-15
 // SOURCE: n/a
 // FORMAT THEOREM: forall argv: parseScrap(argv) = cmd -> deterministic(cmd)
 // PURITY: CORE
@@ -85,8 +88,7 @@ export const parseScrap = (args: ReadonlyArray<string>): Either.Either<Command, 
               if (archivePathRaw && archivePathRaw.length > 0) {
                 return makeScrapExportCommand(projectDir, archivePathRaw, mode)
               }
-              const defaultPath = mode === "session" ? defaultSessionArchiveDir : defaultCacheArchivePath
-              return makeScrapExportCommand(projectDir, defaultPath, mode)
+              return makeScrapExportCommand(projectDir, defaultSessionArchiveDir, mode)
             })
         )
     ),

@@ -183,7 +183,7 @@ describe("parseArgs", () => {
         throw new Error("expected ScrapExport command")
       }
       expect(command.projectDir).toBe(".")
-      expect(command.archivePath).toBe(".orch/scrap/workspace.tar.gz")
+      expect(command.archivePath).toBe(".orch/scrap/session")
     }))
 
   it.effect("fails scrap import without archive", () =>

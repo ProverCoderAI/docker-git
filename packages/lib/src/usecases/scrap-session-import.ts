@@ -3,7 +3,7 @@ import type { FileSystem as Fs } from "@effect/platform/FileSystem"
 import type { Path as PathService } from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import type { ScrapImportCommand } from "../core/domain.js"
+import type { ProjectConfig, ScrapImportCommand } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
 import { ScrapArchiveNotFoundError } from "../shell/errors.js"
 import { resolveBaseDir } from "../shell/paths.js"
@@ -25,6 +25,7 @@ type SessionImportContext = {
   readonly fs: Fs
   readonly path: PathService
   readonly resolved: string
+  readonly config: ProjectConfig
   readonly template: ReturnType<typeof buildScrapTemplate>
   readonly snapshotDir: string
   readonly manifest: SessionManifest
@@ -86,7 +87,7 @@ const loadSessionImportContext = (
     const manifestText = yield* _(fs.readFileString(manifestPath))
     const manifest = yield* _(decodeSessionManifest(manifestPath, manifestText))
 
-    return { fs, path, resolved, template, snapshotDir, manifest }
+    return { fs, path, resolved, config, template, snapshotDir, manifest }
   })
 
 const resolveSnapshotPartsAbs = (
@@ -107,6 +108,34 @@ const resolveSnapshotPartsAbs = (
     return partsAbs
   })
 
+const restoreHostEnvFiles = (ctx: SessionImportContext): Effect.Effect<void, ScrapError, ScrapRequirements> =>
+  Effect.gen(function*(_) {
+    const restore = (snapshotFileName: string | null | undefined, dstAbs: string, label: string) =>
+      Effect.gen(function*(__) {
+        const name = snapshotFileName?.trim() ?? ""
+        if (name.length === 0 || name === "null") {
+          return
+        }
+
+        const srcAbs = ctx.path.join(ctx.snapshotDir, name)
+        const exists = yield* __(ctx.fs.exists(srcAbs))
+        if (!exists) {
+          return
+        }
+
+        const contents = yield* __(ctx.fs.readFileString(srcAbs))
+        yield* __(ctx.fs.makeDirectory(ctx.path.dirname(dstAbs), { recursive: true }))
+        yield* __(ctx.fs.writeFileString(dstAbs, contents))
+        yield* __(Effect.log(`Restored ${label}: ${dstAbs}`))
+      })
+
+    const envGlobalAbs = resolvePathFromCwd(ctx.path, ctx.resolved, ctx.config.template.envGlobalPath)
+    const envProjectAbs = resolvePathFromCwd(ctx.path, ctx.resolved, ctx.config.template.envProjectPath)
+
+    yield* _(restore(ctx.manifest.artifacts.envGlobalFile, envGlobalAbs, "env-global"))
+    yield* _(restore(ctx.manifest.artifacts.envProjectFile, envProjectAbs, "env-project"))
+  }).pipe(Effect.asVoid)
+
 const prepareRepoForImport = (
   ctx: SessionImportContext,
   wipe: boolean
@@ -126,7 +155,9 @@ const prepareRepoForImport = (
     "git fetch --all --prune",
     `git checkout --detach ${shellEscape(ctx.manifest.repo.head)}`,
     `git reset --hard ${shellEscape(ctx.manifest.repo.head)}`,
-    "git clean -fd"
+    "git clean -fd",
+    // Remove common heavy caches that are easy to rebuild with internet access.
+    "find . -name node_modules -type d -prune -exec rm -rf '{}' + 2>/dev/null || true"
   ].join("; ")
 
   return runDockerExec(ctx.resolved, "scrap session prepare repo", ctx.template.containerName, prepScript)
@@ -171,6 +202,24 @@ const restoreTarChunksIntoContainerDir = (
     yield* _(runShell(ctx.resolved, label, script))
   }).pipe(Effect.asVoid)
 
+const runRebuildCommands = (ctx: SessionImportContext): Effect.Effect<void, ScrapError, ScrapRequirements> =>
+  Effect.gen(function*(_) {
+    const commands = ctx.manifest.rebuild.commands
+    if (commands.length === 0) {
+      return
+    }
+
+    for (const command of commands) {
+      const trimmed = command.trim()
+      if (trimmed.length === 0) {
+        continue
+      }
+      yield* _(Effect.log(`Rebuilding: ${trimmed}`))
+      const script = `set -e; cd ${shellEscape(ctx.template.targetDir)}; ${trimmed}`
+      yield* _(runDockerExec(ctx.resolved, "scrap session rebuild", ctx.template.containerName, script))
+    }
+  }).pipe(Effect.asVoid)
+
 export const importScrapSession = (
   command: ScrapImportCommand
 ): Effect.Effect<void, ScrapError, ScrapRequirements> =>
@@ -189,6 +238,7 @@ export const importScrapSession = (
       )
     )
 
+    yield* _(restoreHostEnvFiles(ctx))
     yield* _(prepareRepoForImport(ctx, command.wipe))
     yield* _(applyWorktreePatch(ctx))
 
@@ -211,5 +261,6 @@ export const importScrapSession = (
       )
     )
 
+    yield* _(runRebuildCommands(ctx))
     yield* _(Effect.log("Scrap session import complete."))
   }).pipe(Effect.asVoid)

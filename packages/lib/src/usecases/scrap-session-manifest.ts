@@ -20,6 +20,11 @@ export type SessionManifest = {
     readonly worktreePatchChunks: string
     readonly codexChunks: string
     readonly codexSharedChunks: string
+    readonly envGlobalFile: string | null
+    readonly envProjectFile: string | null
+  }
+  readonly rebuild: {
+    readonly commands: ReadonlyArray<string>
   }
 }
 
@@ -36,8 +41,16 @@ const SessionManifestSchema = Schema.Struct({
   artifacts: Schema.Struct({
     worktreePatchChunks: Schema.String,
     codexChunks: Schema.String,
-    codexSharedChunks: Schema.String
-  })
+    codexSharedChunks: Schema.String,
+    envGlobalFile: Schema.optionalWith(Schema.Union(Schema.String, Schema.Null), { default: () => null }),
+    envProjectFile: Schema.optionalWith(Schema.Union(Schema.String, Schema.Null), { default: () => null })
+  }),
+  rebuild: Schema.optionalWith(
+    Schema.Struct({
+      commands: Schema.Array(Schema.String)
+    }),
+    { default: () => ({ commands: [] }) }
+  )
 })
 
 const SessionManifestJsonSchema = Schema.parseJson(SessionManifestSchema)
