@@ -128,7 +128,8 @@ EOF_ENV
 
 # Auto-open SSH happens only in an interactive TTY; wrap with `script` to allocate a pseudo-TTY.
 command -v script >/dev/null 2>&1 || fail "missing 'script' command (util-linux)"
-rm -f "$SSH_LOG_PATH"
+: > "$SSH_LOG_PATH"
+chmod 0666 "$SSH_LOG_PATH" || true
 script -q -e -c "pnpm run docker-git clone \"$REPO_URL\" --force --ssh-port \"$SSH_PORT\" --out-dir \"$OUT_DIR_REL\" --container-name \"$CONTAINER_NAME\" --service-name \"$SERVICE_NAME\" --volume-name \"$VOLUME_NAME\"" /dev/null
 
 [[ -s "$SSH_LOG_PATH" ]] || fail "expected ssh to be invoked; log is empty: $SSH_LOG_PATH"
