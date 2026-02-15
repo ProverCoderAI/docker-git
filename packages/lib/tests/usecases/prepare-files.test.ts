@@ -107,6 +107,10 @@ describe("prepareProjectFiles", () => {
         expect(dockerfile).toContain("docker-compose-v2")
         expect(entrypoint).toContain('DOCKER_GIT_HOME="/home/dev/.docker-git"')
         expect(entrypoint).toContain('SOURCE_SHARED_AUTH="/home/dev/.codex-shared/auth.json"')
+        expect(entrypoint).toContain('OPENCODE_DATA_DIR="/home/dev/.local/share/opencode"')
+        expect(entrypoint).toContain('OPENCODE_SHARED_HOME="/home/dev/.codex-shared/opencode"')
+        expect(entrypoint).toContain('OPENCODE_CONFIG_DIR="/home/dev/.config/opencode"')
+        expect(entrypoint).toContain('"plugin": ["oh-my-opencode"]')
         expect(composeBefore).toContain(":/home/dev/.docker-git")
         expect(composeBefore).not.toContain("dg-test-browser")
 

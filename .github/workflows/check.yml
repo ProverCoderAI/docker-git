@@ -84,3 +84,16 @@ jobs:
         run: pnpm --filter ./packages/app lint:effect
       - name: Lint Effect-TS (lib)
         run: pnpm --filter ./packages/lib lint:effect
+
+  e2e-opencode:
+    name: E2E (OpenCode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Docker info
+        run: docker version && docker compose version
+      - name: OpenCode autoconnect
+        run: bash scripts/e2e/opencode-autoconnect.sh
