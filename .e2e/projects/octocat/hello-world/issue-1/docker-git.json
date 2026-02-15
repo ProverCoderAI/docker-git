@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "template": {
+    "containerName": "dg-hello-world-issue-1",
+    "serviceName": "dg-hello-world-issue-1",
+    "sshUser": "dev",
+    "sshPort": 34623,
+    "repoUrl": "https://github.com/octocat/Hello-World.git",
+    "repoRef": "issue-1",
+    "targetDir": "/home/dev/octocat/hello-world/issue-1",
+    "volumeName": "dg-hello-world-issue-1-home",
+    "dockerGitPath": "../../..",
+    "authorizedKeysPath": "../../../authorized_keys",
+    "envGlobalPath": "./.orch/env/global.env",
+    "envProjectPath": "../../../../project.env",
+    "codexAuthPath": "./.orch/auth/codex",
+    "codexSharedAuthPath": "../../../.orch/auth/codex",
+    "codexHome": "/home/dev/.codex",
+    "enableMcpPlaywright": false,
+    "pnpmVersion": "10.27.0"
+  }
+}

@@ -373,3 +373,12 @@ describe("Message invariants", () => {
 Каждый эффект — это контролируемое взаимодействие с реальным миром.
 
 ПРИНЦИП: Сначала формализуем, потом программируем.
+
+<!-- docker-git:issue-managed:start -->
+Issue workspace: #39
+Issue URL: https://github.com/ProverCoderAI/docker-git/issues/39
+Workspace path: /home/dev/provercoderai/docker-git/issue-39
+
+Работай только над этим issue, если пользователь не попросил другое.
+Если нужен первоисточник требований, открой Issue URL.
+<!-- docker-git:issue-managed:end -->

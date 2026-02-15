@@ -1,0 +1,15 @@
+diff --git a/dist/shell/utils/dependencies.js b/dist/shell/utils/dependencies.js
+index bd96968de92e45ef4543abb7781bd71d333c8090..47a6bf82594a74b1acefbe24c2e00b0171dc3cf6 100644
+--- a/dist/shell/utils/dependencies.js
++++ b/dist/shell/utils/dependencies.js
+@@ -42,7 +42,9 @@ const DEPENDENCIES = [
+     {
+         name: "TypeScript",
+         command: "tsc",
+-        checkCommand: "npx tsc --version",
++        // npm@11+ `npx tsc` resolves to the unrelated `tsc` package.
++        // We just need the TypeScript compiler API dependency to be present.
++        checkCommand: "node -e \"require('typescript')\"",
+         installCommand: "npm install",
+         required: true,
+     },

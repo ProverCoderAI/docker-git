@@ -1,12 +1,14 @@
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
-import type * as FileSystem from "@effect/platform/FileSystem"
+import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
 import type { CreateCommand } from "../../core/domain.js"
 import { deriveRepoPathParts } from "../../core/domain.js"
+import { runCommandWithExitCodes } from "../../shell/command-runner.js"
 import { ensureDockerDaemonAccess } from "../../shell/docker.js"
+import { CommandFailedError } from "../../shell/errors.js"
 import type {
   CloneFailedError,
   DockerAccessError,
@@ -15,8 +17,11 @@ import type {
   PortProbeError
 } from "../../shell/errors.js"
 import { logDockerAccessInfo } from "../access-log.js"
+import { renderError } from "../errors.js"
 import { applyGithubForkConfig } from "../github-fork.js"
 import { defaultProjectsRoot } from "../menu-helpers.js"
+import { findSshPrivateKey } from "../path-helpers.js"
+import { buildSshCommand } from "../projects-core.js"
 import { autoSyncState } from "../state-repo.js"
 import { runDockerUpIfNeeded } from "./docker-up.js"
 import { buildProjectConfigs, resolveDockerGitRootRelativePath } from "./paths.js"
@@ -80,6 +85,69 @@ const formatStateSyncLabel = (repoUrl: string): string => {
   return repoPath.length > 0 ? repoPath : repoUrl
 }
 
+const isInteractiveTty = (): boolean => process.stdin.isTTY === true && process.stdout.isTTY === true
+
+const buildSshArgs = (
+  config: CreateCommand["config"],
+  sshKeyPath: string | null
+): ReadonlyArray<string> => {
+  const args: Array<string> = []
+  if (sshKeyPath !== null) {
+    args.push("-i", sshKeyPath)
+  }
+  args.push(
+    "-tt",
+    "-Y",
+    "-o",
+    "LogLevel=ERROR",
+    "-o",
+    "StrictHostKeyChecking=no",
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-p",
+    String(config.sshPort),
+    `${config.sshUser}@localhost`
+  )
+  return args
+}
+
+// CHANGE: auto-open SSH after environment is created (best-effort)
+// WHY: clone flow should drop the user into the container without manual copy/paste
+// QUOTE(ТЗ): "Мне надо что бы он сразу открыл SSH"
+// REF: issue-39
+// SOURCE: n/a
+// FORMAT THEOREM: forall c: openSsh(c) -> ssh_session_started(c) || warning_logged(c)
+// PURITY: SHELL
+// EFFECT: Effect<void, never, FileSystem | Path | CommandExecutor>
+// INVARIANT: SSH failures do not fail the create/clone command
+// COMPLEXITY: O(1) + ssh
+const openSshBestEffort = (
+  template: CreateCommand["config"]
+): Effect.Effect<void, never, CreateProjectRuntime> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+
+    const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
+    const sshCommand = buildSshCommand(template, sshKey)
+
+    yield* _(Effect.log(`Opening SSH: ${sshCommand}`))
+    yield* _(
+      runCommandWithExitCodes(
+        {
+          cwd: process.cwd(),
+          command: "ssh",
+          args: buildSshArgs(template, sshKey)
+        },
+        [0, 130],
+        (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
+      )
+    )
+  }).pipe(
+    Effect.catchAll((error) => Effect.logWarning(`SSH auto-open failed: ${renderError(error)}`)),
+    Effect.asVoid
+  )
+
 const runCreateProject = (
   path: Path.Path,
   command: CreateCommand
@@ -118,6 +186,16 @@ const runCreateProject = (
     }
 
     yield* _(autoSyncState(`chore(state): update ${formatStateSyncLabel(projectConfig.repoUrl)}`))
+
+    if (command.openSsh) {
+      if (!command.runUp) {
+        yield* _(Effect.logWarning("Skipping SSH auto-open: docker compose up disabled (--no-up)."))
+      } else if (!isInteractiveTty()) {
+        yield* _(Effect.logWarning("Skipping SSH auto-open: not running in an interactive TTY."))
+      } else {
+        yield* _(openSshBestEffort(projectConfig))
+      }
+    }
   }).pipe(Effect.asVoid)
 
 export const createProject = (command: CreateCommand): Effect.Effect<void, CreateProjectError, CreateProjectRuntime> =>

@@ -1115,6 +1115,7 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
                 config: nextTemplate,
                 outDir: project.directory,
                 runUp: false,
+                openSsh: false,
                 force: true,
                 forceEnv: false,
                 waitForClone: false
@@ -1455,6 +1456,7 @@ data: ${JSON.stringify(data)}
                 config: nextTemplate,
                 outDir: project.directory,
                 runUp: false,
+                openSsh: false,
                 force: true,
                 forceEnv: false,
                 waitForClone: false

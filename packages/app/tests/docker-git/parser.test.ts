@@ -56,6 +56,8 @@ describe("parseArgs", () => {
   it.effect("parses create command with defaults", () =>
     expectCreateCommand(["create", "--repo-url", "https://github.com/org/repo.git"], (command) => {
       expectCreateDefaults(command)
+      expect(command.openSsh).toBe(false)
+      expect(command.waitForClone).toBe(false)
       expect(command.config.containerName).toBe("dg-repo")
       expect(command.config.serviceName).toBe("dg-repo")
       expect(command.config.volumeName).toBe("dg-repo-home")
@@ -67,6 +69,8 @@ describe("parseArgs", () => {
       expect(command.config.repoUrl).toBe("https://github.com/org/repo.git")
       expect(command.config.repoRef).toBe("issue-9")
       expect(command.outDir).toBe(".docker-git/org/repo/issue-9")
+      expect(command.openSsh).toBe(false)
+      expect(command.waitForClone).toBe(false)
       expect(command.config.containerName).toBe("dg-repo-issue-9")
       expect(command.config.serviceName).toBe("dg-repo-issue-9")
       expect(command.config.volumeName).toBe("dg-repo-issue-9-home")
@@ -77,12 +81,24 @@ describe("parseArgs", () => {
   it.effect("parses clone command with positional repo url", () =>
     expectCreateCommand(["clone", "https://github.com/org/repo.git"], (command) => {
       expectCreateDefaults(command)
+      expect(command.openSsh).toBe(true)
+      expect(command.waitForClone).toBe(true)
       expect(command.config.targetDir).toBe("/home/dev/org/repo")
     }))
 
   it.effect("parses clone branch alias", () =>
     expectCreateCommand(["clone", "https://github.com/org/repo.git", "--branch", "feature-x"], (command) => {
       expect(command.config.repoRef).toBe("feature-x")
+    }))
+
+  it.effect("supports disabling SSH auto-open for clone", () =>
+    expectCreateCommand(["clone", "https://github.com/org/repo.git", "--no-ssh"], (command) => {
+      expect(command.openSsh).toBe(false)
+    }))
+
+  it.effect("supports enabling SSH auto-open for create", () =>
+    expectCreateCommand(["create", "--repo-url", "https://github.com/org/repo.git", "--ssh"], (command) => {
+      expect(command.openSsh).toBe(true)
     }))
 
   it.effect("parses force-env flag for clone", () =>
