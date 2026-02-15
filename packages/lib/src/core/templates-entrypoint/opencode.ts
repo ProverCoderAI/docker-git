@@ -167,6 +167,7 @@ const entry = {
 opencode.openai = entry
 writeJsonAtomic(opencodePath, opencode)
 NODE
+  chown 1000:1000 "$OPENCODE_SEED_AUTH" 2>/dev/null || true
 fi
 
 # OpenCode: ensure global config exists (plugins + permissions)
