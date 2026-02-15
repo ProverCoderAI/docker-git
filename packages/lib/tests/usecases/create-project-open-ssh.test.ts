@@ -17,6 +17,12 @@ type RecordedCommand = {
   readonly args: ReadonlyArray<string>
 }
 
+type ProcessPatch = {
+  readonly prevProjectsRoot: string | undefined
+  readonly prevStdinTty: boolean | undefined
+  readonly prevStdoutTty: boolean | undefined
+}
+
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
 ): Effect.Effect<A, E, R | FileSystem.FileSystem> =>
@@ -30,6 +36,40 @@ const withTempDir = <A, E, R>(
       )
       return yield* _(use(tempDir))
     })
+  )
+
+const patchProcessForInteractiveSsh = (projectsRoot: string): Effect.Effect<ProcessPatch, never> =>
+  Effect.sync(() => {
+    const prevProjectsRoot = process.env["DOCKER_GIT_PROJECTS_ROOT"]
+    const prevStdinTty = process.stdin.isTTY
+    const prevStdoutTty = process.stdout.isTTY
+
+    process.env["DOCKER_GIT_PROJECTS_ROOT"] = projectsRoot
+    Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true })
+    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true })
+
+    return { prevProjectsRoot, prevStdinTty, prevStdoutTty }
+  })
+
+const restorePatchedProcess = (patch: ProcessPatch): Effect.Effect<void, never> =>
+  Effect.sync(() => {
+    if (patch.prevProjectsRoot === undefined) {
+      delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
+    } else {
+      process.env["DOCKER_GIT_PROJECTS_ROOT"] = patch.prevProjectsRoot
+    }
+    Object.defineProperty(process.stdin, "isTTY", { value: patch.prevStdinTty, configurable: true })
+    Object.defineProperty(process.stdout, "isTTY", { value: patch.prevStdoutTty, configurable: true })
+  })
+
+const withInteractiveProcess = <A, E, R>(
+  projectsRoot: string,
+  use: Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R> =>
+  Effect.scoped(
+    Effect.acquireRelease(patchProcessForInteractiveSsh(projectsRoot), restorePatchedProcess).pipe(
+      Effect.flatMap(() => use)
+    )
   )
 
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value)
@@ -140,25 +180,12 @@ describe("createProject (openSsh)", () => {
         const executor = makeFakeExecutor(recorded)
         const command = makeCommand(root, outDir, path)
 
-        const prevProjectsRoot = process.env["DOCKER_GIT_PROJECTS_ROOT"]
-        const prevStdinTty = process.stdin.isTTY
-        const prevStdoutTty = process.stdout.isTTY
-
-        process.env["DOCKER_GIT_PROJECTS_ROOT"] = path.join(root, "state")
-        Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true })
-        Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true })
-
-        try {
-          yield* _(createProject(command).pipe(Effect.provideService(CommandExecutor.CommandExecutor, executor)))
-        } finally {
-          if (prevProjectsRoot === undefined) {
-            delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
-          } else {
-            process.env["DOCKER_GIT_PROJECTS_ROOT"] = prevProjectsRoot
-          }
-          Object.defineProperty(process.stdin, "isTTY", { value: prevStdinTty, configurable: true })
-          Object.defineProperty(process.stdout, "isTTY", { value: prevStdoutTty, configurable: true })
-        }
+        yield* _(
+          withInteractiveProcess(
+            path.join(root, "state"),
+            createProject(command).pipe(Effect.provideService(CommandExecutor.CommandExecutor, executor))
+          )
+        )
 
         const sshInvocations = recorded.filter((entry) => entry.command === "ssh")
         expect(sshInvocations).toHaveLength(1)

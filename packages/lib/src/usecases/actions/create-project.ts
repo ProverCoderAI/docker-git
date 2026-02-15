@@ -144,8 +144,11 @@ const openSshBestEffort = (
       )
     )
   }).pipe(
-    Effect.catchAll((error) => Effect.logWarning(`SSH auto-open failed: ${renderError(error)}`)),
-    Effect.asVoid
+    Effect.asVoid,
+    Effect.matchEffect({
+      onFailure: (error) => Effect.logWarning(`SSH auto-open failed: ${renderError(error)}`),
+      onSuccess: () => Effect.void
+    })
   )
 
 const runCreateProject = (
