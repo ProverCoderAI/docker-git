@@ -1,23 +1,13 @@
 import type { TemplateConfig } from "../domain.js"
 
-// CHANGE: bootstrap OpenCode config (permissions + plugins) and share OpenCode auth.json across projects
-// WHY: make OpenCode usable out-of-the-box inside disposable docker-git containers
-// QUOTE(ТЗ): "Preinstall OpenCode and oh-my-opencode with full authorization of existing tools"
-// REF: issue-34
-// SOURCE: n/a
-// FORMAT THEOREM: forall s: start(s) -> config_exists(s)
-// PURITY: CORE
-// INVARIANT: never overwrites an existing opencode.json/opencode.jsonc
-// COMPLEXITY: O(1)
-export const renderEntrypointOpenCodeConfig = (config: TemplateConfig): string =>
-  `# OpenCode: share auth.json across projects (so /connect is one-time)
+const entrypointOpenCodeTemplate = `# OpenCode: share auth.json across projects (so /connect is one-time)
 OPENCODE_SHARE_AUTH="\${OPENCODE_SHARE_AUTH:-1}"
 if [[ "$OPENCODE_SHARE_AUTH" == "1" ]]; then
-  OPENCODE_DATA_DIR="/home/${config.sshUser}/.local/share/opencode"
+  OPENCODE_DATA_DIR="/home/__SSH_USER__/.local/share/opencode"
   OPENCODE_AUTH_FILE="$OPENCODE_DATA_DIR/auth.json"
 
   # Store in the shared auth volume to persist across projects/containers.
-  OPENCODE_SHARED_HOME="${config.codexHome}-shared/opencode"
+  OPENCODE_SHARED_HOME="__CODEX_HOME__-shared/opencode"
   OPENCODE_SHARED_AUTH_FILE="$OPENCODE_SHARED_HOME/auth.json"
 
   mkdir -p "$OPENCODE_DATA_DIR" "$OPENCODE_SHARED_HOME"
@@ -59,7 +49,7 @@ NODE
 fi
 
 # OpenCode: ensure global config exists (plugins + permissions)
-OPENCODE_CONFIG_DIR="/home/${config.sshUser}/.config/opencode"
+OPENCODE_CONFIG_DIR="/home/__SSH_USER__/.config/opencode"
 OPENCODE_CONFIG_JSON="$OPENCODE_CONFIG_DIR/opencode.json"
 OPENCODE_CONFIG_JSONC="$OPENCODE_CONFIG_DIR/opencode.jsonc"
 
@@ -85,3 +75,17 @@ if [[ ! -f "$OPENCODE_CONFIG_JSON" && ! -f "$OPENCODE_CONFIG_JSONC" ]]; then
 EOF
   chown 1000:1000 "$OPENCODE_CONFIG_JSON" || true
 fi`
+
+// CHANGE: bootstrap OpenCode config (permissions + plugins) and share OpenCode auth.json across projects
+// WHY: make OpenCode usable out-of-the-box inside disposable docker-git containers
+// QUOTE(ТЗ): "Preinstall OpenCode and oh-my-opencode with full authorization of existing tools"
+// REF: issue-34
+// SOURCE: n/a
+// FORMAT THEOREM: forall s: start(s) -> config_exists(s)
+// PURITY: CORE
+// INVARIANT: never overwrites an existing opencode.json/opencode.jsonc
+// COMPLEXITY: O(1)
+export const renderEntrypointOpenCodeConfig = (config: TemplateConfig): string =>
+  entrypointOpenCodeTemplate
+    .replaceAll("__SSH_USER__", config.sshUser)
+    .replaceAll("__CODEX_HOME__", config.codexHome)
