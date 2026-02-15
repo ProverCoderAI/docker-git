@@ -33,18 +33,16 @@ RUN printf "export NVM_DIR=/usr/local/nvm\\n[ -s /usr/local/nvm/nvm.sh ] && . /u
 const renderDockerfileBunPrelude = (config: TemplateConfig): string =>
   `# Tooling: pnpm + Codex CLI + oh-my-opencode (bun)
 RUN corepack enable && corepack prepare pnpm@${config.pnpmVersion} --activate
-ENV BUN_INSTALL=/usr/local/bun
 ENV TERM=xterm-256color
-ENV PATH="/usr/local/bun/bin:$PATH"
-RUN curl -fsSL https://bun.sh/install | bash
+RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local/bun bash
 RUN ln -sf /usr/local/bun/bin/bun /usr/local/bin/bun
-RUN script -q -e -c "bun add -g @openai/codex@latest oh-my-opencode@latest" /dev/null
+RUN BUN_INSTALL=/usr/local/bun script -q -e -c "bun add -g @openai/codex@latest oh-my-opencode@latest" /dev/null
 RUN ln -sf /usr/local/bun/bin/codex /usr/local/bin/codex
 RUN ln -sf /usr/local/bun/bin/oh-my-opencode /usr/local/bin/oh-my-opencode`
 
 const renderDockerfileOpenCode = (): string =>
   `# Tooling: OpenCode (binary)
-RUN HOME=/usr/local curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path
+RUN curl -fsSL https://opencode.ai/install | HOME=/usr/local bash -s -- --no-modify-path
 RUN ln -sf /usr/local/.opencode/bin/opencode /usr/local/bin/opencode
 RUN opencode --version`
 
@@ -92,7 +90,7 @@ EOF
 RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
 
 const renderDockerfileBunProfile = (): string =>
-  `RUN printf "export BUN_INSTALL=/usr/local/bun\\nexport PATH=/usr/local/bun/bin:$PATH\\n" \
+  `RUN printf "export PATH=/usr/local/bun/bin:$PATH\\n" \
   > /etc/profile.d/bun.sh && chmod 0644 /etc/profile.d/bun.sh`
 
 const renderDockerfileBun = (config: TemplateConfig): string =>
