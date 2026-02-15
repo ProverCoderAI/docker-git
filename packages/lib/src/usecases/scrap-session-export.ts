@@ -77,13 +77,17 @@ const captureRepoInfo = (
   Effect.gen(function*(_) {
     const base = `set -e; cd ${shellEscape(ctx.template.targetDir)};`
     const capture = (label: string, cmd: string) =>
-      runDockerExecCapture(ctx.resolved, label, ctx.template.containerName, `${base} ${cmd}`).pipe(
-        Effect.map((value) => value.trim())
-      )
+      runDockerExecCapture(ctx.resolved, label, ctx.template.containerName, `${base} ${cmd}`, ctx.template.sshUser)
+        .pipe(
+          Effect.map((value) => value.trim())
+        )
 
-    const head = yield* _(capture("scrap session rev-parse", "git rev-parse HEAD"))
-    const branch = yield* _(capture("scrap session branch", "git rev-parse --abbrev-ref HEAD"))
-    const originUrl = yield* _(capture("scrap session origin", "git remote get-url origin"))
+    const safe = shellEscape(ctx.template.targetDir)
+    const head = yield* _(capture("scrap session rev-parse", `git -c safe.directory=${safe} rev-parse HEAD`))
+    const branch = yield* _(
+      capture("scrap session branch", `git -c safe.directory=${safe} rev-parse --abbrev-ref HEAD`)
+    )
+    const originUrl = yield* _(capture("scrap session origin", `git -c safe.directory=${safe} remote get-url origin`))
     return { originUrl, head, branch }
   })
 
@@ -116,18 +120,24 @@ const detectRebuildCommands = (
   ctx: SessionExportContext
 ): Effect.Effect<ReadonlyArray<string>, ScrapError, ScrapRequirements> =>
   Effect.gen(function*(_) {
-    const base = `set -e; cd ${shellEscape(ctx.template.targetDir)};`
     const script = [
-      base,
+      "set -e",
+      `cd ${shellEscape(ctx.template.targetDir)}`,
       // Priority: pnpm > npm > yarn. Keep commands deterministic and rebuildable.
       "if [ -f pnpm-lock.yaml ]; then echo 'pnpm install --frozen-lockfile'; exit 0; fi",
       "if [ -f package-lock.json ]; then echo 'npm ci'; exit 0; fi",
       "if [ -f yarn.lock ]; then echo 'yarn install --frozen-lockfile'; exit 0; fi",
       "exit 0"
-    ].join(" ")
+    ].join("; ")
 
     const output = yield* _(
-      runDockerExecCapture(ctx.resolved, "scrap session detect rebuild", ctx.template.containerName, script)
+      runDockerExecCapture(
+        ctx.resolved,
+        "scrap session detect rebuild",
+        ctx.template.containerName,
+        script,
+        ctx.template.sshUser
+      )
     )
 
     const command = output.trim()
@@ -145,19 +155,22 @@ const exportWorktreePatchChunks = (
     const patchInner = [
       "set -e",
       `cd ${shellEscape(ctx.template.targetDir)}`,
+      `SAFE=${shellEscape(ctx.template.targetDir)}`,
       "TMP_INDEX=$(mktemp)",
       "trap 'rm -f \"$TMP_INDEX\"' EXIT",
-      "GIT_INDEX_FILE=\"$TMP_INDEX\" git read-tree HEAD",
-      "GIT_INDEX_FILE=\"$TMP_INDEX\" git add -A",
-      "GIT_INDEX_FILE=\"$TMP_INDEX\" git diff --cached --binary --no-color"
+      "GIT_INDEX_FILE=\"$TMP_INDEX\" git -c safe.directory=\"$SAFE\" read-tree HEAD",
+      "GIT_INDEX_FILE=\"$TMP_INDEX\" git -c safe.directory=\"$SAFE\" add -A",
+      "GIT_INDEX_FILE=\"$TMP_INDEX\" git -c safe.directory=\"$SAFE\" diff --cached --binary --no-color"
     ].join("; ")
 
-    const patchScript = [
-      "set -e",
-      `docker exec ${shellEscape(ctx.template.containerName)} sh -lc ${shellEscape(patchInner)}`,
-      "| gzip -c",
-      `| split -b ${maxGitBlobBytes} -d -a 5 - ${shellEscape(patchPartsPrefix)}`
-    ].join(" ")
+    const patchPipeline = [
+      `docker exec -u ${shellEscape(ctx.template.sshUser)} ${shellEscape(ctx.template.containerName)} sh -c ${
+        shellEscape(patchInner)
+      }`,
+      "gzip -c",
+      `split -b ${maxGitBlobBytes} -d -a 5 - ${shellEscape(patchPartsPrefix)}`
+    ].join(" | ")
+    const patchScript = `set -e; bash -o pipefail -c ${shellEscape(patchPipeline)}`
     yield* _(runShell(ctx.resolved, "scrap export session patch", patchScript))
 
     const partsAbs = yield* _(listChunkParts(ctx.fs, ctx.path, patchAbs))
@@ -183,11 +196,13 @@ const exportContainerDirChunks = (
       "tar czf - -C \"$SRC\" ."
     ].join("; ")
 
-    const script = [
-      "set -e",
-      `docker exec ${shellEscape(ctx.template.containerName)} sh -lc ${shellEscape(inner)}`,
-      `| split -b ${maxGitBlobBytes} -d -a 5 - ${shellEscape(partsPrefix)}`
-    ].join(" ")
+    const archivePipeline = [
+      `docker exec -u ${shellEscape(ctx.template.sshUser)} ${shellEscape(ctx.template.containerName)} sh -c ${
+        shellEscape(inner)
+      }`,
+      `split -b ${maxGitBlobBytes} -d -a 5 - ${shellEscape(partsPrefix)}`
+    ].join(" | ")
+    const script = `set -e; bash -o pipefail -c ${shellEscape(archivePipeline)}`
     yield* _(runShell(ctx.resolved, label, script))
 
     const partsAbs = yield* _(listChunkParts(ctx.fs, ctx.path, archiveAbs))
