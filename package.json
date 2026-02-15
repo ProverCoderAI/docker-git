@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "setup:pre-commit-hook": "node scripts/setup-pre-commit-hook.js",
     "build": "pnpm --filter ./packages/app build",
     "check": "pnpm --filter ./packages/app check && pnpm --filter ./packages/lib typecheck",
     "changeset": "changeset",
