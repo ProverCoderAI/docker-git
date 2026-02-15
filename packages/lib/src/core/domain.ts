@@ -71,6 +71,33 @@ export interface SessionsLogsCommand {
   readonly lines: number
 }
 
+// CHANGE: remove scrap cache mode and keep only the reproducible session snapshot.
+// WHY: cache archives include large, easily-rebuildable artifacts (e.g. node_modules) that should not be stored in git.
+// QUOTE(ТЗ): "не должно быть старого режима где он качает весь шлак типо node_modules"
+// REF: user-request-2026-02-15
+// SOURCE: n/a
+// FORMAT THEOREM: forall m: ScrapMode, m = "session"
+// PURITY: CORE
+// EFFECT: Effect<never>
+// INVARIANT: scrap exports/imports are always recipe-like (git state + small secrets), never full workspace caches
+// COMPLEXITY: O(1)
+export type ScrapMode = "session"
+
+export interface ScrapExportCommand {
+  readonly _tag: "ScrapExport"
+  readonly projectDir: string
+  readonly archivePath: string
+  readonly mode: ScrapMode
+}
+
+export interface ScrapImportCommand {
+  readonly _tag: "ScrapImport"
+  readonly projectDir: string
+  readonly archivePath: string
+  readonly wipe: boolean
+  readonly mode: ScrapMode
+}
+
 export interface HelpCommand {
   readonly _tag: "Help"
   readonly message: string
@@ -158,6 +185,10 @@ export type SessionsCommand =
   | SessionsKillCommand
   | SessionsLogsCommand
 
+export type ScrapCommand =
+  | ScrapExportCommand
+  | ScrapImportCommand
+
 export type AuthCommand =
   | AuthGithubLoginCommand
   | AuthGithubStatusCommand
@@ -181,6 +212,7 @@ export type Command =
   | AttachCommand
   | PanesCommand
   | SessionsCommand
+  | ScrapCommand
   | HelpCommand
   | StatusCommand
   | DownAllCommand

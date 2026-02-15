@@ -26,6 +26,9 @@ export interface RawOptions {
   readonly codexAuthPath?: string
   readonly codexHome?: string
   readonly enableMcpPlaywright?: boolean
+  readonly archivePath?: string
+  readonly scrapMode?: string
+  readonly wipe?: boolean
   readonly label?: string
   readonly token?: string
   readonly scopes?: string

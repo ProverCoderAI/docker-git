@@ -20,6 +20,8 @@ interface ValueOptionSpec {
     | "envProjectPath"
     | "codexAuthPath"
     | "codexHome"
+    | "archivePath"
+    | "scrapMode"
     | "label"
     | "token"
     | "scopes"
@@ -46,6 +48,8 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--env-project", key: "envProjectPath" },
   { flag: "--codex-auth", key: "codexAuthPath" },
   { flag: "--codex-home", key: "codexHome" },
+  { flag: "--archive", key: "archivePath" },
+  { flag: "--mode", key: "scrapMode" },
   { flag: "--label", key: "label" },
   { flag: "--token", key: "token" },
   { flag: "--scopes", key: "scopes" },
@@ -69,6 +73,8 @@ const booleanFlagUpdaters: Readonly<Record<string, (raw: RawOptions) => RawOptio
   "--force-env": (raw) => ({ ...raw, forceEnv: true }),
   "--mcp-playwright": (raw) => ({ ...raw, enableMcpPlaywright: true }),
   "--no-mcp-playwright": (raw) => ({ ...raw, enableMcpPlaywright: false }),
+  "--wipe": (raw) => ({ ...raw, wipe: true }),
+  "--no-wipe": (raw) => ({ ...raw, wipe: false }),
   "--web": (raw) => ({ ...raw, authWeb: true }),
   "--include-default": (raw) => ({ ...raw, includeDefault: true })
 }
@@ -88,6 +94,8 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   envProjectPath: (raw, value) => ({ ...raw, envProjectPath: value }),
   codexAuthPath: (raw, value) => ({ ...raw, codexAuthPath: value }),
   codexHome: (raw, value) => ({ ...raw, codexHome: value }),
+  archivePath: (raw, value) => ({ ...raw, archivePath: value }),
+  scrapMode: (raw, value) => ({ ...raw, scrapMode: value }),
   label: (raw, value) => ({ ...raw, label: value }),
   token: (raw, value) => ({ ...raw, token: value }),
   scopes: (raw, value) => ({ ...raw, scopes: value }),

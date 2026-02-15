@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+set -eu
+
+# CHANGE: provide a minimal npx shim for pnpm-managed workspaces
+# WHY: some tools (e.g. vibecode-linter) call `npx tsc` which may accidentally run the wrong `tsc` package instead of the local TypeScript compiler
+# QUOTE(ТЗ): n/a
+# REF: issue-27 (CI/test harness)
+# SOURCE: n/a
+# FORMAT THEOREM: ∀cmd,args: npx(cmd,args) -> pnpm_exec(cmd,args)
+# PURITY: SHELL
+# EFFECT: Effect<void, never, never>
+# INVARIANT: prefers local workspace binaries over downloading similarly-named packages
+# COMPLEXITY: O(1)
+
+# Drop the common "yes/no-install" flags used in automation.
+while [ "${1-}" ]; do
+  case "$1" in
+    -y|--yes|--no|--no-install|--quiet|--silent)
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [ "${1-}" = "" ]; then
+  echo "npx shim: missing command" >&2
+  exit 2
+fi
+
+exec pnpm exec "$@"
+

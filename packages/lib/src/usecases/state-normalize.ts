@@ -21,8 +21,7 @@ const isLegacyDockerGitRelativePath = (value: string): boolean => {
 const shouldNormalizePath = (path: Path.Path, value: string): boolean =>
   path.isAbsolute(value) || isLegacyDockerGitRelativePath(value)
 
-const withFallback = (value: string, fallback: string): string =>
-  value.length > 0 ? value : fallback
+const withFallback = (value: string, fallback: string): string => value.length > 0 ? value : fallback
 
 const pathFieldsForNormalization = (template: TemplateConfig): ReadonlyArray<string> => [
   template.dockerGitPath,
