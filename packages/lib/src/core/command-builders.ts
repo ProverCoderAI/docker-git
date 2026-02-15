@@ -200,6 +200,7 @@ export const buildCreateCommand = (
     const names = yield* _(resolveNames(raw, repo.projectSlug))
     const paths = yield* _(resolvePaths(raw, repo.projectSlug, repo.repoPath))
     const runUp = raw.up ?? true
+    const openSsh = raw.openSsh ?? false
     const force = raw.force ?? false
     const forceEnv = raw.forceEnv ?? false
     const enableMcpPlaywright = raw.enableMcpPlaywright ?? false
@@ -208,6 +209,7 @@ export const buildCreateCommand = (
       _tag: "Create",
       outDir: paths.outDir,
       runUp,
+      openSsh,
       force,
       forceEnv,
       waitForClone: false,

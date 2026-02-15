@@ -23,6 +23,17 @@ SSH_PORT="$(( (RANDOM % 1000) + 20000 ))"
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
 
+REPO_URL="https://github.com/octocat/Hello-World/issues/1"
+TARGET_DIR="/home/dev/octocat/hello-world/issue-1"
+
+SSH_LOG_PATH="$ROOT/ssh.log"
+SSH_WRAPPER_BIN="$ROOT/.e2e-bin"
+
+fail() {
+  echo "e2e/opencode-autoconnect: $*" >&2
+  exit 1
+}
+
 on_error() {
   local line="$1"
   echo "e2e/opencode-autoconnect: failed at line $line" >&2
@@ -66,6 +77,20 @@ trap cleanup EXIT
 mkdir -p "$ROOT/.orch/auth/codex" "$ROOT/.orch/env"
 : > "$ROOT/authorized_keys"
 
+# Wrap `ssh` so CI doesn't hang in interactive mode; we only assert the invocation.
+mkdir -p "$SSH_WRAPPER_BIN"
+cat > "$SSH_WRAPPER_BIN/ssh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${SSH_LOG_PATH:?SSH_LOG_PATH is required}"
+printf "ssh %s\n" "$*" >> "$SSH_LOG_PATH"
+exit 0
+EOF
+chmod +x "$SSH_WRAPPER_BIN/ssh"
+export PATH="$SSH_WRAPPER_BIN:$PATH"
+export SSH_LOG_PATH
+
 # Seed a fake (but structurally valid) Codex auth.json so the entrypoint can
 # auto-connect OpenCode without manual /connect.
 node <<'NODE' > "$ROOT/.orch/auth/codex/auth.json"
@@ -101,14 +126,19 @@ OPENCODE_SHARE_AUTH=1
 OPENCODE_AUTO_CONNECT=1
 EOF_ENV
 
-pnpm run docker-git clone https://github.com/octocat/Hello-World \
-  --force \
-  --repo-ref master \
-  --ssh-port "$SSH_PORT" \
-  --out-dir "$OUT_DIR_REL" \
-  --container-name "$CONTAINER_NAME" \
-  --service-name "$SERVICE_NAME" \
-  --volume-name "$VOLUME_NAME"
+# Auto-open SSH happens only in an interactive TTY; wrap with `script` to allocate a pseudo-TTY.
+command -v script >/dev/null 2>&1 || fail "missing 'script' command (util-linux)"
+: > "$SSH_LOG_PATH"
+chmod 0666 "$SSH_LOG_PATH" || true
+script -q -e -c "pnpm run docker-git clone \"$REPO_URL\" --force --ssh-port \"$SSH_PORT\" --out-dir \"$OUT_DIR_REL\" --container-name \"$CONTAINER_NAME\" --service-name \"$SERVICE_NAME\" --volume-name \"$VOLUME_NAME\"" /dev/null
+
+[[ -s "$SSH_LOG_PATH" ]] || fail "expected ssh to be invoked; log is empty: $SSH_LOG_PATH"
+grep -q -- "dev@localhost" "$SSH_LOG_PATH" || fail "expected ssh args to include dev@localhost"
+grep -q -- "-p $SSH_PORT" "$SSH_LOG_PATH" || fail "expected ssh args to include -p $SSH_PORT"
+
+docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" || fail "expected repo to be cloned at: $TARGET_DIR"
+branch="$(docker exec -u dev "$CONTAINER_NAME" bash -lc "cd '$TARGET_DIR' && git rev-parse --abbrev-ref HEAD")"
+[[ "$branch" == "issue-1" ]] || fail "expected HEAD branch issue-1, got: $branch"
 
 # Basic sanity checks.
 docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"

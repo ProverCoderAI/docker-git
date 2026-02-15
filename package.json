@@ -47,6 +47,9 @@
       "@parcel/watcher",
       "msgpackr-extract",
       "unrs-resolver"
-    ]
+    ],
+    "patchedDependencies": {
+      "@ton-ai-core/vibecode-linter@1.0.6": "patches/@ton-ai-core__vibecode-linter@1.0.6.patch"
+    }
   }
 }
