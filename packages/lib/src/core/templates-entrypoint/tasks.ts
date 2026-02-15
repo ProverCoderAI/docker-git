@@ -5,7 +5,7 @@ const renderEntrypointAutoUpdate = (): string =>
 if [[ "$CODEX_AUTO_UPDATE" == "1" ]]; then
   if command -v bun >/dev/null 2>&1; then
     echo "[codex] updating via bun..."
-    script -q -e -c "bun add -g @openai/codex@latest" /dev/null || true
+    BUN_INSTALL=/usr/local/bun script -q -e -c "bun add -g @openai/codex@latest" /dev/null || true
   else
     echo "[codex] bun not found, skipping auto-update"
   fi
