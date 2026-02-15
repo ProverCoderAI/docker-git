@@ -8,6 +8,7 @@ docker-git clone <url> [options]
 docker-git mcp-playwright [<url>] [options]
 docker-git attach [<url>] [options]
 docker-git panes [<url>] [options]
+docker-git scrap <action> [<url>] [options]
 docker-git sessions [list] [<url>] [options]
 docker-git sessions kill <pid> [<url>] [options]
 docker-git sessions logs <pid> [<url>] [options]
@@ -23,6 +24,7 @@ Commands:
   mcp-playwright      Enable Playwright MCP + Chromium sidecar for an existing project dir
   attach, tmux        Open tmux workspace for a docker-git project
   panes, terms        List tmux panes for a docker-git project
+  scrap               Export/import project scrap (session snapshot + rebuildable deps)
   sessions            List/kill/log container terminal processes
   ps, status          Show docker compose status for all docker-git projects
   down-all            Stop all docker-git containers (docker compose down)
@@ -46,6 +48,9 @@ Options:
   --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
   --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>[/issue-<id>|/pr-<id>])
   --project-dir <path>      Project directory for attach (default: .)
+  --archive <path>          Scrap snapshot directory (default: .orch/scrap/session)
+  --mode <session>          Scrap mode (default: session)
+  --wipe | --no-wipe        Wipe workspace before scrap import (default: --wipe)
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list
   --up | --no-up            Run docker compose up after init (default: --up)

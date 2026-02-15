@@ -22,3 +22,4 @@ export const parseMcpPlaywright = (
     projectDir,
     runUp: raw.up ?? true
   }))
+

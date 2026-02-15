@@ -51,3 +51,24 @@ export class CommandFailedError extends Data.TaggedError("CommandFailedError")<{
 export class AuthError extends Data.TaggedError("AuthError")<{
   readonly message: string
 }> {}
+
+export class ScrapArchiveNotFoundError extends Data.TaggedError("ScrapArchiveNotFoundError")<{
+  readonly path: string
+}> {}
+
+export class ScrapArchiveInvalidError extends Data.TaggedError("ScrapArchiveInvalidError")<{
+  readonly path: string
+  readonly message: string
+}> {}
+
+export class ScrapTargetDirUnsupportedError extends Data.TaggedError("ScrapTargetDirUnsupportedError")<{
+  readonly sshUser: string
+  readonly targetDir: string
+  readonly reason: string
+}> {}
+
+export class ScrapWipeRefusedError extends Data.TaggedError("ScrapWipeRefusedError")<{
+  readonly sshUser: string
+  readonly targetDir: string
+  readonly reason: string
+}> {}

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-node scripts/split-knowledge-large-files.js
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$HOOK_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
+node scripts/split-knowledge-large-files.js
 if [ -d ".knowledge" ]; then
   git add -A .knowledge
 fi
@@ -29,3 +32,5 @@ if [ "${#too_large[@]}" -gt 0 ]; then
   printf ' - %s\n' "${too_large[@]}"
   exit 1
 fi
+
+bash "$REPO_ROOT/scripts/pre-commit-secret-guard.sh"

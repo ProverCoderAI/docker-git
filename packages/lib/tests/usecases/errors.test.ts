@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 
-import { DockerAccessError, DockerCommandError } from "../../src/shell/errors.js"
+import { DockerAccessError, DockerCommandError, ScrapArchiveNotFoundError } from "../../src/shell/errors.js"
 import { renderError } from "../../src/usecases/errors.js"
 
 describe("renderError", () => {
@@ -23,5 +23,12 @@ describe("renderError", () => {
     expect(message).toContain("permission denied")
     expect(message).toContain("DOCKER_HOST")
     expect(message).toContain("Details:")
+  })
+
+  it("renders scrap archive missing hint", () => {
+    const message = renderError(new ScrapArchiveNotFoundError({ path: "/tmp/workspace.tar.gz" }))
+
+    expect(message).toContain("Scrap archive not found")
+    expect(message).toContain("docker-git scrap export")
   })
 })

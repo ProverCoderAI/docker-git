@@ -9,6 +9,7 @@ import { buildCreateCommand } from "./parser-create.js"
 import { parseMcpPlaywright } from "./parser-mcp-playwright.js"
 import { parseRawOptions } from "./parser-options.js"
 import { parsePanes } from "./parser-panes.js"
+import { parseScrap } from "./parser-scrap.js"
 import { parseSessions } from "./parser-sessions.js"
 import { parseState } from "./parser-state.js"
 import { usageText } from "./usage.js"
@@ -60,6 +61,7 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("terms", () => parsePanes(rest)),
       Match.when("terminals", () => parsePanes(rest)),
       Match.when("sessions", () => parseSessions(rest)),
+      Match.when("scrap", () => parseScrap(rest)),
       Match.when("mcp-playwright", () => parseMcpPlaywright(rest)),
       Match.when("help", () => Either.right(helpCommand)),
       Match.when("ps", () => Either.right(statusCommand)),
@@ -69,8 +71,10 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("kill-all", () => Either.right(downAllCommand)),
       Match.when("menu", () => Either.right(menuCommand)),
       Match.when("ui", () => Either.right(menuCommand)),
-      Match.when("auth", () => parseAuth(rest)),
-      Match.when("state", () => parseState(rest))
+      Match.when("auth", () => parseAuth(rest))
     )
-    .pipe(Match.orElse(() => Either.left(unknownCommandError)))
+    .pipe(
+      Match.when("state", () => parseState(rest)),
+      Match.orElse(() => Either.left(unknownCommandError))
+    )
 }

@@ -29,25 +29,39 @@ const filterReserved = (
   return path.resolve(item.projectDir) !== resolvedExclude
 }
 
-// CHANGE: collect reserved SSH ports from existing docker-git projects
-// WHY: keep ports stable per project even when containers are stopped
+// CHANGE: collect SSH ports currently occupied by existing docker-git projects
+// WHY: avoid port collisions while allowing reuse of ports from stopped projects
 // QUOTE(ТЗ): "для каждого докера брать должен свой порт"
 // REF: user-request-2026-02-05-port-reserve
 // SOURCE: n/a
 // FORMAT THEOREM: ∀p∈Projects: reserved(port(p))
 // PURITY: SHELL
-// EFFECT: Effect<ReadonlyArray<ReservedPort>, PlatformError, FileSystem | Path>
+// EFFECT: Effect<ReadonlyArray<ReservedPort>, PlatformError | PortProbeError, FileSystem | Path.Path>
 // INVARIANT: excludes the current project dir when provided
 // COMPLEXITY: O(n) where n = number of projects
 export const loadReservedPorts = (
   excludeDir: string | null
-): Effect.Effect<ReadonlyArray<ReservedPort>, PlatformError, FileSystem | Path.Path> =>
+): Effect.Effect<
+  ReadonlyArray<ReservedPort>,
+  PlatformError | PortProbeError,
+  FileSystem | Path.Path
+> =>
   Effect.gen(function*(_) {
     const path = yield* _(Path.Path)
     const items = yield* _(listProjectItems)
-    return items
-      .filter(filterReserved(path, excludeDir))
-      .map((item) => ({ port: item.sshPort, projectDir: item.projectDir }))
+    const reserved: Array<ReservedPort> = []
+    const filter = filterReserved(path, excludeDir)
+
+    for (const item of items) {
+      if (!filter(item)) {
+        continue
+      }
+      if (!(yield* _(isPortAvailable(item.sshPort)))) {
+        reserved.push({ port: item.sshPort, projectDir: item.projectDir })
+      }
+    }
+
+    return reserved
   })
 
 const isReserved = (reserved: ReadonlySet<number>, port: number): boolean => reserved.has(port)
