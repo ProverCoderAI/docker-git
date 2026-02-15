@@ -51,7 +51,8 @@ export const runShell = (
   script: string
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCommandWithExitCodes(
-    { cwd, command: "sh", args: ["-lc", script] },
+    // NOTE: avoid `sh -l` on the host; some distros ship /etc/profile that is bash-only and breaks dash/posix sh.
+    { cwd, command: "sh", args: ["-c", script] },
     dockerOk,
     (exitCode) => new CommandFailedErrorClass({ command: `sh (${label})`, exitCode })
   )
@@ -60,10 +61,12 @@ export const runDockerExecCapture = (
   cwd: string,
   label: string,
   containerName: string,
-  script: string
+  script: string,
+  user?: string
 ): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCommandCapture(
-    { cwd, command: "docker", args: ["exec", containerName, "sh", "-lc", script] },
+    // NOTE: avoid `sh -l` inside containers; it can source /etc/profile which may be bash-only and break dash/posix sh.
+    { cwd, command: "docker", args: ["exec", ...(user ? ["-u", user] : []), containerName, "sh", "-c", script] },
     dockerOk,
     (exitCode) => new CommandFailedErrorClass({ command: `docker exec (${label})`, exitCode })
   )
@@ -72,10 +75,12 @@ export const runDockerExec = (
   cwd: string,
   label: string,
   containerName: string,
-  script: string
+  script: string,
+  user?: string
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCommandWithExitCodes(
-    { cwd, command: "docker", args: ["exec", containerName, "sh", "-lc", script] },
+    // NOTE: avoid `sh -l` inside containers; it can source /etc/profile which may be bash-only and break dash/posix sh.
+    { cwd, command: "docker", args: ["exec", ...(user ? ["-u", user] : []), containerName, "sh", "-c", script] },
     dockerOk,
     (exitCode) => new CommandFailedErrorClass({ command: `docker exec (${label})`, exitCode })
   )

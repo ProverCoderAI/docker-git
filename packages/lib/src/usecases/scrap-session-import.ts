@@ -152,25 +152,41 @@ const prepareRepoForImport = (
     `  git clone ${shellEscape(ctx.manifest.repo.originUrl)} ${shellEscape(ctx.template.targetDir)}`,
     "fi",
     `cd ${shellEscape(ctx.template.targetDir)}`,
-    "git fetch --all --prune",
-    `git checkout --detach ${shellEscape(ctx.manifest.repo.head)}`,
-    `git reset --hard ${shellEscape(ctx.manifest.repo.head)}`,
-    "git clean -fd",
+    `SAFE=${shellEscape(ctx.template.targetDir)}`,
+    "git -c safe.directory=\"$SAFE\" fetch --all --prune",
+    `git -c safe.directory="$SAFE" checkout --detach ${shellEscape(ctx.manifest.repo.head)}`,
+    `git -c safe.directory="$SAFE" reset --hard ${shellEscape(ctx.manifest.repo.head)}`,
+    "git -c safe.directory=\"$SAFE\" clean -fd",
     // Remove common heavy caches that are easy to rebuild with internet access.
     "find . -name node_modules -type d -prune -exec rm -rf '{}' + 2>/dev/null || true"
-  ].join("; ")
+  ].join("\n")
 
-  return runDockerExec(ctx.resolved, "scrap session prepare repo", ctx.template.containerName, prepScript)
+  return runDockerExec(
+    ctx.resolved,
+    "scrap session prepare repo",
+    ctx.template.containerName,
+    prepScript,
+    ctx.template.sshUser
+  )
 }
 
 const applyWorktreePatch = (ctx: SessionImportContext): Effect.Effect<void, ScrapError, ScrapRequirements> =>
   Effect.gen(function*(_) {
     const patchPartsAbs = yield* _(resolveSnapshotPartsAbs(ctx, ctx.manifest.artifacts.worktreePatchChunks))
     const patchCatArgs = patchPartsAbs.map((p) => shellEscape(p)).join(" ")
-    const applyInner = `set -e; cd ${shellEscape(ctx.template.targetDir)}; git apply --binary --whitespace=nowarn -`
+    const applyInner = [
+      "set -e",
+      `cd ${shellEscape(ctx.template.targetDir)}`,
+      `SAFE=${shellEscape(ctx.template.targetDir)}`,
+      "git -c safe.directory=\"$SAFE\" apply --allow-empty --binary --whitespace=nowarn -"
+    ].join("; ")
     const applyScript = [
       "set -e",
-      `cat ${patchCatArgs} | gzip -dc | docker exec -i ${shellEscape(ctx.template.containerName)} sh -lc ${
+      `cat ${patchCatArgs} | gzip -dc | docker exec -i -u ${shellEscape(ctx.template.sshUser)} ${
+        shellEscape(
+          ctx.template.containerName
+        )
+      } sh -c ${
         shellEscape(
           applyInner
         )
@@ -191,13 +207,18 @@ const restoreTarChunksIntoContainerDir = (
     const inner = [
       "set -e",
       `DST=${shellEscape(dst)}`,
-      "rm -rf \"$DST\"",
       "mkdir -p \"$DST\"",
+      // Clearing contents instead of removing the directory keeps mount points (like shared auth volumes) intact.
+      "find \"$DST\" -mindepth 1 -maxdepth 1 -exec rm -rf '{}' + 2>/dev/null || true",
       "tar xzf - -C \"$DST\""
     ].join("; ")
     const script = [
       "set -e",
-      `cat ${catArgs} | docker exec -i ${shellEscape(ctx.template.containerName)} sh -lc ${shellEscape(inner)}`
+      `cat ${catArgs} | docker exec -i -u ${shellEscape(ctx.template.sshUser)} ${
+        shellEscape(
+          ctx.template.containerName
+        )
+      } sh -c ${shellEscape(inner)}`
     ].join("; ")
     yield* _(runShell(ctx.resolved, label, script))
   }).pipe(Effect.asVoid)
@@ -216,7 +237,9 @@ const runRebuildCommands = (ctx: SessionImportContext): Effect.Effect<void, Scra
       }
       yield* _(Effect.log(`Rebuilding: ${trimmed}`))
       const script = `set -e; cd ${shellEscape(ctx.template.targetDir)}; ${trimmed}`
-      yield* _(runDockerExec(ctx.resolved, "scrap session rebuild", ctx.template.containerName, script))
+      yield* _(
+        runDockerExec(ctx.resolved, "scrap session rebuild", ctx.template.containerName, script, ctx.template.sshUser)
+      )
     }
   }).pipe(Effect.asVoid)
 
