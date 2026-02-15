@@ -34,4 +34,3 @@ if [ "${1-}" = "" ]; then
 fi
 
 exec pnpm exec "$@"
-
