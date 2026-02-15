@@ -41,6 +41,7 @@ CODEX_SHARE_AUTH=0
 EOF
 
 export DOCKER_GIT_PROJECTS_ROOT="$PROJECTS_ROOT"
+export DOCKER_GIT_STATE_AUTO_SYNC=0
 
 cat > "$BIN_DIR/ssh" <<'EOF'
 #!/usr/bin/env bash
@@ -73,7 +74,7 @@ grep -q -- "-p " "$SSH_LOG" || fail "expected ssh args to include -p <port>; got
 
 docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" || fail "expected container to be running: $CONTAINER_NAME"
 docker exec "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" || fail "expected repo to be cloned at: $TARGET_DIR"
-branch="$(docker exec "$CONTAINER_NAME" bash -lc "cd '$TARGET_DIR' && git rev-parse --abbrev-ref HEAD")"
+branch="$(docker exec -u dev "$CONTAINER_NAME" bash -lc "cd '$TARGET_DIR' && git rev-parse --abbrev-ref HEAD")"
 [[ "$branch" == "issue-1" ]] || fail "expected HEAD branch issue-1, got: $branch"
 
 [[ -f "$OUT_DIR/docker-git.json" ]] || fail "expected project config file: $OUT_DIR/docker-git.json"

@@ -8,6 +8,7 @@ dev_ssh_key.pub
 
 # Local docker-git work dirs
 .docker-git/
+.e2e/
 effect-template1/
 
 # Node / build artifacts

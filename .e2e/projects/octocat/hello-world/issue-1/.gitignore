@@ -1,9 +1,0 @@
-# docker-git project files
-# NOTE: this directory is intended to be committed to the docker-git state repository.
-# It intentionally does not ignore .orch/ or auth files; keep the state repo private.
-
-# Volatile Codex artifacts (do not commit)
-.orch/auth/codex/log/
-.orch/auth/codex/tmp/
-.orch/auth/codex/sessions/
-.orch/auth/codex/models_cache.json
