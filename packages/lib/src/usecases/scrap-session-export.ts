@@ -3,7 +3,7 @@ import type { FileSystem as Fs } from "@effect/platform/FileSystem"
 import type { Path as PathService } from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import type { ScrapExportCommand } from "../core/domain.js"
+import type { ProjectConfig, ScrapExportCommand } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
 import { resolveBaseDir } from "../shell/paths.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
@@ -25,9 +25,24 @@ type SessionExportContext = {
   readonly fs: Fs
   readonly path: PathService
   readonly resolved: string
+  readonly config: ProjectConfig
   readonly template: ScrapTemplate
   readonly snapshotId: string
   readonly snapshotDir: string
+}
+
+type HostEnvArtifacts = {
+  readonly envGlobalFile: string | null
+  readonly envProjectFile: string | null
+}
+
+type SessionManifestInput = {
+  readonly repo: SessionRepoInfo
+  readonly patchChunksPath: string
+  readonly codexChunksPath: string
+  readonly codexSharedChunksPath: string
+  readonly hostEnv: HostEnvArtifacts
+  readonly rebuildCommands: ReadonlyArray<string>
 }
 
 const formatSnapshotId = (now: Date): string => {
@@ -53,7 +68,7 @@ const loadSessionExportContext = (
     const snapshotDir = path.join(archiveRootAbs, snapshotId)
     yield* _(fs.makeDirectory(snapshotDir, { recursive: true }))
 
-    return { fs, path, resolved, template, snapshotId, snapshotDir }
+    return { fs, path, resolved, config, template, snapshotId, snapshotDir }
   })
 
 const captureRepoInfo = (
@@ -70,6 +85,53 @@ const captureRepoInfo = (
     const branch = yield* _(capture("scrap session branch", "git rev-parse --abbrev-ref HEAD"))
     const originUrl = yield* _(capture("scrap session origin", "git remote get-url origin"))
     return { originUrl, head, branch }
+  })
+
+const exportHostEnvFiles = (
+  ctx: SessionExportContext
+): Effect.Effect<HostEnvArtifacts, ScrapError, ScrapRequirements> =>
+  Effect.gen(function*(_) {
+    const copyIfExists = (srcAbs: string, dstName: string) =>
+      Effect.gen(function*(__) {
+        const exists = yield* __(ctx.fs.exists(srcAbs))
+        if (!exists) {
+          return null
+        }
+        const contents = yield* __(ctx.fs.readFileString(srcAbs))
+        const dstAbs = ctx.path.join(ctx.snapshotDir, dstName)
+        yield* __(ctx.fs.writeFileString(dstAbs, contents))
+        return dstName
+      })
+
+    const envGlobalAbs = resolvePathFromCwd(ctx.path, ctx.resolved, ctx.config.template.envGlobalPath)
+    const envProjectAbs = resolvePathFromCwd(ctx.path, ctx.resolved, ctx.config.template.envProjectPath)
+
+    const envGlobalFile = yield* _(copyIfExists(envGlobalAbs, "env-global.env"))
+    const envProjectFile = yield* _(copyIfExists(envProjectAbs, "env-project.env"))
+
+    return { envGlobalFile, envProjectFile }
+  })
+
+const detectRebuildCommands = (
+  ctx: SessionExportContext
+): Effect.Effect<ReadonlyArray<string>, ScrapError, ScrapRequirements> =>
+  Effect.gen(function*(_) {
+    const base = `set -e; cd ${shellEscape(ctx.template.targetDir)};`
+    const script = [
+      base,
+      // Priority: pnpm > npm > yarn. Keep commands deterministic and rebuildable.
+      "if [ -f pnpm-lock.yaml ]; then echo 'pnpm install --frozen-lockfile'; exit 0; fi",
+      "if [ -f package-lock.json ]; then echo 'npm ci'; exit 0; fi",
+      "if [ -f yarn.lock ]; then echo 'yarn install --frozen-lockfile'; exit 0; fi",
+      "exit 0"
+    ].join(" ")
+
+    const output = yield* _(
+      runDockerExecCapture(ctx.resolved, "scrap session detect rebuild", ctx.template.containerName, script)
+    )
+
+    const command = output.trim()
+    return command.length > 0 ? [command] : []
   })
 
 const exportWorktreePatchChunks = (
@@ -135,10 +197,7 @@ const exportContainerDirChunks = (
 
 const writeSessionManifest = (
   ctx: SessionExportContext,
-  repo: SessionRepoInfo,
-  patchChunksPath: string,
-  codexChunksPath: string,
-  codexSharedChunksPath: string
+  input: SessionManifestInput
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
     const manifest: SessionManifest = {
@@ -146,11 +205,16 @@ const writeSessionManifest = (
       mode: "session",
       snapshotId: ctx.snapshotId,
       createdAtUtc: new Date().toISOString(),
-      repo,
+      repo: input.repo,
       artifacts: {
-        worktreePatchChunks: ctx.path.basename(patchChunksPath),
-        codexChunks: ctx.path.basename(codexChunksPath),
-        codexSharedChunks: ctx.path.basename(codexSharedChunksPath)
+        worktreePatchChunks: ctx.path.basename(input.patchChunksPath),
+        codexChunks: ctx.path.basename(input.codexChunksPath),
+        codexSharedChunks: ctx.path.basename(input.codexSharedChunksPath),
+        envGlobalFile: input.hostEnv.envGlobalFile,
+        envProjectFile: input.hostEnv.envProjectFile
+      },
+      rebuild: {
+        commands: [...input.rebuildCommands]
       }
     }
     const manifestPath = ctx.path.join(ctx.snapshotDir, "manifest.json")
@@ -175,6 +239,9 @@ export const exportScrapSession = (
     )
 
     const repo = yield* _(captureRepoInfo(ctx))
+    const hostEnv = yield* _(exportHostEnvFiles(ctx))
+    const rebuildCommands = yield* _(detectRebuildCommands(ctx))
+
     const patchChunksPath = yield* _(exportWorktreePatchChunks(ctx))
     const codexChunksPath = yield* _(
       exportContainerDirChunks(ctx, ctx.template.codexHome, "codex.tar.gz", "scrap export session codex")
@@ -185,6 +252,15 @@ export const exportScrapSession = (
       exportContainerDirChunks(ctx, codexSharedHome, "codex-shared.tar.gz", "scrap export session codex-shared")
     )
 
-    yield* _(writeSessionManifest(ctx, repo, patchChunksPath, codexChunksPath, codexSharedChunksPath))
+    yield* _(
+      writeSessionManifest(ctx, {
+        repo,
+        patchChunksPath,
+        codexChunksPath,
+        codexSharedChunksPath,
+        hostEnv,
+        rebuildCommands
+      })
+    )
     yield* _(Effect.log("Scrap session export complete."))
   }).pipe(Effect.asVoid)

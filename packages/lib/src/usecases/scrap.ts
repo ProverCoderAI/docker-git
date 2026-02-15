@@ -2,7 +2,6 @@ import { Effect } from "effect"
 
 import type { ScrapExportCommand, ScrapImportCommand } from "../core/domain.js"
 import { ensureDockerDaemonAccess } from "../shell/docker.js"
-import { exportScrapCache, importScrapCache } from "./scrap-cache.js"
 import { exportScrapSession, importScrapSession } from "./scrap-session.js"
 import type { ScrapError, ScrapRequirements } from "./scrap-types.js"
 
@@ -14,7 +13,7 @@ export const exportScrap = (
 ): Effect.Effect<void, ScrapError, ScrapRequirements> =>
   Effect.gen(function*(_) {
     yield* _(ensureDockerDaemonAccess(process.cwd()))
-    yield* _(command.mode === "session" ? exportScrapSession(command) : exportScrapCache(command))
+    yield* _(exportScrapSession(command))
   }).pipe(Effect.asVoid)
 
 export const importScrap = (
@@ -22,5 +21,5 @@ export const importScrap = (
 ): Effect.Effect<void, ScrapError, ScrapRequirements> =>
   Effect.gen(function*(_) {
     yield* _(ensureDockerDaemonAccess(process.cwd()))
-    yield* _(command.mode === "session" ? importScrapSession(command) : importScrapCache(command))
+    yield* _(importScrapSession(command))
   }).pipe(Effect.asVoid)

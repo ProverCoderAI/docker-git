@@ -71,7 +71,17 @@ export interface SessionsLogsCommand {
   readonly lines: number
 }
 
-export type ScrapMode = "cache" | "session"
+// CHANGE: remove scrap cache mode and keep only the reproducible session snapshot.
+// WHY: cache archives include large, easily-rebuildable artifacts (e.g. node_modules) that should not be stored in git.
+// QUOTE(ТЗ): "не должно быть старого режима где он качает весь шлак типо node_modules"
+// REF: user-request-2026-02-15
+// SOURCE: n/a
+// FORMAT THEOREM: forall m: ScrapMode, m = "session"
+// PURITY: CORE
+// EFFECT: Effect<never>
+// INVARIANT: scrap exports/imports are always recipe-like (git state + small secrets), never full workspace caches
+// COMPLEXITY: O(1)
+export type ScrapMode = "session"
 
 export interface ScrapExportCommand {
   readonly _tag: "ScrapExport"
