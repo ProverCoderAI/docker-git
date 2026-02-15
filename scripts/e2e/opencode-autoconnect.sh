@@ -2,7 +2,14 @@
 set -euo pipefail
 
 RUN_ID="$(date +%s)-$RANDOM"
-ROOT="$(mktemp -d)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ROOT_BASE="${DOCKER_GIT_E2E_ROOT_BASE:-$REPO_ROOT/.docker-git/e2e-root}"
+mkdir -p "$ROOT_BASE"
+ROOT="$(mktemp -d "$ROOT_BASE/opencode-autoconnect.XXXXXX")"
+# docker-git containers may `chown -R` the `.docker-git` bind mount to UID 1000.
+# `mktemp -d` creates 0700 dirs; if ownership changes, the host runner may lose access.
+chmod 0755 "$ROOT"
 KEEP="${KEEP:-0}"
 
 # Keep compose project/volume names unique to avoid interfering with any local docker-git state.
