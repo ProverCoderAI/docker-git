@@ -36,6 +36,7 @@ export interface CreateCommand {
   readonly force: boolean
   readonly forceEnv: boolean
   readonly waitForClone: boolean
+  readonly openSsh: boolean
 }
 
 export interface MenuCommand {

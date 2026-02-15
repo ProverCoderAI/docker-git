@@ -47,6 +47,7 @@ Options:
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list
   --up | --no-up            Run docker compose up after init (default: --up)
+  --ssh | --no-ssh          Auto-open SSH after create/clone (default: clone=--ssh, create=--no-ssh)
   --mcp-playwright | --no-mcp-playwright  Enable Playwright MCP + Chromium sidecar (default: --no-mcp-playwright)
   --force                   Overwrite existing files and wipe compose volumes (docker compose down -v)
   --force-env               Reset project env defaults only (keep workspace volume/data)

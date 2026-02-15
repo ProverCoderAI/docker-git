@@ -36,6 +36,7 @@ export interface RawOptions {
   readonly lines?: string
   readonly includeDefault?: boolean
   readonly up?: boolean
+  readonly openSsh?: boolean
   readonly force?: boolean
   readonly forceEnv?: boolean
 }

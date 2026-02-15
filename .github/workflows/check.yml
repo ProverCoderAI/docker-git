@@ -84,3 +84,14 @@ jobs:
         run: pnpm --filter ./packages/app lint:effect
       - name: Lint Effect-TS (lib)
         run: pnpm --filter ./packages/lib lint:effect
+
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: System E2E (clone + auto-SSH)
+        run: bash scripts/e2e/ci.sh

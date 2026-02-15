@@ -179,6 +179,7 @@ const runRecreateFlow = async (projectDir, send) => {
         config: config.template,
         outDir: projectDir,
         runUp: false,
+        openSsh: false,
         force: true,
         forceEnv: false,
         waitForClone: false

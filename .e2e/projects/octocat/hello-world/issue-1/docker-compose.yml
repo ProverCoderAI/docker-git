@@ -1,0 +1,32 @@
+services:
+  dg-hello-world-issue-1:
+    build: .
+    container_name: dg-hello-world-issue-1
+    environment:
+      REPO_URL: "https://github.com/octocat/Hello-World.git"
+      REPO_REF: "issue-1"
+      FORK_REPO_URL: ""
+      TARGET_DIR: "/home/dev/octocat/hello-world/issue-1"
+      CODEX_HOME: "/home/dev/.codex"
+    env_file:
+      - ./.orch/env/global.env
+      - ../../../../project.env
+    ports:
+      - "127.0.0.1:34623:22"
+    volumes:
+      - dg-hello-world-issue-1-home:/home/dev
+      - ../../..:/home/dev/.docker-git
+      - ../../../authorized_keys:/authorized_keys:ro
+      - ./.orch/auth/codex:/home/dev/.codex
+      - ../../../.orch/auth/codex:/home/dev/.codex-shared
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - dg-hello-world-issue-1-net
+
+
+networks:
+  dg-hello-world-issue-1-net:
+    driver: bridge
+
+volumes:
+  dg-hello-world-issue-1-home:

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${SSH_LOG_PATH:?SSH_LOG_PATH is required}"
+printf "ssh %s\n" "$*" >> "$SSH_LOG_PATH"
+exit 0

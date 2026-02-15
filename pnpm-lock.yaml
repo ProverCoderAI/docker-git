@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@ton-ai-core/vibecode-linter@1.0.6':
+    hash: f1c1c4c58bdb59306606b68007b20230987779acff18507650a013d40de72b55
+    path: patches/@ton-ai-core__vibecode-linter@1.0.6.patch
+
 importers:
 
   .:
@@ -101,7 +106,7 @@ importers:
         version: 0.0.13(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
       '@ton-ai-core/vibecode-linter':
         specifier: ^1.0.6
-        version: 1.0.6
+        version: 1.0.6(patch_hash=f1c1c4c58bdb59306606b68007b20230987779acff18507650a013d40de72b55)
       '@types/node':
         specifier: ^24.10.9
         version: 24.10.9
@@ -304,7 +309,7 @@ importers:
         version: 0.0.13(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
       '@ton-ai-core/vibecode-linter':
         specifier: ^1.0.6
-        version: 1.0.6
+        version: 1.0.6(patch_hash=f1c1c4c58bdb59306606b68007b20230987779acff18507650a013d40de72b55)
       '@types/node':
         specifier: ^24.10.9
         version: 24.10.9
@@ -5777,7 +5782,7 @@ snapshots:
       postcss: 8.5.6
       tailwindcss: 4.1.18
 
-  '@ton-ai-core/vibecode-linter@1.0.6':
+  '@ton-ai-core/vibecode-linter@1.0.6(patch_hash=f1c1c4c58bdb59306606b68007b20230987779acff18507650a013d40de72b55)':
     dependencies:
       ajv: 8.17.1
       effect: 3.19.14
