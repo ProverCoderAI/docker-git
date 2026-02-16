@@ -64,6 +64,7 @@ describe("planFiles", () => {
         expect(dockerfileSpec.contents).toContain("AUTO_MENU")
         expect(dockerfileSpec.contents).toContain("ncurses-term")
         expect(dockerfileSpec.contents).toContain("tag-order builtins commands")
+        expect(dockerfileSpec.contents).toContain("gitleaks version")
       }
 
       if (entrypointSpec && entrypointSpec._tag === "File") {
