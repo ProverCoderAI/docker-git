@@ -46,6 +46,8 @@ Options:
   --env-project <path>      Host path to project env file (default: ./.orch/env/project.env)
   --codex-auth <path>       Host path for Codex auth cache (default: <projectsRoot>/.orch/auth/codex)
   --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
+  --base-flavor <flavor>    Container base/toolchain flavor: ubuntu|nix (default: ubuntu)
+  --nix | --ubuntu          Shorthand for --base-flavor nix|ubuntu
   --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>[/issue-<id>|/pr-<id>])
   --project-dir <path>      Project directory for attach (default: .)
   --archive <path>          Scrap snapshot directory (default: .orch/scrap/session)

@@ -45,7 +45,15 @@ type CreateReturnContext = CreateContext & {
 }
 
 export const buildCreateArgs = (input: CreateInputs): ReadonlyArray<string> => {
-  const args: Array<string> = ["create", "--repo-url", input.repoUrl, "--secrets-root", input.secretsRoot]
+  const args: Array<string> = [
+    "create",
+    "--repo-url",
+    input.repoUrl,
+    "--secrets-root",
+    input.secretsRoot,
+    "--base-flavor",
+    input.baseFlavor
+  ]
   if (input.repoRef.length > 0) {
     args.push("--repo-ref", input.repoRef)
   }
@@ -114,6 +122,7 @@ export const resolveCreateInputs = (
     repoRef: values.repoRef ?? resolvedRepoRef ?? "main",
     outDir,
     secretsRoot,
+    baseFlavor: values.baseFlavor ?? "ubuntu",
     runUp: values.runUp !== false,
     enableMcpPlaywright: values.enableMcpPlaywright === true,
     force: values.force === true,
@@ -128,6 +137,20 @@ const parseYesDefault = (input: string, fallback: boolean): boolean => {
   }
   if (normalized === "n" || normalized === "no") {
     return false
+  }
+  return fallback
+}
+
+const parseBaseFlavorDefault = (
+  input: string,
+  fallback: CreateInputs["baseFlavor"]
+): CreateInputs["baseFlavor"] => {
+  const normalized = input.trim().toLowerCase()
+  if (normalized === "nix") {
+    return "nix"
+  }
+  if (normalized === "ubuntu") {
+    return "ubuntu"
   }
   return fallback
 }
@@ -194,6 +217,13 @@ const applyCreateStep = (input: {
     }),
     Match.when("outDir", () => {
       input.nextValues.outDir = input.buffer.length > 0 ? input.buffer : input.currentDefaults.outDir
+      return true
+    }),
+    Match.when("baseFlavor", () => {
+      input.nextValues.baseFlavor = parseBaseFlavorDefault(
+        input.buffer,
+        input.currentDefaults.baseFlavor
+      )
       return true
     }),
     Match.when("runUp", () => {
