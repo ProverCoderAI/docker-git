@@ -103,15 +103,20 @@ const renderMenuMessage = (
   )
 }
 
-export const renderMenu = (
-  cwd: string,
-  activeDir: string | null,
-  selected: number,
-  busy: boolean,
-  message: string | null
-): React.ReactElement => {
+type MenuRenderInput = {
+  readonly cwd: string
+  readonly activeDir: string | null
+  readonly runningDockerGitContainers: number
+  readonly selected: number
+  readonly busy: boolean
+  readonly message: string | null
+}
+
+export const renderMenu = (input: MenuRenderInput): React.ReactElement => {
+  const { activeDir, busy, cwd, message, runningDockerGitContainers, selected } = input
   const el = React.createElement
   const activeLabel = `Active: ${activeDir ?? "(none)"}`
+  const runningLabel = `Running docker-git containers: ${runningDockerGitContainers}`
   const cwdLabel = `CWD: ${cwd}`
   const items = menuItems.map((item, index) => {
     const indexLabel = `${index + 1})`
@@ -134,6 +139,7 @@ export const renderMenu = (
     "docker-git",
     compactElements([
       el(Text, null, activeLabel),
+      el(Text, null, runningLabel),
       el(Text, null, cwdLabel),
       el(Box, { flexDirection: "column", marginTop: 1 }, ...items),
       hints,

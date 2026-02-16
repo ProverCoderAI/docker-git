@@ -6,6 +6,7 @@ import { renderError } from "@effect-template/lib/usecases/errors"
 import {
   downAllDockerGitProjects,
   listProjectItems,
+  listProjectStatus,
   listRunningProjectItems
 } from "@effect-template/lib/usecases/projects"
 import { runDockerComposeUpWithPortCheck } from "@effect-template/lib/usecases/projects-up"
@@ -195,6 +196,10 @@ const runDeleteAction = (context: MenuContext) => {
 }
 
 const runComposeAction = (action: MenuAction, context: MenuContext) => {
+  if (action._tag === "Status" && context.state.activeDir === null) {
+    runWithSuspendedTui(listProjectStatus, context, "docker compose ps (all projects)")
+    return
+  }
   if (!requireActiveProject(context)) {
     return
   }

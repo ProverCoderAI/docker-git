@@ -176,4 +176,5 @@ process.exit(1)
 NODE'
 
 # Exercises Bun-based plugin install path (regression test for BUN_INSTALL env).
-docker exec -u dev "$CONTAINER_NAME" opencode models openai | grep -m 1 -E '^openai/' >/dev/null
+docker exec -u dev "$CONTAINER_NAME" bash -lc \
+  'output="$(opencode models openai)" && grep -m 1 -E "^openai/" <<< "$output" >/dev/null'
