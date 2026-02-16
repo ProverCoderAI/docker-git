@@ -69,6 +69,7 @@ else
           echo "[clone-cache] mirror refresh failed for $REPO_URL"
         fi
         CLONE_CACHE_ARGS="--reference-if-able '$CACHE_REPO_DIR' --dissociate"
+        echo "[clone-cache] using mirror: $CACHE_REPO_DIR"
       else
         echo "[clone-cache] invalid mirror removed: $CACHE_REPO_DIR"
         rm -rf "$CACHE_REPO_DIR"

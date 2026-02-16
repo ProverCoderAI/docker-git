@@ -73,6 +73,7 @@ describe("planFiles", () => {
         expect(entrypointSpec.contents).toContain("token=\"$GITHUB_TOKEN\"")
         expect(entrypointSpec.contents).toContain("CACHE_ROOT=\"/home/dev/.docker-git/.cache/git-mirrors\"")
         expect(entrypointSpec.contents).toContain("CLONE_CACHE_ARGS=\"--reference-if-able '$CACHE_REPO_DIR' --dissociate\"")
+        expect(entrypointSpec.contents).toContain("[clone-cache] using mirror: $CACHE_REPO_DIR")
         expect(entrypointSpec.contents).toContain("git clone --progress $CLONE_CACHE_ARGS")
         expect(entrypointSpec.contents).toContain("[clone-cache] mirror created: $CACHE_REPO_DIR")
       }
