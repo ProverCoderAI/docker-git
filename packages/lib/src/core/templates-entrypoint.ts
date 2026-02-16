@@ -44,7 +44,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointBashHistory(),
     renderEntrypointInputRc(config),
     renderEntrypointZshConfig(),
-    renderEntrypointCodexResumeHint(),
+    renderEntrypointCodexResumeHint(config),
     renderEntrypointAgentsNotice(config),
     renderEntrypointDockerSocket(config),
     renderEntrypointGitConfig(config),
