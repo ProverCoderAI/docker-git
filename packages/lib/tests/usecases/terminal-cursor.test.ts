@@ -35,26 +35,35 @@ const withPatchedTty = <A, E, R>(
     )
   )
 
+const withWriteSpy = <A, E, R>(
+  use: (writeSpy: ReturnType<typeof vi.spyOn>) => Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R> =>
+  Effect.scoped(
+    Effect.acquireRelease(
+      Effect.sync(() => vi.spyOn(process.stdout, "write").mockImplementation(() => true)),
+      (writeSpy) =>
+        Effect.sync(() => {
+          writeSpy.mockRestore()
+        })
+    ).pipe(
+      Effect.flatMap((writeSpy) => use(writeSpy))
+    )
+  )
+
 describe("ensureTerminalCursorVisible", () => {
   it.effect("emits show-cursor escape in interactive tty", () =>
-    Effect.gen(function*(_) {
-      const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
-      try {
+    withWriteSpy((writeSpy) =>
+      Effect.gen(function*(_) {
         yield* _(withPatchedTty(true, true, ensureTerminalCursorVisible()))
         expect(writeSpy).toHaveBeenCalledWith("\u001B[?25h")
-      } finally {
-        writeSpy.mockRestore()
-      }
-    }))
+      })
+    ))
 
   it.effect("does nothing in non-interactive mode", () =>
-    Effect.gen(function*(_) {
-      const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
-      try {
+    withWriteSpy((writeSpy) =>
+      Effect.gen(function*(_) {
         yield* _(withPatchedTty(false, true, ensureTerminalCursorVisible()))
         expect(writeSpy).not.toHaveBeenCalled()
-      } finally {
-        writeSpy.mockRestore()
-      }
-    }))
+      })
+    ))
 })
