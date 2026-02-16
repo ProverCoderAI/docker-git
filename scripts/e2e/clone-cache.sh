@@ -62,22 +62,6 @@ cleanup() {
 trap 'on_error $LINENO' ERR
 trap cleanup EXIT
 
-compute_cache_key() {
-  local value="$1"
-
-  if command -v sha256sum >/dev/null 2>&1; then
-    printf "%s" "$value" | sha256sum | awk '{print $1}'
-    return
-  fi
-
-  if command -v shasum >/dev/null 2>&1; then
-    printf "%s" "$value" | shasum -a 256 | awk '{print $1}'
-    return
-  fi
-
-  printf "%s" "$value" | tr '/:@' '_' | tr -cd '[:alnum:]_.-'
-}
-
 wait_for_clone_completion() {
   local container="$1"
   local attempts=120
@@ -104,6 +88,7 @@ wait_for_clone_completion() {
 run_clone_case() {
   local case_name="$1"
   local expect_cache_use="$2"
+  local expected_mirror_name="${3:-}"
   local out_dir_rel=".docker-git/e2e/clone-cache-${case_name}-${RUN_ID}"
   local out_dir="$ROOT/e2e/clone-cache-${case_name}-${RUN_ID}"
   local container_name="dg-e2e-cache-${case_name}-${RUN_ID}"
@@ -147,8 +132,13 @@ EOF_ENV
   [[ "$branch" == "issue-1" ]] || fail "expected branch issue-1, got: $branch"
 
   if [[ "$expect_cache_use" == "1" ]]; then
-    grep -Fq -- "[clone-cache] using mirror: $MIRROR_PREFIX/" "$log_path" \
-      || fail "expected cache reuse log in second clone"
+    if [[ -n "$expected_mirror_name" ]]; then
+      grep -Fq -- "[clone-cache] using mirror: $MIRROR_PREFIX/$expected_mirror_name" "$log_path" \
+        || fail "expected cache reuse log for mirror $expected_mirror_name in second clone"
+    else
+      grep -Fq -- "[clone-cache] using mirror: $MIRROR_PREFIX/" "$log_path" \
+        || fail "expected cache reuse log in second clone"
+    fi
   else
     grep -Fq -- "[clone-cache] mirror created: $MIRROR_PREFIX/" "$log_path" \
       || fail "expected cache bootstrap log in first clone"
@@ -160,14 +150,17 @@ EOF_ENV
 mkdir -p "$ROOT/.orch/auth/codex" "$ROOT/.orch/env"
 : > "$ROOT/authorized_keys"
 
-CACHE_KEY="$(compute_cache_key "$REPO_URL")"
-[[ -n "$CACHE_KEY" ]] || fail "failed to compute cache key"
-CACHE_HOST_DIR="$ROOT/.docker-git/.cache/git-mirrors/$CACHE_KEY.git"
-
 run_clone_case "first" "0"
 
-[[ -d "$CACHE_HOST_DIR" ]] || fail "expected mirror cache directory to exist: $CACHE_HOST_DIR"
+MIRROR_ROOT="$ROOT/.docker-git/.cache/git-mirrors"
+[[ -d "$MIRROR_ROOT" ]] || fail "expected mirror root directory to exist: $MIRROR_ROOT"
 
-run_clone_case "second" "1"
+mapfile -t MIRRORS < <(find "$MIRROR_ROOT" -mindepth 1 -maxdepth 1 -type d -name "*.git" | sort)
+[[ "${#MIRRORS[@]}" -eq 1 ]] || fail "expected exactly one mirror directory, got: ${#MIRRORS[@]}"
+
+CACHE_HOST_DIR="${MIRRORS[0]}"
+MIRROR_NAME="$(basename "$CACHE_HOST_DIR")"
+
+run_clone_case "second" "1" "$MIRROR_NAME"
 
 echo "e2e/clone-cache: cache reuse verified for $REPO_URL"
