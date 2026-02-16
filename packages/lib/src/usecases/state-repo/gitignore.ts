@@ -17,10 +17,17 @@ const volatileCodexIgnorePatterns: ReadonlyArray<string> = [
   "**/.orch/auth/codex/models_cache.json"
 ]
 
+const repositoryCacheIgnorePatterns: ReadonlyArray<string> = [
+  ".cache/git-mirrors/"
+]
+
 const defaultStateGitignore = [
   stateGitignoreMarker,
   "# NOTE: this repo intentionally tracks EVERYTHING under the state dir, including .orch/env and .orch/auth.",
   "# Keep the remote private; treat it as sensitive infrastructure state.",
+  "",
+  "# Shared git mirrors cache (do not commit)",
+  ...repositoryCacheIgnorePatterns,
   "",
   "# Volatile Codex artifacts (do not commit)",
   ...volatileCodexIgnorePatterns,
@@ -31,6 +38,34 @@ const normalizeGitignoreText = (text: string): string =>
   text
     .replaceAll("\r\n", "\n")
     .trim()
+
+type MissingManagedPatterns = {
+  readonly repositoryCache: ReadonlyArray<string>
+  readonly volatileCodex: ReadonlyArray<string>
+}
+
+const collectMissingManagedPatterns = (prevLines: ReadonlySet<string>): MissingManagedPatterns => ({
+  repositoryCache: repositoryCacheIgnorePatterns.filter((p) => !prevLines.has(p)),
+  volatileCodex: volatileCodexIgnorePatterns.filter((p) => !prevLines.has(p))
+})
+
+const hasMissingManagedPatterns = (missing: MissingManagedPatterns): boolean =>
+  missing.repositoryCache.length > 0 || missing.volatileCodex.length > 0
+
+const appendManagedBlocks = (
+  prev: string,
+  missing: MissingManagedPatterns
+): string => {
+  const blocks = [
+    missing.repositoryCache.length > 0
+      ? `# Shared git mirrors cache (do not commit)\n${missing.repositoryCache.join("\n")}`
+      : "",
+    missing.volatileCodex.length > 0
+      ? `# Volatile Codex artifacts (do not commit)\n${missing.volatileCodex.join("\n")}`
+      : ""
+  ].filter((block) => block.length > 0)
+  return `${[prev.trimEnd(), ...blocks].join("\n\n")}\n`
+}
 
 export const ensureStateGitignore = (
   fs: FileSystem.FileSystem,
@@ -65,11 +100,10 @@ export const ensureStateGitignore = (
       return
     }
 
-    // Ensure volatile Codex artifacts are ignored; append if missing.
-    const missingVolatile = volatileCodexIgnorePatterns.filter((p) => !prevLines.has(p))
-    if (missingVolatile.length === 0) {
+    // Ensure managed ignore patterns exist; append any missing entries.
+    const missing = collectMissingManagedPatterns(prevLines)
+    if (!hasMissingManagedPatterns(missing)) {
       return
     }
-    const next = `${prev.trimEnd()}\n\n# Volatile Codex artifacts (do not commit)\n${missingVolatile.join("\n")}\n`
-    yield* _(fs.writeFileString(gitignorePath, next))
+    yield* _(fs.writeFileString(gitignorePath, appendManagedBlocks(prev, missing)))
   })

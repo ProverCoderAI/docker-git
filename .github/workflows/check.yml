@@ -98,6 +98,19 @@ jobs:
       - name: OpenCode autoconnect
         run: bash scripts/e2e/opencode-autoconnect.sh
 
+  e2e-clone-cache:
+    name: E2E (Clone cache)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Docker info
+        run: docker version && docker compose version
+      - name: Clone cache reuse
+        run: bash scripts/e2e/clone-cache.sh
+
   e2e-login-context:
     name: E2E (Login context)
     runs-on: ubuntu-latest
