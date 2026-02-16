@@ -23,6 +23,7 @@ type TerminalSessionRegistry = {
   readonly id: string
   readonly projectId: string
   readonly displayName: string
+  readonly containerName?: string
   readonly mode: TerminalSessionMode
   readonly source: string
   readonly status: TerminalSessionStatus
@@ -181,8 +182,15 @@ export const attachTerminalWs = (wss: WebSocketServer) => {
         const privateKey = fs.readFileSync(target.identityPath)
 
         client.on("ready", () => {
-          updateSession(sessionId, { status: "connected", displayName: details.displayName })
-          sendMessage(socket, { type: "info", data: `[docker-git] attached to ${details.displayName}` })
+          updateSession(sessionId, {
+            status: "connected",
+            displayName: details.displayName,
+            containerName: details.containerName
+          })
+          sendMessage(socket, {
+            type: "info",
+            data: `[docker-git] attached to ${details.displayName} (${details.containerName})`
+          })
 
           client.shell(
             {

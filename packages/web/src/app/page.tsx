@@ -533,9 +533,13 @@ export default function Home() {
 
   useEffect(() => () => disposeTerminal(), [disposeTerminal])
 
-  const connectedLabel = activeProject?.displayName ?? "none"
+  const activeTerminalSession = terminalSessions.find((session) => session.id === activeSessionId)
+  const connectedContainerLabel = terminalStatus === "detached"
+    ? "none"
+    : activeTerminalSession?.containerName ?? activeProject?.containerName ?? "unknown"
   const statusLabel = activeProject?.statusLabel ?? "unknown"
   const sshLabel = activeProject?.ssh ?? "-"
+  const containerLabel = activeProject?.containerName ?? "-"
   const repoLabel = activeProject?.displayName ?? "-"
   const refLabel = activeProject?.repoRef ?? "-"
   const recreateStatus = activeProject?.recreateStatus
@@ -558,7 +562,7 @@ export default function Home() {
         <div className="brand">docker-git</div>
         <div className="status-chip">
           <span className="status-dot" />
-          Connected · {connectedLabel}
+          Connected SSH · {connectedContainerLabel}
         </div>
       </header>
 
@@ -603,6 +607,7 @@ export default function Home() {
             <div className="topbar">
               <div className="topbar-meta">
                 <span className="pill">SSH: {sshLabel}</span>
+                <span className="pill">Container: {containerLabel}</span>
                 <span className="pill">Repo: {repoLabel}</span>
                 <span className="pill">Ref: {refLabel}</span>
                 <span className="pill">Status: {statusLabel}</span>
@@ -685,43 +690,46 @@ export default function Home() {
                         {showDetails ? "No active terminals" : "None"}
                       </div>
                     ) : (
-                      terminalSessions.map((session) => (
-                        <div
-                          key={session.id}
-                          className={`list-item ${session.id === activeSessionId ? "active" : ""}`}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleSessionSelect(session)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault()
-                              handleSessionSelect(session)
-                            }
-                          }}
-                        >
-                          <div className="list-item-row">
-                            <strong>{session.displayName}</strong>
-                            <div className="list-item-actions">
-                              <span className={session.status === "connected" ? "badge" : "badge warn"}>
-                                {session.status}
-                              </span>
-                              <button
-                                className="icon-button"
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  handleSessionClose(session)
-                                }}
-                              >
-                                delete
-                              </button>
+                      terminalSessions.map((session) => {
+                        const sessionContainer = session.containerName ?? session.projectId
+                        return (
+                          <div
+                            key={session.id}
+                            className={`list-item ${session.id === activeSessionId ? "active" : ""}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => handleSessionSelect(session)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault()
+                                handleSessionSelect(session)
+                              }
+                            }}
+                          >
+                            <div className="list-item-row">
+                              <strong>{session.displayName}</strong>
+                              <div className="list-item-actions">
+                                <span className={session.status === "connected" ? "badge" : "badge warn"}>
+                                  {session.status}
+                                </span>
+                                <button
+                                  className="icon-button"
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    handleSessionClose(session)
+                                  }}
+                                >
+                                  delete
+                                </button>
+                              </div>
                             </div>
+                            <small>
+                              {session.source} · {session.mode} · {sessionContainer}
+                            </small>
                           </div>
-                          <small>
-                            {session.source} · {session.mode} · {session.projectId}
-                          </small>
-                        </div>
-                      ))
+                        )
+                      })
                     )}
                   </div>
                 </div>
