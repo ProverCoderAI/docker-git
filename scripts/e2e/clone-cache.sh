@@ -152,7 +152,7 @@ mkdir -p "$ROOT/.orch/auth/codex" "$ROOT/.orch/env"
 
 run_clone_case "first" "0"
 
-MIRROR_ROOT="$ROOT/.docker-git/.cache/git-mirrors"
+MIRROR_ROOT="$ROOT/.cache/git-mirrors"
 [[ -d "$MIRROR_ROOT" ]] || fail "expected mirror root directory to exist: $MIRROR_ROOT"
 
 mapfile -t MIRRORS < <(find "$MIRROR_ROOT" -mindepth 1 -maxdepth 1 -type d -name "*.git" | sort)
