@@ -23,6 +23,7 @@ import { defaultProjectsRoot } from "../menu-helpers.js"
 import { findSshPrivateKey } from "../path-helpers.js"
 import { buildSshCommand } from "../projects-core.js"
 import { autoSyncState } from "../state-repo.js"
+import { ensureTerminalCursorVisible } from "../terminal-cursor.js"
 import { runDockerUpIfNeeded } from "./docker-up.js"
 import { buildProjectConfigs, resolveDockerGitRootRelativePath } from "./paths.js"
 import { resolveSshPort } from "./ports.js"
@@ -85,7 +86,7 @@ const formatStateSyncLabel = (repoUrl: string): string => {
   return repoPath.length > 0 ? repoPath : repoUrl
 }
 
-const isInteractiveTty = (): boolean => process.stdin.isTTY === true && process.stdout.isTTY === true
+const isInteractiveTty = (): boolean => process.stdin.isTTY && process.stdout.isTTY
 
 const buildSshArgs = (
   config: CreateCommand["config"],
@@ -132,6 +133,7 @@ const openSshBestEffort = (
     const sshCommand = buildSshCommand(template, sshKey)
 
     yield* _(Effect.log(`Opening SSH: ${sshCommand}`))
+    yield* _(ensureTerminalCursorVisible())
     yield* _(
       runCommandWithExitCodes(
         {
@@ -193,10 +195,10 @@ const runCreateProject = (
     if (command.openSsh) {
       if (!command.runUp) {
         yield* _(Effect.logWarning("Skipping SSH auto-open: docker compose up disabled (--no-up)."))
-      } else if (!isInteractiveTty()) {
-        yield* _(Effect.logWarning("Skipping SSH auto-open: not running in an interactive TTY."))
-      } else {
+      } else if (isInteractiveTty()) {
         yield* _(openSshBestEffort(projectConfig))
+      } else {
+        yield* _(Effect.logWarning("Skipping SSH auto-open: not running in an interactive TTY."))
       }
     }
   }).pipe(Effect.asVoid)
