@@ -10,7 +10,8 @@ type DockerGitConfigSearchState = {
 
 const isDockerGitConfig = (entry: string): boolean => entry.endsWith("docker-git.json")
 
-const shouldSkipDir = (entry: string): boolean => entry === ".git" || entry === ".orch"
+const shouldSkipDir = (entry: string): boolean =>
+  entry === ".git" || entry === ".orch" || entry === ".docker-git"
 
 const processDockerGitEntry = (
   fs: FileSystem.FileSystem,

@@ -17,10 +17,17 @@ const volatileCodexIgnorePatterns: ReadonlyArray<string> = [
   "**/.orch/auth/codex/models_cache.json"
 ]
 
+const repositoryCacheIgnorePatterns: ReadonlyArray<string> = [
+  ".cache/git-mirrors/"
+]
+
 const defaultStateGitignore = [
   stateGitignoreMarker,
   "# NOTE: this repo intentionally tracks EVERYTHING under the state dir, including .orch/env and .orch/auth.",
   "# Keep the remote private; treat it as sensitive infrastructure state.",
+  "",
+  "# Shared git mirrors cache (do not commit)",
+  ...repositoryCacheIgnorePatterns,
   "",
   "# Volatile Codex artifacts (do not commit)",
   ...volatileCodexIgnorePatterns,
@@ -65,11 +72,19 @@ export const ensureStateGitignore = (
       return
     }
 
-    // Ensure volatile Codex artifacts are ignored; append if missing.
+    // Ensure managed ignore patterns exist; append any missing entries.
+    const missingRepositoryCache = repositoryCacheIgnorePatterns.filter((p) => !prevLines.has(p))
     const missingVolatile = volatileCodexIgnorePatterns.filter((p) => !prevLines.has(p))
-    if (missingVolatile.length === 0) {
+    if (missingRepositoryCache.length === 0 && missingVolatile.length === 0) {
       return
     }
-    const next = `${prev.trimEnd()}\n\n# Volatile Codex artifacts (do not commit)\n${missingVolatile.join("\n")}\n`
-    yield* _(fs.writeFileString(gitignorePath, next))
+
+    let next = prev.trimEnd()
+    if (missingRepositoryCache.length > 0) {
+      next = `${next}\n\n# Shared git mirrors cache (do not commit)\n${missingRepositoryCache.join("\n")}`
+    }
+    if (missingVolatile.length > 0) {
+      next = `${next}\n\n# Volatile Codex artifacts (do not commit)\n${missingVolatile.join("\n")}`
+    }
+    yield* _(fs.writeFileString(gitignorePath, `${next}\n`))
   })

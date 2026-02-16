@@ -71,6 +71,10 @@ describe("planFiles", () => {
           "GIT_CREDENTIAL_HELPER_PATH=\"/usr/local/bin/docker-git-credential-helper\""
         )
         expect(entrypointSpec.contents).toContain("token=\"$GITHUB_TOKEN\"")
+        expect(entrypointSpec.contents).toContain("CACHE_ROOT=\"/home/dev/.docker-git/.cache/git-mirrors\"")
+        expect(entrypointSpec.contents).toContain("CLONE_CACHE_ARGS=\"--reference-if-able '$CACHE_REPO_DIR' --dissociate\"")
+        expect(entrypointSpec.contents).toContain("git clone --progress $CLONE_CACHE_ARGS")
+        expect(entrypointSpec.contents).toContain("[clone-cache] mirror created: $CACHE_REPO_DIR")
       }
     }))
 
