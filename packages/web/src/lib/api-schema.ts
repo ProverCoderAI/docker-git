@@ -108,6 +108,7 @@ const TerminalSessionSchema = Schema.Struct({
   id: Schema.String,
   projectId: Schema.String,
   displayName: Schema.String,
+  containerName: Schema.optional(Schema.String),
   mode: TerminalSessionModeSchema,
   source: Schema.String,
   status: TerminalSessionStatusSchema,

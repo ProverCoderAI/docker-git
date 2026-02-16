@@ -65,6 +65,7 @@ export type TerminalSession = {
   readonly id: string
   readonly projectId: string
   readonly displayName: string
+  readonly containerName?: string
   readonly mode: TerminalSessionMode
   readonly source: string
   readonly status: TerminalSessionStatus
