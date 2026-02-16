@@ -39,6 +39,34 @@ const normalizeGitignoreText = (text: string): string =>
     .replaceAll("\r\n", "\n")
     .trim()
 
+type MissingManagedPatterns = {
+  readonly repositoryCache: ReadonlyArray<string>
+  readonly volatileCodex: ReadonlyArray<string>
+}
+
+const collectMissingManagedPatterns = (prevLines: ReadonlySet<string>): MissingManagedPatterns => ({
+  repositoryCache: repositoryCacheIgnorePatterns.filter((p) => !prevLines.has(p)),
+  volatileCodex: volatileCodexIgnorePatterns.filter((p) => !prevLines.has(p))
+})
+
+const hasMissingManagedPatterns = (missing: MissingManagedPatterns): boolean =>
+  missing.repositoryCache.length > 0 || missing.volatileCodex.length > 0
+
+const appendManagedBlocks = (
+  prev: string,
+  missing: MissingManagedPatterns
+): string => {
+  const blocks = [
+    missing.repositoryCache.length > 0
+      ? `# Shared git mirrors cache (do not commit)\n${missing.repositoryCache.join("\n")}`
+      : "",
+    missing.volatileCodex.length > 0
+      ? `# Volatile Codex artifacts (do not commit)\n${missing.volatileCodex.join("\n")}`
+      : ""
+  ].filter((block) => block.length > 0)
+  return `${[prev.trimEnd(), ...blocks].join("\n\n")}\n`
+}
+
 export const ensureStateGitignore = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
@@ -73,18 +101,9 @@ export const ensureStateGitignore = (
     }
 
     // Ensure managed ignore patterns exist; append any missing entries.
-    const missingRepositoryCache = repositoryCacheIgnorePatterns.filter((p) => !prevLines.has(p))
-    const missingVolatile = volatileCodexIgnorePatterns.filter((p) => !prevLines.has(p))
-    if (missingRepositoryCache.length === 0 && missingVolatile.length === 0) {
+    const missing = collectMissingManagedPatterns(prevLines)
+    if (!hasMissingManagedPatterns(missing)) {
       return
     }
-
-    let next = prev.trimEnd()
-    if (missingRepositoryCache.length > 0) {
-      next = `${next}\n\n# Shared git mirrors cache (do not commit)\n${missingRepositoryCache.join("\n")}`
-    }
-    if (missingVolatile.length > 0) {
-      next = `${next}\n\n# Volatile Codex artifacts (do not commit)\n${missingVolatile.join("\n")}`
-    }
-    yield* _(fs.writeFileString(gitignorePath, `${next}\n`))
+    yield* _(fs.writeFileString(gitignorePath, appendManagedBlocks(prev, missing)))
   })
