@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ROOT_BASE="${DOCKER_GIT_E2E_ROOT_BASE:-$REPO_ROOT/.docker-git/e2e-root}"
 mkdir -p "$ROOT_BASE"
 ROOT="$(mktemp -d "$ROOT_BASE/login-context.XXXXXX")"
+SSH_KEY_BASE="$(mktemp -d /tmp/docker-git-login-context-key.XXXXXX)"
 # docker-git containers may `chown -R` the `.docker-git` bind mount to UID 1000.
 # Use world-writable permissions so the host runner can still create files
 # even if ownership changes inside the container.
@@ -59,6 +60,7 @@ cleanup() {
   fi
   cleanup_active_case
   rm -rf "$ROOT" >/dev/null 2>&1 || true
+  rm -rf "$SSH_KEY_BASE" >/dev/null 2>&1 || true
 }
 
 trap 'on_error $LINENO' ERR
@@ -68,9 +70,9 @@ command -v ssh >/dev/null 2>&1 || fail "missing 'ssh' command"
 command -v timeout >/dev/null 2>&1 || fail "missing 'timeout' command"
 command -v ssh-keygen >/dev/null 2>&1 || fail "missing 'ssh-keygen' command"
 
-ssh-keygen -q -t ed25519 -N "" -f "$ROOT/dev_ssh_key" >/dev/null
-cp "$ROOT/dev_ssh_key.pub" "$ROOT/authorized_keys"
-chmod 0600 "$ROOT/dev_ssh_key"
+ssh-keygen -q -t ed25519 -N "" -f "$SSH_KEY_BASE/dev_ssh_key" >/dev/null
+cp "$SSH_KEY_BASE/dev_ssh_key.pub" "$ROOT/authorized_keys"
+chmod 0600 "$SSH_KEY_BASE/dev_ssh_key"
 chmod 0644 "$ROOT/authorized_keys"
 
 wait_for_ssh() {
@@ -131,7 +133,7 @@ EOF_ENV
   rm -f "$login_log"
 
   set +e
-  timeout 30s bash -lc "printf 'exit\n' | ssh -i \"$ROOT/dev_ssh_key\" -tt -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p \"$ssh_port\" dev@localhost" > "$login_log" 2>&1
+  timeout 30s bash -lc "printf 'exit\n' | ssh -i \"$SSH_KEY_BASE/dev_ssh_key\" -tt -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p \"$ssh_port\" dev@localhost" > "$login_log" 2>&1
   local ssh_exit=$?
   set -e
 
