@@ -7,7 +7,7 @@
 // SOURCE: n/a
 // FORMAT THEOREM: ∀b ∈ Blobs(pushedRange, knowledgePaths): size(b) ≤ MAX_BYTES ∧ noSecrets(b) → pushAllowed
 // PURITY: SHELL (git IO)
-// INVARIANT: No pushed blob in knowledge paths exceeds MAX_BYTES or matches secret patterns.
+// INVARIANT: No pushed blob in knowledge paths exceeds MAX_BYTES or matches secret patterns (regex + optional gitleaks).
 
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -45,12 +45,43 @@ const sh = (cmd, args, options = {}) =>
 const shBytes = (cmd, args, options = {}) =>
   execFileSync(cmd, args, { encoding: null, ...options });
 
+const hasGitleaks = (() => {
+  try {
+    execFileSync("gitleaks", ["version"], {
+      encoding: "utf8",
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 const toMb = (bytes) => (bytes / 1_000_000).toFixed(2);
 const classifySecret = (text) => {
   for (const pattern of SECRET_PATTERNS) {
     if (pattern.regex.test(text)) return pattern.name;
   }
   return null;
+};
+const scanWithGitleaks = (content) => {
+  if (!hasGitleaks) return "skip";
+  try {
+    execFileSync(
+      "gitleaks",
+      ["stdin", "--no-banner", "--redact", "--log-level", "error"],
+      {
+        encoding: null,
+        stdio: ["pipe", "ignore", "ignore"],
+        input: content,
+      }
+    );
+    return "clean";
+  } catch (error) {
+    const status = typeof error?.status === "number" ? error.status : null;
+    if (status === 1) return "hit";
+    return "error";
+  }
 };
 
 const stdin = fs.readFileSync(0, "utf8").trimEnd();
@@ -80,6 +111,7 @@ const oversize = [];
 const secretHits = [];
 const objectToPaths = new Map();
 const oversizeBlobOids = new Set();
+let gitleaksErrorCount = 0;
 
 for (const range of ranges) {
   let revList = "";
@@ -138,14 +170,29 @@ for (const oid of oids) {
   }
   if (content.includes(0)) continue;
 
-  const secretType = classifySecret(content.toString("utf8"));
-  if (secretType === null) continue;
+  const text = content.toString("utf8");
+  const secretType = classifySecret(text);
+  if (secretType !== null) {
+    secretHits.push({
+      oid,
+      paths: objectToPaths.get(oid) ?? new Set(),
+      type: secretType,
+    });
+    continue;
+  }
 
-  secretHits.push({
-    oid,
-    paths: objectToPaths.get(oid) ?? new Set(),
-    type: secretType,
-  });
+  const gitleaksState = scanWithGitleaks(content);
+  if (gitleaksState === "hit") {
+    secretHits.push({
+      oid,
+      paths: objectToPaths.get(oid) ?? new Set(),
+      type: "Gitleaks finding",
+    });
+    continue;
+  }
+  if (gitleaksState === "error") {
+    gitleaksErrorCount += 1;
+  }
 }
 
 if (oversize.length === 0 && secretHits.length === 0) process.exit(0);
@@ -168,6 +215,12 @@ if (secretHits.length > 0) {
       ` - ${firstPath(item.paths)}: ${item.type} [${item.oid}]`
     );
   }
+}
+
+if (gitleaksErrorCount > 0) {
+  console.error(
+    `WARN: gitleaks scanner errored for ${gitleaksErrorCount} blob(s); fallback regex checks were used.`
+  );
 }
 
 console.error("");
