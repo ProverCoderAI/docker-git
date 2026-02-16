@@ -139,6 +139,48 @@ describe("planFiles", () => {
         expect(entrypointSpec.contents).toContain("Issue AGENTS.md:")
         expect(entrypointSpec.contents).toContain("ISSUE_AGENTS_PATH=\"$TARGET_DIR/AGENTS.md\"")
         expect(entrypointSpec.contents).toContain("grep -qx \"AGENTS.md\" \"$EXCLUDE_PATH\"")
+        expect(entrypointSpec.contents).toContain("docker_git_workspace_context_line()")
+        expect(entrypointSpec.contents).toContain("Контекст workspace: issue #$ISSUE_ID_VALUE ($ISSUE_URL_VALUE)")
+      }
+    }))
+
+  it.effect("embeds PR workspace URL context in entrypoint", () =>
+    Effect.sync(() => {
+      const config: TemplateConfig = {
+        containerName: "dg-repo-pr-42",
+        serviceName: "dg-repo-pr-42",
+        sshUser: "dev",
+        sshPort: 2222,
+        repoUrl: "https://github.com/org/repo.git",
+        repoRef: "refs/pull/42/head",
+        targetDir: "/home/dev/org/repo/pr-42",
+        volumeName: "dg-repo-pr-42-home",
+        authorizedKeysPath: "./authorized_keys",
+        envGlobalPath: "./.orch/env/global.env",
+        envProjectPath: "./.orch/env/project.env",
+        codexAuthPath: "./.orch/auth/codex",
+        codexSharedAuthPath: "../../.orch/auth/codex",
+        codexHome: "/home/dev/.codex",
+        enableMcpPlaywright: false,
+        pnpmVersion: "10.27.0"
+      }
+
+      const specs = planFiles(config)
+      const entrypointSpec = specs.find(
+        (spec) => spec._tag === "File" && spec.relativePath === "entrypoint.sh"
+      )
+      expect(entrypointSpec !== undefined && entrypointSpec._tag === "File").toBe(true)
+      if (entrypointSpec && entrypointSpec._tag === "File") {
+        expect(entrypointSpec.contents).toContain(
+          "PR_ID=\"$(printf \"%s\" \"$REPO_REF\" | sed -nE 's#^refs/pull/([0-9]+)/head$#\\1#p')\""
+        )
+        expect(entrypointSpec.contents).toContain(
+          "PR_URL=\"https://github.com/$PR_REPO/pull/$PR_ID\""
+        )
+        expect(entrypointSpec.contents).toContain(
+          "WORKSPACE_INFO_LINE=\"Контекст workspace: PR #$PR_ID ($PR_URL)\""
+        )
+        expect(entrypointSpec.contents).toContain("Контекст workspace: PR #$PR_ID_VALUE ($PR_URL_VALUE)")
       }
     }))
 })
