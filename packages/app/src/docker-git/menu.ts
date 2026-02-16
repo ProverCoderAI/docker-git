@@ -185,13 +185,14 @@ const renderView = (context: RenderContext) => {
     return renderCreate(label, context.view.buffer, context.message, context.view.step, currentDefaults)
   }
 
-  return renderSelect(
-    context.view.purpose,
-    context.view.items,
-    context.view.selected,
-    context.view.confirmDelete,
-    context.message
-  )
+  return renderSelect({
+    purpose: context.view.purpose,
+    items: context.view.items,
+    selected: context.view.selected,
+    runtimeByProject: context.view.runtimeByProject,
+    confirmDelete: context.view.confirmDelete,
+    message: context.message
+  })
 }
 
 const useMenuState = () => {

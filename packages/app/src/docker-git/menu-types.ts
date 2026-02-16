@@ -77,9 +77,15 @@ export type ViewState =
     readonly _tag: "SelectProject"
     readonly purpose: "Connect" | "Down" | "Info" | "Delete"
     readonly items: ReadonlyArray<ProjectItem>
+    readonly runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
     readonly selected: number
     readonly confirmDelete: boolean
   }
+
+export type SelectProjectRuntime = {
+  readonly running: boolean
+  readonly sshSessions: number
+}
 
 export const menuItems: ReadonlyArray<{ readonly id: MenuAction; readonly label: string }> = [
   { id: { _tag: "Create" }, label: "Create project" },

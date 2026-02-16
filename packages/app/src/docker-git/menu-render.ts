@@ -3,7 +3,14 @@ import { Box, Text } from "ink"
 import React from "react"
 
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
-import type { CreateInputs, CreateStep } from "./menu-types.js"
+import {
+  buildSelectLabels,
+  renderSelectDetails,
+  selectHint,
+  type SelectPurpose,
+  selectTitle
+} from "./menu-render-select.js"
+import type { CreateInputs, CreateStep, SelectProjectRuntime } from "./menu-types.js"
 import { createSteps, menuItems } from "./menu-types.js"
 
 // CHANGE: render menu views with Ink without JSX
@@ -168,91 +175,6 @@ export const renderCreate = (
   )
 }
 
-const formatRepoRef = (repoRef: string): string => {
-  const trimmed = repoRef.trim()
-  const prPrefix = "refs/pull/"
-  if (trimmed.startsWith(prPrefix)) {
-    const rest = trimmed.slice(prPrefix.length)
-    const number = rest.split("/")[0] ?? rest
-    return `PR#${number}`
-  }
-  return trimmed.length > 0 ? trimmed : "main"
-}
-
-const renderSelectDetails = (
-  el: typeof React.createElement,
-  purpose: SelectPurpose,
-  item: ProjectItem | undefined
-): ReadonlyArray<React.ReactElement> => {
-  if (!item) {
-    return [el(Text, { color: "gray", wrap: "truncate" }, "No project selected.")]
-  }
-
-  const refLabel = formatRepoRef(item.repoRef)
-  const authSuffix = item.authorizedKeysExists ? "" : " (missing)"
-
-  return Match.value(purpose).pipe(
-    Match.when("Info", () => [
-      el(Text, { color: "cyan", bold: true, wrap: "truncate" }, "Connection info"),
-      el(Text, { wrap: "wrap" }, `Project directory: ${item.projectDir}`),
-      el(Text, { wrap: "wrap" }, `Container: ${item.containerName}`),
-      el(Text, { wrap: "wrap" }, `Service: ${item.serviceName}`),
-      el(Text, { wrap: "wrap" }, `SSH command: ${item.sshCommand}`),
-      el(Text, { wrap: "wrap" }, `Repo: ${item.repoUrl} (${refLabel})`),
-      el(Text, { wrap: "wrap" }, `Workspace: ${item.targetDir}`),
-      el(Text, { wrap: "wrap" }, `Authorized keys: ${item.authorizedKeysPath}${authSuffix}`),
-      el(Text, { wrap: "wrap" }, `Env global: ${item.envGlobalPath}`),
-      el(Text, { wrap: "wrap" }, `Env project: ${item.envProjectPath}`),
-      el(Text, { wrap: "wrap" }, `Codex auth: ${item.codexAuthPath} -> ${item.codexHome}`)
-    ]),
-    Match.when("Delete", () => [
-      el(Text, { color: "cyan", bold: true, wrap: "truncate" }, "Delete project"),
-      el(Text, { wrap: "wrap" }, `Project directory: ${item.projectDir}`),
-      el(Text, { wrap: "wrap" }, `Container: ${item.containerName}`),
-      el(Text, { wrap: "wrap" }, `Repo: ${item.repoUrl} (${refLabel})`),
-      el(Text, { wrap: "wrap" }, "Removes the project folder (no git history rewrite).")
-    ]),
-    Match.orElse(() => [
-      el(Text, { color: "cyan", bold: true, wrap: "truncate" }, "Details"),
-      el(Text, { wrap: "truncate" }, `Repo: ${item.repoUrl}`),
-      el(Text, { wrap: "truncate" }, `Ref: ${item.repoRef}`),
-      el(Text, { wrap: "truncate" }, `Project dir: ${item.projectDir}`),
-      el(Text, { wrap: "truncate" }, `Workspace: ${item.targetDir}`),
-      el(Text, { wrap: "truncate" }, `SSH: ${item.sshCommand}`)
-    ])
-  )
-}
-
-type SelectPurpose = "Connect" | "Down" | "Info" | "Delete"
-
-const selectTitle = (purpose: SelectPurpose): string =>
-  Match.value(purpose).pipe(
-    Match.when("Connect", () => "docker-git / Select project"),
-    Match.when("Down", () => "docker-git / Stop container"),
-    Match.when("Info", () => "docker-git / Show connection info"),
-    Match.when("Delete", () => "docker-git / Delete project"),
-    Match.exhaustive
-  )
-
-const selectHint = (purpose: SelectPurpose): string =>
-  Match.value(purpose).pipe(
-    Match.when("Connect", () => "Enter = select + SSH, Esc = back"),
-    Match.when("Down", () => "Enter = stop container, Esc = back"),
-    Match.when("Info", () => "Use arrows to browse details, Enter = set active, Esc = back"),
-    Match.when("Delete", () => "Enter = ask/confirm delete, Esc = cancel"),
-    Match.exhaustive
-  )
-
-const buildSelectLabels = (
-  items: ReadonlyArray<ProjectItem>,
-  selected: number
-): ReadonlyArray<string> =>
-  items.map((item, index) => {
-    const prefix = index === selected ? ">" : " "
-    const refLabel = formatRepoRef(item.repoRef)
-    return `${prefix} ${index + 1}. ${item.displayName} (${refLabel})`
-  })
-
 const computeListWidth = (labels: ReadonlyArray<string>): number => {
   const maxLabelWidth = labels.length > 0 ? Math.max(...labels.map((label) => label.length)) : 24
   return Math.min(Math.max(maxLabelWidth + 2, 28), 54)
@@ -288,9 +210,10 @@ const renderSelectDetailsBox = (
   el: typeof React.createElement,
   purpose: SelectPurpose,
   items: ReadonlyArray<ProjectItem>,
-  selected: number
+  selected: number,
+  runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
 ): React.ReactElement => {
-  const details = renderSelectDetails(el, purpose, items[selected])
+  const details = renderSelectDetails(el, purpose, items[selected], runtimeByProject)
   return el(
     Box,
     { flexDirection: "column", marginLeft: 2, flexGrow: 1 },
@@ -299,22 +222,32 @@ const renderSelectDetailsBox = (
 }
 
 export const renderSelect = (
-  purpose: SelectPurpose,
-  items: ReadonlyArray<ProjectItem>,
-  selected: number,
-  confirmDelete: boolean,
-  message: string | null
+  input: {
+    readonly purpose: SelectPurpose
+    readonly items: ReadonlyArray<ProjectItem>
+    readonly selected: number
+    readonly runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
+    readonly confirmDelete: boolean
+    readonly message: string | null
+  }
 ): React.ReactElement => {
+  const { confirmDelete, items, message, purpose, runtimeByProject, selected } = input
   const el = React.createElement
-  const listLabels = buildSelectLabels(items, selected)
+  const listLabels = buildSelectLabels(items, selected, purpose, runtimeByProject)
   const listWidth = computeListWidth(listLabels)
   const listBox = renderSelectListBox(el, items, selected, listLabels, listWidth)
-  const detailsBox = renderSelectDetailsBox(el, purpose, items, selected)
+  const detailsBox = renderSelectDetailsBox(el, purpose, items, selected, runtimeByProject)
   const baseHint = selectHint(purpose)
-  const deleteHint = purpose === "Delete" && confirmDelete
-    ? "Confirm mode: Enter = delete now, Esc = cancel"
-    : baseHint
-  const hints = el(Box, { marginTop: 1 }, el(Text, { color: "gray" }, deleteHint))
+  const confirmHint = (() => {
+    if (purpose === "Delete" && confirmDelete) {
+      return "Confirm mode: Enter = delete now, Esc = cancel"
+    }
+    if (purpose === "Down" && confirmDelete) {
+      return "Confirm mode: Enter = stop now, Esc = cancel"
+    }
+    return baseHint
+  })()
+  const hints = el(Box, { marginTop: 1 }, el(Text, { color: "gray" }, confirmHint))
 
   return renderLayout(
     selectTitle(purpose),
