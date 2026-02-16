@@ -156,7 +156,10 @@ const useStartupSnapshot = (
     const startup = pipe(
       Effect.all([listProjectItems, runDockerPsNames(process.cwd())]),
       Effect.map(([items, runningNames]) => resolveMenuStartupSnapshot(items, runningNames)),
-      Effect.catchAll(() => Effect.succeed(defaultMenuStartupSnapshot())),
+      Effect.match({
+        onFailure: () => defaultMenuStartupSnapshot(),
+        onSuccess: (snapshot) => snapshot
+      }),
       Effect.provide(NodeContext.layer)
     )
 
