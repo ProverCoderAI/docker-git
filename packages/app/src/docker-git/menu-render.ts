@@ -206,14 +206,25 @@ const renderSelectListBox = (
   )
 }
 
+type SelectDetailsBoxInput = {
+  readonly purpose: SelectPurpose
+  readonly items: ReadonlyArray<ProjectItem>
+  readonly selected: number
+  readonly runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
+  readonly connectEnableMcpPlaywright: boolean
+}
+
 const renderSelectDetailsBox = (
   el: typeof React.createElement,
-  purpose: SelectPurpose,
-  items: ReadonlyArray<ProjectItem>,
-  selected: number,
-  runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
+  input: SelectDetailsBoxInput
 ): React.ReactElement => {
-  const details = renderSelectDetails(el, purpose, items[selected], runtimeByProject)
+  const details = renderSelectDetails(
+    el,
+    input.purpose,
+    input.items[input.selected],
+    input.runtimeByProject,
+    input.connectEnableMcpPlaywright
+  )
   return el(
     Box,
     { flexDirection: "column", marginLeft: 2, flexGrow: 1 },
@@ -228,16 +239,23 @@ export const renderSelect = (
     readonly selected: number
     readonly runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
     readonly confirmDelete: boolean
+    readonly connectEnableMcpPlaywright: boolean
     readonly message: string | null
   }
 ): React.ReactElement => {
-  const { confirmDelete, items, message, purpose, runtimeByProject, selected } = input
+  const { confirmDelete, connectEnableMcpPlaywright, items, message, purpose, runtimeByProject, selected } = input
   const el = React.createElement
   const listLabels = buildSelectLabels(items, selected, purpose, runtimeByProject)
   const listWidth = computeListWidth(listLabels)
   const listBox = renderSelectListBox(el, items, selected, listLabels, listWidth)
-  const detailsBox = renderSelectDetailsBox(el, purpose, items, selected, runtimeByProject)
-  const baseHint = selectHint(purpose)
+  const detailsBox = renderSelectDetailsBox(el, {
+    purpose,
+    items,
+    selected,
+    runtimeByProject,
+    connectEnableMcpPlaywright
+  })
+  const baseHint = selectHint(purpose, connectEnableMcpPlaywright)
   const confirmHint = (() => {
     if (purpose === "Delete" && confirmDelete) {
       return "Confirm mode: Enter = delete now, Esc = cancel"

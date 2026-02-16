@@ -1,5 +1,6 @@
 import { runDockerComposeDown } from "@effect-template/lib/shell/docker"
 import type { AppError } from "@effect-template/lib/usecases/errors"
+import { mcpPlaywrightUp } from "@effect-template/lib/usecases/mcp-playwright"
 import {
   connectProjectSshWithUp,
   deleteDockerGitProject,
@@ -9,6 +10,7 @@ import {
 
 import { Effect, Match, pipe } from "effect"
 
+import { buildConnectEffect, isConnectMcpToggleInput } from "./menu-select-connect.js"
 import { loadRuntimeByProject, runtimeForSelection } from "./menu-select-runtime.js"
 import { resetToMenu, resumeTui, suspendTui } from "./menu-shared.js"
 import type {
@@ -19,17 +21,6 @@ import type {
   SelectProjectRuntime,
   ViewState
 } from "./menu-types.js"
-
-// CHANGE: handle project selection flow in TUI
-// WHY: allow selecting active project without manual typing
-// QUOTE(ТЗ): "А ты можешь сделать удобный выбор проектов?"
-// REF: user-request-2026-02-02-select-project
-// SOURCE: n/a
-// FORMAT THEOREM: forall p: select(p) -> activeDir(p)
-// PURITY: SHELL
-// EFFECT: Effect<void, never, never>
-// INVARIANT: selected index always within items length
-// COMPLEXITY: O(1) per keypress
 
 type SelectContext = MenuViewContext & {
   readonly activeDir: string | null
@@ -47,7 +38,15 @@ export const startSelectView = (
   runtimeByProject: Readonly<Record<string, SelectProjectRuntime>> = emptyRuntimeByProject()
 ) => {
   context.setMessage(null)
-  context.setView({ _tag: "SelectProject", purpose, items, runtimeByProject, selected: 0, confirmDelete: false })
+  context.setView({
+    _tag: "SelectProject",
+    purpose,
+    items,
+    runtimeByProject,
+    selected: 0,
+    confirmDelete: false,
+    connectEnableMcpPlaywright: false
+  })
 }
 
 const clampIndex = (value: number, size: number): number => {
@@ -73,6 +72,9 @@ export const handleSelectInput = (
     resetToMenu(context)
     return
   }
+  if (handleConnectOptionToggle(input, view, context)) {
+    return
+  }
   if (handleSelectNavigation(key, view, context)) {
     return
   }
@@ -80,7 +82,27 @@ export const handleSelectInput = (
     handleSelectReturn(view, context)
     return
   }
-  handleSelectHint(input, context)
+  if (input.trim().length > 0) {
+    context.setMessage("Use arrows + Enter to select a project, Esc to cancel.")
+  }
+}
+
+const handleConnectOptionToggle = (
+  input: string,
+  view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
+  context: Pick<SelectContext, "setView" | "setMessage">
+): boolean => {
+  if (view.purpose !== "Connect" || !isConnectMcpToggleInput(input)) {
+    return false
+  }
+  const nextValue = !view.connectEnableMcpPlaywright
+  context.setView({ ...view, connectEnableMcpPlaywright: nextValue, confirmDelete: false })
+  context.setMessage(
+    nextValue
+      ? "Playwright MCP will be enabled before SSH (press Enter to connect)."
+      : "Playwright MCP toggle is OFF (press Enter to connect without changes)."
+  )
+  return true
 }
 
 const handleSelectNavigation = (
@@ -127,12 +149,30 @@ const runWithSuspendedTui = (
   )
 }
 
-const runConnectSelection = (selected: ProjectItem, context: SelectContext) => {
-  context.setMessage(`Connecting to ${selected.displayName}...`)
+const runConnectSelection = (
+  selected: ProjectItem,
+  context: SelectContext,
+  enableMcpPlaywright: boolean
+) => {
+  context.setMessage(
+    enableMcpPlaywright
+      ? `Enabling Playwright MCP for ${selected.displayName}, then connecting...`
+      : `Connecting to ${selected.displayName}...`
+  )
   context.setSshActive(true)
   runWithSuspendedTui(
     context,
-    connectProjectSshWithUp(selected),
+    buildConnectEffect(selected, enableMcpPlaywright, {
+      connectWithUp: (item) =>
+        connectProjectSshWithUp(item).pipe(
+          Effect.mapError((error): AppError => error)
+        ),
+      enableMcpPlaywright: (projectDir) =>
+        mcpPlaywrightUp({ _tag: "McpPlaywrightUp", projectDir, runUp: false }).pipe(
+          Effect.asVoid,
+          Effect.mapError((error): AppError => error)
+        )
+    }),
     () => {
       context.setSshActive(false)
     },
@@ -218,7 +258,7 @@ const handleSelectReturn = (
   Match.value(view.purpose).pipe(
     Match.when("Connect", () => {
       context.setActiveDir(selected.projectDir)
-      runConnectSelection(selected, context)
+      runConnectSelection(selected, context, view.connectEnableMcpPlaywright)
     }),
     Match.when("Down", () => {
       if (selectedRuntime.sshSessions > 0 && !view.confirmDelete) {
@@ -248,12 +288,6 @@ const handleSelectReturn = (
     }),
     Match.exhaustive
   )
-}
-
-const handleSelectHint = (input: string, context: SelectContext) => {
-  if (input.trim().length > 0) {
-    context.setMessage("Use arrows + Enter to select a project, Esc to cancel.")
-  }
 }
 
 export const loadSelectView = <E>(

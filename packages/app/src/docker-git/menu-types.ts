@@ -80,6 +80,7 @@ export type ViewState =
     readonly runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
     readonly selected: number
     readonly confirmDelete: boolean
+    readonly connectEnableMcpPlaywright: boolean
   }
 
 export type SelectProjectRuntime = {

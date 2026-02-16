@@ -191,6 +191,7 @@ const renderView = (context: RenderContext) => {
     selected: context.view.selected,
     runtimeByProject: context.view.runtimeByProject,
     confirmDelete: context.view.confirmDelete,
+    connectEnableMcpPlaywright: context.view.connectEnableMcpPlaywright,
     message: context.message
   })
 }

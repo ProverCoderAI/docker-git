@@ -37,9 +37,15 @@ export const selectTitle = (purpose: SelectPurpose): string =>
     Match.exhaustive
   )
 
-export const selectHint = (purpose: SelectPurpose): string =>
+export const selectHint = (
+  purpose: SelectPurpose,
+  connectEnableMcpPlaywright: boolean
+): string =>
   Match.value(purpose).pipe(
-    Match.when("Connect", () => "Enter = select + SSH, Esc = back"),
+    Match.when(
+      "Connect",
+      () => `Enter = select + SSH, P = toggle Playwright MCP (${connectEnableMcpPlaywright ? "on" : "off"}), Esc = back`
+    ),
     Match.when("Down", () => "Enter = stop container, Esc = back"),
     Match.when("Info", () => "Use arrows to browse details, Enter = set active, Esc = back"),
     Match.when("Delete", () => "Enter = ask/confirm delete, Esc = cancel"),
@@ -127,11 +133,31 @@ const renderDefaultDetails = (
   el(Text, { wrap: "truncate" }, `SSH: ${context.item.sshCommand}`)
 ]
 
+const renderConnectDetails = (
+  el: typeof React.createElement,
+  context: SelectDetailsContext,
+  common: ReadonlyArray<React.ReactElement>,
+  connectEnableMcpPlaywright: boolean
+): ReadonlyArray<React.ReactElement> => [
+  titleRow(el, "Connect + SSH"),
+  ...common,
+  el(
+    Text,
+    { color: connectEnableMcpPlaywright ? "green" : "gray", wrap: "wrap" },
+    connectEnableMcpPlaywright
+      ? "Playwright MCP: will be enabled before SSH (P to disable)."
+      : "Playwright MCP: keep current project setting (P to enable before SSH)."
+  ),
+  el(Text, { wrap: "wrap" }, `Repo: ${context.item.repoUrl} (${context.refLabel})`),
+  el(Text, { wrap: "wrap" }, `SSH command: ${context.item.sshCommand}`)
+]
+
 export const renderSelectDetails = (
   el: typeof React.createElement,
   purpose: SelectPurpose,
   item: ProjectItem | undefined,
-  runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
+  runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>,
+  connectEnableMcpPlaywright: boolean
 ): ReadonlyArray<React.ReactElement> => {
   if (!item) {
     return [el(Text, { color: "gray", wrap: "truncate" }, "No project selected.")]
@@ -140,6 +166,7 @@ export const renderSelectDetails = (
   const common = commonRows(el, context)
 
   return Match.value(purpose).pipe(
+    Match.when("Connect", () => renderConnectDetails(el, context, common, connectEnableMcpPlaywright)),
     Match.when("Info", () => renderInfoDetails(el, context, common)),
     Match.when("Down", () => [
       titleRow(el, "Stop container"),

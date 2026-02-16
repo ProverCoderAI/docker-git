@@ -25,6 +25,7 @@ import {
   withProjectIndexAndSsh
 } from "./projects-core.js"
 import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
+import { ensureTerminalCursorVisible } from "./terminal-cursor.js"
 
 const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
   const args: Array<string> = []
@@ -118,14 +119,19 @@ const waitForSshReady = (
 export const connectProjectSsh = (
   item: ProjectItem
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  runCommandWithExitCodes(
-    {
-      cwd: process.cwd(),
-      command: "ssh",
-      args: buildSshArgs(item)
-    },
-    [0, 130],
-    (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
+  pipe(
+    ensureTerminalCursorVisible(),
+    Effect.zipRight(
+      runCommandWithExitCodes(
+        {
+          cwd: process.cwd(),
+          command: "ssh",
+          args: buildSshArgs(item)
+        },
+        [0, 130],
+        (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
+      )
+    )
   )
 
 // CHANGE: ensure docker compose is up before SSH connection
