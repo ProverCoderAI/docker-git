@@ -107,8 +107,8 @@ CODEX_HINT_PATH="/etc/profile.d/zz-codex-resume.sh"
 if [[ ! -s "$CODEX_HINT_PATH" ]]; then
   cat <<'EOF' > "$CODEX_HINT_PATH"
 docker_git_workspace_context_line() {
-  REPO_REF_VALUE="\${REPO_REF:-}"
-  REPO_URL_VALUE="\${REPO_URL:-}"
+  REPO_REF_VALUE="\${REPO_REF:-__REPO_REF_DEFAULT__}"
+  REPO_URL_VALUE="\${REPO_URL:-__REPO_URL_DEFAULT__}"
 
   if [[ "$REPO_REF_VALUE" == issue-* ]]; then
     ISSUE_ID_VALUE="$(printf "%s" "$REPO_REF_VALUE" | sed -E 's#^issue-##')"
@@ -184,7 +184,20 @@ if [[ -s /etc/zsh/zshrc ]] && ! grep -q "zz-codex-resume.sh" /etc/zsh/zshrc 2>/d
   printf "%s\\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then source /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/zsh/zshrc
 fi`
 
-export const renderEntrypointCodexResumeHint = (): string => entrypointCodexResumeHintTemplate
+const escapeForDoubleQuotes = (value: string): string => {
+  const backslash = String.fromCodePoint(92)
+  const quote = String.fromCodePoint(34)
+  const escapedBackslash = `${backslash}${backslash}`
+  const escapedQuote = `${backslash}${quote}`
+  return value
+    .replaceAll(backslash, escapedBackslash)
+    .replaceAll(quote, escapedQuote)
+}
+
+export const renderEntrypointCodexResumeHint = (config: TemplateConfig): string =>
+  entrypointCodexResumeHintTemplate
+    .replaceAll("__REPO_REF_DEFAULT__", escapeForDoubleQuotes(config.repoRef))
+    .replaceAll("__REPO_URL_DEFAULT__", escapeForDoubleQuotes(config.repoUrl))
 
 const entrypointAgentsNoticeTemplate = String.raw`# Ensure global AGENTS.md exists for container context
 AGENTS_PATH="__CODEX_HOME__/AGENTS.md"

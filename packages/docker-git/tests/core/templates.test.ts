@@ -140,6 +140,8 @@ describe("planFiles", () => {
         expect(entrypointSpec.contents).toContain("ISSUE_AGENTS_PATH=\"$TARGET_DIR/AGENTS.md\"")
         expect(entrypointSpec.contents).toContain("grep -qx \"AGENTS.md\" \"$EXCLUDE_PATH\"")
         expect(entrypointSpec.contents).toContain("docker_git_workspace_context_line()")
+        expect(entrypointSpec.contents).toContain("REPO_REF_VALUE=\"${REPO_REF:-issue-5}\"")
+        expect(entrypointSpec.contents).toContain("REPO_URL_VALUE=\"${REPO_URL:-https://github.com/org/repo.git}\"")
         expect(entrypointSpec.contents).toContain("Контекст workspace: issue #$ISSUE_ID_VALUE ($ISSUE_URL_VALUE)")
       }
     }))
@@ -171,6 +173,8 @@ describe("planFiles", () => {
       )
       expect(entrypointSpec !== undefined && entrypointSpec._tag === "File").toBe(true)
       if (entrypointSpec && entrypointSpec._tag === "File") {
+        expect(entrypointSpec.contents).toContain("REPO_REF_VALUE=\"${REPO_REF:-refs/pull/42/head}\"")
+        expect(entrypointSpec.contents).toContain("REPO_URL_VALUE=\"${REPO_URL:-https://github.com/org/repo.git}\"")
         expect(entrypointSpec.contents).toContain(
           "PR_ID=\"$(printf \"%s\" \"$REPO_REF\" | sed -nE 's#^refs/pull/([0-9]+)/head$#\\1#p')\""
         )
