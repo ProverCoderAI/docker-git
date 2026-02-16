@@ -28,6 +28,9 @@ pnpm run docker-git clone https://github.com/agiens/crm/issues/123 --force-env
 
 # Same, but also enable Playwright MCP + Chromium sidecar for Codex
 pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force --mcp-playwright
+
+# Experimental: generate project with Nix-based container flavor
+pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force --nix
 ```
 
 ## Parallel Issues / PRs
@@ -45,6 +48,16 @@ Force modes:
 Agent context for issue workspaces:
 - Global `${CODEX_HOME}/AGENTS.md` includes workspace path + issue/PR context.
 - For `issue-*` workspaces, docker-git creates `${TARGET_DIR}/AGENTS.md` (if missing) with issue context and auto-adds it to `.git/info/exclude`.
+
+## Container Base Flavor (Ubuntu/Nix)
+
+By default, generated projects use an Ubuntu-based Dockerfile (`--base-flavor ubuntu`).
+
+For migration experiments you can switch to Nix-based container setup:
+- `--base-flavor nix`
+- or shorthand `--nix`
+
+This keeps the same docker-git workflow (SSH, compose, entrypoint logic), but installs toolchain packages via `nix profile install` instead of `apt`.
 
 ## Projects Root Layout
 

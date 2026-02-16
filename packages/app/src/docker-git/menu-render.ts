@@ -29,6 +29,7 @@ export const renderStepLabel = (step: CreateStep, defaults: CreateInputs): strin
     Match.when("repoUrl", () => "Repo URL"),
     Match.when("repoRef", () => `Repo ref [${defaults.repoRef}]`),
     Match.when("outDir", () => `Output dir [${defaults.outDir}]`),
+    Match.when("baseFlavor", () => `Container base flavor [${defaults.baseFlavor}]`),
     Match.when("runUp", () => `Run docker compose up now? [${defaults.runUp ? "Y" : "n"}]`),
     Match.when(
       "mcpPlaywright",

@@ -1,11 +1,17 @@
-import { type CreateCommand, deriveRepoPathParts, resolveRepoInput } from "@effect-template/lib/core/domain"
+import { type CreateCommand } from "@effect-template/lib/core/domain"
 import { createProject } from "@effect-template/lib/usecases/actions"
 import type { AppError } from "@effect-template/lib/usecases/errors"
-import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import * as Path from "@effect/platform/Path"
 import { Effect, Either, Match, pipe } from "effect"
 import { parseArgs } from "./cli/parser.js"
 import { formatParseError, usageText } from "./cli/usage.js"
+import {
+  buildCreateArgs,
+  parseBaseFlavorDefault,
+  parseYesDefault,
+  resolveCreateInputs,
+  resolveDefaultOutDir
+} from "./menu-create-helpers.js"
 
 import { resetToMenu } from "./menu-shared.js"
 import {
@@ -42,94 +48,6 @@ type CreateContext = {
 
 type CreateReturnContext = CreateContext & {
   readonly view: Extract<ViewState, { readonly _tag: "Create" }>
-}
-
-export const buildCreateArgs = (input: CreateInputs): ReadonlyArray<string> => {
-  const args: Array<string> = ["create", "--repo-url", input.repoUrl, "--secrets-root", input.secretsRoot]
-  if (input.repoRef.length > 0) {
-    args.push("--repo-ref", input.repoRef)
-  }
-  args.push("--out-dir", input.outDir)
-  if (!input.runUp) {
-    args.push("--no-up")
-  }
-  if (input.enableMcpPlaywright) {
-    args.push("--mcp-playwright")
-  }
-  if (input.force) {
-    args.push("--force")
-  }
-  if (input.forceEnv) {
-    args.push("--force-env")
-  }
-  return args
-}
-
-const trimLeftSlash = (value: string): string => {
-  let start = 0
-  while (start < value.length && value[start] === "/") {
-    start += 1
-  }
-  return value.slice(start)
-}
-
-const trimRightSlash = (value: string): string => {
-  let end = value.length
-  while (end > 0 && value[end - 1] === "/") {
-    end -= 1
-  }
-  return value.slice(0, end)
-}
-
-const joinPath = (...parts: ReadonlyArray<string>): string => {
-  const cleaned = parts
-    .filter((part) => part.length > 0)
-    .map((part, index) => {
-      if (index === 0) {
-        return trimRightSlash(part)
-      }
-      return trimRightSlash(trimLeftSlash(part))
-    })
-  return cleaned.join("/")
-}
-
-const resolveDefaultOutDir = (cwd: string, repoUrl: string): string => {
-  const resolvedRepo = resolveRepoInput(repoUrl)
-  const baseParts = deriveRepoPathParts(resolvedRepo.repoUrl).pathParts
-  const projectParts = resolvedRepo.workspaceSuffix ? [...baseParts, resolvedRepo.workspaceSuffix] : baseParts
-  return joinPath(defaultProjectsRoot(cwd), ...projectParts)
-}
-
-export const resolveCreateInputs = (
-  cwd: string,
-  values: Partial<CreateInputs>
-): CreateInputs => {
-  const repoUrl = values.repoUrl ?? ""
-  const resolvedRepoRef = repoUrl.length > 0 ? resolveRepoInput(repoUrl).repoRef : undefined
-  const secretsRoot = values.secretsRoot ?? joinPath(defaultProjectsRoot(cwd), "secrets")
-  const outDir = values.outDir ?? (repoUrl.length > 0 ? resolveDefaultOutDir(cwd, repoUrl) : "")
-
-  return {
-    repoUrl,
-    repoRef: values.repoRef ?? resolvedRepoRef ?? "main",
-    outDir,
-    secretsRoot,
-    runUp: values.runUp !== false,
-    enableMcpPlaywright: values.enableMcpPlaywright === true,
-    force: values.force === true,
-    forceEnv: values.forceEnv === true
-  }
-}
-
-const parseYesDefault = (input: string, fallback: boolean): boolean => {
-  const normalized = input.trim().toLowerCase()
-  if (normalized === "y" || normalized === "yes") {
-    return true
-  }
-  if (normalized === "n" || normalized === "no") {
-    return false
-  }
-  return fallback
 }
 
 const applyCreateCommand = (
@@ -194,6 +112,13 @@ const applyCreateStep = (input: {
     }),
     Match.when("outDir", () => {
       input.nextValues.outDir = input.buffer.length > 0 ? input.buffer : input.currentDefaults.outDir
+      return true
+    }),
+    Match.when("baseFlavor", () => {
+      input.nextValues.baseFlavor = parseBaseFlavorDefault(
+        input.buffer,
+        input.currentDefaults.baseFlavor
+      )
       return true
     }),
     Match.when("runUp", () => {
@@ -318,3 +243,5 @@ export const handleCreateInput = (
     context.setView({ ...view, buffer: view.buffer + input })
   }
 }
+
+export { buildCreateArgs, resolveCreateInputs } from "./menu-create-helpers.js"

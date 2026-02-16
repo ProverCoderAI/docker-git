@@ -34,6 +34,9 @@ const TemplateConfigSchema = Schema.Struct({
     default: () => defaultTemplateConfig.codexSharedAuthPath
   }),
   codexHome: Schema.String,
+  baseFlavor: Schema.optionalWith(Schema.Union(Schema.Literal("ubuntu"), Schema.Literal("nix")), {
+    default: () => defaultTemplateConfig.baseFlavor
+  }),
   enableMcpPlaywright: Schema.optionalWith(Schema.Boolean, {
     default: () => defaultTemplateConfig.enableMcpPlaywright
   }),

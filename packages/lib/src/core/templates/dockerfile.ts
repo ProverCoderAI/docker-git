@@ -1,7 +1,9 @@
 import type { TemplateConfig } from "../domain.js"
 import { renderDockerfilePrompt } from "../templates-prompt.js"
 
-const renderDockerfilePrelude = (): string =>
+type BaseFlavor = TemplateConfig["baseFlavor"]
+
+const renderDockerfilePreludeUbuntu = (): string =>
   `FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -17,7 +19,43 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
   && chmod 0440 /etc/sudoers.d/zz-all`
 
-const renderDockerfileNode = (): string =>
+const renderDockerfilePreludeNix = (): string =>
+  `FROM nixos/nix:latest
+
+ENV NIX_CONFIG="experimental-features = nix-command flakes"
+ENV PATH="/nix/var/nix/profiles/default/bin:$PATH"
+
+RUN nix profile install --profile /nix/var/nix/profiles/default \
+    nixpkgs#bash \
+    nixpkgs#bash-completion \
+    nixpkgs#cacert \
+    nixpkgs#curl \
+    nixpkgs#docker \
+    nixpkgs#gh \
+    nixpkgs#git \
+    nixpkgs#gnumake \
+    nixpkgs#ncurses \
+    nixpkgs#openssh \
+    nixpkgs#shadow \
+    nixpkgs#sudo \
+    nixpkgs#unzip \
+    nixpkgs#util-linux \
+    nixpkgs#xorg.xauth \
+    nixpkgs#zsh \
+    nixpkgs#zsh-autosuggestions
+
+# Keep path compatibility with existing entrypoint (/usr/bin/zsh, /usr/sbin/sshd)
+RUN mkdir -p /usr/bin /usr/sbin /etc/sudoers.d \
+  && ln -sf "$(command -v bash)" /usr/bin/bash \
+  && ln -sf "$(command -v zsh)" /usr/bin/zsh \
+  && ln -sf "$(command -v sshd)" /usr/sbin/sshd \
+  && printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
+  && chmod 0440 /etc/sudoers.d/zz-all`
+
+const renderDockerfilePrelude = (baseFlavor: BaseFlavor): string =>
+  baseFlavor === "nix" ? renderDockerfilePreludeNix() : renderDockerfilePreludeUbuntu()
+
+const renderDockerfileNodeUbuntu = (): string =>
   `# Tooling: Node 24 (NodeSource) + nvm
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
   && apt-get install -y --no-install-recommends nodejs \
@@ -29,6 +67,17 @@ RUN mkdir -p /usr/local/nvm \
   && curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 RUN printf "export NVM_DIR=/usr/local/nvm\\n[ -s /usr/local/nvm/nvm.sh ] && . /usr/local/nvm/nvm.sh\\n" \
   > /etc/profile.d/nvm.sh && chmod 0644 /etc/profile.d/nvm.sh`
+
+const renderDockerfileNodeNix = (): string =>
+  `# Tooling: Node 24 via nixpkgs
+RUN nix profile install --profile /nix/var/nix/profiles/default nixpkgs#nodejs_24 \
+  || nix profile install --profile /nix/var/nix/profiles/default nixpkgs#nodejs
+RUN node -v \
+  && npm -v \
+  && corepack --version`
+
+const renderDockerfileNode = (baseFlavor: BaseFlavor): string =>
+  baseFlavor === "nix" ? renderDockerfileNodeNix() : renderDockerfileNodeUbuntu()
 
 const renderDockerfileBunPrelude = (config: TemplateConfig): string =>
   `# Tooling: pnpm + Codex CLI + oh-my-opencode (bun)
@@ -167,9 +216,9 @@ ENTRYPOINT ["/entrypoint.sh"]`
 
 export const renderDockerfile = (config: TemplateConfig): string =>
   [
-    renderDockerfilePrelude(),
+    renderDockerfilePrelude(config.baseFlavor),
     renderDockerfilePrompt(),
-    renderDockerfileNode(),
+    renderDockerfileNode(config.baseFlavor),
     renderDockerfileBun(config),
     renderDockerfileOpenCode(),
     renderDockerfileGitleaks(),
