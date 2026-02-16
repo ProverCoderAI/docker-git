@@ -105,6 +105,7 @@ describe("prepareProjectFiles", () => {
         const entrypoint = yield* _(fs.readFileString(path.join(outDir, "entrypoint.sh")))
         const composeBefore = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
         expect(dockerfile).toContain("docker-compose-v2")
+        expect(dockerfile).toContain("gitleaks version")
         expect(entrypoint).toContain('DOCKER_GIT_HOME="/home/dev/.docker-git"')
         expect(entrypoint).toContain('SOURCE_SHARED_AUTH="/home/dev/.codex-shared/auth.json"')
         expect(entrypoint).toContain('OPENCODE_DATA_DIR="/home/dev/.local/share/opencode"')

@@ -46,6 +46,21 @@ RUN curl -fsSL https://opencode.ai/install | HOME=/usr/local bash -s -- --no-mod
 RUN ln -sf /usr/local/.opencode/bin/opencode /usr/local/bin/opencode
 RUN opencode --version`
 
+const gitleaksVersion = "8.28.0"
+
+const renderDockerfileGitleaks = (): string =>
+  `# Tooling: gitleaks (secret scanner for .knowledge/.knowlenge hooks)
+RUN ARCH="$(uname -m)" \
+  && case "$ARCH" in \
+      x86_64|amd64) GITLEAKS_ARCH="x64" ;; \
+      aarch64|arm64) GITLEAKS_ARCH="arm64" ;; \
+      *) echo "Unsupported arch for gitleaks: $ARCH" >&2; exit 1 ;; \
+    esac \
+  && curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${gitleaksVersion}/gitleaks_${gitleaksVersion}_linux_$GITLEAKS_ARCH.tar.gz" \
+    | tar -xz -C /usr/local/bin gitleaks \
+  && chmod +x /usr/local/bin/gitleaks \
+  && gitleaks version`
+
 const dockerfilePlaywrightMcpBlock = String.raw`RUN npm install -g @playwright/mcp@latest
 
 # docker-git: wrapper that converts a CDP HTTP endpoint into a usable WS endpoint
@@ -157,6 +172,7 @@ export const renderDockerfile = (config: TemplateConfig): string =>
     renderDockerfileNode(),
     renderDockerfileBun(config),
     renderDockerfileOpenCode(),
+    renderDockerfileGitleaks(),
     renderDockerfileUsers(config),
     renderDockerfileWorkspace(config)
   ].join("\n\n")
