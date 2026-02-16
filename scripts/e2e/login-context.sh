@@ -8,8 +8,11 @@ ROOT_BASE="${DOCKER_GIT_E2E_ROOT_BASE:-$REPO_ROOT/.docker-git/e2e-root}"
 mkdir -p "$ROOT_BASE"
 ROOT="$(mktemp -d "$ROOT_BASE/login-context.XXXXXX")"
 # docker-git containers may `chown -R` the `.docker-git` bind mount to UID 1000.
-# `mktemp -d` creates 0700 dirs; if ownership changes, the host runner may lose access.
-chmod 0755 "$ROOT"
+# Use world-writable permissions so the host runner can still create files
+# even if ownership changes inside the container.
+chmod 0777 "$ROOT"
+mkdir -p "$ROOT/e2e"
+chmod 0777 "$ROOT/e2e"
 KEEP="${KEEP:-0}"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
@@ -96,9 +99,10 @@ run_case() {
   local service_name="dg-e2e-login-${case_name}-${RUN_ID}"
   local volume_name="dg-e2e-login-${case_name}-${RUN_ID}-home"
   local ssh_port="$(( (RANDOM % 1000) + 21000 ))"
-  local login_log="$ROOT/login-${case_name}.log"
+  local login_log="/tmp/docker-git-login-context-${RUN_ID}-${case_name}.log"
 
   mkdir -p "$out_dir/.orch/env"
+  chmod 0777 "$out_dir" "$out_dir/.orch" "$out_dir/.orch/env"
   cat > "$out_dir/.orch/env/project.env" <<'EOF_ENV'
 # docker-git project env (e2e)
 CODEX_AUTO_UPDATE=0
@@ -123,6 +127,8 @@ EOF_ENV
   )
 
   wait_for_ssh "$ssh_port" || fail "ssh port did not open for $case_name (port: $ssh_port)"
+
+  rm -f "$login_log"
 
   set +e
   timeout 30s bash -lc "printf 'exit\n' | ssh -i \"$ROOT/dev_ssh_key\" -tt -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p \"$ssh_port\" dev@localhost" > "$login_log" 2>&1
