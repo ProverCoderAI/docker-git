@@ -1,24 +1,18 @@
+import { runDockerPsNames } from "@effect-template/lib/shell/docker"
 import { type InputCancelledError, InputReadError } from "@effect-template/lib/shell/errors"
 import { type AppError, renderError } from "@effect-template/lib/usecases/errors"
+import { listProjectItems } from "@effect-template/lib/usecases/projects"
 import { NodeContext } from "@effect/platform-node"
 import { Effect, pipe } from "effect"
 import { render, useApp, useInput } from "ink"
 import React, { useEffect, useMemo, useState } from "react"
 
-import { handleCreateInput, resolveCreateInputs } from "./menu-create.js"
-import { handleMenuInput } from "./menu-menu.js"
+import { resolveCreateInputs } from "./menu-create.js"
+import { handleUserInput, type InputStage } from "./menu-input-handler.js"
 import { renderCreate, renderMenu, renderSelect, renderStepLabel } from "./menu-render.js"
-import { handleSelectInput } from "./menu-select.js"
 import { leaveTui, resumeTui } from "./menu-shared.js"
-import {
-  createSteps,
-  type MenuEnv,
-  type MenuKeyInput,
-  type MenuRunner,
-  type MenuState,
-  type MenuViewContext,
-  type ViewState
-} from "./menu-types.js"
+import { defaultMenuStartupSnapshot, resolveMenuStartupSnapshot } from "./menu-startup.js"
+import { createSteps, type MenuEnv, type MenuState, type ViewState } from "./menu-types.js"
 
 // CHANGE: keep menu state in the TUI layer
 // WHY: provide a dynamic interface with live selection and inputs
@@ -58,115 +52,11 @@ const useRunner = (
   return { runEffect }
 }
 
-type InputStage = "cold" | "active"
-
-type MenuInputContext = MenuViewContext & {
-  readonly busy: boolean
-  readonly view: ViewState
-  readonly inputStage: InputStage
-  readonly setInputStage: (stage: InputStage) => void
-  readonly selected: number
-  readonly setSelected: (update: (value: number) => number) => void
-  readonly setSkipInputs: (update: (value: number) => number) => void
-  readonly sshActive: boolean
-  readonly setSshActive: (active: boolean) => void
-  readonly state: MenuState
-  readonly runner: MenuRunner
-  readonly exit: () => void
-}
-
-const activateInput = (
-  input: string,
-  key: Pick<MenuKeyInput, "upArrow" | "downArrow" | "return">,
-  context: Pick<MenuInputContext, "inputStage" | "setInputStage">
-): { readonly activated: boolean; readonly allowProcessing: boolean } => {
-  if (context.inputStage === "active") {
-    return { activated: false, allowProcessing: true }
-  }
-
-  if (input.trim().length > 0) {
-    context.setInputStage("active")
-    return { activated: true, allowProcessing: true }
-  }
-
-  if (key.upArrow || key.downArrow || key.return) {
-    context.setInputStage("active")
-    return { activated: true, allowProcessing: false }
-  }
-
-  if (input.length > 0) {
-    context.setInputStage("active")
-    return { activated: true, allowProcessing: true }
-  }
-
-  return { activated: false, allowProcessing: false }
-}
-
-const shouldHandleMenuInput = (
-  input: string,
-  key: Pick<MenuKeyInput, "upArrow" | "downArrow" | "return">,
-  context: Pick<MenuInputContext, "inputStage" | "setInputStage">
-): boolean => {
-  const activation = activateInput(input, key, context)
-  if (activation.activated && !activation.allowProcessing) {
-    return false
-  }
-  return activation.allowProcessing
-}
-
-const handleUserInput = (
-  input: string,
-  key: MenuKeyInput,
-  context: MenuInputContext
-) => {
-  if (context.busy) {
-    return
-  }
-  if (context.sshActive) {
-    return
-  }
-  if (context.view._tag === "Menu") {
-    if (!shouldHandleMenuInput(input, key, context)) {
-      return
-    }
-    handleMenuInput(input, key, {
-      selected: context.selected,
-      setSelected: context.setSelected,
-      state: context.state,
-      runner: context.runner,
-      exit: context.exit,
-      setView: context.setView,
-      setMessage: context.setMessage
-    })
-    return
-  }
-
-  if (context.view._tag === "Create") {
-    handleCreateInput(input, key, context.view, {
-      state: context.state,
-      setView: context.setView,
-      setMessage: context.setMessage,
-      runner: context.runner,
-      setActiveDir: context.setActiveDir
-    })
-    return
-  }
-
-  handleSelectInput(input, key, context.view, {
-    setView: context.setView,
-    setMessage: context.setMessage,
-    setActiveDir: context.setActiveDir,
-    activeDir: context.state.activeDir,
-    runner: context.runner,
-    setSshActive: context.setSshActive,
-    setSkipInputs: context.setSkipInputs
-  })
-}
-
 type RenderContext = {
   readonly state: MenuState
   readonly view: ViewState
   readonly activeDir: string | null
+  readonly runningDockerGitContainers: number
   readonly selected: number
   readonly busy: boolean
   readonly message: string | null
@@ -174,7 +64,14 @@ type RenderContext = {
 
 const renderView = (context: RenderContext) => {
   if (context.view._tag === "Menu") {
-    return renderMenu(context.state.cwd, context.activeDir, context.selected, context.busy, context.message)
+    return renderMenu({
+      cwd: context.state.cwd,
+      activeDir: context.activeDir,
+      runningDockerGitContainers: context.runningDockerGitContainers,
+      selected: context.selected,
+      busy: context.busy,
+      message: context.message
+    })
   }
 
   if (context.view._tag === "Create") {
@@ -198,6 +95,7 @@ const renderView = (context: RenderContext) => {
 
 const useMenuState = () => {
   const [activeDir, setActiveDir] = useState<string | null>(null)
+  const [runningDockerGitContainers, setRunningDockerGitContainers] = useState(0)
   const [selected, setSelected] = useState(0)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -213,6 +111,8 @@ const useMenuState = () => {
   return {
     activeDir,
     setActiveDir,
+    runningDockerGitContainers,
+    setRunningDockerGitContainers,
     selected,
     setSelected,
     busy,
@@ -245,6 +145,38 @@ const useReadyGate = (setReady: (ready: boolean) => void) => {
   }, [setReady])
 }
 
+const useStartupSnapshot = (
+  setActiveDir: (value: string | null) => void,
+  setRunningDockerGitContainers: (value: number) => void,
+  setMessage: (message: string | null) => void
+) => {
+  useEffect(() => {
+    let cancelled = false
+
+    const startup = pipe(
+      Effect.all([listProjectItems, runDockerPsNames(process.cwd())]),
+      Effect.map(([items, runningNames]) => resolveMenuStartupSnapshot(items, runningNames)),
+      Effect.catchAll(() => Effect.succeed(defaultMenuStartupSnapshot())),
+      Effect.provide(NodeContext.layer)
+    )
+
+    void Effect.runPromise(startup).then((snapshot) => {
+      if (cancelled) {
+        return
+      }
+      setRunningDockerGitContainers(snapshot.runningDockerGitContainers)
+      setMessage(snapshot.message)
+      if (snapshot.activeDir !== null) {
+        setActiveDir(snapshot.activeDir)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [setActiveDir, setMessage, setRunningDockerGitContainers])
+}
+
 const useSigintGuard = (exit: () => void, sshActive: boolean) => {
   useEffect(() => {
     const handleSigint = () => {
@@ -265,6 +197,7 @@ const TuiApp = () => {
   const menu = useMenuState()
 
   useReadyGate(menu.setReady)
+  useStartupSnapshot(menu.setActiveDir, menu.setRunningDockerGitContainers, menu.setMessage)
   useSigintGuard(exit, menu.sshActive)
 
   useInput(
@@ -304,6 +237,7 @@ const TuiApp = () => {
     state: menu.state,
     view: menu.view,
     activeDir: menu.activeDir,
+    runningDockerGitContainers: menu.runningDockerGitContainers,
     selected: menu.selected,
     busy: menu.busy,
     message: menu.message
