@@ -18,6 +18,7 @@ export interface TemplateConfig {
   readonly codexAuthPath: string
   readonly codexSharedAuthPath: string
   readonly codexHome: string
+  readonly baseFlavor: "ubuntu" | "nix"
   readonly enableMcpPlaywright: boolean
   readonly pnpmVersion: string
 }
@@ -185,7 +186,9 @@ export type Command =
   | StateCommand
   | AuthCommand
 
-export const defaultTemplateConfig = {
+type DefaultTemplateConfig = Omit<TemplateConfig, "repoUrl">
+
+export const defaultTemplateConfig: DefaultTemplateConfig = {
   containerName: "dev-ssh",
   serviceName: "dev",
   sshUser: "dev",
@@ -199,6 +202,7 @@ export const defaultTemplateConfig = {
   codexAuthPath: "./.docker-git/.orch/auth/codex",
   codexSharedAuthPath: "./.docker-git/.orch/auth/codex",
   codexHome: "/home/dev/.codex",
+  baseFlavor: "ubuntu",
   enableMcpPlaywright: false,
   pnpmVersion: "10.27.0"
 }

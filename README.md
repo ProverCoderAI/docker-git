@@ -22,7 +22,20 @@ pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force
 
 # Same, but also enable Playwright MCP + Chromium sidecar for Codex
 pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force --mcp-playwright
+
+# Experimental: generate project with Nix-based container flavor
+pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force --nix
 ```
+
+## Container Base Flavor (Ubuntu/Nix)
+
+By default, generated projects use an Ubuntu-based Dockerfile (`--base-flavor ubuntu`).
+
+For migration experiments you can switch to Nix-based container setup:
+- `--base-flavor nix`
+- or shorthand `--nix`
+
+This keeps the same docker-git workflow (SSH, compose, entrypoint logic), but installs toolchain packages via `nix profile install` instead of `apt`.
 
 ## Projects Root Layout
 

@@ -30,6 +30,20 @@ const parsePort = (value: string): Either.Either<number, ParseError> => {
   return Either.right(parsed)
 }
 
+const parseBaseFlavor = (
+  value: string | undefined
+): Either.Either<"ubuntu" | "nix", ParseError> => {
+  const candidate = value?.trim() ?? defaultTemplateConfig.baseFlavor
+  if (candidate === "ubuntu" || candidate === "nix") {
+    return Either.right(candidate)
+  }
+  return Either.left({
+    _tag: "InvalidOption",
+    option: "--base-flavor",
+    reason: `expected one of: ubuntu, nix (got: ${candidate})`
+  })
+}
+
 export const nonEmpty = (
   option: string,
   value: string | undefined,
@@ -167,6 +181,7 @@ export const buildCreateCommand = (
     const paths = yield* _(resolvePaths(raw, repo.repoSlug, repo.repoPath))
     const runUp = raw.up ?? true
     const force = raw.force ?? false
+    const baseFlavor = yield* _(parseBaseFlavor(raw.baseFlavor))
     const enableMcpPlaywright = raw.enableMcpPlaywright ?? false
 
     return {
@@ -190,6 +205,7 @@ export const buildCreateCommand = (
         codexAuthPath: paths.codexAuthPath,
         codexSharedAuthPath: paths.codexSharedAuthPath,
         codexHome: paths.codexHome,
+        baseFlavor,
         enableMcpPlaywright,
         pnpmVersion: defaultTemplateConfig.pnpmVersion
       }

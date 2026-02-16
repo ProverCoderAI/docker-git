@@ -20,6 +20,7 @@ interface ValueOptionSpec {
     | "envProjectPath"
     | "codexAuthPath"
     | "codexHome"
+    | "baseFlavor"
     | "label"
     | "token"
     | "scopes"
@@ -46,6 +47,7 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--env-project", key: "envProjectPath" },
   { flag: "--codex-auth", key: "codexAuthPath" },
   { flag: "--codex-home", key: "codexHome" },
+  { flag: "--base-flavor", key: "baseFlavor" },
   { flag: "--label", key: "label" },
   { flag: "--token", key: "token" },
   { flag: "--scopes", key: "scopes" },
@@ -66,6 +68,8 @@ const booleanFlagUpdaters: Readonly<Record<string, (raw: RawOptions) => RawOptio
   "--up": (raw) => ({ ...raw, up: true }),
   "--no-up": (raw) => ({ ...raw, up: false }),
   "--force": (raw) => ({ ...raw, force: true }),
+  "--nix": (raw) => ({ ...raw, baseFlavor: "nix" }),
+  "--ubuntu": (raw) => ({ ...raw, baseFlavor: "ubuntu" }),
   "--mcp-playwright": (raw) => ({ ...raw, enableMcpPlaywright: true }),
   "--no-mcp-playwright": (raw) => ({ ...raw, enableMcpPlaywright: false }),
   "--web": (raw) => ({ ...raw, authWeb: true }),
@@ -87,6 +91,7 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   envProjectPath: (raw, value) => ({ ...raw, envProjectPath: value }),
   codexAuthPath: (raw, value) => ({ ...raw, codexAuthPath: value }),
   codexHome: (raw, value) => ({ ...raw, codexHome: value }),
+  baseFlavor: (raw, value) => ({ ...raw, baseFlavor: value }),
   label: (raw, value) => ({ ...raw, label: value }),
   token: (raw, value) => ({ ...raw, token: value }),
   scopes: (raw, value) => ({ ...raw, scopes: value }),

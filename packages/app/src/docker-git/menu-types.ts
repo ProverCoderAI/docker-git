@@ -47,6 +47,7 @@ export type CreateInputs = {
   readonly repoRef: string
   readonly outDir: string
   readonly secretsRoot: string
+  readonly baseFlavor: "ubuntu" | "nix"
   readonly runUp: boolean
   readonly enableMcpPlaywright: boolean
   readonly force: boolean
@@ -56,6 +57,7 @@ export type CreateStep =
   | "repoUrl"
   | "repoRef"
   | "outDir"
+  | "baseFlavor"
   | "runUp"
   | "mcpPlaywright"
   | "force"
@@ -64,6 +66,7 @@ export const createSteps: ReadonlyArray<CreateStep> = [
   "repoUrl",
   "repoRef",
   "outDir",
+  "baseFlavor",
   "runUp",
   "mcpPlaywright",
   "force"

@@ -31,6 +31,7 @@ const expectCreateCommand = (
 const expectCreateDefaults = (command: CreateCommand) => {
   expect(command.config.repoUrl).toBe("https://github.com/org/repo.git")
   expect(command.config.repoRef).toBe(defaultTemplateConfig.repoRef)
+  expect(command.config.baseFlavor).toBe(defaultTemplateConfig.baseFlavor)
   expect(command.outDir).toBe(".docker-git/org/repo")
   expect(command.runUp).toBe(true)
 }
@@ -66,6 +67,31 @@ describe("parseArgs", () => {
   it.effect("parses clone branch alias", () =>
     expectCreateCommand(["clone", "https://github.com/org/repo.git", "--branch", "feature-x"], (command) => {
       expect(command.config.repoRef).toBe("feature-x")
+    }))
+
+  it.effect("parses nix shorthand flag", () =>
+    expectCreateCommand(["clone", "https://github.com/org/repo.git", "--nix"], (command) => {
+      expect(command.config.baseFlavor).toBe("nix")
+    }))
+
+  it.effect("parses explicit base flavor", () =>
+    expectCreateCommand(
+      ["clone", "https://github.com/org/repo.git", "--base-flavor", "ubuntu"],
+      (command) => {
+        expect(command.config.baseFlavor).toBe("ubuntu")
+      }
+    ))
+
+  it.effect("fails on unsupported base flavor value", () =>
+    Effect.sync(() => {
+      Either.match(parseArgs(["clone", "https://github.com/org/repo.git", "--base-flavor", "guix"]), {
+        onLeft: (error) => {
+          expect(error._tag).toBe("InvalidOption")
+        },
+        onRight: () => {
+          throw new Error("expected parse error")
+        }
+      })
     }))
 
   it.effect("parses GitHub tree url as repo + ref", () =>

@@ -22,6 +22,7 @@ describe("planFiles", () => {
         codexAuthPath: "./.orch/auth/codex",
         codexSharedAuthPath: "../../.orch/auth/codex",
         codexHome: "/home/dev/.codex",
+        baseFlavor: "ubuntu",
         enableMcpPlaywright: false,
         pnpmVersion: "10.27.0"
       }
@@ -80,6 +81,7 @@ describe("planFiles", () => {
         codexAuthPath: "./.orch/auth/codex",
         codexSharedAuthPath: "../../.orch/auth/codex",
         codexHome: "/home/dev/.codex",
+        baseFlavor: "ubuntu",
         enableMcpPlaywright: true,
         pnpmVersion: "10.27.0"
       }
@@ -94,5 +96,39 @@ describe("planFiles", () => {
 
       expect(browserDockerfile !== undefined && browserDockerfile._tag === "File").toBe(true)
       expect(browserScript !== undefined && browserScript._tag === "File").toBe(true)
+    }))
+
+  it.effect("renders Nix flavor Dockerfile when requested", () =>
+    Effect.sync(() => {
+      const config: TemplateConfig = {
+        containerName: "dg-test",
+        serviceName: "dg-test",
+        sshUser: "dev",
+        sshPort: 2222,
+        repoUrl: "https://github.com/org/repo.git",
+        repoRef: "main",
+        targetDir: "/home/dev/app",
+        volumeName: "dg-test-home",
+        authorizedKeysPath: "./authorized_keys",
+        envGlobalPath: "./.orch/env/global.env",
+        envProjectPath: "./.orch/env/project.env",
+        codexAuthPath: "./.orch/auth/codex",
+        codexSharedAuthPath: "../../.orch/auth/codex",
+        codexHome: "/home/dev/.codex",
+        baseFlavor: "nix",
+        enableMcpPlaywright: false,
+        pnpmVersion: "10.27.0"
+      }
+
+      const specs = planFiles(config)
+      const dockerfileSpec = specs.find(
+        (spec) => spec._tag === "File" && spec.relativePath === "Dockerfile"
+      )
+      expect(dockerfileSpec !== undefined && dockerfileSpec._tag === "File").toBe(true)
+      if (dockerfileSpec && dockerfileSpec._tag === "File") {
+        expect(dockerfileSpec.contents).toContain("FROM nixos/nix:latest")
+        expect(dockerfileSpec.contents).toContain("nix profile install --profile /nix/var/nix/profiles/default")
+        expect(dockerfileSpec.contents).not.toContain("FROM ubuntu:24.04")
+      }
     }))
 })
