@@ -6,13 +6,14 @@ REPO_ROOT="$(cd "$HOOK_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 node scripts/split-knowledge-large-files.js
-if [ -d ".knowledge" ]; then
-  git add -A .knowledge
-fi
-
-if [ -d ".knowlenge" ]; then
-  git add -A .knowlenge
-fi
+while IFS= read -r -d '' knowledge_dir; do
+  git add -A -- "$knowledge_dir"
+done < <(
+  find . -type d \
+    \( -name ".knowledge" -o -name ".knowlenge" \) \
+    -not -path "*/.git/*" \
+    -print0
+)
 
 MAX_BYTES=$((99 * 1000 * 1000))
 too_large=()

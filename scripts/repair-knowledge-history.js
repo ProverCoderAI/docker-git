@@ -51,11 +51,11 @@ if (!Number.isFinite(count) || count <= 0) {
   process.exit(0);
 }
 
-// Run splitter after each commit is replayed, and amend only if it produced changes.
+// Run splitter + secret redaction after each commit is replayed, then amend if needed.
 const execCmd = [
   `node scripts/split-knowledge-large-files.js`,
-  `if [ -d .knowledge ]; then git add -A .knowledge; fi`,
-  `if [ -d .knowlenge ]; then git add -A .knowlenge; fi`,
+  `while IFS= read -r -d '' knowledge_dir; do git add -A -- "$knowledge_dir"; done < <(find . -type d \\( -name ".knowledge" -o -name ".knowlenge" \\) -not -path "*/.git/*" -print0)`,
+  `bash scripts/pre-commit-secret-guard.sh`,
   `if ! git diff --cached --quiet; then git commit --amend --no-edit --no-verify; fi`,
 ].join(" && ");
 

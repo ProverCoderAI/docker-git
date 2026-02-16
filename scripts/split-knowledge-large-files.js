@@ -4,9 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const MAX_BYTES = 99 * 1000 * 1000;
-const ROOTS = [".knowledge", ".knowlenge"].filter((dir) =>
-  fs.existsSync(path.resolve(dir))
-);
+const KNOWLEDGE_DIR_NAMES = new Set([".knowledge", ".knowlenge"]);
+const WALK_IGNORE_DIR_NAMES = new Set([".git", "node_modules"]);
 const MANIFEST_SUFFIX = ".chunks.json";
 const CHUNK_BYTES = 1024 * 1024;
 
@@ -18,6 +17,29 @@ const isManifest = (fileName) => fileName.endsWith(MANIFEST_SUFFIX);
 
 const getPartRegex = (baseName) =>
   new RegExp(`^${escapeRegExp(baseName)}\\.part\\d+$`);
+
+const findKnowledgeRoots = (startDir) => {
+  const result = [];
+
+  const visit = (dir) => {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (WALK_IGNORE_DIR_NAMES.has(entry.name)) continue;
+
+      const fullPath = path.join(dir, entry.name);
+      if (KNOWLEDGE_DIR_NAMES.has(entry.name)) {
+        result.push(fullPath);
+        continue;
+      }
+
+      visit(fullPath);
+    }
+  };
+
+  visit(startDir);
+  return result;
+};
 
 const removeSplitArtifacts = (filePath) => {
   const dir = path.dirname(filePath);
@@ -121,6 +143,8 @@ const splitIfLarge = (filePath) => {
   console.log(`[knowledge-split] Split ${filePath} -> ${partsCount} part(s)`);
 };
 
+const ROOTS = findKnowledgeRoots(process.cwd());
+
 for (const root of ROOTS) {
-  walk(path.resolve(root));
+  walk(root);
 }

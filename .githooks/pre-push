@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# NOTE: pre-commit splits large .knowledge/.knowlenge files before they land in new commits.
-# pre-push is a safety net: it prevents pushing any commit range containing >99MB blobs.
+# NOTE: pre-commit splits/redacts knowledge files before they land in new commits.
+# pre-push is a safety net: it prevents pushing commit ranges containing oversized or secret blobs
+# under any nested .knowledge/.knowlenge path.
 
 if [ "${DOCKER_GIT_SKIP_KNOWLEDGE_GUARD:-}" = "1" ]; then
   exit 0
 fi
 
 node scripts/pre-push-knowledge-guard.js "$@"
-
