@@ -42,8 +42,10 @@ const countContainerSshSessions = (
       [0],
       (exitCode) => ({ _tag: "CommandFailedError", command: "docker exec who -u", exitCode })
     ),
-    Effect.map((raw) => parseSshSessionCount(raw)),
-    Effect.catchAll(() => Effect.succeed(0))
+    Effect.match({
+      onFailure: () => 0,
+      onSuccess: (raw) => parseSshSessionCount(raw)
+    })
   )
 
 // CHANGE: enrich select items with runtime state and SSH session counts
@@ -80,7 +82,10 @@ export const loadRuntimeByProject = (
       )
     ),
     Effect.map((entries) => toRuntimeMap(entries)),
-    Effect.catchAll(() => Effect.succeed(emptyRuntimeByProject()))
+    Effect.match({
+      onFailure: () => emptyRuntimeByProject(),
+      onSuccess: (runtimeByProject) => runtimeByProject
+    })
   )
 
 export const runtimeForSelection = (
