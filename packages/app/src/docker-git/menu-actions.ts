@@ -13,7 +13,7 @@ import { runDockerComposeUpWithPortCheck } from "@effect-template/lib/usecases/p
 import { Effect, Match, pipe } from "effect"
 
 import { startCreateView } from "./menu-create.js"
-import { loadSelectView } from "./menu-select.js"
+import { loadSelectView } from "./menu-select-load.js"
 import { resumeTui, suspendTui } from "./menu-shared.js"
 import { type MenuEnv, type MenuRunner, type MenuState, type ViewState } from "./menu-types.js"
 

@@ -18,7 +18,30 @@ const formatRepoRef = (repoRef: string): string => {
   return trimmed.length > 0 ? trimmed : "main"
 }
 
-const stoppedRuntime = (): SelectProjectRuntime => ({ running: false, sshSessions: 0 })
+const stoppedRuntime = (): SelectProjectRuntime => ({
+  running: false,
+  sshSessions: 0,
+  startedAtIso: null,
+  startedAtEpochMs: null
+})
+
+const pad2 = (value: number): string => value.toString().padStart(2, "0")
+
+const formatUtcTimestamp = (epochMs: number, withSeconds: boolean): string => {
+  const date = new Date(epochMs)
+  const seconds = withSeconds ? `:${pad2(date.getUTCSeconds())}` : ""
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())} ${
+    pad2(
+      date.getUTCHours()
+    )
+  }:${pad2(date.getUTCMinutes())}${seconds} UTC`
+}
+
+const renderStartedAtCompact = (runtime: SelectProjectRuntime): string =>
+  runtime.startedAtEpochMs === null ? "-" : formatUtcTimestamp(runtime.startedAtEpochMs, false)
+
+const renderStartedAtDetailed = (runtime: SelectProjectRuntime): string =>
+  runtime.startedAtEpochMs === null ? "not available" : formatUtcTimestamp(runtime.startedAtEpochMs, true)
 
 const runtimeForProject = (
   runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>,
@@ -26,7 +49,11 @@ const runtimeForProject = (
 ): SelectProjectRuntime => runtimeByProject[item.projectDir] ?? stoppedRuntime()
 
 const renderRuntimeLabel = (runtime: SelectProjectRuntime): string =>
-  `${runtime.running ? "running" : "stopped"}, ssh=${runtime.sshSessions}`
+  `${runtime.running ? "running" : "stopped"}, ssh=${runtime.sshSessions}, started=${
+    renderStartedAtCompact(
+      runtime
+    )
+  }`
 
 export const selectTitle = (purpose: SelectPurpose): string =>
   Match.value(purpose).pipe(
@@ -61,9 +88,10 @@ export const buildSelectLabels = (
   items.map((item, index) => {
     const prefix = index === selected ? ">" : " "
     const refLabel = formatRepoRef(item.repoRef)
+    const runtime = runtimeForProject(runtimeByProject, item)
     const runtimeSuffix = purpose === "Down" || purpose === "Delete"
-      ? ` [${renderRuntimeLabel(runtimeForProject(runtimeByProject, item))}]`
-      : ""
+      ? ` [${renderRuntimeLabel(runtime)}]`
+      : ` [started=${renderStartedAtCompact(runtime)}]`
     return `${prefix} ${index + 1}. ${item.displayName} (${refLabel})${runtimeSuffix}`
   })
 
@@ -101,6 +129,7 @@ const commonRows = (
   el(Text, { wrap: "wrap" }, `Project directory: ${context.item.projectDir}`),
   el(Text, { wrap: "wrap" }, `Container: ${context.item.containerName}`),
   el(Text, { wrap: "wrap" }, `State: ${context.runtime.running ? "running" : "stopped"}`),
+  el(Text, { wrap: "wrap" }, `Started at: ${renderStartedAtDetailed(context.runtime)}`),
   el(Text, { wrap: "wrap" }, `SSH sessions now: ${context.sshSessionsLabel}`)
 ]
 

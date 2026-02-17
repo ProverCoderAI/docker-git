@@ -86,6 +86,8 @@ export type ViewState =
 export type SelectProjectRuntime = {
   readonly running: boolean
   readonly sshSessions: number
+  readonly startedAtIso: string | null
+  readonly startedAtEpochMs: number | null
 }
 
 export const menuItems: ReadonlyArray<{ readonly id: MenuAction; readonly label: string }> = [
