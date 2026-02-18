@@ -7,6 +7,7 @@ import * as Fiber from "effect/Fiber"
 import type * as Scope from "effect/Scope"
 import * as Stream from "effect/Stream"
 import { writeSync } from "node:fs"
+import * as Readline from "node:readline"
 
 import { AuthError, CommandFailedError } from "../shell/errors.js"
 
@@ -54,7 +55,7 @@ const oauthCodeFromEnv = (): string | null => {
 }
 
 const ensureInteractiveStdin = (): Effect.Effect<void, AuthError> =>
-  process.stdin.isTTY && process.stdout.isTTY && typeof process.stdin.setRawMode === "function"
+  process.stdin.isTTY && process.stdout.isTTY
     ? Effect.void
     : Effect.fail(
       new AuthError({
@@ -63,52 +64,55 @@ const ensureInteractiveStdin = (): Effect.Effect<void, AuthError> =>
       })
     )
 
-const readHiddenLine = (prompt: string): Effect.Effect<string, AuthError> =>
+const readLine = (prompt: string): Effect.Effect<string, AuthError> =>
   Effect.async<string, AuthError>((resume) => {
-    const previousRaw = process.stdin.isRaw
-    let buffer = ""
+    // We intentionally use readline (not raw mode) so paste works reliably in common terminals.
+    const hasRawMode = process.stdin.isTTY && typeof process.stdin.setRawMode === "function"
+    const previousRaw = hasRawMode ? process.stdin.isRaw : undefined
+    if (hasRawMode) {
+      process.stdin.setRawMode(false)
+    }
+
+    const rl = Readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: true
+    })
+
+    let settled = false
 
     const cleanup = () => {
-      process.stdin.off("data", onData)
-      process.stdin.setRawMode(previousRaw)
-    }
-
-    const done = (value: string) => {
-      cleanup()
-      writeSync(1, "\n")
-      resume(Effect.succeed(value))
-    }
-
-    const fail = (message: string) => {
-      cleanup()
-      resume(Effect.fail(new AuthError({ message })))
-    }
-
-    const onData = (chunk: Buffer | string) => {
-      const text = typeof chunk === "string" ? chunk : chunk.toString("utf8")
-      for (const ch of text) {
-        if (ch === "\u0003") {
-          fail("Claude auth login cancelled.")
-          return
-        }
-        if (ch === "\r" || ch === "\n") {
-          done(buffer)
-          return
-        }
-        if (ch === "\u007F") {
-          buffer = buffer.slice(0, Math.max(0, buffer.length - 1))
-          continue
-        }
-        buffer += ch
+      rl.removeAllListeners()
+      rl.close()
+      if (hasRawMode && previousRaw !== undefined) {
+        process.stdin.setRawMode(previousRaw)
       }
     }
 
+    rl.on("SIGINT", () => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resume(Effect.fail(new AuthError({ message: "Claude auth login cancelled." })))
+    })
+
     writeSync(1, prompt)
-    process.stdin.setRawMode(true)
-    process.stdin.resume()
-    process.stdin.on("data", onData)
+    rl.question("", (answer) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resume(Effect.succeed(answer))
+    })
 
     return Effect.sync(() => {
+      if (settled) {
+        return
+      }
+      settled = true
       cleanup()
     })
   })
@@ -120,8 +124,8 @@ const resolveOauthCodeInput = (info: ClaudeAuthorizeInfo): Effect.Effect<string,
   }
   return ensureInteractiveStdin().pipe(
     Effect.zipRight(
-      readHiddenLine(
-        "\n[docker-git] Paste the Authentication Code from the browser and press Enter (input hidden; Ctrl+C to cancel):\n> "
+      readLine(
+        "\n[docker-git] Paste the Authentication Code from the browser and press Enter (Ctrl+C to cancel):\n> "
       )
     ),
     Effect.map((value) => normalizeOauthPaste(value, info.state)),
@@ -252,7 +256,15 @@ const finishClaudeLogin = (
     return ensureExitOk(outcome.exitCode)
   }
   return resolveOauthCodeInput(outcome.info).pipe(
-    Effect.flatMap((code) => feedOauthCode(proc, code)),
+    Effect.flatMap((code) =>
+      feedOauthCode(proc, code).pipe(
+        Effect.zipRight(
+          Effect.sync(() => {
+            writeSync(1, "[docker-git] Code submitted, waiting for Claude...\n")
+          })
+        )
+      )
+    ),
     Effect.zipRight(proc.exitCode.pipe(Effect.map(Number), Effect.flatMap((exitCode) => ensureExitOk(exitCode)))),
     Effect.asVoid
   )
