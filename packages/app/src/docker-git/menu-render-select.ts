@@ -5,7 +5,7 @@ import type React from "react"
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import type { SelectProjectRuntime } from "./menu-types.js"
 
-export type SelectPurpose = "Connect" | "Down" | "Info" | "Delete"
+export type SelectPurpose = "Connect" | "Down" | "Info" | "Delete" | "Auth"
 
 const formatRepoRef = (repoRef: string): string => {
   const trimmed = repoRef.trim()
@@ -58,6 +58,7 @@ const renderRuntimeLabel = (runtime: SelectProjectRuntime): string =>
 export const selectTitle = (purpose: SelectPurpose): string =>
   Match.value(purpose).pipe(
     Match.when("Connect", () => "docker-git / Select project"),
+    Match.when("Auth", () => "docker-git / Project auth"),
     Match.when("Down", () => "docker-git / Stop container"),
     Match.when("Info", () => "docker-git / Show connection info"),
     Match.when("Delete", () => "docker-git / Delete project"),
@@ -73,6 +74,7 @@ export const selectHint = (
       "Connect",
       () => `Enter = select + SSH, P = toggle Playwright MCP (${connectEnableMcpPlaywright ? "on" : "off"}), Esc = back`
     ),
+    Match.when("Auth", () => "Enter = open project auth menu, Esc = back"),
     Match.when("Down", () => "Enter = stop container, Esc = back"),
     Match.when("Info", () => "Use arrows to browse details, Enter = set active, Esc = back"),
     Match.when("Delete", () => "Enter = ask/confirm delete, Esc = cancel"),
@@ -196,6 +198,14 @@ export const renderSelectDetails = (
 
   return Match.value(purpose).pipe(
     Match.when("Connect", () => renderConnectDetails(el, context, common, connectEnableMcpPlaywright)),
+    Match.when("Auth", () => [
+      titleRow(el, "Project auth"),
+      ...common,
+      el(Text, { wrap: "wrap" }, `Repo: ${context.item.repoUrl} (${context.refLabel})`),
+      el(Text, { wrap: "wrap" }, `Env global: ${context.item.envGlobalPath}`),
+      el(Text, { wrap: "wrap" }, `Env project: ${context.item.envProjectPath}`),
+      el(Text, { color: "gray", wrap: "wrap" }, "Press Enter to manage labels for this project.")
+    ]),
     Match.when("Info", () => renderInfoDetails(el, context, common)),
     Match.when("Down", () => [
       titleRow(el, "Stop container"),

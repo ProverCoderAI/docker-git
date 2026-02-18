@@ -101,14 +101,26 @@ export const resolveGithubToken = (
       return fromEnv
     }
 
-    const envPath = path.join(root, ".orch", "env", "global.env")
-    const exists = yield* _(fs.exists(envPath))
-    if (!exists) {
-      return null
+    const candidates: ReadonlyArray<string> = [
+      // Canonical layout: ~/.docker-git/.orch/env/global.env
+      path.join(root, ".orch", "env", "global.env"),
+      // Legacy layout (kept for backward compatibility): ~/.docker-git/secrets/global.env
+      path.join(root, "secrets", "global.env")
+    ]
+
+    for (const envPath of candidates) {
+      const exists = yield* _(fs.exists(envPath))
+      if (!exists) {
+        continue
+      }
+      const text = yield* _(fs.readFileString(envPath))
+      const token = findTokenInEnvEntries(parseEnvEntries(text))
+      if (token !== null) {
+        return token
+      }
     }
 
-    const text = yield* _(fs.readFileString(envPath))
-    return findTokenInEnvEntries(parseEnvEntries(text))
+    return null
   })
 
 export type GitAuthEnv = Readonly<Record<string, string | undefined>>

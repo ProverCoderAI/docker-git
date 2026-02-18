@@ -14,6 +14,7 @@ import { ensureDockerImage } from "./docker-image.js"
 // NOTE: keep local helpers grouped to avoid duplicated import blocks.
 import { resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
+import { autoSyncState } from "./state-repo.js"
 
 type CodexRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 
@@ -158,7 +159,9 @@ const runCodexLogout = (
 export const authCodexLogin = (
   command: AuthCodexLoginCommand
 ): Effect.Effect<void, CommandFailedError | PlatformError, CodexRuntime> =>
-  withCodexAuth(command, ({ accountPath, cwd }) => runCodexLogin(cwd, accountPath))
+  withCodexAuth(command, ({ accountPath, cwd }) => runCodexLogin(cwd, accountPath)).pipe(
+    Effect.zipRight(autoSyncState(`chore(state): auth codex ${normalizeAccountLabel(command.label, "default")}`))
+  )
 
 // CHANGE: show Codex auth status for a given label
 // WHY: make it obvious whether Codex is connected
@@ -200,4 +203,6 @@ export const authCodexStatus = (
 export const authCodexLogout = (
   command: AuthCodexLogoutCommand
 ): Effect.Effect<void, CommandFailedError | PlatformError, CodexRuntime> =>
-  withCodexAuth(command, ({ accountPath, cwd }) => runCodexLogout(cwd, accountPath))
+  withCodexAuth(command, ({ accountPath, cwd }) => runCodexLogout(cwd, accountPath)).pipe(
+    Effect.zipRight(autoSyncState(`chore(state): auth codex logout ${normalizeAccountLabel(command.label, "default")}`))
+  )

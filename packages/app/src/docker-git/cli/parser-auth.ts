@@ -1,21 +1,18 @@
 import { Either, Match } from "effect"
 
 import type { RawOptions } from "@effect-template/lib/core/command-options"
-import {
-  type AuthCommand,
-  type Command,
-  defaultTemplateConfig,
-  type ParseError
-} from "@effect-template/lib/core/domain"
+import { type AuthCommand, type Command, type ParseError } from "@effect-template/lib/core/domain"
 
 import { parseRawOptions } from "./parser-options.js"
 
 type AuthOptions = {
   readonly envGlobalPath: string
   readonly codexAuthPath: string
+  readonly claudeAuthPath: string
   readonly label: string | null
   readonly token: string | null
   readonly scopes: string | null
+  readonly authWeb: boolean
 }
 
 const missingArgument = (name: string): ParseError => ({
@@ -34,24 +31,32 @@ const normalizeLabel = (value: string | undefined): string | null => {
   return trimmed.length === 0 ? null : trimmed
 }
 
+const defaultEnvGlobalPath = ".docker-git/.orch/env/global.env"
+const defaultCodexAuthPath = ".docker-git/.orch/auth/codex"
+const defaultClaudeAuthPath = ".docker-git/.orch/auth/claude"
+
 const resolveAuthOptions = (raw: RawOptions): AuthOptions => ({
-  envGlobalPath: raw.envGlobalPath ?? defaultTemplateConfig.envGlobalPath,
-  codexAuthPath: raw.codexAuthPath ?? defaultTemplateConfig.codexAuthPath,
+  envGlobalPath: raw.envGlobalPath ?? defaultEnvGlobalPath,
+  codexAuthPath: raw.codexAuthPath ?? defaultCodexAuthPath,
+  claudeAuthPath: defaultClaudeAuthPath,
   label: normalizeLabel(raw.label),
   token: normalizeLabel(raw.token),
-  scopes: normalizeLabel(raw.scopes)
+  scopes: normalizeLabel(raw.scopes),
+  authWeb: raw.authWeb === true
 })
 
 const buildGithubCommand = (action: string, options: AuthOptions): Either.Either<AuthCommand, ParseError> =>
   Match.value(action).pipe(
     Match.when("login", () =>
-      Either.right<AuthCommand>({
-        _tag: "AuthGithubLogin",
-        label: options.label,
-        token: options.token,
-        scopes: options.scopes,
-        envGlobalPath: options.envGlobalPath
-      })),
+      options.authWeb && options.token !== null
+        ? Either.left(invalidArgument("--token", "cannot be combined with --web"))
+        : Either.right<AuthCommand>({
+          _tag: "AuthGithubLogin",
+          label: options.label,
+          token: options.authWeb ? null : options.token,
+          scopes: options.scopes,
+          envGlobalPath: options.envGlobalPath
+        })),
     Match.when("status", () =>
       Either.right<AuthCommand>({
         _tag: "AuthGithubStatus",
@@ -89,6 +94,29 @@ const buildCodexCommand = (action: string, options: AuthOptions): Either.Either<
     Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
   )
 
+const buildClaudeCommand = (action: string, options: AuthOptions): Either.Either<AuthCommand, ParseError> =>
+  Match.value(action).pipe(
+    Match.when("login", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthClaudeLogin",
+        label: options.label,
+        claudeAuthPath: options.claudeAuthPath
+      })),
+    Match.when("status", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthClaudeStatus",
+        label: options.label,
+        claudeAuthPath: options.claudeAuthPath
+      })),
+    Match.when("logout", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthClaudeLogout",
+        label: options.label,
+        claudeAuthPath: options.claudeAuthPath
+      })),
+    Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
+  )
+
 const buildAuthCommand = (
   provider: string,
   action: string,
@@ -98,6 +126,8 @@ const buildAuthCommand = (
     Match.when("github", () => buildGithubCommand(action, options)),
     Match.when("gh", () => buildGithubCommand(action, options)),
     Match.when("codex", () => buildCodexCommand(action, options)),
+    Match.when("claude", () => buildClaudeCommand(action, options)),
+    Match.when("cc", () => buildClaudeCommand(action, options)),
     Match.orElse(() => Either.left(invalidArgument("auth provider", `unknown provider '${provider}'`)))
   )
 

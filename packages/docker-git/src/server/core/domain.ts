@@ -80,44 +80,47 @@ export const resolveProjectsRoot = (cwd: string, env: Record<string, string | un
   return `${cwd}/.docker-git`
 }
 
-// CHANGE: derive the secrets root from the projects root
-// WHY: centralize shared credentials across docker-git environments
-// QUOTE(ТЗ): "удобную настройку ENV"
-// REF: user-request-2026-01-09
+// CHANGE: derive the shared `.orch` root from the projects root
+// WHY: keep shared credentials and auth caches in the existing `.orch` layout
+// QUOTE(ТЗ): "ОСТАВЬ ВСЁ В .orch"
+// REF: issue-61
 // SOURCE: n/a
-// FORMAT THEOREM: forall root: secrets(root) = root + "/secrets"
+// FORMAT THEOREM: forall root: orch(root) = root + "/.orch"
 // PURITY: CORE
-// EFFECT: Effect<string, never, never>
+// EFFECT: n/a
 // INVARIANT: returned path is non-empty
 // COMPLEXITY: O(1)
-export const resolveSecretsRoot = (projectsRoot: string): string =>
-  `${trimTrailingSlash(projectsRoot)}/secrets`
+export const resolveOrchRoot = (projectsRoot: string): string =>
+  `${trimTrailingSlash(projectsRoot)}/.orch`
+
+// Backward-compatible alias (older code/tests referenced "secrets" root).
+export const resolveSecretsRoot = (projectsRoot: string): string => resolveOrchRoot(projectsRoot)
 
 // CHANGE: derive the shared global env file path
 // WHY: allow orchestrator-level integrations without entering containers
 // QUOTE(ТЗ): "у меня должна быть возможность подключать гитхаб"
 // REF: user-request-2026-01-09
 // SOURCE: n/a
-// FORMAT THEOREM: forall root: globalEnv(root) = secrets(root) + "/global.env"
+// FORMAT THEOREM: forall root: globalEnv(root) = orch(root) + "/env/global.env"
 // PURITY: CORE
 // EFFECT: Effect<string, never, never>
 // INVARIANT: returned path is non-empty
 // COMPLEXITY: O(1)
 export const resolveGlobalEnvPath = (projectsRoot: string): string =>
-  `${resolveSecretsRoot(projectsRoot)}/global.env`
+  `${resolveOrchRoot(projectsRoot)}/env/global.env`
 
 // CHANGE: derive the shared Codex auth directory path
 // WHY: allow Codex credentials to be managed globally in the orchestrator
 // QUOTE(ТЗ): "Добавь подключение Codex в интеграции"
 // REF: user-request-2026-01-09
 // SOURCE: n/a
-// FORMAT THEOREM: forall root: codex(root) = secrets(root) + "/codex"
+// FORMAT THEOREM: forall root: codex(root) = orch(root) + "/auth/codex"
 // PURITY: CORE
 // EFFECT: Effect<string, never, never>
 // INVARIANT: returned path is non-empty
 // COMPLEXITY: O(1)
 export const resolveCodexAuthPath = (projectsRoot: string): string =>
-  `${resolveSecretsRoot(projectsRoot)}/codex`
+  `${resolveOrchRoot(projectsRoot)}/auth/codex`
 
 // CHANGE: resolve the SSH host for connection commands
 // WHY: allow users to override the hostname when SSH is bound to a specific interface

@@ -380,10 +380,6 @@ export const renderCodexLoginPage = (label: string | null, terminalPort: number)
 // EFFECT: Effect<string, never, never>
 // INVARIANT: escaped user-provided strings
 // COMPLEXITY: O(1)
-export type GithubAccountView =
-  | { readonly _tag: "Connected"; readonly label: string; readonly login: string }
-  | { readonly _tag: "Error"; readonly label: string; readonly message: string }
-
 export interface CodexAccountView {
   readonly label: string
   readonly path: string
@@ -392,88 +388,10 @@ export interface CodexAccountView {
   readonly legacy: boolean
 }
 
-const renderGithubAccounts = (accounts: ReadonlyArray<GithubAccountView>): string => {
-  if (accounts.length === 0) {
-    return `<div>Accounts: <span>none</span></div>`
-  }
-
-  return accounts
-    .map((account) =>
-      account._tag === "Connected"
-        ? `<div>Account: <span>${escapeHtml(account.label)} · ${escapeHtml(account.login)}</span></div>`
-        : `<div>Account: <span>${escapeHtml(account.label)} · error</span></div>`
-    )
-    .join("\n")
-}
-
-const renderGithubDisconnectForms = (accounts: ReadonlyArray<GithubAccountView>): string => {
-  if (accounts.length === 0) {
-    return ""
-  }
-
-  return accounts
-    .map((account) =>
-      `<form method="post" action="/integrations/github/disconnect" class="env-actions">
-        <input type="hidden" name="githubLabel" value="${escapeHtml(account.label)}" />
-        <button class="btn" type="submit">Disconnect ${escapeHtml(account.label)}</button>
-      </form>`
-    )
-    .join("\n")
-}
-
-const findGithubLogin = (
-  accounts: ReadonlyArray<GithubAccountView>,
-  label: string
-): string | null => {
-  const match = accounts.find(
-    (account) => account._tag === "Connected" && account.label === label
-  )
-  return match && match._tag === "Connected" ? match.login : null
-}
-
-const renderGithubActiveLine = (
-  accounts: ReadonlyArray<GithubAccountView>,
-  activeLabel: string | null
-): string => {
-  if (activeLabel === null) {
-    return `<div>Active: <span>none</span></div>`
-  }
-  const login = findGithubLogin(accounts, activeLabel)
-  const suffix = login ? ` · ${escapeHtml(login)}` : ""
-  return `<div>Active: <span>${escapeHtml(activeLabel)}${suffix}</span></div>`
-}
-
-const renderGithubAccountOptions = (accounts: ReadonlyArray<GithubAccountView>): string => {
-  if (accounts.length === 0) {
-    return `<option value="" disabled selected>No accounts connected</option>`
-  }
-
-  return accounts
-    .map((account) =>
-      account._tag === "Connected"
-        ? `<option value="${escapeHtml(account.label)}">${escapeHtml(account.label)} · ${escapeHtml(account.login)}</option>`
-        : `<option value="${escapeHtml(account.label)}" disabled>${escapeHtml(account.label)} · error</option>`
-    )
-    .join("\n")
-}
-
-const renderGithubAccountOptionsForClone = (accounts: ReadonlyArray<GithubAccountView>): string => {
-  const base = `<option value="" selected>Public repo (no token)</option>`
-  if (accounts.length === 0) {
-    return base
-  }
-
-  const options = accounts
-    .map((account) =>
-      account._tag === "Connected"
-        ? `<option value="${escapeHtml(account.label)}">${escapeHtml(account.label)} · ${escapeHtml(account.login)}</option>`
-        : `<option value="${escapeHtml(account.label)}" disabled>${escapeHtml(account.label)} · error</option>`
-    )
-    .join("\n")
-
-  return `${base}
-${options}`
-}
+const renderActiveLabelLine = (activeLabel: string | null): string =>
+  activeLabel === null
+    ? `<div>Active: <span>none</span></div>`
+    : `<div>Active: <span>${escapeHtml(activeLabel)}</span></div>`
 
 const renderCodexAccounts = (accounts: ReadonlyArray<CodexAccountView>): string => {
   if (accounts.length === 0) {
@@ -533,7 +451,9 @@ const renderCodexActiveLine = (
 
 export const renderIntegrationsPage = (
   globalEnvPath: string,
-  githubAccounts: ReadonlyArray<GithubAccountView>,
+  githubTokenEntries: number,
+  gitTokenEntries: number,
+  claudeKeyEntries: number,
   codexRootPath: string,
   codexAccounts: ReadonlyArray<CodexAccountView>
 ): string => `<!doctype html>
@@ -569,8 +489,8 @@ export const renderIntegrationsPage = (
             </div>
             <h3>GitHub</h3>
             <div class="meta">
-              <div>Status: <span>${githubAccounts.length > 0 ? "Connected" : "Not connected"}</span></div>
-              ${renderGithubAccounts(githubAccounts)}
+              <div>Status: <span>${githubTokenEntries > 0 ? "Connected" : "Not connected"}</span></div>
+              <div>Tokens: <span>${githubTokenEntries}</span></div>
             </div>
             <div class="env-actions env-actions--left">
               <a
@@ -585,7 +505,49 @@ export const renderIntegrationsPage = (
               <input class="env-input" type="password" name="githubToken" placeholder="ghp_..." required />
               <button class="btn primary" type="submit">Connect</button>
             </form>
-            ${renderGithubDisconnectForms(githubAccounts)}
+            <form method="post" action="/integrations/github/disconnect" class="env-actions">
+              <input class="env-input" type="text" name="githubLabel" placeholder="label (empty = default)" />
+              <button class="btn" type="submit">Disconnect</button>
+            </form>
+          </article>
+          <article class="card">
+            <div>
+              <span class="badge">git</span>
+            </div>
+            <h3>Git credentials</h3>
+            <div class="meta">
+              <div>Status: <span>${gitTokenEntries > 0 ? "Connected" : "Not connected"}</span></div>
+              <div>Tokens: <span>${gitTokenEntries}</span></div>
+            </div>
+            <form method="post" action="/integrations/git/connect" class="env-actions">
+              <input class="env-input" type="text" name="gitLabel" placeholder="label (optional)" />
+              <input class="env-input" type="text" name="gitUser" placeholder="x-access-token (optional)" />
+              <input class="env-input" type="password" name="gitToken" placeholder="token" required />
+              <button class="btn primary" type="submit">Connect</button>
+            </form>
+            <form method="post" action="/integrations/git/disconnect" class="env-actions">
+              <input class="env-input" type="text" name="gitLabel" placeholder="label (empty = default)" />
+              <button class="btn" type="submit">Disconnect</button>
+            </form>
+          </article>
+          <article class="card">
+            <div>
+              <span class="badge">claude</span>
+            </div>
+            <h3>Claude Code</h3>
+            <div class="meta">
+              <div>Status: <span>${claudeKeyEntries > 0 ? "Connected" : "Not connected"}</span></div>
+              <div>Keys: <span>${claudeKeyEntries}</span></div>
+            </div>
+            <form method="post" action="/integrations/claude/connect" class="env-actions">
+              <input class="env-input" type="text" name="claudeLabel" placeholder="label (optional)" />
+              <input class="env-input" type="password" name="claudeApiKey" placeholder="sk-ant-..." required />
+              <button class="btn primary" type="submit">Connect</button>
+            </form>
+            <form method="post" action="/integrations/claude/disconnect" class="env-actions">
+              <input class="env-input" type="text" name="claudeLabel" placeholder="label (empty = default)" />
+              <button class="btn" type="submit">Disconnect</button>
+            </form>
           </article>
           <article class="card">
             <div>
@@ -634,7 +596,7 @@ export const renderIntegrationsPage = (
 // COMPLEXITY: O(n) where n = |accounts|
 export const renderClonePage = (
   globalEnvPath: string,
-  githubAccounts: ReadonlyArray<GithubAccountView>
+  githubTokenEntries: number
 ): string => `<!doctype html>
 <html lang="en">
   <head>
@@ -668,18 +630,16 @@ export const renderClonePage = (
             </div>
             <h3>New docker-git project</h3>
             <div class="meta">
-              <div>Git session: <span>select a GitHub account for private repos</span></div>
+              <div>Git session: <span>enter a GitHub label for private repos (${githubTokenEntries} tokens)</span></div>
             </div>
             <form method="post" action="/clone" class="env-actions env-actions--left">
               <input class="env-input" type="text" name="repoUrl" placeholder="https://github.com/org/repo" required />
               <input class="env-input" type="text" name="repoRef" placeholder="main (optional)" />
-              <select class="env-select" name="githubLabel">
-                ${renderGithubAccountOptionsForClone(githubAccounts)}
-              </select>
+              <input class="env-input" type="text" name="githubLabel" placeholder="github label (optional; e.g. default)" />
               <button class="btn primary" type="submit">Clone</button>
             </form>
             <div class="env-note">
-              <p class="muted">For private repos, pick a connected GitHub account from Integrations.</p>
+              <p class="muted">For private repos, enter a GitHub label from Integrations (use <span class="mono">default</span> for the base token).</p>
               <p class="muted">Public repos can be cloned without a token.</p>
             </div>
           </article>
@@ -784,14 +744,21 @@ export const renderEnvPage = (
   project: ProjectSummary,
   globalEnv: string,
   projectEnv: string,
-  githubAccounts: ReadonlyArray<GithubAccountView>,
+  githubTokenEntries: number,
   activeGithubLabel: string | null,
+  gitTokenEntries: number,
+  activeGitLabel: string | null,
+  claudeKeyEntries: number,
+  activeClaudeLabel: string | null,
   codexAccounts: ReadonlyArray<CodexAccountView>,
   activeCodexLabel: string | null
 ): string => {
-  const hasGithubAccounts = githubAccounts.some((account) => account._tag === "Connected")
-  const githubSelect = renderGithubAccountOptions(githubAccounts)
-  const githubActiveLine = renderGithubActiveLine(githubAccounts, activeGithubLabel)
+  const hasGithubAccounts = githubTokenEntries > 0
+  const githubActiveLine = renderActiveLabelLine(activeGithubLabel)
+  const hasGitCredentials = gitTokenEntries > 0
+  const gitCredentialActiveLine = renderActiveLabelLine(activeGitLabel)
+  const hasClaudeAccounts = claudeKeyEntries > 0
+  const claudeActiveLine = renderActiveLabelLine(activeClaudeLabel)
   const codexHasAccounts = codexAccounts.some((account) => account.connected)
   const codexSelect = renderCodexAccountOptions(codexAccounts)
   const codexActiveLine = renderCodexActiveLine(codexAccounts, activeCodexLabel)
@@ -835,14 +802,41 @@ export const renderEnvPage = (
               ${githubActiveLine}
             </div>
             <form method="post" action="/env/${encodeURIComponent(project.id)}/connect/github" class="env-actions env-actions--left">
-              <select class="env-select" name="githubLabel" ${hasGithubAccounts ? "" : "disabled"}>
-                ${githubSelect}
-              </select>
+              <input class="env-input" type="text" name="githubLabel" placeholder="label (empty = default)" ${hasGithubAccounts ? "" : "disabled"} />
               <button class="btn primary" type="submit" ${hasGithubAccounts ? "" : "disabled"}>Use for this project</button>
             </form>
             <form method="post" action="/env/${encodeURIComponent(project.id)}/disconnect/github" class="env-actions env-actions--left">
               <button class="btn" type="submit">Disconnect git</button>
             </form>
+            <p class="muted">Available tokens: <span>${githubTokenEntries}</span></p>
+          </div>
+          <div class="service-card">
+            <div class="service-row">
+              <strong>Git credentials</strong>
+              ${gitCredentialActiveLine}
+            </div>
+            <form method="post" action="/env/${encodeURIComponent(project.id)}/connect/git" class="env-actions env-actions--left">
+              <input class="env-input" type="text" name="gitLabel" placeholder="label (empty = default)" ${hasGitCredentials ? "" : "disabled"} />
+              <button class="btn primary" type="submit" ${hasGitCredentials ? "" : "disabled"}>Use for this project</button>
+            </form>
+            <form method="post" action="/env/${encodeURIComponent(project.id)}/disconnect/git" class="env-actions env-actions--left">
+              <button class="btn" type="submit">Disconnect git credentials</button>
+            </form>
+            <p class="muted">Available tokens: <span>${gitTokenEntries}</span></p>
+          </div>
+          <div class="service-card">
+            <div class="service-row">
+              <strong>Claude Code</strong>
+              ${claudeActiveLine}
+            </div>
+            <form method="post" action="/env/${encodeURIComponent(project.id)}/connect/claude" class="env-actions env-actions--left">
+              <input class="env-input" type="text" name="claudeLabel" placeholder="label (empty = default)" ${hasClaudeAccounts ? "" : "disabled"} />
+              <button class="btn primary" type="submit" ${hasClaudeAccounts ? "" : "disabled"}>Use for this project</button>
+            </form>
+            <form method="post" action="/env/${encodeURIComponent(project.id)}/disconnect/claude" class="env-actions env-actions--left">
+              <button class="btn" type="submit">Disconnect claude</button>
+            </form>
+            <p class="muted">Available keys: <span>${claudeKeyEntries}</span></p>
           </div>
           <div class="service-card">
             <div class="service-row">
@@ -891,7 +885,7 @@ export const renderEnvPage = (
           </div>
         </form>
         <div class="env-note">
-          <p class="muted">Examples: <span class="mono">GITHUB_TOKEN</span>, <span class="mono">GIT_AUTH_TOKEN</span>, <span class="mono">GIT_USER_NAME</span>, <span class="mono">GIT_USER_EMAIL</span>.</p>
+          <p class="muted">Examples: <span class="mono">GITHUB_TOKEN</span>, <span class="mono">GIT_AUTH_TOKEN</span>, <span class="mono">ANTHROPIC_API_KEY</span>, <span class="mono">GIT_USER_NAME</span>, <span class="mono">GIT_USER_EMAIL</span>.</p>
           <p class="muted">Private GitHub clone uses <span class="mono">GIT_AUTH_TOKEN</span> or <span class="mono">GITHUB_TOKEN</span>. Optional <span class="mono">GIT_AUTH_USER</span> (default: <span class="mono">x-access-token</span>).</p>
         </div>
       </section>

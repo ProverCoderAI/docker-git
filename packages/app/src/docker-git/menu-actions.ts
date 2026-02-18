@@ -12,10 +12,11 @@ import {
 import { runDockerComposeUpWithPortCheck } from "@effect-template/lib/usecases/projects-up"
 import { Effect, Match, pipe } from "effect"
 
+import { openAuthMenu } from "./menu-auth.js"
 import { startCreateView } from "./menu-create.js"
 import { loadSelectView } from "./menu-select-load.js"
-import { resumeTui, suspendTui } from "./menu-shared.js"
-import { type MenuEnv, type MenuRunner, type MenuState, type ViewState } from "./menu-types.js"
+import { withSuspendedTui, writeErrorAndPause } from "./menu-shared.js"
+import { type MenuEnv, type MenuRunner, type MenuState, type MenuViewContext } from "./menu-types.js"
 
 // CHANGE: keep menu actions and input parsing in a dedicated module
 // WHY: reduce cognitive complexity in the TUI entry
@@ -39,9 +40,7 @@ export type MenuContext = {
   readonly state: MenuState
   readonly runner: MenuRunner
   readonly exit: () => void
-  readonly setView: (view: ViewState) => void
-  readonly setMessage: (message: string | null) => void
-}
+} & MenuViewContext
 
 export type MenuSelectionContext = MenuContext & {
   readonly selected: number
@@ -50,6 +49,8 @@ export type MenuSelectionContext = MenuContext & {
 
 const actionLabel = (action: MenuAction): string =>
   Match.value(action).pipe(
+    Match.when({ _tag: "Auth" }, () => "Auth profiles"),
+    Match.when({ _tag: "ProjectAuth" }, () => "Project auth"),
     Match.when({ _tag: "Up" }, () => "docker compose up"),
     Match.when({ _tag: "Status" }, () => "docker compose ps"),
     Match.when({ _tag: "Logs" }, () => "docker compose logs"),
@@ -67,17 +68,11 @@ const runWithSuspendedTui = (
     pipe(
       Effect.sync(() => {
         context.setMessage(`${label}...`)
-        suspendTui()
       }),
-      Effect.zipRight(effect),
+      Effect.zipRight(withSuspendedTui(effect, { onError: (error) => writeErrorAndPause(renderError(error)) })),
       Effect.tap(() =>
         Effect.sync(() => {
           context.setMessage(`${label} finished.`)
-        })
-      ),
-      Effect.ensuring(
-        Effect.sync(() => {
-          resumeTui()
         })
       ),
       Effect.asVoid
@@ -140,6 +135,8 @@ const handleMenuAction = (
     Match.when({ _tag: "Quit" }, () => Effect.succeed(quitOutcome)),
     Match.when({ _tag: "Create" }, () => Effect.succeed(continueOutcome(state))),
     Match.when({ _tag: "Select" }, () => Effect.succeed(continueOutcome(state))),
+    Match.when({ _tag: "Auth" }, () => Effect.succeed(continueOutcome(state))),
+    Match.when({ _tag: "ProjectAuth" }, () => Effect.succeed(continueOutcome(state))),
     Match.when({ _tag: "Info" }, () => Effect.succeed(continueOutcome(state))),
     Match.when({ _tag: "Delete" }, () => Effect.succeed(continueOutcome(state))),
     Match.when({ _tag: "Up" }, () =>
@@ -169,6 +166,22 @@ const runCreateAction = (context: MenuContext) => {
 const runSelectAction = (context: MenuContext) => {
   context.setMessage(null)
   context.runner.runEffect(loadSelectView(listProjectItems, "Connect", context))
+}
+
+const runAuthProfilesAction = (context: MenuContext) => {
+  context.setMessage(null)
+  openAuthMenu({
+    state: context.state,
+    runner: context.runner,
+    setView: context.setView,
+    setMessage: context.setMessage,
+    setActiveDir: context.setActiveDir
+  })
+}
+
+const runProjectAuthAction = (context: MenuContext) => {
+  context.setMessage(null)
+  context.runner.runEffect(loadSelectView(listProjectItems, "Auth", context))
 }
 
 const runDownAllAction = (context: MenuContext) => {
@@ -221,6 +234,12 @@ export const handleMenuActionSelection = (action: MenuAction, context: MenuConte
     }),
     Match.when({ _tag: "Select" }, () => {
       runSelectAction(context)
+    }),
+    Match.when({ _tag: "Auth" }, () => {
+      runAuthProfilesAction(context)
+    }),
+    Match.when({ _tag: "ProjectAuth" }, () => {
+      runProjectAuthAction(context)
     }),
     Match.when({ _tag: "Info" }, () => {
       runInfoAction(context)

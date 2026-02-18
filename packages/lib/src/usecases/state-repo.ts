@@ -2,7 +2,7 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
-import { Effect } from "effect"
+import { Effect, pipe } from "effect"
 import { runCommandExitCode } from "../shell/command-runner.js"
 import { CommandFailedError } from "../shell/errors.js"
 import { defaultProjectsRoot } from "./menu-helpers.js"
@@ -253,8 +253,17 @@ export const statePush = Effect.gen(function*(_) {
   )
   const token = yield* _(resolveGithubToken(fs, path, root))
   const effect = token && token.length > 0 && isGithubHttpsRemote(originUrl)
-    ? withGithubAskpassEnv(token, (env) => git(root, ["push", "-u", "origin", "HEAD"], env))
-    : git(root, ["push", "-u", "origin", "HEAD"], gitBaseEnv)
+    ? withGithubAskpassEnv(
+      token,
+      (env) =>
+        pipe(
+          gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"], env),
+          Effect.map((value) => value.trim()),
+          Effect.map((branch) => (branch === "HEAD" ? "main" : branch)),
+          Effect.flatMap((branch) => git(root, ["push", "--no-verify", originUrl, `HEAD:refs/heads/${branch}`], env))
+        )
+    )
+    : git(root, ["push", "--no-verify", "-u", "origin", "HEAD"], gitBaseEnv)
   yield* _(effect)
 }).pipe(Effect.asVoid)
 

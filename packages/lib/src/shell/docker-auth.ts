@@ -14,9 +14,26 @@ export type DockerAuthSpec = {
   readonly image: string
   readonly volume: DockerVolume
   readonly entrypoint?: string
-  readonly env?: string
+  readonly env?: string | ReadonlyArray<string>
   readonly args: ReadonlyArray<string>
   readonly interactive: boolean
+}
+
+const appendEnvArgs = (base: Array<string>, env: string | ReadonlyArray<string>) => {
+  if (typeof env === "string") {
+    const trimmed = env.trim()
+    if (trimmed.length > 0) {
+      base.push("-e", trimmed)
+    }
+    return
+  }
+  for (const entry of env) {
+    const trimmed = entry.trim()
+    if (trimmed.length === 0) {
+      continue
+    }
+    base.push("-e", trimmed)
+  }
 }
 
 const buildDockerArgs = (spec: DockerAuthSpec): ReadonlyArray<string> => {
@@ -28,11 +45,19 @@ const buildDockerArgs = (spec: DockerAuthSpec): ReadonlyArray<string> => {
     base.push("--entrypoint", spec.entrypoint)
   }
   base.push("-v", `${spec.volume.hostPath}:${spec.volume.containerPath}`)
-  if (spec.env && spec.env.length > 0) {
-    base.push("-e", spec.env)
+  if (spec.env !== undefined) {
+    appendEnvArgs(base, spec.env)
   }
   return [...base, spec.image, ...spec.args]
 }
+
+// CHANGE: expose docker CLI args builder for advanced auth flows (stdin piping)
+// WHY: some OAuth CLIs (Claude Code) don't reliably render their input UI; docker-git needs to drive stdin explicitly
+// REF: issue-61
+// SOURCE: n/a
+// PURITY: CORE
+// INVARIANT: args match those used by runDockerAuth / runDockerAuthCapture
+export const buildDockerAuthArgs = (spec: DockerAuthSpec): ReadonlyArray<string> => buildDockerArgs(spec)
 
 // CHANGE: run a docker auth command with controlled exit codes
 // WHY: reuse container auth flow for gh/codex

@@ -4,10 +4,10 @@ set -euo pipefail
 RUN_ID="$(date +%s)-$RANDOM"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$REPO_ROOT/scripts/e2e/_lib.sh"
 ROOT_BASE="${DOCKER_GIT_E2E_ROOT_BASE:-$REPO_ROOT/.docker-git/e2e-root}"
 mkdir -p "$ROOT_BASE"
 ROOT="$(mktemp -d "$ROOT_BASE/login-context.XXXXXX")"
-SSH_KEY_BASE="$(mktemp -d /tmp/docker-git-login-context-key.XXXXXX)"
 # docker-git containers may `chown -R` the `.docker-git` bind mount to UID 1000.
 # Use world-writable permissions so the host runner can still create files
 # even if ownership changes inside the container.
@@ -15,6 +15,8 @@ chmod 0777 "$ROOT"
 mkdir -p "$ROOT/e2e"
 chmod 0777 "$ROOT/e2e"
 KEEP="${KEEP:-0}"
+
+dg_ensure_docker "$ROOT/.e2e-bin"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
@@ -60,36 +62,16 @@ cleanup() {
   fi
   cleanup_active_case
   rm -rf "$ROOT" >/dev/null 2>&1 || true
-  rm -rf "$SSH_KEY_BASE" >/dev/null 2>&1 || true
 }
 
 trap 'on_error $LINENO' ERR
 trap cleanup EXIT
 
-command -v ssh >/dev/null 2>&1 || fail "missing 'ssh' command"
+command -v script >/dev/null 2>&1 || fail "missing 'script' command (util-linux)"
 command -v timeout >/dev/null 2>&1 || fail "missing 'timeout' command"
-command -v ssh-keygen >/dev/null 2>&1 || fail "missing 'ssh-keygen' command"
 
-ssh-keygen -q -t ed25519 -N "" -f "$SSH_KEY_BASE/dev_ssh_key" >/dev/null
-cp "$SSH_KEY_BASE/dev_ssh_key.pub" "$ROOT/authorized_keys"
-chmod 0600 "$SSH_KEY_BASE/dev_ssh_key"
-chmod 0644 "$ROOT/authorized_keys"
-
-wait_for_ssh() {
-  local ssh_port="$1"
-  local attempts=30
-  local attempt=1
-
-  while [[ "$attempt" -le "$attempts" ]]; do
-    if timeout 1 bash -lc "cat < /dev/null > /dev/tcp/127.0.0.1/$ssh_port" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 1
-    attempt="$((attempt + 1))"
-  done
-
-  return 1
-}
+: > "$ROOT/authorized_keys"
+chmod 0644 "$ROOT/authorized_keys" || true
 
 run_case() {
   local case_name="$1"
@@ -128,18 +110,16 @@ EOF_ENV
       --volume-name "$volume_name"
   )
 
-  wait_for_ssh "$ssh_port" || fail "ssh port did not open for $case_name (port: $ssh_port)"
-
   rm -f "$login_log"
 
   set +e
-  timeout 30s bash -lc "printf 'exit\n' | ssh -i \"$SSH_KEY_BASE/dev_ssh_key\" -tt -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p \"$ssh_port\" dev@localhost" > "$login_log" 2>&1
-  local ssh_exit=$?
+  timeout 30s script -q -e -c "docker exec -u dev -it \"$container_name\" bash -lic 'exit'" /dev/null > "$login_log" 2>&1
+  local exec_exit=$?
   set -e
 
-  if [[ "$ssh_exit" -ne 0 ]]; then
+  if [[ "$exec_exit" -ne 0 ]]; then
     cat "$login_log" >&2 || true
-    fail "ssh login failed for $case_name (exit: $ssh_exit)"
+    fail "interactive shell probe failed for $case_name (exit: $exec_exit)"
   fi
 
   grep -Fq -- "$expected_context_line" "$login_log" \

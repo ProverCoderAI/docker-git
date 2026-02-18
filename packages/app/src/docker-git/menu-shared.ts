@@ -1,5 +1,7 @@
 import type { MenuViewContext, ViewState } from "./menu-types.js"
 
+import { Effect, pipe } from "effect"
+
 // CHANGE: share menu escape handling across flows
 // WHY: avoid duplicated logic in TUI handlers
 // QUOTE(ТЗ): "А ты можешь сделать удобный выбор проектов?"
@@ -13,10 +15,31 @@ import type { MenuViewContext, ViewState } from "./menu-types.js"
 
 type MenuResetContext = Pick<MenuViewContext, "setView" | "setMessage">
 
-type StdoutWrite = typeof process.stdout.write
+type OutputWrite = typeof process.stdout.write
 
 let stdoutPatched = false
 let stdoutMuted = false
+let baseStdoutWrite: OutputWrite | null = null
+let baseStderrWrite: OutputWrite | null = null
+
+const wrapWrite = (baseWrite: OutputWrite): OutputWrite =>
+(
+  chunk: string | Uint8Array,
+  encoding?: BufferEncoding | ((err?: Error | null) => void),
+  cb?: (err?: Error | null) => void
+) => {
+  if (stdoutMuted) {
+    const callback = typeof encoding === "function" ? encoding : cb
+    if (typeof callback === "function") {
+      callback()
+    }
+    return true
+  }
+  if (typeof encoding === "function") {
+    return baseWrite(chunk, encoding)
+  }
+  return baseWrite(chunk, encoding, cb)
+}
 
 const disableMouseModes = (): void => {
   // Disable xterm/urxvt mouse tracking and "alternate scroll" mode (wheel -> arrow keys).
@@ -39,27 +62,115 @@ const ensureStdoutPatched = (): void => {
   if (stdoutPatched) {
     return
   }
-  const baseWrite: StdoutWrite = process.stdout.write.bind(process.stdout)
-  const mutedWrite: StdoutWrite = (
-    chunk: string | Uint8Array,
-    encoding?: BufferEncoding | ((err?: Error | null) => void),
-    cb?: (err?: Error | null) => void
-  ) => {
-    if (stdoutMuted) {
-      const callback = typeof encoding === "function" ? encoding : cb
-      if (typeof callback === "function") {
-        callback()
-      }
-      return true
-    }
-    if (typeof encoding === "function") {
-      return baseWrite(chunk, encoding)
-    }
-    return baseWrite(chunk, encoding, cb)
-  }
-  process.stdout.write = mutedWrite
+  baseStdoutWrite = process.stdout.write.bind(process.stdout)
+  baseStderrWrite = process.stderr.write.bind(process.stderr)
+
+  process.stdout.write = wrapWrite(baseStdoutWrite)
+  process.stderr.write = wrapWrite(baseStderrWrite)
   stdoutPatched = true
 }
+
+// CHANGE: allow writing to the terminal even while stdout is muted
+// WHY: we mute Ink renders during interactive commands, but still need to show prompts/errors
+// REF: user-request-2026-02-18-tui-output-hidden
+// SOURCE: n/a
+// PURITY: SHELL
+// EFFECT: n/a
+// INVARIANT: bypasses the mute wrapper safely
+export const writeToTerminal = (text: string): void => {
+  ensureStdoutPatched()
+  const write = baseStdoutWrite ?? process.stdout.write.bind(process.stdout)
+  write(text)
+}
+
+// CHANGE: keep the user on the primary screen until they acknowledge
+// WHY: otherwise output from failed docker/gh commands gets hidden again when TUI resumes
+// REF: user-request-2026-02-18-tui-output-hidden
+// SOURCE: n/a
+// PURITY: SHELL
+// EFFECT: Effect<void, never, never>
+// INVARIANT: no-op when stdin/stdout aren't TTY (CI/e2e)
+export const pauseForEnter = (
+  prompt = "Press Enter to return to docker-git..."
+): Effect.Effect<void> => {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return Effect.void
+  }
+
+  return Effect.async((resume) => {
+    // Ensure the prompt isn't glued to the last command line.
+    writeToTerminal(`\n${prompt}\n`)
+    process.stdin.resume()
+
+    const cleanup = () => {
+      process.stdin.off("data", onData)
+    }
+
+    const onData = () => {
+      cleanup()
+      resume(Effect.void)
+    }
+
+    process.stdin.on("data", onData)
+
+    return Effect.sync(() => {
+      cleanup()
+    })
+  }).pipe(Effect.asVoid)
+}
+
+export const writeErrorAndPause = (renderedError: string): Effect.Effect<void> =>
+  pipe(
+    Effect.sync(() => {
+      writeToTerminal(`\n[docker-git] ${renderedError}\n`)
+    }),
+    Effect.zipRight(pauseForEnter()),
+    Effect.asVoid
+  )
+
+export const withSuspendedTui = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+  options?: {
+    readonly onError?: (error: E) => Effect.Effect<void>
+    readonly onResume?: () => void
+  }
+): Effect.Effect<A, E, R> => {
+  const withError = options?.onError
+    ? pipe(effect, Effect.tapError((error) => Effect.ignore(options.onError?.(error) ?? Effect.void)))
+    : effect
+
+  return pipe(
+    Effect.sync(suspendTui),
+    Effect.zipRight(withError),
+    Effect.ensuring(
+      Effect.sync(() => {
+        resumeTui()
+        options?.onResume?.()
+      })
+    )
+  )
+}
+
+export type SkipInputsContext = {
+  readonly setSkipInputs: (update: (value: number) => number) => void
+}
+
+export type SshActiveContext = {
+  readonly setSshActive: (active: boolean) => void
+}
+
+export const resumeWithSkipInputs = (context: SkipInputsContext, extra?: () => void) => () => {
+  extra?.()
+  context.setSkipInputs(() => 2)
+}
+
+export const resumeSshWithSkipInputs = (context: SkipInputsContext & SshActiveContext) =>
+  resumeWithSkipInputs(context, () => {
+    context.setSshActive(false)
+  })
+
+export const pauseOnError = <E>(render: (error: E) => string) => (error: E): Effect.Effect<void> =>
+  writeErrorAndPause(render(error))
 
 // CHANGE: toggle stdout write muting for Ink rendering
 // WHY: allow SSH sessions to own the terminal without TUI redraws
@@ -94,7 +205,9 @@ export const suspendTui = (): void => {
   if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
     process.stdin.setRawMode(false)
   }
-  process.stdout.write("\u001B[?1049l\u001B[2J\u001B[H")
+  // Switch back to the primary screen so interactive commands (ssh/gh/codex)
+  // can render normally. Do not clear it: users may need scrollback (OAuth codes/URLs).
+  process.stdout.write("\u001B[?1049l")
   setStdoutMuted(true)
 }
 
@@ -114,6 +227,7 @@ export const resumeTui = (): void => {
   }
   setStdoutMuted(false)
   disableMouseModes()
+  // Return to the alternate screen for Ink rendering.
   process.stdout.write("\u001B[?1049h\u001B[2J\u001B[H")
   if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
     process.stdin.setRawMode(true)
@@ -128,7 +242,8 @@ export const leaveTui = (): void => {
   // Ensure we don't leave the terminal in a broken "mouse reporting" mode.
   setStdoutMuted(false)
   disableMouseModes()
-  process.stdout.write("\u001B[?1049l\u001B[2J\u001B[H")
+  // Restore the primary screen on exit without clearing it (keeps useful scrollback).
+  process.stdout.write("\u001B[?1049l")
   if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
     process.stdin.setRawMode(false)
   }

@@ -28,7 +28,7 @@ Commands:
   sessions            List/kill/log container terminal processes
   ps, status          Show docker compose status for all docker-git projects
   down-all            Stop all docker-git containers (docker compose down)
-  auth                Manage GitHub/Codex auth for docker-git
+  auth                Manage GitHub/Codex/Claude Code auth for docker-git
   state               Manage docker-git state directory via git (sync across machines)
 
 Options:
@@ -40,7 +40,6 @@ Options:
   --container-name <name>   Docker container name (default: dg-<repo>)
   --service-name <name>     Compose service name (default: dg-<repo>)
   --volume-name <name>      Docker volume name (default: dg-<repo>-home)
-  --secrets-root <path>     Host root for shared secrets (default: n/a)
   --authorized-keys <path>  Host path to authorized_keys (default: <projectsRoot>/authorized_keys)
   --env-global <path>       Host path to shared env file (default: <projectsRoot>/.orch/env/global.env)
   --env-project <path>      Host path to project env file (default: ./.orch/env/project.env)
@@ -72,6 +71,7 @@ Container runtime env (set via .orch/env/project.env):
 Auth providers:
   github, gh         GitHub CLI auth (tokens saved to env file)
   codex             Codex CLI auth (stored under .orch/auth/codex)
+  claude, cc        Claude Code CLI auth (OAuth cache stored under .orch/auth/claude)
 
 Auth actions:
   login             Run login flow and store credentials
@@ -80,7 +80,8 @@ Auth actions:
 
 Auth options:
   --label <label>        Account label (default: default)
-  --token <token>        GitHub token override (login only)
+  --token <token>        GitHub token override (login only; useful for non-interactive/CI)
+  --web                 Force OAuth web flow (login only; ignores --token)
   --scopes <scopes>      GitHub scopes (login only, default: repo,workflow,read:org)
   --env-global <path>    Env file path for GitHub tokens (default: <projectsRoot>/.orch/env/global.env)
   --codex-auth <path>    Codex auth root path (default: <projectsRoot>/.orch/auth/codex)

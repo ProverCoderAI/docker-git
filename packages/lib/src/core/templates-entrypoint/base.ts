@@ -9,6 +9,7 @@ REPO_URL="\${REPO_URL:-}"
 REPO_REF="\${REPO_REF:-}"
 FORK_REPO_URL="\${FORK_REPO_URL:-}"
 TARGET_DIR="\${TARGET_DIR:-${config.targetDir}}"
+CLAUDE_AUTH_LABEL="\${CLAUDE_AUTH_LABEL:-}"
 GIT_AUTH_USER="\${GIT_AUTH_USER:-\${GITHUB_USER:-x-access-token}}"
 GIT_AUTH_TOKEN="\${GIT_AUTH_TOKEN:-\${GITHUB_TOKEN:-\${GH_TOKEN:-}}}"
 GH_TOKEN="\${GH_TOKEN:-\${GIT_AUTH_TOKEN:-}}"
@@ -18,7 +19,28 @@ GIT_USER_EMAIL="\${GIT_USER_EMAIL:-}"
 CODEX_AUTO_UPDATE="\${CODEX_AUTO_UPDATE:-1}"
 MCP_PLAYWRIGHT_ENABLE="\${MCP_PLAYWRIGHT_ENABLE:-${config.enableMcpPlaywright ? "1" : "0"}}"
 MCP_PLAYWRIGHT_CDP_ENDPOINT="\${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"
-MCP_PLAYWRIGHT_ISOLATED="\${MCP_PLAYWRIGHT_ISOLATED:-1}"`
+MCP_PLAYWRIGHT_ISOLATED="\${MCP_PLAYWRIGHT_ISOLATED:-1}"
+
+SSH_ENV_PATH="/home/${config.sshUser}/.ssh/environment"
+
+docker_git_upsert_ssh_env() {
+  local key="$1"
+  local value="$2"
+
+  if [[ -d "$SSH_ENV_PATH" ]]; then
+    mv "$SSH_ENV_PATH" "$SSH_ENV_PATH.bak-$(date +%s)" || true
+  fi
+
+  mkdir -p "$(dirname "$SSH_ENV_PATH")"
+  touch "$SSH_ENV_PATH"
+
+  awk -v k="$key" -F= '$1 != k { print }' "$SSH_ENV_PATH" > "$SSH_ENV_PATH.tmp"
+  mv "$SSH_ENV_PATH.tmp" "$SSH_ENV_PATH"
+
+  printf "%s\n" "$key=$value" >> "$SSH_ENV_PATH"
+  chmod 600 "$SSH_ENV_PATH" || true
+  chown 1000:1000 "$SSH_ENV_PATH" || true
+}`
 
 export const renderEntrypointAuthorizedKeys = (config: TemplateConfig): string =>
   `# 1) Authorized keys are mounted from host at /authorized_keys

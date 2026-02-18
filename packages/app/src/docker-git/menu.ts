@@ -9,7 +9,16 @@ import React, { useEffect, useMemo, useState } from "react"
 
 import { resolveCreateInputs } from "./menu-create.js"
 import { handleUserInput, type InputStage } from "./menu-input-handler.js"
-import { renderCreate, renderMenu, renderSelect, renderStepLabel } from "./menu-render.js"
+import {
+  renderAuthMenu,
+  renderAuthPrompt,
+  renderCreate,
+  renderMenu,
+  renderProjectAuthMenu,
+  renderProjectAuthPrompt,
+  renderSelect,
+  renderStepLabel
+} from "./menu-render.js"
 import { leaveTui, resumeTui } from "./menu-shared.js"
 import { defaultMenuStartupSnapshot, resolveMenuStartupSnapshot } from "./menu-startup.js"
 import { createSteps, type MenuEnv, type MenuState, type ViewState } from "./menu-types.js"
@@ -80,6 +89,22 @@ const renderView = (context: RenderContext) => {
     const label = renderStepLabel(step, currentDefaults)
 
     return renderCreate(label, context.view.buffer, context.message, context.view.step, currentDefaults)
+  }
+
+  if (context.view._tag === "AuthMenu") {
+    return renderAuthMenu(context.view.snapshot, context.view.selected, context.message)
+  }
+
+  if (context.view._tag === "AuthPrompt") {
+    return renderAuthPrompt(context.view, context.message)
+  }
+
+  if (context.view._tag === "ProjectAuthMenu") {
+    return renderProjectAuthMenu(context.view.snapshot, context.view.selected, context.message)
+  }
+
+  if (context.view._tag === "ProjectAuthPrompt") {
+    return renderProjectAuthPrompt(context.view, context.message)
   }
 
   return renderSelect({

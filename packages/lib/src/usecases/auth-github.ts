@@ -17,6 +17,7 @@ import { ensureEnvFile, parseEnvEntries, readEnvText, removeEnvKey, upsertEnvKey
 import { ensureGhAuthImage, ghAuthDir, ghAuthRoot, ghImageName } from "./github-auth-image.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
+import { autoSyncState } from "./state-repo.js"
 
 type GithubTokenEntry = {
   readonly key: string
@@ -101,10 +102,10 @@ const normalizeGithubScopes = (value: string | null | undefined): ReadonlyArray<
   return scopes.length === 0 ? defaultGithubScopes.split(",") : scopes
 }
 
-const withEnvContext = <A, E>(
+const withEnvContext = <A, E, R>(
   envGlobalPath: string,
-  run: (context: EnvContext) => Effect.Effect<A, E, FileSystem.FileSystem>
-): Effect.Effect<A, E | PlatformError, FileSystem.FileSystem | Path.Path> =>
+  run: (context: EnvContext) => Effect.Effect<A, E, FileSystem.FileSystem | R>
+): Effect.Effect<A, E | PlatformError, FileSystem.FileSystem | Path.Path | R> =>
   withFsPathContext(({ cwd, fs, path }) =>
     Effect.gen(function*(_) {
       yield* _(ensureGithubOrchLayout(cwd, envGlobalPath))
@@ -232,13 +233,16 @@ export const authGithubLogin = (
       yield* _(ensureGithubOrchLayout(cwd, command.envGlobalPath))
       const envPath = resolvePathFromCwd(path, cwd, command.envGlobalPath)
       const token = command.token?.trim() ?? ""
+      const key = buildGithubTokenKey(command.label)
+      const label = labelFromKey(key)
       if (token.length > 0) {
         yield* _(ensureEnvFile(fs, path, envPath))
-        const key = buildGithubTokenKey(command.label)
         yield* _(persistGithubToken(fs, envPath, key, token))
+        yield* _(autoSyncState(`chore(state): auth gh ${label}`))
         return
       }
-      return yield* _(runGithubInteractiveLogin(cwd, fs, path, envPath, command))
+      yield* _(runGithubInteractiveLogin(cwd, fs, path, envPath, command))
+      yield* _(autoSyncState(`chore(state): auth gh ${label}`))
     })
   )
 
@@ -262,8 +266,10 @@ export const authGithubStatus = (
         yield* _(Effect.log(`GitHub not connected (no tokens in ${envPath}).`))
         return
       }
-      const labels = tokens.map((entry) => entry.label).join(", ")
-      yield* _(Effect.log(`GitHub tokens: ${labels}`))
+      const sample = tokens.slice(0, 20).map((entry) => entry.label).join(", ")
+      const remaining = tokens.length - Math.min(tokens.length, 20)
+      const suffix = remaining > 0 ? ` ... (+${remaining} more)` : ""
+      yield* _(Effect.log(`GitHub tokens (${tokens.length}): ${sample}${suffix}`))
     }))
 
 // CHANGE: remove GitHub auth token from the shared env file
@@ -278,7 +284,7 @@ export const authGithubStatus = (
 // COMPLEXITY: O(n) where n = |env|
 export const authGithubLogout = (
   command: AuthGithubLogoutCommand
-): Effect.Effect<void, PlatformError, GithubFsRuntime> =>
+): Effect.Effect<void, PlatformError, GithubRuntime> =>
   withEnvContext(command.envGlobalPath, ({ current, envPath, fs }) =>
     Effect.gen(function*(_) {
       const key = buildGithubTokenKey(command.label)
@@ -286,4 +292,5 @@ export const authGithubLogout = (
       yield* _(fs.writeFileString(envPath, nextText))
       const label = labelFromKey(key)
       yield* _(Effect.log(`GitHub token removed (${label}) from ${envPath}`))
+      yield* _(autoSyncState(`chore(state): auth gh logout ${label}`))
     }))

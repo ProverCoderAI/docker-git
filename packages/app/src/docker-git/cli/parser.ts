@@ -22,7 +22,7 @@ const statusCommand: Command = { _tag: "Status" }
 const downAllCommand: Command = { _tag: "DownAll" }
 
 const parseCreate = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> =>
-  Either.flatMap(parseRawOptions(args), buildCreateCommand)
+  Either.flatMap(parseRawOptions(args), (raw) => buildCreateCommand(raw))
 
 // CHANGE: parse CLI arguments into a typed command
 // WHY: enforce deterministic, pure parsing before any effects run

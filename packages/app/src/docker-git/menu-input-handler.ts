@@ -1,5 +1,7 @@
+import { handleAuthInput } from "./menu-auth.js"
 import { handleCreateInput } from "./menu-create.js"
 import { handleMenuInput } from "./menu-menu.js"
+import { handleProjectAuthInput } from "./menu-project-auth.js"
 import { handleSelectInput } from "./menu-select.js"
 import type { MenuKeyInput, MenuRunner, MenuState, MenuViewContext, ViewState } from "./menu-types.js"
 
@@ -19,6 +21,8 @@ export type MenuInputContext = MenuViewContext & {
   readonly runner: MenuRunner
   readonly exit: () => void
 }
+
+type ActiveView = Exclude<ViewState, { readonly _tag: "Menu" }>
 
 const activateInput = (
   input: string,
@@ -59,43 +63,79 @@ const shouldHandleMenuInput = (
   return activation.allowProcessing
 }
 
-export const handleUserInput = (
+const handleMenuViewInput = (
   input: string,
   key: MenuKeyInput,
   context: MenuInputContext
 ) => {
-  if (context.busy || context.sshActive) {
+  if (!shouldHandleMenuInput(input, key, context)) {
     return
   }
+  handleMenuInput(input, key, {
+    selected: context.selected,
+    setSelected: context.setSelected,
+    state: context.state,
+    runner: context.runner,
+    exit: context.exit,
+    setView: context.setView,
+    setMessage: context.setMessage,
+    setActiveDir: context.setActiveDir
+  })
+}
 
-  if (context.view._tag === "Menu") {
-    if (!shouldHandleMenuInput(input, key, context)) {
-      return
-    }
-    handleMenuInput(input, key, {
-      selected: context.selected,
-      setSelected: context.setSelected,
-      state: context.state,
-      runner: context.runner,
-      exit: context.exit,
-      setView: context.setView,
-      setMessage: context.setMessage
-    })
-    return
-  }
+const handleCreateViewInput = (
+  input: string,
+  key: MenuKeyInput,
+  view: Extract<ViewState, { readonly _tag: "Create" }>,
+  context: MenuInputContext
+) => {
+  handleCreateInput(input, key, view, {
+    state: context.state,
+    setView: context.setView,
+    setMessage: context.setMessage,
+    runner: context.runner,
+    setActiveDir: context.setActiveDir
+  })
+}
 
-  if (context.view._tag === "Create") {
-    handleCreateInput(input, key, context.view, {
-      state: context.state,
-      setView: context.setView,
-      setMessage: context.setMessage,
-      runner: context.runner,
-      setActiveDir: context.setActiveDir
-    })
-    return
-  }
+const handleAuthViewInput = (
+  input: string,
+  key: MenuKeyInput,
+  view: Extract<ViewState, { readonly _tag: "AuthMenu" | "AuthPrompt" }>,
+  context: MenuInputContext
+) => {
+  handleAuthInput(input, key, view, {
+    state: context.state,
+    setView: context.setView,
+    setMessage: context.setMessage,
+    setActiveDir: context.setActiveDir,
+    runner: context.runner,
+    setSshActive: context.setSshActive,
+    setSkipInputs: context.setSkipInputs
+  })
+}
 
-  handleSelectInput(input, key, context.view, {
+const handleProjectAuthViewInput = (
+  input: string,
+  key: MenuKeyInput,
+  view: Extract<ViewState, { readonly _tag: "ProjectAuthMenu" | "ProjectAuthPrompt" }>,
+  context: MenuInputContext
+) => {
+  handleProjectAuthInput(input, key, view, {
+    runner: context.runner,
+    setView: context.setView,
+    setMessage: context.setMessage,
+    setActiveDir: context.setActiveDir
+  })
+}
+
+const handleSelectViewInput = (
+  input: string,
+  key: MenuKeyInput,
+  view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
+  context: MenuInputContext
+) => {
+  handleSelectInput(input, key, view, {
     setView: context.setView,
     setMessage: context.setMessage,
     setActiveDir: context.setActiveDir,
@@ -104,4 +144,40 @@ export const handleUserInput = (
     setSshActive: context.setSshActive,
     setSkipInputs: context.setSkipInputs
   })
+}
+
+const handleActiveViewInput = (
+  input: string,
+  key: MenuKeyInput,
+  view: ActiveView,
+  context: MenuInputContext
+) => {
+  if (view._tag === "Create") {
+    handleCreateViewInput(input, key, view, context)
+    return
+  }
+  if (view._tag === "AuthMenu" || view._tag === "AuthPrompt") {
+    handleAuthViewInput(input, key, view, context)
+    return
+  }
+  if (view._tag === "ProjectAuthMenu" || view._tag === "ProjectAuthPrompt") {
+    handleProjectAuthViewInput(input, key, view, context)
+    return
+  }
+  handleSelectViewInput(input, key, view, context)
+}
+
+export const handleUserInput = (
+  input: string,
+  key: MenuKeyInput,
+  context: MenuInputContext
+) => {
+  if (context.busy || context.sshActive) {
+    return
+  }
+  if (context.view._tag === "Menu") {
+    handleMenuViewInput(input, key, context)
+    return
+  }
+  handleActiveViewInput(input, key, context.view, context)
 }

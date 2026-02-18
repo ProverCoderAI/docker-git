@@ -59,10 +59,10 @@ Structure (simplified):
   authorized_keys
   .orch/
     env/
-      global.env
+      global.env      # shared tokens/keys (GitHub, Git, Claude) with labels
     auth/
-      codex/          # shared Codex auth cache (credentials)
-      gh/             # shared GitHub auth (optional)
+      codex/          # shared Codex auth/config (when CODEX_SHARE_AUTH=1)
+      gh/             # GH CLI auth cache for OAuth login container
   <owner>/<repo>/
     docker-compose.yml
     Dockerfile
@@ -70,7 +70,6 @@ Structure (simplified):
     docker-git.json
     .orch/
       env/
-        global.env    # copied/synced from root .orch/env/global.env
         project.env   # per-project env knobs (see below)
       auth/
         codex/        # project-local Codex state (sessions/logs/tmp/etc)
@@ -79,7 +78,7 @@ Structure (simplified):
 ## Codex Auth: Shared Credentials, Per-Project Sessions
 
 Default behavior:
-- Shared credentials live in `/home/dev/.codex-shared/auth.json` (mounted from projects root).
+- Shared credentials live in `/home/dev/.codex-shared/auth.json` (mounted from `<projectsRoot>/.orch/auth/codex`).
 - Each project keeps its own Codex state under `/home/dev/.codex/` (mounted from project `.orch/auth/codex`).
 - The entrypoint links `/home/dev/.codex/auth.json -> /home/dev/.codex-shared/auth.json`.
 
@@ -160,7 +159,7 @@ Clone auth error (`Invalid username or token`):
   ```bash
   pnpm run docker-git auth github status
   pnpm run docker-git auth github logout
-  pnpm run docker-git auth github login --token '<GITHUB_TOKEN>'
+  pnpm run docker-git auth github login --web
   pnpm run docker-git auth github status
   ```
 - Token requirements:

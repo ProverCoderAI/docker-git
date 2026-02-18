@@ -5,6 +5,7 @@ import {
   buildSshCommand,
   resolveCodexAuthPath,
   resolveGlobalEnvPath,
+  resolveOrchRoot,
   resolveProjectsRoot,
   resolveSecretsRoot
 } from "../../src/server/core/domain.js"
@@ -29,13 +30,14 @@ describe("resolveProjectsRoot", () => {
     }))
 })
 
-describe("secrets helpers", () => {
-  it.effect("builds secrets paths", () =>
+describe("orch helpers", () => {
+  it.effect("builds orch paths", () =>
     Effect.sync(() => {
       const root = "/root/.docker-git"
-      expect(resolveSecretsRoot(root)).toBe("/root/.docker-git/secrets")
-      expect(resolveGlobalEnvPath(root)).toBe("/root/.docker-git/secrets/global.env")
-      expect(resolveCodexAuthPath(root)).toBe("/root/.docker-git/secrets/codex")
+      expect(resolveOrchRoot(root)).toBe("/root/.docker-git/.orch")
+      expect(resolveSecretsRoot(root)).toBe("/root/.docker-git/.orch")
+      expect(resolveGlobalEnvPath(root)).toBe("/root/.docker-git/.orch/env/global.env")
+      expect(resolveCodexAuthPath(root)).toBe("/root/.docker-git/.orch/auth/codex")
     }))
 })
 

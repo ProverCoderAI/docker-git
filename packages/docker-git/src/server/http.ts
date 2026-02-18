@@ -22,8 +22,8 @@ import { DockerCommandError } from "../shell/errors.js"
 import { readProjectConfig } from "../shell/config.js"
 import { ProjectNotFoundError, StaticAssetNotFoundError } from "./errors.js"
 import { ProjectParamsSchema } from "./core/schema.js"
-import { resolveCodexAuthPath, resolveGlobalEnvPath, resolveSecretsRoot } from "./core/domain.js"
-import { upsertEnvKey } from "./core/env.js"
+import { resolveCodexAuthPath, resolveGlobalEnvPath } from "./core/domain.js"
+import { parseEnvEntries, upsertEnvKey } from "./core/env.js"
 import { loadProject, scanProjects } from "./projects.js"
 import { readDockerComposeLogs, readDockerComposePs } from "./docker.js"
 import { readEnvFile, writeEnvFile } from "./env.js"
@@ -50,18 +50,31 @@ import {
   renderOutputPage,
   renderTerminalPage
 } from "./view.js"
-import type { GithubAccountView } from "./view.js"
 import {
   buildGithubTokenKey,
-  fetchGithubAccount,
   findGithubTokenByLabel,
   listGithubTokens,
-  resolveGithubLabelForToken,
+  projectGithubLabelKey,
+  resolveProjectGithubLabel,
   resolveProjectGithubToken
 } from "./github.js"
+import {
+  findGitCredentialByLabel,
+  projectGitLabelKey,
+  resolveProjectGitLabel,
+  resolveProjectGitToken
+} from "./git-credentials.js"
+import {
+  findClaudeApiKeyByLabel,
+  projectClaudeLabelKey,
+  resolveProjectClaudeApiKey,
+  resolveProjectClaudeLabel
+} from "./claude.js"
+import { buildLabeledEnvKey } from "./labeled-env.js"
 import { createProject } from "@effect-template/lib/usecases/actions"
 import { buildCreateCommand } from "@effect-template/lib/core/command-builders"
 import type { RawOptions } from "@effect-template/lib/core/command-options"
+import type { DockerAccessError as LibDockerAccessError } from "@effect-template/lib/shell/errors"
 import { defaultTemplateConfig, deriveRepoSlug } from "../core/domain.js"
 import { formatParseError } from "@effect-template/lib/core/parse-errors"
 import {
@@ -97,6 +110,7 @@ type ApiError =
   | CloneFailedError
   | PortProbeError
   | DockerCommandError
+  | LibDockerAccessError
   | CodexAuthError
   | ParseResult.ParseError
   | HttpBody.HttpBodyError
@@ -123,6 +137,37 @@ const GithubProjectConnectSchema = Schema.Struct({
 
 const GithubProjectDisconnectSchema = Schema.Struct({})
 
+const GitConnectSchema = Schema.Struct({
+  gitToken: Schema.String,
+  gitUser: Schema.optional(Schema.String),
+  gitLabel: Schema.optional(Schema.String)
+})
+
+const GitDisconnectSchema = Schema.Struct({
+  gitLabel: Schema.optional(Schema.String)
+})
+
+const GitProjectConnectSchema = Schema.Struct({
+  gitLabel: Schema.String
+})
+
+const GitProjectDisconnectSchema = Schema.Struct({})
+
+const ClaudeConnectSchema = Schema.Struct({
+  claudeApiKey: Schema.String,
+  claudeLabel: Schema.optional(Schema.String)
+})
+
+const ClaudeDisconnectSchema = Schema.Struct({
+  claudeLabel: Schema.optional(Schema.String)
+})
+
+const ClaudeProjectConnectSchema = Schema.Struct({
+  claudeLabel: Schema.String
+})
+
+const ClaudeProjectDisconnectSchema = Schema.Struct({})
+
 const CodexConnectSchema = Schema.Struct({
   codexSource: Schema.optional(Schema.String),
   codexLabel: Schema.optional(Schema.String)
@@ -148,18 +193,6 @@ const GitIdentitySchema = Schema.Struct({
   gitUserEmail: Schema.String
 })
 
-const makeGithubConnected = (label: string, login: string): GithubAccountView => ({
-  _tag: "Connected",
-  label,
-  login
-})
-
-const makeGithubError = (label: string, message: string): GithubAccountView => ({
-  _tag: "Error",
-  label,
-  message
-})
-
 const sshPortRange: PortRange = { min: 2222, max: 2299 }
 
 const chooseSshPort = (
@@ -167,6 +200,14 @@ const chooseSshPort = (
   usedPorts: ReadonlyArray<number>
 ): number =>
   findAvailablePort(preferred, usedPorts, sshPortRange) ?? preferred
+
+const countKeyEntries = (envText: string, baseKey: string): number => {
+  const prefix = `${baseKey}__`
+  return parseEnvEntries(envText)
+    .filter((entry) =>
+      entry.value.trim().length > 0 && (entry.key === baseKey || entry.key.startsWith(prefix)))
+    .length
+}
 
 const jsonResponse = (data: unknown, status: number) =>
   pipe(
@@ -463,7 +504,7 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
       )
     })
 
-  const uiRouter = HttpRouter.empty.pipe(
+  const uiRouterBase = HttpRouter.empty.pipe(
     HttpRouter.get(
       "/",
       pipe(
@@ -480,19 +521,8 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
         const resolvedRoot = path.resolve(projectsRoot)
         const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
         const envText = yield* _(readEnvFile(globalEnvPath))
-        const tokens = listGithubTokens(envText)
-        const results = yield* _(
-          Effect.forEach(tokens, (entry) => Effect.either(fetchGithubAccount(entry)))
-        )
-        const accounts = results.map((result) =>
-          Either.match(result, {
-            onLeft: (error: { readonly label: string; readonly message: string }) =>
-              makeGithubError(error.label, error.message),
-            onRight: (account: { readonly label: string; readonly login: string }) =>
-              makeGithubConnected(account.label, account.login)
-          })
-        )
-        const html = renderClonePage(globalEnvPath, accounts)
+        const githubTokenEntries = countKeyEntries(envText, "GITHUB_TOKEN")
+        const html = renderClonePage(globalEnvPath, githubTokenEntries)
         return HttpServerResponse.html(html)
       }).pipe(
         Effect.tapError((error) => Console.error(`clone failed: ${String(error)}`)),
@@ -507,20 +537,18 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
         const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
         const codexRootPath = yield* _(resolveWritableCodexRoot(resolvedRoot))
         const envText = yield* _(readEnvFile(globalEnvPath))
-        const tokens = listGithubTokens(envText)
-        const results = yield* _(
-          Effect.forEach(tokens, (entry) => Effect.either(fetchGithubAccount(entry)))
-        )
-        const accounts = results.map((result) =>
-          Either.match(result, {
-            onLeft: (error: { readonly label: string; readonly message: string }) =>
-              makeGithubError(error.label, error.message),
-            onRight: (account: { readonly label: string; readonly login: string }) =>
-              makeGithubConnected(account.label, account.login)
-          })
-        )
+        const githubTokenEntries = countKeyEntries(envText, "GITHUB_TOKEN")
+        const gitTokenEntries = countKeyEntries(envText, "GIT_AUTH_TOKEN")
+        const claudeKeyEntries = countKeyEntries(envText, "ANTHROPIC_API_KEY")
         const codexAccounts = yield* _(listCodexAccounts(codexRootPath))
-        const html = renderIntegrationsPage(globalEnvPath, accounts, codexRootPath, codexAccounts)
+        const html = renderIntegrationsPage(
+          globalEnvPath,
+          githubTokenEntries,
+          gitTokenEntries,
+          claudeKeyEntries,
+          codexRootPath,
+          codexAccounts
+        )
         return HttpServerResponse.html(html)
       }).pipe(Effect.catchAll(htmlErrorResponse))
     ),
@@ -554,6 +582,74 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
         const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
         const envText = yield* _(readEnvFile(globalEnvPath))
         const key = buildGithubTokenKey(githubLabel?.trim() ?? "")
+        const nextText = upsertEnvKey(envText, key, "")
+        yield* _(writeEnvFile(globalEnvPath, nextText))
+        return HttpServerResponse.redirect("/integrations")
+      }).pipe(Effect.catchAll(htmlErrorResponse))
+    ),
+    HttpRouter.post(
+      "/integrations/git/connect",
+      Effect.gen(function* (_) {
+        const { gitLabel, gitToken, gitUser } = yield* _(HttpServerRequest.schemaBodyUrlParams(GitConnectSchema))
+        const path = yield* _(Path.Path)
+        const resolvedRoot = path.resolve(projectsRoot)
+        const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
+        const envText = yield* _(readEnvFile(globalEnvPath))
+        const label = gitLabel?.trim() ?? ""
+        const tokenKey = buildLabeledEnvKey("GIT_AUTH_TOKEN", label)
+        const userKey = buildLabeledEnvKey("GIT_AUTH_USER", label)
+        const trimmedGitUser = gitUser?.trim() ?? ""
+        const user = trimmedGitUser.length > 0 ? trimmedGitUser : "x-access-token"
+        const withToken = upsertEnvKey(envText, tokenKey, gitToken)
+        const nextText = upsertEnvKey(withToken, userKey, user)
+        yield* _(writeEnvFile(globalEnvPath, nextText))
+        return HttpServerResponse.redirect("/integrations")
+      }).pipe(Effect.catchAll(htmlErrorResponse))
+    ),
+    HttpRouter.post(
+      "/integrations/git/disconnect",
+      Effect.gen(function* (_) {
+        const { gitLabel } = yield* _(HttpServerRequest.schemaBodyUrlParams(GitDisconnectSchema))
+        const path = yield* _(Path.Path)
+        const resolvedRoot = path.resolve(projectsRoot)
+        const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
+        const envText = yield* _(readEnvFile(globalEnvPath))
+        const label = gitLabel?.trim() ?? ""
+        const tokenKey = buildLabeledEnvKey("GIT_AUTH_TOKEN", label)
+        const userKey = buildLabeledEnvKey("GIT_AUTH_USER", label)
+        const withoutToken = upsertEnvKey(envText, tokenKey, "")
+        const nextText = upsertEnvKey(withoutToken, userKey, "")
+        yield* _(writeEnvFile(globalEnvPath, nextText))
+        return HttpServerResponse.redirect("/integrations")
+      }).pipe(Effect.catchAll(htmlErrorResponse))
+    ),
+    HttpRouter.post(
+      "/integrations/claude/connect",
+      Effect.gen(function* (_) {
+        const { claudeApiKey, claudeLabel } = yield* _(
+          HttpServerRequest.schemaBodyUrlParams(ClaudeConnectSchema)
+        )
+        const path = yield* _(Path.Path)
+        const resolvedRoot = path.resolve(projectsRoot)
+        const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
+        const envText = yield* _(readEnvFile(globalEnvPath))
+        const key = buildLabeledEnvKey("ANTHROPIC_API_KEY", claudeLabel?.trim() ?? "")
+        const nextText = upsertEnvKey(envText, key, claudeApiKey)
+        yield* _(writeEnvFile(globalEnvPath, nextText))
+        return HttpServerResponse.redirect("/integrations")
+      }).pipe(Effect.catchAll(htmlErrorResponse))
+    ),
+    HttpRouter.post(
+      "/integrations/claude/disconnect",
+      Effect.gen(function* (_) {
+        const { claudeLabel } = yield* _(
+          HttpServerRequest.schemaBodyUrlParams(ClaudeDisconnectSchema)
+        )
+        const path = yield* _(Path.Path)
+        const resolvedRoot = path.resolve(projectsRoot)
+        const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
+        const envText = yield* _(readEnvFile(globalEnvPath))
+        const key = buildLabeledEnvKey("ANTHROPIC_API_KEY", claudeLabel?.trim() ?? "")
         const nextText = upsertEnvKey(envText, key, "")
         yield* _(writeEnvFile(globalEnvPath, nextText))
         return HttpServerResponse.redirect("/integrations")
@@ -649,7 +745,6 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
 
         const path = yield* _(Path.Path)
         const resolvedRoot = path.resolve(projectsRoot)
-        const secretsRoot = resolveSecretsRoot(resolvedRoot)
         const codexRootPath = yield* _(resolveWritableCodexRoot(resolvedRoot))
         const expectedCodexRoot = resolveCodexAuthPath(resolvedRoot)
         const resolvedCodexRoot = path.resolve(codexRootPath)
@@ -665,7 +760,6 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
         const selectedPort = chooseSshPort(defaultTemplateConfig.sshPort, usedPorts)
         const raw: RawOptions = {
           repoUrl: trimmedRepoUrl,
-          secretsRoot,
           codexAuthPath: projectCodexPath,
           outDir,
           up: false,
@@ -709,7 +803,9 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
                     "GIT_AUTH_TOKEN",
                     selected.token
                   )
-                  const nextProjectEnv = upsertEnvKey(withGitToken, "GH_TOKEN", selected.token)
+                  const withGhToken = upsertEnvKey(withGitToken, "GH_TOKEN", selected.token)
+                  const withGitLabel = upsertEnvKey(withGhToken, projectGitLabelKey, "")
+                  const nextProjectEnv = upsertEnvKey(withGitLabel, projectGithubLabelKey, selected.label)
                   yield* _(writeEnvFile(project.envProjectPath, nextProjectEnv))
                 }
                 yield* _(syncProjectCodexAuth(projectsRoot, project))
@@ -755,7 +851,10 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
           })
         )
       }).pipe(Effect.catchAll(htmlErrorResponse))
-    ),
+    )
+  )
+
+  const uiRouter = uiRouterBase.pipe(
     HttpRouter.get(
       "/terminal/:projectId",
       pipe(
@@ -792,30 +891,34 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
         ),
         Effect.flatMap(({ project, globalEnv, projectEnv, integrationsEnv, codexAccounts, codexProject }) =>
           Effect.gen(function* (_) {
-            const tokens = listGithubTokens(integrationsEnv)
-            const results = yield* _(
-              Effect.forEach(tokens, (entry) => Effect.either(fetchGithubAccount(entry)))
-            )
-            const accounts = results.map((result) =>
-              Either.match(result, {
-                onLeft: (error: { readonly label: string; readonly message: string }) =>
-                  makeGithubError(error.label, error.message),
-                onRight: (account: { readonly label: string; readonly login: string }) =>
-                  makeGithubConnected(account.label, account.login)
-              })
-            )
-            const activeToken = resolveProjectGithubToken(projectEnv)
-            const activeLabel = activeToken === null
-              ? null
-              : resolveGithubLabelForToken(tokens, activeToken) ?? "custom"
+            const githubTokenEntries = countKeyEntries(integrationsEnv, "GITHUB_TOKEN")
+            const gitTokenEntries = countKeyEntries(integrationsEnv, "GIT_AUTH_TOKEN")
+            const claudeKeyEntries = countKeyEntries(integrationsEnv, "ANTHROPIC_API_KEY")
+
+            const projectGithubLabel = resolveProjectGithubLabel(projectEnv)
+            const projectGithubToken = resolveProjectGithubToken(projectEnv)
+            const activeGithubLabel = projectGithubLabel ?? (projectGithubToken === null ? null : "custom")
+
+            const activeProjectGitLabel = resolveProjectGitLabel(projectEnv)
+            const activeProjectGitToken = resolveProjectGitToken(projectEnv)
+            const activeGitLabel = activeProjectGitLabel ?? (activeProjectGitToken === null ? null : "custom")
+
+            const activeProjectClaudeLabel = resolveProjectClaudeLabel(projectEnv)
+            const activeProjectClaudeApiKey = resolveProjectClaudeApiKey(projectEnv)
+            const activeClaudeLabel = activeProjectClaudeLabel ?? (activeProjectClaudeApiKey === null ? null : "custom")
+
             const codexLabel = resolveProjectCodexLabel(projectEnv)
             const activeCodexLabel = codexLabel ?? (codexProject.connected ? "custom" : null)
             return renderEnvPage(
               project,
               globalEnv,
               projectEnv,
-              accounts,
-              activeLabel,
+              githubTokenEntries,
+              activeGithubLabel,
+              gitTokenEntries,
+              activeGitLabel,
+              claudeKeyEntries,
+              activeClaudeLabel,
               codexAccounts,
               activeCodexLabel
             )
@@ -872,7 +975,9 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
         }
         const projectEnv = yield* _(readEnvFile(project.envProjectPath))
         const withGitToken = upsertEnvKey(projectEnv, "GIT_AUTH_TOKEN", selected.token)
-        const nextProjectEnv = upsertEnvKey(withGitToken, "GH_TOKEN", selected.token)
+        const withGhToken = upsertEnvKey(withGitToken, "GH_TOKEN", selected.token)
+        const withGitLabel = upsertEnvKey(withGhToken, projectGitLabelKey, "")
+        const nextProjectEnv = upsertEnvKey(withGitLabel, projectGithubLabelKey, selected.label)
         yield* _(writeEnvFile(project.envProjectPath, nextProjectEnv))
         return HttpServerResponse.redirect(`/env/${encodeURIComponent(project.id)}`)
       }).pipe(Effect.catchAll(htmlErrorResponse))
@@ -885,7 +990,89 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
         const project = yield* _(loadProject(projectsRoot, projectId, cwd))
         const projectEnv = yield* _(readEnvFile(project.envProjectPath))
         const withoutGitToken = upsertEnvKey(projectEnv, "GIT_AUTH_TOKEN", "")
-        const nextProjectEnv = upsertEnvKey(withoutGitToken, "GH_TOKEN", "")
+        const withGhToken = upsertEnvKey(withoutGitToken, "GH_TOKEN", "")
+        const withGitLabel = upsertEnvKey(withGhToken, projectGitLabelKey, "")
+        const nextProjectEnv = upsertEnvKey(withGitLabel, projectGithubLabelKey, "")
+        yield* _(writeEnvFile(project.envProjectPath, nextProjectEnv))
+        return HttpServerResponse.redirect(`/env/${encodeURIComponent(project.id)}`)
+      }).pipe(Effect.catchAll(htmlErrorResponse))
+    ),
+    HttpRouter.post(
+      "/env/:projectId/connect/git",
+      Effect.gen(function* (_) {
+        const { projectId } = yield* _(projectParams)
+        const { gitLabel } = yield* _(HttpServerRequest.schemaBodyUrlParams(GitProjectConnectSchema))
+        const project = yield* _(loadProject(projectsRoot, projectId, cwd))
+        const path = yield* _(Path.Path)
+        const resolvedRoot = path.resolve(projectsRoot)
+        const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
+        const globalEnv = yield* _(readEnvFile(globalEnvPath))
+        const selected = findGitCredentialByLabel(globalEnv, gitLabel)
+        if (selected === null) {
+          return HttpServerResponse.html(
+            renderOutputPage("Git credentials not found", `Label not found: ${gitLabel}`)
+          )
+        }
+        const projectEnv = yield* _(readEnvFile(project.envProjectPath))
+        const withToken = upsertEnvKey(projectEnv, "GIT_AUTH_TOKEN", selected.token)
+        const withUser = upsertEnvKey(withToken, "GIT_AUTH_USER", selected.user)
+        const withGhToken = upsertEnvKey(withUser, "GH_TOKEN", selected.token)
+        const withGitLabel = upsertEnvKey(withGhToken, projectGitLabelKey, selected.label)
+        const nextProjectEnv = upsertEnvKey(withGitLabel, projectGithubLabelKey, selected.label)
+        yield* _(writeEnvFile(project.envProjectPath, nextProjectEnv))
+        return HttpServerResponse.redirect(`/env/${encodeURIComponent(project.id)}`)
+      }).pipe(Effect.catchAll(htmlErrorResponse))
+    ),
+    HttpRouter.post(
+      "/env/:projectId/disconnect/git",
+      Effect.gen(function* (_) {
+        const { projectId } = yield* _(projectParams)
+        yield* _(HttpServerRequest.schemaBodyUrlParams(GitProjectDisconnectSchema))
+        const project = yield* _(loadProject(projectsRoot, projectId, cwd))
+        const projectEnv = yield* _(readEnvFile(project.envProjectPath))
+        const withoutToken = upsertEnvKey(projectEnv, "GIT_AUTH_TOKEN", "")
+        const withoutUser = upsertEnvKey(withoutToken, "GIT_AUTH_USER", "")
+        const withoutGhToken = upsertEnvKey(withoutUser, "GH_TOKEN", "")
+        const withGitLabel = upsertEnvKey(withoutGhToken, projectGitLabelKey, "")
+        const nextProjectEnv = upsertEnvKey(withGitLabel, projectGithubLabelKey, "")
+        yield* _(writeEnvFile(project.envProjectPath, nextProjectEnv))
+        return HttpServerResponse.redirect(`/env/${encodeURIComponent(project.id)}`)
+      }).pipe(Effect.catchAll(htmlErrorResponse))
+    ),
+    HttpRouter.post(
+      "/env/:projectId/connect/claude",
+      Effect.gen(function* (_) {
+        const { projectId } = yield* _(projectParams)
+        const { claudeLabel } = yield* _(
+          HttpServerRequest.schemaBodyUrlParams(ClaudeProjectConnectSchema)
+        )
+        const project = yield* _(loadProject(projectsRoot, projectId, cwd))
+        const path = yield* _(Path.Path)
+        const resolvedRoot = path.resolve(projectsRoot)
+        const globalEnvPath = resolveGlobalEnvPath(resolvedRoot)
+        const globalEnv = yield* _(readEnvFile(globalEnvPath))
+        const selected = findClaudeApiKeyByLabel(globalEnv, claudeLabel)
+        if (selected === null) {
+          return HttpServerResponse.html(
+            renderOutputPage("Claude key not found", `Label not found: ${claudeLabel}`)
+          )
+        }
+        const projectEnv = yield* _(readEnvFile(project.envProjectPath))
+        const withApiKey = upsertEnvKey(projectEnv, "ANTHROPIC_API_KEY", selected.apiKey)
+        const nextProjectEnv = upsertEnvKey(withApiKey, projectClaudeLabelKey, selected.label)
+        yield* _(writeEnvFile(project.envProjectPath, nextProjectEnv))
+        return HttpServerResponse.redirect(`/env/${encodeURIComponent(project.id)}`)
+      }).pipe(Effect.catchAll(htmlErrorResponse))
+    ),
+    HttpRouter.post(
+      "/env/:projectId/disconnect/claude",
+      Effect.gen(function* (_) {
+        const { projectId } = yield* _(projectParams)
+        yield* _(HttpServerRequest.schemaBodyUrlParams(ClaudeProjectDisconnectSchema))
+        const project = yield* _(loadProject(projectsRoot, projectId, cwd))
+        const projectEnv = yield* _(readEnvFile(project.envProjectPath))
+        const withoutApiKey = upsertEnvKey(projectEnv, "ANTHROPIC_API_KEY", "")
+        const nextProjectEnv = upsertEnvKey(withoutApiKey, projectClaudeLabelKey, "")
         yield* _(writeEnvFile(project.envProjectPath, nextProjectEnv))
         return HttpServerResponse.redirect(`/env/${encodeURIComponent(project.id)}`)
       }).pipe(Effect.catchAll(htmlErrorResponse))
