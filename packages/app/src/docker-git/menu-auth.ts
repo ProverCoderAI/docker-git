@@ -104,10 +104,12 @@ const runAuthPromptEffect = (
           effect,
           Effect.tapError((error) =>
             Effect.ignore(
-              Effect.tryPromise(async () => {
-                writeToTerminal(`\n[docker-git] ${renderError(error)}\n`)
-                await pauseForEnter()
-              })
+              pipe(
+                Effect.sync(() => {
+                  writeToTerminal(`\n[docker-git] ${renderError(error)}\n`)
+                }),
+                Effect.zipRight(pauseForEnter())
+              )
             )
           )
         )

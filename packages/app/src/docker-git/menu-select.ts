@@ -145,10 +145,12 @@ const runWithSuspendedTui = (
           effect,
           Effect.tapError((error) =>
             Effect.ignore(
-              Effect.tryPromise(async () => {
-                writeToTerminal(`\n[docker-git] ${renderError(error)}\n`)
-                await pauseForEnter()
-              })
+              pipe(
+                Effect.sync(() => {
+                  writeToTerminal(`\n[docker-git] ${renderError(error)}\n`)
+                }),
+                Effect.zipRight(pauseForEnter())
+              )
             )
           )
         )
@@ -226,10 +228,12 @@ const runDownSelection = (selected: ProjectItem, context: SelectContext) => {
       ),
       Effect.tapError((error) =>
         Effect.ignore(
-          Effect.tryPromise(async () => {
-            writeToTerminal(`\n[docker-git] ${renderError(error)}\n`)
-            await pauseForEnter()
-          })
+          pipe(
+            Effect.sync(() => {
+              writeToTerminal(`\n[docker-git] ${renderError(error)}\n`)
+            }),
+            Effect.zipRight(pauseForEnter())
+          )
         )
       ),
       Effect.ensuring(

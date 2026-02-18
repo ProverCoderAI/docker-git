@@ -1,6 +1,6 @@
 import type { MenuViewContext, ViewState } from "./menu-types.js"
 
-import { once } from "node:events"
+import { Effect } from "effect"
 
 // CHANGE: share menu escape handling across flows
 // WHY: avoid duplicated logic in TUI handlers
@@ -88,19 +88,35 @@ export const writeToTerminal = (text: string): void => {
 // REF: user-request-2026-02-18-tui-output-hidden
 // SOURCE: n/a
 // PURITY: SHELL
-// EFFECT: Promise<void>
+// EFFECT: Effect<void, never, never>
 // INVARIANT: no-op when stdin/stdout aren't TTY (CI/e2e)
-export const pauseForEnter = (prompt = "Press Enter to return to docker-git..."): Promise<void> => {
+export const pauseForEnter = (
+  prompt = "Press Enter to return to docker-git..."
+): Effect.Effect<void, never, never> => {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    return Promise.resolve()
+    return Effect.void
   }
 
-  // Ensure the prompt isn't glued to the last command line.
-  writeToTerminal(`\n${prompt}\n`)
-  process.stdin.resume()
+  return Effect.async<void>((resume) => {
+    // Ensure the prompt isn't glued to the last command line.
+    writeToTerminal(`\n${prompt}\n`)
+    process.stdin.resume()
 
-  // Wait for the next line (we keep stdin in cooked mode while TUI is suspended).
-  return once(process.stdin, "data").then(() => undefined)
+    const cleanup = () => {
+      process.stdin.off("data", onData)
+    }
+
+    const onData = () => {
+      cleanup()
+      resume(Effect.void)
+    }
+
+    process.stdin.on("data", onData)
+
+    return Effect.sync(() => {
+      cleanup()
+    })
+  }).pipe(Effect.asVoid)
 }
 
 // CHANGE: toggle stdout write muting for Ink rendering
