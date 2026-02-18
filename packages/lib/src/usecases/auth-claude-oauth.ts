@@ -1,15 +1,15 @@
 import * as Command from "@effect/platform/Command"
 import * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
-import { Effect, pipe } from "effect"
+import { Duration, Effect, pipe, Schedule } from "effect"
 import * as Deferred from "effect/Deferred"
 import * as Fiber from "effect/Fiber"
 import type * as Scope from "effect/Scope"
 import * as Stream from "effect/Stream"
 import { writeSync } from "node:fs"
-import * as Readline from "node:readline"
 
 import { AuthError, CommandFailedError } from "../shell/errors.js"
+import { readVisibleLine } from "./auth-claude-oauth-input.js"
 
 type ClaudeAuthorizeInfo = {
   readonly authorizeUrl: string
@@ -64,59 +64,6 @@ const ensureInteractiveStdin = (): Effect.Effect<void, AuthError> =>
       })
     )
 
-const readLine = (prompt: string): Effect.Effect<string, AuthError> =>
-  Effect.async<string, AuthError>((resume) => {
-    // We intentionally use readline (not raw mode) so paste works reliably in common terminals.
-    const hasRawMode = process.stdin.isTTY && typeof process.stdin.setRawMode === "function"
-    const previousRaw = hasRawMode ? process.stdin.isRaw : undefined
-    if (hasRawMode) {
-      process.stdin.setRawMode(false)
-    }
-
-    const rl = Readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      terminal: true
-    })
-
-    let settled = false
-
-    const cleanup = () => {
-      rl.removeAllListeners()
-      rl.close()
-      if (hasRawMode && previousRaw !== undefined) {
-        process.stdin.setRawMode(previousRaw)
-      }
-    }
-
-    rl.on("SIGINT", () => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      resume(Effect.fail(new AuthError({ message: "Claude auth login cancelled." })))
-    })
-
-    writeSync(1, prompt)
-    rl.question("", (answer) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      resume(Effect.succeed(answer))
-    })
-
-    return Effect.sync(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-    })
-  })
-
 const resolveOauthCodeInput = (info: ClaudeAuthorizeInfo): Effect.Effect<string, AuthError> => {
   const fromEnv = oauthCodeFromEnv()
   if (fromEnv !== null) {
@@ -124,7 +71,7 @@ const resolveOauthCodeInput = (info: ClaudeAuthorizeInfo): Effect.Effect<string,
   }
   return ensureInteractiveStdin().pipe(
     Effect.zipRight(
-      readLine(
+      readVisibleLine(
         "\n[docker-git] Paste the Authentication Code from the browser and press Enter (Ctrl+C to cancel):\n> "
       )
     ),
@@ -139,6 +86,11 @@ const resolveOauthCodeInput = (info: ClaudeAuthorizeInfo): Effect.Effect<string,
 const writeChunk = (fd: number, chunk: Uint8Array): Effect.Effect<void> =>
   Effect.sync(() => {
     writeSync(fd, chunk)
+  }).pipe(Effect.asVoid)
+
+const logLine = (line: string): Effect.Effect<void> =>
+  Effect.sync(() => {
+    writeSync(1, line.endsWith("\n") ? line : `${line}\n`)
   }).pipe(Effect.asVoid)
 
 const pumpDockerOutput = (
@@ -204,9 +156,9 @@ const buildDockerLoginSpec = (
 })
 
 const buildDockerLoginArgs = (spec: DockerLoginSpec): ReadonlyArray<string> => {
-  // NOTE: We intentionally avoid `-t` here.
-  // We need stdin as a pipe (to feed the OAuth code), and `docker run -t` errors when stdin isn't a real TTY.
-  const base: Array<string> = ["run", "--rm", "-i", "-v", `${spec.hostPath}:${spec.containerPath}`]
+  // NOTE: Claude Code's `auth login` uses an interactive prompt that behaves poorly without a TTY.
+  // We still want to programmatically feed the code, so we run `docker` under `script(1)` which allocates a pty.
+  const base: Array<string> = ["run", "--rm", "-i", "-t", "-v", `${spec.hostPath}:${spec.containerPath}`]
   for (const entry of spec.env) {
     const trimmed = entry.trim()
     if (trimmed.length === 0) {
@@ -217,13 +169,36 @@ const buildDockerLoginArgs = (spec: DockerLoginSpec): ReadonlyArray<string> => {
   return [...base, spec.image, ...spec.args]
 }
 
+const shellQuote = (value: string): string => {
+  if (value.length === 0) {
+    return "''"
+  }
+  // POSIX-safe single-quote escaping: ' -> '\'' .
+  const singleQuoteEscape = String.raw`'\''`
+  return "'".concat(value.replaceAll("'", singleQuoteEscape), "'")
+}
+
+const buildDockerLoginCommandString = (spec: DockerLoginSpec): string =>
+  ["docker", ...buildDockerLoginArgs(spec)]
+    .map((part) => shellQuote(part))
+    .join(" ")
+
 const startDockerProcess = (
   executor: CommandExecutor.CommandExecutor,
   spec: DockerLoginSpec
 ): Effect.Effect<CommandExecutor.Process, PlatformError, Scope.Scope> =>
   executor.start(
     pipe(
-      Command.make("docker", ...buildDockerLoginArgs(spec)),
+      // We run docker via script(1) to get a pseudo-tty even when we need to pipe input from Node.
+      Command.make(
+        "script",
+        "-q",
+        "-f",
+        "-e",
+        "-c",
+        buildDockerLoginCommandString(spec),
+        "/dev/null"
+      ),
       Command.workingDirectory(spec.cwd),
       Command.stdin("pipe"),
       Command.stdout("pipe"),
@@ -248,6 +223,32 @@ const feedOauthCode = (proc: CommandExecutor.Process, code: string): Effect.Effe
   return pipe(Stream.make(bytes), Stream.run(proc.stdin), Effect.asVoid)
 }
 
+const awaitExitCodeWithHeartbeat = (proc: CommandExecutor.Process): Effect.Effect<number, PlatformError> =>
+  Effect.gen(function*(_) {
+    const start = Date.now()
+    const heartbeat = yield* _(
+      Effect.fork(
+        logLine("[docker-git] Waiting for Claude to finish OAuth login (this can be silent for a bit)...").pipe(
+          Effect.zipRight(
+            Effect.repeat(
+              Effect.sync(() => {
+                const seconds = Math.max(0, Math.floor((Date.now() - start) / 1000))
+                writeSync(1, `[docker-git] Still waiting for Claude... (${seconds}s)\n`)
+              }),
+              Schedule.addDelay(Schedule.forever, () => Duration.seconds(5))
+            )
+          )
+        )
+      )
+    )
+    return yield* _(
+      proc.exitCode.pipe(
+        Effect.map(Number),
+        Effect.ensuring(Fiber.interrupt(heartbeat).pipe(Effect.ignore))
+      )
+    )
+  })
+
 const finishClaudeLogin = (
   outcome: FirstOutcome,
   proc: CommandExecutor.Process
@@ -265,7 +266,7 @@ const finishClaudeLogin = (
         )
       )
     ),
-    Effect.zipRight(proc.exitCode.pipe(Effect.map(Number), Effect.flatMap((exitCode) => ensureExitOk(exitCode)))),
+    Effect.zipRight(awaitExitCodeWithHeartbeat(proc).pipe(Effect.flatMap((exitCode) => ensureExitOk(exitCode)))),
     Effect.asVoid
   )
 }
