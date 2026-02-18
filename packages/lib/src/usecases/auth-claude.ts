@@ -103,7 +103,7 @@ const runClaudeAuthCommand = (
       image: claudeImageName,
       hostPath: accountPath,
       containerPath: claudeConfigDir,
-      env: `CLAUDE_CONFIG_DIR=${claudeConfigDir}`,
+      env: [`CLAUDE_CONFIG_DIR=${claudeConfigDir}`, "BROWSER=echo"],
       args,
       interactive
     }),
@@ -180,7 +180,10 @@ export const authClaudeLogin = (
     return Effect.fail(new AuthError({ message: "Claude auth login requires an interactive TTY." }))
   }
   const accountLabel = normalizeAccountLabel(command.label, "default")
-  return withClaudeAuth(command, ({ accountPath, cwd }) => runClaudeLogin(cwd, accountPath, true)).pipe(
+  return Effect.log(
+    "Claude OAuth: open the URL, then copy the Authentication Code from the browser and paste it here (input is hidden), then press Enter."
+  ).pipe(
+    Effect.zipRight(withClaudeAuth(command, ({ accountPath, cwd }) => runClaudeLogin(cwd, accountPath, true))),
     Effect.zipRight(autoSyncState(`chore(state): auth claude ${accountLabel}`))
   )
 }
