@@ -5,7 +5,6 @@ import { Effect, pipe } from "effect"
 import * as Fiber from "effect/Fiber"
 import type * as Scope from "effect/Scope"
 import * as Stream from "effect/Stream"
-import { writeSync } from "node:fs"
 
 import { AuthError, CommandFailedError } from "../shell/errors.js"
 
@@ -151,6 +150,14 @@ const startDockerProcess = (
     )
   )
 
+const writeChunkToFd = (fd: number, chunk: Uint8Array): void => {
+  if (fd === 2) {
+    process.stderr.write(chunk)
+    return
+  }
+  process.stdout.write(chunk)
+}
+
 const pumpDockerOutput = (
   source: Stream.Stream<Uint8Array, PlatformError>,
   fd: number,
@@ -163,7 +170,7 @@ const pumpDockerOutput = (
     source,
     Stream.runForEach((chunk) =>
       Effect.sync(() => {
-        writeSync(fd, chunk)
+        writeChunkToFd(fd, chunk)
         outputWindow += decoder.decode(chunk)
         if (outputWindow.length > outputWindowSize) {
           outputWindow = outputWindow.slice(-outputWindowSize)

@@ -19,7 +19,7 @@ describe("renderEntrypoint auth bridge", () => {
       expect(entrypoint).toContain("GITHUB_TOKEN=\"${GITHUB_TOKEN:-${GH_TOKEN:-}}\"")
       expect(entrypoint).toContain("if [[ -n \"$GH_TOKEN\" || -n \"$GITHUB_TOKEN\" ]]; then")
       expect(entrypoint).toContain(String.raw`printf "export GITHUB_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN"`)
-      expect(entrypoint).toContain(String.raw`printf "%s\n" "GITHUB_TOKEN=$EFFECTIVE_GITHUB_TOKEN" >> "$SSH_ENV_PATH"`)
+      expect(entrypoint).toContain("docker_git_upsert_ssh_env \"GITHUB_TOKEN\" \"$EFFECTIVE_GITHUB_TOKEN\"")
       expect(entrypoint).toContain("GIT_CREDENTIAL_HELPER_PATH=\"/usr/local/bin/docker-git-credential-helper\"")
       expect(entrypoint).toContain("token=\"$GITHUB_TOKEN\"")
       expect(entrypoint).toContain("token=\"$GH_TOKEN\"")
