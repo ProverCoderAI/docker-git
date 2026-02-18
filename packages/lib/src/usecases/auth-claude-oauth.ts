@@ -183,7 +183,6 @@ type DockerLoginSpec = {
   readonly containerPath: string
   readonly env: ReadonlyArray<string>
   readonly args: ReadonlyArray<string>
-  readonly tty: boolean
 }
 
 const buildDockerLoginSpec = (
@@ -197,16 +196,13 @@ const buildDockerLoginSpec = (
   hostPath: accountPath,
   containerPath,
   env: [`CLAUDE_CONFIG_DIR=${containerPath}`, "BROWSER=echo"],
-  args: ["auth", "login"],
-  tty: process.stdin.isTTY && process.stdout.isTTY
+  args: ["auth", "login"]
 })
 
 const buildDockerLoginArgs = (spec: DockerLoginSpec): ReadonlyArray<string> => {
-  const base: Array<string> = ["run", "--rm", "-i"]
-  if (spec.tty) {
-    base.push("-t")
-  }
-  base.push("-v", `${spec.hostPath}:${spec.containerPath}`)
+  // NOTE: We intentionally avoid `-t` here.
+  // We need stdin as a pipe (to feed the OAuth code), and `docker run -t` errors when stdin isn't a real TTY.
+  const base: Array<string> = ["run", "--rm", "-i", "-v", `${spec.hostPath}:${spec.containerPath}`]
   for (const entry of spec.env) {
     const trimmed = entry.trim()
     if (trimmed.length === 0) {
