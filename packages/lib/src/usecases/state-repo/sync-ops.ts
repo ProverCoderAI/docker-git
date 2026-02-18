@@ -12,14 +12,9 @@ import { tryBuildGithubCompareUrl, withGithubAskpassEnv } from "./github-auth.js
 
 type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 
-const withOriginPushUrlOverride = (originUrl: string | null, args: ReadonlyArray<string>): ReadonlyArray<string> => {
+const resolveOriginPushTarget = (originUrl: string | null): string => {
   const trimmed = originUrl?.trim() ?? ""
-  if (trimmed.length === 0) {
-    return args
-  }
-  // Use a per-command config override so token-based pushes use HTTPS even when the repo has an SSH pushurl.
-  // This keeps the repo config unchanged while avoiding non-interactive SSH host key / passphrase prompts.
-  return ["-c", `remote.origin.pushurl=${trimmed}`, ...args]
+  return trimmed.length > 0 ? trimmed : "origin"
 }
 
 const resolveSyncMessage = (value: string | null): string => {
@@ -88,7 +83,7 @@ const rebaseOntoOriginIfPossible = (
 const pushToNewBranch = (
   root: string,
   baseBranch: string,
-  originPushUrlOverride: string | null,
+  originPushTarget: string,
   env: GitAuthEnv
 ): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
@@ -98,9 +93,7 @@ const pushToNewBranch = (
     const timestamp = yield* _(Effect.sync(() => new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-")))
     const branch = sanitizeBranchComponent(`state-sync/${baseBranch}/${timestamp}-${headShort}`)
 
-    yield* _(
-      git(root, withOriginPushUrlOverride(originPushUrlOverride, ["push", "origin", `HEAD:refs/heads/${branch}`]), env)
-    )
+    yield* _(git(root, ["push", originPushTarget, `HEAD:refs/heads/${branch}`], env))
     return branch
   })
 
@@ -121,6 +114,7 @@ export const runStateSyncOps = (
 ): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
   Effect.gen(function*(_) {
     const originPushUrlOverride = options?.originPushUrlOverride ?? null
+    const originPushTarget = resolveOriginPushTarget(originPushUrlOverride)
     yield* _(normalizeLegacyStateProjects(root))
     yield* _(commitAllIfNeeded(root, resolveSyncMessage(message), env))
 
@@ -129,7 +123,7 @@ export const runStateSyncOps = (
 
     const rebaseResult = yield* _(rebaseOntoOriginIfPossible(root, baseBranch, env))
     if (rebaseResult === "conflict") {
-      const prBranch = yield* _(pushToNewBranch(root, baseBranch, originPushUrlOverride, env))
+      const prBranch = yield* _(pushToNewBranch(root, baseBranch, originPushTarget, env))
       const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
 
       yield* _(Effect.logWarning(`State sync needs manual merge: pushed changes to branch '${prBranch}'.`))
@@ -137,18 +131,12 @@ export const runStateSyncOps = (
       return
     }
 
-    const pushExit = yield* _(
-      gitExitCode(
-        root,
-        withOriginPushUrlOverride(originPushUrlOverride, ["push", "-u", "origin", "HEAD"]),
-        env
-      )
-    )
+    const pushExit = yield* _(gitExitCode(root, ["push", originPushTarget, `HEAD:refs/heads/${baseBranch}`], env))
     if (pushExit === successExitCode) {
       return
     }
 
-    const prBranch = yield* _(pushToNewBranch(root, baseBranch, originPushUrlOverride, env))
+    const prBranch = yield* _(pushToNewBranch(root, baseBranch, originPushTarget, env))
     const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
     yield* _(Effect.logWarning(`State push failed (exit ${pushExit}); pushed changes to branch '${prBranch}'.`))
     yield* _(logOpenPr(originUrl, baseBranch, prBranch, compareUrl))

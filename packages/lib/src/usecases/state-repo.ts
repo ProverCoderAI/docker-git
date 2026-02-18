@@ -2,7 +2,7 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
-import { Effect } from "effect"
+import { Effect, pipe } from "effect"
 import { runCommandExitCode } from "../shell/command-runner.js"
 import { CommandFailedError } from "../shell/errors.js"
 import { defaultProjectsRoot } from "./menu-helpers.js"
@@ -255,7 +255,13 @@ export const statePush = Effect.gen(function*(_) {
   const effect = token && token.length > 0 && isGithubHttpsRemote(originUrl)
     ? withGithubAskpassEnv(
       token,
-      (env) => git(root, ["-c", `remote.origin.pushurl=${originUrl}`, "push", "-u", "origin", "HEAD"], env)
+      (env) =>
+        pipe(
+          gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"], env),
+          Effect.map((value) => value.trim()),
+          Effect.map((branch) => (branch === "HEAD" ? "main" : branch)),
+          Effect.flatMap((branch) => git(root, ["push", originUrl, `HEAD:refs/heads/${branch}`], env))
+        )
     )
     : git(root, ["push", "-u", "origin", "HEAD"], gitBaseEnv)
   yield* _(effect)
