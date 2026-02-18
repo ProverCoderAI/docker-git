@@ -3,6 +3,7 @@ import { Box, Text } from "ink"
 import React from "react"
 
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import { renderLayout } from "./menu-render-layout.js"
 import {
   buildSelectLabels,
   renderSelectDetails,
@@ -41,34 +42,6 @@ export const renderStepLabel = (step: CreateStep, defaults: CreateInputs): strin
     Match.exhaustive
   )
 
-const renderMessage = (message: string | null): React.ReactElement | null => {
-  if (!message) {
-    return null
-  }
-  return React.createElement(
-    Box,
-    { marginTop: 1 },
-    React.createElement(Text, { color: "magenta" }, message)
-  )
-}
-
-const renderLayout = (
-  title: string,
-  body: ReadonlyArray<React.ReactElement>,
-  message: string | null
-): React.ReactElement => {
-  const el = React.createElement
-  const messageView = renderMessage(message)
-  const tail = messageView ? [messageView] : []
-  return el(
-    Box,
-    { flexDirection: "column", padding: 1, borderStyle: "round" },
-    el(Text, { color: "cyan", bold: true }, title),
-    ...body,
-    ...tail
-  )
-}
-
 const compactElements = (
   items: ReadonlyArray<React.ReactElement | null>
 ): ReadonlyArray<React.ReactElement> => items.filter((item): item is React.ReactElement => item !== null)
@@ -82,7 +55,7 @@ const renderMenuHints = (el: typeof React.createElement): React.ReactElement =>
     el(
       Text,
       { color: "gray" },
-      "  - Aliases: create/c, select/s, info/i, status/ps, logs/l, down/d, down-all/da, delete/del, quit/q"
+      "  - Aliases: create/c, select/s, auth/a, project-auth/pa, info/i, status/ps, logs/l, down/d, down-all/da, delete/del, quit/q"
     ),
     el(Text, { color: "gray" }, "  - Use arrows and Enter to run.")
   )
@@ -180,6 +153,9 @@ export const renderCreate = (
     message
   )
 }
+
+export { renderAuthMenu, renderAuthPrompt } from "./menu-render-auth.js"
+export { renderProjectAuthMenu, renderProjectAuthPrompt } from "./menu-render-project-auth.js"
 
 const computeListWidth = (labels: ReadonlyArray<string>): number => {
   const maxLabelWidth = labels.length > 0 ? Math.max(...labels.map((label) => label.length)) : 24

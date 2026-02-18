@@ -40,7 +40,6 @@ Options:
   --container-name <name>   Docker container name (default: dg-<repo>)
   --service-name <name>     Compose service name (default: dg-<repo>)
   --volume-name <name>      Docker volume name (default: dg-<repo>-home)
-  --secrets-root <path>     Host root for shared secrets (default: n/a)
   --authorized-keys <path>  Host path to authorized_keys (default: <projectsRoot>/authorized_keys)
   --env-global <path>       Host path to shared env file (default: <projectsRoot>/.orch/env/global.env)
   --env-project <path>      Host path to project env file (default: ./.orch/env/project.env)
@@ -80,7 +79,8 @@ Auth actions:
 
 Auth options:
   --label <label>        Account label (default: default)
-  --token <token>        GitHub token override (login only)
+  --token <token>        GitHub token override (login only; useful for non-interactive/CI)
+  --web                 Force OAuth web flow (login only; ignores --token)
   --scopes <scopes>      GitHub scopes (login only, default: repo,workflow,read:org)
   --env-global <path>    Env file path for GitHub tokens (default: <projectsRoot>/.orch/env/global.env)
   --codex-auth <path>    Codex auth root path (default: <projectsRoot>/.orch/auth/codex)

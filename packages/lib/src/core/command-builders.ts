@@ -128,8 +128,7 @@ const resolveNormalizedSecretsRoot = (value: string | undefined): string | undef
 }
 
 const buildDefaultPathConfig = (
-  normalizedSecretsRoot: string | undefined,
-  projectSlug: string
+  normalizedSecretsRoot: string | undefined
 ): DefaultPathConfig =>
   normalizedSecretsRoot === undefined
     ? {
@@ -140,21 +139,22 @@ const buildDefaultPathConfig = (
       codexAuthPath: defaultTemplateConfig.codexAuthPath
     }
     : {
-      dockerGitPath: normalizedSecretsRoot,
-      authorizedKeysPath: `${normalizedSecretsRoot}/authorized_keys`,
+      // NOTE: Keep docker-git root mount stable (projects root) so caches like
+      // `.cache/git-mirrors` remain outside the secrets dir.
+      dockerGitPath: defaultTemplateConfig.dockerGitPath,
+      authorizedKeysPath: defaultTemplateConfig.authorizedKeysPath,
       envGlobalPath: `${normalizedSecretsRoot}/global.env`,
-      envProjectPath: `${normalizedSecretsRoot}/${projectSlug}.env`,
+      envProjectPath: defaultTemplateConfig.envProjectPath,
       codexAuthPath: `${normalizedSecretsRoot}/codex`
     }
 
 const resolvePaths = (
   raw: RawOptions,
-  projectSlug: string,
   repoPath: string
 ): Either.Either<PathConfig, ParseError> =>
   Either.gen(function*(_) {
     const normalizedSecretsRoot = resolveNormalizedSecretsRoot(raw.secretsRoot)
-    const defaults = buildDefaultPathConfig(normalizedSecretsRoot, projectSlug)
+    const defaults = buildDefaultPathConfig(normalizedSecretsRoot)
     const dockerGitPath = defaults.dockerGitPath
     const authorizedKeysPath = yield* _(
       nonEmpty("--authorized-keys", raw.authorizedKeysPath, defaults.authorizedKeysPath)
@@ -198,7 +198,7 @@ export const buildCreateCommand = (
   Either.gen(function*(_) {
     const repo = yield* _(resolveRepoBasics(raw))
     const names = yield* _(resolveNames(raw, repo.projectSlug))
-    const paths = yield* _(resolvePaths(raw, repo.projectSlug, repo.repoPath))
+    const paths = yield* _(resolvePaths(raw, repo.repoPath))
     const runUp = raw.up ?? true
     const openSsh = raw.openSsh ?? false
     const force = raw.force ?? false

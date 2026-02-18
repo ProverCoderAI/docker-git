@@ -4,6 +4,7 @@ set -euo pipefail
 RUN_ID="$(date +%s)-$RANDOM"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "$REPO_ROOT/scripts/e2e/_lib.sh"
 ROOT_BASE="${DOCKER_GIT_E2E_ROOT_BASE:-$REPO_ROOT/.docker-git/e2e-root}"
 mkdir -p "$ROOT_BASE"
 ROOT="$(mktemp -d "$ROOT_BASE/clone-cache.XXXXXX")"
@@ -13,6 +14,8 @@ chmod 0777 "$ROOT"
 mkdir -p "$ROOT/e2e"
 chmod 0777 "$ROOT/e2e"
 KEEP="${KEEP:-0}"
+
+dg_ensure_docker "$ROOT/.e2e-bin"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
@@ -152,14 +155,13 @@ mkdir -p "$ROOT/.orch/auth/codex" "$ROOT/.orch/env"
 
 run_clone_case "first" "0"
 
-MIRROR_ROOT="$ROOT/.cache/git-mirrors"
-[[ -d "$MIRROR_ROOT" ]] || fail "expected mirror root directory to exist: $MIRROR_ROOT"
-
-mapfile -t MIRRORS < <(find "$MIRROR_ROOT" -mindepth 1 -maxdepth 1 -type d -name "*.git" | sort)
-[[ "${#MIRRORS[@]}" -eq 1 ]] || fail "expected exactly one mirror directory, got: ${#MIRRORS[@]}"
-
-CACHE_HOST_DIR="${MIRRORS[0]}"
-MIRROR_NAME="$(basename "$CACHE_HOST_DIR")"
+FIRST_LOG="$ROOT/clone-cache-first.log"
+mirror_line="$(grep -F -- "[clone-cache] mirror created: $MIRROR_PREFIX/" "$FIRST_LOG" | tail -n 1 || true)"
+[[ -n "$mirror_line" ]] || fail "expected mirror created log line in first clone logs: $FIRST_LOG"
+mirror_path="${mirror_line#*mirror created: }"
+[[ -n "$mirror_path" ]] || fail "failed to parse mirror path from first clone log line: $mirror_line"
+MIRROR_NAME="$(basename "$mirror_path")"
+[[ -n "$MIRROR_NAME" ]] || fail "failed to parse mirror name from mirror path: $mirror_path"
 
 run_clone_case "second" "1" "$MIRROR_NAME"
 

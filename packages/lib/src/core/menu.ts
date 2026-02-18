@@ -3,6 +3,8 @@ import { Either } from "effect"
 export type MenuAction =
   | { readonly _tag: "Create" }
   | { readonly _tag: "Select" }
+  | { readonly _tag: "Auth" }
+  | { readonly _tag: "ProjectAuth" }
   | { readonly _tag: "Info" }
   | { readonly _tag: "Up" }
   | { readonly _tag: "Status" }
@@ -29,24 +31,31 @@ const menuAliasMap = new Map<string, MenuAction>([
   ["2", { _tag: "Select" }],
   ["select", { _tag: "Select" }],
   ["s", { _tag: "Select" }],
-  ["3", { _tag: "Info" }],
+  ["3", { _tag: "Auth" }],
+  ["auth", { _tag: "Auth" }],
+  ["a", { _tag: "Auth" }],
+  ["4", { _tag: "ProjectAuth" }],
+  ["project-auth", { _tag: "ProjectAuth" }],
+  ["projectauth", { _tag: "ProjectAuth" }],
+  ["pa", { _tag: "ProjectAuth" }],
+  ["5", { _tag: "Info" }],
   ["info", { _tag: "Info" }],
   ["i", { _tag: "Info" }],
   ["up", { _tag: "Up" }],
   ["u", { _tag: "Up" }],
   ["start", { _tag: "Up" }],
-  ["4", { _tag: "Status" }],
+  ["6", { _tag: "Status" }],
   ["status", { _tag: "Status" }],
   ["ps", { _tag: "Status" }],
-  ["5", { _tag: "Logs" }],
+  ["7", { _tag: "Logs" }],
   ["logs", { _tag: "Logs" }],
   ["log", { _tag: "Logs" }],
   ["l", { _tag: "Logs" }],
-  ["6", { _tag: "Down" }],
+  ["8", { _tag: "Down" }],
   ["down", { _tag: "Down" }],
   ["stop", { _tag: "Down" }],
   ["d", { _tag: "Down" }],
-  ["7", { _tag: "DownAll" }],
+  ["9", { _tag: "DownAll" }],
   ["down-all", { _tag: "DownAll" }],
   ["downall", { _tag: "DownAll" }],
   ["stop-all", { _tag: "DownAll" }],
@@ -54,13 +63,13 @@ const menuAliasMap = new Map<string, MenuAction>([
   ["kill-all", { _tag: "DownAll" }],
   ["killall", { _tag: "DownAll" }],
   ["da", { _tag: "DownAll" }],
-  ["8", { _tag: "Delete" }],
+  ["10", { _tag: "Delete" }],
   ["delete", { _tag: "Delete" }],
   ["del", { _tag: "Delete" }],
   ["remove", { _tag: "Delete" }],
   ["rm", { _tag: "Delete" }],
   ["0", { _tag: "Quit" }],
-  ["9", { _tag: "Quit" }],
+  ["11", { _tag: "Quit" }],
   ["quit", { _tag: "Quit" }],
   ["q", { _tag: "Quit" }],
   ["exit", { _tag: "Quit" }]

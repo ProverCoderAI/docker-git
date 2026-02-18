@@ -7,7 +7,7 @@ import type { MenuEnv, MenuViewContext } from "./menu-types.js"
 
 export const loadSelectView = <E>(
   effect: Effect.Effect<ReadonlyArray<ProjectItem>, E, MenuEnv>,
-  purpose: "Connect" | "Down" | "Info" | "Delete",
+  purpose: "Connect" | "Down" | "Info" | "Delete" | "Auth",
   context: Pick<MenuViewContext, "setView" | "setMessage">
 ): Effect.Effect<void, E, MenuEnv> =>
   pipe(

@@ -7,6 +7,7 @@ import { Effect, Either, Match, pipe } from "effect"
 import { parseArgs } from "./cli/parser.js"
 import { formatParseError, usageText } from "./cli/usage.js"
 
+import { nextBufferValue } from "./menu-buffer-input.js"
 import { resetToMenu } from "./menu-shared.js"
 import {
   type CreateInputs,
@@ -45,7 +46,7 @@ type CreateReturnContext = CreateContext & {
 }
 
 export const buildCreateArgs = (input: CreateInputs): ReadonlyArray<string> => {
-  const args: Array<string> = ["create", "--repo-url", input.repoUrl, "--secrets-root", input.secretsRoot]
+  const args: Array<string> = ["create", "--repo-url", input.repoUrl]
   if (input.repoRef.length > 0) {
     args.push("--repo-ref", input.repoRef)
   }
@@ -106,14 +107,12 @@ export const resolveCreateInputs = (
 ): CreateInputs => {
   const repoUrl = values.repoUrl ?? ""
   const resolvedRepoRef = repoUrl.length > 0 ? resolveRepoInput(repoUrl).repoRef : undefined
-  const secretsRoot = values.secretsRoot ?? joinPath(defaultProjectsRoot(cwd), "secrets")
   const outDir = values.outDir ?? (repoUrl.length > 0 ? resolveDefaultOutDir(cwd, repoUrl) : "")
 
   return {
     repoUrl,
     repoRef: values.repoRef ?? resolvedRepoRef ?? "main",
     outDir,
-    secretsRoot,
     runUp: values.runUp !== false,
     enableMcpPlaywright: values.enableMcpPlaywright === true,
     force: values.force === true,
@@ -308,13 +307,8 @@ export const handleCreateInput = (
     handleCreateReturn({ ...context, view })
     return
   }
-
-  if (key.backspace || key.delete) {
-    context.setView({ ...view, buffer: view.buffer.slice(0, -1) })
-    return
-  }
-
-  if (input.length > 0) {
-    context.setView({ ...view, buffer: view.buffer + input })
+  const nextBuffer = nextBufferValue(input, key, view.buffer)
+  if (nextBuffer !== null) {
+    context.setView({ ...view, buffer: nextBuffer })
   }
 }

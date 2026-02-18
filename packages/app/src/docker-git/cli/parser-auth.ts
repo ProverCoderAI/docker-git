@@ -1,12 +1,7 @@
 import { Either, Match } from "effect"
 
 import type { RawOptions } from "@effect-template/lib/core/command-options"
-import {
-  type AuthCommand,
-  type Command,
-  defaultTemplateConfig,
-  type ParseError
-} from "@effect-template/lib/core/domain"
+import { type AuthCommand, type Command, type ParseError } from "@effect-template/lib/core/domain"
 
 import { parseRawOptions } from "./parser-options.js"
 
@@ -16,6 +11,7 @@ type AuthOptions = {
   readonly label: string | null
   readonly token: string | null
   readonly scopes: string | null
+  readonly authWeb: boolean
 }
 
 const missingArgument = (name: string): ParseError => ({
@@ -34,21 +30,27 @@ const normalizeLabel = (value: string | undefined): string | null => {
   return trimmed.length === 0 ? null : trimmed
 }
 
+const defaultEnvGlobalPath = ".docker-git/.orch/env/global.env"
+const defaultCodexAuthPath = ".docker-git/.orch/auth/codex"
+
 const resolveAuthOptions = (raw: RawOptions): AuthOptions => ({
-  envGlobalPath: raw.envGlobalPath ?? defaultTemplateConfig.envGlobalPath,
-  codexAuthPath: raw.codexAuthPath ?? defaultTemplateConfig.codexAuthPath,
+  envGlobalPath: raw.envGlobalPath ?? defaultEnvGlobalPath,
+  codexAuthPath: raw.codexAuthPath ?? defaultCodexAuthPath,
   label: normalizeLabel(raw.label),
   token: normalizeLabel(raw.token),
-  scopes: normalizeLabel(raw.scopes)
+  scopes: normalizeLabel(raw.scopes),
+  authWeb: raw.authWeb === true
 })
 
 const buildGithubCommand = (action: string, options: AuthOptions): Either.Either<AuthCommand, ParseError> =>
   Match.value(action).pipe(
     Match.when("login", () =>
-      Either.right<AuthCommand>({
+      options.authWeb && options.token !== null
+        ? Either.left(invalidArgument("--token", "cannot be combined with --web"))
+        : Either.right<AuthCommand>({
         _tag: "AuthGithubLogin",
         label: options.label,
-        token: options.token,
+        token: options.authWeb ? null : options.token,
         scopes: options.scopes,
         envGlobalPath: options.envGlobalPath
       })),

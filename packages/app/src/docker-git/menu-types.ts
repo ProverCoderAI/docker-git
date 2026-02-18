@@ -40,13 +40,14 @@ export type MenuKeyInput = {
   readonly downArrow?: boolean
   readonly return?: boolean
   readonly escape?: boolean
+  readonly backspace?: boolean
+  readonly delete?: boolean
 }
 
 export type CreateInputs = {
   readonly repoUrl: string
   readonly repoRef: string
   readonly outDir: string
-  readonly secretsRoot: string
   readonly runUp: boolean
   readonly enableMcpPlaywright: boolean
   readonly force: boolean
@@ -70,12 +71,74 @@ export const createSteps: ReadonlyArray<CreateStep> = [
   "force"
 ]
 
+export type AuthFlow =
+  | "GithubOauth"
+  | "GithubRemove"
+  | "GitSet"
+  | "GitRemove"
+  | "ClaudeSet"
+  | "ClaudeRemove"
+
+export interface AuthSnapshot {
+  readonly globalEnvPath: string
+  readonly totalEntries: number
+  readonly githubTokenEntries: number
+  readonly gitTokenEntries: number
+  readonly gitUserEntries: number
+  readonly claudeKeyEntries: number
+}
+
+export type ProjectAuthFlow =
+  | "ProjectGithubConnect"
+  | "ProjectGithubDisconnect"
+  | "ProjectGitConnect"
+  | "ProjectGitDisconnect"
+  | "ProjectClaudeConnect"
+  | "ProjectClaudeDisconnect"
+
+export interface ProjectAuthSnapshot {
+  readonly projectDir: string
+  readonly projectName: string
+  readonly envGlobalPath: string
+  readonly envProjectPath: string
+  readonly githubTokenEntries: number
+  readonly gitTokenEntries: number
+  readonly claudeKeyEntries: number
+  readonly activeGithubLabel: string | null
+  readonly activeGitLabel: string | null
+  readonly activeClaudeLabel: string | null
+}
+
 export type ViewState =
   | { readonly _tag: "Menu" }
   | { readonly _tag: "Create"; readonly step: number; readonly buffer: string; readonly values: Partial<CreateInputs> }
+  | { readonly _tag: "AuthMenu"; readonly selected: number; readonly snapshot: AuthSnapshot }
+  | {
+    readonly _tag: "AuthPrompt"
+    readonly flow: AuthFlow
+    readonly step: number
+    readonly buffer: string
+    readonly values: Readonly<Record<string, string>>
+    readonly snapshot: AuthSnapshot
+  }
+  | {
+    readonly _tag: "ProjectAuthMenu"
+    readonly selected: number
+    readonly project: ProjectItem
+    readonly snapshot: ProjectAuthSnapshot
+  }
+  | {
+    readonly _tag: "ProjectAuthPrompt"
+    readonly flow: ProjectAuthFlow
+    readonly step: number
+    readonly buffer: string
+    readonly values: Readonly<Record<string, string>>
+    readonly project: ProjectItem
+    readonly snapshot: ProjectAuthSnapshot
+  }
   | {
     readonly _tag: "SelectProject"
-    readonly purpose: "Connect" | "Down" | "Info" | "Delete"
+    readonly purpose: "Connect" | "Down" | "Info" | "Delete" | "Auth"
     readonly items: ReadonlyArray<ProjectItem>
     readonly runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
     readonly selected: number
@@ -93,6 +156,8 @@ export type SelectProjectRuntime = {
 export const menuItems: ReadonlyArray<{ readonly id: MenuAction; readonly label: string }> = [
   { id: { _tag: "Create" }, label: "Create project" },
   { id: { _tag: "Select" }, label: "Select project" },
+  { id: { _tag: "Auth" }, label: "Auth profiles (keys)" },
+  { id: { _tag: "ProjectAuth" }, label: "Project auth (bind labels)" },
   { id: { _tag: "Info" }, label: "Show connection info" },
   { id: { _tag: "Status" }, label: "docker compose ps" },
   { id: { _tag: "Logs" }, label: "docker compose logs --tail=200" },

@@ -3,7 +3,7 @@ import * as Data from "effect/Data"
 import * as ParseResult from "effect/ParseResult"
 import * as Schema from "effect/Schema"
 
-import { parseEnvEntries } from "./core/env.js"
+import { findEnvValue, parseEnvEntries } from "./core/env.js"
 
 export interface GithubTokenEntry {
   readonly key: string
@@ -43,6 +43,7 @@ const decodeGithubUser = (
 const tokenKey = "GITHUB_TOKEN"
 const tokenPrefix = "GITHUB_TOKEN__"
 const projectTokenKeys: ReadonlyArray<string> = ["GIT_AUTH_TOKEN", "GITHUB_TOKEN"]
+const projectLabelKey = "GITHUB_AUTH_LABEL"
 
 const normalizeLabel = (value: string): string => {
   const trimmed = value.trim()
@@ -116,6 +117,31 @@ export const resolveProjectGithubToken = (envText: string): string | null => {
   }
   return null
 }
+
+// CHANGE: resolve active GitHub label override from project env
+// WHY: avoid scanning all stored tokens when a project explicitly picks a label
+// QUOTE(ТЗ): "выбор нескольки GH ключей"
+// REF: issue-61
+// SOURCE: n/a
+// FORMAT THEOREM: forall env: label(env) -> string | null
+// PURITY: CORE
+// EFFECT: Effect<string | null, never, never>
+// INVARIANT: empty values map to null
+// COMPLEXITY: O(n) where n = |lines|
+export const resolveProjectGithubLabel = (envText: string): string | null =>
+  findEnvValue(envText, projectLabelKey)
+
+// CHANGE: expose env key used to persist project GitHub label
+// WHY: keep route handlers aligned on a single key
+// QUOTE(ТЗ): "выбор нескольки GH ключей"
+// REF: issue-61
+// SOURCE: n/a
+// FORMAT THEOREM: forall _: key = constant
+// PURITY: CORE
+// EFFECT: Effect<string, never, never>
+// INVARIANT: constant key
+// COMPLEXITY: O(1)
+export const projectGithubLabelKey = projectLabelKey
 
 // CHANGE: match a token value to a known label
 // WHY: show connected account label without leaking secrets

@@ -375,9 +375,9 @@ describe("Message invariants", () => {
 ПРИНЦИП: Сначала формализуем, потом программируем.
 
 <!-- docker-git:issue-managed:start -->
-Issue workspace: #39
-Issue URL: https://github.com/ProverCoderAI/docker-git/issues/39
-Workspace path: /home/dev/provercoderai/docker-git/issue-39
+Issue workspace: #61
+Issue URL: https://github.com/ProverCoderAI/docker-git/issues/61
+Workspace path: /home/dev/provercoderai/docker-git/issue-61
 
 Работай только над этим issue, если пользователь не попросил другое.
 Если нужен первоисточник требований, открой Issue URL.

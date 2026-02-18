@@ -90,6 +90,31 @@ export const parseEnvEntries = (input: string): ReadonlyArray<EnvEntry> => {
   return entries
 }
 
+// CHANGE: resolve the latest value for an env key
+// WHY: support label-based lookups without allocating full entry lists
+// QUOTE(ТЗ): "токенов может быть милион ... без хардкода"
+// REF: issue-61
+// SOURCE: n/a
+// FORMAT THEOREM: forall s,k: value(s,k) = last_assignment(s,k) | null
+// PURITY: CORE
+// INVARIANT: ignores commented/invalid lines and empty assignments
+// COMPLEXITY: O(n) where n = |lines|
+export const findEnvValue = (input: string, key: string): string | null => {
+  const trimmedKey = key.trim()
+  if (trimmedKey.length === 0) {
+    return null
+  }
+  const lines = splitLines(input)
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const parsed = parseEnvLine(lines[i] ?? "")
+    if (parsed && parsed.key === trimmedKey) {
+      const value = parsed.value.trim()
+      return value.length > 0 ? value : null
+    }
+  }
+  return null
+}
+
 // CHANGE: upsert a key in env contents
 // WHY: update tokens without manual edits
 // QUOTE(ТЗ): "система авторизации"

@@ -1,5 +1,6 @@
 import { runDockerComposeDown } from "@effect-template/lib/shell/docker"
 import type { AppError } from "@effect-template/lib/usecases/errors"
+import { renderError } from "@effect-template/lib/usecases/errors"
 import { mcpPlaywrightUp } from "@effect-template/lib/usecases/mcp-playwright"
 import {
   connectProjectSshWithUp,
@@ -8,10 +9,17 @@ import {
   type ProjectItem
 } from "@effect-template/lib/usecases/projects"
 import { Effect, Match, pipe } from "effect"
+import { openProjectAuthMenu } from "./menu-project-auth.js"
 import { buildConnectEffect, isConnectMcpToggleInput } from "./menu-select-connect.js"
 import { sortItemsByLaunchTime } from "./menu-select-order.js"
 import { loadRuntimeByProject, runtimeForSelection } from "./menu-select-runtime.js"
-import { resetToMenu, resumeTui, suspendTui } from "./menu-shared.js"
+import {
+  pauseForEnter,
+  resetToMenu,
+  resumeTui,
+  suspendTui,
+  writeToTerminal
+} from "./menu-shared.js"
 import type {
   MenuEnv,
   MenuKeyInput,
@@ -32,7 +40,7 @@ const emptyRuntimeByProject = (): Readonly<Record<string, SelectProjectRuntime>>
 
 export const startSelectView = (
   items: ReadonlyArray<ProjectItem>,
-  purpose: "Connect" | "Down" | "Info" | "Delete",
+  purpose: "Connect" | "Down" | "Info" | "Delete" | "Auth",
   context: Pick<SelectContext, "setView" | "setMessage">,
   runtimeByProject: Readonly<Record<string, SelectProjectRuntime>> = emptyRuntimeByProject()
 ) => {
@@ -132,7 +140,19 @@ const runWithSuspendedTui = (
   context.runner.runEffect(
     pipe(
       Effect.sync(suspendTui),
-      Effect.zipRight(effect),
+      Effect.zipRight(
+        pipe(
+          effect,
+          Effect.tapError((error) =>
+            Effect.ignore(
+              Effect.tryPromise(async () => {
+                writeToTerminal(`\n[docker-git] ${renderError(error)}\n`)
+                await pauseForEnter()
+              })
+            )
+          )
+        )
+      ),
       Effect.ensuring(
         Effect.sync(() => {
           resumeTui()
@@ -204,6 +224,14 @@ const runDownSelection = (selected: ProjectItem, context: SelectContext) => {
           context.setMessage("Container stopped. Select another to stop, or Esc to return.")
         })
       ),
+      Effect.tapError((error) =>
+        Effect.ignore(
+          Effect.tryPromise(async () => {
+            writeToTerminal(`\n[docker-git] ${renderError(error)}\n`)
+            await pauseForEnter()
+          })
+        )
+      ),
       Effect.ensuring(
         Effect.sync(() => {
           resumeTui()
@@ -217,6 +245,16 @@ const runDownSelection = (selected: ProjectItem, context: SelectContext) => {
 
 const runInfoSelection = (selected: ProjectItem, context: SelectContext) => {
   context.setMessage(`Details for ${selected.displayName} are shown on the right. Press Esc to return to the menu.`)
+}
+
+const runAuthSelection = (selected: ProjectItem, context: SelectContext) => {
+  openProjectAuthMenu({
+    project: selected,
+    runner: context.runner,
+    setView: context.setView,
+    setMessage: context.setMessage,
+    setActiveDir: context.setActiveDir
+  })
 }
 
 const runDeleteSelection = (selected: ProjectItem, context: SelectContext) => {
@@ -240,6 +278,9 @@ const runDeleteSelection = (selected: ProjectItem, context: SelectContext) => {
   )
 }
 
+const formatSshSessionsLabel = (sshSessions: number): string =>
+  sshSessions === 1 ? "1 active SSH session" : `${sshSessions} active SSH sessions`
+
 const handleSelectReturn = (
   view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
   context: SelectContext
@@ -251,14 +292,16 @@ const handleSelectReturn = (
     return
   }
   const selectedRuntime = runtimeForSelection(view, selected)
-  const sshSessionsLabel = selectedRuntime.sshSessions === 1
-    ? "1 active SSH session"
-    : `${selectedRuntime.sshSessions} active SSH sessions`
+  const sshSessionsLabel = formatSshSessionsLabel(selectedRuntime.sshSessions)
 
   Match.value(view.purpose).pipe(
     Match.when("Connect", () => {
       context.setActiveDir(selected.projectDir)
       runConnectSelection(selected, context, view.connectEnableMcpPlaywright)
+    }),
+    Match.when("Auth", () => {
+      context.setActiveDir(selected.projectDir)
+      runAuthSelection(selected, context)
     }),
     Match.when("Down", () => {
       if (selectedRuntime.sshSessions > 0 && !view.confirmDelete) {

@@ -6,7 +6,11 @@ import { Effect } from "effect"
 import type { CreateCommand } from "../../core/domain.js"
 import type { FileExistsError } from "../../shell/errors.js"
 import { writeProjectFiles } from "../../shell/files.js"
-import { ensureCodexConfigFile, migrateLegacyOrchLayout, syncAuthArtifacts } from "../auth-sync.js"
+import {
+  ensureCodexConfigFile,
+  migrateLegacyOrchLayout,
+  syncAuthArtifacts
+} from "../auth-sync.js"
 import { findAuthorizedKeysSource, resolveAuthorizedKeysPath } from "../path-helpers.js"
 import { withFsPathContext } from "../runtime.js"
 import { resolvePathFromBase } from "./paths.js"
