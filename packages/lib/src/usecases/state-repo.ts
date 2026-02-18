@@ -260,10 +260,10 @@ export const statePush = Effect.gen(function*(_) {
           gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"], env),
           Effect.map((value) => value.trim()),
           Effect.map((branch) => (branch === "HEAD" ? "main" : branch)),
-          Effect.flatMap((branch) => git(root, ["push", originUrl, `HEAD:refs/heads/${branch}`], env))
+          Effect.flatMap((branch) => git(root, ["push", "--no-verify", originUrl, `HEAD:refs/heads/${branch}`], env))
         )
     )
-    : git(root, ["push", "-u", "origin", "HEAD"], gitBaseEnv)
+    : git(root, ["push", "--no-verify", "-u", "origin", "HEAD"], gitBaseEnv)
   yield* _(effect)
 }).pipe(Effect.asVoid)
 

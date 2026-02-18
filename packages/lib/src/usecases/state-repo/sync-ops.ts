@@ -93,7 +93,7 @@ const pushToNewBranch = (
     const timestamp = yield* _(Effect.sync(() => new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-")))
     const branch = sanitizeBranchComponent(`state-sync/${baseBranch}/${timestamp}-${headShort}`)
 
-    yield* _(git(root, ["push", originPushTarget, `HEAD:refs/heads/${branch}`], env))
+    yield* _(git(root, ["push", "--no-verify", originPushTarget, `HEAD:refs/heads/${branch}`], env))
     return branch
   })
 
@@ -131,7 +131,9 @@ export const runStateSyncOps = (
       return
     }
 
-    const pushExit = yield* _(gitExitCode(root, ["push", originPushTarget, `HEAD:refs/heads/${baseBranch}`], env))
+    const pushExit = yield* _(
+      gitExitCode(root, ["push", "--no-verify", originPushTarget, `HEAD:refs/heads/${baseBranch}`], env)
+    )
     if (pushExit === successExitCode) {
       return
     }
