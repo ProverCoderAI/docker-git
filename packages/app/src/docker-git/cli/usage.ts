@@ -28,7 +28,7 @@ Commands:
   sessions            List/kill/log container terminal processes
   ps, status          Show docker compose status for all docker-git projects
   down-all            Stop all docker-git containers (docker compose down)
-  auth                Manage GitHub/Codex auth for docker-git
+  auth                Manage GitHub/Codex/Claude Code auth for docker-git
   state               Manage docker-git state directory via git (sync across machines)
 
 Options:
@@ -71,6 +71,7 @@ Container runtime env (set via .orch/env/project.env):
 Auth providers:
   github, gh         GitHub CLI auth (tokens saved to env file)
   codex             Codex CLI auth (stored under .orch/auth/codex)
+  claude, cc        Claude Code CLI auth (OAuth cache stored under .orch/auth/claude)
 
 Auth actions:
   login             Run login flow and store credentials

@@ -10,6 +10,7 @@ import {
   renderEntrypointZshShell,
   renderEntrypointZshUserRc
 } from "./templates-entrypoint/base.js"
+import { renderEntrypointClaudeConfig } from "./templates-entrypoint/claude.js"
 import {
   renderEntrypointAgentsNotice,
   renderEntrypointCodexHome,
@@ -48,6 +49,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointAgentsNotice(config),
     renderEntrypointDockerSocket(config),
     renderEntrypointGitConfig(config),
+    renderEntrypointClaudeConfig(config),
     renderEntrypointGitHooks(),
     renderEntrypointBackgroundTasks(config),
     renderEntrypointBaseline(),

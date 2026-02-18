@@ -76,16 +76,17 @@ export type AuthFlow =
   | "GithubRemove"
   | "GitSet"
   | "GitRemove"
-  | "ClaudeSet"
-  | "ClaudeRemove"
+  | "ClaudeOauth"
+  | "ClaudeLogout"
 
 export interface AuthSnapshot {
   readonly globalEnvPath: string
+  readonly claudeAuthPath: string
   readonly totalEntries: number
   readonly githubTokenEntries: number
   readonly gitTokenEntries: number
   readonly gitUserEntries: number
-  readonly claudeKeyEntries: number
+  readonly claudeAuthEntries: number
 }
 
 export type ProjectAuthFlow =
@@ -101,9 +102,10 @@ export interface ProjectAuthSnapshot {
   readonly projectName: string
   readonly envGlobalPath: string
   readonly envProjectPath: string
+  readonly claudeAuthPath: string
   readonly githubTokenEntries: number
   readonly gitTokenEntries: number
-  readonly claudeKeyEntries: number
+  readonly claudeAuthEntries: number
   readonly activeGithubLabel: string | null
   readonly activeGitLabel: string | null
   readonly activeClaudeLabel: string | null

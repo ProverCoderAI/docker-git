@@ -3,12 +3,14 @@ import * as Path from "@effect/platform/Path"
 import { Effect, Match, pipe } from "effect"
 
 import { AuthError } from "@effect-template/lib/shell/errors"
+import { normalizeAccountLabel } from "@effect-template/lib/usecases/auth-helpers"
 import { ensureEnvFile, findEnvValue, readEnvText, upsertEnvKey } from "@effect-template/lib/usecases/env-file"
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import { autoSyncState } from "@effect-template/lib/usecases/state-repo"
 
+import { countAuthAccountDirectories } from "./menu-auth-helpers.js"
 import { buildLabeledEnvKey, countKeyEntries, normalizeLabel } from "./menu-labeled-env.js"
 import type { MenuEnv, ProjectAuthFlow, ProjectAuthSnapshot } from "./menu-types.js"
 
@@ -60,7 +62,6 @@ const resolveCanonicalLabel = (value: string): string => {
 const githubTokenBaseKey = "GITHUB_TOKEN"
 const gitTokenBaseKey = "GIT_AUTH_TOKEN"
 const gitUserBaseKey = "GIT_AUTH_USER"
-const claudeApiKeyBaseKey = "ANTHROPIC_API_KEY"
 
 const projectGithubLabelKey = "GITHUB_AUTH_LABEL"
 const projectGitLabelKey = "GIT_AUTH_LABEL"
@@ -73,11 +74,13 @@ type ProjectAuthEnvText = {
   readonly path: Path.Path
   readonly globalEnvPath: string
   readonly projectEnvPath: string
+  readonly claudeAuthPath: string
   readonly globalEnvText: string
   readonly projectEnvText: string
 }
 
 const buildGlobalEnvPath = (cwd: string): string => `${defaultProjectsRoot(cwd)}/.orch/env/global.env`
+const buildClaudeAuthPath = (cwd: string): string => `${defaultProjectsRoot(cwd)}/.orch/auth/claude`
 
 const loadProjectAuthEnvText = (
   project: ProjectItem
@@ -86,6 +89,7 @@ const loadProjectAuthEnvText = (
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const globalEnvPath = buildGlobalEnvPath(process.cwd())
+    const claudeAuthPath = buildClaudeAuthPath(process.cwd())
     yield* _(ensureEnvFile(fs, path, globalEnvPath))
     yield* _(ensureEnvFile(fs, path, project.envProjectPath))
     const globalEnvText = yield* _(readEnvText(fs, globalEnvPath))
@@ -95,6 +99,7 @@ const loadProjectAuthEnvText = (
       path,
       globalEnvPath,
       projectEnvPath: project.envProjectPath,
+      claudeAuthPath,
       globalEnvText,
       projectEnvText
     }
@@ -105,18 +110,24 @@ export const readProjectAuthSnapshot = (
 ): Effect.Effect<ProjectAuthSnapshot, AppError, MenuEnv> =>
   pipe(
     loadProjectAuthEnvText(project),
-    Effect.map(({ globalEnvPath, globalEnvText, projectEnvPath, projectEnvText }) => ({
-      projectDir: project.projectDir,
-      projectName: project.displayName,
-      envGlobalPath: globalEnvPath,
-      envProjectPath: projectEnvPath,
-      githubTokenEntries: countKeyEntries(globalEnvText, githubTokenBaseKey),
-      gitTokenEntries: countKeyEntries(globalEnvText, gitTokenBaseKey),
-      claudeKeyEntries: countKeyEntries(globalEnvText, claudeApiKeyBaseKey),
-      activeGithubLabel: findEnvValue(projectEnvText, projectGithubLabelKey),
-      activeGitLabel: findEnvValue(projectEnvText, projectGitLabelKey),
-      activeClaudeLabel: findEnvValue(projectEnvText, projectClaudeLabelKey)
-    }))
+    Effect.flatMap(({ claudeAuthPath, fs, globalEnvPath, globalEnvText, path, projectEnvPath, projectEnvText }) =>
+      pipe(
+        countAuthAccountDirectories(fs, path, claudeAuthPath),
+        Effect.map((claudeAuthEntries) => ({
+          projectDir: project.projectDir,
+          projectName: project.displayName,
+          envGlobalPath: globalEnvPath,
+          envProjectPath: projectEnvPath,
+          claudeAuthPath,
+          githubTokenEntries: countKeyEntries(globalEnvText, githubTokenBaseKey),
+          gitTokenEntries: countKeyEntries(globalEnvText, gitTokenBaseKey),
+          claudeAuthEntries,
+          activeGithubLabel: findEnvValue(projectEnvText, projectGithubLabelKey),
+          activeGitLabel: findEnvValue(projectEnvText, projectGitLabelKey),
+          activeClaudeLabel: findEnvValue(projectEnvText, projectClaudeLabelKey)
+        }))
+      )
+    )
   )
 
 const missingSecret = (
@@ -129,11 +140,13 @@ const missingSecret = (
   })
 
 type ProjectEnvUpdateSpec = {
+  readonly fs: FileSystem.FileSystem
   readonly rawLabel: string
   readonly canonicalLabel: string
   readonly globalEnvPath: string
   readonly globalEnvText: string
   readonly projectEnvText: string
+  readonly claudeAuthPath: string
 }
 
 const updateProjectGithubConnect = (spec: ProjectEnvUpdateSpec): Effect.Effect<string, AppError> => {
@@ -182,18 +195,39 @@ const updateProjectGitDisconnect = (spec: ProjectEnvUpdateSpec): Effect.Effect<s
 }
 
 const updateProjectClaudeConnect = (spec: ProjectEnvUpdateSpec): Effect.Effect<string, AppError> => {
-  const key = buildLabeledEnvKey(claudeApiKeyBaseKey, spec.rawLabel)
-  const apiKey = findEnvValue(spec.globalEnvText, key)
-  if (apiKey === null) {
-    return Effect.fail(missingSecret("Claude key", spec.canonicalLabel, spec.globalEnvPath))
-  }
-  const withKey = upsertEnvKey(spec.projectEnvText, claudeApiKeyBaseKey, apiKey)
-  return Effect.succeed(upsertEnvKey(withKey, projectClaudeLabelKey, spec.canonicalLabel))
+  const accountLabel = normalizeAccountLabel(spec.rawLabel, "default")
+  const accountPath = `${spec.claudeAuthPath}/${accountLabel}`
+  return Effect.gen(function*(_) {
+    const exists = yield* _(spec.fs.exists(accountPath))
+    if (!exists) {
+      return yield* _(Effect.fail(missingSecret("Claude Code login", spec.canonicalLabel, spec.claudeAuthPath)))
+    }
+    const configJsonPath = `${accountPath}/.config.json`
+    const hasConfigJson = yield* _(spec.fs.exists(configJsonPath))
+    if (hasConfigJson) {
+      const info = yield* _(spec.fs.stat(configJsonPath))
+      if (info.type === "File") {
+        return upsertEnvKey(spec.projectEnvText, projectClaudeLabelKey, spec.canonicalLabel)
+      }
+    }
+
+    const entries = yield* _(spec.fs.readDirectory(accountPath))
+    for (const entry of entries) {
+      if (!entry.startsWith(".claude") || !entry.endsWith(".json")) {
+        continue
+      }
+      const info = yield* _(spec.fs.stat(`${accountPath}/${entry}`))
+      if (info.type === "File") {
+        return upsertEnvKey(spec.projectEnvText, projectClaudeLabelKey, spec.canonicalLabel)
+      }
+    }
+
+    return yield* _(Effect.fail(missingSecret("Claude Code login", spec.canonicalLabel, spec.claudeAuthPath)))
+  })
 }
 
 const updateProjectClaudeDisconnect = (spec: ProjectEnvUpdateSpec): Effect.Effect<string> => {
-  const withoutKey = upsertEnvKey(spec.projectEnvText, claudeApiKeyBaseKey, "")
-  return Effect.succeed(upsertEnvKey(withoutKey, projectClaudeLabelKey, ""))
+  return Effect.succeed(upsertEnvKey(spec.projectEnvText, projectClaudeLabelKey, ""))
 }
 
 const resolveProjectEnvUpdate = (
@@ -217,10 +251,18 @@ export const writeProjectAuthFlow = (
 ): Effect.Effect<void, AppError, MenuEnv> =>
   pipe(
     loadProjectAuthEnvText(project),
-    Effect.flatMap(({ fs, globalEnvPath, globalEnvText, projectEnvPath, projectEnvText }) => {
+    Effect.flatMap(({ claudeAuthPath, fs, globalEnvPath, globalEnvText, projectEnvPath, projectEnvText }) => {
       const rawLabel = values["label"] ?? ""
       const canonicalLabel = resolveCanonicalLabel(rawLabel)
-      const spec: ProjectEnvUpdateSpec = { rawLabel, canonicalLabel, globalEnvPath, globalEnvText, projectEnvText }
+      const spec: ProjectEnvUpdateSpec = {
+        fs,
+        rawLabel,
+        canonicalLabel,
+        globalEnvPath,
+        globalEnvText,
+        projectEnvText,
+        claudeAuthPath
+      }
       const nextProjectEnv = resolveProjectEnvUpdate(flow, spec)
       const syncMessage = Match.value(flow).pipe(
         Match.when("ProjectGithubConnect", () =>

@@ -7,6 +7,7 @@ import { type AppError } from "@effect-template/lib/usecases/errors"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import { autoSyncState } from "@effect-template/lib/usecases/state-repo"
 
+import { countAuthAccountDirectories } from "./menu-auth-helpers.js"
 import { buildLabeledEnvKey, countKeyEntries, normalizeLabel } from "./menu-labeled-env.js"
 import type { AuthFlow, AuthSnapshot, MenuEnv } from "./menu-types.js"
 
@@ -17,8 +18,10 @@ type AuthMenuItem = {
   readonly label: string
 }
 
+export type AuthEnvFlow = Extract<AuthFlow, "GithubRemove" | "GitSet" | "GitRemove">
+
 export type AuthPromptStep = {
-  readonly key: "label" | "token" | "user" | "apiKey"
+  readonly key: "label" | "token" | "user"
   readonly label: string
   readonly required: boolean
   readonly secret: boolean
@@ -29,8 +32,8 @@ const authMenuItems: ReadonlyArray<AuthMenuItem> = [
   { action: "GithubRemove", label: "GitHub: remove token" },
   { action: "GitSet", label: "Git: add/update credentials" },
   { action: "GitRemove", label: "Git: remove credentials" },
-  { action: "ClaudeSet", label: "Claude: add/update API key" },
-  { action: "ClaudeRemove", label: "Claude: remove API key" },
+  { action: "ClaudeOauth", label: "Claude Code: login via OAuth (web)" },
+  { action: "ClaudeLogout", label: "Claude Code: logout (clear cache)" },
   { action: "Refresh", label: "Refresh snapshot" },
   { action: "Back", label: "Back to main menu" }
 ]
@@ -50,12 +53,11 @@ const flowSteps: Readonly<Record<AuthFlow, ReadonlyArray<AuthPromptStep>>> = {
   GitRemove: [
     { key: "label", label: "Label to remove (empty = default)", required: false, secret: false }
   ],
-  ClaudeSet: [
-    { key: "label", label: "Label (empty = default)", required: false, secret: false },
-    { key: "apiKey", label: "Claude API key", required: true, secret: true }
+  ClaudeOauth: [
+    { key: "label", label: "Label (empty = default)", required: false, secret: false }
   ],
-  ClaudeRemove: [
-    { key: "label", label: "Label to remove (empty = default)", required: false, secret: false }
+  ClaudeLogout: [
+    { key: "label", label: "Label to logout (empty = default)", required: false, secret: false }
   ]
 }
 
@@ -65,8 +67,8 @@ const flowTitle = (flow: AuthFlow): string =>
     Match.when("GithubRemove", () => "GitHub remove"),
     Match.when("GitSet", () => "Git credentials"),
     Match.when("GitRemove", () => "Git remove"),
-    Match.when("ClaudeSet", () => "Claude API key"),
-    Match.when("ClaudeRemove", () => "Claude remove"),
+    Match.when("ClaudeOauth", () => "Claude Code OAuth"),
+    Match.when("ClaudeLogout", () => "Claude Code logout"),
     Match.exhaustive
   )
 
@@ -76,16 +78,19 @@ export const successMessage = (flow: AuthFlow, label: string): string =>
     Match.when("GithubRemove", () => `Removed GitHub token (${label}).`),
     Match.when("GitSet", () => `Saved Git credentials (${label}).`),
     Match.when("GitRemove", () => `Removed Git credentials (${label}).`),
-    Match.when("ClaudeSet", () => `Saved Claude key (${label}).`),
-    Match.when("ClaudeRemove", () => `Removed Claude key (${label}).`),
+    Match.when("ClaudeOauth", () => `Saved Claude Code login (${label}).`),
+    Match.when("ClaudeLogout", () => `Logged out Claude Code (${label}).`),
     Match.exhaustive
   )
 
 const buildGlobalEnvPath = (cwd: string): string => `${defaultProjectsRoot(cwd)}/.orch/env/global.env`
+const buildClaudeAuthPath = (cwd: string): string => `${defaultProjectsRoot(cwd)}/.orch/auth/claude`
 
 type AuthEnvText = {
   readonly fs: FileSystem.FileSystem
+  readonly path: Path.Path
   readonly globalEnvPath: string
+  readonly claudeAuthPath: string
   readonly envText: string
 }
 
@@ -96,9 +101,10 @@ const loadAuthEnvText = (
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const globalEnvPath = buildGlobalEnvPath(cwd)
+    const claudeAuthPath = buildClaudeAuthPath(cwd)
     yield* _(ensureEnvFile(fs, path, globalEnvPath))
     const envText = yield* _(readEnvText(fs, globalEnvPath))
-    return { fs, globalEnvPath, envText }
+    return { fs, path, globalEnvPath, claudeAuthPath, envText }
   })
 
 export const readAuthSnapshot = (
@@ -106,19 +112,25 @@ export const readAuthSnapshot = (
 ): Effect.Effect<AuthSnapshot, AppError, MenuEnv> =>
   pipe(
     loadAuthEnvText(cwd),
-    Effect.map(({ envText, globalEnvPath }) => ({
-      globalEnvPath,
-      totalEntries: parseEnvEntries(envText).filter((entry) => entry.value.trim().length > 0).length,
-      githubTokenEntries: countKeyEntries(envText, "GITHUB_TOKEN"),
-      gitTokenEntries: countKeyEntries(envText, "GIT_AUTH_TOKEN"),
-      gitUserEntries: countKeyEntries(envText, "GIT_AUTH_USER"),
-      claudeKeyEntries: countKeyEntries(envText, "ANTHROPIC_API_KEY")
-    }))
+    Effect.flatMap(({ claudeAuthPath, envText, fs, globalEnvPath, path }) =>
+      pipe(
+        countAuthAccountDirectories(fs, path, claudeAuthPath),
+        Effect.map((claudeAuthEntries) => ({
+          globalEnvPath,
+          claudeAuthPath,
+          totalEntries: parseEnvEntries(envText).filter((entry) => entry.value.trim().length > 0).length,
+          githubTokenEntries: countKeyEntries(envText, "GITHUB_TOKEN"),
+          gitTokenEntries: countKeyEntries(envText, "GIT_AUTH_TOKEN"),
+          gitUserEntries: countKeyEntries(envText, "GIT_AUTH_USER"),
+          claudeAuthEntries
+        }))
+      )
+    )
   )
 
 export const writeAuthFlow = (
   cwd: string,
-  flow: AuthFlow,
+  flow: AuthEnvFlow,
   values: Readonly<Record<string, string>>
 ): Effect.Effect<void, AppError, MenuEnv> =>
   pipe(
@@ -131,9 +143,7 @@ export const writeAuthFlow = (
       })()
       const token = (values["token"] ?? "").trim()
       const user = (values["user"] ?? "").trim()
-      const apiKey = (values["apiKey"] ?? "").trim()
       const nextText = Match.value(flow).pipe(
-        Match.when("GithubOauth", () => envText),
         Match.when("GithubRemove", () => upsertEnvKey(envText, buildLabeledEnvKey("GITHUB_TOKEN", label), "")),
         Match.when("GitSet", () => {
           const withToken = upsertEnvKey(envText, buildLabeledEnvKey("GIT_AUTH_TOKEN", label), token)
@@ -144,17 +154,12 @@ export const writeAuthFlow = (
           const withoutToken = upsertEnvKey(envText, buildLabeledEnvKey("GIT_AUTH_TOKEN", label), "")
           return upsertEnvKey(withoutToken, buildLabeledEnvKey("GIT_AUTH_USER", label), "")
         }),
-        Match.when("ClaudeSet", () => upsertEnvKey(envText, buildLabeledEnvKey("ANTHROPIC_API_KEY", label), apiKey)),
-        Match.when("ClaudeRemove", () => upsertEnvKey(envText, buildLabeledEnvKey("ANTHROPIC_API_KEY", label), "")),
         Match.exhaustive
       )
       const syncMessage = Match.value(flow).pipe(
-        Match.when("GithubOauth", () => `chore(state): auth gh ${canonicalLabel}`),
         Match.when("GithubRemove", () => `chore(state): auth gh logout ${canonicalLabel}`),
         Match.when("GitSet", () => `chore(state): auth git ${canonicalLabel}`),
         Match.when("GitRemove", () => `chore(state): auth git logout ${canonicalLabel}`),
-        Match.when("ClaudeSet", () => `chore(state): auth claude ${canonicalLabel}`),
-        Match.when("ClaudeRemove", () => `chore(state): auth claude logout ${canonicalLabel}`),
         Match.exhaustive
       )
       return pipe(

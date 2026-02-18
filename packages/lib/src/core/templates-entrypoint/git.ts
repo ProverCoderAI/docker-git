@@ -16,11 +16,8 @@ if [[ -n "$GH_TOKEN" || -n "$GITHUB_TOKEN" ]]; then
   printf "export GH_TOKEN=%q\n" "$EFFECTIVE_GH_TOKEN" > /etc/profile.d/gh-token.sh
   printf "export GITHUB_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN" >> /etc/profile.d/gh-token.sh
   chmod 0644 /etc/profile.d/gh-token.sh
-  SSH_ENV_PATH="/home/${config.sshUser}/.ssh/environment"
-  printf "%s\n" "GH_TOKEN=$EFFECTIVE_GH_TOKEN" > "$SSH_ENV_PATH"
-  printf "%s\n" "GITHUB_TOKEN=$EFFECTIVE_GITHUB_TOKEN" >> "$SSH_ENV_PATH"
-  chmod 600 "$SSH_ENV_PATH"
-  chown 1000:1000 "$SSH_ENV_PATH" || true
+  docker_git_upsert_ssh_env "GH_TOKEN" "$EFFECTIVE_GH_TOKEN"
+  docker_git_upsert_ssh_env "GITHUB_TOKEN" "$EFFECTIVE_GITHUB_TOKEN"
 
   SAFE_GH_TOKEN="$(printf "%q" "$GH_TOKEN")"
   # Keep git+https auth in sync with gh auth so push/pull works without manual setup.

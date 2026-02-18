@@ -8,6 +8,7 @@ import { parseRawOptions } from "./parser-options.js"
 type AuthOptions = {
   readonly envGlobalPath: string
   readonly codexAuthPath: string
+  readonly claudeAuthPath: string
   readonly label: string | null
   readonly token: string | null
   readonly scopes: string | null
@@ -32,10 +33,12 @@ const normalizeLabel = (value: string | undefined): string | null => {
 
 const defaultEnvGlobalPath = ".docker-git/.orch/env/global.env"
 const defaultCodexAuthPath = ".docker-git/.orch/auth/codex"
+const defaultClaudeAuthPath = ".docker-git/.orch/auth/claude"
 
 const resolveAuthOptions = (raw: RawOptions): AuthOptions => ({
   envGlobalPath: raw.envGlobalPath ?? defaultEnvGlobalPath,
   codexAuthPath: raw.codexAuthPath ?? defaultCodexAuthPath,
+  claudeAuthPath: defaultClaudeAuthPath,
   label: normalizeLabel(raw.label),
   token: normalizeLabel(raw.token),
   scopes: normalizeLabel(raw.scopes),
@@ -91,6 +94,29 @@ const buildCodexCommand = (action: string, options: AuthOptions): Either.Either<
     Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
   )
 
+const buildClaudeCommand = (action: string, options: AuthOptions): Either.Either<AuthCommand, ParseError> =>
+  Match.value(action).pipe(
+    Match.when("login", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthClaudeLogin",
+        label: options.label,
+        claudeAuthPath: options.claudeAuthPath
+      })),
+    Match.when("status", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthClaudeStatus",
+        label: options.label,
+        claudeAuthPath: options.claudeAuthPath
+      })),
+    Match.when("logout", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthClaudeLogout",
+        label: options.label,
+        claudeAuthPath: options.claudeAuthPath
+      })),
+    Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
+  )
+
 const buildAuthCommand = (
   provider: string,
   action: string,
@@ -100,6 +126,8 @@ const buildAuthCommand = (
     Match.when("github", () => buildGithubCommand(action, options)),
     Match.when("gh", () => buildGithubCommand(action, options)),
     Match.when("codex", () => buildCodexCommand(action, options)),
+    Match.when("claude", () => buildClaudeCommand(action, options)),
+    Match.when("cc", () => buildClaudeCommand(action, options)),
     Match.orElse(() => Either.left(invalidArgument("auth provider", `unknown provider '${provider}'`)))
   )
 

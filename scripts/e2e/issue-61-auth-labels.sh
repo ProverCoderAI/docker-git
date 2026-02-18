@@ -71,7 +71,6 @@ export DOCKER_GIT_STATE_AUTO_SYNC=1
 default_token="token_default_$RUN_ID"
 agiens_token="token_agiens_$RUN_ID"
 git_token="git_token_$RUN_ID"
-claude_key="claude_key_$RUN_ID"
 
 # 1) Store multiple GitHub tokens by label (non-interactive / CI path).
 (
@@ -93,7 +92,7 @@ grep -Fq -- "GITHUB_TOKEN__AGIENS=$agiens_token" "$ROOT/.orch/env/global.env" \
 [[ "$(git --git-dir "$REMOTE" log -1 --pretty=%s)" == "chore(state): auth gh AGIENS" ]] \
   || fail "expected latest remote commit to come from labeled GH auth"
 
-# 2) Set labeled Git credentials + Claude key via the same menu logic (non-interactive).
+# 2) Set labeled Git credentials + stub Claude Code OAuth cache via the same menu logic (non-interactive).
 PROJECT_DIR="$ROOT/e2e/project-1"
 PROJECT_ENV="$PROJECT_DIR/.orch/env/project.env"
 mkdir -p "$(dirname "$PROJECT_ENV")"
@@ -106,10 +105,11 @@ EOF_ENV
   PROJECT_DIR="$PROJECT_DIR" \
   PROJECT_ENV_PATH="$PROJECT_ENV" \
   GIT_TOKEN_VALUE="$git_token" \
-  CLAUDE_KEY_VALUE="$claude_key" \
   node --input-type=module <<'NODE'
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
 import { Effect } from "effect"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 
 import { writeAuthFlow } from "./dist/src/docker-git/menu-auth-data.js"
 import { writeProjectAuthFlow } from "./dist/src/docker-git/menu-project-auth-data.js"
@@ -121,9 +121,8 @@ if (projectDir.length === 0 || envProjectPath.length === 0) {
 }
 
 const gitToken = process.env.GIT_TOKEN_VALUE ?? ""
-const claudeKey = process.env.CLAUDE_KEY_VALUE ?? ""
-if (gitToken.length === 0 || claudeKey.length === 0) {
-  throw new Error("missing GIT_TOKEN_VALUE / CLAUDE_KEY_VALUE")
+if (gitToken.length === 0) {
+  throw new Error("missing GIT_TOKEN_VALUE")
 }
 
 const project = {
@@ -135,7 +134,15 @@ const project = {
 const main = Effect.gen(function*(_) {
   // Create labeled profiles in ~/.docker-git/.orch/env/global.env
   yield* _(writeAuthFlow(process.cwd(), "GitSet", { label: "agiens", token: gitToken, user: "x-access-token" }))
-  yield* _(writeAuthFlow(process.cwd(), "ClaudeSet", { label: "agiens", apiKey: claudeKey }))
+
+  // Stub a Claude Code OAuth cache for the same label so project binding can validate it.
+  const root = process.env.DOCKER_GIT_PROJECTS_ROOT ?? ""
+  if (root.length === 0) {
+    throw new Error("missing DOCKER_GIT_PROJECTS_ROOT")
+  }
+  const claudeAuthDir = join(root, ".orch", "auth", "claude", "agiens")
+  mkdirSync(claudeAuthDir, { recursive: true })
+  writeFileSync(join(claudeAuthDir, ".config.json"), JSON.stringify({}), "utf8")
 
   // Bind them into the project env.
   yield* _(writeProjectAuthFlow(project, "ProjectGithubConnect", { label: "agiens" }))
@@ -153,7 +160,6 @@ grep -Fq -- "CLAUDE_AUTH_LABEL=AGIENS" "$PROJECT_ENV" || fail "expected CLAUDE_A
 grep -Fq -- "GIT_AUTH_TOKEN=$git_token" "$PROJECT_ENV" || fail "expected bound GIT_AUTH_TOKEN in project.env"
 grep -Fq -- "GIT_AUTH_USER=x-access-token" "$PROJECT_ENV" || fail "expected bound GIT_AUTH_USER in project.env"
 grep -Fq -- "GH_TOKEN=$git_token" "$PROJECT_ENV" || fail "expected bound GH_TOKEN in project.env"
-grep -Fq -- "ANTHROPIC_API_KEY=$claude_key" "$PROJECT_ENV" || fail "expected bound ANTHROPIC_API_KEY in project.env"
 
 [[ -z "$(git -C "$ROOT" status --porcelain)" ]] || fail "state repo not clean after project bindings"
 last_msg="$(git --git-dir "$REMOTE" log -1 --pretty=%s)"

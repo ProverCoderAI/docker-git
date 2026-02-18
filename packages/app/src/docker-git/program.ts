@@ -1,6 +1,9 @@
 import type { Command, ParseError } from "@effect-template/lib/core/domain"
 import { createProject } from "@effect-template/lib/usecases/actions"
 import {
+  authClaudeLogin,
+  authClaudeLogout,
+  authClaudeStatus,
   authCodexLogin,
   authCodexLogout,
   authCodexStatus,
@@ -85,15 +88,18 @@ const handleNonBaseCommand = (command: NonBaseCommand) =>
       Match.when({ _tag: "AuthCodexLogin" }, (cmd) => authCodexLogin(cmd)),
       Match.when({ _tag: "AuthCodexStatus" }, (cmd) => authCodexStatus(cmd)),
       Match.when({ _tag: "AuthCodexLogout" }, (cmd) => authCodexLogout(cmd)),
+      Match.when({ _tag: "AuthClaudeLogin" }, (cmd) => authClaudeLogin(cmd)),
+      Match.when({ _tag: "AuthClaudeStatus" }, (cmd) => authClaudeStatus(cmd)),
+      Match.when({ _tag: "AuthClaudeLogout" }, (cmd) => authClaudeLogout(cmd)),
       Match.when({ _tag: "Attach" }, (cmd) => attachTmux(cmd)),
       Match.when({ _tag: "Panes" }, (cmd) => listTmuxPanes(cmd)),
       Match.when({ _tag: "SessionsList" }, (cmd) => listTerminalSessions(cmd)),
-      Match.when({ _tag: "SessionsKill" }, (cmd) => killTerminalProcess(cmd)),
-      Match.when({ _tag: "SessionsLogs" }, (cmd) => tailTerminalLogs(cmd)),
-      Match.when({ _tag: "ScrapExport" }, (cmd) => exportScrap(cmd)),
-      Match.when({ _tag: "ScrapImport" }, (cmd) => importScrap(cmd))
+      Match.when({ _tag: "SessionsKill" }, (cmd) => killTerminalProcess(cmd))
     )
     .pipe(
+      Match.when({ _tag: "SessionsLogs" }, (cmd) => tailTerminalLogs(cmd)),
+      Match.when({ _tag: "ScrapExport" }, (cmd) => exportScrap(cmd)),
+      Match.when({ _tag: "ScrapImport" }, (cmd) => importScrap(cmd)),
       Match.when({ _tag: "McpPlaywrightUp" }, (cmd) => mcpPlaywrightUp(cmd)),
       Match.exhaustive
     )

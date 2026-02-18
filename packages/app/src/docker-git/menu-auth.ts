@@ -1,6 +1,6 @@
-import { Effect, pipe } from "effect"
+import { Effect, Match, pipe } from "effect"
 
-import { authGithubLogin } from "@effect-template/lib/usecases/auth"
+import { authClaudeLogin, authClaudeLogout, authGithubLogin, claudeAuthRoot } from "@effect-template/lib/usecases/auth"
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 
@@ -68,23 +68,43 @@ const startAuthPrompt = (
   context.setMessage(null)
 }
 
+const resolveLabelOption = (values: Readonly<Record<string, string>>): string | null => {
+  const labelValue = (values["label"] ?? "").trim()
+  return labelValue.length > 0 ? labelValue : null
+}
+
 const resolveAuthPromptEffect = (
   view: AuthPromptView,
   cwd: string,
   values: Readonly<Record<string, string>>
 ): Effect.Effect<void, AppError, MenuEnv> => {
-  if (view.flow === "GithubOauth") {
-    const labelValue = (values["label"] ?? "").trim()
-    const labelOption = labelValue.length > 0 ? labelValue : null
-    return authGithubLogin({
-      _tag: "AuthGithubLogin",
-      label: labelOption,
-      token: null,
-      scopes: null,
-      envGlobalPath: view.snapshot.globalEnvPath
-    })
-  }
-  return writeAuthFlow(cwd, view.flow, values)
+  const labelOption = resolveLabelOption(values)
+  return Match.value(view.flow).pipe(
+    Match.when("GithubOauth", () =>
+      authGithubLogin({
+        _tag: "AuthGithubLogin",
+        label: labelOption,
+        token: null,
+        scopes: null,
+        envGlobalPath: view.snapshot.globalEnvPath
+      })),
+    Match.when("ClaudeOauth", () =>
+      authClaudeLogin({
+        _tag: "AuthClaudeLogin",
+        label: labelOption,
+        claudeAuthPath: claudeAuthRoot
+      })),
+    Match.when("ClaudeLogout", () =>
+      authClaudeLogout({
+        _tag: "AuthClaudeLogout",
+        label: labelOption,
+        claudeAuthPath: claudeAuthRoot
+      })),
+    Match.when("GithubRemove", (flow) => writeAuthFlow(cwd, flow, values)),
+    Match.when("GitSet", (flow) => writeAuthFlow(cwd, flow, values)),
+    Match.when("GitRemove", (flow) => writeAuthFlow(cwd, flow, values)),
+    Match.exhaustive
+  )
 }
 
 const runAuthPromptEffect = (
@@ -162,7 +182,9 @@ const submitAuthPrompt = (
     (nextValues) => {
       const label = defaultLabel(nextValues["label"] ?? "")
       const effect = resolveAuthPromptEffect(view, context.state.cwd, nextValues)
-      runAuthPromptEffect(effect, view, label, context, { suspendTui: view.flow === "GithubOauth" })
+      runAuthPromptEffect(effect, view, label, context, {
+        suspendTui: view.flow === "GithubOauth" || view.flow === "ClaudeOauth" || view.flow === "ClaudeLogout"
+      })
     }
   )
 }

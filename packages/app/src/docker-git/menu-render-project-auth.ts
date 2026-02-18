@@ -30,6 +30,7 @@ export const renderProjectAuthMenu = (
       el(Text, { color: "gray" }, `Dir: ${snapshot.projectDir}`),
       el(Text, { color: "gray" }, `Project env: ${snapshot.envProjectPath}`),
       el(Text, { color: "gray" }, `Global env: ${snapshot.envGlobalPath}`),
+      el(Text, { color: "gray" }, `Claude auth: ${snapshot.claudeAuthPath}`),
       el(
         Box,
         { marginTop: 1, flexDirection: "column" },
@@ -38,7 +39,7 @@ export const renderProjectAuthMenu = (
         el(Text, { color: "gray" }, `Git label: ${renderActiveLabel(snapshot.activeGitLabel)}`),
         el(Text, { color: "gray" }, renderCountLine("Available Git tokens", snapshot.gitTokenEntries)),
         el(Text, { color: "gray" }, `Claude label: ${renderActiveLabel(snapshot.activeClaudeLabel)}`),
-        el(Text, { color: "gray" }, renderCountLine("Available Claude keys", snapshot.claudeKeyEntries))
+        el(Text, { color: "gray" }, renderCountLine("Available Claude logins", snapshot.claudeAuthEntries))
       ),
       el(Box, { flexDirection: "column", marginTop: 1 }, ...list),
       renderMenuHelp("Use arrows + Enter, or type a number from the list.")

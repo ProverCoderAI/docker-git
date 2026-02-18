@@ -187,6 +187,24 @@ export interface AuthCodexLogoutCommand {
   readonly codexAuthPath: string
 }
 
+export interface AuthClaudeLoginCommand {
+  readonly _tag: "AuthClaudeLogin"
+  readonly label: string | null
+  readonly claudeAuthPath: string
+}
+
+export interface AuthClaudeStatusCommand {
+  readonly _tag: "AuthClaudeStatus"
+  readonly label: string | null
+  readonly claudeAuthPath: string
+}
+
+export interface AuthClaudeLogoutCommand {
+  readonly _tag: "AuthClaudeLogout"
+  readonly label: string | null
+  readonly claudeAuthPath: string
+}
+
 export type SessionsCommand =
   | SessionsListCommand
   | SessionsKillCommand
@@ -203,6 +221,9 @@ export type AuthCommand =
   | AuthCodexLoginCommand
   | AuthCodexStatusCommand
   | AuthCodexLogoutCommand
+  | AuthClaudeLoginCommand
+  | AuthClaudeStatusCommand
+  | AuthClaudeLogoutCommand
 
 export type StateCommand =
   | StatePathCommand
