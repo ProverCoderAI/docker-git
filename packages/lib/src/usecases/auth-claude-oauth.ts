@@ -1,138 +1,108 @@
 import * as Command from "@effect/platform/Command"
 import * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
-import { Duration, Effect, pipe, Schedule } from "effect"
-import * as Deferred from "effect/Deferred"
+import { Effect, pipe } from "effect"
 import * as Fiber from "effect/Fiber"
 import type * as Scope from "effect/Scope"
 import * as Stream from "effect/Stream"
 import { writeSync } from "node:fs"
 
 import { AuthError, CommandFailedError } from "../shell/errors.js"
-import { readVisibleLine } from "./auth-claude-oauth-input.js"
 
-type ClaudeAuthorizeInfo = {
-  readonly authorizeUrl: string
-  readonly state: string | null
+const oauthTokenEnvKey = "DOCKER_GIT_CLAUDE_OAUTH_TOKEN"
+const tokenMarker = "Your OAuth token (valid for 1 year):"
+const outputWindowSize = 262_144
+
+const oauthTokenRegex = /([A-Za-z0-9][A-Za-z0-9._-]{20,})/u
+
+const ansiEscape = "\u001B"
+const ansiBell = "\u0007"
+
+const isAnsiFinalByte = (codePoint: number | undefined): boolean =>
+  codePoint !== undefined && codePoint >= 0x40 && codePoint <= 0x7E
+
+const skipCsiSequence = (raw: string, start: number): number => {
+  const length = raw.length
+  let index = start + 2
+  while (index < length) {
+    const codePoint = raw.codePointAt(index)
+    if (isAnsiFinalByte(codePoint)) {
+      return index + 1
+    }
+    index += 1
+  }
+  return index
 }
 
-type FirstOutcome =
-  | { readonly _tag: "Exit"; readonly exitCode: number }
-  | { readonly _tag: "AuthorizeUrl"; readonly info: ClaudeAuthorizeInfo }
-
-const oauthCodeEnvKey = "DOCKER_GIT_CLAUDE_OAUTH_CODE"
-const authorizeUrlRegex = /https:\/\/claude\.ai\/oauth\/authorize\S*/u
-
-const extractAuthorizeUrl = (line: string): string | null => {
-  const match = authorizeUrlRegex.exec(line)
-  return match?.[0] ?? null
+const skipOscSequence = (raw: string, start: number): number => {
+  const length = raw.length
+  let index = start + 2
+  while (index < length) {
+    const char = raw[index] ?? ""
+    if (char === ansiBell) {
+      return index + 1
+    }
+    if (char === ansiEscape && raw[index + 1] === "\\") {
+      return index + 2
+    }
+    index += 1
+  }
+  return index
 }
 
-const readQueryParam = (raw: string, key: string): string | null => {
-  const match = new RegExp(String.raw`[?&]${key}=([^&#\s]+)`, "u").exec(raw)
+const skipEscapeSequence = (raw: string, start: number): number => {
+  const next = raw[start + 1] ?? ""
+  if (next === "[") {
+    return skipCsiSequence(raw, start)
+  }
+  if (next === "]") {
+    return skipOscSequence(raw, start)
+  }
+  return Math.min(raw.length, start + 2)
+}
+
+const stripAnsi = (raw: string): string => {
+  const cleaned: Array<string> = []
+  let index = 0
+
+  while (index < raw.length) {
+    const current = raw[index] ?? ""
+    if (current !== ansiEscape) {
+      cleaned.push(current)
+      index += 1
+      continue
+    }
+    index = skipEscapeSequence(raw, index)
+  }
+
+  return cleaned.join("")
+}
+
+const extractOauthToken = (rawOutput: string): string | null => {
+  const normalized = stripAnsi(rawOutput).replaceAll("\r", "\n")
+  const markerIndex = normalized.lastIndexOf(tokenMarker)
+  if (markerIndex === -1) {
+    return null
+  }
+
+  const tail = normalized.slice(markerIndex + tokenMarker.length)
+  const match = oauthTokenRegex.exec(tail)
   return match?.[1] ?? null
 }
 
-const normalizeOauthPaste = (raw: string, authorizeState: string | null): string => {
-  const trimmed = raw.trim()
-  if (trimmed.length === 0) {
-    return ""
-  }
-  if (trimmed.includes("#")) {
-    return trimmed
-  }
-  const callbackCode = readQueryParam(trimmed, "code")
-  const callbackState = readQueryParam(trimmed, "state")
-  if (callbackCode !== null) {
-    return callbackState === null ? callbackCode : `${callbackCode}#${callbackState}`
-  }
-  return authorizeState === null ? trimmed : `${trimmed}#${authorizeState}`
-}
-
-const oauthCodeFromEnv = (): string | null => {
-  const value = (process.env[oauthCodeEnvKey] ?? "").trim()
+const oauthTokenFromEnv = (): string | null => {
+  const value = (process.env[oauthTokenEnvKey] ?? "").trim()
   return value.length > 0 ? value : null
 }
 
-const ensureInteractiveStdin = (): Effect.Effect<void, AuthError> =>
-  process.stdin.isTTY && process.stdout.isTTY
-    ? Effect.void
-    : Effect.fail(
-      new AuthError({
-        message:
-          `Claude auth login needs an interactive TTY, or set ${oauthCodeEnvKey} to the OAuth Authentication Code.`
-      })
-    )
-
-const resolveOauthCodeInput = (info: ClaudeAuthorizeInfo): Effect.Effect<string, AuthError> => {
-  const fromEnv = oauthCodeFromEnv()
-  if (fromEnv !== null) {
-    return Effect.succeed(normalizeOauthPaste(fromEnv, info.state))
-  }
-  return ensureInteractiveStdin().pipe(
-    Effect.zipRight(
-      readVisibleLine(
-        "\n[docker-git] Paste the Authentication Code from the browser and press Enter (Ctrl+C to cancel):\n> "
-      )
-    ),
-    Effect.map((value) => normalizeOauthPaste(value, info.state)),
-    Effect.filterOrFail(
-      (value) => value.trim().length > 0,
-      () => new AuthError({ message: "Claude auth login requires a non-empty Authentication Code." })
-    )
-  )
+const ensureOauthToken = (rawToken: string): Effect.Effect<string, AuthError> => {
+  const token = rawToken.trim()
+  return token.length > 0
+    ? Effect.succeed(token)
+    : Effect.fail(new AuthError({ message: "Claude OAuth token is empty." }))
 }
 
-const writeChunk = (fd: number, chunk: Uint8Array): Effect.Effect<void> =>
-  Effect.sync(() => {
-    writeSync(fd, chunk)
-  }).pipe(Effect.asVoid)
-
-const logLine = (line: string): Effect.Effect<void> =>
-  Effect.sync(() => {
-    writeSync(1, line.endsWith("\n") ? line : `${line}\n`)
-  }).pipe(Effect.asVoid)
-
-const pumpDockerOutput = (
-  source: Stream.Stream<Uint8Array, PlatformError>,
-  fd: number,
-  oauth: Deferred.Deferred<ClaudeAuthorizeInfo>
-): Effect.Effect<void, PlatformError> => {
-  const decoder = new TextDecoder("utf-8")
-  let remainder = ""
-
-  return pipe(
-    source,
-    Stream.runForEach((chunk) =>
-      pipe(
-        writeChunk(fd, chunk),
-        Effect.zipRight(
-          Effect.sync((): ClaudeAuthorizeInfo | null => {
-            remainder += decoder.decode(chunk)
-            // Keep only a sliding window so repeated scans stay cheap.
-            if (remainder.length > 8192) {
-              remainder = remainder.slice(-8192)
-            }
-            const authorizeUrl = extractAuthorizeUrl(remainder)
-            if (authorizeUrl === null) {
-              return null
-            }
-            const state = readQueryParam(authorizeUrl, "state")
-            return { authorizeUrl, state }
-          })
-        ),
-        Effect.flatMap((info) =>
-          info === null
-            ? Effect.void
-            : Deferred.succeed(oauth, info).pipe(Effect.asVoid)
-        ),
-        Effect.asVoid
-      )
-    )
-  ).pipe(Effect.asVoid)
-}
-
-type DockerLoginSpec = {
+type DockerSetupTokenSpec = {
   readonly cwd: string
   readonly image: string
   readonly hostPath: string
@@ -141,23 +111,21 @@ type DockerLoginSpec = {
   readonly args: ReadonlyArray<string>
 }
 
-const buildDockerLoginSpec = (
+const buildDockerSetupTokenSpec = (
   cwd: string,
   accountPath: string,
   image: string,
   containerPath: string
-): DockerLoginSpec => ({
+): DockerSetupTokenSpec => ({
   cwd,
   image,
   hostPath: accountPath,
   containerPath,
-  env: [`CLAUDE_CONFIG_DIR=${containerPath}`, "BROWSER=echo"],
-  args: ["auth", "login"]
+  env: [`CLAUDE_CONFIG_DIR=${containerPath}`],
+  args: ["setup-token"]
 })
 
-const buildDockerLoginArgs = (spec: DockerLoginSpec): ReadonlyArray<string> => {
-  // NOTE: Claude Code's `auth login` uses an interactive prompt that behaves poorly without a TTY.
-  // We still want to programmatically feed the code, so we run `docker` under `script(1)` which allocates a pty.
+const buildDockerSetupTokenArgs = (spec: DockerSetupTokenSpec): ReadonlyArray<string> => {
   const base: Array<string> = ["run", "--rm", "-i", "-t", "-v", `${spec.hostPath}:${spec.containerPath}`]
   for (const entry of spec.env) {
     const trimmed = entry.trim()
@@ -169,107 +137,61 @@ const buildDockerLoginArgs = (spec: DockerLoginSpec): ReadonlyArray<string> => {
   return [...base, spec.image, ...spec.args]
 }
 
-const shellQuote = (value: string): string => {
-  if (value.length === 0) {
-    return "''"
-  }
-  // POSIX-safe single-quote escaping: ' -> '\'' .
-  const singleQuoteEscape = String.raw`'\''`
-  return "'".concat(value.replaceAll("'", singleQuoteEscape), "'")
-}
-
-const buildDockerLoginCommandString = (spec: DockerLoginSpec): string =>
-  ["docker", ...buildDockerLoginArgs(spec)]
-    .map((part) => shellQuote(part))
-    .join(" ")
-
 const startDockerProcess = (
   executor: CommandExecutor.CommandExecutor,
-  spec: DockerLoginSpec
+  spec: DockerSetupTokenSpec
 ): Effect.Effect<CommandExecutor.Process, PlatformError, Scope.Scope> =>
   executor.start(
     pipe(
-      // We run docker via script(1) to get a pseudo-tty even when we need to pipe input from Node.
-      Command.make(
-        "script",
-        "-q",
-        "-f",
-        "-e",
-        "-c",
-        buildDockerLoginCommandString(spec),
-        "/dev/null"
-      ),
+      Command.make("docker", ...buildDockerSetupTokenArgs(spec)),
       Command.workingDirectory(spec.cwd),
-      Command.stdin("pipe"),
+      Command.stdin("inherit"),
       Command.stdout("pipe"),
       Command.stderr("pipe")
     )
   )
 
-const awaitFirstOutcome = (
-  proc: CommandExecutor.Process,
-  oauth: Deferred.Deferred<ClaudeAuthorizeInfo>
-): Effect.Effect<FirstOutcome, PlatformError> =>
-  Effect.race(
-    Deferred.await(oauth).pipe(Effect.map((info) => ({ _tag: "AuthorizeUrl" as const, info }))),
-    proc.exitCode.pipe(Effect.map((exitCode) => ({ _tag: "Exit" as const, exitCode: Number(exitCode) })))
-  )
+const pumpDockerOutput = (
+  source: Stream.Stream<Uint8Array, PlatformError>,
+  fd: number,
+  tokenBox: { value: string | null }
+): Effect.Effect<void, PlatformError> => {
+  const decoder = new TextDecoder("utf-8")
+  let outputWindow = ""
+
+  return pipe(
+    source,
+    Stream.runForEach((chunk) =>
+      Effect.sync(() => {
+        writeSync(fd, chunk)
+        outputWindow += decoder.decode(chunk)
+        if (outputWindow.length > outputWindowSize) {
+          outputWindow = outputWindow.slice(-outputWindowSize)
+        }
+        if (tokenBox.value !== null) {
+          return
+        }
+        const parsed = extractOauthToken(outputWindow)
+        if (parsed !== null) {
+          tokenBox.value = parsed
+        }
+      }).pipe(Effect.asVoid)
+    )
+  ).pipe(Effect.asVoid)
+}
 
 const ensureExitOk = (exitCode: number): Effect.Effect<void, CommandFailedError> =>
-  exitCode === 0 ? Effect.void : Effect.fail(new CommandFailedError({ command: "claude auth login", exitCode }))
+  exitCode === 0 ? Effect.void : Effect.fail(new CommandFailedError({ command: "claude setup-token", exitCode }))
 
-const feedOauthCode = (proc: CommandExecutor.Process, code: string): Effect.Effect<void, PlatformError> => {
-  const bytes = new TextEncoder().encode(`${code}\n`)
-  return pipe(Stream.make(bytes), Stream.run(proc.stdin), Effect.asVoid)
-}
-
-const awaitExitCodeWithHeartbeat = (proc: CommandExecutor.Process): Effect.Effect<number, PlatformError> =>
-  Effect.gen(function*(_) {
-    const start = Date.now()
-    const heartbeat = yield* _(
-      Effect.fork(
-        logLine("[docker-git] Waiting for Claude to finish OAuth login (this can be silent for a bit)...").pipe(
-          Effect.zipRight(
-            Effect.repeat(
-              Effect.sync(() => {
-                const seconds = Math.max(0, Math.floor((Date.now() - start) / 1000))
-                writeSync(1, `[docker-git] Still waiting for Claude... (${seconds}s)\n`)
-              }),
-              Schedule.addDelay(Schedule.forever, () => Duration.seconds(5))
-            )
-          )
-        )
-      )
+const resolveCapturedToken = (token: string | null): Effect.Effect<string, AuthError> =>
+  token === null
+    ? Effect.fail(
+      new AuthError({
+        message:
+          "Claude OAuth completed without a captured token. Retry login and ensure the flow reaches 'Long-lived authentication token created successfully'."
+      })
     )
-    return yield* _(
-      proc.exitCode.pipe(
-        Effect.map(Number),
-        Effect.ensuring(Fiber.interrupt(heartbeat).pipe(Effect.ignore))
-      )
-    )
-  })
-
-const finishClaudeLogin = (
-  outcome: FirstOutcome,
-  proc: CommandExecutor.Process
-): Effect.Effect<void, AuthError | CommandFailedError | PlatformError> => {
-  if (outcome._tag === "Exit") {
-    return ensureExitOk(outcome.exitCode)
-  }
-  return resolveOauthCodeInput(outcome.info).pipe(
-    Effect.flatMap((code) =>
-      feedOauthCode(proc, code).pipe(
-        Effect.zipRight(
-          Effect.sync(() => {
-            writeSync(1, "[docker-git] Code submitted, waiting for Claude...\n")
-          })
-        )
-      )
-    ),
-    Effect.zipRight(awaitExitCodeWithHeartbeat(proc).pipe(Effect.flatMap((exitCode) => ensureExitOk(exitCode)))),
-    Effect.asVoid
-  )
-}
+    : ensureOauthToken(token)
 
 export const runClaudeOauthLoginWithPrompt = (
   cwd: string,
@@ -278,21 +200,28 @@ export const runClaudeOauthLoginWithPrompt = (
     readonly image: string
     readonly containerPath: string
   }
-): Effect.Effect<void, AuthError | CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  Effect.scoped(
+): Effect.Effect<string, AuthError | CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const envToken = oauthTokenFromEnv()
+  if (envToken !== null) {
+    return ensureOauthToken(envToken)
+  }
+
+  return Effect.scoped(
     Effect.gen(function*(_) {
       const executor = yield* _(CommandExecutor.CommandExecutor)
-      const spec = buildDockerLoginSpec(cwd, accountPath, options.image, options.containerPath)
+      const spec = buildDockerSetupTokenSpec(cwd, accountPath, options.image, options.containerPath)
       const proc = yield* _(startDockerProcess(executor, spec))
 
-      const oauth = yield* _(Deferred.make<ClaudeAuthorizeInfo>())
-      const stdoutFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stdout, 1, oauth)))
-      const stderrFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stderr, 2, oauth)))
+      const tokenBox: { value: string | null } = { value: null }
+      const stdoutFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stdout, 1, tokenBox)))
+      const stderrFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stderr, 2, tokenBox)))
 
-      const first = yield* _(awaitFirstOutcome(proc, oauth))
-      yield* _(finishClaudeLogin(first, proc))
-
+      const exitCode = yield* _(proc.exitCode.pipe(Effect.map(Number)))
       yield* _(Fiber.join(stdoutFiber))
       yield* _(Fiber.join(stderrFiber))
-    }).pipe(Effect.asVoid)
+      yield* _(ensureExitOk(exitCode))
+
+      return yield* _(resolveCapturedToken(tokenBox.value))
+    })
   )
+}

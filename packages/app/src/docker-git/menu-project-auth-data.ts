@@ -12,6 +12,7 @@ import { autoSyncState } from "@effect-template/lib/usecases/state-repo"
 
 import { countAuthAccountDirectories } from "./menu-auth-helpers.js"
 import { buildLabeledEnvKey, countKeyEntries, normalizeLabel } from "./menu-labeled-env.js"
+import { hasClaudeAccountCredentials } from "./menu-project-auth-claude.js"
 import type { MenuEnv, ProjectAuthFlow, ProjectAuthSnapshot } from "./menu-types.js"
 
 export type ProjectAuthMenuAction = ProjectAuthFlow | "Refresh" | "Back"
@@ -202,24 +203,13 @@ const updateProjectClaudeConnect = (spec: ProjectEnvUpdateSpec): Effect.Effect<s
     if (!exists) {
       return yield* _(Effect.fail(missingSecret("Claude Code login", spec.canonicalLabel, spec.claudeAuthPath)))
     }
-    const configJsonPath = `${accountPath}/.config.json`
-    const hasConfigJson = yield* _(spec.fs.exists(configJsonPath))
-    if (hasConfigJson) {
-      const info = yield* _(spec.fs.stat(configJsonPath))
-      if (info.type === "File") {
-        return upsertEnvKey(spec.projectEnvText, projectClaudeLabelKey, spec.canonicalLabel)
-      }
-    }
 
-    const entries = yield* _(spec.fs.readDirectory(accountPath))
-    for (const entry of entries) {
-      if (!entry.startsWith(".claude") || !entry.endsWith(".json")) {
-        continue
-      }
-      const info = yield* _(spec.fs.stat(`${accountPath}/${entry}`))
-      if (info.type === "File") {
-        return upsertEnvKey(spec.projectEnvText, projectClaudeLabelKey, spec.canonicalLabel)
-      }
+    const hasCredentials = yield* _(
+      hasClaudeAccountCredentials(spec.fs, accountPath),
+      Effect.orElseSucceed(() => false)
+    )
+    if (hasCredentials) {
+      return upsertEnvKey(spec.projectEnvText, projectClaudeLabelKey, spec.canonicalLabel)
     }
 
     return yield* _(Effect.fail(missingSecret("Claude Code login", spec.canonicalLabel, spec.claudeAuthPath)))

@@ -25,6 +25,7 @@ type ClaudeAccountContext = {
   readonly accountLabel: string
   readonly accountPath: string
   readonly cwd: string
+  readonly fs: FileSystem.FileSystem
 }
 
 export const claudeAuthRoot = ".docker-git/.orch/auth/claude"
@@ -32,6 +33,9 @@ export const claudeAuthRoot = ".docker-git/.orch/auth/claude"
 const claudeImageName = "docker-git-auth-claude:latest"
 const claudeImageDir = ".docker-git/.orch/auth/claude/.image"
 const claudeConfigDir = "/claude-config"
+const claudeOauthTokenFileName = ".oauth-token"
+
+const claudeOauthTokenPath = (accountPath: string): string => `${accountPath}/${claudeOauthTokenFileName}`
 
 const ensureClaudeOrchLayout = (
   cwd: string
@@ -88,7 +92,7 @@ const withClaudeAuth = <A, E>(
           buildLabel: "claude auth"
         })
       )
-      return yield* _(run({ accountLabel, accountPath, cwd }))
+      return yield* _(run({ accountLabel, accountPath, cwd, fs }))
     })
   )
 
@@ -171,11 +175,13 @@ export const authClaudeLogin = (
   command: AuthClaudeLoginCommand
 ): Effect.Effect<void, AuthError | CommandFailedError | PlatformError, ClaudeRuntime> => {
   const accountLabel = normalizeAccountLabel(command.label, "default")
-  return withClaudeAuth(command, ({ accountPath, cwd }) =>
+  return withClaudeAuth(command, ({ accountPath, cwd, fs }) =>
     runClaudeOauthLoginWithPrompt(cwd, accountPath, {
       image: claudeImageName,
       containerPath: claudeConfigDir
-    })).pipe(
+    }).pipe(
+      Effect.flatMap((token) => fs.writeFileString(claudeOauthTokenPath(accountPath), `${token}\n`))
+    )).pipe(
       Effect.zipRight(autoSyncState(`chore(state): auth claude ${accountLabel}`))
     )
 }
@@ -193,8 +199,18 @@ export const authClaudeLogin = (
 export const authClaudeStatus = (
   command: AuthClaudeStatusCommand
 ): Effect.Effect<void, CommandFailedError | PlatformError, ClaudeRuntime> =>
-  withClaudeAuth(command, ({ accountLabel, accountPath, cwd }) =>
+  withClaudeAuth(command, ({ accountLabel, accountPath, cwd, fs }) =>
     Effect.gen(function*(_) {
+      const tokenPath = claudeOauthTokenPath(accountPath)
+      const hasToken = yield* _(fs.exists(tokenPath))
+      if (hasToken) {
+        const tokenText = yield* _(fs.readFileString(tokenPath), Effect.orElseSucceed(() => ""))
+        if (tokenText.trim().length > 0) {
+          yield* _(Effect.log(`Claude connected (${accountLabel}, oauth-token).`))
+          return
+        }
+      }
+
       const raw = yield* _(runClaudeStatusJson(cwd, accountPath))
       const status = yield* _(decodeClaudeAuthStatus(raw))
       yield* (status.loggedIn
@@ -217,6 +233,16 @@ export const authClaudeLogout = (
 ): Effect.Effect<void, CommandFailedError | PlatformError, ClaudeRuntime> =>
   Effect.gen(function*(_) {
     const accountLabel = normalizeAccountLabel(command.label, "default")
-    yield* _(withClaudeAuth(command, ({ accountPath, cwd }) => runClaudeLogout(cwd, accountPath)))
+    yield* _(
+      withClaudeAuth(command, ({ accountPath, cwd, fs }) =>
+        Effect.gen(function*(_) {
+          const tokenPath = claudeOauthTokenPath(accountPath)
+          const hasToken = yield* _(fs.exists(tokenPath))
+          if (hasToken) {
+            yield* _(fs.remove(tokenPath, { force: true }))
+          }
+          yield* _(runClaudeLogout(cwd, accountPath))
+        }))
+    )
     yield* _(autoSyncState(`chore(state): auth claude logout ${accountLabel}`))
   }).pipe(Effect.asVoid)
