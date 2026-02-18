@@ -9,7 +9,9 @@ import { Effect, Either } from "effect"
 import type { AuthClaudeLoginCommand, AuthClaudeLogoutCommand, AuthClaudeStatusCommand } from "../core/domain.js"
 import { defaultTemplateConfig } from "../core/domain.js"
 import { runDockerAuth, runDockerAuthCapture } from "../shell/docker-auth.js"
-import { AuthError, CommandFailedError } from "../shell/errors.js"
+import type { AuthError } from "../shell/errors.js"
+import { CommandFailedError } from "../shell/errors.js"
+import { runClaudeOauthLoginWithPrompt } from "./auth-claude-oauth.js"
 import { buildDockerAuthSpec, normalizeAccountLabel } from "./auth-helpers.js"
 import { migrateLegacyOrchLayout } from "./auth-sync.js"
 import { ensureDockerImage } from "./docker-image.js"
@@ -111,13 +113,6 @@ const runClaudeAuthCommand = (
     (exitCode) => new CommandFailedError({ command: commandLabel, exitCode })
   )
 
-const runClaudeLogin = (
-  cwd: string,
-  accountPath: string,
-  interactive: boolean
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  runClaudeAuthCommand(cwd, accountPath, ["auth", "login"], "claude auth login", interactive)
-
 const runClaudeLogout = (
   cwd: string,
   accountPath: string
@@ -175,17 +170,14 @@ const decodeClaudeAuthStatus = (raw: string): Effect.Effect<ClaudeAuthStatus, Co
 export const authClaudeLogin = (
   command: AuthClaudeLoginCommand
 ): Effect.Effect<void, AuthError | CommandFailedError | PlatformError, ClaudeRuntime> => {
-  const interactive = process.stdin.isTTY && process.stdout.isTTY
-  if (!interactive) {
-    return Effect.fail(new AuthError({ message: "Claude auth login requires an interactive TTY." }))
-  }
   const accountLabel = normalizeAccountLabel(command.label, "default")
-  return Effect.log(
-    "Claude OAuth: open the URL, then copy the Authentication Code from the browser and paste it here (input is hidden), then press Enter."
-  ).pipe(
-    Effect.zipRight(withClaudeAuth(command, ({ accountPath, cwd }) => runClaudeLogin(cwd, accountPath, true))),
-    Effect.zipRight(autoSyncState(`chore(state): auth claude ${accountLabel}`))
-  )
+  return withClaudeAuth(command, ({ accountPath, cwd }) =>
+    runClaudeOauthLoginWithPrompt(cwd, accountPath, {
+      image: claudeImageName,
+      containerPath: claudeConfigDir
+    })).pipe(
+      Effect.zipRight(autoSyncState(`chore(state): auth claude ${accountLabel}`))
+    )
 }
 
 // CHANGE: show Claude Code auth status for a given label

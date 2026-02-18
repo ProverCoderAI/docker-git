@@ -51,6 +51,14 @@ const buildDockerArgs = (spec: DockerAuthSpec): ReadonlyArray<string> => {
   return [...base, spec.image, ...spec.args]
 }
 
+// CHANGE: expose docker CLI args builder for advanced auth flows (stdin piping)
+// WHY: some OAuth CLIs (Claude Code) don't reliably render their input UI; docker-git needs to drive stdin explicitly
+// REF: issue-61
+// SOURCE: n/a
+// PURITY: CORE
+// INVARIANT: args match those used by runDockerAuth / runDockerAuthCapture
+export const buildDockerAuthArgs = (spec: DockerAuthSpec): ReadonlyArray<string> => buildDockerArgs(spec)
+
 // CHANGE: run a docker auth command with controlled exit codes
 // WHY: reuse container auth flow for gh/codex
 // QUOTE(ТЗ): "поднимал отдельный контейнер где будет установлен чисто gh или чисто codex"
