@@ -253,7 +253,10 @@ export const statePush = Effect.gen(function*(_) {
   )
   const token = yield* _(resolveGithubToken(fs, path, root))
   const effect = token && token.length > 0 && isGithubHttpsRemote(originUrl)
-    ? withGithubAskpassEnv(token, (env) => git(root, ["push", "-u", "origin", "HEAD"], env))
+    ? withGithubAskpassEnv(
+      token,
+      (env) => git(root, ["-c", `remote.origin.pushurl=${originUrl}`, "push", "-u", "origin", "HEAD"], env)
+    )
     : git(root, ["push", "-u", "origin", "HEAD"], gitBaseEnv)
   yield* _(effect)
 }).pipe(Effect.asVoid)
