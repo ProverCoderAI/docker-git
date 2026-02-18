@@ -223,11 +223,19 @@ export const writeProjectAuthFlow = (
       const spec: ProjectEnvUpdateSpec = { rawLabel, canonicalLabel, globalEnvPath, globalEnvText, projectEnvText }
       const nextProjectEnv = resolveProjectEnvUpdate(flow, spec)
       const syncMessage = Match.value(flow).pipe(
-        Match.when("ProjectGithubConnect", () => `chore(state): project auth gh ${canonicalLabel} ${project.displayName}`),
-        Match.when("ProjectGithubDisconnect", () => `chore(state): project auth gh logout ${project.displayName}`),
-        Match.when("ProjectGitConnect", () => `chore(state): project auth git ${canonicalLabel} ${project.displayName}`),
+        Match.when("ProjectGithubConnect", () =>
+          `chore(state): project auth gh ${canonicalLabel} ${project.displayName}`),
+        Match.when("ProjectGithubDisconnect", () =>
+          `chore(state): project auth gh logout ${project.displayName}`),
+        Match.when(
+          "ProjectGitConnect",
+          () => `chore(state): project auth git ${canonicalLabel} ${project.displayName}`
+        ),
         Match.when("ProjectGitDisconnect", () => `chore(state): project auth git logout ${project.displayName}`),
-        Match.when("ProjectClaudeConnect", () => `chore(state): project auth claude ${canonicalLabel} ${project.displayName}`),
+        Match.when(
+          "ProjectClaudeConnect",
+          () => `chore(state): project auth claude ${canonicalLabel} ${project.displayName}`
+        ),
         Match.when("ProjectClaudeDisconnect", () => `chore(state): project auth claude logout ${project.displayName}`),
         Match.exhaustive
       )

@@ -15,7 +15,7 @@ import { Effect, Match, pipe } from "effect"
 import { openAuthMenu } from "./menu-auth.js"
 import { startCreateView } from "./menu-create.js"
 import { loadSelectView } from "./menu-select-load.js"
-import { pauseForEnter, resumeTui, suspendTui, writeToTerminal } from "./menu-shared.js"
+import { withSuspendedTui, writeErrorAndPause } from "./menu-shared.js"
 import { type MenuEnv, type MenuRunner, type MenuState, type MenuViewContext } from "./menu-types.js"
 
 // CHANGE: keep menu actions and input parsing in a dedicated module
@@ -68,31 +68,11 @@ const runWithSuspendedTui = (
     pipe(
       Effect.sync(() => {
         context.setMessage(`${label}...`)
-        suspendTui()
       }),
-      Effect.zipRight(
-        pipe(
-          effect,
-          Effect.tapError((error) =>
-            Effect.ignore(
-              pipe(
-                Effect.sync(() => {
-                  writeToTerminal(`\n[docker-git] ${renderError(error)}\n`)
-                }),
-                Effect.zipRight(pauseForEnter())
-              )
-            )
-          )
-        )
-      ),
+      Effect.zipRight(withSuspendedTui(effect, { onError: (error) => writeErrorAndPause(renderError(error)) })),
       Effect.tap(() =>
         Effect.sync(() => {
           context.setMessage(`${label} finished.`)
-        })
-      ),
-      Effect.ensuring(
-        Effect.sync(() => {
-          resumeTui()
         })
       ),
       Effect.asVoid

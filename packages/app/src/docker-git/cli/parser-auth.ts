@@ -48,12 +48,12 @@ const buildGithubCommand = (action: string, options: AuthOptions): Either.Either
       options.authWeb && options.token !== null
         ? Either.left(invalidArgument("--token", "cannot be combined with --web"))
         : Either.right<AuthCommand>({
-        _tag: "AuthGithubLogin",
-        label: options.label,
-        token: options.authWeb ? null : options.token,
-        scopes: options.scopes,
-        envGlobalPath: options.envGlobalPath
-      })),
+          _tag: "AuthGithubLogin",
+          label: options.label,
+          token: options.authWeb ? null : options.token,
+          scopes: options.scopes,
+          envGlobalPath: options.envGlobalPath
+        })),
     Match.when("status", () =>
       Either.right<AuthCommand>({
         _tag: "AuthGithubStatus",

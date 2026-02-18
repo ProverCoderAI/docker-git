@@ -15,7 +15,7 @@ import {
 } from "./menu-auth-data.js"
 import { nextBufferValue } from "./menu-buffer-input.js"
 import { handleMenuNumberInput, submitPromptStep } from "./menu-input-utils.js"
-import { pauseForEnter, resetToMenu, resumeTui, suspendTui, writeToTerminal } from "./menu-shared.js"
+import { pauseOnError, resetToMenu, resumeSshWithSkipInputs, withSuspendedTui } from "./menu-shared.js"
 import type {
   AuthFlow,
   AuthSnapshot,
@@ -95,38 +95,13 @@ const runAuthPromptEffect = (
   options: { readonly suspendTui: boolean }
 ) => {
   const withOptionalSuspension = options.suspendTui
-    ? pipe(
-      Effect.sync(() => {
-        suspendTui()
-      }),
-      Effect.zipRight(
-        pipe(
-          effect,
-          Effect.tapError((error) =>
-            Effect.ignore(
-              pipe(
-                Effect.sync(() => {
-                  writeToTerminal(`\n[docker-git] ${renderError(error)}\n`)
-                }),
-                Effect.zipRight(pauseForEnter())
-              )
-            )
-          )
-        )
-      ),
-      Effect.ensuring(
-        Effect.sync(() => {
-          resumeTui()
-          context.setSshActive(false)
-          context.setSkipInputs(() => 2)
-        })
-      )
-    )
+    ? withSuspendedTui(effect, {
+      onError: pauseOnError(renderError),
+      onResume: resumeSshWithSkipInputs(context)
+    })
     : effect
 
-  if (options.suspendTui) {
-    context.setSshActive(true)
-  }
+  context.setSshActive(options.suspendTui)
   context.runner.runEffect(
     pipe(
       withOptionalSuspension,
