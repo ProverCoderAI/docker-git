@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildSelectLabels } from "../../src/docker-git/menu-render-select.js"
+import { buildSelectLabels, buildSelectListWindow } from "../../src/docker-git/menu-render-select.js"
 import { sortItemsByLaunchTime } from "../../src/docker-git/menu-select-order.js"
 import type { SelectProjectRuntime } from "../../src/docker-git/menu-types.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
@@ -69,5 +69,16 @@ describe("menu-select order", () => {
     expect(connectLabel).toContain("[started=2026-02-17 09:45 UTC]")
     expect(downLabel).toContain("running, ssh=2, started=2026-02-17 09:45 UTC")
     emitProof("UI labels show container start timestamp in Connect and Down views")
+  })
+
+  it("keeps full list visible when projects fit into viewport", () => {
+    const window = buildSelectListWindow(8, 3, 12)
+    expect(window).toEqual({ start: 0, end: 8 })
+  })
+
+  it("computes a scrolling window around selected project", () => {
+    expect(buildSelectListWindow(30, 0, 10)).toEqual({ start: 0, end: 10 })
+    expect(buildSelectListWindow(30, 15, 10)).toEqual({ start: 10, end: 20 })
+    expect(buildSelectListWindow(30, 29, 10)).toEqual({ start: 20, end: 30 })
   })
 })

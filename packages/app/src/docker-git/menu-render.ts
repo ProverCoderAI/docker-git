@@ -6,6 +6,7 @@ import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import { renderLayout } from "./menu-render-layout.js"
 import {
   buildSelectLabels,
+  buildSelectListWindow,
   renderSelectDetails,
   selectHint,
   type SelectPurpose,
@@ -162,6 +163,22 @@ const computeListWidth = (labels: ReadonlyArray<string>): number => {
   return Math.min(Math.max(maxLabelWidth + 2, 28), 54)
 }
 
+const readStdoutRows = (): number | null => {
+  const rows = process.stdout.rows
+  if (typeof rows !== "number" || !Number.isFinite(rows) || rows <= 0) {
+    return null
+  }
+  return rows
+}
+
+const computeSelectListMaxRows = (): number => {
+  const rows = readStdoutRows()
+  if (rows === null) {
+    return 12
+  }
+  return Math.max(6, rows - 14)
+}
+
 const renderSelectListBox = (
   el: typeof React.createElement,
   items: ReadonlyArray<ProjectItem>,
@@ -169,8 +186,13 @@ const renderSelectListBox = (
   labels: ReadonlyArray<string>,
   width: number
 ): React.ReactElement => {
-  const list = labels.map((label, index) =>
-    el(
+  const window = buildSelectListWindow(labels.length, selected, computeSelectListMaxRows())
+  const hiddenAbove = window.start
+  const hiddenBelow = labels.length - window.end
+  const visibleLabels = labels.slice(window.start, window.end)
+  const list = visibleLabels.map((label, offset) => {
+    const index = window.start + offset
+    return el(
       Text,
       {
         key: items[index]?.projectDir ?? String(index),
@@ -179,12 +201,22 @@ const renderSelectListBox = (
       },
       label
     )
-  )
+  })
+
+  const before = hiddenAbove > 0
+    ? [el(Text, { color: "gray", wrap: "truncate" }, `[scroll] ${hiddenAbove} more above`)]
+    : []
+  const after = hiddenBelow > 0
+    ? [el(Text, { color: "gray", wrap: "truncate" }, `[scroll] ${hiddenBelow} more below`)]
+    : []
+  const listBody = list.length > 0 ? list : [el(Text, { color: "gray" }, "No projects found.")]
 
   return el(
     Box,
     { flexDirection: "column", width },
-    ...(list.length > 0 ? list : [el(Text, { color: "gray" }, "No projects found.")])
+    ...before,
+    ...listBody,
+    ...after
   )
 }
 
