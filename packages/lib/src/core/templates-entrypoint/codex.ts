@@ -65,7 +65,7 @@ web_search = "live"
 
 [features]
 shell_snapshot = true
-collab = true
+multi_agent = true
 apps = true
 shell_tool = true
 EOF

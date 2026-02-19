@@ -165,6 +165,6 @@ export const menuItems: ReadonlyArray<{ readonly id: MenuAction; readonly label:
   { id: { _tag: "Logs" }, label: "docker compose logs --tail=200" },
   { id: { _tag: "Down" }, label: "docker compose down" },
   { id: { _tag: "DownAll" }, label: "docker compose down (ALL projects)" },
-  { id: { _tag: "Delete" }, label: "Delete project (remove folder)" },
+  { id: { _tag: "Delete" }, label: "Delete project (folder + container)" },
   { id: { _tag: "Quit" }, label: "Quit" }
 ]

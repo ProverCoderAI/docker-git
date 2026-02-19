@@ -4,8 +4,9 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 import { deriveRepoPathParts } from "../core/domain.js"
-import { runDockerComposeDown } from "../shell/docker.js"
-import type { DockerCommandError } from "../shell/errors.js"
+import { runCommandWithExitCodes } from "../shell/command-runner.js"
+import { runDockerComposeDownVolumes } from "../shell/docker.js"
+import { CommandFailedError, type DockerCommandError } from "../shell/errors.js"
 import { renderError } from "./errors.js"
 import { defaultProjectsRoot } from "./menu-helpers.js"
 import type { ProjectItem } from "./projects-core.js"
@@ -25,12 +26,41 @@ const isWithinProjectsRoot = (path: Path.Path, root: string, target: string): bo
   return true
 }
 
+const removeContainerByName = (
+  cwd: string,
+  containerName: string
+): Effect.Effect<void, never, CommandExecutor.CommandExecutor> =>
+  runCommandWithExitCodes(
+    {
+      cwd,
+      command: "docker",
+      args: ["rm", "-f", containerName]
+    },
+    [0],
+    (exitCode) => new CommandFailedError({ command: `docker rm -f ${containerName}`, exitCode })
+  ).pipe(
+    Effect.matchEffect({
+      onFailure: (error) =>
+        Effect.logWarning(`docker rm -f fallback failed for ${containerName}: ${renderError(error)}`),
+      onSuccess: () => Effect.log(`Removed container: ${containerName}`)
+    }),
+    Effect.asVoid
+  )
+
+const removeContainersFallback = (
+  item: ProjectItem
+): Effect.Effect<void, never, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    yield* _(removeContainerByName(item.projectDir, item.containerName))
+    yield* _(removeContainerByName(item.projectDir, `${item.containerName}-browser`))
+  })
+
 // CHANGE: delete a docker-git project directory (state) selected in the TUI
 // WHY: allow removing unwanted projects without rewriting git history (just delete the folder)
 // QUOTE(ТЗ): "Сделай возможность так же удалять мусорный для меня контейнер... Не нужно чистить гит историю. Пусть просто папку с ним удалит"
 // REF: user-request-2026-02-09-delete-project
 // SOURCE: n/a
-// FORMAT THEOREM: forall p: delete(p) -> !exists(projectDir(p))
+// FORMAT THEOREM: forall p: delete(p) -> !exists(projectDir(p)) && !container_exists(p)
 // PURITY: SHELL
 // EFFECT: Effect<void, PlatformError | DockerCommandError, FileSystem | Path | CommandExecutor>
 // INVARIANT: never deletes paths outside the projects root
@@ -56,14 +86,17 @@ export const deleteDockerGitProject = (
       return
     }
 
-    // Best-effort: stop the container if possible before removing the compose dir.
+    // Best-effort: remove compose containers and volumes before deleting the project folder.
     yield* _(
-      runDockerComposeDown(targetDir).pipe(
-        Effect.catchTag(
-          "DockerCommandError",
-          (error: DockerCommandError) =>
-            Effect.logWarning(`docker compose down failed before delete: ${renderError(error)}`)
-        )
+      runDockerComposeDownVolumes(targetDir).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.gen(function*(_) {
+              yield* _(Effect.logWarning(`docker compose down -v failed before delete: ${renderError(error)}`))
+              yield* _(removeContainersFallback(item))
+            }),
+          onSuccess: () => Effect.void
+        })
       )
     )
 

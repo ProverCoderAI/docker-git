@@ -18,7 +18,8 @@ const volatileCodexIgnorePatterns: ReadonlyArray<string> = [
 ]
 
 const repositoryCacheIgnorePatterns: ReadonlyArray<string> = [
-  ".cache/git-mirrors/"
+  ".cache/git-mirrors/",
+  ".cache/packages/"
 ]
 
 const defaultStateGitignore = [
@@ -26,7 +27,7 @@ const defaultStateGitignore = [
   "# NOTE: this repo intentionally tracks EVERYTHING under the state dir, including .orch/env and .orch/auth.",
   "# Keep the remote private; treat it as sensitive infrastructure state.",
   "",
-  "# Shared git mirrors cache (do not commit)",
+  "# Shared repository caches (do not commit)",
   ...repositoryCacheIgnorePatterns,
   "",
   "# Volatile Codex artifacts (do not commit)",
@@ -58,7 +59,7 @@ const appendManagedBlocks = (
 ): string => {
   const blocks = [
     missing.repositoryCache.length > 0
-      ? `# Shared git mirrors cache (do not commit)\n${missing.repositoryCache.join("\n")}`
+      ? `# Shared repository caches (do not commit)\n${missing.repositoryCache.join("\n")}`
       : "",
     missing.volatileCodex.length > 0
       ? `# Volatile Codex artifacts (do not commit)\n${missing.volatileCodex.join("\n")}`

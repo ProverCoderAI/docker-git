@@ -219,7 +219,7 @@ export const renderSelectDetails = (
         ? el(Text, { color: "yellow", wrap: "wrap" }, "Warning: project has active SSH sessions.")
         : el(Text, { color: "gray", wrap: "wrap" }, "No active SSH sessions detected."),
       el(Text, { wrap: "wrap" }, `Repo: ${context.item.repoUrl} (${context.refLabel})`),
-      el(Text, { wrap: "wrap" }, "Removes the project folder (no git history rewrite).")
+      el(Text, { wrap: "wrap" }, "Removes project folder and runs docker compose down -v.")
     ]),
     Match.orElse(() => renderDefaultDetails(el, context))
   )
