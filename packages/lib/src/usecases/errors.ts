@@ -54,6 +54,26 @@ const renderDockerAccessHeadline = (issue: DockerAccessError["issue"]): string =
     ? "Cannot access Docker daemon socket: permission denied."
     : "Cannot connect to Docker daemon."
 
+const renderDockerAccessActionPlan = (issue: DockerAccessError["issue"]): string => {
+  const permissionDeniedPlan = [
+    "Action plan:",
+    "1) In the same shell, run: `groups $USER` and make sure group `docker` is present.",
+    "2) Re-login to refresh group memberships and run command again.",
+    "3) If DOCKER_HOST is set to rootless socket, keep running: `export DOCKER_HOST=unix:///run/user/$UID/docker.sock`.",
+    "4) If using a dedicated socket not in /run/user, set DOCKER_HOST explicitly and re-run.",
+    "Tip: this app now auto-tries a rootless socket fallback on first permission error."
+  ]
+
+  const daemonUnavailablePlan = [
+    "Action plan:",
+    "1) Check daemon status: `systemctl --user status docker` or `systemctl status docker`.",
+    "2) Start daemon: `systemctl --user start docker` (or `systemctl start docker` for system Docker).",
+    "3) Retry command in a new shell."
+  ]
+
+  return issue === "PermissionDenied" ? permissionDeniedPlan.join("\n") : daemonUnavailablePlan.join("\n")
+}
+
 const renderPrimaryError = (error: NonParseError): string | null =>
   Match.value(error).pipe(
     Match.when({ _tag: "FileExistsError" }, ({ path }) => `File already exists: ${path} (use --force to overwrite)`),
@@ -68,6 +88,7 @@ const renderPrimaryError = (error: NonParseError): string | null =>
         renderDockerAccessHeadline(issue),
         "Hint: ensure Docker daemon is running and current user can access the docker socket.",
         "Hint: if you use rootless Docker, set DOCKER_HOST to your user socket (for example unix:///run/user/$UID/docker.sock).",
+        renderDockerAccessActionPlan(issue),
         `Details: ${details}`
       ].join("\n")),
     Match.when({ _tag: "CloneFailedError" }, ({ repoRef, repoUrl, targetDir }) =>
