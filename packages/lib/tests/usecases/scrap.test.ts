@@ -30,6 +30,19 @@ describe("deriveScrapWorkspaceRelativePath", () => {
     })
   })
 
+  it("supports workspace path written with ~", () => {
+    const result = deriveScrapWorkspaceRelativePath("dev", "~/org/repo")
+
+    Either.match(result, {
+      onLeft: (error) => {
+        throw new Error(`unexpected error ${error._tag}`)
+      },
+      onRight: (value) => {
+        expect(value).toBe("org/repo")
+      }
+    })
+  })
+
   it("fails when targetDir is outside the user's home", () => {
     const result = deriveScrapWorkspaceRelativePath("dev", "/opt/app")
 
@@ -58,4 +71,3 @@ describe("deriveScrapWorkspaceRelativePath", () => {
     })
   })
 })
-

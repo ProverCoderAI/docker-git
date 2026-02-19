@@ -86,11 +86,11 @@ const renderPrimaryError = (error: NonParseError): string | null =>
       { _tag: "ScrapArchiveInvalidError" },
       ({ message, path }) => `Invalid scrap archive: ${path}\nDetails: ${message}`
     ),
-    Match.when({ _tag: "ScrapTargetDirUnsupportedError" }, ({ reason, sshUser, targetDir }) =>
+    Match.when({ _tag: "ScrapTargetDirUnsupportedError" }, ({ reason, targetDir }) =>
       [
         `Cannot use scrap with targetDir ${targetDir}.`,
         `Reason: ${reason}`,
-        `Hint: scrap currently supports workspaces under /home/${sshUser}/... only.`
+        `Hint: scrap currently supports workspaces under the ssh home directory only (for example: ~/repo).`
       ].join("\n")),
     Match.when({ _tag: "ScrapWipeRefusedError" }, ({ reason, targetDir }) =>
       [

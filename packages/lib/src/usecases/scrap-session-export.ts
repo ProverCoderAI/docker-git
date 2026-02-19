@@ -75,14 +75,15 @@ const captureRepoInfo = (
   ctx: SessionExportContext
 ): Effect.Effect<SessionRepoInfo, ScrapError, ScrapRequirements> =>
   Effect.gen(function*(_) {
-    const base = `set -e; cd ${shellEscape(ctx.template.targetDir)};`
+    const targetDir = shellEscape(ctx.template.targetDir)
+    const base = `set -e; cd ${targetDir};`
     const capture = (label: string, cmd: string) =>
       runDockerExecCapture(ctx.resolved, label, ctx.template.containerName, `${base} ${cmd}`, ctx.template.sshUser)
         .pipe(
           Effect.map((value) => value.trim())
         )
 
-    const safe = shellEscape(ctx.template.targetDir)
+    const safe = targetDir
     const head = yield* _(capture("scrap session rev-parse", `git -c safe.directory=${safe} rev-parse HEAD`))
     const branch = yield* _(
       capture("scrap session branch", `git -c safe.directory=${safe} rev-parse --abbrev-ref HEAD`)
@@ -120,9 +121,10 @@ const detectRebuildCommands = (
   ctx: SessionExportContext
 ): Effect.Effect<ReadonlyArray<string>, ScrapError, ScrapRequirements> =>
   Effect.gen(function*(_) {
+    const targetDir = shellEscape(ctx.template.targetDir)
     const script = [
       "set -e",
-      `cd ${shellEscape(ctx.template.targetDir)}`,
+      `cd ${targetDir}`,
       // Priority: pnpm > npm > yarn. Keep commands deterministic and rebuildable.
       "if [ -f pnpm-lock.yaml ]; then echo 'pnpm install --frozen-lockfile'; exit 0; fi",
       "if [ -f package-lock.json ]; then echo 'npm ci'; exit 0; fi",
@@ -148,14 +150,15 @@ const exportWorktreePatchChunks = (
   ctx: SessionExportContext
 ): Effect.Effect<string, ScrapError, ScrapRequirements> =>
   Effect.gen(function*(_) {
+    const targetDir = shellEscape(ctx.template.targetDir)
     const patchAbs = ctx.path.join(ctx.snapshotDir, "worktree.patch.gz")
     const patchPartsPrefix = `${patchAbs}.part`
     yield* _(removeChunkArtifacts(ctx.fs, ctx.path, patchAbs))
 
     const patchInner = [
       "set -e",
-      `cd ${shellEscape(ctx.template.targetDir)}`,
-      `SAFE=${shellEscape(ctx.template.targetDir)}`,
+      `cd ${targetDir}`,
+      `SAFE=${targetDir}`,
       "TMP_INDEX=$(mktemp)",
       "trap 'rm -f \"$TMP_INDEX\"' EXIT",
       "GIT_INDEX_FILE=\"$TMP_INDEX\" git -c safe.directory=\"$SAFE\" read-tree HEAD",

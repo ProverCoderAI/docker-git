@@ -34,7 +34,7 @@ Commands:
 Options:
   --repo-ref <ref>          Git ref/branch (default: main)
   --branch, -b <ref>        Alias for --repo-ref
-  --target-dir <path>       Target dir inside container (create default: /home/dev/app, clone default: /home/dev/<org>/<repo>[/issue-<id>|/pr-<id>])
+  --target-dir <path>       Target dir inside container (create default: /home/dev/app, clone default: ~/.docker-git/workspaces/<org>/<repo>[/issue-<id>|/pr-<id>])
   --ssh-port <port>         Local SSH port (default: 2222)
   --ssh-user <user>         SSH user inside container (default: dev)
   --container-name <name>   Docker container name (default: dg-<repo>)

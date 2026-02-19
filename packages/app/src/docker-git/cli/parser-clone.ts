@@ -2,12 +2,7 @@ import { Either } from "effect"
 
 import { buildCreateCommand, nonEmpty } from "@effect-template/lib/core/command-builders"
 import type { RawOptions } from "@effect-template/lib/core/command-options"
-import {
-  type Command,
-  defaultTemplateConfig,
-  type ParseError,
-  resolveRepoInput
-} from "@effect-template/lib/core/domain"
+import { type Command, type ParseError, resolveRepoInput } from "@effect-template/lib/core/domain"
 
 import { parseRawOptions } from "./parser-options.js"
 import { resolveWorkspaceRepoPath, splitPositionalRepo } from "./parser-shared.js"
@@ -18,13 +13,12 @@ const applyCloneDefaults = (
   resolvedRepo: ReturnType<typeof resolveRepoInput>
 ): RawOptions => {
   const repoPath = resolveWorkspaceRepoPath(resolvedRepo)
-  const sshUser = raw.sshUser?.trim() ?? defaultTemplateConfig.sshUser
-  const homeDir = `/home/${sshUser}`
+  const targetHome = "~"
   return {
     ...raw,
     repoUrl: rawRepoUrl,
     outDir: raw.outDir ?? `.docker-git/${repoPath}`,
-    targetDir: raw.targetDir ?? `${homeDir}/${repoPath}`
+    targetDir: raw.targetDir ?? `${targetHome}/.docker-git/workspaces/${repoPath}`
   }
 }
 

@@ -8,9 +8,14 @@ import { Effect } from "effect"
 import * as Inspectable from "effect/Inspectable"
 import * as Sink from "effect/Sink"
 import * as Stream from "effect/Stream"
+import { vi } from "vitest"
 
 import type { CreateCommand, TemplateConfig } from "../../src/core/domain.js"
 import { createProject } from "../../src/usecases/actions/create-project.js"
+
+vi.mock("../../src/usecases/actions/ports.js", () => ({
+  resolveSshPort: (config: CreateCommand["config"]) => Effect.succeed(config)
+}))
 
 type RecordedCommand = {
   readonly command: string

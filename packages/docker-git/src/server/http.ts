@@ -890,7 +890,7 @@ export const makeRouter = ({ cwd, projectsRoot, webRoot, vendorRoot, terminalPor
           })
         ),
         Effect.flatMap(({ project, globalEnv, projectEnv, integrationsEnv, codexAccounts, codexProject }) =>
-          Effect.gen(function* (_) {
+          Effect.sync(() => {
             const githubTokenEntries = countKeyEntries(integrationsEnv, "GITHUB_TOKEN")
             const gitTokenEntries = countKeyEntries(integrationsEnv, "GIT_AUTH_TOKEN")
             const claudeKeyEntries = countKeyEntries(integrationsEnv, "ANTHROPIC_API_KEY")

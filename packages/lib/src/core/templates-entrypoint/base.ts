@@ -9,6 +9,11 @@ REPO_URL="\${REPO_URL:-}"
 REPO_REF="\${REPO_REF:-}"
 FORK_REPO_URL="\${FORK_REPO_URL:-}"
 TARGET_DIR="\${TARGET_DIR:-${config.targetDir}}"
+if [[ "$TARGET_DIR" == "~" ]]; then
+  TARGET_DIR="$HOME"
+elif [[ "$TARGET_DIR" == "~/"* ]]; then
+  TARGET_DIR="$HOME\${TARGET_DIR:1}"
+fi
 CLAUDE_AUTH_LABEL="\${CLAUDE_AUTH_LABEL:-}"
 GIT_AUTH_USER="\${GIT_AUTH_USER:-\${GITHUB_USER:-x-access-token}}"
 GIT_AUTH_TOKEN="\${GIT_AUTH_TOKEN:-\${GITHUB_TOKEN:-\${GH_TOKEN:-}}}"

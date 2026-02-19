@@ -9,6 +9,7 @@ import {
   CommandFailedError as CommandFailedErrorClass,
   ScrapWipeRefusedError as ScrapWipeRefusedErrorClass
 } from "../shell/errors.js"
+import { expandContainerHome } from "./scrap-path.js"
 
 const dockerOk = [0]
 
@@ -23,7 +24,7 @@ export type ScrapTemplate = {
 export const buildScrapTemplate = (config: ProjectConfig): ScrapTemplate => ({
   sshUser: config.template.sshUser,
   containerName: config.template.containerName,
-  targetDir: config.template.targetDir,
+  targetDir: expandContainerHome(config.template.sshUser, config.template.targetDir),
   volumeName: config.template.volumeName,
   codexHome: config.template.codexHome
 })

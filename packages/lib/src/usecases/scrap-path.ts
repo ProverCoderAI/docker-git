@@ -4,6 +4,16 @@ import { ScrapTargetDirUnsupportedError } from "../shell/errors.js"
 
 const normalizeContainerPath = (value: string): string => value.replaceAll("\\", "/").trim()
 
+export const expandContainerHome = (sshUser: string, value: string): string => {
+  if (value === "~") {
+    return `/home/${sshUser}`
+  }
+  if (value.startsWith("~/")) {
+    return `/home/${sshUser}${value.slice(1)}`
+  }
+  return value
+}
+
 const trimTrailingPosixSlashes = (value: string): string => {
   let end = value.length
   while (end > 0 && value[end - 1] === "/") {
@@ -24,7 +34,9 @@ export const deriveScrapWorkspaceRelativePath = (
   sshUser: string,
   targetDir: string
 ): Either.Either<string, ScrapTargetDirUnsupportedError> => {
-  const normalizedTarget = trimTrailingPosixSlashes(normalizeContainerPath(targetDir))
+  const normalizedTarget = trimTrailingPosixSlashes(
+    normalizeContainerPath(expandContainerHome(sshUser, targetDir))
+  )
   const normalizedHome = trimTrailingPosixSlashes(`/home/${sshUser}`)
 
   if (hasParentTraversalSegment(normalizedTarget)) {

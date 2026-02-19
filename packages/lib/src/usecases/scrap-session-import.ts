@@ -140,19 +140,20 @@ const prepareRepoForImport = (
   ctx: SessionImportContext,
   wipe: boolean
 ): Effect.Effect<void, ScrapError, ScrapRequirements> => {
-  const wipeLine = wipe ? `rm -rf ${shellEscape(ctx.template.targetDir)}` : ":"
+  const targetDir = shellEscape(ctx.template.targetDir)
+  const wipeLine = wipe ? `rm -rf ${targetDir}` : ":"
   const gitDir = `${ctx.template.targetDir}/.git`
   const prepScript = [
     "set -e",
     wipeLine,
-    `mkdir -p ${shellEscape(ctx.template.targetDir)}`,
+    `mkdir -p ${targetDir}`,
     `if [ ! -d ${shellEscape(gitDir)} ]; then`,
-    `  PARENT=$(dirname ${shellEscape(ctx.template.targetDir)})`,
+    `  PARENT=$(dirname ${targetDir})`,
     "  mkdir -p \"$PARENT\"",
-    `  git clone ${shellEscape(ctx.manifest.repo.originUrl)} ${shellEscape(ctx.template.targetDir)}`,
+    `  git clone ${shellEscape(ctx.manifest.repo.originUrl)} ${targetDir}`,
     "fi",
-    `cd ${shellEscape(ctx.template.targetDir)}`,
-    `SAFE=${shellEscape(ctx.template.targetDir)}`,
+    `cd ${targetDir}`,
+    `SAFE=${targetDir}`,
     "git -c safe.directory=\"$SAFE\" fetch --all --prune",
     `git -c safe.directory="$SAFE" checkout --detach ${shellEscape(ctx.manifest.repo.head)}`,
     `git -c safe.directory="$SAFE" reset --hard ${shellEscape(ctx.manifest.repo.head)}`,
@@ -174,10 +175,11 @@ const applyWorktreePatch = (ctx: SessionImportContext): Effect.Effect<void, Scra
   Effect.gen(function*(_) {
     const patchPartsAbs = yield* _(resolveSnapshotPartsAbs(ctx, ctx.manifest.artifacts.worktreePatchChunks))
     const patchCatArgs = patchPartsAbs.map((p) => shellEscape(p)).join(" ")
+    const targetDir = shellEscape(ctx.template.targetDir)
     const applyInner = [
       "set -e",
-      `cd ${shellEscape(ctx.template.targetDir)}`,
-      `SAFE=${shellEscape(ctx.template.targetDir)}`,
+      `cd ${targetDir}`,
+      `SAFE=${targetDir}`,
       "git -c safe.directory=\"$SAFE\" apply --allow-empty --binary --whitespace=nowarn -"
     ].join("; ")
     const applyScript = [
@@ -225,6 +227,7 @@ const restoreTarChunksIntoContainerDir = (
 
 const runRebuildCommands = (ctx: SessionImportContext): Effect.Effect<void, ScrapError, ScrapRequirements> =>
   Effect.gen(function*(_) {
+    const targetDir = shellEscape(ctx.template.targetDir)
     const commands = ctx.manifest.rebuild.commands
     if (commands.length === 0) {
       return
@@ -236,7 +239,7 @@ const runRebuildCommands = (ctx: SessionImportContext): Effect.Effect<void, Scra
         continue
       }
       yield* _(Effect.log(`Rebuilding: ${trimmed}`))
-      const script = `set -e; cd ${shellEscape(ctx.template.targetDir)}; ${trimmed}`
+      const script = `set -e; cd ${targetDir}; ${trimmed}`
       yield* _(
         runDockerExec(ctx.resolved, "scrap session rebuild", ctx.template.containerName, script, ctx.template.sshUser)
       )
