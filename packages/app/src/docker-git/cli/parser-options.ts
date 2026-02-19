@@ -23,6 +23,7 @@ interface ValueOptionSpec {
     | "archivePath"
     | "scrapMode"
     | "label"
+    | "gitTokenLabel"
     | "token"
     | "scopes"
     | "message"
@@ -51,6 +52,7 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--archive", key: "archivePath" },
   { flag: "--mode", key: "scrapMode" },
   { flag: "--label", key: "label" },
+  { flag: "--git-token", key: "gitTokenLabel" },
   { flag: "--token", key: "token" },
   { flag: "--scopes", key: "scopes" },
   { flag: "--message", key: "message" },
@@ -99,6 +101,7 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   archivePath: (raw, value) => ({ ...raw, archivePath: value }),
   scrapMode: (raw, value) => ({ ...raw, scrapMode: value }),
   label: (raw, value) => ({ ...raw, label: value }),
+  gitTokenLabel: (raw, value) => ({ ...raw, gitTokenLabel: value }),
   token: (raw, value) => ({ ...raw, token: value }),
   scopes: (raw, value) => ({ ...raw, scopes: value }),
   message: (raw, value) => ({ ...raw, message: value }),
@@ -132,6 +135,19 @@ export const parseRawOptions = (args: ReadonlyArray<string>): Either.Either<RawO
 
   while (index < args.length) {
     const token = args[index] ?? ""
+    const equalIndex = token.indexOf("=")
+    if (equalIndex > 0 && token.startsWith("-")) {
+      const flag = token.slice(0, equalIndex)
+      const inlineValue = token.slice(equalIndex + 1)
+      const nextRaw = applyCommandValueFlag(raw, flag, inlineValue)
+      if (Either.isLeft(nextRaw)) {
+        return Either.left(nextRaw.left)
+      }
+      raw = nextRaw.right
+      index += 1
+      continue
+    }
+
     const booleanApplied = applyCommandBooleanFlag(raw, token)
     if (booleanApplied !== null) {
       raw = booleanApplied

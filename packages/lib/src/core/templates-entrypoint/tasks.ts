@@ -43,9 +43,45 @@ else
   fi
   chown -R 1000:1000 /home/${config.sshUser}
 
+  RESOLVED_GIT_AUTH_USER="$GIT_AUTH_USER"
+  RESOLVED_GIT_AUTH_TOKEN="$GIT_AUTH_TOKEN"
+  RESOLVED_GIT_AUTH_LABEL=""
+  GIT_TOKEN_LABEL_RAW="\${GIT_AUTH_LABEL:-\${GITHUB_AUTH_LABEL:-}}"
+
+  if [[ -z "$GIT_TOKEN_LABEL_RAW" && "$REPO_URL" == https://github.com/* ]]; then
+    GIT_TOKEN_LABEL_RAW="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##' | cut -d/ -f1)"
+  fi
+
+  if [[ -n "$GIT_TOKEN_LABEL_RAW" ]]; then
+    RESOLVED_GIT_AUTH_LABEL="$(printf "%s" "$GIT_TOKEN_LABEL_RAW" | tr '[:lower:]' '[:upper:]' | sed -E 's/[^A-Z0-9]+/_/g; s/^_+//; s/_+$//')"
+    if [[ "$RESOLVED_GIT_AUTH_LABEL" == "DEFAULT" ]]; then
+      RESOLVED_GIT_AUTH_LABEL=""
+    fi
+  fi
+
+  if [[ -n "$RESOLVED_GIT_AUTH_LABEL" ]]; then
+    LABELED_GIT_TOKEN_KEY="GIT_AUTH_TOKEN__$RESOLVED_GIT_AUTH_LABEL"
+    LABELED_GITHUB_TOKEN_KEY="GITHUB_TOKEN__$RESOLVED_GIT_AUTH_LABEL"
+    LABELED_GIT_USER_KEY="GIT_AUTH_USER__$RESOLVED_GIT_AUTH_LABEL"
+
+    LABELED_GIT_TOKEN="\${!LABELED_GIT_TOKEN_KEY-}"
+    LABELED_GITHUB_TOKEN="\${!LABELED_GITHUB_TOKEN_KEY-}"
+    LABELED_GIT_USER="\${!LABELED_GIT_USER_KEY-}"
+
+    if [[ -n "$LABELED_GIT_TOKEN" ]]; then
+      RESOLVED_GIT_AUTH_TOKEN="$LABELED_GIT_TOKEN"
+    elif [[ -n "$LABELED_GITHUB_TOKEN" ]]; then
+      RESOLVED_GIT_AUTH_TOKEN="$LABELED_GITHUB_TOKEN"
+    fi
+
+    if [[ -n "$LABELED_GIT_USER" ]]; then
+      RESOLVED_GIT_AUTH_USER="$LABELED_GIT_USER"
+    fi
+  fi
+
   AUTH_REPO_URL="$REPO_URL"
-  if [[ -n "$GIT_AUTH_TOKEN" && "$REPO_URL" == https://* ]]; then
-    AUTH_REPO_URL="$(printf "%s" "$REPO_URL" | sed "s#^https://#https://\${GIT_AUTH_USER}:\${GIT_AUTH_TOKEN}@#")"
+  if [[ -n "$RESOLVED_GIT_AUTH_TOKEN" && "$REPO_URL" == https://* ]]; then
+    AUTH_REPO_URL="$(printf "%s" "$REPO_URL" | sed "s#^https://#https://\${RESOLVED_GIT_AUTH_USER}:\${RESOLVED_GIT_AUTH_TOKEN}@#")"
   fi
 
   CLONE_CACHE_ARGS=""

@@ -30,6 +30,7 @@ export interface RawOptions {
   readonly scrapMode?: string
   readonly wipe?: boolean
   readonly label?: string
+  readonly gitTokenLabel?: string
   readonly token?: string
   readonly scopes?: string
   readonly message?: string

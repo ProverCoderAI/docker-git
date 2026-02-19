@@ -48,6 +48,22 @@ export const nonEmpty = (
 
 const normalizeSecretsRoot = (value: string): string => trimRightChar(value, "/")
 
+const normalizeGitTokenLabel = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim() ?? ""
+  if (trimmed.length === 0) {
+    return undefined
+  }
+  const normalized = trimmed
+    .toUpperCase()
+    .replaceAll(/[^A-Z0-9]+/g, "_")
+  const withoutLeading = normalized.replace(/^_+/, "")
+  const cleaned = withoutLeading.replace(/_+$/, "")
+  if (cleaned.length === 0 || cleaned === "DEFAULT") {
+    return undefined
+  }
+  return cleaned
+}
+
 type RepoBasics = {
   readonly repoUrl: string
   readonly repoSlug: string
@@ -206,6 +222,7 @@ export const buildCreateCommand = (
     const force = raw.force ?? false
     const forceEnv = raw.forceEnv ?? false
     const enableMcpPlaywright = raw.enableMcpPlaywright ?? false
+    const gitTokenLabel = normalizeGitTokenLabel(raw.gitTokenLabel)
 
     return {
       _tag: "Create",
@@ -222,6 +239,7 @@ export const buildCreateCommand = (
         sshPort: repo.sshPort,
         repoUrl: repo.repoUrl,
         repoRef: repo.repoRef,
+        ...(gitTokenLabel === undefined ? {} : { gitTokenLabel }),
         targetDir: repo.targetDir,
         volumeName: names.volumeName,
         dockerGitPath: paths.dockerGitPath,

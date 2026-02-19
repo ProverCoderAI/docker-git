@@ -49,6 +49,7 @@ Options:
   --project-dir <path>      Project directory for attach (default: .)
   --archive <path>          Scrap snapshot directory (default: .orch/scrap/session)
   --mode <session>          Scrap mode (default: session)
+  --git-token <label>       Token label for clone/create (maps to GITHUB_TOKEN__<LABEL>, example: agiens)
   --wipe | --no-wipe        Wipe workspace before scrap import (default: --wipe)
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list

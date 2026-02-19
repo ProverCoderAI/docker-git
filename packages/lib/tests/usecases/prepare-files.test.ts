@@ -29,6 +29,7 @@ const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   sshPort: 2222,
   repoUrl: "https://github.com/org/repo.git",
   repoRef: "main",
+  gitTokenLabel: undefined,
   targetDir: "/home/dev/org/repo",
   volumeName: "dg-test-home",
   dockerGitPath: path.join(root, ".docker-git"),
@@ -45,7 +46,8 @@ const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
 const makeProjectConfig = (
   outDir: string,
   enableMcpPlaywright: boolean,
-  path: Path.Path
+  path: Path.Path,
+  gitTokenLabel?: string
 ): TemplateConfig => ({
   containerName: "dg-test",
   serviceName: "dg-test",
@@ -53,6 +55,7 @@ const makeProjectConfig = (
   sshPort: 2222,
   repoUrl: "https://github.com/org/repo.git",
   repoRef: "main",
+  gitTokenLabel,
   targetDir: "/home/dev/org/repo",
   volumeName: "dg-test-home",
   dockerGitPath: path.join(outDir, ".docker-git"),
@@ -92,7 +95,7 @@ describe("prepareProjectFiles", () => {
         const outDir = path.join(root, "project")
         const globalConfig = makeGlobalConfig(root, path)
         const withoutMcp = makeProjectConfig(outDir, false, path)
-        const withMcp = makeProjectConfig(outDir, true, path)
+        const withMcp = makeProjectConfig(outDir, true, path, "AGIENS")
 
         yield* _(
           prepareProjectFiles(outDir, root, globalConfig, withoutMcp, {
@@ -128,6 +131,8 @@ describe("prepareProjectFiles", () => {
 
         expect(composeAfter).toContain("dg-test-browser")
         expect(composeAfter).toContain('MCP_PLAYWRIGHT_ENABLE: "1"')
+        expect(composeAfter).toContain('GITHUB_AUTH_LABEL: "AGIENS"')
+        expect(composeAfter).toContain('GIT_AUTH_LABEL: "AGIENS"')
         expect(readEnableMcpPlaywrightFlag(configAfter)).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))

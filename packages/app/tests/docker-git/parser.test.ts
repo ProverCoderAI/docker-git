@@ -101,6 +101,11 @@ describe("parseArgs", () => {
       expect(command.openSsh).toBe(false)
     }))
 
+  it.effect("parses clone git token label from inline option and normalizes it", () =>
+    expectCreateCommand(["clone", "https://github.com/org/repo.git", "--git-token=#agiens"], (command) => {
+      expect(command.config.gitTokenLabel).toBe("AGIENS")
+    }))
+
   it.effect("supports enabling SSH auto-open for create", () =>
     expectCreateCommand(["create", "--repo-url", "https://github.com/org/repo.git", "--ssh"], (command) => {
       expect(command.openSsh).toBe(true)

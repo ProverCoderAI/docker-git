@@ -17,6 +17,7 @@ const TemplateConfigSchema = Schema.Struct({
   sshPort: Schema.Number.pipe(Schema.int()),
   repoUrl: Schema.String,
   repoRef: Schema.String,
+  gitTokenLabel: Schema.optional(Schema.String),
   targetDir: Schema.String,
   volumeName: Schema.String,
   dockerGitPath: Schema.optionalWith(Schema.String, {

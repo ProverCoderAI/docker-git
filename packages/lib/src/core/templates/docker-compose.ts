@@ -3,6 +3,10 @@ import type { TemplateConfig } from "../domain.js"
 export const renderDockerCompose = (config: TemplateConfig): string => {
   const networkName = `${config.serviceName}-net`
   const forkRepoUrl = config.forkRepoUrl ?? ""
+  const gitTokenLabel = config.gitTokenLabel?.trim() ?? ""
+  const maybeGitTokenLabelEnv = gitTokenLabel.length > 0
+    ? `      GITHUB_AUTH_LABEL: "${gitTokenLabel}"\n      GIT_AUTH_LABEL: "${gitTokenLabel}"\n`
+    : ""
 
   const browserServiceName = `${config.serviceName}-browser`
   const browserContainerName = `${config.containerName}-browser`
@@ -29,6 +33,7 @@ export const renderDockerCompose = (config: TemplateConfig): string => {
       REPO_URL: "${config.repoUrl}"
       REPO_REF: "${config.repoRef}"
       FORK_REPO_URL: "${forkRepoUrl}"
+${maybeGitTokenLabelEnv}      # Optional token label selector (maps to GITHUB_TOKEN__<LABEL>/GIT_AUTH_TOKEN__<LABEL>)
       TARGET_DIR: "${config.targetDir}"
       CODEX_HOME: "${config.codexHome}"
 ${maybePlaywrightEnv}${maybeDependsOn}    env_file:
