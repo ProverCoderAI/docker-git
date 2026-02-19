@@ -10,7 +10,11 @@ type DockerGitConfigSearchState = {
 
 const isDockerGitConfig = (entry: string): boolean => entry.endsWith("docker-git.json")
 
-const shouldSkipDir = (entry: string): boolean => entry === ".git" || entry === ".orch" || entry === ".docker-git"
+const shouldSkipDir = (entry: string): boolean =>
+  entry === ".git" || entry === ".orch" || entry === ".docker-git" || entry === ".cache"
+
+const isNotFoundStatError = (error: PlatformError): boolean =>
+  error._tag === "SystemError" && error.reason === "NotFound"
 
 const processDockerGitEntry = (
   fs: FileSystem.FileSystem,
@@ -25,7 +29,18 @@ const processDockerGitEntry = (
     }
 
     const resolved = path.join(dir, entry)
-    const info = yield* _(fs.stat(resolved))
+    const info = yield* _(
+      fs.stat(resolved).pipe(
+        Effect.catchAll((error) =>
+          isNotFoundStatError(error)
+            ? Effect.succeed(null)
+            : Effect.fail(error)
+        )
+      )
+    )
+    if (info === null) {
+      return
+    }
     if (info.type === "Directory") {
       state.stack.push(resolved)
       return
