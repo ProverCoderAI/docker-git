@@ -48,6 +48,19 @@ export const nonEmpty = (
 
 const normalizeSecretsRoot = (value: string): string => trimRightChar(value, "/")
 
+const trimEdgeUnderscores = (value: string): string => {
+  let start = 0
+  while (start < value.length && value[start] === "_") {
+    start += 1
+  }
+
+  let end = value.length
+  while (end > start && value[end - 1] === "_") {
+    end -= 1
+  }
+  return value.slice(start, end)
+}
+
 const normalizeGitTokenLabel = (value: string | undefined): string | undefined => {
   const trimmed = value?.trim() ?? ""
   if (trimmed.length === 0) {
@@ -56,8 +69,7 @@ const normalizeGitTokenLabel = (value: string | undefined): string | undefined =
   const normalized = trimmed
     .toUpperCase()
     .replaceAll(/[^A-Z0-9]+/g, "_")
-  const withoutLeading = normalized.replace(/^_+/, "")
-  const cleaned = withoutLeading.replace(/_+$/, "")
+  const cleaned = trimEdgeUnderscores(normalized)
   if (cleaned.length === 0 || cleaned === "DEFAULT") {
     return undefined
   }

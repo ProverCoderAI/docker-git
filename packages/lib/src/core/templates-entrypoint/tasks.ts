@@ -31,7 +31,7 @@ const renderCloneRemotes = (config: TemplateConfig): string =>
   fi
 fi`
 
-const renderCloneBodyStart = (config: TemplateConfig): string =>
+const renderCloneGuard = (config: TemplateConfig): string =>
   `if [[ -z "$REPO_URL" ]]; then
   echo "[clone] skip (no repo url)"
 elif [[ -d "$TARGET_DIR/.git" ]]; then
@@ -41,9 +41,10 @@ else
   if [[ "$TARGET_DIR" != "/" ]]; then
     chown -R 1000:1000 "$TARGET_DIR"
   fi
-  chown -R 1000:1000 /home/${config.sshUser}
+  chown -R 1000:1000 /home/${config.sshUser}`
 
-  RESOLVED_GIT_AUTH_USER="$GIT_AUTH_USER"
+const renderCloneAuthSelection = (): string =>
+  `  RESOLVED_GIT_AUTH_USER="$GIT_AUTH_USER"
   RESOLVED_GIT_AUTH_TOKEN="$GIT_AUTH_TOKEN"
   RESOLVED_GIT_AUTH_LABEL=""
   GIT_TOKEN_LABEL_RAW="\${GIT_AUTH_LABEL:-\${GITHUB_AUTH_LABEL:-}}"
@@ -77,14 +78,16 @@ else
     if [[ -n "$LABELED_GIT_USER" ]]; then
       RESOLVED_GIT_AUTH_USER="$LABELED_GIT_USER"
     fi
-  fi
+  fi`
 
-  AUTH_REPO_URL="$REPO_URL"
+const renderCloneAuthRepoUrl = (): string =>
+  `  AUTH_REPO_URL="$REPO_URL"
   if [[ -n "$RESOLVED_GIT_AUTH_TOKEN" && "$REPO_URL" == https://* ]]; then
     AUTH_REPO_URL="$(printf "%s" "$REPO_URL" | sed "s#^https://#https://\${RESOLVED_GIT_AUTH_USER}:\${RESOLVED_GIT_AUTH_TOKEN}@#")"
-  fi
+  fi`
 
-  CLONE_CACHE_ARGS=""
+const renderCloneCacheInit = (config: TemplateConfig): string =>
+  `  CLONE_CACHE_ARGS=""
   CACHE_REPO_DIR=""
   CACHE_ROOT="/home/${config.sshUser}/.docker-git/.cache/git-mirrors"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -112,6 +115,14 @@ else
       fi
     fi
   fi`
+
+const renderCloneBodyStart = (config: TemplateConfig): string =>
+  [
+    renderCloneGuard(config),
+    renderCloneAuthSelection(),
+    renderCloneAuthRepoUrl(),
+    renderCloneCacheInit(config)
+  ].join("\n\n")
 
 const renderCloneBodyRef = (config: TemplateConfig): string =>
   `  if [[ -n "$REPO_REF" ]]; then

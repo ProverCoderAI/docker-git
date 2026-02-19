@@ -1,6 +1,6 @@
 import type { TemplateConfig } from "../domain.js"
 
-const renderEntrypointAuthEnvBridge = (config: TemplateConfig): string =>
+const renderAuthLabelResolution = (): string =>
   String.raw`# 2) Ensure GitHub auth vars are available for SSH sessions.
 # Prefer a label-selected token (same selection model as clone/create) when present.
 RESOLVED_AUTH_LABEL=""
@@ -15,9 +15,10 @@ if [[ -n "$AUTH_LABEL_RAW" ]]; then
   if [[ "$RESOLVED_AUTH_LABEL" == "DEFAULT" ]]; then
     RESOLVED_AUTH_LABEL=""
   fi
-fi
+fi`
 
-EFFECTIVE_GITHUB_TOKEN="$GITHUB_TOKEN"
+const renderEffectiveTokenResolution = (): string =>
+  String.raw`EFFECTIVE_GITHUB_TOKEN="$GITHUB_TOKEN"
 if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
   EFFECTIVE_GITHUB_TOKEN="$GH_TOKEN"
 fi
@@ -41,9 +42,10 @@ if [[ -n "$RESOLVED_AUTH_LABEL" ]]; then
   elif [[ -n "$LABELED_GH_TOKEN" ]]; then
     EFFECTIVE_GITHUB_TOKEN="$LABELED_GH_TOKEN"
   fi
-fi
+fi`
 
-EFFECTIVE_GH_TOKEN="$EFFECTIVE_GITHUB_TOKEN"
+const renderAuthBridgeFinalize = (config: TemplateConfig): string =>
+  String.raw`EFFECTIVE_GH_TOKEN="$EFFECTIVE_GITHUB_TOKEN"
 
 if [[ -n "$EFFECTIVE_GH_TOKEN" ]]; then
   printf "export GH_TOKEN=%q\n" "$EFFECTIVE_GH_TOKEN" > /etc/profile.d/gh-token.sh
@@ -70,6 +72,13 @@ if [[ -n "$EFFECTIVE_GH_TOKEN" ]]; then
     GIT_USER_EMAIL="${"${"}GH_ID}+${"${"}GH_LOGIN}@users.noreply.github.com"
   fi
 fi`
+
+const renderEntrypointAuthEnvBridge = (config: TemplateConfig): string =>
+  [
+    renderAuthLabelResolution(),
+    renderEffectiveTokenResolution(),
+    renderAuthBridgeFinalize(config)
+  ].join("\n\n")
 
 const renderEntrypointGitCredentialHelper = (config: TemplateConfig): string =>
   String.raw`# 3) Configure git credential helper for HTTPS remotes

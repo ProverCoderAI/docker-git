@@ -129,47 +129,68 @@ export const applyCommandValueFlag = (
   return Either.right(update(raw, value))
 }
 
+type ParseRawOptionsStep =
+  | { readonly _tag: "ok"; readonly raw: RawOptions; readonly nextIndex: number }
+  | { readonly _tag: "error"; readonly error: ParseError }
+
+const parseInlineValueToken = (
+  raw: RawOptions,
+  token: string
+): Either.Either<RawOptions, ParseError> | null => {
+  const equalIndex = token.indexOf("=")
+  if (equalIndex <= 0 || !token.startsWith("-")) {
+    return null
+  }
+
+  const flag = token.slice(0, equalIndex)
+  const inlineValue = token.slice(equalIndex + 1)
+  return applyCommandValueFlag(raw, flag, inlineValue)
+}
+
+const parseRawOptionsStep = (
+  args: ReadonlyArray<string>,
+  index: number,
+  raw: RawOptions
+): ParseRawOptionsStep => {
+  const token = args[index] ?? ""
+  const inlineApplied = parseInlineValueToken(raw, token)
+  if (inlineApplied !== null) {
+    return Either.isLeft(inlineApplied)
+      ? { _tag: "error", error: inlineApplied.left }
+      : { _tag: "ok", raw: inlineApplied.right, nextIndex: index + 1 }
+  }
+
+  const booleanApplied = applyCommandBooleanFlag(raw, token)
+  if (booleanApplied !== null) {
+    return { _tag: "ok", raw: booleanApplied, nextIndex: index + 1 }
+  }
+
+  if (!token.startsWith("-")) {
+    return { _tag: "error", error: { _tag: "UnexpectedArgument", value: token } }
+  }
+
+  const value = args[index + 1]
+  if (value === undefined) {
+    return { _tag: "error", error: { _tag: "MissingOptionValue", option: token } }
+  }
+
+  const nextRaw = applyCommandValueFlag(raw, token, value)
+  return Either.isLeft(nextRaw)
+    ? { _tag: "error", error: nextRaw.left }
+    : { _tag: "ok", raw: nextRaw.right, nextIndex: index + 2 }
+}
+
 export const parseRawOptions = (args: ReadonlyArray<string>): Either.Either<RawOptions, ParseError> => {
   let index = 0
   let raw: RawOptions = {}
 
   while (index < args.length) {
-    const token = args[index] ?? ""
-    const equalIndex = token.indexOf("=")
-    if (equalIndex > 0 && token.startsWith("-")) {
-      const flag = token.slice(0, equalIndex)
-      const inlineValue = token.slice(equalIndex + 1)
-      const nextRaw = applyCommandValueFlag(raw, flag, inlineValue)
-      if (Either.isLeft(nextRaw)) {
-        return Either.left(nextRaw.left)
-      }
-      raw = nextRaw.right
-      index += 1
-      continue
+    const step = parseRawOptionsStep(args, index, raw)
+    if (step._tag === "error") {
+      return Either.left(step.error)
     }
-
-    const booleanApplied = applyCommandBooleanFlag(raw, token)
-    if (booleanApplied !== null) {
-      raw = booleanApplied
-      index += 1
-      continue
-    }
-
-    if (!token.startsWith("-")) {
-      return Either.left({ _tag: "UnexpectedArgument", value: token })
-    }
-
-    const value = args[index + 1]
-    if (value === undefined) {
-      return Either.left({ _tag: "MissingOptionValue", option: token })
-    }
-
-    const nextRaw = applyCommandValueFlag(raw, token, value)
-    if (Either.isLeft(nextRaw)) {
-      return Either.left(nextRaw.left)
-    }
-    raw = nextRaw.right
-    index += 2
+    raw = step.raw
+    index = step.nextIndex
   }
 
   return Either.right(raw)
