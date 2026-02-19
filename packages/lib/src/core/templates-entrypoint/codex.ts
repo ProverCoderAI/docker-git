@@ -206,7 +206,6 @@ PROJECT_LINE="Рабочая папка проекта (git clone): __TARGET_DIR
 WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
 WORKSPACE_INFO_LINE="Контекст workspace: repository"
 FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__"
-ISSUE_AGENTS_HINT_LINE="Issue AGENTS.md: n/a"
 INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
@@ -222,7 +221,6 @@ if [[ "$REPO_REF" == issue-* ]]; then
   else
     WORKSPACE_INFO_LINE="Контекст workspace: issue #$ISSUE_ID"
   fi
-  ISSUE_AGENTS_HINT_LINE="Issue AGENTS.md: __TARGET_DIR__/AGENTS.md"
 elif [[ "$REPO_REF" == refs/pull/*/head ]]; then
   PR_ID="$(printf "%s" "$REPO_REF" | sed -nE 's#^refs/pull/([0-9]+)/head$#\1#p')"
   PR_URL=""
@@ -249,7 +247,6 @@ $PROJECT_LINE
 $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
-$ISSUE_AGENTS_HINT_LINE
 $INTERNET_LINE
 $MANAGED_END
 EOF
@@ -270,7 +267,6 @@ $PROJECT_LINE
 $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
-$ISSUE_AGENTS_HINT_LINE
 $INTERNET_LINE
 $MANAGED_END
 EOF

@@ -133,89 +133,6 @@ const renderCloneCacheFinalize = (config: TemplateConfig): string =>
   fi
 fi`
 
-const renderIssueWorkspaceAgentsResolve = (): string =>
-  `ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
-ISSUE_URL=""
-if [[ "$REPO_URL" == https://github.com/* ]]; then
-  ISSUE_REPO="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##')"
-  if [[ -n "$ISSUE_REPO" ]]; then
-    ISSUE_URL="https://github.com/$ISSUE_REPO/issues/$ISSUE_ID"
-  fi
-fi
-if [[ -z "$ISSUE_URL" ]]; then
-  ISSUE_URL="n/a"
-fi`
-
-const renderIssueWorkspaceAgentsManagedBlock = (): string =>
-  `ISSUE_AGENTS_PATH="$TARGET_DIR/AGENTS.md"
-ISSUE_MANAGED_START="<!-- docker-git:issue-managed:start -->"
-ISSUE_MANAGED_END="<!-- docker-git:issue-managed:end -->"
-ISSUE_MANAGED_BLOCK="$(cat <<EOF
-$ISSUE_MANAGED_START
-Issue workspace: #$ISSUE_ID
-Issue URL: $ISSUE_URL
-Workspace path: $TARGET_DIR
-
-Работай только над этим issue, если пользователь не попросил другое.
-Если нужен первоисточник требований, открой Issue URL.
-$ISSUE_MANAGED_END
-EOF
-)"`
-
-const renderIssueWorkspaceAgentsWrite = (): string =>
-  `if [[ ! -e "$ISSUE_AGENTS_PATH" ]]; then
-  printf "%s\n" "$ISSUE_MANAGED_BLOCK" > "$ISSUE_AGENTS_PATH"
-else
-  TMP_ISSUE_AGENTS_PATH="$(mktemp)"
-  if grep -qF "$ISSUE_MANAGED_START" "$ISSUE_AGENTS_PATH" && grep -qF "$ISSUE_MANAGED_END" "$ISSUE_AGENTS_PATH"; then
-    awk -v start="$ISSUE_MANAGED_START" -v end="$ISSUE_MANAGED_END" -v repl="$ISSUE_MANAGED_BLOCK" '
-      BEGIN { in_block = 0 }
-      $0 == start { print repl; in_block = 1; next }
-      $0 == end { in_block = 0; next }
-      in_block == 0 { print }
-    ' "$ISSUE_AGENTS_PATH" > "$TMP_ISSUE_AGENTS_PATH"
-  else
-    sed \
-      -e '/^# docker-git issue workspace$/d' \
-      -e '/^Issue workspace: #/d' \
-      -e '/^Issue URL: /d' \
-      -e '/^Workspace path: /d' \
-      -e '/^Работай только над этим issue, если пользователь не попросил другое[.]$/d' \
-      -e '/^Если нужен первоисточник требований, открой Issue URL[.]$/d' \
-      "$ISSUE_AGENTS_PATH" > "$TMP_ISSUE_AGENTS_PATH"
-    if [[ -s "$TMP_ISSUE_AGENTS_PATH" ]]; then
-      printf "\n" >> "$TMP_ISSUE_AGENTS_PATH"
-    fi
-    printf "%s\n" "$ISSUE_MANAGED_BLOCK" >> "$TMP_ISSUE_AGENTS_PATH"
-  fi
-  mv "$TMP_ISSUE_AGENTS_PATH" "$ISSUE_AGENTS_PATH"
-fi
-if [[ -e "$ISSUE_AGENTS_PATH" ]]; then
-  chown 1000:1000 "$ISSUE_AGENTS_PATH" || true
-fi`
-
-const renderIssueWorkspaceAgentsExclude = (): string =>
-  `EXCLUDE_PATH="$TARGET_DIR/.git/info/exclude"
-if [[ -f "$ISSUE_AGENTS_PATH" ]]; then
-  touch "$EXCLUDE_PATH"
-  if ! grep -qx "AGENTS.md" "$EXCLUDE_PATH"; then
-    printf "%s\n" "AGENTS.md" >> "$EXCLUDE_PATH"
-  fi
-fi`
-
-const renderIssueWorkspaceAgents = (): string =>
-  [
-    `if [[ "$CLONE_OK" -eq 1 && "$REPO_REF" == issue-* && -d "$TARGET_DIR/.git" ]]; then`,
-    renderIssueWorkspaceAgentsResolve(),
-    "",
-    renderIssueWorkspaceAgentsManagedBlock(),
-    "",
-    renderIssueWorkspaceAgentsWrite(),
-    "",
-    renderIssueWorkspaceAgentsExclude(),
-    "fi"
-  ].join("\n")
-
 const renderCloneBody = (config: TemplateConfig): string =>
   [
     renderCloneBodyStart(config),
@@ -224,9 +141,7 @@ const renderCloneBody = (config: TemplateConfig): string =>
     "",
     renderCloneRemotes(config),
     "",
-    renderCloneCacheFinalize(config),
-    "",
-    renderIssueWorkspaceAgents()
+    renderCloneCacheFinalize(config)
   ].join("\n")
 
 const renderCloneFinalize = (): string =>

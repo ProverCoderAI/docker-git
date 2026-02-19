@@ -45,7 +45,6 @@ Force modes:
 
 Agent context for issue workspaces:
 - Global `${CODEX_HOME}/AGENTS.md` includes workspace path + issue/PR context.
-- For `issue-*` workspaces, docker-git creates `${TARGET_DIR}/AGENTS.md` (if missing) with issue context and auto-adds it to `.git/info/exclude`.
 
 ## Projects Root Layout
 

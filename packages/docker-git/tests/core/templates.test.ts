@@ -73,6 +73,11 @@ describe("planFiles", () => {
           "GIT_CREDENTIAL_HELPER_PATH=\"/usr/local/bin/docker-git-credential-helper\""
         )
         expect(entrypointSpec.contents).toContain("token=\"$GITHUB_TOKEN\"")
+        expect(entrypointSpec.contents).toContain("issue_managed_start='<!-- docker-git:issue-managed:start -->'")
+        expect(entrypointSpec.contents).toContain("check_issue_managed_block_range")
+        expect(entrypointSpec.contents).toContain(
+          "push contains commit updating managed issue block in AGENTS.md"
+        )
         expect(entrypointSpec.contents).toContain("CACHE_ROOT=\"/home/dev/.docker-git/.cache/git-mirrors\"")
         expect(entrypointSpec.contents).toContain("PACKAGE_CACHE_ROOT=\"/home/dev/.docker-git/.cache/packages\"")
         expect(entrypointSpec.contents).toContain("npm_config_store_dir")
@@ -149,13 +154,17 @@ describe("planFiles", () => {
       if (entrypointSpec && entrypointSpec._tag === "File") {
         expect(entrypointSpec.contents).toContain("Доступные workspace пути:")
         expect(entrypointSpec.contents).toContain("Контекст workspace:")
-        expect(entrypointSpec.contents).toContain("Issue AGENTS.md:")
-        expect(entrypointSpec.contents).toContain("ISSUE_AGENTS_PATH=\"$TARGET_DIR/AGENTS.md\"")
-        expect(entrypointSpec.contents).toContain("grep -qx \"AGENTS.md\" \"$EXCLUDE_PATH\"")
         expect(entrypointSpec.contents).toContain("docker_git_workspace_context_line()")
         expect(entrypointSpec.contents).toContain("REPO_REF_VALUE=\"${REPO_REF:-issue-5}\"")
         expect(entrypointSpec.contents).toContain("REPO_URL_VALUE=\"${REPO_URL:-https://github.com/org/repo.git}\"")
         expect(entrypointSpec.contents).toContain("Контекст workspace: issue #$ISSUE_ID_VALUE ($ISSUE_URL_VALUE)")
+        expect(entrypointSpec.contents).not.toContain("ISSUE_AGENTS_HINT_LINE=")
+        expect(entrypointSpec.contents).not.toContain("Issue AGENTS.md: __TARGET_DIR__/AGENTS.md")
+        expect(entrypointSpec.contents).not.toContain("ISSUE_AGENTS_PATH=\"$TARGET_DIR/AGENTS.md\"")
+        expect(entrypointSpec.contents).not.toContain(
+          "ISSUE_MANAGED_START=\"<!-- docker-git:issue-managed:start -->\""
+        )
+        expect(entrypointSpec.contents).not.toContain("grep -qx \"AGENTS.md\" \"$EXCLUDE_PATH\"")
       }
     }))
 
