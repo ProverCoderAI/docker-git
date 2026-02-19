@@ -5,6 +5,7 @@
 Key goals:
 - Functional Core, Imperative Shell implementation (pure templates + typed orchestration).
 - Per-project `.orch/` directory (env + local state), while still allowing shared credentials across containers.
+- Shared package caches (`pnpm`/`npm`/`yarn`) across all project containers.
 - Optional Playwright MCP + Chromium sidecar so Codex can do browser automation.
 
 ## Quickstart
@@ -63,6 +64,9 @@ Structure (simplified):
     auth/
       codex/          # shared Codex auth/config (when CODEX_SHARE_AUTH=1)
       gh/             # GH CLI auth cache for OAuth login container
+  .cache/
+    git-mirrors/      # shared git clone mirrors
+    packages/         # shared pnpm/npm/yarn caches
   <owner>/<repo>/
     docker-compose.yml
     Dockerfile
@@ -115,6 +119,9 @@ Common toggles:
 - `DOCKER_GIT_ZSH_AUTOSUGGEST=1|0` (default: `1`)
 - `MCP_PLAYWRIGHT_ISOLATED=1|0` (default: `1`)
 - `MCP_PLAYWRIGHT_CDP_ENDPOINT=http://...` (override CDP endpoint if needed)
+- `PNPM_STORE_DIR=/home/dev/.docker-git/.cache/packages/pnpm/store` (default shared store)
+- `NPM_CONFIG_CACHE=/home/dev/.docker-git/.cache/packages/npm` (default shared cache)
+- `YARN_CACHE_FOLDER=/home/dev/.docker-git/.cache/packages/yarn` (default shared cache)
 
 ## Troubleshooting
 

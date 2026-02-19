@@ -24,6 +24,19 @@ type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandE
 
 const resolveStateRoot = (path: Path.Path, cwd: string): string => path.resolve(defaultProjectsRoot(cwd))
 
+const managedRepositoryCachePaths: ReadonlyArray<string> = [".cache/git-mirrors", ".cache/packages"]
+
+const ensureStateIgnoreAndUntrackCaches = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  root: string
+): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
+  Effect.gen(function*(_) {
+    yield* _(ensureStateGitignore(fs, path, root))
+    // Best-effort idempotent cleanup: keep cache artifacts out of git history.
+    yield* _(git(root, ["rm", "-r", "--cached", "--ignore-unmatch", ...managedRepositoryCachePaths], gitBaseEnv))
+  }).pipe(Effect.asVoid)
+
 export const statePath: Effect.Effect<void, PlatformError, Path.Path> = Effect.gen(function*(_) {
   const path = yield* _(Path.Path)
   const cwd = process.cwd()
@@ -47,6 +60,8 @@ export const stateSync = (
         Effect.fail(new CommandFailedError({ command: "git rev-parse --is-inside-work-tree", exitCode: repoExit }))
       )
     }
+
+    yield* _(ensureStateIgnoreAndUntrackCaches(fs, path, root))
 
     const originUrlExit = yield* _(gitExitCode(root, ["remote", "get-url", "origin"], gitBaseEnv))
     if (originUrlExit !== successExitCode) {
@@ -269,11 +284,17 @@ export const statePush = Effect.gen(function*(_) {
 
 export const stateCommit = (
   message: string
-): Effect.Effect<void, CommandFailedError | PlatformError, Path.Path | CommandExecutor.CommandExecutor> =>
+): Effect.Effect<
+  void,
+  CommandFailedError | PlatformError,
+  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+> =>
   Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const root = resolveStateRoot(path, process.cwd())
 
+    yield* _(ensureStateIgnoreAndUntrackCaches(fs, path, root))
     yield* _(git(root, ["add", "-A"], gitBaseEnv))
     const diffExit = yield* _(gitExitCode(root, ["diff", "--cached", "--quiet"], gitBaseEnv))
 

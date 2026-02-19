@@ -42,6 +42,31 @@ docker_git_upsert_ssh_env() {
   chown 1000:1000 "$SSH_ENV_PATH" || true
 }`
 
+export const renderEntrypointPackageCache = (config: TemplateConfig): string =>
+  `# Share package manager caches across all docker-git containers
+PACKAGE_CACHE_ROOT="/home/${config.sshUser}/.docker-git/.cache/packages"
+PACKAGE_PNPM_STORE="\${npm_config_store_dir:-\${PNPM_STORE_DIR:-$PACKAGE_CACHE_ROOT/pnpm/store}}"
+PACKAGE_NPM_CACHE="\${npm_config_cache:-\${NPM_CONFIG_CACHE:-$PACKAGE_CACHE_ROOT/npm}}"
+PACKAGE_YARN_CACHE="\${YARN_CACHE_FOLDER:-$PACKAGE_CACHE_ROOT/yarn}"
+
+mkdir -p "$PACKAGE_PNPM_STORE" "$PACKAGE_NPM_CACHE" "$PACKAGE_YARN_CACHE"
+chown -R 1000:1000 "$PACKAGE_CACHE_ROOT" || true
+
+cat <<EOF > /etc/profile.d/docker-git-package-cache.sh
+export PNPM_STORE_DIR="$PACKAGE_PNPM_STORE"
+export npm_config_store_dir="$PACKAGE_PNPM_STORE"
+export NPM_CONFIG_CACHE="$PACKAGE_NPM_CACHE"
+export npm_config_cache="$PACKAGE_NPM_CACHE"
+export YARN_CACHE_FOLDER="$PACKAGE_YARN_CACHE"
+EOF
+chmod 0644 /etc/profile.d/docker-git-package-cache.sh
+
+docker_git_upsert_ssh_env "PNPM_STORE_DIR" "$PACKAGE_PNPM_STORE"
+docker_git_upsert_ssh_env "npm_config_store_dir" "$PACKAGE_PNPM_STORE"
+docker_git_upsert_ssh_env "NPM_CONFIG_CACHE" "$PACKAGE_NPM_CACHE"
+docker_git_upsert_ssh_env "npm_config_cache" "$PACKAGE_NPM_CACHE"
+docker_git_upsert_ssh_env "YARN_CACHE_FOLDER" "$PACKAGE_YARN_CACHE"`
+
 export const renderEntrypointAuthorizedKeys = (config: TemplateConfig): string =>
   `# 1) Authorized keys are mounted from host at /authorized_keys
 mkdir -p /home/${config.sshUser}/.ssh

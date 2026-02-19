@@ -80,7 +80,7 @@ ${codexConfigLine}
 
 [features]
 shell_snapshot = true
-collab = true
+multi_agent = true
 apps = true
 
 [projects."/home/dev"]
@@ -101,7 +101,7 @@ web_search = "live"
 
 [features]
 shell_snapshot = true
-collab = true
+multi_agent = true
 apps = true
 `
 

@@ -33,6 +33,7 @@ describe("ensureStateGitignore", () => {
         const gitignore = yield* _(fs.readFileString(path.join(root, ".gitignore")))
         expect(gitignore).toContain("# docker-git state repository")
         expect(gitignore).toContain(".cache/git-mirrors/")
+        expect(gitignore).toContain(".cache/packages/")
         expect(gitignore).toContain("**/.orch/auth/codex/models_cache.json")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
@@ -57,8 +58,9 @@ describe("ensureStateGitignore", () => {
 
         const gitignore = yield* _(fs.readFileString(gitignorePath))
         expect(gitignore).toContain("custom-ignore/")
-        expect(gitignore).toContain("# Shared git mirrors cache (do not commit)")
+        expect(gitignore).toContain("# Shared repository caches (do not commit)")
         expect(gitignore).toContain(".cache/git-mirrors/")
+        expect(gitignore).toContain(".cache/packages/")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })
