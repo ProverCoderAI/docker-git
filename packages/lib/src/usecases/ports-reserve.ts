@@ -1,8 +1,10 @@
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type { FileSystem } from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
-import { Effect, Option } from "effect"
+import { Effect, Either, Option } from "effect"
 
+import { runDockerPsPublishedHostPorts } from "../shell/docker.js"
 import { PortProbeError } from "../shell/errors.js"
 import { isPortAvailable } from "../shell/ports.js"
 import { listProjectItems } from "./projects-list.js"
@@ -11,6 +13,8 @@ export type ReservedPort = {
   readonly port: number
   readonly projectDir: string
 }
+
+const dockerPublishedMarker = "<docker:published>"
 
 const resolveExclude = (
   path: Path.Path,
@@ -29,6 +33,34 @@ const filterReserved = (
   return path.resolve(item.projectDir) !== resolvedExclude
 }
 
+const reservePort = (
+  reserved: Array<ReservedPort>,
+  seen: Set<number>,
+  port: number,
+  projectDir: string
+): void => {
+  if (seen.has(port)) {
+    return
+  }
+  seen.add(port)
+  reserved.push({ port, projectDir })
+}
+
+const loadPublishedDockerPorts = (): Effect.Effect<ReadonlySet<number>, never, CommandExecutor.CommandExecutor> =>
+  Effect.either(runDockerPsPublishedHostPorts(process.cwd())).pipe(
+    Effect.flatMap(
+      Either.match({
+        onLeft: (error) =>
+          Effect.logWarning(
+            `Failed to read published Docker ports; falling back to TCP probing only: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          ).pipe(Effect.as(new Set<number>())),
+        onRight: (ports) => Effect.succeed(new Set(ports))
+      })
+    )
+  )
+
 // CHANGE: collect SSH ports currently occupied by existing docker-git projects
 // WHY: avoid port collisions while allowing reuse of ports from stopped projects
 // QUOTE(ТЗ): "для каждого докера брать должен свой порт"
@@ -36,7 +68,7 @@ const filterReserved = (
 // SOURCE: n/a
 // FORMAT THEOREM: ∀p∈Projects: reserved(port(p))
 // PURITY: SHELL
-// EFFECT: Effect<ReadonlyArray<ReservedPort>, PlatformError | PortProbeError, FileSystem | Path.Path>
+// EFFECT: Effect<ReadonlyArray<ReservedPort>, PlatformError | PortProbeError, FileSystem | Path.Path | CommandExecutor>
 // INVARIANT: excludes the current project dir when provided
 // COMPLEXITY: O(n) where n = number of projects
 export const loadReservedPorts = (
@@ -44,21 +76,29 @@ export const loadReservedPorts = (
 ): Effect.Effect<
   ReadonlyArray<ReservedPort>,
   PlatformError | PortProbeError,
-  FileSystem | Path.Path
+  FileSystem | Path.Path | CommandExecutor.CommandExecutor
 > =>
   Effect.gen(function*(_) {
     const path = yield* _(Path.Path)
     const items = yield* _(listProjectItems)
+    const publishedByDocker = yield* _(loadPublishedDockerPorts())
     const reserved: Array<ReservedPort> = []
+    const seen = new Set<number>()
     const filter = filterReserved(path, excludeDir)
 
     for (const item of items) {
       if (!filter(item)) {
         continue
       }
-      if (!(yield* _(isPortAvailable(item.sshPort)))) {
-        reserved.push({ port: item.sshPort, projectDir: item.projectDir })
+      const occupiedByDocker = publishedByDocker.has(item.sshPort)
+      const occupiedBySocket = occupiedByDocker ? false : !(yield* _(isPortAvailable(item.sshPort)))
+      if (occupiedByDocker || occupiedBySocket) {
+        reservePort(reserved, seen, item.sshPort, item.projectDir)
       }
+    }
+
+    for (const port of publishedByDocker) {
+      reservePort(reserved, seen, port, dockerPublishedMarker)
     }
 
     return reserved

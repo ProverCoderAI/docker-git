@@ -60,7 +60,8 @@ const renderPrimaryError = (error: NonParseError): string | null =>
     Match.when({ _tag: "DockerCommandError" }, ({ exitCode }) =>
       [
         `docker compose failed with exit code ${exitCode}`,
-        "Hint: ensure Docker daemon is running and current user can access /var/run/docker.sock (for example via the docker group)."
+        "Hint: ensure Docker daemon is running and current user can access /var/run/docker.sock (for example via the docker group).",
+        "Hint: if output above contains 'port is already allocated', retry with a free SSH port via --ssh-port <port> (for example --ssh-port 2235), or stop the conflicting project/container."
       ].join("\n")),
     Match.when({ _tag: "DockerAccessError" }, ({ details, issue }) =>
       [

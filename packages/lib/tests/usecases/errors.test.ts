@@ -9,6 +9,8 @@ describe("renderError", () => {
 
     expect(message).toContain("docker compose failed with exit code 1")
     expect(message).toContain("/var/run/docker.sock")
+    expect(message).toContain("port is already allocated")
+    expect(message).toContain("--ssh-port")
   })
 
   it("renders actionable recovery for DockerAccessError", () => {
