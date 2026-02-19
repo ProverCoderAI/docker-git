@@ -11,6 +11,8 @@ export interface TemplateConfig {
   readonly repoRef: string
   readonly forkRepoUrl?: string
   readonly gitTokenLabel?: string | undefined
+  readonly codexAuthLabel?: string | undefined
+  readonly claudeAuthLabel?: string | undefined
   readonly targetDir: string
   readonly volumeName: string
   readonly dockerGitPath: string

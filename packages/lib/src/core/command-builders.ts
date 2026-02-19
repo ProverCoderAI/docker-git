@@ -10,7 +10,7 @@ import {
   type ParseError,
   resolveRepoInput
 } from "./domain.js"
-import { trimRightChar } from "./strings.js"
+import { trimLeftChar, trimRightChar } from "./strings.js"
 
 const parsePort = (value: string): Either.Either<number, ParseError> => {
   const parsed = Number(value)
@@ -71,6 +71,26 @@ const normalizeGitTokenLabel = (value: string | undefined): string | undefined =
     .replaceAll(/[^A-Z0-9]+/g, "_")
   const cleaned = trimEdgeUnderscores(normalized)
   if (cleaned.length === 0 || cleaned === "DEFAULT") {
+    return undefined
+  }
+  return cleaned
+}
+
+const trimEdgeHyphens = (value: string): string => {
+  const withoutLeading = trimLeftChar(value, "-")
+  return trimRightChar(withoutLeading, "-")
+}
+
+const normalizeAuthLabel = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim() ?? ""
+  if (trimmed.length === 0) {
+    return undefined
+  }
+  const normalized = trimmed
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+  const cleaned = trimEdgeHyphens(normalized)
+  if (cleaned.length === 0 || cleaned === "default") {
     return undefined
   }
   return cleaned
@@ -235,6 +255,8 @@ export const buildCreateCommand = (
     const forceEnv = raw.forceEnv ?? false
     const enableMcpPlaywright = raw.enableMcpPlaywright ?? false
     const gitTokenLabel = normalizeGitTokenLabel(raw.gitTokenLabel)
+    const codexAuthLabel = normalizeAuthLabel(raw.codexTokenLabel)
+    const claudeAuthLabel = normalizeAuthLabel(raw.claudeTokenLabel)
 
     return {
       _tag: "Create",
@@ -251,7 +273,9 @@ export const buildCreateCommand = (
         sshPort: repo.sshPort,
         repoUrl: repo.repoUrl,
         repoRef: repo.repoRef,
-        ...(gitTokenLabel === undefined ? {} : { gitTokenLabel }),
+        gitTokenLabel,
+        codexAuthLabel,
+        claudeAuthLabel,
         targetDir: repo.targetDir,
         volumeName: names.volumeName,
         dockerGitPath: paths.dockerGitPath,

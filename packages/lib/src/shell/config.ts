@@ -18,6 +18,8 @@ const TemplateConfigSchema = Schema.Struct({
   repoUrl: Schema.String,
   repoRef: Schema.String,
   gitTokenLabel: Schema.optional(Schema.String),
+  codexAuthLabel: Schema.optional(Schema.String),
+  claudeAuthLabel: Schema.optional(Schema.String),
   targetDir: Schema.String,
   volumeName: Schema.String,
   dockerGitPath: Schema.optionalWith(Schema.String, {

@@ -126,6 +126,20 @@ describe("parseArgs", () => {
       expect(command.config.gitTokenLabel).toBe("AGIENS")
     }))
 
+  it.effect("parses clone codex/claude token labels from inline options and normalizes them", () =>
+    expectCreateCommand(
+      [
+        "clone",
+        "https://github.com/org/repo.git",
+        "--codex-token= Team A ",
+        "--claude-token=---AGIENS:::Claude---"
+      ],
+      (command) => {
+        expect(command.config.codexAuthLabel).toBe("team-a")
+        expect(command.config.claudeAuthLabel).toBe("agiens-claude")
+      }
+    ))
+
   it.effect("supports enabling SSH auto-open for create", () =>
     expectCreateCommand(["create", "--repo-url", "https://github.com/org/repo.git", "--ssh"], (command) => {
       expect(command.openSsh).toBe(true)

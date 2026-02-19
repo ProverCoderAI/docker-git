@@ -3,6 +3,8 @@ import type { TemplateConfig } from "../domain.js"
 type ComposeFragments = {
   readonly networkName: string
   readonly maybeGitTokenLabelEnv: string
+  readonly maybeCodexAuthLabelEnv: string
+  readonly maybeClaudeAuthLabelEnv: string
   readonly maybeDependsOn: string
   readonly maybePlaywrightEnv: string
   readonly maybeBrowserService: string
@@ -18,6 +20,16 @@ type PlaywrightFragments = Pick<
 const renderGitTokenLabelEnv = (gitTokenLabel: string): string =>
   gitTokenLabel.length > 0
     ? `      GITHUB_AUTH_LABEL: "${gitTokenLabel}"\n      GIT_AUTH_LABEL: "${gitTokenLabel}"\n`
+    : ""
+
+const renderCodexAuthLabelEnv = (codexAuthLabel: string): string =>
+  codexAuthLabel.length > 0
+    ? `      CODEX_AUTH_LABEL: "${codexAuthLabel}"\n`
+    : ""
+
+const renderClaudeAuthLabelEnv = (claudeAuthLabel: string): string =>
+  claudeAuthLabel.length > 0
+    ? `      CLAUDE_AUTH_LABEL: "${claudeAuthLabel}"\n`
     : ""
 
 const buildPlaywrightFragments = (
@@ -53,12 +65,18 @@ const buildComposeFragments = (config: TemplateConfig): ComposeFragments => {
   const networkName = `${config.serviceName}-net`
   const forkRepoUrl = config.forkRepoUrl ?? ""
   const gitTokenLabel = config.gitTokenLabel?.trim() ?? ""
+  const codexAuthLabel = config.codexAuthLabel?.trim() ?? ""
+  const claudeAuthLabel = config.claudeAuthLabel?.trim() ?? ""
   const maybeGitTokenLabelEnv = renderGitTokenLabelEnv(gitTokenLabel)
+  const maybeCodexAuthLabelEnv = renderCodexAuthLabelEnv(codexAuthLabel)
+  const maybeClaudeAuthLabelEnv = renderClaudeAuthLabelEnv(claudeAuthLabel)
   const playwright = buildPlaywrightFragments(config, networkName)
 
   return {
     networkName,
     maybeGitTokenLabelEnv,
+    maybeCodexAuthLabelEnv,
+    maybeClaudeAuthLabelEnv,
     maybeDependsOn: playwright.maybeDependsOn,
     maybePlaywrightEnv: playwright.maybePlaywrightEnv,
     maybeBrowserService: playwright.maybeBrowserService,
@@ -77,6 +95,8 @@ const renderComposeServices = (config: TemplateConfig, fragments: ComposeFragmen
       REPO_REF: "${config.repoRef}"
       FORK_REPO_URL: "${fragments.forkRepoUrl}"
 ${fragments.maybeGitTokenLabelEnv}      # Optional token label selector (maps to GITHUB_TOKEN__<LABEL>/GIT_AUTH_TOKEN__<LABEL>)
+${fragments.maybeCodexAuthLabelEnv}      # Optional Codex account label selector (maps to CODEX_AUTH_LABEL)
+${fragments.maybeClaudeAuthLabelEnv}      # Optional Claude account label selector (maps to CLAUDE_AUTH_LABEL)
       TARGET_DIR: "${config.targetDir}"
       CODEX_HOME: "${config.codexHome}"
 ${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    env_file:

@@ -24,6 +24,8 @@ interface ValueOptionSpec {
     | "scrapMode"
     | "label"
     | "gitTokenLabel"
+    | "codexTokenLabel"
+    | "claudeTokenLabel"
     | "token"
     | "scopes"
     | "message"
@@ -53,6 +55,8 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--mode", key: "scrapMode" },
   { flag: "--label", key: "label" },
   { flag: "--git-token", key: "gitTokenLabel" },
+  { flag: "--codex-token", key: "codexTokenLabel" },
+  { flag: "--claude-token", key: "claudeTokenLabel" },
   { flag: "--token", key: "token" },
   { flag: "--scopes", key: "scopes" },
   { flag: "--message", key: "message" },
@@ -102,6 +106,8 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   scrapMode: (raw, value) => ({ ...raw, scrapMode: value }),
   label: (raw, value) => ({ ...raw, label: value }),
   gitTokenLabel: (raw, value) => ({ ...raw, gitTokenLabel: value }),
+  codexTokenLabel: (raw, value) => ({ ...raw, codexTokenLabel: value }),
+  claudeTokenLabel: (raw, value) => ({ ...raw, claudeTokenLabel: value }),
   token: (raw, value) => ({ ...raw, token: value }),
   scopes: (raw, value) => ({ ...raw, scopes: value }),
   message: (raw, value) => ({ ...raw, message: value }),

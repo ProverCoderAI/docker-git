@@ -47,7 +47,9 @@ const makeProjectConfig = (
   outDir: string,
   enableMcpPlaywright: boolean,
   path: Path.Path,
-  gitTokenLabel?: string
+  gitTokenLabel?: string,
+  codexAuthLabel?: string,
+  claudeAuthLabel?: string
 ): TemplateConfig => ({
   containerName: "dg-test",
   serviceName: "dg-test",
@@ -56,6 +58,8 @@ const makeProjectConfig = (
   repoUrl: "https://github.com/org/repo.git",
   repoRef: "main",
   gitTokenLabel,
+  codexAuthLabel,
+  claudeAuthLabel,
   targetDir: "/home/dev/org/repo",
   volumeName: "dg-test-home",
   dockerGitPath: path.join(outDir, ".docker-git"),
@@ -95,7 +99,7 @@ describe("prepareProjectFiles", () => {
         const outDir = path.join(root, "project")
         const globalConfig = makeGlobalConfig(root, path)
         const withoutMcp = makeProjectConfig(outDir, false, path)
-        const withMcp = makeProjectConfig(outDir, true, path, "AGIENS")
+        const withMcp = makeProjectConfig(outDir, true, path, "AGIENS", "agien-codex", "agien-claude")
 
         yield* _(
           prepareProjectFiles(outDir, root, globalConfig, withoutMcp, {
@@ -111,6 +115,7 @@ describe("prepareProjectFiles", () => {
         expect(dockerfile).toContain("gitleaks version")
         expect(entrypoint).toContain('DOCKER_GIT_HOME="/home/dev/.docker-git"')
         expect(entrypoint).toContain('SOURCE_SHARED_AUTH="/home/dev/.codex-shared/auth.json"')
+        expect(entrypoint).toContain('CODEX_LABEL_RAW="$CODEX_AUTH_LABEL"')
         expect(entrypoint).toContain('OPENCODE_DATA_DIR="/home/dev/.local/share/opencode"')
         expect(entrypoint).toContain('OPENCODE_SHARED_HOME="/home/dev/.codex-shared/opencode"')
         expect(entrypoint).toContain('OPENCODE_CONFIG_DIR="/home/dev/.config/opencode"')
@@ -133,6 +138,8 @@ describe("prepareProjectFiles", () => {
         expect(composeAfter).toContain('MCP_PLAYWRIGHT_ENABLE: "1"')
         expect(composeAfter).toContain('GITHUB_AUTH_LABEL: "AGIENS"')
         expect(composeAfter).toContain('GIT_AUTH_LABEL: "AGIENS"')
+        expect(composeAfter).toContain('CODEX_AUTH_LABEL: "agien-codex"')
+        expect(composeAfter).toContain('CLAUDE_AUTH_LABEL: "agien-claude"')
         expect(readEnableMcpPlaywrightFlag(configAfter)).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
