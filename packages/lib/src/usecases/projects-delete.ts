@@ -1,4 +1,4 @@
-import type { CommandExecutor } from "@effect/platform/CommandExecutor"
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
@@ -67,7 +67,11 @@ const removeContainersFallback = (
 // COMPLEXITY: O(docker + fs)
 export const deleteDockerGitProject = (
   item: ProjectItem
-): Effect.Effect<void, PlatformError | DockerCommandError, FileSystem.FileSystem | Path.Path | CommandExecutor> =>
+): Effect.Effect<
+  void,
+  PlatformError | DockerCommandError,
+  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
