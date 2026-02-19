@@ -2,7 +2,7 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type { FileSystem } from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
-import { Effect, Option } from "effect"
+import { Effect, Either, Option } from "effect"
 
 import { runDockerPsPublishedHostPorts } from "../shell/docker.js"
 import { PortProbeError } from "../shell/errors.js"
@@ -47,14 +47,17 @@ const reservePort = (
 }
 
 const loadPublishedDockerPorts = (): Effect.Effect<ReadonlySet<number>, never, CommandExecutor.CommandExecutor> =>
-  runDockerPsPublishedHostPorts(process.cwd()).pipe(
-    Effect.map((ports) => new Set(ports)),
-    Effect.catchAll((error) =>
-      Effect.logWarning(
-        `Failed to read published Docker ports; falling back to TCP probing only: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      ).pipe(Effect.as(new Set<number>()))
+  Effect.either(runDockerPsPublishedHostPorts(process.cwd())).pipe(
+    Effect.flatMap(
+      Either.match({
+        onLeft: (error) =>
+          Effect.logWarning(
+            `Failed to read published Docker ports; falling back to TCP probing only: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          ).pipe(Effect.as(new Set<number>())),
+        onRight: (ports) => Effect.succeed(new Set(ports))
+      })
     )
   )
 

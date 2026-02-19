@@ -451,7 +451,7 @@ const parsePublishedHostPortsFromLine = (line: string): ReadonlyArray<number> =>
       continue
     }
     const value = Number.parseInt(rawPort, 10)
-    if (Number.isInteger(value) && value > 0 && value <= 65535) {
+    if (Number.isInteger(value) && value > 0 && value <= 65_535) {
       parsed.push(value)
     }
   }
@@ -511,5 +511,5 @@ export const runDockerPsPublishedHostPorts = (
       [Number(ExitCode(0))],
       (exitCode) => new CommandFailedError({ command: "docker ps", exitCode })
     ),
-    Effect.map(parseDockerPublishedHostPorts)
+    Effect.map((output) => parseDockerPublishedHostPorts(output))
   )
