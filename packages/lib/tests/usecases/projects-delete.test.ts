@@ -17,6 +17,21 @@ type RecordedCommand = {
   readonly args: ReadonlyArray<string>
 }
 
+const includesArgsInOrder = (
+  args: ReadonlyArray<string>,
+  expectedSequence: ReadonlyArray<string>
+): boolean => {
+  let searchFrom = 0
+  for (const expected of expectedSequence) {
+    const foundAt = args.indexOf(expected, searchFrom)
+    if (foundAt === -1) {
+      return false
+    }
+    searchFrom = foundAt + 1
+  }
+  return true
+}
+
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
 ): Effect.Effect<A, E, R | FileSystem.FileSystem> =>
@@ -91,9 +106,7 @@ const makeFakeExecutor = (
       const last = flattened[flattened.length - 1]!
       const shouldFailComposeDownVolumes = failComposeDownVolumes &&
         last.command === "docker" &&
-        last.args[0] === "compose" &&
-        last.args[1] === "down" &&
-        last.args[2] === "-v"
+        includesArgsInOrder(last.args, ["compose", "down", "-v"])
       const exit = shouldFailComposeDownVolumes ? 1 : 0
 
       const process: CommandExecutor.Process = {
@@ -147,9 +160,7 @@ describe("deleteDockerGitProject", () => {
           recorded.some(
             (entry) =>
               entry.command === "docker" &&
-              entry.args[0] === "compose" &&
-              entry.args[1] === "down" &&
-              entry.args[2] === "-v"
+              includesArgsInOrder(entry.args, ["compose", "down", "-v"])
           )
         ).toBe(true)
       })

@@ -24,7 +24,7 @@ type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandE
 
 const resolveStateRoot = (path: Path.Path, cwd: string): string => path.resolve(defaultProjectsRoot(cwd))
 
-const managedRepositoryCachePaths = [".cache/git-mirrors", ".cache/packages"] as const
+const managedRepositoryCachePaths: ReadonlyArray<string> = [".cache/git-mirrors", ".cache/packages"]
 
 const ensureStateIgnoreAndUntrackCaches = (
   fs: FileSystem.FileSystem,
