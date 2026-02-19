@@ -10,6 +10,7 @@ import {
   resolveRepoInput
 } from "./domain.js"
 import { trimRightChar } from "./strings.js"
+import { expandContainerHome } from "../usecases/scrap-path.js"
 
 const parsePort = (value: string): Either.Either<number, ParseError> => {
   const parsed = Number(value)
@@ -71,10 +72,11 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
     const repoRef = yield* _(
       nonEmpty("--repo-ref", raw.repoRef ?? resolvedRepo.repoRef, defaultTemplateConfig.repoRef)
     )
-    const targetDir = yield* _(
+    const sshUser = yield* _(nonEmpty("--ssh-user", raw.sshUser, defaultTemplateConfig.sshUser))
+    const rawTargetDir = yield* _(
       nonEmpty("--target-dir", raw.targetDir, defaultTemplateConfig.targetDir)
     )
-    const sshUser = yield* _(nonEmpty("--ssh-user", raw.sshUser, defaultTemplateConfig.sshUser))
+    const targetDir = expandContainerHome(sshUser, rawTargetDir)
     const sshPort = yield* _(parsePort(raw.sshPort ?? String(defaultTemplateConfig.sshPort)))
 
     return { repoUrl, repoSlug, projectSlug, repoPath, repoRef, targetDir, sshUser, sshPort }
