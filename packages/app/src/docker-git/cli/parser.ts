@@ -2,6 +2,7 @@ import { Either, Match } from "effect"
 
 import { type Command, type ParseError } from "@effect-template/lib/core/domain"
 
+import { parseApply } from "./parser-apply.js"
 import { parseAttach } from "./parser-attach.js"
 import { parseAuth } from "./parser-auth.js"
 import { parseClone } from "./parser-clone.js"
@@ -74,6 +75,7 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("auth", () => parseAuth(rest))
     )
     .pipe(
+      Match.when("apply", () => parseApply(rest)),
       Match.when("state", () => parseState(rest)),
       Match.orElse(() => Either.left(unknownCommandError))
     )

@@ -106,6 +106,12 @@ export interface McpPlaywrightUpCommand {
   readonly runUp: boolean
 }
 
+export interface ApplyCommand {
+  readonly _tag: "Apply"
+  readonly projectDir: string
+  readonly runUp: boolean
+}
+
 export interface HelpCommand {
   readonly _tag: "Help"
   readonly message: string
@@ -243,6 +249,7 @@ export type Command =
   | SessionsCommand
   | ScrapCommand
   | McpPlaywrightUpCommand
+  | ApplyCommand
   | HelpCommand
   | StatusCommand
   | DownAllCommand

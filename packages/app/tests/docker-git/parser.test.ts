@@ -196,6 +196,34 @@ describe("parseArgs", () => {
       expect(command.projectDir).toBe(".docker-git/org/repo")
     }))
 
+  it.effect("parses apply command in current directory", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["apply"])
+      if (command._tag !== "Apply") {
+        throw new Error("expected Apply command")
+      }
+      expect(command.projectDir).toBe(".")
+      expect(command.runUp).toBe(true)
+    }))
+
+  it.effect("parses apply command with --no-up", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["apply", "--no-up"])
+      if (command._tag !== "Apply") {
+        throw new Error("expected Apply command")
+      }
+      expect(command.runUp).toBe(false)
+    }))
+
+  it.effect("parses apply with positional repo url into project dir", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["apply", "https://github.com/org/repo.git"])
+      if (command._tag !== "Apply") {
+        throw new Error("expected Apply command")
+      }
+      expect(command.projectDir).toBe(".docker-git/org/repo")
+    }))
+
   it.effect("parses down-all command", () =>
     Effect.sync(() => {
       const command = parseOrThrow(["down-all"])
