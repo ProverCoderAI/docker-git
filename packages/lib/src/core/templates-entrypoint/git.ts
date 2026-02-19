@@ -81,8 +81,8 @@ export const renderEntrypointGitConfig = (config: TemplateConfig): string =>
     renderEntrypointGitIdentity(config)
   ].join("\n\n")
 
-export const renderEntrypointGitHooks = (): string =>
-  String.raw`# 3) Install global git hooks to protect main/master + managed AGENTS context
+const entrypointGitHooksTemplate = String
+  .raw`# 3) Install global git hooks to protect main/master + managed AGENTS context
 HOOKS_DIR="/opt/docker-git/hooks"
 PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"
 mkdir -p "$HOOKS_DIR"
@@ -213,3 +213,5 @@ EOF
 chmod 0755 "$PRE_PUSH_HOOK"
 git config --system core.hooksPath "$HOOKS_DIR" || true
 git config --global core.hooksPath "$HOOKS_DIR" || true`
+
+export const renderEntrypointGitHooks = (): string => entrypointGitHooksTemplate
