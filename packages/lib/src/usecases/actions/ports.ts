@@ -1,3 +1,4 @@
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
@@ -15,7 +16,7 @@ export const resolveSshPort = (
 ): Effect.Effect<
   CreateCommand["config"],
   PortProbeError | PlatformError,
-  FileSystem.FileSystem | Path.Path
+  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 > =>
   Effect.gen(function*(_) {
     const reserved = yield* _(loadReservedPorts(outDir))

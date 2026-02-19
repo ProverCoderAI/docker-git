@@ -33,7 +33,7 @@ const maxPortAttempts = 25
 // SOURCE: n/a
 // FORMAT THEOREM: ∀p: reserved(p) ∨ occupied(p) → selected(p') ∧ available(p')
 // PURITY: SHELL
-// EFFECT: Effect<TemplateConfig, PortProbeError | PlatformError | FileExistsError, FileSystem | Path>
+// EFFECT: Effect<TemplateConfig, PortProbeError | PlatformError | FileExistsError, FileSystem | Path | CommandExecutor>
 // INVARIANT: config is rewritten when port changes
 // COMPLEXITY: O(n) where n = maxPortAttempts
 const ensureAvailableSshPort = (
@@ -42,7 +42,7 @@ const ensureAvailableSshPort = (
 ): Effect.Effect<
   TemplateConfig,
   PortProbeError | PlatformError | FileExistsError,
-  FileSystem | Path
+  FileSystem | Path | CommandExecutor
 > =>
   Effect.gen(function*(_) {
     const reserved = yield* _(loadReservedPorts(projectDir))
