@@ -1,6 +1,6 @@
 {
   "name": "@prover-coder-ai/docker-git",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "Minimal Vite-powered TypeScript console starter using Effect",
   "main": "dist/src/docker-git/main.js",
   "bin": {
