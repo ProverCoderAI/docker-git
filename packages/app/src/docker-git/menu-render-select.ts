@@ -97,6 +97,30 @@ export const buildSelectLabels = (
     return `${prefix} ${index + 1}. ${item.displayName} (${refLabel})${runtimeSuffix}`
   })
 
+export type SelectListWindow = {
+  readonly start: number
+  readonly end: number
+}
+
+export const buildSelectListWindow = (
+  total: number,
+  selected: number,
+  maxVisible: number
+): SelectListWindow => {
+  if (total <= 0) {
+    return { start: 0, end: 0 }
+  }
+  const visible = Math.max(1, maxVisible)
+  if (total <= visible) {
+    return { start: 0, end: total }
+  }
+  const boundedSelected = Math.min(Math.max(selected, 0), total - 1)
+  const half = Math.floor(visible / 2)
+  const maxStart = total - visible
+  const start = Math.min(Math.max(boundedSelected - half, 0), maxStart)
+  return { start, end: start + visible }
+}
+
 type SelectDetailsContext = {
   readonly item: ProjectItem
   readonly refLabel: string

@@ -8,12 +8,64 @@
 // EFFECT: n/a
 // INVARIANT: script is deterministic
 // COMPLEXITY: O(1)
-export const renderPromptScript = (): string =>
-  `docker_git_branch() { git rev-parse --abbrev-ref HEAD 2>/dev/null; }
+const dockerGitPromptScript = `docker_git_branch() { git rev-parse --abbrev-ref HEAD 2>/dev/null; }
+docker_git_short_pwd() {
+  local full_path
+  full_path="\${PWD:-}"
+  if [[ -z "$full_path" ]]; then
+    printf "%s" "?"
+    return
+  fi
+
+  local display="$full_path"
+  if [[ -n "\${HOME:-}" && "$full_path" == "$HOME" ]]; then
+    display="~"
+  elif [[ -n "\${HOME:-}" && "$full_path" == "$HOME/"* ]]; then
+    display="~/\${full_path#$HOME/}"
+  fi
+
+  if [[ "$display" == "~" || "$display" == "/" ]]; then
+    printf "%s" "$display"
+    return
+  fi
+
+  local prefix=""
+  local body="$display"
+  if [[ "$body" == "~/"* ]]; then
+    prefix="~/"
+    body="\${body#~/}"
+  elif [[ "$body" == /* ]]; then
+    prefix="/"
+    body="\${body#/}"
+  fi
+
+  local result="$prefix"
+  local segment=""
+  local rest="$body"
+  while [[ "$rest" == */* ]]; do
+    segment="\${rest%%/*}"
+    rest="\${rest#*/}"
+    if [[ -n "$segment" ]]; then
+      result+="\${segment:0:1}/"
+    fi
+  done
+
+  if [[ -n "$rest" ]]; then
+    result+="$rest"
+  elif [[ "$result" == "~/" ]]; then
+    result="~"
+  elif [[ -z "$result" ]]; then
+    result="/"
+  fi
+
+  printf "%s" "$result"
+}
 docker_git_prompt_apply() {
   local b
   b="$(docker_git_branch)"
-  local base="[\\t] \\w"
+  local short_pwd
+  short_pwd="$(docker_git_short_pwd)"
+  local base="[\\t] $short_pwd"
   if [ -n "$b" ]; then
     PS1="\${base} (\${b})> "
   else
@@ -25,6 +77,8 @@ if [ -n "$PROMPT_COMMAND" ]; then
 else
   PROMPT_COMMAND="docker_git_prompt_apply"
 fi`
+
+export const renderPromptScript = (): string => dockerGitPromptScript
 
 // CHANGE: enable bash completion for interactive shells
 // WHY: allow tab completion for CLI tools in SSH terminals
@@ -124,10 +178,68 @@ zstyle ':completion:*' tag-order builtins commands aliases reserved-words functi
 
 autoload -Uz add-zsh-hook
 docker_git_branch() { git rev-parse --abbrev-ref HEAD 2>/dev/null; }
+docker_git_short_pwd() {
+  local full_path="\${PWD:-}"
+  if [[ -z "$full_path" ]]; then
+    print -r -- "?"
+    return
+  fi
+
+  local display="$full_path"
+  if [[ -n "\${HOME:-}" && "$full_path" == "$HOME" ]]; then
+    display="~"
+  elif [[ -n "\${HOME:-}" && "$full_path" == "$HOME/"* ]]; then
+    display="~/\${full_path#$HOME/}"
+  fi
+
+  if [[ "$display" == "~" || "$display" == "/" ]]; then
+    print -r -- "$display"
+    return
+  fi
+
+  local prefix=""
+  local body="$display"
+  if [[ "$body" == "~/"* ]]; then
+    prefix="~/"
+    body="\${body#~/}"
+  elif [[ "$body" == /* ]]; then
+    prefix="/"
+    body="\${body#/}"
+  fi
+
+  local -a parts
+  local result="$prefix"
+  parts=(\${(s:/:)body})
+  local total=\${#parts[@]}
+  local idx=1
+  local part=""
+  for part in "\${parts[@]}"; do
+    if [[ -z "$part" ]]; then
+      ((idx++))
+      continue
+    fi
+    if (( idx < total )); then
+      result+="\${part[1,1]}/"
+    else
+      result+="$part"
+    fi
+    ((idx++))
+  done
+
+  if [[ -z "$result" ]]; then
+    result="/"
+  elif [[ "$result" == "~/" ]]; then
+    result="~"
+  fi
+
+  print -r -- "$result"
+}
 docker_git_prompt_apply() {
   local b
   b="$(docker_git_branch)"
-  local base="[%*] %~"
+  local short_pwd
+  short_pwd="$(docker_git_short_pwd)"
+  local base="[%*] $short_pwd"
   if [[ -n "$b" ]]; then
     PROMPT="$base ($b)> "
   else

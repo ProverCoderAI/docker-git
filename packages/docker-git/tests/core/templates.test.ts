@@ -78,6 +78,9 @@ describe("planFiles", () => {
         expect(entrypointSpec.contents).toContain(
           "push contains commit updating managed issue block in AGENTS.md"
         )
+        expect(entrypointSpec.contents).toContain("docker_git_short_pwd()")
+        expect(entrypointSpec.contents).toContain("local base=\"[\\t] $short_pwd\"")
+        expect(entrypointSpec.contents).toContain("local base=\"[%*] $short_pwd\"")
         expect(entrypointSpec.contents).toContain("CACHE_ROOT=\"/home/dev/.docker-git/.cache/git-mirrors\"")
         expect(entrypointSpec.contents).toContain("PACKAGE_CACHE_ROOT=\"/home/dev/.docker-git/.cache/packages\"")
         expect(entrypointSpec.contents).toContain("npm_config_store_dir")
