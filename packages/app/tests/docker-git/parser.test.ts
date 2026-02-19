@@ -33,6 +33,26 @@ const parseOrThrow = (args: ReadonlyArray<string>): Command => {
   })
 }
 
+type ProjectDirRunUpCommand = Extract<Command, { readonly projectDir: string; readonly runUp: boolean }>
+
+const expectProjectDirRunUpCommand = (
+  args: ReadonlyArray<string>,
+  expectedTag: ProjectDirRunUpCommand["_tag"],
+  expectedProjectDir: string,
+  expectedRunUp: boolean
+) =>
+  Effect.sync(() => {
+    const command = parseOrThrow(args)
+    if (command._tag !== expectedTag) {
+      throw new Error(`expected ${expectedTag} command`)
+    }
+    if (!("projectDir" in command) || !("runUp" in command)) {
+      throw new Error("expected command with projectDir and runUp")
+    }
+    expect(command.projectDir).toBe(expectedProjectDir)
+    expect(command.runUp).toBe(expectedRunUp)
+  })
+
 const expectCreateCommand = (
   args: ReadonlyArray<string>,
   onRight: (command: CreateCommand) => void
@@ -169,23 +189,10 @@ describe("parseArgs", () => {
     }))
 
   it.effect("parses mcp-playwright command in current directory", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["mcp-playwright"])
-      if (command._tag !== "McpPlaywrightUp") {
-        throw new Error("expected McpPlaywrightUp command")
-      }
-      expect(command.projectDir).toBe(".")
-      expect(command.runUp).toBe(true)
-    }))
+    expectProjectDirRunUpCommand(["mcp-playwright"], "McpPlaywrightUp", ".", true))
 
   it.effect("parses mcp-playwright command with --no-up", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["mcp-playwright", "--no-up"])
-      if (command._tag !== "McpPlaywrightUp") {
-        throw new Error("expected McpPlaywrightUp command")
-      }
-      expect(command.runUp).toBe(false)
-    }))
+    expectProjectDirRunUpCommand(["mcp-playwright", "--no-up"], "McpPlaywrightUp", ".", false))
 
   it.effect("parses mcp-playwright with positional repo url into project dir", () =>
     Effect.sync(() => {
@@ -197,23 +204,10 @@ describe("parseArgs", () => {
     }))
 
   it.effect("parses apply command in current directory", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["apply"])
-      if (command._tag !== "Apply") {
-        throw new Error("expected Apply command")
-      }
-      expect(command.projectDir).toBe(".")
-      expect(command.runUp).toBe(true)
-    }))
+    expectProjectDirRunUpCommand(["apply"], "Apply", ".", true))
 
   it.effect("parses apply command with --no-up", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["apply", "--no-up"])
-      if (command._tag !== "Apply") {
-        throw new Error("expected Apply command")
-      }
-      expect(command.runUp).toBe(false)
-    }))
+    expectProjectDirRunUpCommand(["apply", "--no-up"], "Apply", ".", false))
 
   it.effect("parses apply with positional repo url into project dir", () =>
     Effect.sync(() => {
