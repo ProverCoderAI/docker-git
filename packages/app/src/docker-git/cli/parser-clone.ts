@@ -18,7 +18,7 @@ const applyCloneDefaults = (
     ...raw,
     repoUrl: rawRepoUrl,
     outDir: raw.outDir ?? `.docker-git/${repoPath}`,
-    targetDir: raw.targetDir ?? `${targetHome}/.docker-git/workspaces/${repoPath}`
+    targetDir: raw.targetDir ?? `${targetHome}/workspaces/${repoPath}`
   }
 }
 

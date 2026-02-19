@@ -1,25 +1,60 @@
 import type { TemplateConfig } from "../domain.js"
 
 const renderEntrypointAuthEnvBridge = (config: TemplateConfig): string =>
-  String.raw`# 2) Ensure GitHub auth vars are available for SSH sessions if provided
-if [[ -n "$GH_TOKEN" || -n "$GITHUB_TOKEN" ]]; then
-  EFFECTIVE_GITHUB_TOKEN="$GITHUB_TOKEN"
-  if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
-    EFFECTIVE_GITHUB_TOKEN="$GH_TOKEN"
-  fi
+  String.raw`# 2) Ensure GitHub auth vars are available for SSH sessions.
+# Prefer a label-selected token (same selection model as clone/create) when present.
+RESOLVED_AUTH_LABEL=""
+AUTH_LABEL_RAW="${"${"}GIT_AUTH_LABEL:-${"${"}GITHUB_AUTH_LABEL:-}}"
 
-  EFFECTIVE_GH_TOKEN="$GH_TOKEN"
-  if [[ -z "$EFFECTIVE_GH_TOKEN" ]]; then
-    EFFECTIVE_GH_TOKEN="$EFFECTIVE_GITHUB_TOKEN"
-  fi
+if [[ -z "$AUTH_LABEL_RAW" && "$REPO_URL" == https://github.com/* ]]; then
+  AUTH_LABEL_RAW="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##' | cut -d/ -f1)"
+fi
 
+if [[ -n "$AUTH_LABEL_RAW" ]]; then
+  RESOLVED_AUTH_LABEL="$(printf "%s" "$AUTH_LABEL_RAW" | tr '[:lower:]' '[:upper:]' | sed -E 's/[^A-Z0-9]+/_/g; s/^_+//; s/_+$//')"
+  if [[ "$RESOLVED_AUTH_LABEL" == "DEFAULT" ]]; then
+    RESOLVED_AUTH_LABEL=""
+  fi
+fi
+
+EFFECTIVE_GITHUB_TOKEN="$GITHUB_TOKEN"
+if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
+  EFFECTIVE_GITHUB_TOKEN="$GH_TOKEN"
+fi
+if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
+  EFFECTIVE_GITHUB_TOKEN="$GIT_AUTH_TOKEN"
+fi
+
+if [[ -n "$RESOLVED_AUTH_LABEL" ]]; then
+  LABELED_GIT_TOKEN_KEY="GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL"
+  LABELED_GITHUB_TOKEN_KEY="GITHUB_TOKEN__$RESOLVED_AUTH_LABEL"
+  LABELED_GH_TOKEN_KEY="GH_TOKEN__$RESOLVED_AUTH_LABEL"
+
+  LABELED_GIT_TOKEN="${"${"}!LABELED_GIT_TOKEN_KEY-}"
+  LABELED_GITHUB_TOKEN="${"${"}!LABELED_GITHUB_TOKEN_KEY-}"
+  LABELED_GH_TOKEN="${"${"}!LABELED_GH_TOKEN_KEY-}"
+
+  if [[ -n "$LABELED_GIT_TOKEN" ]]; then
+    EFFECTIVE_GITHUB_TOKEN="$LABELED_GIT_TOKEN"
+  elif [[ -n "$LABELED_GITHUB_TOKEN" ]]; then
+    EFFECTIVE_GITHUB_TOKEN="$LABELED_GITHUB_TOKEN"
+  elif [[ -n "$LABELED_GH_TOKEN" ]]; then
+    EFFECTIVE_GITHUB_TOKEN="$LABELED_GH_TOKEN"
+  fi
+fi
+
+EFFECTIVE_GH_TOKEN="$EFFECTIVE_GITHUB_TOKEN"
+
+if [[ -n "$EFFECTIVE_GH_TOKEN" ]]; then
   printf "export GH_TOKEN=%q\n" "$EFFECTIVE_GH_TOKEN" > /etc/profile.d/gh-token.sh
   printf "export GITHUB_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN" >> /etc/profile.d/gh-token.sh
+  printf "export GIT_AUTH_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN" >> /etc/profile.d/gh-token.sh
   chmod 0644 /etc/profile.d/gh-token.sh
   docker_git_upsert_ssh_env "GH_TOKEN" "$EFFECTIVE_GH_TOKEN"
   docker_git_upsert_ssh_env "GITHUB_TOKEN" "$EFFECTIVE_GITHUB_TOKEN"
+  docker_git_upsert_ssh_env "GIT_AUTH_TOKEN" "$EFFECTIVE_GITHUB_TOKEN"
 
-  SAFE_GH_TOKEN="$(printf "%q" "$GH_TOKEN")"
+  SAFE_GH_TOKEN="$(printf "%q" "$EFFECTIVE_GH_TOKEN")"
   # Keep git+https auth in sync with gh auth so push/pull works without manual setup.
   su - ${config.sshUser} -c "GH_TOKEN=$SAFE_GH_TOKEN gh auth setup-git --hostname github.com --force" || true
 
@@ -47,9 +82,9 @@ if [[ "$#" -lt 1 || "$1" != "get" ]]; then
   exit 0
 fi
 
-token="$GITHUB_TOKEN"
+token="${"${"}GITHUB_TOKEN:-}"
 if [[ -z "$token" ]]; then
-  token="$GH_TOKEN"
+  token="${"${"}GH_TOKEN:-}"
 fi
 
 if [[ -z "$token" ]]; then

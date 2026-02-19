@@ -101,7 +101,7 @@ else
     chown 1000:1000 "$CACHE_ROOT" || true
     if [[ -d "$CACHE_REPO_DIR" ]]; then
       if su - ${config.sshUser} -c "git --git-dir '$CACHE_REPO_DIR' rev-parse --is-bare-repository >/dev/null 2>&1"; then
-        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$REPO_URL' '+refs/*:refs/*'"; then
+        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' '+refs/*:refs/*'"; then
           echo "[clone-cache] mirror refresh failed for $REPO_URL"
         fi
         CLONE_CACHE_ARGS="--reference-if-able '$CACHE_REPO_DIR' --dissociate"
@@ -155,7 +155,8 @@ const renderCloneBodyRef = (config: TemplateConfig): string =>
   fi`
 
 const renderCloneCacheFinalize = (config: TemplateConfig): string =>
-  `if [[ "$CLONE_OK" -eq 1 && -d "$TARGET_DIR/.git" && -n "$CACHE_REPO_DIR" && ! -d "$CACHE_REPO_DIR" ]]; then
+  `CACHE_REPO_DIR="\${CACHE_REPO_DIR:-}"
+if [[ "$CLONE_OK" -eq 1 && -d "$TARGET_DIR/.git" && -n "$CACHE_REPO_DIR" && ! -d "$CACHE_REPO_DIR" ]]; then
   CACHE_TMP_DIR="$CACHE_REPO_DIR.tmp-$$"
   if su - ${config.sshUser} -c "rm -rf '$CACHE_TMP_DIR' && GIT_TERMINAL_PROMPT=0 git clone --mirror --progress '$TARGET_DIR/.git' '$CACHE_TMP_DIR'"; then
     if mv "$CACHE_TMP_DIR" "$CACHE_REPO_DIR" 2>/dev/null; then

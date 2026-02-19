@@ -72,7 +72,13 @@ describe("planFiles", () => {
         expect(entrypointSpec.contents).toContain(
           "GIT_CREDENTIAL_HELPER_PATH=\"/usr/local/bin/docker-git-credential-helper\""
         )
-        expect(entrypointSpec.contents).toContain("token=\"$GITHUB_TOKEN\"")
+        expect(entrypointSpec.contents).toContain("AUTH_LABEL_RAW=\"${GIT_AUTH_LABEL:-${GITHUB_AUTH_LABEL:-}}\"")
+        expect(entrypointSpec.contents).toContain("LABELED_GITHUB_TOKEN_KEY=\"GITHUB_TOKEN__$RESOLVED_AUTH_LABEL\"")
+        expect(entrypointSpec.contents).toContain("LABELED_GIT_TOKEN_KEY=\"GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL\"")
+        expect(entrypointSpec.contents).toContain("SAFE_GH_TOKEN=\"$(printf \"%q\" \"$EFFECTIVE_GH_TOKEN\")\"")
+        expect(entrypointSpec.contents).toContain("docker_git_upsert_ssh_env \"GIT_AUTH_TOKEN\" \"$EFFECTIVE_GITHUB_TOKEN\"")
+        expect(entrypointSpec.contents).toContain("token=\"${GITHUB_TOKEN:-}\"")
+        expect(entrypointSpec.contents).toContain("token=\"${GH_TOKEN:-}\"")
         expect(entrypointSpec.contents).toContain("issue_managed_start='<!-- docker-git:issue-managed:start -->'")
         expect(entrypointSpec.contents).toContain("check_issue_managed_block_range")
         expect(entrypointSpec.contents).toContain(
@@ -90,6 +96,8 @@ describe("planFiles", () => {
         expect(entrypointSpec.contents).toContain("[clone-cache] using mirror: $CACHE_REPO_DIR")
         expect(entrypointSpec.contents).toContain("git clone --progress $CLONE_CACHE_ARGS")
         expect(entrypointSpec.contents).toContain("[clone-cache] mirror created: $CACHE_REPO_DIR")
+        expect(entrypointSpec.contents).toContain("CACHE_REPO_DIR=\"${CACHE_REPO_DIR:-}\"")
+        expect(entrypointSpec.contents).toContain("fetch --progress --prune '$AUTH_REPO_URL' '+refs/*:refs/*'")
       }
     }))
 

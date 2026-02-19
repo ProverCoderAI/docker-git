@@ -87,7 +87,7 @@ describe("parseArgs", () => {
       expect(command.openSsh).toBe(true)
       expect(command.waitForClone).toBe(true)
       expect(command.config.targetDir).toBe(
-        expandDefaultTargetDir("~/.docker-git/workspaces/org/repo")
+        expandDefaultTargetDir("~/workspaces/org/repo")
       )
     }))
 
@@ -129,7 +129,7 @@ describe("parseArgs", () => {
       expect(command.config.repoRef).toBe("vova-fork")
       expect(command.outDir).toBe(".docker-git/agiens/crm")
       expect(command.config.targetDir).toBe(
-        expandDefaultTargetDir("~/.docker-git/workspaces/agiens/crm")
+        expandDefaultTargetDir("~/workspaces/agiens/crm")
       )
     }))
 
@@ -139,7 +139,7 @@ describe("parseArgs", () => {
       expect(command.config.repoRef).toBe("issue-5")
       expect(command.outDir).toBe(".docker-git/org/repo/issue-5")
       expect(command.config.targetDir).toBe(
-        expandDefaultTargetDir("~/.docker-git/workspaces/org/repo/issue-5")
+        expandDefaultTargetDir("~/workspaces/org/repo/issue-5")
       )
       expect(command.config.containerName).toBe("dg-repo-issue-5")
       expect(command.config.serviceName).toBe("dg-repo-issue-5")
@@ -152,7 +152,7 @@ describe("parseArgs", () => {
       expect(command.config.repoRef).toBe("refs/pull/42/head")
       expect(command.outDir).toBe(".docker-git/org/repo/pr-42")
       expect(command.config.targetDir).toBe(
-        expandDefaultTargetDir("~/.docker-git/workspaces/org/repo/pr-42")
+        expandDefaultTargetDir("~/workspaces/org/repo/pr-42")
       )
       expect(command.config.containerName).toBe("dg-repo-pr-42")
       expect(command.config.serviceName).toBe("dg-repo-pr-42")
