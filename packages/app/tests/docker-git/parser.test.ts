@@ -53,6 +53,18 @@ const expectProjectDirRunUpCommand = (
     expect(command.runUp).toBe(expectedRunUp)
   })
 
+const expectAttachProjectDirCommand = (
+  args: ReadonlyArray<string>,
+  expectedProjectDir: string
+) =>
+  Effect.sync(() => {
+    const command = parseOrThrow(args)
+    if (command._tag !== "Attach") {
+      throw new Error("expected Attach command")
+    }
+    expect(command.projectDir).toBe(expectedProjectDir)
+  })
+
 const expectCreateCommand = (
   args: ReadonlyArray<string>,
   onRight: (command: CreateCommand) => void
@@ -196,22 +208,10 @@ describe("parseArgs", () => {
     }))
 
   it.effect("parses attach with GitHub issue url into issue workspace", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["attach", "https://github.com/org/repo/issues/7"])
-      if (command._tag !== "Attach") {
-        throw new Error("expected Attach command")
-      }
-      expect(command.projectDir).toBe(".docker-git/org/repo/issue-7")
-    }))
+    expectAttachProjectDirCommand(["attach", "https://github.com/org/repo/issues/7"], ".docker-git/org/repo/issue-7"))
 
   it.effect("parses open with GitHub issue url into issue workspace", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["open", "https://github.com/org/repo/issues/7"])
-      if (command._tag !== "Attach") {
-        throw new Error("expected Attach command")
-      }
-      expect(command.projectDir).toBe(".docker-git/org/repo/issue-7")
-    }))
+    expectAttachProjectDirCommand(["open", "https://github.com/org/repo/issues/7"], ".docker-git/org/repo/issue-7"))
 
   it.effect("parses mcp-playwright command in current directory", () =>
     expectProjectDirRunUpCommand(["mcp-playwright"], "McpPlaywrightUp", ".", true))
