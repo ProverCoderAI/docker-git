@@ -2,6 +2,12 @@ export type { MenuAction, ParseError } from "./menu.js"
 export { parseMenuSelection } from "./menu.js"
 export { deriveRepoPathParts, deriveRepoSlug, resolveRepoInput } from "./repo.js"
 
+export type DockerNetworkMode = "shared" | "project"
+
+export const defaultDockerNetworkMode: DockerNetworkMode = "shared"
+
+export const defaultDockerSharedNetworkName = "docker-git-shared"
+
 export interface TemplateConfig {
   readonly containerName: string
   readonly serviceName: string
@@ -22,6 +28,8 @@ export interface TemplateConfig {
   readonly codexAuthPath: string
   readonly codexSharedAuthPath: string
   readonly codexHome: string
+  readonly dockerNetworkMode: DockerNetworkMode
+  readonly dockerSharedNetworkName: string
   readonly enableMcpPlaywright: boolean
   readonly pnpmVersion: string
 }
@@ -262,6 +270,36 @@ export type Command =
   | StateCommand
   | AuthCommand
 
+// CHANGE: validate docker network mode values at the CLI/config boundary
+// WHY: keep compose network behavior explicit and type-safe
+// QUOTE(ТЗ): "Что бы среды были изолированы?"
+// REF: user-request-2026-02-20-networks
+// SOURCE: n/a
+// FORMAT THEOREM: ∀x: isDockerNetworkMode(x) -> x ∈ {"shared","project"}
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: returns true only for known modes
+// COMPLEXITY: O(1)
+export const isDockerNetworkMode = (value: string): value is DockerNetworkMode =>
+  value === "shared" || value === "project"
+
+// CHANGE: derive compose network name from typed template config
+// WHY: keep network naming deterministic across template generation and runtime checks
+// QUOTE(ТЗ): "Если я хочу уникальную сеть на каждый контейнер?"
+// REF: user-request-2026-02-20-networks
+// SOURCE: n/a
+// FORMAT THEOREM: ∀cfg: resolveComposeNetworkName(cfg) = n -> deterministic(n)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: shared mode always resolves to dockerSharedNetworkName; project mode to "<service>-net"
+// COMPLEXITY: O(1)
+export const resolveComposeNetworkName = (
+  config: Pick<TemplateConfig, "serviceName" | "dockerNetworkMode" | "dockerSharedNetworkName">
+): string =>
+  config.dockerNetworkMode === "shared"
+    ? config.dockerSharedNetworkName
+    : `${config.serviceName}-net`
+
 export const defaultTemplateConfig = {
   containerName: "dev-ssh",
   serviceName: "dev",
@@ -277,6 +315,8 @@ export const defaultTemplateConfig = {
   codexAuthPath: "./.docker-git/.orch/auth/codex",
   codexSharedAuthPath: "./.docker-git/.orch/auth/codex",
   codexHome: "/home/dev/.codex",
+  dockerNetworkMode: defaultDockerNetworkMode,
+  dockerSharedNetworkName: defaultDockerSharedNetworkName,
   enableMcpPlaywright: false,
   pnpmVersion: "10.27.0"
 }

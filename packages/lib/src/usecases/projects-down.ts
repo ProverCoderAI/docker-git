@@ -6,6 +6,7 @@ import { Effect, pipe } from "effect"
 
 import { runDockerComposeDown } from "../shell/docker.js"
 import type { DockerCommandError } from "../shell/errors.js"
+import { gcProjectNetworkByTemplate } from "./docker-network-gc.js"
 import { renderError } from "./errors.js"
 import { forEachProjectStatus, loadProjectIndex, renderProjectStatusHeader } from "./projects-core.js"
 
@@ -36,7 +37,8 @@ export const downAllDockerGitProjects: Effect.Effect<
               Effect.catchTag("DockerCommandError", (error: DockerCommandError) =>
                 Effect.logWarning(
                   `docker compose down failed for ${status.projectDir}: ${renderError(error)}`
-                ))
+                )),
+              Effect.zipRight(gcProjectNetworkByTemplate(status.projectDir, status.config.template))
             )
           )
         ))

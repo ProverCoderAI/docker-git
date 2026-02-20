@@ -20,6 +20,8 @@ interface ValueOptionSpec {
     | "envProjectPath"
     | "codexAuthPath"
     | "codexHome"
+    | "dockerNetworkMode"
+    | "dockerSharedNetworkName"
     | "archivePath"
     | "scrapMode"
     | "label"
@@ -51,6 +53,8 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--env-project", key: "envProjectPath" },
   { flag: "--codex-auth", key: "codexAuthPath" },
   { flag: "--codex-home", key: "codexHome" },
+  { flag: "--network-mode", key: "dockerNetworkMode" },
+  { flag: "--shared-network", key: "dockerSharedNetworkName" },
   { flag: "--archive", key: "archivePath" },
   { flag: "--mode", key: "scrapMode" },
   { flag: "--label", key: "label" },
@@ -102,6 +106,8 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   envProjectPath: (raw, value) => ({ ...raw, envProjectPath: value }),
   codexAuthPath: (raw, value) => ({ ...raw, codexAuthPath: value }),
   codexHome: (raw, value) => ({ ...raw, codexHome: value }),
+  dockerNetworkMode: (raw, value) => ({ ...raw, dockerNetworkMode: value }),
+  dockerSharedNetworkName: (raw, value) => ({ ...raw, dockerSharedNetworkName: value }),
   archivePath: (raw, value) => ({ ...raw, archivePath: value }),
   scrapMode: (raw, value) => ({ ...raw, scrapMode: value }),
   label: (raw, value) => ({ ...raw, label: value }),

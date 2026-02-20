@@ -37,6 +37,12 @@ const TemplateConfigSchema = Schema.Struct({
     default: () => defaultTemplateConfig.codexSharedAuthPath
   }),
   codexHome: Schema.String,
+  dockerNetworkMode: Schema.optionalWith(Schema.Literal("shared", "project"), {
+    default: () => defaultTemplateConfig.dockerNetworkMode
+  }),
+  dockerSharedNetworkName: Schema.optionalWith(Schema.String, {
+    default: () => defaultTemplateConfig.dockerSharedNetworkName
+  }),
   enableMcpPlaywright: Schema.optionalWith(Schema.Boolean, {
     default: () => defaultTemplateConfig.enableMcpPlaywright
   }),

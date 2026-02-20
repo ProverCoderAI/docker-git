@@ -39,6 +39,8 @@ const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   codexAuthPath: path.join(root, ".orch/auth/codex"),
   codexSharedAuthPath: path.join(root, ".orch/auth/codex-shared"),
   codexHome: "/home/dev/.codex",
+  dockerNetworkMode: "shared",
+  dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: false,
   pnpmVersion: "10.27.0"
 })
@@ -69,6 +71,8 @@ const makeProjectConfig = (
   codexAuthPath: path.join(outDir, ".orch/auth/codex"),
   codexSharedAuthPath: path.join(outDir, ".orch/auth/codex-shared"),
   codexHome: "/home/dev/.codex",
+  dockerNetworkMode: "shared",
+  dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright,
   pnpmVersion: "10.27.0"
 })
@@ -122,6 +126,8 @@ describe("prepareProjectFiles", () => {
         expect(entrypoint).toContain('"plugin": ["oh-my-opencode"]')
         expect(composeBefore).toContain(":/home/dev/.docker-git")
         expect(composeBefore).not.toContain("dg-test-browser")
+        expect(composeBefore).toContain("docker-git-shared")
+        expect(composeBefore).toContain("external: true")
 
         yield* _(
           prepareProjectFiles(outDir, root, globalConfig, withMcp, {
@@ -140,7 +146,35 @@ describe("prepareProjectFiles", () => {
         expect(composeAfter).toContain('GIT_AUTH_LABEL: "AGIENS"')
         expect(composeAfter).toContain('CODEX_AUTH_LABEL: "agien-codex"')
         expect(composeAfter).toContain('CLAUDE_AUTH_LABEL: "agien-claude"')
+        expect(composeAfter).toContain("docker-git-shared")
+        expect(composeAfter).toContain("external: true")
         expect(readEnableMcpPlaywrightFlag(configAfter)).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("renders project-scoped network when dockerNetworkMode=project", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project-mode")
+        const globalConfig = makeGlobalConfig(root, path)
+        const projectConfig = {
+          ...makeProjectConfig(outDir, false, path),
+          dockerNetworkMode: "project"
+        }
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          })
+        )
+
+        const compose = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+        expect(compose).toContain("dg-test-net")
+        expect(compose).toContain("driver: bridge")
+        expect(compose).not.toContain("external: true")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

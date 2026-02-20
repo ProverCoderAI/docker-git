@@ -47,6 +47,8 @@ Options:
   --env-project <path>      Host path to project env file (default: ./.orch/env/project.env)
   --codex-auth <path>       Host path for Codex auth cache (default: <projectsRoot>/.orch/auth/codex)
   --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
+  --network-mode <mode>     Compose network mode: shared|project (default: shared)
+  --shared-network <name>   Shared Docker network name when network-mode=shared (default: docker-git-shared)
   --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>[/issue-<id>|/pr-<id>])
   --project-dir <path>      Project directory for attach (default: .)
   --archive <path>          Scrap snapshot directory (default: .orch/scrap/session)

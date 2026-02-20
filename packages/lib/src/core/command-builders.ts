@@ -7,6 +7,7 @@ import {
   defaultTemplateConfig,
   deriveRepoPathParts,
   deriveRepoSlug,
+  isDockerNetworkMode,
   type ParseError,
   resolveRepoInput
 } from "./domain.js"
@@ -30,6 +31,20 @@ const parsePort = (value: string): Either.Either<number, ParseError> => {
     })
   }
   return Either.right(parsed)
+}
+
+const parseDockerNetworkMode = (
+  value: string | undefined
+): Either.Either<CreateCommand["config"]["dockerNetworkMode"], ParseError> => {
+  const candidate = value?.trim() ?? defaultTemplateConfig.dockerNetworkMode
+  if (isDockerNetworkMode(candidate)) {
+    return Either.right(candidate)
+  }
+  return Either.left({
+    _tag: "InvalidOption",
+    option: "--network-mode",
+    reason: "expected one of: shared, project"
+  })
 }
 
 export const nonEmpty = (
@@ -210,6 +225,10 @@ export const buildCreateCommand = (
     const gitTokenLabel = normalizeGitTokenLabel(raw.gitTokenLabel)
     const codexAuthLabel = normalizeAuthLabel(raw.codexTokenLabel)
     const claudeAuthLabel = normalizeAuthLabel(raw.claudeTokenLabel)
+    const dockerNetworkMode = yield* _(parseDockerNetworkMode(raw.dockerNetworkMode))
+    const dockerSharedNetworkName = yield* _(
+      nonEmpty("--shared-network", raw.dockerSharedNetworkName, defaultTemplateConfig.dockerSharedNetworkName)
+    )
 
     return {
       _tag: "Create",
@@ -238,6 +257,8 @@ export const buildCreateCommand = (
         codexAuthPath: paths.codexAuthPath,
         codexSharedAuthPath: paths.codexSharedAuthPath,
         codexHome: paths.codexHome,
+        dockerNetworkMode,
+        dockerSharedNetworkName,
         enableMcpPlaywright,
         pnpmVersion: defaultTemplateConfig.pnpmVersion
       }

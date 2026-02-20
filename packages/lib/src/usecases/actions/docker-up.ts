@@ -16,6 +16,7 @@ import {
 } from "../../shell/docker.js"
 import type { DockerCommandError } from "../../shell/errors.js"
 import { CloneFailedError } from "../../shell/errors.js"
+import { ensureComposeNetworkReady } from "../docker-network-gc.js"
 import { findSshPrivateKey, resolveAuthorizedKeysPath } from "../path-helpers.js"
 import { buildSshCommand } from "../projects.js"
 
@@ -111,10 +112,13 @@ const waitForCloneCompletion = (
 
 const runDockerComposeUpByMode = (
   resolvedOutDir: string,
+  projectConfig: CreateCommand["config"],
   force: boolean,
   forceEnv: boolean
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
+    yield* _(ensureComposeNetworkReady(resolvedOutDir, projectConfig))
+
     if (force) {
       yield* _(Effect.log("Force enabled: wiping docker compose volumes (docker compose down -v)..."))
       yield* _(runDockerComposeDownVolumes(resolvedOutDir))
@@ -173,7 +177,7 @@ export const runDockerUpIfNeeded = (
     if (!options.runUp) {
       return
     }
-    yield* _(runDockerComposeUpByMode(resolvedOutDir, options.force, options.forceEnv))
+    yield* _(runDockerComposeUpByMode(resolvedOutDir, projectConfig, options.force, options.forceEnv))
     yield* _(ensureBridgeAccess(resolvedOutDir, projectConfig))
 
     if (options.waitForClone) {

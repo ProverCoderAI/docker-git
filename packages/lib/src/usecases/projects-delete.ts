@@ -7,6 +7,7 @@ import { deriveRepoPathParts } from "../core/domain.js"
 import { runCommandWithExitCodes } from "../shell/command-runner.js"
 import { runDockerComposeDownVolumes } from "../shell/docker.js"
 import { CommandFailedError, type DockerCommandError } from "../shell/errors.js"
+import { gcProjectNetworkByServiceName } from "./docker-network-gc.js"
 import { renderError } from "./errors.js"
 import { defaultProjectsRoot } from "./menu-helpers.js"
 import type { ProjectItem } from "./projects-core.js"
@@ -103,6 +104,7 @@ export const deleteDockerGitProject = (
         })
       )
     )
+    yield* _(gcProjectNetworkByServiceName(targetDir, item.serviceName))
 
     yield* _(fs.remove(targetDir, { recursive: true, force: true }))
 

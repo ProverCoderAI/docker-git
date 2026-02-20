@@ -122,6 +122,19 @@ Common toggles:
 - `NPM_CONFIG_CACHE=/home/dev/.docker-git/.cache/packages/npm` (default shared cache)
 - `YARN_CACHE_FOLDER=/home/dev/.docker-git/.cache/packages/yarn` (default shared cache)
 
+## Compose Network Mode
+
+Default mode is shared:
+- `--network-mode shared` (default)
+- Shared compose network name: `--shared-network docker-git-shared`
+
+Shared mode keeps one external Docker network for all docker-git projects, which reduces address pool pressure when many projects are created.
+
+If you need strict per-project isolation:
+- `--network-mode project`
+
+In project mode, each project uses `<service>-net` (Docker-managed bridge network).
+
 ## Troubleshooting
 
 MCP errors in `codex` UI:
@@ -157,6 +170,17 @@ Docker permission error (`/var/run/docker.sock`):
   ```
 - Note:
   - Do not run `pnpm run docker-git ...` with `sudo`.
+
+Docker network pool exhausted (`all predefined address pools have been fully subnetted`):
+- Symptom:
+  - `failed to create network ... all predefined address pools have been fully subnetted`
+- Quick recovery:
+  ```bash
+  docker network prune -f
+  ```
+- Long-term fix:
+  - Configure Docker daemon `default-address-pools` in `/etc/docker/daemon.json`.
+  - Prefer `docker-git` shared network mode (`--network-mode shared`).
 
 Clone auth error (`Invalid username or token`):
 - Symptom:

@@ -158,6 +158,8 @@ const makeCommand = (root: string, outDir: string, path: Path.Path): CreateComma
     codexAuthPath: path.join(root, ".orch/auth/codex"),
     codexSharedAuthPath: path.join(root, ".orch/auth/codex-shared"),
     codexHome: "/home/dev/.codex",
+    dockerNetworkMode: "shared",
+    dockerSharedNetworkName: "docker-git-shared",
     enableMcpPlaywright: false,
     pnpmVersion: "10.27.0"
   }

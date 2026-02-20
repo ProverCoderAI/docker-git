@@ -1,6 +1,7 @@
-import type { TemplateConfig } from "../domain.js"
+import { resolveComposeNetworkName, type TemplateConfig } from "../domain.js"
 
 type ComposeFragments = {
+  readonly networkMode: TemplateConfig["dockerNetworkMode"]
   readonly networkName: string
   readonly maybeGitTokenLabelEnv: string
   readonly maybeCodexAuthLabelEnv: string
@@ -62,7 +63,8 @@ const buildPlaywrightFragments = (
 }
 
 const buildComposeFragments = (config: TemplateConfig): ComposeFragments => {
-  const networkName = `${config.serviceName}-net`
+  const networkMode = config.dockerNetworkMode
+  const networkName = resolveComposeNetworkName(config)
   const forkRepoUrl = config.forkRepoUrl ?? ""
   const gitTokenLabel = config.gitTokenLabel?.trim() ?? ""
   const codexAuthLabel = config.codexAuthLabel?.trim() ?? ""
@@ -73,6 +75,7 @@ const buildComposeFragments = (config: TemplateConfig): ComposeFragments => {
   const playwright = buildPlaywrightFragments(config, networkName)
 
   return {
+    networkMode,
     networkName,
     maybeGitTokenLabelEnv,
     maybeCodexAuthLabelEnv,
@@ -115,8 +118,15 @@ ${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    env_file:
       - ${fragments.networkName}
 ${fragments.maybeBrowserService}`
 
-const renderComposeNetworks = (networkName: string): string =>
-  `networks:
+const renderComposeNetworks = (
+  networkMode: TemplateConfig["dockerNetworkMode"],
+  networkName: string
+): string =>
+  networkMode === "shared"
+    ? `networks:
+  ${networkName}:
+    external: true`
+    : `networks:
   ${networkName}:
     driver: bridge`
 
@@ -129,7 +139,7 @@ export const renderDockerCompose = (config: TemplateConfig): string => {
   const fragments = buildComposeFragments(config)
   return [
     renderComposeServices(config, fragments),
-    renderComposeNetworks(fragments.networkName),
+    renderComposeNetworks(fragments.networkMode, fragments.networkName),
     renderComposeVolumes(config, fragments.maybeBrowserVolume)
   ].join("\n\n")
 }

@@ -71,6 +71,8 @@ const expectCreateDefaults = (command: CreateCommand) => {
   expect(command.outDir).toBe(".docker-git/org/repo")
   expect(command.runUp).toBe(true)
   expect(command.forceEnv).toBe(false)
+  expect(command.config.dockerNetworkMode).toBe("shared")
+  expect(command.config.dockerSharedNetworkName).toBe("docker-git-shared")
 }
 
 const expandDefaultTargetDir = (path: string): string => expandContainerHome(defaultTemplateConfig.sshUser, path)

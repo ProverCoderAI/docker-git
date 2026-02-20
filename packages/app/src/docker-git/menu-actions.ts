@@ -9,6 +9,7 @@ import {
   listProjectStatus,
   listRunningProjectItems
 } from "@effect-template/lib/usecases/projects"
+import { gcProjectNetworkByTemplate } from "@effect-template/lib/usecases/docker-network-gc"
 import { runDockerComposeUpWithPortCheck } from "@effect-template/lib/usecases/projects-up"
 import { Effect, Match, pipe } from "effect"
 
@@ -149,8 +150,10 @@ const handleMenuAction = (
       withProjectConfig(state, setMessage, () =>
         runDockerComposeLogs(state.activeDir ?? state.cwd))),
     Match.when({ _tag: "Down" }, () =>
-      withProjectConfig(state, setMessage, () =>
-        runDockerComposeDown(state.activeDir ?? state.cwd))),
+      withProjectConfig(state, setMessage, (config) =>
+        runDockerComposeDown(state.activeDir ?? state.cwd).pipe(
+          Effect.zipRight(gcProjectNetworkByTemplate(state.activeDir ?? state.cwd, config.template))
+        ))),
     Match.when({ _tag: "DownAll" }, () =>
       pipe(
         downAllDockerGitProjects,

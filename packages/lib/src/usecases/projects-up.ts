@@ -21,6 +21,7 @@ import type {
 } from "../shell/errors.js"
 import { writeProjectFiles } from "../shell/files.js"
 import { ensureCodexConfigFile } from "./auth-sync.js"
+import { ensureComposeNetworkReady } from "./docker-network-gc.js"
 import { loadReservedPorts, selectAvailablePort } from "./ports-reserve.js"
 import { parseComposePsOutput } from "./projects-core.js"
 
@@ -96,6 +97,7 @@ export const runDockerComposeUpWithPortCheck = (
     // Keep generated templates in sync with the running CLI version.
     yield* _(writeProjectFiles(projectDir, updated, true))
     yield* _(ensureCodexConfigFile(projectDir, updated.codexAuthPath))
+    yield* _(ensureComposeNetworkReady(projectDir, updated))
     yield* _(runDockerComposeUp(projectDir))
 
     const ensureBridgeAccess = (containerName: string) =>

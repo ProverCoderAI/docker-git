@@ -39,6 +39,8 @@ const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   codexAuthPath: path.join(root, ".orch/auth/codex"),
   codexSharedAuthPath: path.join(root, ".orch/auth/codex-shared"),
   codexHome: "/home/dev/.codex",
+  dockerNetworkMode: "shared",
+  dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: false,
   pnpmVersion: "10.27.0"
 })
@@ -63,6 +65,8 @@ const makeProjectConfig = (
   codexAuthPath: path.join(outDir, ".orch/auth/codex"),
   codexSharedAuthPath: path.join(outDir, ".orch/auth/codex-shared"),
   codexHome: "/home/dev/.codex",
+  dockerNetworkMode: "shared",
+  dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright,
   pnpmVersion: "10.27.0"
 })
