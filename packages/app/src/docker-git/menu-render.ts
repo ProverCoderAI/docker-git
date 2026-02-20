@@ -28,7 +28,7 @@ import { createSteps, menuItems } from "./menu-types.js"
 
 export const renderStepLabel = (step: CreateStep, defaults: CreateInputs): string =>
   Match.value(step).pipe(
-    Match.when("repoUrl", () => "Repo URL"),
+    Match.when("repoUrl", () => "Repo URL (optional for empty workspace)"),
     Match.when("repoRef", () => `Repo ref [${defaults.repoRef}]`),
     Match.when("outDir", () => `Output dir [${defaults.outDir}]`),
     Match.when("runUp", () => `Run docker compose up now? [${defaults.runUp ? "Y" : "n"}]`),

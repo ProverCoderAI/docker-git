@@ -3,7 +3,7 @@ import { Match } from "effect"
 import type { ParseError } from "@effect-template/lib/core/domain"
 
 export const usageText = `docker-git menu
-docker-git create --repo-url <url> [options]
+docker-git create [--repo-url <url>] [options]
 docker-git clone <url> [options]
 docker-git apply [<url>] [options]
 docker-git mcp-playwright [<url>] [options]
@@ -20,7 +20,7 @@ docker-git state <action> [options]
 
 Commands:
   menu                Interactive menu (default when no args)
-  create, init        Generate docker development environment
+  create, init        Generate docker development environment (repo URL optional)
   clone               Create + run container and clone repo
   apply               Apply docker-git config to an existing project/container (current dir by default)
   mcp-playwright      Enable Playwright MCP + Chromium sidecar for an existing project dir
@@ -34,6 +34,7 @@ Commands:
   state               Manage docker-git state directory via git (sync across machines)
 
 Options:
+  --repo-url <url>          Repository URL (create: optional; clone: required via positional arg or flag)
   --repo-ref <ref>          Git ref/branch (default: main)
   --branch, -b <ref>        Alias for --repo-ref
   --target-dir <path>       Target dir inside container (create default: /home/dev/app, clone default: ~/workspaces/<org>/<repo>[/issue-<id>|/pr-<id>])

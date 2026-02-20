@@ -77,7 +77,7 @@ type RepoBasics = {
 
 const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseError> =>
   Either.gen(function*(_) {
-    const rawRepoUrl = yield* _(nonEmpty("--repo-url", raw.repoUrl))
+    const rawRepoUrl = raw.repoUrl?.trim() ?? ""
     const resolvedRepo = resolveRepoInput(rawRepoUrl)
     const repoUrl = resolvedRepo.repoUrl
     const repoSlug = deriveRepoSlug(repoUrl)
@@ -200,6 +200,47 @@ const resolvePaths = (
     }
   })
 
+type BuildTemplateConfigInput = {
+  readonly raw: RawOptions
+  readonly repo: RepoBasics
+  readonly names: NameConfig
+  readonly paths: PathConfig
+  readonly dockerNetworkMode: CreateCommand["config"]["dockerNetworkMode"]
+  readonly dockerSharedNetworkName: string
+}
+
+const buildTemplateConfig = (input: BuildTemplateConfigInput): CreateCommand["config"] => {
+  const enableMcpPlaywright = input.raw.enableMcpPlaywright ?? false
+  const gitTokenLabel = normalizeGitTokenLabel(input.raw.gitTokenLabel)
+  const codexAuthLabel = normalizeAuthLabel(input.raw.codexTokenLabel)
+  const claudeAuthLabel = normalizeAuthLabel(input.raw.claudeTokenLabel)
+
+  return {
+    containerName: input.names.containerName,
+    serviceName: input.names.serviceName,
+    sshUser: input.repo.sshUser,
+    sshPort: input.repo.sshPort,
+    repoUrl: input.repo.repoUrl,
+    repoRef: input.repo.repoRef,
+    gitTokenLabel,
+    codexAuthLabel,
+    claudeAuthLabel,
+    targetDir: input.repo.targetDir,
+    volumeName: input.names.volumeName,
+    dockerGitPath: input.paths.dockerGitPath,
+    authorizedKeysPath: input.paths.authorizedKeysPath,
+    envGlobalPath: input.paths.envGlobalPath,
+    envProjectPath: input.paths.envProjectPath,
+    codexAuthPath: input.paths.codexAuthPath,
+    codexSharedAuthPath: input.paths.codexSharedAuthPath,
+    codexHome: input.paths.codexHome,
+    dockerNetworkMode: input.dockerNetworkMode,
+    dockerSharedNetworkName: input.dockerSharedNetworkName,
+    enableMcpPlaywright,
+    pnpmVersion: defaultTemplateConfig.pnpmVersion
+  }
+}
+
 // CHANGE: build a typed create command from raw options (CLI or API)
 // WHY: share deterministic command construction across CLI and server
 // QUOTE(ТЗ): "В lib ты оставляешь бизнес логику, а все CLI морду хранишь в app"
@@ -221,14 +262,18 @@ export const buildCreateCommand = (
     const openSsh = raw.openSsh ?? false
     const force = raw.force ?? false
     const forceEnv = raw.forceEnv ?? false
-    const enableMcpPlaywright = raw.enableMcpPlaywright ?? false
-    const gitTokenLabel = normalizeGitTokenLabel(raw.gitTokenLabel)
-    const codexAuthLabel = normalizeAuthLabel(raw.codexTokenLabel)
-    const claudeAuthLabel = normalizeAuthLabel(raw.claudeTokenLabel)
     const dockerNetworkMode = yield* _(parseDockerNetworkMode(raw.dockerNetworkMode))
     const dockerSharedNetworkName = yield* _(
       nonEmpty("--shared-network", raw.dockerSharedNetworkName, defaultTemplateConfig.dockerSharedNetworkName)
     )
+    const config = buildTemplateConfig({
+      raw,
+      repo,
+      names,
+      paths,
+      dockerNetworkMode,
+      dockerSharedNetworkName
+    })
 
     return {
       _tag: "Create",
@@ -238,29 +283,6 @@ export const buildCreateCommand = (
       force,
       forceEnv,
       waitForClone: false,
-      config: {
-        containerName: names.containerName,
-        serviceName: names.serviceName,
-        sshUser: repo.sshUser,
-        sshPort: repo.sshPort,
-        repoUrl: repo.repoUrl,
-        repoRef: repo.repoRef,
-        gitTokenLabel,
-        codexAuthLabel,
-        claudeAuthLabel,
-        targetDir: repo.targetDir,
-        volumeName: names.volumeName,
-        dockerGitPath: paths.dockerGitPath,
-        authorizedKeysPath: paths.authorizedKeysPath,
-        envGlobalPath: paths.envGlobalPath,
-        envProjectPath: paths.envProjectPath,
-        codexAuthPath: paths.codexAuthPath,
-        codexSharedAuthPath: paths.codexSharedAuthPath,
-        codexHome: paths.codexHome,
-        dockerNetworkMode,
-        dockerSharedNetworkName,
-        enableMcpPlaywright,
-        pnpmVersion: defaultTemplateConfig.pnpmVersion
-      }
+      config
     }
   })

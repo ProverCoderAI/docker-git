@@ -46,11 +46,16 @@ type CreateReturnContext = CreateContext & {
 }
 
 export const buildCreateArgs = (input: CreateInputs): ReadonlyArray<string> => {
-  const args: Array<string> = ["create", "--repo-url", input.repoUrl]
+  const args: Array<string> = ["create"]
+  if (input.repoUrl.length > 0) {
+    args.push("--repo-url", input.repoUrl)
+  }
   if (input.repoRef.length > 0) {
     args.push("--repo-ref", input.repoRef)
   }
-  args.push("--out-dir", input.outDir)
+  if (input.outDir.length > 0) {
+    args.push("--out-dir", input.outDir)
+  }
   if (!input.runUp) {
     args.push("--no-up")
   }
@@ -106,8 +111,8 @@ export const resolveCreateInputs = (
   values: Partial<CreateInputs>
 ): CreateInputs => {
   const repoUrl = values.repoUrl ?? ""
-  const resolvedRepoRef = repoUrl.length > 0 ? resolveRepoInput(repoUrl).repoRef : undefined
-  const outDir = values.outDir ?? (repoUrl.length > 0 ? resolveDefaultOutDir(cwd, repoUrl) : "")
+  const resolvedRepoRef = resolveRepoInput(repoUrl).repoRef
+  const outDir = values.outDir ?? resolveDefaultOutDir(cwd, repoUrl)
 
   return {
     repoUrl,
@@ -179,10 +184,6 @@ const applyCreateStep = (input: {
 }): boolean =>
   Match.value(input.step).pipe(
     Match.when("repoUrl", () => {
-      if (input.buffer.length === 0) {
-        input.setMessage("Repo URL is required.")
-        return false
-      }
       input.nextValues.repoUrl = input.buffer
       input.nextValues.outDir = resolveDefaultOutDir(input.cwd, input.buffer)
       return true
@@ -222,11 +223,6 @@ const finalizeCreateFlow = (input: {
   readonly setActiveDir: (dir: string | null) => void
 }) => {
   const inputs = resolveCreateInputs(input.state.cwd, input.nextValues)
-  if (inputs.repoUrl.length === 0) {
-    input.setMessage("Repo URL is required.")
-    return
-  }
-
   const parsed = parseArgs(buildCreateArgs(inputs))
   if (Either.isLeft(parsed)) {
     input.setMessage(formatParseError(parsed.left))
