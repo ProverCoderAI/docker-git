@@ -24,6 +24,9 @@ pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force
 # Clone an issue URL (creates isolated workspace + issue branch)
 pnpm run docker-git clone https://github.com/agiens/crm/issues/123 --force
 
+# Open an existing docker-git project by repo/issue URL (runs up + tmux attach)
+pnpm run docker-git open https://github.com/agiens/crm/issues/123
+
 # Reset only project env defaults (keep workspace volume/data)
 pnpm run docker-git clone https://github.com/agiens/crm/issues/123 --force-env
 

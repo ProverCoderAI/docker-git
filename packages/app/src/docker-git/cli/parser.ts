@@ -75,6 +75,7 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("auth", () => parseAuth(rest))
     )
     .pipe(
+      Match.when("open", () => parseAttach(rest)),
       Match.when("apply", () => parseApply(rest)),
       Match.when("state", () => parseState(rest)),
       Match.orElse(() => Either.left(unknownCommandError))

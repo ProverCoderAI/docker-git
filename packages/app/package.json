@@ -22,6 +22,7 @@
     "build:docker-git": "tsc -p tsconfig.build.json",
     "check": "pnpm run typecheck",
     "clone": "pnpm -C ../.. run clone",
+    "open": "pnpm -C ../.. run open",
     "docker-git": "node dist/src/docker-git/main.js",
     "list": "pnpm -C ../.. run list",
     "prestart": "pnpm run build",
