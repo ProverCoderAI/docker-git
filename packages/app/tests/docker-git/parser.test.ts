@@ -33,6 +33,26 @@ const parseOrThrow = (args: ReadonlyArray<string>): Command => {
   })
 }
 
+type ProjectDirRunUpCommand = Extract<Command, { readonly projectDir: string; readonly runUp: boolean }>
+
+const expectProjectDirRunUpCommand = (
+  args: ReadonlyArray<string>,
+  expectedTag: ProjectDirRunUpCommand["_tag"],
+  expectedProjectDir: string,
+  expectedRunUp: boolean
+) =>
+  Effect.sync(() => {
+    const command = parseOrThrow(args)
+    if (command._tag !== expectedTag) {
+      throw new Error(`expected ${expectedTag} command`)
+    }
+    if (!("projectDir" in command) || !("runUp" in command)) {
+      throw new Error("expected command with projectDir and runUp")
+    }
+    expect(command.projectDir).toBe(expectedProjectDir)
+    expect(command.runUp).toBe(expectedRunUp)
+  })
+
 const expectCreateCommand = (
   args: ReadonlyArray<string>,
   onRight: (command: CreateCommand) => void
@@ -106,6 +126,20 @@ describe("parseArgs", () => {
       expect(command.config.gitTokenLabel).toBe("AGIENS")
     }))
 
+  it.effect("parses clone codex/claude token labels from inline options and normalizes them", () =>
+    expectCreateCommand(
+      [
+        "clone",
+        "https://github.com/org/repo.git",
+        "--codex-token= Team A ",
+        "--claude-token=---AGIENS:::Claude---"
+      ],
+      (command) => {
+        expect(command.config.codexAuthLabel).toBe("team-a")
+        expect(command.config.claudeAuthLabel).toBe("agiens-claude")
+      }
+    ))
+
   it.effect("supports enabling SSH auto-open for create", () =>
     expectCreateCommand(["create", "--repo-url", "https://github.com/org/repo.git", "--ssh"], (command) => {
       expect(command.openSsh).toBe(true)
@@ -169,23 +203,10 @@ describe("parseArgs", () => {
     }))
 
   it.effect("parses mcp-playwright command in current directory", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["mcp-playwright"])
-      if (command._tag !== "McpPlaywrightUp") {
-        throw new Error("expected McpPlaywrightUp command")
-      }
-      expect(command.projectDir).toBe(".")
-      expect(command.runUp).toBe(true)
-    }))
+    expectProjectDirRunUpCommand(["mcp-playwright"], "McpPlaywrightUp", ".", true))
 
   it.effect("parses mcp-playwright command with --no-up", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["mcp-playwright", "--no-up"])
-      if (command._tag !== "McpPlaywrightUp") {
-        throw new Error("expected McpPlaywrightUp command")
-      }
-      expect(command.runUp).toBe(false)
-    }))
+    expectProjectDirRunUpCommand(["mcp-playwright", "--no-up"], "McpPlaywrightUp", ".", false))
 
   it.effect("parses mcp-playwright with positional repo url into project dir", () =>
     Effect.sync(() => {
@@ -194,6 +215,41 @@ describe("parseArgs", () => {
         throw new Error("expected McpPlaywrightUp command")
       }
       expect(command.projectDir).toBe(".docker-git/org/repo")
+    }))
+
+  it.effect("parses apply command in current directory", () =>
+    expectProjectDirRunUpCommand(["apply"], "Apply", ".", true))
+
+  it.effect("parses apply command with --no-up", () =>
+    expectProjectDirRunUpCommand(["apply", "--no-up"], "Apply", ".", false))
+
+  it.effect("parses apply with positional repo url into project dir", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["apply", "https://github.com/org/repo.git"])
+      if (command._tag !== "Apply") {
+        throw new Error("expected Apply command")
+      }
+      expect(command.projectDir).toBe(".docker-git/org/repo")
+    }))
+
+  it.effect("parses apply token and mcp overrides", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow([
+        "apply",
+        "--git-token=agien_main",
+        "--codex-token=Team A",
+        "--claude-token=Team B",
+        "--mcp-playwright",
+        "--no-up"
+      ])
+      if (command._tag !== "Apply") {
+        throw new Error("expected Apply command")
+      }
+      expect(command.runUp).toBe(false)
+      expect(command.gitTokenLabel).toBe("agien_main")
+      expect(command.codexTokenLabel).toBe("Team A")
+      expect(command.claudeTokenLabel).toBe("Team B")
+      expect(command.enableMcpPlaywright).toBe(true)
     }))
 
   it.effect("parses down-all command", () =>

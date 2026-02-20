@@ -15,13 +15,22 @@ export const renderEntrypointCodexSharedAuth = (config: TemplateConfig): string 
   `# Share Codex auth.json across projects (avoids refresh_token_reused)
 CODEX_SHARE_AUTH="\${CODEX_SHARE_AUTH:-1}"
 if [[ "$CODEX_SHARE_AUTH" == "1" ]]; then
+  CODEX_LABEL_RAW="$CODEX_AUTH_LABEL"
+  if [[ -z "$CODEX_LABEL_RAW" ]]; then CODEX_LABEL_RAW="default"; fi
+  CODEX_LABEL_NORM="$(printf "%s" "$CODEX_LABEL_RAW" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+  if [[ -z "$CODEX_LABEL_NORM" ]]; then CODEX_LABEL_NORM="default"; fi
+  CODEX_AUTH_LABEL="$CODEX_LABEL_NORM"
   CODEX_SHARED_HOME="${config.codexHome}-shared"
   mkdir -p "$CODEX_SHARED_HOME"
   chown -R 1000:1000 "$CODEX_SHARED_HOME" || true
-
   AUTH_FILE="${config.codexHome}/auth.json"
   SHARED_AUTH_FILE="$CODEX_SHARED_HOME/auth.json"
-
+  if [[ "$CODEX_LABEL_NORM" != "default" ]]; then
+    SHARED_AUTH_FILE="$CODEX_SHARED_HOME/$CODEX_LABEL_NORM/auth.json"
+    mkdir -p "$(dirname "$SHARED_AUTH_FILE")"
+  fi
   # Guard against a bad bind mount creating a directory at auth.json.
   if [[ -d "$AUTH_FILE" ]]; then
     mv "$AUTH_FILE" "$AUTH_FILE.bak-$(date +%s)" || true
@@ -29,8 +38,8 @@ if [[ "$CODEX_SHARE_AUTH" == "1" ]]; then
   if [[ -e "$AUTH_FILE" && ! -L "$AUTH_FILE" ]]; then
     rm -f "$AUTH_FILE" || true
   fi
-
   ln -sf "$SHARED_AUTH_FILE" "$AUTH_FILE"
+  docker_git_upsert_ssh_env "CODEX_AUTH_LABEL" "$CODEX_AUTH_LABEL"
 fi`
 
 const entrypointMcpPlaywrightTemplate = String.raw`# Optional: configure Playwright MCP for Codex (browser automation)

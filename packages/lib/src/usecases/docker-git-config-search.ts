@@ -31,11 +31,10 @@ const processDockerGitEntry = (
     const resolved = path.join(dir, entry)
     const info = yield* _(
       fs.stat(resolved).pipe(
-        Effect.catchAll((error) =>
+        Effect.catchTag("SystemError", (error) =>
           isNotFoundStatError(error)
             ? Effect.succeed(null)
-            : Effect.fail(error)
-        )
+            : Effect.fail(error))
       )
     )
     if (info === null) {

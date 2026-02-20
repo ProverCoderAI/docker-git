@@ -25,7 +25,7 @@ export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
 
 REPO_URL="https://github.com/octocat/Hello-World/issues/1"
-TARGET_DIR="/home/dev/.docker-git/workspaces/octocat/hello-world/issue-1"
+TARGET_DIR="/home/dev/workspaces/octocat/hello-world/issue-1"
 E2E_BIN="$ROOT/.e2e-bin"
 dg_ensure_docker "$E2E_BIN"
 

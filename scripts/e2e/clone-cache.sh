@@ -21,7 +21,7 @@ export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
 
 REPO_URL="https://github.com/octocat/Hello-World/issues/1"
-TARGET_DIR="/home/dev/.docker-git/workspaces/octocat/hello-world/issue-1"
+TARGET_DIR="/home/dev/workspaces/octocat/hello-world/issue-1"
 MIRROR_PREFIX="/home/dev/.docker-git/.cache/git-mirrors"
 
 ACTIVE_OUT_DIR=""

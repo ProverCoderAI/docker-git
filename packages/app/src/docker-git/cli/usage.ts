@@ -5,6 +5,7 @@ import type { ParseError } from "@effect-template/lib/core/domain"
 export const usageText = `docker-git menu
 docker-git create --repo-url <url> [options]
 docker-git clone <url> [options]
+docker-git apply [<url>] [options]
 docker-git mcp-playwright [<url>] [options]
 docker-git attach [<url>] [options]
 docker-git panes [<url>] [options]
@@ -21,6 +22,7 @@ Commands:
   menu                Interactive menu (default when no args)
   create, init        Generate docker development environment
   clone               Create + run container and clone repo
+  apply               Apply docker-git config to an existing project/container (current dir by default)
   mcp-playwright      Enable Playwright MCP + Chromium sidecar for an existing project dir
   attach, tmux        Open tmux workspace for a docker-git project
   panes, terms        List tmux panes for a docker-git project
@@ -50,6 +52,8 @@ Options:
   --archive <path>          Scrap snapshot directory (default: .orch/scrap/session)
   --mode <session>          Scrap mode (default: session)
   --git-token <label>       Token label for clone/create (maps to GITHUB_TOKEN__<LABEL>, example: agiens)
+  --codex-token <label>     Codex auth label for clone/create (maps to CODEX_AUTH_LABEL, example: agien)
+  --claude-token <label>    Claude auth label for clone/create (maps to CLAUDE_AUTH_LABEL, example: agien)
   --wipe | --no-wipe        Wipe workspace before scrap import (default: --wipe)
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list

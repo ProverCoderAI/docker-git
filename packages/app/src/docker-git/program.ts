@@ -1,5 +1,6 @@
 import type { Command, ParseError } from "@effect-template/lib/core/domain"
 import { createProject } from "@effect-template/lib/usecases/actions"
+import { applyProjectConfig } from "@effect-template/lib/usecases/apply"
 import {
   authClaudeLogin,
   authClaudeLogout,
@@ -97,6 +98,7 @@ const handleNonBaseCommand = (command: NonBaseCommand) =>
       Match.when({ _tag: "SessionsKill" }, (cmd) => killTerminalProcess(cmd))
     )
     .pipe(
+      Match.when({ _tag: "Apply" }, (cmd) => applyProjectConfig(cmd)),
       Match.when({ _tag: "SessionsLogs" }, (cmd) => tailTerminalLogs(cmd)),
       Match.when({ _tag: "ScrapExport" }, (cmd) => exportScrap(cmd)),
       Match.when({ _tag: "ScrapImport" }, (cmd) => importScrap(cmd)),

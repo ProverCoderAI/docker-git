@@ -11,6 +11,8 @@ export interface TemplateConfig {
   readonly repoRef: string
   readonly forkRepoUrl?: string
   readonly gitTokenLabel?: string | undefined
+  readonly codexAuthLabel?: string | undefined
+  readonly claudeAuthLabel?: string | undefined
   readonly targetDir: string
   readonly volumeName: string
   readonly dockerGitPath: string
@@ -104,6 +106,16 @@ export interface McpPlaywrightUpCommand {
   readonly _tag: "McpPlaywrightUp"
   readonly projectDir: string
   readonly runUp: boolean
+}
+
+export interface ApplyCommand {
+  readonly _tag: "Apply"
+  readonly projectDir: string
+  readonly runUp: boolean
+  readonly gitTokenLabel?: string | undefined
+  readonly codexTokenLabel?: string | undefined
+  readonly claudeTokenLabel?: string | undefined
+  readonly enableMcpPlaywright?: boolean | undefined
 }
 
 export interface HelpCommand {
@@ -243,6 +255,7 @@ export type Command =
   | SessionsCommand
   | ScrapCommand
   | McpPlaywrightUpCommand
+  | ApplyCommand
   | HelpCommand
   | StatusCommand
   | DownAllCommand
