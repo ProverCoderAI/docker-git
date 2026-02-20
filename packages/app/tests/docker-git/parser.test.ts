@@ -1,69 +1,16 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Either } from "effect"
+import { Effect } from "effect"
 
-import { type Command, defaultTemplateConfig } from "@effect-template/lib/core/domain"
+import { defaultTemplateConfig } from "@effect-template/lib/core/domain"
 import { expandContainerHome } from "@effect-template/lib/usecases/scrap-path"
-import { parseArgs } from "../../src/docker-git/cli/parser.js"
-
-type CreateCommand = Extract<Command, { _tag: "Create" }>
-
-const expectParseErrorTag = (
-  args: ReadonlyArray<string>,
-  expectedTag: string
-) =>
-  Effect.sync(() => {
-    const parsed = parseArgs(args)
-    Either.match(parsed, {
-      onLeft: (error) => {
-        expect(error._tag).toBe(expectedTag)
-      },
-      onRight: () => {
-        throw new Error("expected parse error")
-      }
-    })
-  })
-
-const parseOrThrow = (args: ReadonlyArray<string>): Command => {
-  const parsed = parseArgs(args)
-  return Either.match(parsed, {
-    onLeft: (error) => {
-      throw new Error(`unexpected error ${error._tag}`)
-    },
-    onRight: (command) => command
-  })
-}
-
-type ProjectDirRunUpCommand = Extract<Command, { readonly projectDir: string; readonly runUp: boolean }>
-
-const expectProjectDirRunUpCommand = (
-  args: ReadonlyArray<string>,
-  expectedTag: ProjectDirRunUpCommand["_tag"],
-  expectedProjectDir: string,
-  expectedRunUp: boolean
-) =>
-  Effect.sync(() => {
-    const command = parseOrThrow(args)
-    if (command._tag !== expectedTag) {
-      throw new Error(`expected ${expectedTag} command`)
-    }
-    if (!("projectDir" in command) || !("runUp" in command)) {
-      throw new Error("expected command with projectDir and runUp")
-    }
-    expect(command.projectDir).toBe(expectedProjectDir)
-    expect(command.runUp).toBe(expectedRunUp)
-  })
-
-const expectCreateCommand = (
-  args: ReadonlyArray<string>,
-  onRight: (command: CreateCommand) => void
-) =>
-  Effect.sync(() => {
-    const command = parseOrThrow(args)
-    if (command._tag !== "Create") {
-      throw new Error("expected Create command")
-    }
-    onRight(command)
-  })
+import {
+  type CreateCommand,
+  expectAttachProjectDirCommand,
+  expectCreateCommand,
+  expectParseErrorTag,
+  expectProjectDirRunUpCommand,
+  parseOrThrow
+} from "./parser-helpers.js"
 
 const expectCreateDefaults = (command: CreateCommand) => {
   expect(command.config.repoUrl).toBe("https://github.com/org/repo.git")
@@ -209,13 +156,10 @@ describe("parseArgs", () => {
     }))
 
   it.effect("parses attach with GitHub issue url into issue workspace", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["attach", "https://github.com/org/repo/issues/7"])
-      if (command._tag !== "Attach") {
-        throw new Error("expected Attach command")
-      }
-      expect(command.projectDir).toBe(".docker-git/org/repo/issue-7")
-    }))
+    expectAttachProjectDirCommand(["attach", "https://github.com/org/repo/issues/7"], ".docker-git/org/repo/issue-7"))
+
+  it.effect("parses open with GitHub issue url into issue workspace", () =>
+    expectAttachProjectDirCommand(["open", "https://github.com/org/repo/issues/7"], ".docker-git/org/repo/issue-7"))
 
   it.effect("parses mcp-playwright command in current directory", () =>
     expectProjectDirRunUpCommand(["mcp-playwright"], "McpPlaywrightUp", ".", true))
