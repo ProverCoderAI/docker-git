@@ -101,7 +101,20 @@ describe("parseArgs", () => {
       expect(command.config.volumeName).toBe("dg-repo-issue-9-home")
     }))
 
-  it.effect("fails on missing repo url", () => expectParseErrorTag(["create"], "MissingRequiredOption"))
+  it.effect("parses create command without repo url into empty workspace defaults", () =>
+    expectCreateCommand(["create"], (command) => {
+      expect(command.config.repoUrl).toBe("")
+      expect(command.config.repoRef).toBe(defaultTemplateConfig.repoRef)
+      expect(command.outDir).toBe(".docker-git/app")
+      expect(command.openSsh).toBe(false)
+      expect(command.waitForClone).toBe(false)
+      expect(command.config.containerName).toBe("dg-app")
+      expect(command.config.serviceName).toBe("dg-app")
+      expect(command.config.volumeName).toBe("dg-app-home")
+      expect(command.config.targetDir).toBe(expandDefaultTargetDir(defaultTemplateConfig.targetDir))
+    }))
+
+  it.effect("fails clone when repo url is missing", () => expectParseErrorTag(["clone"], "MissingRequiredOption"))
 
   it.effect("parses clone command with positional repo url", () =>
     expectCreateCommand(["clone", "https://github.com/org/repo.git"], (command) => {

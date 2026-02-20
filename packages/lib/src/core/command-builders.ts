@@ -77,7 +77,7 @@ type RepoBasics = {
 
 const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseError> =>
   Either.gen(function*(_) {
-    const rawRepoUrl = yield* _(nonEmpty("--repo-url", raw.repoUrl))
+    const rawRepoUrl = raw.repoUrl?.trim() ?? ""
     const resolvedRepo = resolveRepoInput(rawRepoUrl)
     const repoUrl = resolvedRepo.repoUrl
     const repoSlug = deriveRepoSlug(repoUrl)

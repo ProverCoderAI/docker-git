@@ -1,6 +1,6 @@
 # docker-git
 
-`docker-git` generates a disposable Docker development environment per repository and stores it under a single projects root (default: `~/.docker-git`).
+`docker-git` generates a disposable Docker development environment per repository (or empty workspace) and stores it under a single projects root (default: `~/.docker-git`).
 
 Key goals:
 - Functional Core, Imperative Shell implementation (pure templates + typed orchestration).
@@ -17,6 +17,9 @@ pnpm install
 
 # Interactive TUI menu (default)
 pnpm run docker-git
+
+# Create an empty workspace container (no git clone)
+pnpm run docker-git create
 
 # Clone a repo into its own container (creates under ~/.docker-git)
 pnpm run docker-git clone https://github.com/agiens/crm/tree/vova-fork --force
