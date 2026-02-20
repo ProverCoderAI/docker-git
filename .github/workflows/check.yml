@@ -85,6 +85,17 @@ jobs:
       - name: Lint Effect-TS (lib)
         run: pnpm --filter ./packages/lib lint:effect
 
+  e2e-local-package:
+    name: E2E (Local package CLI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Pack and run local package via pnpm
+        run: bash scripts/e2e/local-package-cli.sh
+
   e2e-opencode:
     name: E2E (OpenCode)
     runs-on: ubuntu-latest

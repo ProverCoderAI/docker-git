@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 cases=("$@")
 if [[ "${#cases[@]}" -eq 0 ]]; then
-  cases=("clone-cache" "login-context" "opencode-autoconnect")
+  cases=("local-package-cli" "clone-cache" "login-context" "opencode-autoconnect")
 fi
 
 for case_name in "${cases[@]}"; do
@@ -20,4 +20,3 @@ for case_name in "${cases[@]}"; do
 done
 
 echo "e2e/run-all: all cases OK" >&2
-
