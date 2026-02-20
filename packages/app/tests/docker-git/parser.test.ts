@@ -232,6 +232,26 @@ describe("parseArgs", () => {
       expect(command.projectDir).toBe(".docker-git/org/repo")
     }))
 
+  it.effect("parses apply token and mcp overrides", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow([
+        "apply",
+        "--git-token=agien_main",
+        "--codex-token=Team A",
+        "--claude-token=Team B",
+        "--mcp-playwright",
+        "--no-up"
+      ])
+      if (command._tag !== "Apply") {
+        throw new Error("expected Apply command")
+      }
+      expect(command.runUp).toBe(false)
+      expect(command.gitTokenLabel).toBe("agien_main")
+      expect(command.codexTokenLabel).toBe("Team A")
+      expect(command.claudeTokenLabel).toBe("Team B")
+      expect(command.enableMcpPlaywright).toBe(true)
+    }))
+
   it.effect("parses down-all command", () =>
     Effect.sync(() => {
       const command = parseOrThrow(["down-all"])

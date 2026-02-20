@@ -12,6 +12,7 @@ import { ensureDockerDaemonAccess } from "../shell/docker.js"
 import type * as ShellErrors from "../shell/errors.js"
 import { writeProjectFiles } from "../shell/files.js"
 import { resolveBaseDir } from "../shell/paths.js"
+import { applyTemplateOverrides, hasApplyOverrides } from "./apply-overrides.js"
 import { ensureCodexConfigFile } from "./auth-sync.js"
 import { findDockerGitConfigPaths } from "./docker-git-config-search.js"
 import { defaultProjectsRoot, findExistingUpwards } from "./path-helpers.js"
@@ -35,14 +36,16 @@ type ApplyProjectFilesEnv = FileSystem | Path
 // INVARIANT: rewrites only managed files from docker-git.json
 // COMPLEXITY: O(n) where n = |managed_files|
 export const applyProjectFiles = (
-  projectDir: string
+  projectDir: string,
+  command?: ApplyCommand
 ): Effect.Effect<TemplateConfig, ApplyProjectFilesError, ApplyProjectFilesEnv> =>
   Effect.gen(function*(_) {
     yield* _(Effect.log(`Applying docker-git config files in ${projectDir}...`))
     const config = yield* _(readProjectConfig(projectDir))
-    yield* _(writeProjectFiles(projectDir, config.template, true))
-    yield* _(ensureCodexConfigFile(projectDir, config.template.codexAuthPath))
-    return config.template
+    const resolvedTemplate = applyTemplateOverrides(config.template, command)
+    yield* _(writeProjectFiles(projectDir, resolvedTemplate, true))
+    yield* _(ensureCodexConfigFile(projectDir, resolvedTemplate.codexAuthPath))
+    return resolvedTemplate
   })
 
 export type ApplyProjectConfigError =
@@ -307,16 +310,20 @@ const resolveImplicitApplyProjectDir = (): Effect.Effect<string | null, Platform
 
 const runApplyForProjectDir = (
   projectDir: string,
-  runUp: boolean
+  command: ApplyCommand
 ): Effect.Effect<TemplateConfig, ApplyProjectConfigError, ApplyProjectConfigEnv> =>
-  runUp ? applyProjectWithUp(projectDir) : applyProjectFiles(projectDir)
+  command.runUp ? applyProjectWithUp(projectDir, command) : applyProjectFiles(projectDir, command)
 
 const applyProjectWithUp = (
-  projectDir: string
+  projectDir: string,
+  command: ApplyCommand
 ): Effect.Effect<TemplateConfig, ApplyProjectConfigError, ApplyProjectConfigEnv> =>
   Effect.gen(function*(_) {
     yield* _(Effect.log(`Applying docker-git config and refreshing container in ${projectDir}...`))
     yield* _(ensureDockerDaemonAccess(process.cwd()))
+    if (hasApplyOverrides(command)) {
+      yield* _(applyProjectFiles(projectDir, command))
+    }
     return yield* _(runDockerComposeUpWithPortCheck(projectDir))
   })
 
@@ -333,7 +340,7 @@ const applyProjectWithUp = (
 export const applyProjectConfig = (
   command: ApplyCommand
 ): Effect.Effect<TemplateConfig, ApplyProjectConfigError, ApplyProjectConfigEnv> =>
-  runApplyForProjectDir(command.projectDir, command.runUp).pipe(
+  runApplyForProjectDir(command.projectDir, command).pipe(
     Effect.catchTag("ConfigNotFoundError", (error) =>
       command.projectDir === "."
         ? Effect.gen(function*(_) {
@@ -342,7 +349,7 @@ export const applyProjectConfig = (
             return yield* _(Effect.fail(error))
           }
           yield* _(Effect.log(`Auto-resolved docker-git project directory: ${inferredProjectDir}`))
-          return yield* _(runApplyForProjectDir(inferredProjectDir, command.runUp))
+          return yield* _(runApplyForProjectDir(inferredProjectDir, command))
         })
         : Effect.fail(error))
   )

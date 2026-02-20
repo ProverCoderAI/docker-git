@@ -20,5 +20,9 @@ export const parseApply = (
   Either.map(parseProjectDirWithOptions(args), ({ projectDir, raw }) => ({
     _tag: "Apply",
     projectDir,
-    runUp: raw.up ?? true
+    runUp: raw.up ?? true,
+    gitTokenLabel: raw.gitTokenLabel,
+    codexTokenLabel: raw.codexTokenLabel,
+    claudeTokenLabel: raw.claudeTokenLabel,
+    enableMcpPlaywright: raw.enableMcpPlaywright
   }))

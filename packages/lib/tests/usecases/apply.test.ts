@@ -154,6 +154,49 @@ describe("applyProjectFiles", () => {
         expect(envAfter).toContain("CUSTOM_KEY=1")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("applies token and mcp overrides from apply command", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const targetDir = "/home/dev/workspaces/org/repo"
+        const globalConfig = makeTemplateConfig(root, outDir, path, targetDir)
+        const projectConfig = makeTemplateConfig(root, outDir, path, targetDir)
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          })
+        )
+
+        const appliedTemplate = yield* _(
+          applyProjectFiles(outDir, {
+            _tag: "Apply",
+            projectDir: outDir,
+            runUp: false,
+            gitTokenLabel: "agien_main",
+            codexTokenLabel: "Team A",
+            claudeTokenLabel: "Team B",
+            enableMcpPlaywright: true
+          })
+        )
+        expect(appliedTemplate.gitTokenLabel).toBe("AGIEN_MAIN")
+        expect(appliedTemplate.codexAuthLabel).toBe("team-a")
+        expect(appliedTemplate.claudeAuthLabel).toBe("team-b")
+        expect(appliedTemplate.enableMcpPlaywright).toBe(true)
+
+        const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+        expect(composeAfter).toContain('GITHUB_AUTH_LABEL: "AGIEN_MAIN"')
+        expect(composeAfter).toContain('GIT_AUTH_LABEL: "AGIEN_MAIN"')
+        expect(composeAfter).toContain('CODEX_AUTH_LABEL: "team-a"')
+        expect(composeAfter).toContain('CLAUDE_AUTH_LABEL: "team-b"')
+        expect(composeAfter).toContain('MCP_PLAYWRIGHT_ENABLE: "1"')
+        expect(composeAfter).toContain("dg-test-browser")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
 })
 
 describe("applyProjectConfig", () => {

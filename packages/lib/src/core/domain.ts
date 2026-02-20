@@ -112,6 +112,10 @@ export interface ApplyCommand {
   readonly _tag: "Apply"
   readonly projectDir: string
   readonly runUp: boolean
+  readonly gitTokenLabel?: string | undefined
+  readonly codexTokenLabel?: string | undefined
+  readonly claudeTokenLabel?: string | undefined
+  readonly enableMcpPlaywright?: boolean | undefined
 }
 
 export interface HelpCommand {
