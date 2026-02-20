@@ -200,6 +200,56 @@ const resolvePaths = (
     }
   })
 
+type CreateCommandResolvedInput = {
+  readonly repo: RepoBasics
+  readonly names: NameConfig
+  readonly paths: PathConfig
+  readonly runUp: boolean
+  readonly openSsh: boolean
+  readonly force: boolean
+  readonly forceEnv: boolean
+  readonly gitTokenLabel: CreateCommand["config"]["gitTokenLabel"]
+  readonly codexAuthLabel: CreateCommand["config"]["codexAuthLabel"]
+  readonly claudeAuthLabel: CreateCommand["config"]["claudeAuthLabel"]
+  readonly dockerNetworkMode: CreateCommand["config"]["dockerNetworkMode"]
+  readonly dockerSharedNetworkName: CreateCommand["config"]["dockerSharedNetworkName"]
+  readonly enableMcpPlaywright: boolean
+}
+
+const composeCreateCommand = (input: CreateCommandResolvedInput): CreateCommand => ({
+  _tag: "Create",
+  outDir: input.paths.outDir,
+  runUp: input.runUp,
+  openSsh: input.openSsh,
+  force: input.force,
+  forceEnv: input.forceEnv,
+  waitForClone: false,
+  config: {
+    containerName: input.names.containerName,
+    serviceName: input.names.serviceName,
+    sshUser: input.repo.sshUser,
+    sshPort: input.repo.sshPort,
+    repoUrl: input.repo.repoUrl,
+    repoRef: input.repo.repoRef,
+    gitTokenLabel: input.gitTokenLabel,
+    codexAuthLabel: input.codexAuthLabel,
+    claudeAuthLabel: input.claudeAuthLabel,
+    targetDir: input.repo.targetDir,
+    volumeName: input.names.volumeName,
+    dockerGitPath: input.paths.dockerGitPath,
+    authorizedKeysPath: input.paths.authorizedKeysPath,
+    envGlobalPath: input.paths.envGlobalPath,
+    envProjectPath: input.paths.envProjectPath,
+    codexAuthPath: input.paths.codexAuthPath,
+    codexSharedAuthPath: input.paths.codexSharedAuthPath,
+    codexHome: input.paths.codexHome,
+    dockerNetworkMode: input.dockerNetworkMode,
+    dockerSharedNetworkName: input.dockerSharedNetworkName,
+    enableMcpPlaywright: input.enableMcpPlaywright,
+    pnpmVersion: defaultTemplateConfig.pnpmVersion
+  }
+})
+
 // CHANGE: build a typed create command from raw options (CLI or API)
 // WHY: share deterministic command construction across CLI and server
 // QUOTE(ТЗ): "В lib ты оставляешь бизнес логику, а все CLI морду хранишь в app"
@@ -230,37 +280,19 @@ export const buildCreateCommand = (
       nonEmpty("--shared-network", raw.dockerSharedNetworkName, defaultTemplateConfig.dockerSharedNetworkName)
     )
 
-    return {
-      _tag: "Create",
-      outDir: paths.outDir,
+    return composeCreateCommand({
+      repo,
+      names,
+      paths,
       runUp,
       openSsh,
       force,
       forceEnv,
-      waitForClone: false,
-      config: {
-        containerName: names.containerName,
-        serviceName: names.serviceName,
-        sshUser: repo.sshUser,
-        sshPort: repo.sshPort,
-        repoUrl: repo.repoUrl,
-        repoRef: repo.repoRef,
-        gitTokenLabel,
-        codexAuthLabel,
-        claudeAuthLabel,
-        targetDir: repo.targetDir,
-        volumeName: names.volumeName,
-        dockerGitPath: paths.dockerGitPath,
-        authorizedKeysPath: paths.authorizedKeysPath,
-        envGlobalPath: paths.envGlobalPath,
-        envProjectPath: paths.envProjectPath,
-        codexAuthPath: paths.codexAuthPath,
-        codexSharedAuthPath: paths.codexSharedAuthPath,
-        codexHome: paths.codexHome,
-        dockerNetworkMode,
-        dockerSharedNetworkName,
-        enableMcpPlaywright,
-        pnpmVersion: defaultTemplateConfig.pnpmVersion
-      }
-    }
+      gitTokenLabel,
+      codexAuthLabel,
+      claudeAuthLabel,
+      dockerNetworkMode,
+      dockerSharedNetworkName,
+      enableMcpPlaywright
+    })
   })
