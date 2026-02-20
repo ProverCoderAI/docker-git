@@ -200,46 +200,68 @@ const resolvePaths = (
     }
   })
 
+type CreateBehavior = {
+  readonly runUp: boolean
+  readonly openSsh: boolean
+  readonly force: boolean
+  readonly forceEnv: boolean
+  readonly enableMcpPlaywright: boolean
+}
+
+const resolveCreateBehavior = (raw: RawOptions): CreateBehavior => ({
+  runUp: raw.up ?? true,
+  openSsh: raw.openSsh ?? false,
+  force: raw.force ?? false,
+  forceEnv: raw.forceEnv ?? false,
+  enableMcpPlaywright: raw.enableMcpPlaywright ?? false
+})
+
 type BuildTemplateConfigInput = {
-  readonly raw: RawOptions
   readonly repo: RepoBasics
   readonly names: NameConfig
   readonly paths: PathConfig
   readonly dockerNetworkMode: CreateCommand["config"]["dockerNetworkMode"]
   readonly dockerSharedNetworkName: string
+  readonly gitTokenLabel: string | undefined
+  readonly codexAuthLabel: string | undefined
+  readonly claudeAuthLabel: string | undefined
+  readonly enableMcpPlaywright: boolean
 }
 
-const buildTemplateConfig = (input: BuildTemplateConfigInput): CreateCommand["config"] => {
-  const enableMcpPlaywright = input.raw.enableMcpPlaywright ?? false
-  const gitTokenLabel = normalizeGitTokenLabel(input.raw.gitTokenLabel)
-  const codexAuthLabel = normalizeAuthLabel(input.raw.codexTokenLabel)
-  const claudeAuthLabel = normalizeAuthLabel(input.raw.claudeTokenLabel)
-
-  return {
-    containerName: input.names.containerName,
-    serviceName: input.names.serviceName,
-    sshUser: input.repo.sshUser,
-    sshPort: input.repo.sshPort,
-    repoUrl: input.repo.repoUrl,
-    repoRef: input.repo.repoRef,
-    gitTokenLabel,
-    codexAuthLabel,
-    claudeAuthLabel,
-    targetDir: input.repo.targetDir,
-    volumeName: input.names.volumeName,
-    dockerGitPath: input.paths.dockerGitPath,
-    authorizedKeysPath: input.paths.authorizedKeysPath,
-    envGlobalPath: input.paths.envGlobalPath,
-    envProjectPath: input.paths.envProjectPath,
-    codexAuthPath: input.paths.codexAuthPath,
-    codexSharedAuthPath: input.paths.codexSharedAuthPath,
-    codexHome: input.paths.codexHome,
-    dockerNetworkMode: input.dockerNetworkMode,
-    dockerSharedNetworkName: input.dockerSharedNetworkName,
-    enableMcpPlaywright,
-    pnpmVersion: defaultTemplateConfig.pnpmVersion
-  }
-}
+const buildTemplateConfig = ({
+  claudeAuthLabel,
+  codexAuthLabel,
+  dockerNetworkMode,
+  dockerSharedNetworkName,
+  enableMcpPlaywright,
+  gitTokenLabel,
+  names,
+  paths,
+  repo
+}: BuildTemplateConfigInput): CreateCommand["config"] => ({
+  containerName: names.containerName,
+  serviceName: names.serviceName,
+  sshUser: repo.sshUser,
+  sshPort: repo.sshPort,
+  repoUrl: repo.repoUrl,
+  repoRef: repo.repoRef,
+  gitTokenLabel,
+  codexAuthLabel,
+  claudeAuthLabel,
+  targetDir: repo.targetDir,
+  volumeName: names.volumeName,
+  dockerGitPath: paths.dockerGitPath,
+  authorizedKeysPath: paths.authorizedKeysPath,
+  envGlobalPath: paths.envGlobalPath,
+  envProjectPath: paths.envProjectPath,
+  codexAuthPath: paths.codexAuthPath,
+  codexSharedAuthPath: paths.codexSharedAuthPath,
+  codexHome: paths.codexHome,
+  dockerNetworkMode,
+  dockerSharedNetworkName,
+  enableMcpPlaywright,
+  pnpmVersion: defaultTemplateConfig.pnpmVersion
+})
 
 // CHANGE: build a typed create command from raw options (CLI or API)
 // WHY: share deterministic command construction across CLI and server
@@ -258,31 +280,33 @@ export const buildCreateCommand = (
     const repo = yield* _(resolveRepoBasics(raw))
     const names = yield* _(resolveNames(raw, repo.projectSlug))
     const paths = yield* _(resolvePaths(raw, repo.repoPath))
-    const runUp = raw.up ?? true
-    const openSsh = raw.openSsh ?? false
-    const force = raw.force ?? false
-    const forceEnv = raw.forceEnv ?? false
+    const behavior = resolveCreateBehavior(raw)
+    const gitTokenLabel = normalizeGitTokenLabel(raw.gitTokenLabel)
+    const codexAuthLabel = normalizeAuthLabel(raw.codexTokenLabel)
+    const claudeAuthLabel = normalizeAuthLabel(raw.claudeTokenLabel)
     const dockerNetworkMode = yield* _(parseDockerNetworkMode(raw.dockerNetworkMode))
     const dockerSharedNetworkName = yield* _(
       nonEmpty("--shared-network", raw.dockerSharedNetworkName, defaultTemplateConfig.dockerSharedNetworkName)
     )
-    const config = buildTemplateConfig({
-      raw,
-      repo,
-      names,
-      paths,
-      dockerNetworkMode,
-      dockerSharedNetworkName
-    })
 
     return {
       _tag: "Create",
       outDir: paths.outDir,
-      runUp,
-      openSsh,
-      force,
-      forceEnv,
+      runUp: behavior.runUp,
+      openSsh: behavior.openSsh,
+      force: behavior.force,
+      forceEnv: behavior.forceEnv,
       waitForClone: false,
-      config
+      config: buildTemplateConfig({
+        repo,
+        names,
+        paths,
+        dockerNetworkMode,
+        dockerSharedNetworkName,
+        gitTokenLabel,
+        codexAuthLabel,
+        claudeAuthLabel,
+        enableMcpPlaywright: behavior.enableMcpPlaywright
+      })
     }
   })

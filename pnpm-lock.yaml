@@ -22,9 +22,6 @@ importers:
 
   packages/app:
     dependencies:
-      '@effect-template/lib':
-        specifier: workspace:*
-        version: link:../lib
       '@effect/cli':
         specifier: ^0.73.0
         version: 0.73.0(@effect/platform@0.94.1(effect@3.19.14))(@effect/printer-ansi@0.47.0(@effect/typeclass@0.38.0(effect@3.19.14))(effect@3.19.14))(@effect/printer@0.47.0(@effect/typeclass@0.38.0(effect@3.19.14))(effect@3.19.14))(effect@3.19.14)
@@ -80,6 +77,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.3.11
         version: 2.3.11
+      '@effect-template/lib':
+        specifier: workspace:*
+        version: link:../lib
       '@effect/eslint-plugin':
         specifier: ^0.3.2
         version: 0.3.2

@@ -13,13 +13,14 @@
     "prebuild": "pnpm -C ../lib build",
     "build": "pnpm run build:app && pnpm run build:docker-git",
     "build:app": "vite build --ssr src/app/main.ts",
+    "prepack": "pnpm run build:docker-git",
     "dev": "vite build --watch --ssr src/app/main.ts",
     "prelint": "pnpm -C ../lib build",
     "lint": "PATH=../../scripts:$PATH vibecode-linter src/",
     "lint:tests": "PATH=../../scripts:$PATH vibecode-linter tests/",
     "lint:effect": "PATH=../../scripts:$PATH eslint --config eslint.effect-ts-check.config.mjs .",
     "prebuild:docker-git": "pnpm -C ../lib build",
-    "build:docker-git": "tsc -p tsconfig.build.json",
+    "build:docker-git": "vite build --config vite.docker-git.config.ts",
     "check": "pnpm run typecheck",
     "clone": "pnpm -C ../.. run clone",
     "docker-git": "node dist/src/docker-git/main.js",
@@ -53,7 +54,6 @@
   "homepage": "https://github.com/ProverCoderAI/docker-git#readme",
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
-    "@effect-template/lib": "workspace:*",
     "@effect/cli": "^0.73.0",
     "@effect/cluster": "^0.56.1",
     "@effect/experimental": "^0.58.0",
@@ -73,6 +73,7 @@
     "ts-morph": "^27.0.2"
   },
   "devDependencies": {
+    "@effect-template/lib": "workspace:*",
     "@biomejs/biome": "^2.3.11",
     "@effect/eslint-plugin": "^0.3.2",
     "@effect/language-service": "latest",
