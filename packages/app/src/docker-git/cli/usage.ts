@@ -5,6 +5,7 @@ import type { ParseError } from "@effect-template/lib/core/domain"
 export const usageText = `docker-git menu
 docker-git create [--repo-url <url>] [options]
 docker-git clone <url> [options]
+docker-git open [<url>] [options]
 docker-git apply [<url>] [options]
 docker-git mcp-playwright [<url>] [options]
 docker-git attach [<url>] [options]
@@ -22,9 +23,10 @@ Commands:
   menu                Interactive menu (default when no args)
   create, init        Generate docker development environment (repo URL optional)
   clone               Create + run container and clone repo
+  open                Open existing docker-git project workspace
   apply               Apply docker-git config to an existing project/container (current dir by default)
   mcp-playwright      Enable Playwright MCP + Chromium sidecar for an existing project dir
-  attach, tmux        Open tmux workspace for a docker-git project
+  attach, tmux        Alias for open
   panes, terms        List tmux panes for a docker-git project
   scrap               Export/import project scrap (session snapshot + rebuildable deps)
   sessions            List/kill/log container terminal processes
@@ -51,7 +53,7 @@ Options:
   --network-mode <mode>     Compose network mode: shared|project (default: shared)
   --shared-network <name>   Shared Docker network name when network-mode=shared (default: docker-git-shared)
   --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>[/issue-<id>|/pr-<id>])
-  --project-dir <path>      Project directory for attach (default: .)
+  --project-dir <path>      Project directory for open/attach (default: .)
   --archive <path>          Scrap snapshot directory (default: .orch/scrap/session)
   --mode <session>          Scrap mode (default: session)
   --git-token <label>       Token label for clone/create (maps to GITHUB_TOKEN__<LABEL>, example: agiens)
