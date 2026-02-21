@@ -117,6 +117,10 @@ describe("prepareProjectFiles", () => {
         const composeBefore = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
         expect(dockerfile).toContain("docker-compose-v2")
         expect(dockerfile).toContain("gitleaks version")
+        expect(dockerfile).toContain(
+          "curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://bun.sh/install -o /tmp/bun-install.sh"
+        )
+        expect(dockerfile).toContain("bun install attempt ${attempt} failed; retrying...")
         expect(entrypoint).toContain('DOCKER_GIT_HOME="/home/dev/.docker-git"')
         expect(entrypoint).toContain('SOURCE_SHARED_AUTH="/home/dev/.codex-shared/auth.json"')
         expect(entrypoint).toContain('CODEX_LABEL_RAW="$CODEX_AUTH_LABEL"')
