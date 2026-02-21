@@ -11,6 +11,7 @@ KEEP="${KEEP:-0}"
 
 PACK_LOG="$ROOT/npm-pack.log"
 HELP_LOG="$ROOT/docker-git-help.log"
+TAR_LIST="$ROOT/tar-list.txt"
 PACKED_TARBALL=""
 
 fail() {
@@ -52,6 +53,20 @@ tarball_name="$(tail -n 1 "$PACK_LOG" | tr -d '\r')"
 
 PACKED_TARBALL="$REPO_ROOT/packages/app/$tarball_name"
 [[ -f "$PACKED_TARBALL" ]] || fail "packed tarball not found: $PACKED_TARBALL"
+
+tar -tf "$PACKED_TARBALL" >"$TAR_LIST"
+while IFS= read -r entry; do
+  case "$entry" in
+    package/package.json|package/README*|package/LICENSE*|package/CHANGELOG*|package/dist/*)
+      ;;
+    *)
+      fail "unexpected file in packed tarball: $entry"
+      ;;
+  esac
+done <"$TAR_LIST"
+
+grep -Fxq "package/dist/src/docker-git/main.js" "$TAR_LIST" \
+  || fail "packed tarball does not include dist/src/docker-git/main.js"
 
 dep_keys="$(tar -xOf "$PACKED_TARBALL" package/package.json | node -e 'let s="";process.stdin.on("data",(c)=>{s+=c});process.stdin.on("end",()=>{const pkg=JSON.parse(s);const deps=Object.keys(pkg.dependencies ?? {});if (deps.includes("@effect-template/lib")) {console.error("@effect-template/lib must not be a runtime dependency in packed package");process.exit(1)}process.stdout.write(deps.join(","));});')"
 [[ "$dep_keys" == *"effect"* ]] || fail "packed dependency set looks invalid: $dep_keys"
