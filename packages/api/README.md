@@ -2,6 +2,14 @@
 
 Clean-slate v1 HTTP API for docker-git orchestration.
 
+## UI wrapper
+
+После запуска API открой:
+
+- `http://localhost:3334/`
+
+Это встроенная фронт-обвязка для ручного тестирования endpoint-ов (проекты, агенты, логи, SSE).
+
 ## Run
 
 ```bash

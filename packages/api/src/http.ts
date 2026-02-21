@@ -11,6 +11,7 @@ import * as Schema from "effect/Schema"
 
 import { ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
 import { CreateAgentRequestSchema, CreateProjectRequestSchema } from "./api/schema.js"
+import { uiHtml, uiScript, uiStyles } from "./ui.js"
 import { getAgent, getAgentAttachInfo, listAgents, readAgentLogs, startAgent, stopAgent } from "./services/agents.js"
 import { latestProjectCursor, listProjectEventsSince } from "./services/events.js"
 import {
@@ -46,6 +47,14 @@ type ApiError =
 
 const jsonResponse = (data: unknown, status: number) =>
   Effect.map(HttpServerResponse.json(data), (response) => HttpServerResponse.setStatus(response, status))
+
+const textResponse = (data: string, contentType: string, status = 200) =>
+  Effect.succeed(
+    HttpServerResponse.setStatus(
+      HttpServerResponse.text(data, { contentType }),
+      status
+    )
+  )
 
 const parseQueryInt = (url: string, key: string, fallback: number): number => {
   const parsed = Number(new URL(url, "http://localhost").searchParams.get(key) ?? "")
@@ -102,6 +111,9 @@ const readCreateProjectRequest = () => HttpServerRequest.schemaBodyJson(CreatePr
 
 export const makeRouter = () => {
   const base = HttpRouter.empty.pipe(
+    HttpRouter.get("/", textResponse(uiHtml, "text/html; charset=utf-8", 200)),
+    HttpRouter.get("/ui/styles.css", textResponse(uiStyles, "text/css; charset=utf-8", 200)),
+    HttpRouter.get("/ui/app.js", textResponse(uiScript, "application/javascript; charset=utf-8", 200)),
     HttpRouter.get("/v1/health", jsonResponse({ ok: true }, 200)),
     HttpRouter.get(
       "/v1/projects",
