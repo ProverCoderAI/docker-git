@@ -47,7 +47,19 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="/usr/local/bun/bin:$PATH"
-RUN curl -fsSL https://bun.sh/install | bash
+RUN set -eu; \
+  for attempt in 1 2 3 4 5; do \
+    if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://bun.sh/install -o /tmp/bun-install.sh \
+      && BUN_INSTALL=/usr/local/bun bash /tmp/bun-install.sh; then \
+      rm -f /tmp/bun-install.sh; \
+      exit 0; \
+    fi; \
+    echo "bun install attempt \${attempt} failed; retrying..." >&2; \
+    rm -f /tmp/bun-install.sh; \
+    sleep $((attempt * 2)); \
+  done; \
+  echo "bun install failed after retries" >&2; \
+  exit 1
 RUN ln -sf /usr/local/bun/bin/bun /usr/local/bin/bun
 RUN script -q -e -c "bun add -g @openai/codex@latest" /dev/null
 RUN ln -sf /usr/local/bun/bin/codex /usr/local/bin/codex

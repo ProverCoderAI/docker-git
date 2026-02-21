@@ -34,7 +34,19 @@ const renderDockerfileBunPrelude = (config: TemplateConfig): string =>
   `# Tooling: pnpm + Codex CLI + oh-my-opencode (bun) + Claude Code CLI (npm)
 RUN corepack enable && corepack prepare pnpm@${config.pnpmVersion} --activate
 ENV TERM=xterm-256color
-RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local/bun bash
+RUN set -eu; \
+  for attempt in 1 2 3 4 5; do \
+    if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://bun.sh/install -o /tmp/bun-install.sh \
+      && BUN_INSTALL=/usr/local/bun bash /tmp/bun-install.sh; then \
+      rm -f /tmp/bun-install.sh; \
+      exit 0; \
+    fi; \
+    echo "bun install attempt \${attempt} failed; retrying..." >&2; \
+    rm -f /tmp/bun-install.sh; \
+    sleep $((attempt * 2)); \
+  done; \
+  echo "bun install failed after retries" >&2; \
+  exit 1
 RUN ln -sf /usr/local/bun/bin/bun /usr/local/bin/bun
 RUN BUN_INSTALL=/usr/local/bun script -q -e -c "bun add -g @openai/codex@latest oh-my-opencode@latest" /dev/null
 RUN ln -sf /usr/local/bun/bin/codex /usr/local/bin/codex
