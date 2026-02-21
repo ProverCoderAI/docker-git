@@ -10,6 +10,11 @@
   "scripts": {
     "setup:pre-commit-hook": "node scripts/setup-pre-commit-hook.js",
     "build": "pnpm --filter ./packages/app build",
+    "api:build": "pnpm --filter ./packages/api build",
+    "api:start": "pnpm --filter ./packages/api start",
+    "api:dev": "pnpm --filter ./packages/api dev",
+    "api:test": "pnpm --filter ./packages/api test",
+    "api:typecheck": "pnpm --filter ./packages/api typecheck",
     "check": "pnpm --filter ./packages/app check && pnpm --filter ./packages/lib typecheck",
     "changeset": "changeset",
     "changeset-publish": "node -e \"if (!process.env.NPM_TOKEN) { console.log('Skipping publish: NPM_TOKEN is not set'); process.exit(0); }\" && changeset publish",
