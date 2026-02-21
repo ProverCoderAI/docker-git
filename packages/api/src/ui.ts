@@ -537,8 +537,8 @@ export const uiScript = `
 
   const appendDebug = (label, payload) => {
     const stamp = new Date().toISOString();
-    const line = '[' + stamp + '] ' + label + '\n' + (typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2));
-    views.debugOutput.textContent = (line + '\n\n' + views.debugOutput.textContent).slice(0, 24000);
+    const line = '[' + stamp + '] ' + label + '\\n' + (typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2));
+    views.debugOutput.textContent = (line + '\\n\\n' + views.debugOutput.textContent).slice(0, 24000);
   };
 
   const normalizeBase = (value) => {
@@ -712,7 +712,7 @@ export const uiScript = `
         if (action === 'logs') {
           const payload = await request(projectPath(state.projectId, '/agents/' + encodeURIComponent(agentId) + '/logs?lines=250'));
           const lines = (payload.entries || []).map((entry) => entry.at + ' [' + entry.stream + '] ' + entry.line);
-          setProjectOutput(lines.join('\n'));
+          setProjectOutput(lines.join('\\n'));
           return;
         }
 
@@ -730,7 +730,7 @@ export const uiScript = `
 
   const appendEvent = (event, payload) => {
     const line = event + ' ' + JSON.stringify(payload);
-    views.eventsLog.textContent = (line + '\n' + views.eventsLog.textContent).slice(0, 24000);
+    views.eventsLog.textContent = (line + '\\n' + views.eventsLog.textContent).slice(0, 24000);
   };
 
   const stopEventStream = () => {
@@ -803,7 +803,7 @@ export const uiScript = `
 
   const parseEnvLines = (raw) => {
     return String(raw || '')
-      .split(/\r?\n/)
+      .split(/\\r?\\n/)
       .map((line) => line.trim())
       .filter((line) => line.length > 0 && line.includes('='))
       .map((line) => {
