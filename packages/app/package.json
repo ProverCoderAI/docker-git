@@ -6,6 +6,9 @@
   "bin": {
     "docker-git": "dist/src/docker-git/main.js"
   },
+  "files": [
+    "dist"
+  ],
   "directories": {
     "doc": "doc"
   },
