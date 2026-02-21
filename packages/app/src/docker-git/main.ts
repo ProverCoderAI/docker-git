@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
 import { Effect } from "effect"
 
