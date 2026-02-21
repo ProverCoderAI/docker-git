@@ -1,0 +1,38 @@
+{
+  "name": "@effect-template/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "docker-git clean-slate v1 API",
+  "main": "dist/src/main.js",
+  "type": "module",
+  "scripts": {
+    "prebuild": "pnpm -C ../lib build",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "prestart": "pnpm run build",
+    "start": "node dist/src/main.js",
+    "pretypecheck": "pnpm -C ../lib build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "pretest": "pnpm -C ../lib build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@effect-template/lib": "workspace:*",
+    "@effect/platform": "^0.94.1",
+    "@effect/platform-node": "^0.104.0",
+    "@effect/schema": "^0.75.5",
+    "effect": "^3.19.14"
+  },
+  "devDependencies": {
+    "@effect/vitest": "^0.27.0",
+    "@eslint/js": "9.39.1",
+    "@types/node": "^24.10.1",
+    "@typescript-eslint/eslint-plugin": "^8.48.1",
+    "@typescript-eslint/parser": "^8.48.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
