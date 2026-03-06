@@ -5,6 +5,7 @@ import { createServer } from "node:http"
 
 import { makeRouter } from "./http.js"
 import { initializeAgentState } from "./services/agents.js"
+import { startOutboxPolling } from "./services/federation.js"
 
 const resolvePort = (env: Record<string, string | undefined>): number => {
   const raw = env["DOCKER_GIT_API_PORT"] ?? env["PORT"]
@@ -42,10 +43,18 @@ export const program = (() => {
   const app = router.pipe(HttpServer.serve(requestLogger), HttpServer.withLogAddress)
   const server = createServer()
   const serverLayer = NodeHttpServer.layer(() => server, { port })
+  
+  const pollingInterval = parseInt(process.env["DOCKER_GIT_OUTBOX_POLLING_INTERVAL_MS"] ?? "5000", 10)
 
   return Effect.scoped(
     Console.log(`docker-git api boot port=${port}`).pipe(
       Effect.zipRight(initializeAgentState()),
+      Effect.zipRight(
+        Console.log(`docker-git outbox polling interval=${pollingInterval}ms`)
+      ),
+      Effect.zipRight(
+        Effect.fork(startOutboxPolling(pollingInterval))
+      ),
       Effect.zipRight(Layer.launch(Layer.provide(app, serverLayer)))
     )
   )

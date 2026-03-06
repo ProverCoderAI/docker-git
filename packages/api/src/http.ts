@@ -174,7 +174,13 @@ const resolveFederationContext = (
 
 export const makeRouter = () => {
   const base = HttpRouter.empty.pipe(
-    HttpRouter.get("/", textResponse(uiHtml, "text/html; charset=utf-8", 200)),
+    HttpRouter.get("/", 
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        console.log("GET / request:", request.url, "headers:", request.headers)
+        return yield* _(textResponse(uiHtml, "text/html; charset=utf-8", 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
     HttpRouter.get("/ui/styles.css", textResponse(uiStyles, "text/css; charset=utf-8", 200)),
     HttpRouter.get("/ui/app.js", textResponse(uiScript, "application/javascript; charset=utf-8", 200)),
     HttpRouter.get("/health", jsonResponse({ ok: true }, 200)),

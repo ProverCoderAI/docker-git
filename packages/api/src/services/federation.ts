@@ -1,4 +1,4 @@
-import { Effect } from "effect"
+import { Duration, Effect } from "effect"
 import { randomUUID } from "node:crypto"
 
 import type {
@@ -40,6 +40,7 @@ const issueStore: Map<string, FederationIssueRecord> = new Map()
 const followStore: Map<string, FollowSubscription> = new Map()
 const followByActivityId: Map<string, string> = new Map()
 const followByActorObject: Map<string, string> = new Map()
+const processedOutboxItems: Set<string> = new Set()
 
 const nowIso = (): string => new Date().toISOString()
 
@@ -452,6 +453,115 @@ const ingestOfferTicket = (
       receivedAt: nowIso(),
       ticket
     })
+    
+    // Пересылаем задачу в OrderQue через JSON-LD
+    const orderQueUrl = process.env["DOCKER_GIT_ORDERQUE_URL"] ?? "http://localhost:7277"
+    const apiPublicUrl = process.env["DOCKER_GIT_API_PUBLIC_URL"] ?? "http://localhost:3334"
+    
+    yield* _(Effect.tryPromise({
+      try: async () => {
+        console.log("[ActivityPub] Пересылка Offer(Ticket) в OrderQue:", orderQueUrl)
+        
+        // JSON-LD формат для ActivityPub Offer с Ticket
+        const orderQuePayload = {
+          "@context": [
+            "https://www.w3.org/ns/activitystreams",
+            "https://forgefed.org/ns"
+          ],
+          type: "Offer",
+          id: issueId,
+          actor: `${apiPublicUrl}/federation/actor`,
+          object: {
+            "@context": [
+              "https://www.w3.org/ns/activitystreams",
+              "https://forgefed.org/ns"
+            ],
+            type: "Ticket",
+            id: issueId,
+            attributedTo: `${apiPublicUrl}/federation/actor`,
+            summary: ticket.summary,
+            content: ticket.content,
+            workType: "standard"
+          }
+        }
+        
+        console.log("[ActivityPub] JSON-LD:", JSON.stringify(orderQuePayload, null, 2))
+        
+        const response = await fetch(`${orderQueUrl}/federation/inbox`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
+          },
+          body: JSON.stringify(orderQuePayload)
+        })
+        
+        const text = await response.text()
+        let json: unknown
+        try {
+          json = text ? JSON.parse(text) : { raw: text }
+        } catch {
+          json = { raw: text }
+        }
+        
+        console.log("[ActivityPub] OrderQue ответ:", response.status, json)
+        
+        if (!response.ok) {
+          console.warn("[ActivityPub] OrderQue вернул ошибку:", response.status, json)
+          return
+        }
+        
+        const orderId = (json as Record<string, unknown>)["id"] as number | undefined
+        if (orderId) {
+          console.log("[ActivityPub] Отправка результата для заказа #", orderId)
+          
+          // JSON-LD для результата
+          const resultPayload = {
+            "@context": [
+              "https://www.w3.org/ns/activitystreams",
+              "https://forgefed.org/ns"
+            ],
+            type: "Update",
+            id: `${apiPublicUrl}/orders/${orderId}/result`,
+            actor: `${apiPublicUrl}/federation/actor`,
+            object: {
+              type: "Order",
+              id: `${orderQueUrl}/orders/${orderId}`,
+              status: "completed",
+              chatResponse: "complit task",
+              agentId: 1
+            }
+          }
+          
+          console.log("[ActivityPub] Результат JSON-LD:", JSON.stringify(resultPayload, null, 2))
+          
+          const resultResponse = await fetch(`${orderQueUrl}/orders/${orderId}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
+            },
+            body: JSON.stringify({
+              status: "completed",
+              chatResponse: "complit task",
+              agentId: 1
+            })
+          })
+          
+          const resultText = await resultResponse.text()
+          let resultJson: unknown
+          try {
+            resultJson = resultText ? JSON.parse(resultText) : { raw: resultText }
+          } catch {
+            resultJson = { raw: resultText }
+          }
+          
+          console.log("[ActivityPub] Результат отправлен:", resultResponse.status, resultJson)
+        }
+      },
+      catch: (error) => {
+        console.warn("[ActivityPub] Ошибка пересылки в OrderQue:", error)
+      }
+    })).pipe(Effect.ignore)
+    
     return issue
   })
 
@@ -566,8 +676,12 @@ export const createFollowSubscription = (
     const activityId = `${context.followsActivityPrefix}/${id}`
     const createdAt = nowIso()
 
+    // JSON-LD формат для ActivityPub Follow
     const activity: ActivityPubFollowActivity = {
-      "@context": "https://www.w3.org/ns/activitystreams",
+      "@context": [
+        "https://www.w3.org/ns/activitystreams",
+        "https://forgefed.org/ns"
+      ],
       id: activityId,
       type: "Follow",
       actor,
@@ -594,6 +708,45 @@ export const createFollowSubscription = (
     followByActivityId.set(activityId, id)
     followByActorObject.set(key, id)
 
+    // Отправляем Follow активность в target inbox (OrderQue)
+    if (normalizedInbox) {
+      yield* _(Effect.tryPromise({
+        try: async () => {
+          console.log("[ActivityPub] Отправка Follow в inbox:", normalizedInbox)
+          console.log("[ActivityPub] JSON-LD:", JSON.stringify(activity, null, 2))
+          
+          const response = await fetch(normalizedInbox, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
+            },
+            body: JSON.stringify(activity)
+          })
+          
+          const text = await response.text()
+          let json: unknown
+          try {
+            json = text ? JSON.parse(text) : { raw: text }
+          } catch {
+            json = { raw: text }
+          }
+          
+          console.log("[ActivityPub] Ответ:", response.status, json)
+          
+          // Если получили Accept автоматически - обновляем статус
+          if (response.ok) {
+            subscription.status = "accepted"
+            subscription.updatedAt = nowIso()
+            followStore.set(id, subscription)
+            console.log("[ActivityPub] Подписка подтверждена (status=accepted)")
+          }
+        },
+        catch: (error) => {
+          console.warn("[ActivityPub] Ошибка отправки Follow:", error)
+        }
+      })).pipe(Effect.ignore)
+    }
+
     return { subscription, activity }
   })
 
@@ -608,4 +761,100 @@ export const clearFederationState = (): void => {
   followStore.clear()
   followByActivityId.clear()
   followByActorObject.clear()
+  processedOutboxItems.clear()
 }
+
+/**
+ * Polling outbox из OrderQue для получения новых задач
+ * Запускается как фоновый процесс
+ * URL определяется из активных Follow подписок
+ */
+export const startOutboxPolling = (
+  intervalMs: number = 5000
+): Effect.Effect<void, never, never> =>
+  Effect.gen(function*(_) {
+    console.log("[ActivityPub Polling] Запуск polling outbox")
+    console.log("[ActivityPub Polling] Интервал:", intervalMs, "мс")
+    
+    const poll = Effect.gen(function*(_) {
+      // Получаем активные подписки
+      const subscriptions = listFollowSubscriptions().filter(s => s.status === "accepted")
+      
+      if (subscriptions.length === 0) {
+        console.log("[ActivityPub Polling] Нет активных подписок, ждем...")
+        return 0
+      }
+      
+      let totalItems = 0
+      
+      for (const sub of subscriptions) {
+        // Извлекаем OrderQue URL из object (followers URL)
+        const orderQueUrl = sub.object.replace("/federation/followers", "")
+        const outboxUrl = `${orderQueUrl}/federation/outbox`
+        
+        console.log("[ActivityPub Polling] Запрос outbox:", outboxUrl, "подписка:", sub.id)
+        
+        const result = yield* _(
+          Effect.tryPromise({
+            try: async () => {
+              const response = await fetch(outboxUrl, {
+                method: "GET",
+                headers: {
+                  "Accept": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
+                }
+              })
+              
+              if (!response.ok) {
+                throw new Error(`OrderQue вернул ${response.status}`)
+              }
+              
+              const json = await response.json()
+              return json as ActivityPubOrderedCollection
+            },
+            catch: (error) =>
+              new ApiBadRequestError({
+                message: `Ошибка polling outbox: ${error instanceof Error ? error.message : String(error)}`
+              })
+          })
+        )
+        
+        const orderedItems = Array.isArray(result.orderedItems) ? result.orderedItems : []
+        console.log("[ActivityPub Polling] Получено задач из", outboxUrl, ":", orderedItems.length)
+        totalItems += orderedItems.length
+        
+        for (const item of orderedItems) {
+          const itemId = (item as Record<string, unknown>)["id"] as string | undefined
+          
+          if (itemId && !processedOutboxItems.has(itemId)) {
+            console.log("[ActivityPub Polling] Обработка задачи:", itemId)
+            console.log("[ActivityPub Polling] JSON-LD:", JSON.stringify(item, null, 2))
+            
+            // Отправляем задачу в свой inbox для обработки
+            yield* _(
+              ingestFederationInbox(item).pipe(
+                Effect.tapBoth({
+                  onSuccess: (result) =>
+                    Effect.sync(() => {
+                      console.log("[ActivityPub Polling] Задача обработана:", result.kind)
+                      processedOutboxItems.add(itemId)
+                    }),
+                  onFailure: (error) =>
+                    Effect.sync(() => {
+                      console.warn("[ActivityPub Polling] Ошибка обработки задачи:", error)
+                    })
+                })
+              )
+            )
+          }
+        }
+      }
+      
+      return totalItems
+    }).pipe(Effect.ignore)
+    
+    // Бесконечный цикл с интервалом
+    while (true) {
+      yield* _(poll)
+      yield* _(Effect.sleep(Duration.millis(intervalMs)))
+    }
+  })

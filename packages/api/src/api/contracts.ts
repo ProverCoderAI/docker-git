@@ -137,7 +137,7 @@ export type CreateFollowRequest = {
 export type FollowStatus = "pending" | "accepted" | "rejected"
 
 export type ActivityPubFollowActivity = {
-  readonly "@context": "https://www.w3.org/ns/activitystreams"
+  readonly "@context": string | ReadonlyArray<string>
   readonly id: string
   readonly type: "Follow"
   readonly actor: string
@@ -176,9 +176,9 @@ export type FollowSubscription = {
   readonly inbox?: string | undefined
   readonly to: ReadonlyArray<string>
   readonly capability?: string | undefined
-  readonly status: FollowStatus
+  status: FollowStatus
   readonly createdAt: string
-  readonly updatedAt: string
+  updatedAt: string
   readonly activity: ActivityPubFollowActivity
 }
 
