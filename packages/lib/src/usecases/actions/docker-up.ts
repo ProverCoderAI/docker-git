@@ -4,7 +4,7 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Duration, Effect, Fiber, Schedule } from "effect"
 
-import type { CreateCommand } from "../../core/domain.js"
+import { type CreateCommand, dockerGitSharedCodexVolumeName } from "../../core/domain.js"
 import {
   runDockerComposeDownVolumes,
   runDockerComposeLogsFollow,
@@ -12,7 +12,8 @@ import {
   runDockerComposeUpRecreate,
   runDockerExecExitCode,
   runDockerInspectContainerBridgeIp,
-  runDockerNetworkConnectBridge
+  runDockerNetworkConnectBridge,
+  runDockerVolumeCreate
 } from "../../shell/docker.js"
 import type { DockerCommandError } from "../../shell/errors.js"
 import { AgentFailedError, CloneFailedError } from "../../shell/errors.js"
@@ -175,6 +176,7 @@ const runDockerComposeUpByMode = (
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
     yield* _(ensureComposeNetworkReady(resolvedOutDir, projectConfig))
+    yield* _(runDockerVolumeCreate(resolvedOutDir, dockerGitSharedCodexVolumeName))
 
     if (force) {
       yield* _(Effect.log("Force enabled: wiping docker compose volumes (docker compose down -v)..."))

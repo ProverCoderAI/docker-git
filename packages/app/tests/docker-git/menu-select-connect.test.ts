@@ -20,10 +20,10 @@ const makeConnectDeps = (events: Array<string>) => ({
 const workspaceProject = () =>
   makeProjectItem({
     projectDir: "/home/dev/provercoderai/docker-git/workspaces/org/repo",
-    authorizedKeysPath: "/home/dev/provercoderai/docker-git/workspaces/org/repo/.docker-git/authorized_keys",
-    envGlobalPath: "/home/dev/provercoderai/docker-git/.orch/env/global.env",
+    authorizedKeysPath: "/home/dev/provercoderai/docker-git/workspaces/org/repo/authorized_keys",
+    envGlobalPath: "/home/dev/provercoderai/docker-git/workspaces/org/repo/.orch/env/global.env",
     envProjectPath: "/home/dev/provercoderai/docker-git/workspaces/org/repo/.orch/env/project.env",
-    codexAuthPath: "/home/dev/provercoderai/docker-git/.orch/auth/codex"
+    codexAuthPath: "/home/dev/provercoderai/docker-git/workspaces/org/repo/.orch/auth/codex"
   })
 
 describe("menu-select-connect", () => {

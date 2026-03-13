@@ -131,7 +131,10 @@ describe("prepareProjectFiles", () => {
           "curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://bun.sh/install -o /tmp/bun-install.sh"
         )
         expect(dockerfile).toContain("bun install attempt ${attempt} failed; retrying...")
+        expect(dockerfile).toContain("COPY authorized_keys /opt/docker-git/bootstrap/authorized_keys")
+        expect(dockerfile).toContain("COPY .orch /opt/docker-git/bootstrap/.orch")
         expect(entrypoint).toContain('DOCKER_GIT_HOME="/home/dev/.docker-git"')
+        expect(entrypoint).toContain('BOOTSTRAP_ROOT="/opt/docker-git/bootstrap"')
         expect(entrypoint).toContain('SOURCE_SHARED_AUTH="/home/dev/.codex-shared/auth.json"')
         expect(entrypoint).toContain('CODEX_LABEL_RAW="$CODEX_AUTH_LABEL"')
         expect(entrypoint).toContain('OPENCODE_DATA_DIR="/home/dev/.local/share/opencode"')
@@ -149,9 +152,11 @@ describe("prepareProjectFiles", () => {
         expect(entrypoint).not.toContain("\n  EOFMOVE\n")
         expect(composeBefore).toContain("container_name: dg-test")
         expect(composeBefore).toContain("restart: unless-stopped")
-        expect(composeBefore).toContain(":/home/dev/.docker-git")
+        expect(composeBefore).not.toContain(":/home/dev/.docker-git")
+        expect(composeBefore).toContain("docker_git_shared_codex:/home/dev/.codex-shared")
         expect(composeBefore).not.toContain("dg-test-browser")
         expect(composeBefore).toContain("docker-git-shared")
+        expect(composeBefore).toContain("docker-git-shared-codex")
         expect(composeBefore).toContain("external: true")
 
         yield* _(
@@ -202,7 +207,7 @@ describe("prepareProjectFiles", () => {
         const compose = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
         expect(compose).toContain("dg-test-net")
         expect(compose).toContain("driver: bridge")
-        expect(compose).not.toContain("external: true")
+        expect(compose).not.toContain("dg-test-net:\n    external: true")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

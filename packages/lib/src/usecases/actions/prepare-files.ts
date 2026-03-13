@@ -153,12 +153,14 @@ export const prepareProjectFiles = (
         source: {
           envGlobalPath: globalConfig.envGlobalPath,
           envProjectPath: globalConfig.envProjectPath,
-          codexAuthPath: globalConfig.codexAuthPath
+          codexAuthPath: globalConfig.codexAuthPath,
+          claudeAuthPath: globalClaudeAuthPath
         },
         target: {
           envGlobalPath: projectConfig.envGlobalPath,
           envProjectPath: projectConfig.envProjectPath,
-          codexAuthPath: projectConfig.codexAuthPath
+          codexAuthPath: projectConfig.codexAuthPath,
+          claudeAuthPath: "./.orch/auth/claude"
         }
       })
     )

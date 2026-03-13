@@ -53,16 +53,16 @@ export const buildProjectConfigs = (
   }
   const projectConfig = {
     ...resolvedConfig,
-    dockerGitPath: relativeFromOutDir(globalConfig.dockerGitPath),
-    authorizedKeysPath: relativeFromOutDir(globalConfig.authorizedKeysPath),
+    dockerGitPath: "./.docker-git",
+    authorizedKeysPath: "./authorized_keys",
     envGlobalPath: "./.orch/env/global.env",
     envProjectPath: path.isAbsolute(resolvedConfig.envProjectPath)
       ? relativeFromOutDir(resolvedConfig.envProjectPath)
       : toPosixPath(resolvedConfig.envProjectPath),
     // Project-local Codex state (sessions/logs/etc) is kept under .orch.
     codexAuthPath: "./.orch/auth/codex",
-    // Shared credentials root is mounted separately; entrypoint links auth.json into CODEX_HOME.
-    codexSharedAuthPath: relativeFromOutDir(globalConfig.codexSharedAuthPath)
+    // Bootstrap auth snapshots stay project-local; runtime links auth.json from the shared Docker volume.
+    codexSharedAuthPath: "./.orch/auth/codex"
   }
   return { globalConfig, projectConfig }
 }

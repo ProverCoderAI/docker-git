@@ -4,28 +4,70 @@ const entrypointDockerGitBootstrapTemplate = String
   .raw`# Bootstrap ~/.docker-git for nested docker-git usage inside this container.
 DOCKER_GIT_HOME="/home/__SSH_USER__/.docker-git"
 DOCKER_GIT_AUTH_DIR="$DOCKER_GIT_HOME/.orch/auth/codex"
+DOCKER_GIT_CLAUDE_AUTH_DIR="$DOCKER_GIT_HOME/.orch/auth/claude"
 DOCKER_GIT_ENV_DIR="$DOCKER_GIT_HOME/.orch/env"
 DOCKER_GIT_ENV_GLOBAL="$DOCKER_GIT_ENV_DIR/global.env"
 DOCKER_GIT_ENV_PROJECT="$DOCKER_GIT_ENV_DIR/project.env"
 DOCKER_GIT_AUTH_KEYS="$DOCKER_GIT_HOME/authorized_keys"
+BOOTSTRAP_ROOT="/opt/docker-git/bootstrap"
+BOOTSTRAP_ORCH_ROOT="$BOOTSTRAP_ROOT/.orch"
+BOOTSTRAP_AUTH_KEYS="$BOOTSTRAP_ROOT/authorized_keys"
+BOOTSTRAP_CODEX_AUTH_DIR="$BOOTSTRAP_ORCH_ROOT/auth/codex"
+BOOTSTRAP_CLAUDE_AUTH_DIR="$BOOTSTRAP_ORCH_ROOT/auth/claude"
+BOOTSTRAP_ENV_GLOBAL="$BOOTSTRAP_ORCH_ROOT/env/global.env"
+BOOTSTRAP_ENV_PROJECT="$BOOTSTRAP_ORCH_ROOT/env/project.env"
 
-mkdir -p "$DOCKER_GIT_AUTH_DIR" "$DOCKER_GIT_ENV_DIR" "$DOCKER_GIT_HOME/.orch/auth/gh"
+mkdir -p "$DOCKER_GIT_AUTH_DIR" "$DOCKER_GIT_CLAUDE_AUTH_DIR" "$DOCKER_GIT_ENV_DIR" "$DOCKER_GIT_HOME/.orch/auth/gh"
 
-if [[ -f "/home/__SSH_USER__/.ssh/authorized_keys" ]]; then
+copy_if_missing_file() {
+  local source="$1"
+  local target="$2"
+  if [[ ! -f "$source" || -e "$target" ]]; then
+    return 1
+  fi
+  mkdir -p "$(dirname "$target")"
+  cp "$source" "$target"
+  return 0
+}
+
+copy_dir_missing_entries() {
+  local source="$1"
+  local target="$2"
+  if [[ ! -d "$source" ]]; then
+    return 0
+  fi
+  mkdir -p "$target"
+  (
+    cd "$source"
+    find . -mindepth 1 -print
+  ) | while IFS= read -r entry; do
+    local source_entry="$source/$entry"
+    local target_entry="$target/$entry"
+    if [[ -d "$source_entry" ]]; then
+      mkdir -p "$target_entry"
+    elif [[ -f "$source_entry" && ! -e "$target_entry" ]]; then
+      mkdir -p "$(dirname "$target_entry")"
+      cp "$source_entry" "$target_entry"
+    fi
+  done
+}
+
+if [[ ! -f "$DOCKER_GIT_AUTH_KEYS" && -f "/home/__SSH_USER__/.ssh/authorized_keys" ]]; then
   cp "/home/__SSH_USER__/.ssh/authorized_keys" "$DOCKER_GIT_AUTH_KEYS"
-elif [[ -f /authorized_keys ]]; then
-  cp /authorized_keys "$DOCKER_GIT_AUTH_KEYS"
 fi
+copy_if_missing_file "$BOOTSTRAP_AUTH_KEYS" "$DOCKER_GIT_AUTH_KEYS" || true
 if [[ -f "$DOCKER_GIT_AUTH_KEYS" ]]; then
   chmod 600 "$DOCKER_GIT_AUTH_KEYS" || true
 fi
 
+copy_if_missing_file "$BOOTSTRAP_ENV_GLOBAL" "$DOCKER_GIT_ENV_GLOBAL" || true
 if [[ ! -f "$DOCKER_GIT_ENV_GLOBAL" ]]; then
   cat <<'EOF' > "$DOCKER_GIT_ENV_GLOBAL"
 # docker-git env
 # KEY=value
 EOF
 fi
+copy_if_missing_file "$BOOTSTRAP_ENV_PROJECT" "$DOCKER_GIT_ENV_PROJECT" || true
 if [[ ! -f "$DOCKER_GIT_ENV_PROJECT" ]]; then
   cat <<'EOF' > "$DOCKER_GIT_ENV_PROJECT"
 # docker-git project env defaults
@@ -65,6 +107,9 @@ copy_if_distinct_file() {
   cp "$source" "$target"
   return 0
 }
+
+copy_dir_missing_entries "$BOOTSTRAP_CODEX_AUTH_DIR" "$DOCKER_GIT_AUTH_DIR"
+copy_dir_missing_entries "$BOOTSTRAP_CLAUDE_AUTH_DIR" "$DOCKER_GIT_CLAUDE_AUTH_DIR"
 
 if [[ -n "$GH_TOKEN" ]]; then
   upsert_env_var "$DOCKER_GIT_ENV_GLOBAL" "GH_TOKEN" "$GH_TOKEN"

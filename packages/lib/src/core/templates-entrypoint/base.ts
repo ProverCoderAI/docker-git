@@ -51,7 +51,7 @@ docker_git_upsert_ssh_env() {
 }`
 
 export const renderEntrypointPackageCache = (config: TemplateConfig): string =>
-  `# Share package manager caches across all docker-git containers
+  `# Keep package manager caches inside the project home volume
 PACKAGE_CACHE_ROOT="/home/${config.sshUser}/.docker-git/.cache/packages"
 PACKAGE_PNPM_STORE="\${npm_config_store_dir:-\${PNPM_STORE_DIR:-$PACKAGE_CACHE_ROOT/pnpm/store}}"
 PACKAGE_NPM_CACHE="\${npm_config_cache:-\${NPM_CONFIG_CACHE:-$PACKAGE_CACHE_ROOT/npm}}"
@@ -76,12 +76,13 @@ docker_git_upsert_ssh_env "npm_config_cache" "$PACKAGE_NPM_CACHE"
 docker_git_upsert_ssh_env "YARN_CACHE_FOLDER" "$PACKAGE_YARN_CACHE"`
 
 export const renderEntrypointAuthorizedKeys = (config: TemplateConfig): string =>
-  `# 1) Authorized keys are mounted from host at /authorized_keys
+  `# 1) Mirror authorized_keys from the project home volume into ~/.ssh
+DOCKER_GIT_AUTH_KEYS="/home/${config.sshUser}/.docker-git/authorized_keys"
 mkdir -p /home/${config.sshUser}/.ssh
 chmod 700 /home/${config.sshUser}/.ssh
 
-if [[ -f /authorized_keys ]]; then
-  cp /authorized_keys /home/${config.sshUser}/.ssh/authorized_keys
+if [[ -f "$DOCKER_GIT_AUTH_KEYS" ]]; then
+  cp "$DOCKER_GIT_AUTH_KEYS" /home/${config.sshUser}/.ssh/authorized_keys
   chmod 600 /home/${config.sshUser}/.ssh/authorized_keys
 fi
 

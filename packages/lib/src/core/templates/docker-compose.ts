@@ -1,4 +1,4 @@
-import { resolveComposeNetworkName, type TemplateConfig } from "../domain.js"
+import { dockerGitSharedCodexVolumeName, resolveComposeNetworkName, type TemplateConfig } from "../domain.js"
 
 type ComposeFragments = {
   readonly networkMode: TemplateConfig["dockerNetworkMode"]
@@ -11,14 +11,12 @@ type ComposeFragments = {
   readonly maybeDependsOn: string
   readonly maybePlaywrightEnv: string
   readonly maybeBrowserService: string
-  readonly maybeBrowserVolume: string
   readonly forkRepoUrl: string
 }
 
-type PlaywrightFragments = Pick<
-  ComposeFragments,
-  "maybeDependsOn" | "maybePlaywrightEnv" | "maybeBrowserService" | "maybeBrowserVolume"
->
+type PlaywrightFragments = Pick<ComposeFragments, "maybeDependsOn" | "maybePlaywrightEnv" | "maybeBrowserService">
+
+const sharedCodexVolumeKey = "docker_git_shared_codex"
 
 const renderGitTokenLabelEnv = (gitTokenLabel: string): string =>
   gitTokenLabel.length > 0
@@ -45,12 +43,6 @@ const renderAgentAutoEnv = (agentAuto: boolean | undefined): string =>
     ? `      AGENT_AUTO: "1"\n`
     : ""
 
-const renderProjectsRootHostMount = (projectsRoot: string): string =>
-  `\${DOCKER_GIT_PROJECTS_ROOT_HOST:-${projectsRoot}}`
-
-const renderSharedCodexHostMount = (projectsRoot: string): string =>
-  `\${DOCKER_GIT_PROJECTS_ROOT_HOST:-${projectsRoot}}/.orch/auth/codex`
-
 const buildPlaywrightFragments = (
   config: TemplateConfig,
   networkName: string
@@ -59,8 +51,7 @@ const buildPlaywrightFragments = (
     return {
       maybeDependsOn: "",
       maybePlaywrightEnv: "",
-      maybeBrowserService: "",
-      maybeBrowserVolume: ""
+      maybeBrowserService: ""
     }
   }
 
@@ -75,8 +66,7 @@ const buildPlaywrightFragments = (
     maybePlaywrightEnv:
       `      MCP_PLAYWRIGHT_ENABLE: "1"\n      MCP_PLAYWRIGHT_CDP_ENDPOINT: "${browserCdpEndpoint}"\n`,
     maybeBrowserService:
-      `\n  ${browserServiceName}:\n    build:\n      context: .\n      dockerfile: ${browserDockerfile}\n    container_name: ${browserContainerName}\n    restart: unless-stopped\n    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`,
-    maybeBrowserVolume: `  ${browserVolumeName}:\n`
+      `\n  ${browserServiceName}:\n    build:\n      context: .\n      dockerfile: ${browserDockerfile}\n    container_name: ${browserContainerName}\n    restart: unless-stopped\n    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`
   }
 }
 
@@ -105,7 +95,6 @@ const buildComposeFragments = (config: TemplateConfig): ComposeFragments => {
     maybeDependsOn: playwright.maybeDependsOn,
     maybePlaywrightEnv: playwright.maybePlaywrightEnv,
     maybeBrowserService: playwright.maybeBrowserService,
-    maybeBrowserVolume: playwright.maybeBrowserVolume,
     forkRepoUrl
   }
 }
@@ -132,10 +121,7 @@ ${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    env_file:
       - "127.0.0.1:${config.sshPort}:22"
     volumes:
       - ${config.volumeName}:/home/${config.sshUser}
-      - ${renderProjectsRootHostMount(config.dockerGitPath)}:/home/${config.sshUser}/.docker-git
-      - ${config.authorizedKeysPath}:/authorized_keys:ro
-      - ${config.codexAuthPath}:${config.codexHome}
-      - ${renderSharedCodexHostMount(config.dockerGitPath)}:${config.codexHome}-shared
+      - ${sharedCodexVolumeKey}:${config.codexHome}-shared
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - ${fragments.networkName}
@@ -153,16 +139,21 @@ const renderComposeNetworks = (
   ${networkName}:
     driver: bridge`
 
-const renderComposeVolumes = (config: TemplateConfig, maybeBrowserVolume: string): string =>
-  `volumes:
-  ${config.volumeName}:
-${maybeBrowserVolume}`
+const renderComposeVolumes = (config: TemplateConfig, enableMcpPlaywright: boolean): string =>
+  [
+    "volumes:",
+    `  ${config.volumeName}:`,
+    `  ${sharedCodexVolumeKey}:`,
+    "    external: true",
+    `    name: ${dockerGitSharedCodexVolumeName}`,
+    ...(enableMcpPlaywright ? [`  ${config.volumeName}-browser:`] : [])
+  ].join("\n")
 
 export const renderDockerCompose = (config: TemplateConfig): string => {
   const fragments = buildComposeFragments(config)
   return [
     renderComposeServices(config, fragments),
     renderComposeNetworks(fragments.networkMode, fragments.networkName),
-    renderComposeVolumes(config, fragments.maybeBrowserVolume)
+    renderComposeVolumes(config, config.enableMcpPlaywright)
   ].join("\n\n")
 }

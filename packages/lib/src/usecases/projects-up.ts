@@ -4,14 +4,15 @@ import type { FileSystem } from "@effect/platform/FileSystem"
 import type { Path } from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
-import type { ProjectConfig, TemplateConfig } from "../core/domain.js"
+import { dockerGitSharedCodexVolumeName, type ProjectConfig, type TemplateConfig } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
 import {
   runDockerComposePsFormatted,
   runDockerComposeUp,
   runDockerExecExitCode,
   runDockerInspectContainerBridgeIp,
-  runDockerNetworkConnectBridge
+  runDockerNetworkConnectBridge,
+  runDockerVolumeCreate
 } from "../shell/docker.js"
 import type {
   ConfigDecodeError,
@@ -189,6 +190,7 @@ export const runDockerComposeUpWithPortCheck = (
     // Keep generated templates in sync with the running CLI version.
     yield* _(syncManagedProjectFiles(projectDir, updated))
     yield* _(ensureComposeNetworkReady(projectDir, updated))
+    yield* _(runDockerVolumeCreate(projectDir, dockerGitSharedCodexVolumeName))
     yield* _(runDockerComposeUp(projectDir))
     yield* _(ensureClaudeCliReady(projectDir, updated.containerName))
 

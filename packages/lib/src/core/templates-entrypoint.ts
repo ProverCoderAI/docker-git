@@ -34,11 +34,11 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
   [
     renderEntrypointHeader(config),
     renderEntrypointPackageCache(config),
+    renderEntrypointDockerGitBootstrap(config),
     renderEntrypointAuthorizedKeys(config),
     renderEntrypointCodexHome(config),
     renderEntrypointCodexSharedAuth(config),
     renderEntrypointOpenCodeConfig(config),
-    renderEntrypointDockerGitBootstrap(config),
     renderEntrypointMcpPlaywright(config),
     renderEntrypointZshShell(config),
     renderEntrypointZshUserRc(config),

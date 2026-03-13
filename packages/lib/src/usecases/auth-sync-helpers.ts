@@ -148,6 +148,7 @@ export type AuthPaths = {
   readonly envGlobalPath: string
   readonly envProjectPath: string
   readonly codexAuthPath: string
+  readonly claudeAuthPath: string
 }
 
 export type AuthSyncSpec = {
@@ -157,7 +158,4 @@ export type AuthSyncSpec = {
   readonly target: AuthPaths
 }
 
-export type LegacyOrchPaths = AuthPaths & {
-  readonly ghAuthPath: string
-  readonly claudeAuthPath: string
-}
+export type LegacyOrchPaths = AuthPaths & { readonly ghAuthPath: string }

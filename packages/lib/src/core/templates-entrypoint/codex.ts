@@ -2,8 +2,10 @@ import type { TemplateConfig } from "../domain.js"
 
 export const renderEntrypointCodexHome = (config: TemplateConfig): string =>
   `# Ensure Codex home exists if mounted
-mkdir -p ${config.codexHome}
-chown -R 1000:1000 ${config.codexHome}
+mkdir -p ${config.codexHome} && chown -R 1000:1000 ${config.codexHome}
+
+DOCKER_GIT_CODEX_BOOTSTRAP="/home/${config.sshUser}/.docker-git/.orch/auth/codex/config.toml"
+if [[ -f "$DOCKER_GIT_CODEX_BOOTSTRAP" && ! -f "${config.codexHome}/config.toml" ]]; then cp "$DOCKER_GIT_CODEX_BOOTSTRAP" "${config.codexHome}/config.toml"; chown 1000:1000 "${config.codexHome}/config.toml" || true; fi
 
 # Ensure home ownership matches the dev UID/GID (volumes may be stale)
 HOME_OWNER="$(stat -c "%u:%g" /home/${config.sshUser} 2>/dev/null || echo "")"
@@ -22,15 +24,13 @@ if [[ "$CODEX_SHARE_AUTH" == "1" ]]; then
     | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
   if [[ -z "$CODEX_LABEL_NORM" ]]; then CODEX_LABEL_NORM="default"; fi
   CODEX_AUTH_LABEL="$CODEX_LABEL_NORM"
-  CODEX_SHARED_HOME="${config.codexHome}-shared"
-  mkdir -p "$CODEX_SHARED_HOME"
-  chown -R 1000:1000 "$CODEX_SHARED_HOME" || true
-  AUTH_FILE="${config.codexHome}/auth.json"
-  SHARED_AUTH_FILE="$CODEX_SHARED_HOME/auth.json"
+  DOCKER_GIT_CODEX_AUTH_ROOT="/home/${config.sshUser}/.docker-git/.orch/auth/codex"; CODEX_SHARED_HOME="${config.codexHome}-shared"
+  mkdir -p "$CODEX_SHARED_HOME" && chown -R 1000:1000 "$CODEX_SHARED_HOME" || true
+  AUTH_FILE="${config.codexHome}/auth.json"; SHARED_AUTH_FILE="$CODEX_SHARED_HOME/auth.json"; SHARED_AUTH_SEED="$DOCKER_GIT_CODEX_AUTH_ROOT/auth.json"
   if [[ "$CODEX_LABEL_NORM" != "default" ]]; then
-    SHARED_AUTH_FILE="$CODEX_SHARED_HOME/$CODEX_LABEL_NORM/auth.json"
-    mkdir -p "$(dirname "$SHARED_AUTH_FILE")"
+    SHARED_AUTH_FILE="$CODEX_SHARED_HOME/$CODEX_LABEL_NORM/auth.json"; SHARED_AUTH_SEED="$DOCKER_GIT_CODEX_AUTH_ROOT/$CODEX_LABEL_NORM/auth.json"; mkdir -p "$(dirname "$SHARED_AUTH_FILE")"
   fi
+  if [[ ! -f "$SHARED_AUTH_FILE" && -f "$SHARED_AUTH_SEED" ]]; then cp "$SHARED_AUTH_SEED" "$SHARED_AUTH_FILE"; chmod 600 "$SHARED_AUTH_FILE" || true; chown 1000:1000 "$SHARED_AUTH_FILE" || true; fi
   # Guard against a bad bind mount creating a directory at auth.json.
   if [[ -d "$AUTH_FILE" ]]; then
     mv "$AUTH_FILE" "$AUTH_FILE.bak-$(date +%s)" || true
@@ -319,4 +319,5 @@ export const renderEntrypointAgentsNotice = (config: TemplateConfig): string =>
   entrypointAgentsNoticeTemplate.replaceAll("__CODEX_HOME__", config.codexHome).replaceAll(
     "__SSH_USER__",
     config.sshUser
-  ).replaceAll("__TARGET_DIR__", config.targetDir)
+  )
+    .replaceAll("__TARGET_DIR__", config.targetDir)

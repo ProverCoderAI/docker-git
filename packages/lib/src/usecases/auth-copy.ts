@@ -35,6 +35,23 @@ type CodexFileCopySpec = {
   readonly label: string
 }
 
+const sourceDirReady = (
+  fs: FileSystem.FileSystem,
+  sourceDir: string,
+  targetDir: string
+): Effect.Effect<boolean, PlatformError> =>
+  Effect.gen(function*(_) {
+    if (sourceDir === targetDir) {
+      return false
+    }
+    const sourceExists = yield* _(fs.exists(sourceDir))
+    if (!sourceExists) {
+      return false
+    }
+    const sourceInfo = yield* _(fs.stat(sourceDir))
+    return sourceInfo.type === "Directory"
+  })
+
 export const copyCodexFile = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
@@ -63,15 +80,8 @@ export const copyDirIfEmpty = (
   label: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
-    if (sourceDir === targetDir) {
-      return
-    }
-    const sourceExists = yield* _(fs.exists(sourceDir))
-    if (!sourceExists) {
-      return
-    }
-    const sourceInfo = yield* _(fs.stat(sourceDir))
-    if (sourceInfo.type !== "Directory") {
+    const ready = yield* _(sourceDirReady(fs, sourceDir, targetDir))
+    if (!ready) {
       return
     }
     yield* _(fs.makeDirectory(targetDir, { recursive: true }))
@@ -81,4 +91,51 @@ export const copyDirIfEmpty = (
     }
     yield* _(copyDirRecursive(fs, path, sourceDir, targetDir))
     yield* _(Effect.log(`Copied ${label} from ${sourceDir} to ${targetDir}`))
+  })
+
+const copyMissingRecursive = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sourcePath: string,
+  targetPath: string
+): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    const sourceInfo = yield* _(fs.stat(sourcePath))
+    if (sourceInfo.type === "Directory") {
+      yield* _(fs.makeDirectory(targetPath, { recursive: true }))
+      const entries = yield* _(fs.readDirectory(sourcePath))
+      for (const entry of entries) {
+        yield* _(copyMissingRecursive(fs, path, path.join(sourcePath, entry), path.join(targetPath, entry)))
+      }
+      return
+    }
+
+    if (sourceInfo.type !== "File") {
+      return
+    }
+
+    const targetExists = yield* _(fs.exists(targetPath))
+    if (targetExists) {
+      return
+    }
+
+    yield* _(fs.makeDirectory(path.dirname(targetPath), { recursive: true }))
+    yield* _(fs.copyFile(sourcePath, targetPath))
+  })
+
+export const copyDirMissingEntries = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sourceDir: string,
+  targetDir: string,
+  label: string
+): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    const ready = yield* _(sourceDirReady(fs, sourceDir, targetDir))
+    if (!ready) {
+      return
+    }
+
+    yield* _(copyMissingRecursive(fs, path, sourceDir, targetDir))
+    yield* _(Effect.log(`Seeded missing ${label} entries from ${sourceDir} to ${targetDir}`))
   })

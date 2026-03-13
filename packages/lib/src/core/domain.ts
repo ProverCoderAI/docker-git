@@ -9,6 +9,7 @@ export type DockerNetworkMode = "shared" | "project"
 export const defaultDockerNetworkMode: DockerNetworkMode = "shared"
 
 export const defaultDockerSharedNetworkName = "docker-git-shared"
+export const dockerGitSharedCodexVolumeName = "docker-git-shared-codex"
 
 export interface TemplateConfig {
   readonly containerName: string

@@ -1,7 +1,7 @@
 # docker-git
 
 `docker-git` создаёт отдельную Docker-среду для каждого репозитория, issue или PR.
-По умолчанию проекты лежат в `~/.docker-git`.
+По умолчанию управляющие файлы проекта лежат в `~/.docker-git`, а runtime workspace, `.docker-git` state и auth живут внутри Docker-managed volumes контейнера.
 
 ## Что нужно
 
