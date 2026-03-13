@@ -4,7 +4,7 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Duration, Effect, Fiber, Schedule } from "effect"
 
-import { type CreateCommand, dockerGitSharedCodexVolumeName } from "../../core/domain.js"
+import type { CreateCommand } from "../../core/domain.js"
 import {
   runDockerComposeDownVolumes,
   runDockerComposeLogsFollow,
@@ -12,14 +12,14 @@ import {
   runDockerComposeUpRecreate,
   runDockerExecExitCode,
   runDockerInspectContainerBridgeIp,
-  runDockerNetworkConnectBridge,
-  runDockerVolumeCreate
+  runDockerNetworkConnectBridge
 } from "../../shell/docker.js"
 import type { DockerCommandError } from "../../shell/errors.js"
 import { AgentFailedError, CloneFailedError } from "../../shell/errors.js"
 import { ensureComposeNetworkReady } from "../docker-network-gc.js"
 import { findSshPrivateKey, resolveAuthorizedKeysPath } from "../path-helpers.js"
 import { buildSshCommand } from "../projects.js"
+import { ensureSharedCodexVolumeReady } from "../shared-volume-seed.js"
 
 const maxPortAttempts = 25
 const clonePollInterval = Duration.seconds(1)
@@ -173,10 +173,10 @@ const runDockerComposeUpByMode = (
   projectConfig: CreateCommand["config"],
   force: boolean,
   forceEnv: boolean
-): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+): Effect.Effect<void, DockerCommandError | PlatformError, DockerUpEnvironment> =>
   Effect.gen(function*(_) {
     yield* _(ensureComposeNetworkReady(resolvedOutDir, projectConfig))
-    yield* _(runDockerVolumeCreate(resolvedOutDir, dockerGitSharedCodexVolumeName))
+    yield* _(ensureSharedCodexVolumeReady(resolvedOutDir, projectConfig))
 
     if (force) {
       yield* _(Effect.log("Force enabled: wiping docker compose volumes (docker compose down -v)..."))

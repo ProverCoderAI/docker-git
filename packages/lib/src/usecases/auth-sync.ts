@@ -3,7 +3,7 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import { copyDirIfEmpty, copyDirMissingEntries } from "./auth-copy.js"
+import { copyCodexFile, copyDirIfEmpty, copyDirMissingEntries } from "./auth-copy.js"
 import {
   type AuthSyncSpec,
   defaultCodexConfig,
@@ -172,7 +172,14 @@ export const syncAuthArtifacts = (
       yield* _(copyFileIfNeeded(sourceProject, targetProject))
       yield* _(fs.makeDirectory(targetCodex, { recursive: true }))
       if (sourceCodex !== targetCodex) {
-        yield* _(copyDirMissingEntries(fs, path, sourceCodex, targetCodex, "Codex auth bootstrap"))
+        yield* _(
+          copyCodexFile(fs, path, {
+            sourceDir: sourceCodex,
+            targetDir: targetCodex,
+            fileName: "config.toml",
+            label: "config"
+          })
+        )
       }
       yield* _(copyDirMissingEntries(fs, path, sourceClaude, targetClaude, "Claude auth bootstrap"))
     })

@@ -61,8 +61,8 @@ export const buildProjectConfigs = (
       : toPosixPath(resolvedConfig.envProjectPath),
     // Project-local Codex state (sessions/logs/etc) is kept under .orch.
     codexAuthPath: "./.orch/auth/codex",
-    // Bootstrap auth snapshots stay project-local; runtime links auth.json from the shared Docker volume.
-    codexSharedAuthPath: "./.orch/auth/codex"
+    // Keep the global auth source path so runtime can seed the shared Docker volume when containers start.
+    codexSharedAuthPath: relativeFromOutDir(globalConfig.codexSharedAuthPath)
   }
   return { globalConfig, projectConfig }
 }

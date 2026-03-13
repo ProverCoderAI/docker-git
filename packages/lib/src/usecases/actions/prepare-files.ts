@@ -42,7 +42,8 @@ const ensureFileReady = (
 
 const ensureAuthorizedKeys = (
   baseDir: string,
-  authorizedKeysPath: string
+  authorizedKeysPath: string,
+  preferredSource: string
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
@@ -59,8 +60,14 @@ const ensureAuthorizedKeys = (
         return
       }
 
-      const source = yield* _(findAuthorizedKeysSource(fs, path, process.cwd()))
+      const preferred = path.isAbsolute(preferredSource) || preferredSource.startsWith(".")
+        ? path.resolve(baseDir, preferredSource)
+        : preferredSource
+      const preferredExists = yield* _(fs.exists(preferred))
+      const source = preferredExists ? preferred : yield* _(findAuthorizedKeysSource(fs, path, process.cwd()))
       if (source === null) {
+        yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
+        yield* _(fs.writeFileString(resolved, ""))
         yield* _(
           Effect.logError(
             `Authorized keys not found. Create ${resolved} with your public key to enable SSH.`
@@ -133,7 +140,7 @@ export const prepareProjectFiles = (
     const createdFiles = yield* _(
       writeProjectFiles(resolvedOutDir, projectConfig, rewriteManagedFiles)
     )
-    yield* _(ensureAuthorizedKeys(resolvedOutDir, projectConfig.authorizedKeysPath))
+    yield* _(ensureAuthorizedKeys(resolvedOutDir, projectConfig.authorizedKeysPath, globalConfig.authorizedKeysPath))
     yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envGlobalPath, defaultGlobalEnvContents))
     yield* _(
       ensureEnvFile(

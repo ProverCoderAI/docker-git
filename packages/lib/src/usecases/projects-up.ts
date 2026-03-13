@@ -4,15 +4,14 @@ import type { FileSystem } from "@effect/platform/FileSystem"
 import type { Path } from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
-import { dockerGitSharedCodexVolumeName, type ProjectConfig, type TemplateConfig } from "../core/domain.js"
+import type { ProjectConfig, TemplateConfig } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
 import {
   runDockerComposePsFormatted,
   runDockerComposeUp,
   runDockerExecExitCode,
   runDockerInspectContainerBridgeIp,
-  runDockerNetworkConnectBridge,
-  runDockerVolumeCreate
+  runDockerNetworkConnectBridge
 } from "../shell/docker.js"
 import type {
   ConfigDecodeError,
@@ -26,6 +25,7 @@ import { ensureCodexConfigFile } from "./auth-sync.js"
 import { ensureComposeNetworkReady } from "./docker-network-gc.js"
 import { loadReservedPorts, selectAvailablePort } from "./ports-reserve.js"
 import { parseComposePsOutput } from "./projects-core.js"
+import { ensureSharedCodexVolumeReady } from "./shared-volume-seed.js"
 
 const maxPortAttempts = 25
 
@@ -190,7 +190,7 @@ export const runDockerComposeUpWithPortCheck = (
     // Keep generated templates in sync with the running CLI version.
     yield* _(syncManagedProjectFiles(projectDir, updated))
     yield* _(ensureComposeNetworkReady(projectDir, updated))
-    yield* _(runDockerVolumeCreate(projectDir, dockerGitSharedCodexVolumeName))
+    yield* _(ensureSharedCodexVolumeReady(projectDir, updated))
     yield* _(runDockerComposeUp(projectDir))
     yield* _(ensureClaudeCliReady(projectDir, updated.containerName))
 

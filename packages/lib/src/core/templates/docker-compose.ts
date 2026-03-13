@@ -1,4 +1,9 @@
-import { dockerGitSharedCodexVolumeName, resolveComposeNetworkName, type TemplateConfig } from "../domain.js"
+import {
+  dockerGitSharedCacheVolumeName,
+  dockerGitSharedCodexVolumeName,
+  resolveComposeNetworkName,
+  type TemplateConfig
+} from "../domain.js"
 
 type ComposeFragments = {
   readonly networkMode: TemplateConfig["dockerNetworkMode"]
@@ -17,6 +22,7 @@ type ComposeFragments = {
 type PlaywrightFragments = Pick<ComposeFragments, "maybeDependsOn" | "maybePlaywrightEnv" | "maybeBrowserService">
 
 const sharedCodexVolumeKey = "docker_git_shared_codex"
+const sharedCacheVolumeKey = "docker_git_shared_cache"
 
 const renderGitTokenLabelEnv = (gitTokenLabel: string): string =>
   gitTokenLabel.length > 0
@@ -121,6 +127,7 @@ ${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    env_file:
       - "127.0.0.1:${config.sshPort}:22"
     volumes:
       - ${config.volumeName}:/home/${config.sshUser}
+      - ${sharedCacheVolumeKey}:/home/${config.sshUser}/.docker-git/.cache
       - ${sharedCodexVolumeKey}:${config.codexHome}-shared
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
@@ -143,6 +150,9 @@ const renderComposeVolumes = (config: TemplateConfig, enableMcpPlaywright: boole
   [
     "volumes:",
     `  ${config.volumeName}:`,
+    `  ${sharedCacheVolumeKey}:`,
+    "    external: true",
+    `    name: ${dockerGitSharedCacheVolumeName}`,
     `  ${sharedCodexVolumeKey}:`,
     "    external: true",
     `    name: ${dockerGitSharedCodexVolumeName}`,

@@ -86,14 +86,6 @@ export const runDockerComposeUp = (
     runCompose(cwd, ["up", "-d", "--build"], [Number(ExitCode(0))])
   )
 
-export const runDockerVolumeCreate = (
-  cwd: string,
-  volumeName: string
-): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
-  runCommandWithExitCodes({ cwd, command: "docker", args: ["volume", "create", volumeName] }, [Number(ExitCode(0))], (
-    exitCode
-  ) => new DockerCommandError({ exitCode }))
-
 export const dockerComposeUpRecreateArgs: ReadonlyArray<string> = [
   "up",
   "-d",
