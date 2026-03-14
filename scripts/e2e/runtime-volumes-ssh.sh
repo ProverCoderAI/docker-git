@@ -81,7 +81,7 @@ command -v script >/dev/null 2>&1 || fail "missing 'script' command (util-linux)
 command -v timeout >/dev/null 2>&1 || fail "missing 'timeout' command"
 command -v ssh-keygen >/dev/null 2>&1 || fail "missing 'ssh-keygen' command"
 
-mkdir -p "$ROOT/.docker-git/.orch/auth/codex"
+mkdir -p "$ROOT/.orch/auth/codex"
 ssh-keygen -q -t ed25519 -N "" -C "docker-git-e2e" -f "$SSH_KEY" >/dev/null
 cp "$SSH_PUB_KEY" "$ROOT/authorized_keys"
 chmod 0644 "$ROOT/authorized_keys" || true
@@ -91,7 +91,7 @@ dg_write_docker_host_file "$ROOT/authorized_keys" 644 < "$SSH_PUB_KEY"
 
 # Seed a structurally valid auth.json so the shared Codex volume must be created
 # and wired into the container runtime.
-node <<'NODE' | dg_write_docker_host_file "$ROOT/.docker-git/.orch/auth/codex/auth.json" 600
+node <<'NODE' | dg_write_docker_host_file "$ROOT/.orch/auth/codex/auth.json" 600
 const now = Math.floor(Date.now() / 1000)
 const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url")
 const jwt = (payload) => `${b64({ alg: "none", typ: "JWT" })}.${b64(payload)}.sig`
