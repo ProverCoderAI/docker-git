@@ -42,6 +42,8 @@ export type CreateProjectRequest = {
   readonly envProjectPath?: string | undefined
   readonly codexAuthPath?: string | undefined
   readonly codexHome?: string | undefined
+  readonly cpuLimit?: string | undefined
+  readonly ramLimit?: string | undefined
   readonly dockerNetworkMode?: string | undefined
   readonly dockerSharedNetworkName?: string | undefined
   readonly enableMcpPlaywright?: boolean | undefined

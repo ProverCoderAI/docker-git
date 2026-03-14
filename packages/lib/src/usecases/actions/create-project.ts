@@ -24,6 +24,7 @@ import { applyGithubForkConfig } from "../github-fork.js"
 import { defaultProjectsRoot } from "../menu-helpers.js"
 import { findSshPrivateKey } from "../path-helpers.js"
 import { buildSshCommand } from "../projects-core.js"
+import { resolveTemplateResourceLimits } from "../resource-limits.js"
 import { autoSyncState } from "../state-repo.js"
 import { ensureTerminalCursorVisible } from "../terminal-cursor.js"
 import { runDockerDownCleanup, runDockerUpIfNeeded } from "./docker-up.js"
@@ -74,7 +75,8 @@ const resolveCreateConfig = (
   FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 > =>
   resolveSshPort(resolveRootedConfig(command, ctx), resolvedOutDir).pipe(
-    Effect.flatMap((config) => applyGithubForkConfig(config))
+    Effect.flatMap((config) => applyGithubForkConfig(config)),
+    Effect.flatMap((config) => resolveTemplateResourceLimits(config))
   )
 
 const logCreatedProject = (resolvedOutDir: string, createdFiles: ReadonlyArray<string>) =>

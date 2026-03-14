@@ -18,6 +18,8 @@ const expectCreateDefaults = (command: CreateCommand) => {
   expect(command.outDir).toBe(".docker-git/org/repo")
   expect(command.runUp).toBe(true)
   expect(command.forceEnv).toBe(false)
+  expect(command.config.cpuLimit).toBe("30%")
+  expect(command.config.ramLimit).toBe("30%")
   expect(command.config.dockerNetworkMode).toBe("shared")
   expect(command.config.dockerSharedNetworkName).toBe("docker-git-shared")
 }
@@ -35,6 +37,27 @@ describe("parseArgs", () => {
       expect(command.config.volumeName).toBe("dg-repo-home")
       expect(command.config.sshPort).toBe(defaultTemplateConfig.sshPort)
     }))
+
+  it.effect("parses create resource limit flags", () =>
+    expectCreateCommand(
+      ["create", "--repo-url", "https://github.com/org/repo.git", "--cpu", "30%", "--ram", "3072m"],
+      (command) => {
+        expect(command.config.cpuLimit).toBe("30%")
+        expect(command.config.ramLimit).toBe("3072m")
+      }
+    ))
+
+  it.effect("accepts legacy compose-style limit aliases", () =>
+    expectCreateCommand(
+      ["create", "--repo-url", "https://github.com/org/repo.git", "--cpus", "1.5", "--memory", "4g"],
+      (command) => {
+        expect(command.config.cpuLimit).toBe("1.5")
+        expect(command.config.ramLimit).toBe("4g")
+      }
+    ))
+
+  it.effect("rejects unitless RAM absolute limit", () =>
+    expectParseErrorTag(["create", "--repo-url", "https://github.com/org/repo.git", "--ram", "4096"], "InvalidOption"))
 
   it.effect("parses create command with issue url into isolated defaults", () =>
     expectCreateCommand(["create", "--repo-url", "https://github.com/org/repo/issues/9"], (command) => {
@@ -225,6 +248,8 @@ describe("parseArgs", () => {
         "--git-token=agien_main",
         "--codex-token=Team A",
         "--claude-token=Team B",
+        "--cpu=2",
+        "--ram=4g",
         "--mcp-playwright",
         "--no-up"
       ])
@@ -235,6 +260,8 @@ describe("parseArgs", () => {
       expect(command.gitTokenLabel).toBe("agien_main")
       expect(command.codexTokenLabel).toBe("Team A")
       expect(command.claudeTokenLabel).toBe("Team B")
+      expect(command.cpuLimit).toBe("2")
+      expect(command.ramLimit).toBe("4g")
       expect(command.enableMcpPlaywright).toBe(true)
     }))
 

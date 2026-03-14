@@ -20,6 +20,8 @@ interface ValueOptionSpec {
     | "envProjectPath"
     | "codexAuthPath"
     | "codexHome"
+    | "cpuLimit"
+    | "ramLimit"
     | "dockerNetworkMode"
     | "dockerSharedNetworkName"
     | "archivePath"
@@ -54,6 +56,10 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--env-project", key: "envProjectPath" },
   { flag: "--codex-auth", key: "codexAuthPath" },
   { flag: "--codex-home", key: "codexHome" },
+  { flag: "--cpu", key: "cpuLimit" },
+  { flag: "--cpus", key: "cpuLimit" },
+  { flag: "--ram", key: "ramLimit" },
+  { flag: "--memory", key: "ramLimit" },
   { flag: "--network-mode", key: "dockerNetworkMode" },
   { flag: "--shared-network", key: "dockerSharedNetworkName" },
   { flag: "--archive", key: "archivePath" },
@@ -109,6 +115,8 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   envProjectPath: (raw, value) => ({ ...raw, envProjectPath: value }),
   codexAuthPath: (raw, value) => ({ ...raw, codexAuthPath: value }),
   codexHome: (raw, value) => ({ ...raw, codexHome: value }),
+  cpuLimit: (raw, value) => ({ ...raw, cpuLimit: value }),
+  ramLimit: (raw, value) => ({ ...raw, ramLimit: value }),
   dockerNetworkMode: (raw, value) => ({ ...raw, dockerNetworkMode: value }),
   dockerSharedNetworkName: (raw, value) => ({ ...raw, dockerSharedNetworkName: value }),
   archivePath: (raw, value) => ({ ...raw, archivePath: value }),

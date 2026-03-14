@@ -45,28 +45,38 @@ type CreateReturnContext = CreateContext & {
   readonly view: Extract<ViewState, { readonly _tag: "Create" }>
 }
 
+type OptionalCreateArg = {
+  readonly value: string
+  readonly args: readonly [string, string]
+}
+
+const optionalCreateArgs = (input: CreateInputs): ReadonlyArray<OptionalCreateArg> => [
+  { value: input.repoUrl, args: ["--repo-url", input.repoUrl] },
+  { value: input.repoRef, args: ["--repo-ref", input.repoRef] },
+  { value: input.outDir, args: ["--out-dir", input.outDir] },
+  { value: input.cpuLimit, args: ["--cpu", input.cpuLimit] },
+  { value: input.ramLimit, args: ["--ram", input.ramLimit] }
+]
+
+const booleanCreateFlags = (input: CreateInputs): ReadonlyArray<string> =>
+  [
+    input.runUp ? null : "--no-up",
+    input.enableMcpPlaywright ? "--mcp-playwright" : null,
+    input.force ? "--force" : null,
+    input.forceEnv ? "--force-env" : null
+  ].filter((value): value is string => value !== null)
+
 export const buildCreateArgs = (input: CreateInputs): ReadonlyArray<string> => {
   const args: Array<string> = ["create"]
-  if (input.repoUrl.length > 0) {
-    args.push("--repo-url", input.repoUrl)
+
+  for (const spec of optionalCreateArgs(input)) {
+    if (spec.value.length > 0) {
+      args.push(spec.args[0], spec.args[1])
+    }
   }
-  if (input.repoRef.length > 0) {
-    args.push("--repo-ref", input.repoRef)
-  }
-  if (input.outDir.length > 0) {
-    args.push("--out-dir", input.outDir)
-  }
-  if (!input.runUp) {
-    args.push("--no-up")
-  }
-  if (input.enableMcpPlaywright) {
-    args.push("--mcp-playwright")
-  }
-  if (input.force) {
-    args.push("--force")
-  }
-  if (input.forceEnv) {
-    args.push("--force-env")
+
+  for (const flag of booleanCreateFlags(input)) {
+    args.push(flag)
   }
   return args
 }
@@ -118,6 +128,8 @@ export const resolveCreateInputs = (
     repoUrl,
     repoRef: values.repoRef ?? resolvedRepoRef ?? "main",
     outDir,
+    cpuLimit: values.cpuLimit ?? "",
+    ramLimit: values.ramLimit ?? "",
     runUp: values.runUp !== false,
     enableMcpPlaywright: values.enableMcpPlaywright === true,
     force: values.force === true,
@@ -194,6 +206,14 @@ const applyCreateStep = (input: {
     }),
     Match.when("outDir", () => {
       input.nextValues.outDir = input.buffer.length > 0 ? input.buffer : input.currentDefaults.outDir
+      return true
+    }),
+    Match.when("cpuLimit", () => {
+      input.nextValues.cpuLimit = input.buffer.length > 0 ? input.buffer : input.currentDefaults.cpuLimit
+      return true
+    }),
+    Match.when("ramLimit", () => {
+      input.nextValues.ramLimit = input.buffer.length > 0 ? input.buffer : input.currentDefaults.ramLimit
       return true
     }),
     Match.when("runUp", () => {

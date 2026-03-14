@@ -5,6 +5,8 @@ export const hasApplyOverrides = (command: ApplyCommand): boolean =>
   command.gitTokenLabel !== undefined ||
   command.codexTokenLabel !== undefined ||
   command.claudeTokenLabel !== undefined ||
+  command.cpuLimit !== undefined ||
+  command.ramLimit !== undefined ||
   command.enableMcpPlaywright !== undefined
 
 export const applyTemplateOverrides = (
@@ -33,6 +35,18 @@ export const applyTemplateOverrides = (
     nextTemplate = {
       ...nextTemplate,
       claudeAuthLabel: normalizeAuthLabel(command.claudeTokenLabel)
+    }
+  }
+  if (command.cpuLimit !== undefined) {
+    nextTemplate = {
+      ...nextTemplate,
+      cpuLimit: command.cpuLimit
+    }
+  }
+  if (command.ramLimit !== undefined) {
+    nextTemplate = {
+      ...nextTemplate,
+      ramLimit: command.ramLimit
     }
   }
   if (command.enableMcpPlaywright !== undefined) {

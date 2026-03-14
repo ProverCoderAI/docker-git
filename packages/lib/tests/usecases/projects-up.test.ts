@@ -187,10 +187,18 @@ describe("runDockerComposeUpWithPortCheck", () => {
         )
 
         expect(updated.targetDir).toBe(updatedTargetDir)
+        expect(updated.cpuLimit).toBe("30%")
+        expect(updated.ramLimit).toBe("30%")
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
         expect(composeAfter).toContain(`TARGET_DIR: "${updatedTargetDir}"`)
         expect(composeAfter).not.toContain("# stale compose")
+        expect(composeAfter).toContain("cpus:")
+        expect(composeAfter).toContain('mem_limit: "')
+
+        const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
+        expect(configAfter).toContain('"cpuLimit": "30%"')
+        expect(configAfter).toContain('"ramLimit": "30%"')
 
         expect(recorded.some((entry) => isDockerComposePsFormatted(entry))).toBe(true)
         expect(recorded.some((entry) => isDockerComposeUp(entry))).toBe(true)

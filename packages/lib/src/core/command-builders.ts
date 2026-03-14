@@ -2,67 +2,24 @@ import { Either } from "effect"
 
 import { expandContainerHome } from "../usecases/scrap-path.js"
 import { resolveAutoAgentFlags } from "./auto-agent-flags.js"
+import { nonEmpty, parseDockerNetworkMode, parseSshPort } from "./command-builders-shared.js"
 import { type RawOptions } from "./command-options.js"
 import {
   type AgentMode,
   type CreateCommand,
+  defaultCpuLimit,
+  defaultRamLimit,
   defaultTemplateConfig,
   deriveRepoPathParts,
   deriveRepoSlug,
-  isDockerNetworkMode,
   type ParseError,
   resolveRepoInput
 } from "./domain.js"
+import { normalizeCpuLimit, normalizeRamLimit } from "./resource-limits.js"
 import { trimRightChar } from "./strings.js"
 import { normalizeAuthLabel, normalizeGitTokenLabel } from "./token-labels.js"
 
-const parsePort = (value: string): Either.Either<number, ParseError> => {
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed)) {
-    return Either.left({
-      _tag: "InvalidOption",
-      option: "--ssh-port",
-      reason: `expected integer, got: ${value}`
-    })
-  }
-  if (parsed < 1 || parsed > 65_535) {
-    return Either.left({
-      _tag: "InvalidOption",
-      option: "--ssh-port",
-      reason: "must be between 1 and 65535"
-    })
-  }
-  return Either.right(parsed)
-}
-
-const parseDockerNetworkMode = (
-  value: string | undefined
-): Either.Either<CreateCommand["config"]["dockerNetworkMode"], ParseError> => {
-  const candidate = value?.trim() ?? defaultTemplateConfig.dockerNetworkMode
-  if (isDockerNetworkMode(candidate)) {
-    return Either.right(candidate)
-  }
-  return Either.left({
-    _tag: "InvalidOption",
-    option: "--network-mode",
-    reason: "expected one of: shared, project"
-  })
-}
-
-export const nonEmpty = (
-  option: string,
-  value: string | undefined,
-  fallback?: string
-): Either.Either<string, ParseError> => {
-  const candidate = value?.trim() ?? fallback
-  if (candidate === undefined || candidate.length === 0) {
-    return Either.left({
-      _tag: "MissingRequiredOption",
-      option
-    })
-  }
-  return Either.right(candidate)
-}
+export { nonEmpty } from "./command-builders-shared.js"
 
 const normalizeSecretsRoot = (value: string): string => trimRightChar(value, "/")
 
@@ -95,7 +52,7 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
       nonEmpty("--target-dir", raw.targetDir, defaultTemplateConfig.targetDir)
     )
     const targetDir = expandContainerHome(sshUser, rawTargetDir)
-    const sshPort = yield* _(parsePort(raw.sshPort ?? String(defaultTemplateConfig.sshPort)))
+    const sshPort = yield* _(parseSshPort(raw.sshPort ?? String(defaultTemplateConfig.sshPort)))
 
     return { repoUrl, repoSlug, projectSlug, repoPath, repoRef, targetDir, sshUser, sshPort }
   })
@@ -222,6 +179,8 @@ type BuildTemplateConfigInput = {
   readonly repo: RepoBasics
   readonly names: NameConfig
   readonly paths: PathConfig
+  readonly cpuLimit: string | undefined
+  readonly ramLimit: string | undefined
   readonly dockerNetworkMode: CreateCommand["config"]["dockerNetworkMode"]
   readonly dockerSharedNetworkName: string
   readonly gitTokenLabel: string | undefined
@@ -237,12 +196,14 @@ const buildTemplateConfig = ({
   agentMode,
   claudeAuthLabel,
   codexAuthLabel,
+  cpuLimit,
   dockerNetworkMode,
   dockerSharedNetworkName,
   enableMcpPlaywright,
   gitTokenLabel,
   names,
   paths,
+  ramLimit,
   repo
 }: BuildTemplateConfigInput): CreateCommand["config"] => ({
   containerName: names.containerName,
@@ -263,6 +224,8 @@ const buildTemplateConfig = ({
   codexAuthPath: paths.codexAuthPath,
   codexSharedAuthPath: paths.codexSharedAuthPath,
   codexHome: paths.codexHome,
+  cpuLimit,
+  ramLimit,
   dockerNetworkMode,
   dockerSharedNetworkName,
   enableMcpPlaywright,
@@ -292,6 +255,8 @@ export const buildCreateCommand = (
     const gitTokenLabel = normalizeGitTokenLabel(raw.gitTokenLabel)
     const codexAuthLabel = normalizeAuthLabel(raw.codexTokenLabel)
     const claudeAuthLabel = normalizeAuthLabel(raw.claudeTokenLabel)
+    const cpuLimit = yield* _(normalizeCpuLimit(raw.cpuLimit ?? defaultCpuLimit, "--cpu"))
+    const ramLimit = yield* _(normalizeRamLimit(raw.ramLimit ?? defaultRamLimit, "--ram"))
     const dockerNetworkMode = yield* _(parseDockerNetworkMode(raw.dockerNetworkMode))
     const dockerSharedNetworkName = yield* _(
       nonEmpty("--shared-network", raw.dockerSharedNetworkName, defaultTemplateConfig.dockerSharedNetworkName)
@@ -310,6 +275,8 @@ export const buildCreateCommand = (
         repo,
         names,
         paths,
+        cpuLimit,
+        ramLimit,
         dockerNetworkMode,
         dockerSharedNetworkName,
         gitTokenLabel,

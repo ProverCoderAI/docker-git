@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "./domain.js"
+import type { ResolvedComposeResourceLimits } from "./resource-limits.js"
 import { renderEntrypoint } from "./templates-entrypoint.js"
 import { renderDockerCompose } from "./templates/docker-compose.js"
 import { renderDockerfile } from "./templates/dockerfile.js"
@@ -34,7 +35,10 @@ const renderConfigJson = (config: TemplateConfig): string =>
   `${JSON.stringify({ schemaVersion: 1, template: config }, null, 2)}
 `
 
-export const planFiles = (config: TemplateConfig): ReadonlyArray<FileSpec> => {
+export const planFiles = (
+  config: TemplateConfig,
+  composeResourceLimits?: ResolvedComposeResourceLimits
+): ReadonlyArray<FileSpec> => {
   const maybePlaywrightFiles = config.enableMcpPlaywright
     ? ([
       { _tag: "File", relativePath: "Dockerfile.browser", contents: renderPlaywrightBrowserDockerfile() },
@@ -50,7 +54,11 @@ export const planFiles = (config: TemplateConfig): ReadonlyArray<FileSpec> => {
   return [
     { _tag: "File", relativePath: "Dockerfile", contents: renderDockerfile(config) },
     { _tag: "File", relativePath: "entrypoint.sh", contents: renderEntrypoint(config), mode: 0o755 },
-    { _tag: "File", relativePath: "docker-compose.yml", contents: renderDockerCompose(config) },
+    {
+      _tag: "File",
+      relativePath: "docker-compose.yml",
+      contents: renderDockerCompose(config, composeResourceLimits)
+    },
     { _tag: "File", relativePath: ".dockerignore", contents: renderDockerignore() },
     { _tag: "File", relativePath: "docker-git.json", contents: renderConfigJson(config) },
     { _tag: "File", relativePath: ".gitignore", contents: renderGitignore() },

@@ -26,6 +26,7 @@ import { ensureComposeNetworkReady } from "./docker-network-gc.js"
 import { loadReservedPorts, selectAvailablePort } from "./ports-reserve.js"
 import { parseComposePsOutput } from "./projects-core.js"
 import { ensureSharedCodexVolumeReady } from "./shared-volume-seed.js"
+import { resolveTemplateResourceLimits } from "./resource-limits.js"
 
 const maxPortAttempts = 25
 
@@ -187,12 +188,13 @@ export const runDockerComposeUpWithPortCheck = (
     const updated = alreadyRunning
       ? config.template
       : yield* _(ensureAvailableSshPort(projectDir, config))
+    const resolvedTemplate = yield* _(resolveTemplateResourceLimits(updated))
     // Keep generated templates in sync with the running CLI version.
-    yield* _(syncManagedProjectFiles(projectDir, updated))
-    yield* _(ensureComposeNetworkReady(projectDir, updated))
-    yield* _(ensureSharedCodexVolumeReady(projectDir, updated))
+    yield* _(syncManagedProjectFiles(projectDir, resolvedTemplate))
+    yield* _(ensureComposeNetworkReady(projectDir, resolvedTemplate))
+    yield* _(ensureSharedCodexVolumeReady(projectDir, resolvedTemplate))
     yield* _(runDockerComposeUp(projectDir))
-    yield* _(ensureClaudeCliReady(projectDir, updated.containerName))
+    yield* _(ensureClaudeCliReady(projectDir, resolvedTemplate.containerName))
 
     const ensureBridgeAccess = (containerName: string) =>
       runDockerInspectContainerBridgeIp(projectDir, containerName).pipe(
@@ -212,10 +214,10 @@ export const runDockerComposeUpWithPortCheck = (
         })
       )
 
-    yield* _(ensureBridgeAccess(updated.containerName))
-    if (updated.enableMcpPlaywright) {
-      yield* _(ensureBridgeAccess(`${updated.containerName}-browser`))
+    yield* _(ensureBridgeAccess(resolvedTemplate.containerName))
+    if (resolvedTemplate.enableMcpPlaywright) {
+      yield* _(ensureBridgeAccess(`${resolvedTemplate.containerName}-browser`))
     }
 
-    return updated
+    return resolvedTemplate
   })

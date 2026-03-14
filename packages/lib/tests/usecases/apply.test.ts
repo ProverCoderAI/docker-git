@@ -145,9 +145,17 @@ describe("applyProjectFiles", () => {
 
         const appliedTemplate = yield* _(applyProjectFiles(outDir))
         expect(appliedTemplate.targetDir).toBe(updatedTargetDir)
+        expect(appliedTemplate.cpuLimit).toBe("30%")
+        expect(appliedTemplate.ramLimit).toBe("30%")
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
         expect(composeAfter).toContain(`TARGET_DIR: "${updatedTargetDir}"`)
+        expect(composeAfter).toContain("cpus:")
+        expect(composeAfter).toContain('mem_limit: "')
+
+        const configAfter = yield* _(fs.readFileString(configPath))
+        expect(configAfter).toContain('"cpuLimit": "30%"')
+        expect(configAfter).toContain('"ramLimit": "30%"')
 
         const dockerfileAfter = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
         expect(dockerfileAfter).toContain(`RUN mkdir -p ${updatedTargetDir}`)
@@ -182,12 +190,16 @@ describe("applyProjectFiles", () => {
             gitTokenLabel: "agien_main",
             codexTokenLabel: "Team A",
             claudeTokenLabel: "Team B",
+            cpuLimit: "2",
+            ramLimit: "4g",
             enableMcpPlaywright: true
           })
         )
         expect(appliedTemplate.gitTokenLabel).toBe("AGIEN_MAIN")
         expect(appliedTemplate.codexAuthLabel).toBe("team-a")
         expect(appliedTemplate.claudeAuthLabel).toBe("team-b")
+        expect(appliedTemplate.cpuLimit).toBe("2")
+        expect(appliedTemplate.ramLimit).toBe("4g")
         expect(appliedTemplate.enableMcpPlaywright).toBe(true)
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
@@ -195,8 +207,15 @@ describe("applyProjectFiles", () => {
         expect(composeAfter).toContain('GIT_AUTH_LABEL: "AGIEN_MAIN"')
         expect(composeAfter).toContain('CODEX_AUTH_LABEL: "team-a"')
         expect(composeAfter).toContain('CLAUDE_AUTH_LABEL: "team-b"')
+        expect(composeAfter).toContain("cpus: 2")
+        expect(composeAfter).toContain('mem_limit: "4g"')
+        expect(composeAfter).toContain('memswap_limit: "4g"')
         expect(composeAfter).toContain('MCP_PLAYWRIGHT_ENABLE: "1"')
         expect(composeAfter).toContain("dg-test-browser")
+
+        const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
+        expect(configAfter).toContain('"cpuLimit": "2"')
+        expect(configAfter).toContain('"ramLimit": "4g"')
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

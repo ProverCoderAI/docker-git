@@ -37,6 +37,12 @@ const TemplateConfigSchema = Schema.Struct({
     default: () => defaultTemplateConfig.codexSharedAuthPath
   }),
   codexHome: Schema.String,
+  cpuLimit: Schema.optionalWith(Schema.String, {
+    default: () => defaultTemplateConfig.cpuLimit
+  }),
+  ramLimit: Schema.optionalWith(Schema.String, {
+    default: () => defaultTemplateConfig.ramLimit
+  }),
   dockerNetworkMode: Schema.optionalWith(Schema.Literal("shared", "project"), {
     default: () => defaultTemplateConfig.dockerNetworkMode
   }),

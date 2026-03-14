@@ -48,6 +48,8 @@ export type CreateInputs = {
   readonly repoUrl: string
   readonly repoRef: string
   readonly outDir: string
+  readonly cpuLimit: string
+  readonly ramLimit: string
   readonly runUp: boolean
   readonly enableMcpPlaywright: boolean
   readonly force: boolean
@@ -58,6 +60,8 @@ export type CreateStep =
   | "repoUrl"
   | "repoRef"
   | "outDir"
+  | "cpuLimit"
+  | "ramLimit"
   | "runUp"
   | "mcpPlaywright"
   | "force"
@@ -66,6 +70,8 @@ export const createSteps: ReadonlyArray<CreateStep> = [
   "repoUrl",
   "repoRef",
   "outDir",
+  "cpuLimit",
+  "ramLimit",
   "runUp",
   "mcpPlaywright",
   "force"

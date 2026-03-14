@@ -4,6 +4,7 @@ import {
   resolveComposeNetworkName,
   type TemplateConfig
 } from "../domain.js"
+import type { ResolvedComposeResourceLimits } from "../resource-limits.js"
 
 type ComposeFragments = {
   readonly networkMode: TemplateConfig["dockerNetworkMode"]
@@ -49,9 +50,14 @@ const renderAgentAutoEnv = (agentAuto: boolean | undefined): string =>
     ? `      AGENT_AUTO: "1"\n`
     : ""
 
+const renderResourceLimits = (resourceLimits: ResolvedComposeResourceLimits | undefined): string =>
+  resourceLimits === undefined
+    ? ""
+    : `    cpus: ${resourceLimits.cpuLimit}\n    mem_limit: "${resourceLimits.ramLimit}"\n    memswap_limit: "${resourceLimits.ramLimit}"\n`
 const buildPlaywrightFragments = (
   config: TemplateConfig,
-  networkName: string
+  networkName: string,
+  resourceLimits: ResolvedComposeResourceLimits | undefined
 ): PlaywrightFragments => {
   if (!config.enableMcpPlaywright) {
     return {
@@ -72,11 +78,16 @@ const buildPlaywrightFragments = (
     maybePlaywrightEnv:
       `      MCP_PLAYWRIGHT_ENABLE: "1"\n      MCP_PLAYWRIGHT_CDP_ENDPOINT: "${browserCdpEndpoint}"\n`,
     maybeBrowserService:
-      `\n  ${browserServiceName}:\n    build:\n      context: .\n      dockerfile: ${browserDockerfile}\n    container_name: ${browserContainerName}\n    restart: unless-stopped\n    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`
+      `\n  ${browserServiceName}:\n    build:\n      context: .\n      dockerfile: ${browserDockerfile}\n    container_name: ${browserContainerName}\n    restart: unless-stopped\n${
+        renderResourceLimits(resourceLimits)
+      }    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`
   }
 }
 
-const buildComposeFragments = (config: TemplateConfig): ComposeFragments => {
+const buildComposeFragments = (
+  config: TemplateConfig,
+  resourceLimits: ResolvedComposeResourceLimits | undefined
+): ComposeFragments => {
   const networkMode = config.dockerNetworkMode
   const networkName = resolveComposeNetworkName(config)
   const forkRepoUrl = config.forkRepoUrl ?? ""
@@ -88,7 +99,7 @@ const buildComposeFragments = (config: TemplateConfig): ComposeFragments => {
   const maybeClaudeAuthLabelEnv = renderClaudeAuthLabelEnv(claudeAuthLabel)
   const maybeAgentModeEnv = renderAgentModeEnv(config.agentMode)
   const maybeAgentAutoEnv = renderAgentAutoEnv(config.agentAuto)
-  const playwright = buildPlaywrightFragments(config, networkName)
+  const playwright = buildPlaywrightFragments(config, networkName, resourceLimits)
 
   return {
     networkMode,
@@ -105,7 +116,11 @@ const buildComposeFragments = (config: TemplateConfig): ComposeFragments => {
   }
 }
 
-const renderComposeServices = (config: TemplateConfig, fragments: ComposeFragments): string =>
+const renderComposeServices = (
+  config: TemplateConfig,
+  fragments: ComposeFragments,
+  resourceLimits: ResolvedComposeResourceLimits | undefined
+): string =>
   `services:
   ${config.serviceName}:
     build: .
@@ -125,7 +140,7 @@ ${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    env_file:
       - ${config.envProjectPath}
     ports:
       - "127.0.0.1:${config.sshPort}:22"
-    volumes:
+${renderResourceLimits(resourceLimits)}    volumes:
       - ${config.volumeName}:/home/${config.sshUser}
       - ${sharedCacheVolumeKey}:/home/${config.sshUser}/.docker-git/.cache
       - ${sharedCodexVolumeKey}:${config.codexHome}-shared
@@ -159,10 +174,13 @@ const renderComposeVolumes = (config: TemplateConfig, enableMcpPlaywright: boole
     ...(enableMcpPlaywright ? [`  ${config.volumeName}-browser:`] : [])
   ].join("\n")
 
-export const renderDockerCompose = (config: TemplateConfig): string => {
-  const fragments = buildComposeFragments(config)
+export const renderDockerCompose = (
+  config: TemplateConfig,
+  resourceLimits?: ResolvedComposeResourceLimits
+): string => {
+  const fragments = buildComposeFragments(config, resourceLimits)
   return [
-    renderComposeServices(config, fragments),
+    renderComposeServices(config, fragments, resourceLimits),
     renderComposeNetworks(fragments.networkMode, fragments.networkName),
     renderComposeVolumes(config, config.enableMcpPlaywright)
   ].join("\n\n")

@@ -192,6 +192,8 @@ export const createProjectFromRequest = (
       ...(request.envProjectPath === undefined ? {} : { envProjectPath: request.envProjectPath }),
       ...(request.codexAuthPath === undefined ? {} : { codexAuthPath: request.codexAuthPath }),
       ...(request.codexHome === undefined ? {} : { codexHome: request.codexHome }),
+      ...(request.cpuLimit === undefined ? {} : { cpuLimit: request.cpuLimit }),
+      ...(request.ramLimit === undefined ? {} : { ramLimit: request.ramLimit }),
       ...(request.dockerNetworkMode === undefined ? {} : { dockerNetworkMode: request.dockerNetworkMode }),
       ...(request.dockerSharedNetworkName === undefined ? {} : { dockerSharedNetworkName: request.dockerSharedNetworkName }),
       ...(request.enableMcpPlaywright === undefined ? {} : { enableMcpPlaywright: request.enableMcpPlaywright }),

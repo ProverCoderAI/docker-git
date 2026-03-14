@@ -25,6 +25,8 @@ export interface RawOptions {
   readonly envProjectPath?: string
   readonly codexAuthPath?: string
   readonly codexHome?: string
+  readonly cpuLimit?: string
+  readonly ramLimit?: string
   readonly dockerNetworkMode?: string
   readonly dockerSharedNetworkName?: string
   readonly enableMcpPlaywright?: boolean

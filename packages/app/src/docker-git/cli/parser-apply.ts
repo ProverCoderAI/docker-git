@@ -1,6 +1,7 @@
 import { Either } from "effect"
 
 import { type ApplyCommand, type ParseError } from "@effect-template/lib/core/domain"
+import { normalizeCpuLimit, normalizeRamLimit } from "@effect-template/lib/core/resource-limits"
 
 import { parseProjectDirWithOptions } from "./parser-shared.js"
 
@@ -17,12 +18,19 @@ import { parseProjectDirWithOptions } from "./parser-shared.js"
 export const parseApply = (
   args: ReadonlyArray<string>
 ): Either.Either<ApplyCommand, ParseError> =>
-  Either.map(parseProjectDirWithOptions(args), ({ projectDir, raw }) => ({
-    _tag: "Apply",
-    projectDir,
-    runUp: raw.up ?? true,
-    gitTokenLabel: raw.gitTokenLabel,
-    codexTokenLabel: raw.codexTokenLabel,
-    claudeTokenLabel: raw.claudeTokenLabel,
-    enableMcpPlaywright: raw.enableMcpPlaywright
-  }))
+  Either.gen(function*(_) {
+    const { projectDir, raw } = yield* _(parseProjectDirWithOptions(args))
+    const cpuLimit = yield* _(normalizeCpuLimit(raw.cpuLimit, "--cpu"))
+    const ramLimit = yield* _(normalizeRamLimit(raw.ramLimit, "--ram"))
+    return {
+      _tag: "Apply",
+      projectDir,
+      runUp: raw.up ?? true,
+      gitTokenLabel: raw.gitTokenLabel,
+      codexTokenLabel: raw.codexTokenLabel,
+      claudeTokenLabel: raw.claudeTokenLabel,
+      cpuLimit,
+      ramLimit,
+      enableMcpPlaywright: raw.enableMcpPlaywright
+    }
+  })

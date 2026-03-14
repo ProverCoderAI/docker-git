@@ -31,6 +31,8 @@ export const renderStepLabel = (step: CreateStep, defaults: CreateInputs): strin
     Match.when("repoUrl", () => "Repo URL (optional for empty workspace)"),
     Match.when("repoRef", () => `Repo ref [${defaults.repoRef}]`),
     Match.when("outDir", () => `Output dir [${defaults.outDir}]`),
+    Match.when("cpuLimit", () => `CPU limit [${defaults.cpuLimit || "30%"}]`),
+    Match.when("ramLimit", () => `RAM limit [${defaults.ramLimit || "30%"}]`),
     Match.when("runUp", () => `Run docker compose up now? [${defaults.runUp ? "Y" : "n"}]`),
     Match.when(
       "mcpPlaywright",

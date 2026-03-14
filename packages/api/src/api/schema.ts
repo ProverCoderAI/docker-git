@@ -18,6 +18,8 @@ export const CreateProjectRequestSchema = Schema.Struct({
   envProjectPath: OptionalString,
   codexAuthPath: OptionalString,
   codexHome: OptionalString,
+  cpuLimit: OptionalString,
+  ramLimit: OptionalString,
   dockerNetworkMode: OptionalString,
   dockerSharedNetworkName: OptionalString,
   enableMcpPlaywright: OptionalBoolean,

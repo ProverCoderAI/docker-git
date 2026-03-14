@@ -383,6 +383,16 @@ export const uiHtml = `<!doctype html>
                   </select>
                 </div>
               </div>
+              <div class="row" style="margin-top:0.5rem">
+                <div>
+                  <label for="create-cpu">CPU limit</label>
+                  <input id="create-cpu" type="text" placeholder="30% or 1.5" />
+                </div>
+                <div>
+                  <label for="create-ram">RAM limit</label>
+                  <input id="create-ram" type="text" placeholder="30% or 4g" />
+                </div>
+              </div>
               <div class="checkbox-row" style="margin-top:0.6rem">
                 <input id="create-up" type="checkbox" checked />
                 <label for="create-up" style="margin:0">run up</label>
@@ -530,6 +540,8 @@ export const uiScript = `
     createRepoRef: byId('create-repo-ref'),
     createSshPort: byId('create-ssh-port'),
     createNetworkMode: byId('create-network-mode'),
+    createCpu: byId('create-cpu'),
+    createRam: byId('create-ram'),
     createUp: byId('create-up'),
     createForce: byId('create-force'),
     createForceEnv: byId('create-force-env')
@@ -818,6 +830,8 @@ export const uiScript = `
       repoUrl: views.createRepoUrl.value.trim() || undefined,
       repoRef: views.createRepoRef.value.trim() || undefined,
       sshPort: views.createSshPort.value.trim() || undefined,
+      cpuLimit: views.createCpu.value.trim() || undefined,
+      ramLimit: views.createRam.value.trim() || undefined,
       dockerNetworkMode: views.createNetworkMode.value.trim() || undefined,
       up: views.createUp.checked,
       force: views.createForce.checked,

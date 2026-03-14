@@ -12,6 +12,10 @@ export const defaultDockerSharedNetworkName = "docker-git-shared"
 export const dockerGitSharedCacheVolumeName = "docker-git-shared-cache"
 export const dockerGitSharedCodexVolumeName = "docker-git-shared-codex"
 
+export const defaultCpuLimit = "30%"
+
+export const defaultRamLimit = "30%"
+
 export interface TemplateConfig {
   readonly containerName: string
   readonly serviceName: string
@@ -32,6 +36,8 @@ export interface TemplateConfig {
   readonly codexAuthPath: string
   readonly codexSharedAuthPath: string
   readonly codexHome: string
+  readonly cpuLimit?: string | undefined
+  readonly ramLimit?: string | undefined
   readonly dockerNetworkMode: DockerNetworkMode
   readonly dockerSharedNetworkName: string
   readonly enableMcpPlaywright: boolean
@@ -129,6 +135,8 @@ export interface ApplyCommand {
   readonly gitTokenLabel?: string | undefined
   readonly codexTokenLabel?: string | undefined
   readonly claudeTokenLabel?: string | undefined
+  readonly cpuLimit?: string | undefined
+  readonly ramLimit?: string | undefined
   readonly enableMcpPlaywright?: boolean | undefined
 }
 
@@ -321,6 +329,8 @@ export const defaultTemplateConfig = {
   codexAuthPath: "./.docker-git/.orch/auth/codex",
   codexSharedAuthPath: "./.docker-git/.orch/auth/codex",
   codexHome: "/home/dev/.codex",
+  cpuLimit: defaultCpuLimit,
+  ramLimit: defaultRamLimit,
   dockerNetworkMode: defaultDockerNetworkMode,
   dockerSharedNetworkName: defaultDockerSharedNetworkName,
   enableMcpPlaywright: false,

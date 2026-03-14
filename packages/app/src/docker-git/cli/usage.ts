@@ -50,6 +50,8 @@ Options:
   --env-project <path>      Host path to project env file (default: ./.orch/env/project.env)
   --codex-auth <path>       Host path for Codex auth cache (default: <projectsRoot>/.orch/auth/codex)
   --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
+  --cpu <value>             CPU limit: percent or cores (examples: 30%, 1.5; default: 30%)
+  --ram <value>             RAM limit: percent or size (examples: 30%, 512m, 4g; default: 30%)
   --network-mode <mode>     Compose network mode: shared|project (default: shared)
   --shared-network <name>   Shared Docker network name when network-mode=shared (default: docker-git-shared)
   --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>[/issue-<id>|/pr-<id>])

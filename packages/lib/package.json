@@ -50,7 +50,7 @@
     "ts-morph": "^27.0.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.6",
+    "@biomejs/biome": "^2.4.7",
     "@effect/eslint-plugin": "^0.3.2",
     "@effect/language-service": "latest",
     "@effect/vitest": "^0.27.0",
@@ -73,7 +73,7 @@
     "eslint-plugin-sonarjs": "^4.0.2",
     "eslint-plugin-sort-destructure-keys": "^3.0.0",
     "eslint-plugin-unicorn": "^63.0.0",
-    "@vitest/eslint-plugin": "^1.6.11",
+    "@vitest/eslint-plugin": "^1.6.12",
     "globals": "^17.4.0",
     "jscpd": "^4.0.8",
     "typescript": "^5.9.3",
