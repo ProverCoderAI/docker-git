@@ -189,8 +189,8 @@ docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/env/g
 docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/env/project.env' \
   || fail "expected project env in docker-git runtime state"
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/auth/codex/auth.json' \
-  || fail "expected bootstrap Codex auth inside docker-git runtime state"
+docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/auth/codex/config.toml' \
+  || fail "expected bootstrap Codex config inside docker-git runtime state"
 
 docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.codex-shared/auth.json' \
   || fail "expected shared Codex auth volume to contain auth.json"
