@@ -134,3 +134,16 @@ jobs:
         run: docker version && docker compose version
       - name: Login context notice
         run: bash scripts/e2e/login-context.sh
+
+  e2e-runtime-volumes-ssh:
+    name: E2E (Runtime volumes + SSH)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Docker info
+        run: docker version && docker compose version
+      - name: Runtime volumes + host SSH CLI
+        run: bash scripts/e2e/runtime-volumes-ssh.sh

@@ -45,6 +45,16 @@ docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force 
 - `--auto=claude` или `--auto=codex` принудительно выбирает агента.
 - В auto-режиме агент сам выполняет задачу, создаёт PR и после завершения контейнер очищается.
 
+## Проверка Docker runtime
+
+Воспроизводимая smoke-проверка для Docker runtime и host CLI:
+
+```bash
+pnpm run e2e:runtime-volumes-ssh
+```
+
+Сценарий доказывает, что контейнер стартует через Docker, runtime state живёт в named volumes, а `docker-git clone --no-ssh` печатает готовую host CLI команду `SSH access: ...`, которая реально подключает в контейнер, показывает workspace context и видит установленный `codex`.
+
 ## Подробности
 
 `docker-git --help`
