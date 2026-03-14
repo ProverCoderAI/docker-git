@@ -24,10 +24,18 @@ export const resolveDockerComposeEnv = (
 ): Effect.Effect<Readonly<Record<string, string>>, never, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
     const projectsRoot = resolveProjectsRootCandidate()
+    const remappedProjectDir = yield* _(resolveDockerVolumeHostPath(cwd, cwd))
     if (projectsRoot === null) {
-      return {}
+      return remappedProjectDir === cwd ? {} : { DOCKER_GIT_PROJECT_DIR_HOST: remappedProjectDir }
     }
 
     const remappedProjectsRoot = yield* _(resolveDockerVolumeHostPath(cwd, projectsRoot))
-    return remappedProjectsRoot === projectsRoot ? {} : { DOCKER_GIT_PROJECTS_ROOT_HOST: remappedProjectsRoot }
+    const env: Record<string, string> = {}
+    if (remappedProjectsRoot !== projectsRoot) {
+      env["DOCKER_GIT_PROJECTS_ROOT_HOST"] = remappedProjectsRoot
+    }
+    if (remappedProjectDir !== cwd) {
+      env["DOCKER_GIT_PROJECT_DIR_HOST"] = remappedProjectDir
+    }
+    return env
   })

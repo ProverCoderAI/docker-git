@@ -25,6 +25,10 @@ authorized_keys
 
 const renderDockerignore = (): string =>
   `# docker-git build context
+authorized_keys
+.orch/env/
+.orch/auth/codex/
+.orch/auth/claude/
 .orch/auth/codex/log/
 .orch/auth/codex/tmp/
 .orch/auth/codex/sessions/

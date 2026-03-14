@@ -30,7 +30,13 @@ if [[ "$CODEX_SHARE_AUTH" == "1" ]]; then
   if [[ "$CODEX_LABEL_NORM" != "default" ]]; then
     SHARED_AUTH_FILE="$CODEX_SHARED_HOME/$CODEX_LABEL_NORM/auth.json"; SHARED_AUTH_SEED="$DOCKER_GIT_CODEX_AUTH_ROOT/$CODEX_LABEL_NORM/auth.json"; mkdir -p "$(dirname "$SHARED_AUTH_FILE")"
   fi
-  if [[ ! -f "$SHARED_AUTH_FILE" && -f "$SHARED_AUTH_SEED" ]]; then cp "$SHARED_AUTH_SEED" "$SHARED_AUTH_FILE"; chmod 600 "$SHARED_AUTH_FILE" || true; chown 1000:1000 "$SHARED_AUTH_FILE" || true; fi
+  if [[ -f "$SHARED_AUTH_SEED" ]]; then
+    cp "$SHARED_AUTH_SEED" "$SHARED_AUTH_FILE"
+    chmod 600 "$SHARED_AUTH_FILE" || true
+    chown 1000:1000 "$SHARED_AUTH_FILE" || true
+  else
+    rm -f "$SHARED_AUTH_FILE" || true
+  fi
   # Guard against a bad bind mount creating a directory at auth.json.
   if [[ -d "$AUTH_FILE" ]]; then
     mv "$AUTH_FILE" "$AUTH_FILE.bak-$(date +%s)" || true

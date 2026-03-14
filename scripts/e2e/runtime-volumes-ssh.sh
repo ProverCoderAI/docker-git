@@ -116,6 +116,7 @@ NODE
 
 mkdir -p "$OUT_DIR/.orch/env"
 chmod 0777 "$OUT_DIR" "$OUT_DIR/.orch" "$OUT_DIR/.orch/env"
+dg_write_docker_host_file "$OUT_DIR/authorized_keys" 644 < "$SSH_PUB_KEY"
 cat > "$OUT_DIR/.orch/env/project.env" <<'EOF_ENV'
 # docker-git project env (e2e)
 CODEX_AUTO_UPDATE=0
@@ -189,8 +190,8 @@ docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/env/g
 docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/env/project.env' \
   || fail "expected project env in docker-git runtime state"
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/auth/codex/config.toml' \
-  || fail "expected bootstrap Codex config inside docker-git runtime state"
+docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -d ~/.docker-git/.orch/auth/codex' \
+  || fail "expected bootstrap Codex auth directory inside docker-git runtime state"
 
 docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -d ~/.codex-shared' \
   || fail "expected shared Codex auth volume to be mounted"

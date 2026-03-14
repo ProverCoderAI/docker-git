@@ -17,10 +17,15 @@ type ComposeFragments = {
   readonly maybeDependsOn: string
   readonly maybePlaywrightEnv: string
   readonly maybeBrowserService: string
+  readonly maybeBrowserVolume: string
+  readonly maybeBootstrapMounts: string
   readonly forkRepoUrl: string
 }
 
-type PlaywrightFragments = Pick<ComposeFragments, "maybeDependsOn" | "maybePlaywrightEnv" | "maybeBrowserService">
+type PlaywrightFragments = Pick<
+  ComposeFragments,
+  "maybeDependsOn" | "maybePlaywrightEnv" | "maybeBrowserService" | "maybeBrowserVolume"
+>
 
 const sharedCodexVolumeKey = "docker_git_shared_codex"
 const sharedCacheVolumeKey = "docker_git_shared_cache"
@@ -54,6 +59,50 @@ const renderResourceLimits = (resourceLimits: ResolvedComposeResourceLimits | un
   resourceLimits === undefined
     ? ""
     : `    cpus: ${resourceLimits.cpuLimit}\n    mem_limit: "${resourceLimits.ramLimit}"\n    memswap_limit: "${resourceLimits.ramLimit}"\n`
+
+const renderProjectHostPath = (value: string): string => {
+  if (value.startsWith("/")) {
+    return value
+  }
+
+  const normalized = value.startsWith("./") ? value.slice(2) : value
+  return `\${DOCKER_GIT_PROJECT_DIR_HOST:-.}/${normalized}`
+}
+
+const splitPath = (value: string): { readonly dir: string; readonly base: string } => {
+  const normalized = value.replaceAll("\\", "/")
+  const separatorIndex = normalized.lastIndexOf("/")
+  if (separatorIndex === -1) {
+    return { dir: ".", base: normalized }
+  }
+  return {
+    dir: separatorIndex === 0 ? "/" : normalized.slice(0, separatorIndex),
+    base: normalized.slice(separatorIndex + 1)
+  }
+}
+
+const renderClaudeBootstrapSourceDir = (codexAuthPath: string): string => {
+  const normalized = codexAuthPath.replaceAll("\\", "/")
+  const separatorIndex = normalized.lastIndexOf("/")
+  const authRoot = separatorIndex === -1 ? ".orch/auth" : normalized.slice(0, separatorIndex)
+  return `${authRoot}/claude`
+}
+
+const renderBootstrapMounts = (config: TemplateConfig): string => {
+  const authorizedKeys = splitPath(config.authorizedKeysPath)
+  const envGlobal = splitPath(config.envGlobalPath)
+  const envProject = splitPath(config.envProjectPath)
+
+  return [
+    `      - ${renderProjectHostPath(authorizedKeys.dir)}:/opt/docker-git/bootstrap/source/authorized-keys:ro`,
+    `      - ${renderProjectHostPath(envGlobal.dir)}:/opt/docker-git/bootstrap/source/env-global:ro`,
+    `      - ${renderProjectHostPath(envProject.dir)}:/opt/docker-git/bootstrap/source/env-project:ro`,
+    `      - ${renderProjectHostPath(config.codexAuthPath)}:/opt/docker-git/bootstrap/source/project-auth/codex:ro`,
+    `      - ${renderProjectHostPath(renderClaudeBootstrapSourceDir(config.codexAuthPath))}:/opt/docker-git/bootstrap/source/project-auth/claude:ro`,
+    `      - ${renderProjectHostPath(config.codexSharedAuthPath)}:/opt/docker-git/bootstrap/source/shared-auth/codex:ro`
+  ].join("\n")
+}
+
 const buildPlaywrightFragments = (
   config: TemplateConfig,
   networkName: string,
@@ -63,7 +112,8 @@ const buildPlaywrightFragments = (
     return {
       maybeDependsOn: "",
       maybePlaywrightEnv: "",
-      maybeBrowserService: ""
+      maybeBrowserService: "",
+      maybeBrowserVolume: ""
     }
   }
 
@@ -80,7 +130,8 @@ const buildPlaywrightFragments = (
     maybeBrowserService:
       `\n  ${browserServiceName}:\n    build:\n      context: .\n      dockerfile: ${browserDockerfile}\n    container_name: ${browserContainerName}\n    restart: unless-stopped\n${
         renderResourceLimits(resourceLimits)
-      }    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`
+      }    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`,
+    maybeBrowserVolume: `  ${browserVolumeName}:`
   }
 }
 
@@ -112,6 +163,8 @@ const buildComposeFragments = (
     maybeDependsOn: playwright.maybeDependsOn,
     maybePlaywrightEnv: playwright.maybePlaywrightEnv,
     maybeBrowserService: playwright.maybeBrowserService,
+    maybeBrowserVolume: playwright.maybeBrowserVolume,
+    maybeBootstrapMounts: renderBootstrapMounts(config),
     forkRepoUrl
   }
 }
@@ -144,6 +197,7 @@ ${renderResourceLimits(resourceLimits)}    volumes:
       - ${config.volumeName}:/home/${config.sshUser}
       - ${sharedCacheVolumeKey}:/home/${config.sshUser}/.docker-git/.cache
       - ${sharedCodexVolumeKey}:${config.codexHome}-shared
+${fragments.maybeBootstrapMounts}
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - ${fragments.networkName}
@@ -161,7 +215,7 @@ const renderComposeNetworks = (
   ${networkName}:
     driver: bridge`
 
-const renderComposeVolumes = (config: TemplateConfig, enableMcpPlaywright: boolean): string =>
+const renderComposeVolumes = (config: TemplateConfig, maybeBrowserVolume: string): string =>
   [
     "volumes:",
     `  ${config.volumeName}:`,
@@ -171,8 +225,8 @@ const renderComposeVolumes = (config: TemplateConfig, enableMcpPlaywright: boole
     `  ${sharedCodexVolumeKey}:`,
     "    external: true",
     `    name: ${dockerGitSharedCodexVolumeName}`,
-    ...(enableMcpPlaywright ? [`  ${config.volumeName}-browser:`] : [])
-  ].join("\n")
+    maybeBrowserVolume
+  ].filter((entry) => entry.length > 0).join("\n")
 
 export const renderDockerCompose = (
   config: TemplateConfig,
@@ -182,6 +236,6 @@ export const renderDockerCompose = (
   return [
     renderComposeServices(config, fragments, resourceLimits),
     renderComposeNetworks(fragments.networkMode, fragments.networkName),
-    renderComposeVolumes(config, config.enableMcpPlaywright)
+    renderComposeVolumes(config, fragments.maybeBrowserVolume)
   ].join("\n\n")
 }

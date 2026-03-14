@@ -222,9 +222,13 @@ RUN mkdir -p ${config.targetDir} \
   && chown -R 1000:1000 /home/${config.sshUser} \
   && if [ "${config.targetDir}" != "/" ]; then chown -R 1000:1000 "${config.targetDir}"; fi
 
-RUN mkdir -p /opt/docker-git/bootstrap
-COPY authorized_keys /opt/docker-git/bootstrap/authorized_keys
-COPY .orch /opt/docker-git/bootstrap/.orch
+RUN mkdir -p /opt/docker-git/bootstrap/.orch/auth/codex \
+  /opt/docker-git/bootstrap/.orch/auth/codex-shared \
+  /opt/docker-git/bootstrap/.orch/auth/claude \
+  /opt/docker-git/bootstrap/.orch/env \
+  && touch /opt/docker-git/bootstrap/authorized_keys \
+  /opt/docker-git/bootstrap/.orch/env/global.env \
+  /opt/docker-git/bootstrap/.orch/env/project.env
 
 COPY entrypoint.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
