@@ -25,8 +25,8 @@ import { ensureCodexConfigFile } from "./auth-sync.js"
 import { ensureComposeNetworkReady } from "./docker-network-gc.js"
 import { loadReservedPorts, selectAvailablePort } from "./ports-reserve.js"
 import { parseComposePsOutput } from "./projects-core.js"
-import { ensureSharedCodexVolumeReady } from "./shared-volume-seed.js"
 import { resolveTemplateResourceLimits } from "./resource-limits.js"
+import { ensureSharedCodexVolumeReady } from "./shared-volume-seed.js"
 
 const maxPortAttempts = 25
 

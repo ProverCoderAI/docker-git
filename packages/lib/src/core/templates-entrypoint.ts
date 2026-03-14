@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "./domain.js"
+import { renderEntrypointAgentsNotice } from "./templates-entrypoint/agents-notice.js"
 import {
   renderEntrypointAuthorizedKeys,
   renderEntrypointBaseline,
@@ -13,7 +14,6 @@ import {
 } from "./templates-entrypoint/base.js"
 import { renderEntrypointClaudeConfig } from "./templates-entrypoint/claude.js"
 import {
-  renderEntrypointAgentsNotice,
   renderEntrypointCodexHome,
   renderEntrypointCodexResumeHint,
   renderEntrypointCodexSharedAuth,

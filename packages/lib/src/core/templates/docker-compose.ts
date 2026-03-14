@@ -98,7 +98,9 @@ const renderBootstrapMounts = (config: TemplateConfig): string => {
     `      - ${renderProjectHostPath(envGlobal.dir)}:/opt/docker-git/bootstrap/source/env-global:ro`,
     `      - ${renderProjectHostPath(envProject.dir)}:/opt/docker-git/bootstrap/source/env-project:ro`,
     `      - ${renderProjectHostPath(config.codexAuthPath)}:/opt/docker-git/bootstrap/source/project-auth/codex:ro`,
-    `      - ${renderProjectHostPath(renderClaudeBootstrapSourceDir(config.codexAuthPath))}:/opt/docker-git/bootstrap/source/project-auth/claude:ro`,
+    `      - ${
+      renderProjectHostPath(renderClaudeBootstrapSourceDir(config.codexAuthPath))
+    }:/opt/docker-git/bootstrap/source/project-auth/claude:ro`,
     `      - ${renderProjectHostPath(config.codexSharedAuthPath)}:/opt/docker-git/bootstrap/source/shared-auth/codex:ro`
   ].join("\n")
 }
