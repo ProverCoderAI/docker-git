@@ -1,4 +1,11 @@
-import { buildCreateCommand, createProject, formatParseError, listProjectItems, readProjectConfig } from "@effect-template/lib"
+import {
+  buildCreateCommand,
+  createProject,
+  formatParseError,
+  listProjectItems,
+  readProjectConfig,
+  runDockerComposeUpWithPortCheck
+} from "@effect-template/lib"
 import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { deleteDockerGitProject } from "@effect-template/lib/usecases/projects"
@@ -281,7 +288,7 @@ export const upProject = (
   Effect.gen(function*(_) {
     const project = yield* _(findProjectById(projectId))
     yield* _(markDeployment(projectId, "build", "docker compose up -d --build"))
-    yield* _(runComposeCapture(projectId, project.projectDir, ["up", "-d", "--build"]))
+    yield* _(runDockerComposeUpWithPortCheck(project.projectDir))
     yield* _(markDeployment(projectId, "running", "Container running"))
   })
 
@@ -318,7 +325,7 @@ export const recreateProject = (
     )
 
     yield* _(runComposeCapture(projectId, project.projectDir, ["down"], [0, 1]))
-    yield* _(runComposeCapture(projectId, project.projectDir, ["up", "-d", "--build"]))
+    yield* _(runDockerComposeUpWithPortCheck(project.projectDir))
     yield* _(markDeployment(projectId, "running", "Recreate completed"))
   })
 

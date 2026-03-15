@@ -2,6 +2,7 @@ import {
   dockerGitSharedCacheVolumeName,
   dockerGitSharedCodexVolumeName,
   resolveComposeNetworkName,
+  resolveProjectBootstrapVolumeName,
   type TemplateConfig
 } from "../domain.js"
 import type { ResolvedComposeResourceLimits } from "../resource-limits.js"
@@ -29,6 +30,7 @@ type PlaywrightFragments = Pick<
 
 const sharedCodexVolumeKey = "docker_git_shared_codex"
 const sharedCacheVolumeKey = "docker_git_shared_cache"
+const bootstrapVolumeKey = "docker_git_bootstrap"
 
 const renderGitTokenLabelEnv = (gitTokenLabel: string): string =>
   gitTokenLabel.length > 0
@@ -60,50 +62,8 @@ const renderResourceLimits = (resourceLimits: ResolvedComposeResourceLimits | un
     ? ""
     : `    cpus: ${resourceLimits.cpuLimit}\n    mem_limit: "${resourceLimits.ramLimit}"\n    memswap_limit: "${resourceLimits.ramLimit}"\n`
 
-const renderProjectHostPath = (value: string): string => {
-  if (value.startsWith("/")) {
-    return value
-  }
-
-  const normalized = value.startsWith("./") ? value.slice(2) : value
-  return `\${DOCKER_GIT_PROJECT_DIR_HOST:-.}/${normalized}`
-}
-
-const splitPath = (value: string): { readonly dir: string; readonly base: string } => {
-  const normalized = value.replaceAll("\\", "/")
-  const separatorIndex = normalized.lastIndexOf("/")
-  if (separatorIndex === -1) {
-    return { dir: ".", base: normalized }
-  }
-  return {
-    dir: separatorIndex === 0 ? "/" : normalized.slice(0, separatorIndex),
-    base: normalized.slice(separatorIndex + 1)
-  }
-}
-
-const renderClaudeBootstrapSourceDir = (codexAuthPath: string): string => {
-  const normalized = codexAuthPath.replaceAll("\\", "/")
-  const separatorIndex = normalized.lastIndexOf("/")
-  const authRoot = separatorIndex === -1 ? ".orch/auth" : normalized.slice(0, separatorIndex)
-  return `${authRoot}/claude`
-}
-
-const renderBootstrapMounts = (config: TemplateConfig): string => {
-  const authorizedKeys = splitPath(config.authorizedKeysPath)
-  const envGlobal = splitPath(config.envGlobalPath)
-  const envProject = splitPath(config.envProjectPath)
-
-  return [
-    `      - ${renderProjectHostPath(authorizedKeys.dir)}:/opt/docker-git/bootstrap/source/authorized-keys:ro`,
-    `      - ${renderProjectHostPath(envGlobal.dir)}:/opt/docker-git/bootstrap/source/env-global:ro`,
-    `      - ${renderProjectHostPath(envProject.dir)}:/opt/docker-git/bootstrap/source/env-project:ro`,
-    `      - ${renderProjectHostPath(config.codexAuthPath)}:/opt/docker-git/bootstrap/source/project-auth/codex:ro`,
-    `      - ${
-      renderProjectHostPath(renderClaudeBootstrapSourceDir(config.codexAuthPath))
-    }:/opt/docker-git/bootstrap/source/project-auth/claude:ro`,
-    `      - ${renderProjectHostPath(config.codexSharedAuthPath)}:/opt/docker-git/bootstrap/source/shared-auth/codex:ro`
-  ].join("\n")
-}
+const renderBootstrapMounts = (): string =>
+  `      - ${bootstrapVolumeKey}:/opt/docker-git/bootstrap/source:ro`
 
 const buildPlaywrightFragments = (
   config: TemplateConfig,
@@ -166,7 +126,7 @@ const buildComposeFragments = (
     maybePlaywrightEnv: playwright.maybePlaywrightEnv,
     maybeBrowserService: playwright.maybeBrowserService,
     maybeBrowserVolume: playwright.maybeBrowserVolume,
-    maybeBootstrapMounts: renderBootstrapMounts(config),
+    maybeBootstrapMounts: renderBootstrapMounts(),
     forkRepoUrl
   }
 }
@@ -190,9 +150,7 @@ ${fragments.maybeCodexAuthLabelEnv}      # Optional Codex account label selector
 ${fragments.maybeClaudeAuthLabelEnv}${fragments.maybeAgentModeEnv}${fragments.maybeAgentAutoEnv}      # Optional Claude account label selector (maps to CLAUDE_AUTH_LABEL)
       TARGET_DIR: "${config.targetDir}"
       CODEX_HOME: "${config.codexHome}"
-${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    env_file:
-      - ${config.envGlobalPath}
-      - ${config.envProjectPath}
+${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    # bootstrap auth/env arrives through docker_git_bootstrap
     ports:
       - "127.0.0.1:${config.sshPort}:22"
 ${renderResourceLimits(resourceLimits)}    volumes:
@@ -221,6 +179,8 @@ const renderComposeVolumes = (config: TemplateConfig, maybeBrowserVolume: string
   [
     "volumes:",
     `  ${config.volumeName}:`,
+    `  ${bootstrapVolumeKey}:`,
+    `    name: ${resolveProjectBootstrapVolumeName(config)}`,
     `  ${sharedCacheVolumeKey}:`,
     "    external: true",
     `    name: ${dockerGitSharedCacheVolumeName}`,

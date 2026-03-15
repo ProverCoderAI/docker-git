@@ -314,6 +314,20 @@ export const resolveComposeNetworkName = (
     ? config.dockerSharedNetworkName
     : `${config.serviceName}-net`
 
+// CHANGE: derive a stable bootstrap volume name for per-project runtime bootstrap data
+// WHY: API/controller mode cannot rely on host bind mounts for auth/env material
+// QUOTE(ТЗ): "У нас есть CLI который вызывает docker ? ... Поднимается сервер и ты через него можешь общаться с контейнером"
+// REF: user-request-2026-03-15-api-controller
+// SOURCE: n/a
+// FORMAT THEOREM: ∀cfg: resolveProjectBootstrapVolumeName(cfg) = v -> deterministic(v)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: bootstrap volume name is derived solely from project volumeName
+// COMPLEXITY: O(1)
+export const resolveProjectBootstrapVolumeName = (
+  config: Pick<TemplateConfig, "volumeName">
+): string => `${config.volumeName}-bootstrap`
+
 export const defaultTemplateConfig = {
   containerName: "dev-ssh",
   serviceName: "dev",

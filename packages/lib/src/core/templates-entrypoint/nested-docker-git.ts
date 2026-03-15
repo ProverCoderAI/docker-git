@@ -130,6 +130,46 @@ upsert_env_var() {
   mv "$tmp" "$file"
 }
 
+docker_git_export_env_if_unset() {
+  local key="$1"
+  local value="$2"
+
+  if [[ -n "${"$"}{!key+x}" ]]; then
+    docker_git_upsert_ssh_env "$key" "${"$"}{!key}"
+    return 1
+  fi
+
+  export "$key=$value"
+  docker_git_upsert_ssh_env "$key" "$value"
+  return 0
+}
+
+docker_git_load_env_file() {
+  local file="$1"
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      ""|\#*)
+        continue
+        ;;
+    esac
+    if [[ "$line" != *=* ]]; then
+      continue
+    fi
+
+    local key="${"$"}{line%%=*}"
+    local value="${"$"}{line#*=}"
+    if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      continue
+    fi
+
+    docker_git_export_env_if_unset "$key" "$value"
+  done < "$file"
+}
+
 copy_if_distinct_file() {
   local source="$1"
   local target="$2"
@@ -158,6 +198,21 @@ if [[ -n "$GITHUB_TOKEN" ]]; then
   upsert_env_var "$DOCKER_GIT_ENV_GLOBAL" "GITHUB_TOKEN" "$GITHUB_TOKEN"
 elif [[ -n "$GH_TOKEN" ]]; then
   upsert_env_var "$DOCKER_GIT_ENV_GLOBAL" "GITHUB_TOKEN" "$GH_TOKEN"
+fi
+
+docker_git_load_env_file "$DOCKER_GIT_ENV_GLOBAL"
+docker_git_load_env_file "$DOCKER_GIT_ENV_PROJECT"
+if [[ -z "$GIT_AUTH_TOKEN" ]]; then
+  GIT_AUTH_TOKEN="$GITHUB_TOKEN"
+fi
+if [[ -z "$GIT_AUTH_TOKEN" ]]; then
+  GIT_AUTH_TOKEN="$GH_TOKEN"
+fi
+if [[ -z "$GH_TOKEN" ]]; then
+  GH_TOKEN="$GIT_AUTH_TOKEN"
+fi
+if [[ -z "$GITHUB_TOKEN" ]]; then
+  GITHUB_TOKEN="$GH_TOKEN"
 fi
 
 SOURCE_CODEX_CONFIG="__CODEX_HOME__/config.toml"

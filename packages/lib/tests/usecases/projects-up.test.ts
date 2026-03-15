@@ -58,6 +58,15 @@ const isDockerComposeUp = (cmd: RecordedCommand): boolean =>
   cmd.command === "docker" &&
   includesArgsInOrder(cmd.args, ["compose", "--ansi", "never", "--progress", "plain", "up", "-d", "--build"])
 
+const isDockerVolumeCreate = (cmd: RecordedCommand): boolean =>
+  cmd.command === "docker" &&
+  includesArgsInOrder(cmd.args, ["volume", "create"])
+
+const isBootstrapSeed = (cmd: RecordedCommand): boolean =>
+  cmd.command === "bash" &&
+  cmd.args[0] === "-lc" &&
+  (cmd.args[1] ?? "").includes("docker run --rm -i -v 'dg-test-home-bootstrap:/target' alpine:3.20")
+
 const isDockerInspectBridgeIp = (cmd: RecordedCommand): boolean =>
   cmd.command === "docker" &&
   includesArgsInOrder(cmd.args, ["inspect", "-f"]) &&
@@ -201,6 +210,8 @@ describe("runDockerComposeUpWithPortCheck", () => {
         expect(configAfter).toContain('"ramLimit": "30%"')
 
         expect(recorded.some((entry) => isDockerComposePsFormatted(entry))).toBe(true)
+        expect(recorded.some((entry) => isDockerVolumeCreate(entry))).toBe(true)
+        expect(recorded.some((entry) => isBootstrapSeed(entry))).toBe(true)
         expect(recorded.some((entry) => isDockerComposeUp(entry))).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))

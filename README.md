@@ -1,59 +1,71 @@
 # docker-git
 
 `docker-git` создаёт отдельную Docker-среду для каждого репозитория, issue или PR.
-По умолчанию управляющие файлы проекта лежат в `~/.docker-git`, а runtime workspace, `.docker-git` state и auth живут внутри Docker-managed volumes контейнера.
+
+Теперь есть API-first controller mode:
+- хосту нужен только Docker
+- поднимается `docker-git-api` controller container
+- его state живёт в Docker volume `docker-git-projects`
+- controller через Docker API создаёт и обслуживает дочерние project containers
+- снаружи ты общаешься с системой через HTTP API или `./ctl`
 
 ## Что нужно
 
-- Docker Engine или Docker Desktop
+- Для controller mode: Docker Engine или Docker Desktop
 - Доступ к Docker без `sudo`
-- Node.js и `npm`
+- Node.js и `npm` нужны только для legacy host CLI mode
 
-## Установка
+## API Controller Mode
+
+```bash
+./ctl up
+./ctl health
+./ctl projects
+```
+
+API публикуется на `http://127.0.0.1:3334` по умолчанию.
+
+```bash
+./ctl request GET /projects
+./ctl request POST /projects '{"repoUrl":"https://github.com/ProverCoderAI/docker-git.git","repoRef":"main"}'
+```
+
+Важно:
+- `./ctl` не требует `curl`, `node` или `pnpm` на хосте
+- запросы к API выполняются через `curl` внутри controller container
+- `.docker-git` больше не обязан лежать на host filesystem: controller хранит его в Docker volume
+
+## Legacy Host CLI
 
 ```bash
 npm i -g @prover-coder-ai/docker-git
 docker-git --help
 ```
 
-## Авторизация
-
-```bash
-docker-git auth github login --web
-docker-git auth codex login --web
-docker-git auth claude login --web
-```
-
 ## Пример
 
-Можно передавать ссылку на репозиторий, ветку (`/tree/...`), issue или PR.
+Через API controller можно создать проект и потом поднять его отдельно:
 
 ```bash
-docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force --mcp-playwright
+./ctl request POST /projects '{"repoUrl":"https://github.com/ProverCoderAI/docker-git.git","repoRef":"main","up":false}'
+./ctl projects
 ```
 
-- `--force` пересоздаёт окружение и удаляет volumes проекта.
-- `--mcp-playwright` включает Playwright MCP и Chromium sidecar для браузерной автоматизации.
-
-Автоматический запуск агента:
+API возвращает `projectId`, после чего можно:
 
 ```bash
-docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force --auto
+./ctl request POST /projects/<projectId>/up
+./ctl request GET /projects/<projectId>/logs
+./ctl request POST /projects/<projectId>/down
 ```
-
-- `--auto` сам выбирает Claude или Codex по доступной авторизации. Если доступны оба, выбор случайный.
-- `--auto=claude` или `--auto=codex` принудительно выбирает агента.
-- В auto-режиме агент сам выполняет задачу, создаёт PR и после завершения контейнер очищается.
 
 ## Проверка Docker runtime
-
-Воспроизводимая smoke-проверка для Docker runtime и host CLI:
 
 ```bash
 pnpm run e2e:runtime-volumes-ssh
 ```
 
-Сценарий доказывает, что контейнер стартует через Docker, runtime state живёт в named volumes, а `docker-git clone --no-ssh` печатает готовую host CLI команду `SSH access: ...`, которая реально подключает в контейнер, показывает workspace context и видит установленный `codex`.
+Сценарий доказывает, что контейнер стартует через Docker, runtime state живёт в named volumes, а SSH реально заходит в дочерний project container.
 
 ## Подробности
 

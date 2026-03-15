@@ -176,15 +176,16 @@ const runDockerComposeUpByMode = (
 ): Effect.Effect<void, DockerCommandError | PlatformError, DockerUpEnvironment> =>
   Effect.gen(function*(_) {
     yield* _(ensureComposeNetworkReady(resolvedOutDir, projectConfig))
-    yield* _(ensureSharedCodexVolumeReady(resolvedOutDir, projectConfig))
 
     if (force) {
       yield* _(Effect.log("Force enabled: wiping docker compose volumes (docker compose down -v)..."))
       yield* _(runDockerComposeDownVolumes(resolvedOutDir))
+      yield* _(ensureSharedCodexVolumeReady(resolvedOutDir, projectConfig))
       yield* _(Effect.log("Running: docker compose up -d --build"))
       yield* _(runDockerComposeUp(resolvedOutDir))
       return
     }
+    yield* _(ensureSharedCodexVolumeReady(resolvedOutDir, projectConfig))
     if (forceEnv) {
       yield* _(Effect.log("Force env enabled: resetting env defaults and recreating containers (volumes preserved)..."))
       yield* _(runDockerComposeUpRecreate(resolvedOutDir))
