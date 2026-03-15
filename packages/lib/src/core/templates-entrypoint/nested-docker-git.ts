@@ -169,8 +169,6 @@ if [[ -f "$SOURCE_SHARED_AUTH" ]]; then
   copy_if_distinct_file "$SOURCE_SHARED_AUTH" "$DOCKER_GIT_AUTH_DIR/auth.json" || true
 elif [[ -f "$SOURCE_LOCAL_AUTH" ]]; then
   copy_if_distinct_file "$SOURCE_LOCAL_AUTH" "$DOCKER_GIT_AUTH_DIR/auth.json" || true
-else
-  rm -f "$DOCKER_GIT_AUTH_DIR/auth.json" || true
 fi
 if [[ -f "$DOCKER_GIT_AUTH_DIR/auth.json" ]]; then
   chmod 600 "$DOCKER_GIT_AUTH_DIR/auth.json" || true
