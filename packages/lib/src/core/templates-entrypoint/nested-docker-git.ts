@@ -136,7 +136,7 @@ docker_git_export_env_if_unset() {
 
   if [[ -n "${"$"}{!key+x}" ]]; then
     docker_git_upsert_ssh_env "$key" "${"$"}{!key}"
-    return 1
+    return 0
   fi
 
   export "$key=$value"

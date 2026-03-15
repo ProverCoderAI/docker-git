@@ -10,10 +10,7 @@ import {
   resolveProjectBootstrapVolumeName,
   type TemplateConfig
 } from "../core/domain.js"
-import {
-  runDockerVolumeCreate,
-  runDockerVolumeReplaceFromDirectory
-} from "../shell/docker-volume.js"
+import { runDockerVolumeCreate, runDockerVolumeReplaceFromDirectory } from "../shell/docker-volume.js"
 import type { DockerCommandError } from "../shell/errors.js"
 
 type SharedVolumeSeedEnvironment = CommandExecutor | FileSystem.FileSystem | Path.Path
@@ -74,63 +71,117 @@ const copyFileIfPresent = (
     yield* _(fs.copyFile(sourcePath, targetPath))
   })
 
+type BootstrapSeedConfig = Pick<
+  TemplateConfig,
+  "authorizedKeysPath" | "envGlobalPath" | "envProjectPath" | "codexAuthPath" | "codexSharedAuthPath"
+>
+
+type BootstrapSnapshotSources = {
+  readonly authorizedKeysSource: string
+  readonly envGlobalSource: string
+  readonly envProjectSource: string
+  readonly codexAuthSource: string
+  readonly codexSharedAuthSource: string
+  readonly claudeAuthSource: string
+}
+
+type BootstrapSnapshotTargets = {
+  readonly authorizedKeysTarget: string
+  readonly envGlobalTarget: string
+  readonly envProjectTarget: string
+  readonly projectCodexTarget: string
+  readonly projectClaudeTarget: string
+  readonly sharedCodexTarget: string
+}
+
+const resolveBootstrapSnapshotSources = (
+  path: Path.Path,
+  projectDir: string,
+  config: BootstrapSeedConfig
+): BootstrapSnapshotSources => {
+  const codexAuthSource = resolvePathFromBase(path, projectDir, config.codexAuthPath)
+  return {
+    authorizedKeysSource: resolvePathFromBase(path, projectDir, config.authorizedKeysPath),
+    envGlobalSource: resolvePathFromBase(path, projectDir, config.envGlobalPath),
+    envProjectSource: resolvePathFromBase(path, projectDir, config.envProjectPath),
+    codexAuthSource,
+    codexSharedAuthSource: resolvePathFromBase(path, projectDir, config.codexSharedAuthPath),
+    claudeAuthSource: path.join(path.dirname(codexAuthSource), "claude")
+  }
+}
+
+const resolveBootstrapSnapshotTargets = (
+  path: Path.Path,
+  stagingDir: string,
+  config: BootstrapSeedConfig
+): BootstrapSnapshotTargets => {
+  const authorizedKeysBase = config.authorizedKeysPath.replaceAll("\\", "/").split("/").at(-1) ?? "authorized_keys"
+  const envGlobalBase = config.envGlobalPath.replaceAll("\\", "/").split("/").at(-1) ?? "global.env"
+  const envProjectBase = config.envProjectPath.replaceAll("\\", "/").split("/").at(-1) ?? "project.env"
+
+  return {
+    authorizedKeysTarget: path.join(stagingDir, "authorized-keys", authorizedKeysBase),
+    envGlobalTarget: path.join(stagingDir, "env-global", envGlobalBase),
+    envProjectTarget: path.join(stagingDir, "env-project", envProjectBase),
+    projectCodexTarget: path.join(stagingDir, "project-auth", "codex"),
+    projectClaudeTarget: path.join(stagingDir, "project-auth", "claude"),
+    sharedCodexTarget: path.join(stagingDir, "shared-auth", "codex")
+  }
+}
+
+const ensureBootstrapSnapshotLayout = (
+  path: Path.Path,
+  fs: FileSystem.FileSystem,
+  targets: BootstrapSnapshotTargets
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    yield* _(fs.makeDirectory(path.dirname(targets.authorizedKeysTarget), { recursive: true }))
+    yield* _(fs.makeDirectory(path.dirname(targets.envGlobalTarget), { recursive: true }))
+    yield* _(fs.makeDirectory(path.dirname(targets.envProjectTarget), { recursive: true }))
+    yield* _(fs.makeDirectory(targets.projectCodexTarget, { recursive: true }))
+    yield* _(fs.makeDirectory(targets.projectClaudeTarget, { recursive: true }))
+    yield* _(fs.makeDirectory(targets.sharedCodexTarget, { recursive: true }))
+  })
+
+const copyBootstrapSnapshotFiles = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sources: BootstrapSnapshotSources,
+  targets: BootstrapSnapshotTargets
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    yield* _(copyFileIfPresent(fs, path, sources.authorizedKeysSource, targets.authorizedKeysTarget))
+    yield* _(copyFileIfPresent(fs, path, sources.envGlobalSource, targets.envGlobalTarget))
+    yield* _(copyFileIfPresent(fs, path, sources.envProjectSource, targets.envProjectTarget))
+  })
+
+const copyBootstrapSnapshotAuthDirs = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sources: BootstrapSnapshotSources,
+  targets: BootstrapSnapshotTargets
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    yield* _(copyDirRecursive(fs, path, sources.codexAuthSource, targets.projectCodexTarget))
+    yield* _(copyDirRecursive(fs, path, sources.claudeAuthSource, targets.projectClaudeTarget))
+    yield* _(copyDirRecursive(fs, path, sources.codexSharedAuthSource, targets.sharedCodexTarget))
+  })
+
 const stageBootstrapSnapshot = (
   stagingDir: string,
   projectDir: string,
-  config: Pick<
-    TemplateConfig,
-    "authorizedKeysPath" | "envGlobalPath" | "envProjectPath" | "codexAuthPath" | "codexSharedAuthPath"
-  >
+  config: BootstrapSeedConfig
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
 
-    const authorizedKeysSource = resolvePathFromBase(path, projectDir, config.authorizedKeysPath)
-    const envGlobalSource = resolvePathFromBase(path, projectDir, config.envGlobalPath)
-    const envProjectSource = resolvePathFromBase(path, projectDir, config.envProjectPath)
-    const codexAuthSource = resolvePathFromBase(path, projectDir, config.codexAuthPath)
-    const codexSharedAuthSource = resolvePathFromBase(path, projectDir, config.codexSharedAuthPath)
-    const claudeAuthSource = path.join(path.dirname(codexAuthSource), "claude")
+    const sources = resolveBootstrapSnapshotSources(path, projectDir, config)
+    const targets = resolveBootstrapSnapshotTargets(path, stagingDir, config)
 
-    const authorizedKeysBase = config.authorizedKeysPath.replaceAll("\\", "/").split("/").at(-1) ?? "authorized_keys"
-    const envGlobalBase = config.envGlobalPath.replaceAll("\\", "/").split("/").at(-1) ?? "global.env"
-    const envProjectBase = config.envProjectPath.replaceAll("\\", "/").split("/").at(-1) ?? "project.env"
-
-    yield* _(fs.makeDirectory(path.join(stagingDir, "authorized-keys"), { recursive: true }))
-    yield* _(fs.makeDirectory(path.join(stagingDir, "env-global"), { recursive: true }))
-    yield* _(fs.makeDirectory(path.join(stagingDir, "env-project"), { recursive: true }))
-    yield* _(fs.makeDirectory(path.join(stagingDir, "project-auth", "codex"), { recursive: true }))
-    yield* _(fs.makeDirectory(path.join(stagingDir, "project-auth", "claude"), { recursive: true }))
-    yield* _(fs.makeDirectory(path.join(stagingDir, "shared-auth", "codex"), { recursive: true }))
-
-    yield* _(
-      copyFileIfPresent(
-        fs,
-        path,
-        authorizedKeysSource,
-        path.join(stagingDir, "authorized-keys", authorizedKeysBase)
-      )
-    )
-    yield* _(
-      copyFileIfPresent(
-        fs,
-        path,
-        envGlobalSource,
-        path.join(stagingDir, "env-global", envGlobalBase)
-      )
-    )
-    yield* _(
-      copyFileIfPresent(
-        fs,
-        path,
-        envProjectSource,
-        path.join(stagingDir, "env-project", envProjectBase)
-      )
-    )
-    yield* _(copyDirRecursive(fs, path, codexAuthSource, path.join(stagingDir, "project-auth", "codex")))
-    yield* _(copyDirRecursive(fs, path, claudeAuthSource, path.join(stagingDir, "project-auth", "claude")))
-    yield* _(copyDirRecursive(fs, path, codexSharedAuthSource, path.join(stagingDir, "shared-auth", "codex")))
+    yield* _(ensureBootstrapSnapshotLayout(path, fs, targets))
+    yield* _(copyBootstrapSnapshotFiles(fs, path, sources, targets))
+    yield* _(copyBootstrapSnapshotAuthDirs(fs, path, sources, targets))
   })
 
 export const ensureProjectBootstrapVolumeReady = (

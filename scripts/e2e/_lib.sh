@@ -32,11 +32,15 @@ EOF
 dg_write_docker_host_file() {
   local host_path="$1"
   local mode="${2:-}"
+  local host_uid
+  local host_gid
 
   local host_dir
   local host_name
   host_dir="$(dirname "$host_path")"
   host_name="$(basename "$host_path")"
+  host_uid="$(id -u)"
+  host_gid="$(id -g)"
 
   if [[ -n "$mode" ]] && [[ ! "$mode" =~ ^[0-7]{3,4}$ ]]; then
     echo "e2e: invalid file mode: $mode" >&2
@@ -44,13 +48,19 @@ dg_write_docker_host_file() {
   fi
 
   if [[ -n "$mode" ]]; then
-    docker run --rm -i -v "$host_dir":/mnt ubuntu:24.04 \
-      bash -lc "cat > \"/mnt/$host_name\" && chmod \"$mode\" \"/mnt/$host_name\""
+    docker run --rm -i \
+      -e HOST_UID="$host_uid" \
+      -e HOST_GID="$host_gid" \
+      -v "$host_dir":/mnt ubuntu:24.04 \
+      bash -lc "cat > \"/mnt/$host_name\" && chmod \"$mode\" \"/mnt/$host_name\" && chown \"\$HOST_UID:\$HOST_GID\" \"/mnt/$host_name\""
     return 0
   fi
 
-  docker run --rm -i -v "$host_dir":/mnt ubuntu:24.04 \
-    bash -lc "cat > \"/mnt/$host_name\""
+  docker run --rm -i \
+    -e HOST_UID="$host_uid" \
+    -e HOST_GID="$host_gid" \
+    -v "$host_dir":/mnt ubuntu:24.04 \
+    bash -lc "cat > \"/mnt/$host_name\" && chown \"\$HOST_UID:\$HOST_GID\" \"/mnt/$host_name\""
 }
 
 # Ensure the calling script can run `docker` (and therefore docker-git) in a

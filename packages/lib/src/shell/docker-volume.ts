@@ -6,7 +6,9 @@ import type { Effect } from "effect"
 import { runCommandWithExitCodes } from "./command-runner.js"
 import { DockerCommandError } from "./errors.js"
 
-const shellEscape = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`
+const escapedSingleQuote = String.raw`'\''`
+
+const shellEscape = (value: string): string => `'${value.replaceAll("'", escapedSingleQuote)}'`
 
 export const runDockerVolumeCreate = (
   cwd: string,
@@ -31,13 +33,16 @@ export const runDockerVolumeReplaceFromDirectory = (
   volumeName: string,
   sourceDir: string
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> => {
-  const command =
-    `tar -C ${shellEscape(sourceDir)} -cf - . | ` +
-    `docker run --rm -i -v ${shellEscape(`${volumeName}:/target`)} alpine:3.20 ` +
-    `sh -euc ${shellEscape("mkdir -p /target && find /target -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && tar -xf - -C /target")}`
+  const targetVolume = `${volumeName}:/target`
+  const replaceCommand = shellEscape(
+    "mkdir -p /target && find /target -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && tar -xf - -C /target"
+  )
+  const command = `tar -C ${shellEscape(sourceDir)} -cf - . | ` +
+    `docker run --rm -i -v ${shellEscape(targetVolume)} alpine:3.20 ` +
+    `sh -euc ${replaceCommand}`
 
   return runCommandWithExitCodes(
-    { cwd, command: "bash", args: ["-lc", command] },
+    { cwd, command: "bash", args: ["-c", command] },
     [Number(ExitCode(0))],
     (exitCode) => new DockerCommandError({ exitCode })
   )

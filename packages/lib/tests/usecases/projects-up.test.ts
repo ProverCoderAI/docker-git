@@ -64,7 +64,7 @@ const isDockerVolumeCreate = (cmd: RecordedCommand): boolean =>
 
 const isBootstrapSeed = (cmd: RecordedCommand): boolean =>
   cmd.command === "bash" &&
-  cmd.args[0] === "-lc" &&
+  (cmd.args[0] === "-c" || cmd.args[0] === "-lc") &&
   (cmd.args[1] ?? "").includes("docker run --rm -i -v 'dg-test-home-bootstrap:/target' alpine:3.20")
 
 const isDockerInspectBridgeIp = (cmd: RecordedCommand): boolean =>

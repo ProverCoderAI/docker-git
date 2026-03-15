@@ -163,4 +163,5 @@ PrintLastLog no
 EOF
 chmod 0644 "$DOCKER_GIT_SSHD_CONF" || true`
 
-export const renderEntrypointSshd = (): string => `# 5) Run sshd in foreground\nexec /usr/sbin/sshd -D`
+export const renderEntrypointSshd = (): string =>
+  `# 5) Run sshd in foreground (log to stderr for CI/debuggability)\nexec /usr/sbin/sshd -D -e`

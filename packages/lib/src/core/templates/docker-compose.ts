@@ -62,8 +62,7 @@ const renderResourceLimits = (resourceLimits: ResolvedComposeResourceLimits | un
     ? ""
     : `    cpus: ${resourceLimits.cpuLimit}\n    mem_limit: "${resourceLimits.ramLimit}"\n    memswap_limit: "${resourceLimits.ramLimit}"\n`
 
-const renderBootstrapMounts = (): string =>
-  `      - ${bootstrapVolumeKey}:/opt/docker-git/bootstrap/source:ro`
+const renderBootstrapMounts = (): string => `      - ${bootstrapVolumeKey}:/opt/docker-git/bootstrap/source:ro`
 
 const buildPlaywrightFragments = (
   config: TemplateConfig,
