@@ -5,6 +5,7 @@ import type { Path as PathService } from "@effect/platform/Path"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
 import { runCommandExitCode, runCommandWithExitCodes } from "../shell/command-runner.js"
+import { isInsideDocker } from "../shell/docker-env.js"
 import { runDockerComposePsFormatted } from "../shell/docker.js"
 import {
   CommandFailedError,
@@ -27,7 +28,20 @@ import {
 import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
 import { ensureTerminalCursorVisible } from "./terminal-cursor.js"
 
+// CHANGE: resolve SSH host and port based on environment
+// WHY: in DinD, connect via container name on Docker shared network at port 22;
+//      outside Docker, use localhost with the mapped host port
+// PURITY: CORE
+// INVARIANT: DinD → (containerName, 22); host → (localhost, sshPort)
+type SshTarget = { readonly host: string; readonly port: number }
+
+const resolveSshTarget = (item: ProjectItem): SshTarget =>
+  isInsideDocker()
+    ? { host: item.containerName, port: 22 }
+    : { host: "localhost", port: item.sshPort }
+
 const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
+  const target = resolveSshTarget(item)
   const args: Array<string> = []
   if (item.sshKeyPath !== null) {
     args.push("-i", item.sshKeyPath)
@@ -42,17 +56,38 @@ const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
     "-o",
     "UserKnownHostsFile=/dev/null",
     "-p",
-    String(item.sshPort),
-    `${item.sshUser}@localhost`
+    String(target.port),
+    `${item.sshUser}@${target.host}`
   )
   return args
 }
 
-const buildSshProbeArgs = (item: ProjectItem): ReadonlyArray<string> => {
+// CHANGE: SSH probe uses sshpass when no key is available
+// WHY: BatchMode=yes prevents password auth, making probe fail in DinD where no private key exists;
+//      sshpass with default password (= sshUser) allows authentication
+// PURITY: CORE
+const buildSshProbeArgs = (item: ProjectItem): { readonly command: string; readonly args: ReadonlyArray<string> } => {
+  const target = resolveSshTarget(item)
   const args: Array<string> = []
-  if (item.sshKeyPath !== null) {
-    args.push("-i", item.sshKeyPath)
+  if (item.sshKeyPath === null) {
+    return {
+      command: "sshpass",
+      args: [
+        "-p", item.sshUser,
+        "ssh",
+        "-T",
+        "-o", "ConnectTimeout=2",
+        "-o", "ConnectionAttempts=1",
+        "-o", "LogLevel=ERROR",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        "-p", String(target.port),
+        `${item.sshUser}@${target.host}`,
+        "true"
+      ]
+    }
   }
+  args.push("-i", item.sshKeyPath)
   args.push(
     "-T",
     "-o",
@@ -68,22 +103,24 @@ const buildSshProbeArgs = (item: ProjectItem): ReadonlyArray<string> => {
     "-o",
     "UserKnownHostsFile=/dev/null",
     "-p",
-    String(item.sshPort),
-    `${item.sshUser}@localhost`,
+    String(target.port),
+    `${item.sshUser}@${target.host}`,
     "true"
   )
-  return args
+  return { command: "ssh", args }
 }
 
 const waitForSshReady = (
   item: ProjectItem
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const probeSpec = buildSshProbeArgs(item)
+  const target = resolveSshTarget(item)
   const probe = Effect.gen(function*(_) {
     const exitCode = yield* _(
       runCommandExitCode({
         cwd: process.cwd(),
-        command: "ssh",
-        args: buildSshProbeArgs(item)
+        command: probeSpec.command,
+        args: probeSpec.args
       })
     )
     if (exitCode !== 0) {
@@ -92,7 +129,7 @@ const waitForSshReady = (
   })
 
   return pipe(
-    Effect.log(`Waiting for SSH on localhost:${item.sshPort} ...`),
+    Effect.log(`Waiting for SSH on ${target.host}:${target.port} ...`),
     Effect.zipRight(
       Effect.retry(
         probe,

@@ -205,16 +205,19 @@ RUN printf "%s\\n" "${config.sshUser} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$
 # sshd runtime dir
 RUN mkdir -p /run/sshd
 
-# Harden sshd: disable password auth and root login
+# sshd: password auth enabled so users can connect without key setup
 RUN printf "%s\\n" \
-  "PasswordAuthentication no" \
+  "PasswordAuthentication yes" \
   "PermitRootLogin no" \
   "PubkeyAuthentication yes" \
   "X11Forwarding yes" \
   "X11UseLocalhost yes" \
   "PermitUserEnvironment yes" \
   "AllowUsers ${config.sshUser}" \
-  > /etc/ssh/sshd_config.d/${config.sshUser}.conf`
+  > /etc/ssh/sshd_config.d/${config.sshUser}.conf
+
+# Default password = username (works out of the box; key auth still accepted if authorized_keys provided)
+RUN echo "${config.sshUser}:${config.sshUser}" | chpasswd`
 
 const renderDockerfileWorkspace = (config: TemplateConfig): string =>
   `# Workspace path (supports root-level dirs like /repo)

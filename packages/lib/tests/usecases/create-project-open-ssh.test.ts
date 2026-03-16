@@ -17,6 +17,10 @@ vi.mock("../../src/usecases/actions/ports.js", () => ({
   resolveSshPort: (config: CreateCommand["config"]) => Effect.succeed(config)
 }))
 
+vi.mock("../../src/shell/docker-env.js", () => ({
+  isInsideDocker: () => false
+}))
+
 type RecordedCommand = {
   readonly command: string
   readonly args: ReadonlyArray<string>

@@ -290,3 +290,50 @@ export const attachTmux = (
     yield* _(setupPanes(session, sshCommand, template.containerName))
     yield* _(runTmux(["attach", "-t", session]))
   })
+
+// CHANGE: attach tmux from API project details without local filesystem access
+// WHY: in DinD, project files live on the API host; CLI cannot read them locally
+// QUOTE(ТЗ): "он сам бы подключался к API и всё делал бы сам"
+// PURITY: SHELL
+// EFFECT: Effect<void, CommandFailedError | PlatformError, CommandExecutor>
+// INVARIANT: tmux session name is deterministic from repoUrl; no local file reads
+// COMPLEXITY: O(1)
+export type ProjectInfo = {
+  readonly containerName: string
+  readonly sshUser: string
+  readonly sshPort: number
+  readonly repoUrl: string
+  readonly repoRef: string
+  readonly sshCommand: string
+}
+
+export const attachTmuxFromProject = (
+  project: ProjectInfo
+): Effect.Effect<
+  void,
+  CommandFailedError | PlatformError,
+  CommandExecutor.CommandExecutor
+> =>
+  Effect.gen(function*(_) {
+    const repoDisplayName = formatRepoDisplayName(project.repoUrl)
+    const refLabel = formatRepoRefLabel(project.repoRef)
+    const statusRight =
+      `SSH: ${project.sshUser}@localhost:${project.sshPort} | Repo: ${repoDisplayName} | Ref: ${refLabel} | Status: Running`
+    const session = `dg-${deriveRepoSlug(project.repoUrl)}`
+    const hasSessionCode = yield* _(runTmuxExitCode(["has-session", "-t", session]))
+
+    if (hasSessionCode === 0) {
+      const existingLayout = yield* _(readLayoutVersion(session))
+      if (existingLayout === layoutVersion) {
+        yield* _(runTmux(["attach", "-t", session]))
+        return
+      }
+      yield* _(Effect.logWarning(`tmux session ${session} uses an old layout; recreating.`))
+      yield* _(runTmux(["kill-session", "-t", session]))
+    }
+
+    yield* _(createLayout(session))
+    yield* _(configureSession(session, repoDisplayName, statusRight))
+    yield* _(setupPanes(session, project.sshCommand, project.containerName))
+    yield* _(runTmux(["attach", "-t", session]))
+  })

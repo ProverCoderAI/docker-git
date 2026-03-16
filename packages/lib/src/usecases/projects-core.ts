@@ -18,13 +18,30 @@ const sshOptions = "-tt -Y -o LogLevel=ERROR -o StrictHostKeyChecking=no -o User
 
 export type ProjectLoadError = PlatformError | ConfigNotFoundError | ConfigDecodeError
 
+import { isInsideDocker } from "../shell/docker-env.js"
+
+// CHANGE: detect DinD for SSH command display
+// WHY: in DinD, SSH connects via container name on Docker shared network at port 22
+// PURITY: CORE
+
+const resolveSshDisplay = (config: TemplateConfig): { host: string; port: number } =>
+  isInsideDocker()
+    ? { host: config.containerName, port: 22 }
+    : { host: "localhost", port: config.sshPort }
+
+// CHANGE: use sshpass when no key provided so the command works without interaction
+// WHY: password = sshUser (set via chpasswd at build time); sshpass embeds it in one command
+// PURITY: CORE
+// INVARIANT: sshKey !== null → key auth; sshKey === null → sshpass with default password
 export const buildSshCommand = (
   config: TemplateConfig,
   sshKey: string | null
-): string =>
-  sshKey === null
-    ? `ssh ${sshOptions} -p ${config.sshPort} ${config.sshUser}@localhost`
-    : `ssh -i ${sshKey} ${sshOptions} -p ${config.sshPort} ${config.sshUser}@localhost`
+): string => {
+  const target = resolveSshDisplay(config)
+  return sshKey === null
+    ? `sshpass -p ${config.sshUser} ssh ${sshOptions} -p ${target.port} ${config.sshUser}@${target.host}`
+    : `ssh -i ${sshKey} ${sshOptions} -p ${target.port} ${config.sshUser}@${target.host}`
+}
 
 export type ProjectSummary = {
   readonly projectDir: string

@@ -86,3 +86,104 @@ export const AgentLogLineSchema = Schema.Struct({
 export type CreateProjectRequestInput = Schema.Schema.Type<typeof CreateProjectRequestSchema>
 export type CreateAgentRequestInput = Schema.Schema.Type<typeof CreateAgentRequestSchema>
 export type CreateFollowRequestInput = Schema.Schema.Type<typeof CreateFollowRequestSchema>
+
+export const AuthGithubLoginRequestSchema = Schema.Struct({
+  label: Schema.optional(Schema.NullOr(Schema.String)),
+  token: Schema.optional(Schema.NullOr(Schema.String)),
+  scopes: Schema.optional(Schema.NullOr(Schema.String)),
+  envGlobalPath: Schema.String
+})
+
+export const AuthGithubStatusRequestSchema = Schema.Struct({
+  envGlobalPath: Schema.String
+})
+
+export const AuthGithubLogoutRequestSchema = Schema.Struct({
+  label: Schema.optional(Schema.NullOr(Schema.String)),
+  envGlobalPath: Schema.String
+})
+
+export const AuthCodexLoginRequestSchema = Schema.Struct({
+  label: Schema.optional(Schema.NullOr(Schema.String)),
+  codexAuthPath: Schema.String
+})
+
+export const AuthCodexStatusRequestSchema = Schema.Struct({
+  label: Schema.optional(Schema.NullOr(Schema.String)),
+  codexAuthPath: Schema.String
+})
+
+export const AuthCodexLogoutRequestSchema = Schema.Struct({
+  label: Schema.optional(Schema.NullOr(Schema.String)),
+  codexAuthPath: Schema.String
+})
+
+export const AuthClaudeLoginRequestSchema = Schema.Struct({
+  label: Schema.optional(Schema.NullOr(Schema.String)),
+  claudeAuthPath: Schema.String
+})
+
+export const AuthClaudeStatusRequestSchema = Schema.Struct({
+  label: Schema.optional(Schema.NullOr(Schema.String)),
+  claudeAuthPath: Schema.String
+})
+
+export const AuthClaudeLogoutRequestSchema = Schema.Struct({
+  label: Schema.optional(Schema.NullOr(Schema.String)),
+  claudeAuthPath: Schema.String
+})
+
+export const StateInitRequestSchema = Schema.Struct({
+  repoUrl: Schema.String,
+  repoRef: OptionalString
+})
+
+export const StateCommitRequestSchema = Schema.Struct({
+  message: Schema.String
+})
+
+export const StateSyncRequestSchema = Schema.Struct({
+  message: Schema.optional(Schema.NullOr(Schema.String))
+})
+
+export const ScrapExportRequestSchema = Schema.Struct({
+  projectDir: Schema.String,
+  archivePath: OptionalString
+})
+
+export const ScrapImportRequestSchema = Schema.Struct({
+  projectDir: Schema.String,
+  archivePath: Schema.String,
+  wipe: OptionalBoolean
+})
+
+export const SessionsListRequestSchema = Schema.Struct({
+  projectDir: Schema.String,
+  includeDefault: OptionalBoolean
+})
+
+export const SessionsKillRequestSchema = Schema.Struct({
+  projectDir: Schema.String,
+  pid: Schema.Number
+})
+
+export const SessionsLogsRequestSchema = Schema.Struct({
+  projectDir: Schema.String,
+  pid: Schema.Number,
+  lines: Schema.optional(Schema.Number)
+})
+
+export const McpPlaywrightUpRequestSchema = Schema.Struct({
+  projectDir: Schema.String,
+  runUp: OptionalBoolean
+})
+
+export const ApplyRequestSchema = Schema.Struct({
+  runUp: OptionalBoolean,
+  gitTokenLabel: OptionalString,
+  codexTokenLabel: OptionalString,
+  claudeTokenLabel: OptionalString,
+  cpuLimit: OptionalString,
+  ramLimit: OptionalString,
+  enableMcpPlaywright: OptionalBoolean
+})

@@ -1,4 +1,14 @@
 services:
+  dind:
+    image: docker:27-dind
+    container_name: docker-git-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    volumes:
+      - docker-git-dind-storage:/var/lib/docker
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -9,9 +19,14 @@ services:
       DOCKER_GIT_PROJECTS_ROOT: ${DOCKER_GIT_PROJECTS_ROOT:-/home/dev/.docker-git}
       DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN: ${DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN:-}
       DOCKER_GIT_FEDERATION_ACTOR: ${DOCKER_GIT_FEDERATION_ACTOR:-docker-git}
+      DOCKER_HOST: tcp://dind:2375
     ports:
       - "${DOCKER_GIT_API_BIND_HOST:-127.0.0.1}:${DOCKER_GIT_API_PORT:-3334}:${DOCKER_GIT_API_PORT:-3334}"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - ${DOCKER_GIT_PROJECTS_ROOT_HOST:-/home/dev/.docker-git}:${DOCKER_GIT_PROJECTS_ROOT:-/home/dev/.docker-git}
+    depends_on:
+      - dind
     restart: unless-stopped
+
+volumes:
+  docker-git-dind-storage:

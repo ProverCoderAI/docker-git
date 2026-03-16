@@ -94,11 +94,23 @@ const formatStateSyncLabel = (repoUrl: string): string => {
 
 const isInteractiveTty = (): boolean => process.stdin.isTTY && process.stdout.isTTY
 
+import { isInsideDocker } from "../../shell/docker-env.js"
+
+// CHANGE: detect DinD for SSH host resolution
+// WHY: in DinD, localhost:mappedPort is on outer host; use containerName:22 via Docker DNS
+// PURITY: CORE
+
+const resolveSshHost = (config: CreateCommand["config"]): { host: string; port: number } =>
+  isInsideDocker()
+    ? { host: config.containerName, port: 22 }
+    : { host: "localhost", port: config.sshPort }
+
 const buildSshArgs = (
   config: CreateCommand["config"],
   sshKeyPath: string | null,
   remoteCommand?: string
 ): ReadonlyArray<string> => {
+  const target = resolveSshHost(config)
   const args: Array<string> = []
   if (sshKeyPath !== null) {
     args.push("-i", sshKeyPath)
@@ -113,8 +125,8 @@ const buildSshArgs = (
     "-o",
     "UserKnownHostsFile=/dev/null",
     "-p",
-    String(config.sshPort),
-    `${config.sshUser}@localhost`
+    String(target.port),
+    `${config.sshUser}@${target.host}`
   )
   if (remoteCommand !== undefined) {
     args.push(remoteCommand)

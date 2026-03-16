@@ -227,3 +227,118 @@ export type ApiEvent = {
   readonly at: string
   readonly payload: unknown
 }
+
+// Auth
+export type AuthStatusResponse = { readonly message: string }
+
+export type AuthGithubLoginRequest = {
+  readonly label?: string | null | undefined
+  readonly token?: string | null | undefined
+  readonly scopes?: string | null | undefined
+  readonly envGlobalPath: string
+}
+
+export type AuthGithubStatusRequest = {
+  readonly envGlobalPath: string
+}
+
+export type AuthGithubLogoutRequest = {
+  readonly label?: string | null | undefined
+  readonly envGlobalPath: string
+}
+
+export type AuthCodexLoginRequest = {
+  readonly label?: string | null | undefined
+  readonly codexAuthPath: string
+}
+
+export type AuthCodexStatusRequest = {
+  readonly label?: string | null | undefined
+  readonly codexAuthPath: string
+}
+
+export type AuthCodexLogoutRequest = {
+  readonly label?: string | null | undefined
+  readonly codexAuthPath: string
+}
+
+export type AuthClaudeLoginRequest = {
+  readonly label?: string | null | undefined
+  readonly claudeAuthPath: string
+}
+
+export type AuthClaudeStatusRequest = {
+  readonly label?: string | null | undefined
+  readonly claudeAuthPath: string
+}
+
+export type AuthClaudeLogoutRequest = {
+  readonly label?: string | null | undefined
+  readonly claudeAuthPath: string
+}
+
+// State
+export type StateInitRequest = {
+  readonly repoUrl: string
+  readonly repoRef?: string | undefined
+}
+
+export type StateCommitRequest = {
+  readonly message: string
+}
+
+export type StateSyncRequest = {
+  readonly message?: string | null | undefined
+}
+
+export type StatePathResponse = { readonly path: string }
+
+export type StateOutputResponse = { readonly output: string }
+
+// Scrap
+export type ScrapExportRequest = {
+  readonly projectDir: string
+  readonly archivePath?: string | undefined
+}
+
+export type ScrapImportRequest = {
+  readonly projectDir: string
+  readonly archivePath: string
+  readonly wipe?: boolean | undefined
+}
+
+// Sessions
+export type SessionsListRequest = {
+  readonly projectDir: string
+  readonly includeDefault?: boolean | undefined
+}
+
+export type SessionsKillRequest = {
+  readonly projectDir: string
+  readonly pid: number
+}
+
+export type SessionsLogsRequest = {
+  readonly projectDir: string
+  readonly pid: number
+  readonly lines?: number | undefined
+}
+
+export type SessionsOutput = { readonly output: string }
+
+// MCP Playwright
+export type McpPlaywrightUpRequest = {
+  readonly projectDir: string
+  readonly runUp?: boolean | undefined
+}
+
+// Apply (project config)
+export type ApplyRequest = {
+  readonly runUp?: boolean | undefined
+  readonly gitTokenLabel?: string | undefined
+  readonly codexTokenLabel?: string | undefined
+  readonly claudeTokenLabel?: string | undefined
+  readonly cpuLimit?: string | undefined
+  readonly ramLimit?: string | undefined
+  readonly enableMcpPlaywright?: boolean | undefined
+}
