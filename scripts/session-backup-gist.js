@@ -118,6 +118,57 @@ const execCommand = (command, options = {}) => {
 };
 
 /**
+ * Execute gh CLI command and return result
+ * @param {string[]} args - Command arguments
+ * @returns {{success: boolean, stdout: string, stderr: string}}
+ */
+const ghCommand = (args) => {
+  const result = spawnSync("gh", args, {
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  return {
+    success: result.status === 0,
+    stdout: (result.stdout || "").trim(),
+    stderr: (result.stderr || "").trim(),
+  };
+};
+
+/**
+ * Parse a GitHub repository from a remote URL
+ * @param {string} remoteUrl - Remote URL
+ * @returns {string|null} Repository in owner/repo format or null
+ */
+const parseGitHubRepoFromRemoteUrl = (remoteUrl) => {
+  if (!remoteUrl) {
+    return null;
+  }
+
+  const sshMatch = remoteUrl.match(/git@github\.com:([^/]+\/[^.]+)(?:\.git)?$/);
+  if (sshMatch) {
+    return sshMatch[1];
+  }
+
+  const httpsMatch = remoteUrl.match(/https:\/\/github\.com\/([^/]+\/[^.]+)(?:\.git)?$/);
+  if (httpsMatch) {
+    return httpsMatch[1];
+  }
+
+  return null;
+};
+
+const rankRemoteName = (remoteName) => {
+  if (remoteName === "upstream") {
+    return 0;
+  }
+  if (remoteName === "origin") {
+    return 1;
+  }
+  return 2;
+};
+
+/**
  * Get current git branch name
  * @returns {string|null} Branch name or null
  */
@@ -126,22 +177,58 @@ const getCurrentBranch = () => {
 };
 
 /**
- * Get repository owner/name from git remote
- * @returns {string|null} Repository in owner/repo format or null
+ * Get HEAD commit sha
+ * @returns {string|null} Commit sha or null
  */
-const getRepoFromRemote = () => {
-  const remoteUrl = execCommand("git remote get-url origin");
-  if (!remoteUrl) return null;
+const getHeadCommitSha = () => {
+  return execCommand("git rev-parse HEAD");
+};
 
-  // Handle SSH format: git@github.com:owner/repo.git
-  const sshMatch = remoteUrl.match(/git@github\.com:([^/]+\/[^.]+)(?:\.git)?$/);
-  if (sshMatch) return sshMatch[1];
+/**
+ * Get repository candidates from git remotes
+ * @param {string|null} explicitRepo - Explicit repository override
+ * @param {boolean} verbose - Whether to log verbosely
+ * @returns {string[]} Candidate repositories in owner/repo format
+ */
+const getRepoCandidates = (explicitRepo, verbose) => {
+  if (explicitRepo) {
+    return [explicitRepo];
+  }
 
-  // Handle HTTPS format: https://github.com/owner/repo.git
-  const httpsMatch = remoteUrl.match(/https:\/\/github\.com\/([^/]+\/[^.]+)(?:\.git)?$/);
-  if (httpsMatch) return httpsMatch[1];
+  const remoteOutput = execCommand("git remote -v");
+  if (!remoteOutput) {
+    return [];
+  }
 
-  return null;
+  const remotes = [];
+  const seenRepos = new Set();
+
+  for (const line of remoteOutput.split("\n")) {
+    const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/);
+    if (!match || match[3] !== "fetch") {
+      continue;
+    }
+
+    const [, remoteName, remoteUrl] = match;
+    const repo = parseGitHubRepoFromRemoteUrl(remoteUrl);
+    if (!repo || seenRepos.has(repo)) {
+      continue;
+    }
+
+    remotes.push({ remoteName, repo });
+    seenRepos.add(repo);
+  }
+
+  remotes.sort((left, right) => {
+    const rankDiff = rankRemoteName(left.remoteName) - rankRemoteName(right.remoteName);
+    return rankDiff !== 0 ? rankDiff : left.remoteName.localeCompare(right.remoteName);
+  });
+
+  const repos = remotes.map(({ repo }) => repo);
+  if (repos.length > 0) {
+    log(verbose, `Repository candidates: ${repos.join(", ")}`);
+  }
+  return repos;
 };
 
 /**
@@ -151,12 +238,93 @@ const getRepoFromRemote = () => {
  * @returns {number|null} PR number or null
  */
 const getPrNumberFromBranch = (repo, branch) => {
-  const result = execCommand(
-    `gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number'`
-  );
-  if (result && !isNaN(parseInt(result, 10))) {
-    return parseInt(result, 10);
+  const result = ghCommand([
+    "pr",
+    "list",
+    "--repo",
+    repo,
+    "--head",
+    branch,
+    "--json",
+    "number",
+    "--jq",
+    ".[0].number",
+  ]);
+
+  if (result.success && result.stdout && !isNaN(parseInt(result.stdout, 10))) {
+    return parseInt(result.stdout, 10);
   }
+  return null;
+};
+
+/**
+ * Check whether a PR exists in a repository
+ * @param {string} repo - Repository in owner/repo format
+ * @param {number} prNumber - PR number
+ * @returns {boolean} Whether the PR exists
+ */
+const prExists = (repo, prNumber) => {
+  const result = ghCommand([
+    "pr",
+    "view",
+    prNumber.toString(),
+    "--repo",
+    repo,
+    "--json",
+    "number",
+    "--jq",
+    ".number",
+  ]);
+
+  return result.success && result.stdout === prNumber.toString();
+};
+
+/**
+ * Extract a PR number from a docker-git workspace branch
+ * @param {string} branch - Branch name
+ * @returns {number|null} PR number or null
+ */
+const getPrNumberFromWorkspaceBranch = (branch) => {
+  const match = branch.match(/^pr-refs-pull-([0-9]+)-head$/);
+  if (!match) {
+    return null;
+  }
+
+  const prNumber = parseInt(match[1], 10);
+  return Number.isNaN(prNumber) ? null : prNumber;
+};
+
+/**
+ * Find an open PR for the current branch across repo candidates
+ * @param {string[]} repos - Candidate repositories
+ * @param {string} branch - Branch name
+ * @param {boolean} verbose - Whether to log verbosely
+ * @returns {{repo: string, prNumber: number} | null} PR context or null
+ */
+const findPrContext = (repos, branch, verbose) => {
+  for (const repo of repos) {
+    log(verbose, `Checking open PR in ${repo} for branch ${branch}`);
+    const prNumber = getPrNumberFromBranch(repo, branch);
+    if (prNumber !== null) {
+      return { repo, prNumber };
+    }
+  }
+
+  const workspacePrNumber = getPrNumberFromWorkspaceBranch(branch);
+  if (workspacePrNumber === null) {
+    return null;
+  }
+
+  for (const repo of repos) {
+    log(
+      verbose,
+      `Checking workspace PR #${workspacePrNumber} in ${repo} for branch ${branch}`
+    );
+    if (prExists(repo, workspacePrNumber)) {
+      return { repo, prNumber: workspacePrNumber };
+    }
+  }
+
   return null;
 };
 
@@ -322,13 +490,15 @@ const createGist = (files, description, dryRun, verbose) => {
  * @param {boolean} verbose - Whether to log verbosely
  * @returns {boolean} Whether the comment was posted successfully
  */
-const postPrComment = (repo, prNumber, gistUrl, dryRun, verbose) => {
+const postPrComment = (repo, prNumber, gistUrl, commitSha, dryRun, verbose) => {
   const timestamp = new Date().toISOString();
+  const commitLine = commitSha ? `**Commit:** \`${commitSha}\`\n\n` : "";
+  const commitMarker = commitSha ? `\n<!-- docker-git-session-backup:${commitSha} -->` : "";
   const comment = `## AI Session Backup
 
 A snapshot of the AI agent session has been saved to a private gist:
 
-**Gist URL:** ${gistUrl}
+${commitLine}**Gist URL:** ${gistUrl}
 
 To resume this session, you can use:
 \`\`\`bash
@@ -345,7 +515,7 @@ gemini --resume <session-id>
 For extracting session dialogs, see: https://github.com/ProverCoderAI/context-doc
 
 ---
-*Backup created at: ${timestamp}*`;
+*Backup created at: ${timestamp}*${commitMarker}`;
 
   if (dryRun) {
     console.log(`[dry-run] Would post comment to PR #${prNumber} in ${repo}:`);
@@ -389,11 +559,12 @@ const main = () => {
   log(verbose, "Starting session backup...");
 
   // Get repository info
-  const repo = args.repo || getRepoFromRemote();
-  if (!repo) {
+  const repoCandidates = getRepoCandidates(args.repo, verbose);
+  if (repoCandidates.length === 0) {
     console.error("[session-backup] Could not determine repository. Use --repo option.");
     process.exit(1);
   }
+  const repo = repoCandidates[0];
   log(verbose, `Repository: ${repo}`);
 
   // Get current branch
@@ -405,15 +576,17 @@ const main = () => {
   log(verbose, `Branch: ${branch}`);
 
   // Get PR number
-  let prNumber = args.prNumber;
-  if (!prNumber && args.postComment) {
-    prNumber = getPrNumberFromBranch(repo, branch);
-    if (!prNumber) {
-      log(verbose, "No PR found for current branch, skipping comment");
-    }
+  let prContext = null;
+  if (args.prNumber !== null) {
+    prContext = { repo, prNumber: args.prNumber };
+  } else if (args.postComment) {
+    prContext = findPrContext(repoCandidates, branch, verbose);
   }
-  if (prNumber) {
-    log(verbose, `PR number: ${prNumber}`);
+
+  if (prContext !== null) {
+    log(verbose, `PR number: ${prContext.prNumber} (${prContext.repo})`);
+  } else if (args.postComment) {
+    log(verbose, "No PR found for current branch, skipping comment");
   }
 
   // Find session directories
@@ -438,7 +611,17 @@ const main = () => {
   log(verbose, `Total files to backup: ${allFiles.length}`);
 
   // Create gist
-  const description = `AI Session Backup - ${repo} - ${branch} - ${new Date().toISOString()}`;
+  const commitSha = getHeadCommitSha();
+  const descriptionParts = [
+    "AI Session Backup",
+    prContext !== null ? prContext.repo : repo,
+    branch,
+  ];
+  if (commitSha) {
+    descriptionParts.push(commitSha.slice(0, 12));
+  }
+  descriptionParts.push(new Date().toISOString());
+  const description = descriptionParts.join(" - ");
   const gistUrl = createGist(allFiles, description, args.dryRun, verbose);
 
   if (!gistUrl) {
@@ -449,8 +632,15 @@ const main = () => {
   console.log(`[session-backup] Created gist: ${gistUrl}`);
 
   // Post PR comment
-  if (args.postComment && prNumber) {
-    postPrComment(repo, prNumber, gistUrl, args.dryRun, verbose);
+  if (args.postComment && prContext !== null) {
+    postPrComment(
+      prContext.repo,
+      prContext.prNumber,
+      gistUrl,
+      commitSha,
+      args.dryRun,
+      verbose
+    );
   }
 
   console.log("[session-backup] Session backup complete");
