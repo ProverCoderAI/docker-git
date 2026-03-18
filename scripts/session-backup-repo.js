@@ -7,10 +7,10 @@ const { spawnSync } = require("node:child_process");
 
 const BACKUP_REPO_NAME = "docker-git-sessions";
 const BACKUP_DEFAULT_BRANCH = "main";
-// GitHub's git/blob API receives base64-encoded payloads, so files near 100 MB
-// exceed the practical request size limit even though normal git push could handle them.
-// Keep API uploads comfortably below that ceiling.
-const MAX_REPO_FILE_SIZE = 50 * 1000 * 1000;
+// Keep each stored object below GitHub's 100 MB limit while transport batches stay smaller.
+const MAX_REPO_FILE_SIZE = 99 * 1000 * 1000;
+const MAX_PUSH_BATCH_BYTES = 50 * 1000 * 1000;
+const GH_GIT_CREDENTIAL_HELPER = "!gh auth git-credential";
 const CHUNK_MANIFEST_SUFFIX = ".chunks.json";
 const DOCKER_GIT_CONFIG_FILE = "docker-git.json";
 const GITHUB_ENV_KEYS = ["GITHUB_TOKEN", "GH_TOKEN"];
@@ -284,56 +284,6 @@ const getCommitTreeSha = (repoFullName, commitSha, ghEnv) =>
     `failed to resolve tree for commit ${commitSha}`
   ).stdout;
 
-const createBlob = (repoFullName, contentBase64, ghEnv) =>
-  ensureSuccess(
-    ghApi(`/repos/${repoFullName}/git/blobs`, ghEnv, {
-      method: "POST",
-      body: {
-        content: contentBase64,
-        encoding: "base64",
-      },
-      jq: ".sha",
-    }),
-    `failed to create blob in ${repoFullName}`
-  ).stdout;
-
-const createTree = (repoFullName, baseTreeSha, treeEntries, ghEnv) =>
-  ensureSuccess(
-    ghApi(`/repos/${repoFullName}/git/trees`, ghEnv, {
-      method: "POST",
-      body: {
-        base_tree: baseTreeSha,
-        tree: treeEntries,
-      },
-      jq: ".sha",
-    }),
-    `failed to create tree in ${repoFullName}`
-  ).stdout;
-
-const createCommit = (repoFullName, message, treeSha, parentSha, ghEnv) =>
-  ensureSuccess(
-    ghApi(`/repos/${repoFullName}/git/commits`, ghEnv, {
-      method: "POST",
-      body: {
-        message,
-        tree: treeSha,
-        parents: [parentSha],
-      },
-      jq: ".sha",
-    }),
-    `failed to create commit in ${repoFullName}`
-  ).stdout;
-
-const updateBranchRef = (repoFullName, branch, commitSha, ghEnv) =>
-  ensureSuccess(
-    ghApi(`/repos/${repoFullName}/git/refs/heads/${branch}`, ghEnv, {
-      method: "PATCH",
-      rawFields: { sha: commitSha },
-      jq: ".object.sha",
-    }),
-    `failed to update ${repoFullName}@${branch}`
-  ).stdout;
-
 const getTreeEntries = (repoFullName, branch, ghEnv) => {
   const headSha = getBranchHeadSha(repoFullName, branch, ghEnv);
   const treeSha = getCommitTreeSha(repoFullName, headSha, ghEnv);
@@ -343,6 +293,18 @@ const getTreeEntries = (repoFullName, branch, ghEnv) => {
   );
   return {
     headSha,
+    treeSha,
+    entries: Array.isArray(result.json?.tree) ? result.json.tree : [],
+  };
+};
+
+const getTreeEntriesForCommit = (repoFullName, commitSha, ghEnv) => {
+  const treeSha = getCommitTreeSha(repoFullName, commitSha, ghEnv);
+  const result = ensureSuccess(
+    ghApiJson(`/repos/${repoFullName}/git/trees/${treeSha}?recursive=1`, ghEnv),
+    `failed to list tree for commit ${commitSha} in ${repoFullName}`
+  );
+  return {
     treeSha,
     entries: Array.isArray(result.json?.tree) ? result.json.tree : [],
   };
@@ -364,8 +326,14 @@ const getFileContent = (repoFullName, repoPath, ghEnv, ref = BACKUP_DEFAULT_BRAN
 const buildSnapshotRef = (sourceRepo, prNumber, commitSha, createdAt) =>
   `${sourceRepo}/pr-${prNumber === null ? "no-pr" : prNumber}/commit-${commitSha}/${toSnapshotStamp(createdAt)}`;
 
-const buildCommitMessage = ({ sourceRepo, branch, commitSha, createdAt }) =>
-  `session-backup: ${sourceRepo} ${branch} ${commitSha.slice(0, 12)} ${toSnapshotStamp(createdAt)}`;
+const buildCommitMessage = ({ sourceRepo, repo, branch, commitSha, createdAt }) =>
+  `session-backup: ${sourceRepo ?? repo ?? "unknown"} ${branch} ${commitSha.slice(0, 12)} ${toSnapshotStamp(createdAt)}`;
+
+const buildBatchCommitMessage = (source, batchIndex, batchCount) =>
+  `${buildCommitMessage(source)} [files ${batchIndex}/${batchCount}]`;
+
+const buildManifestCommitMessage = (source) =>
+  `${buildCommitMessage(source)} [manifest]`;
 
 const buildChunkManifest = (logicalName, originalSize, partNames) => ({
   original: logicalName,
@@ -497,51 +465,347 @@ const prepareUploadArtifacts = (sessionFiles, snapshotRef, repoFullName, branch,
   return { uploadEntries, manifestFiles };
 };
 
-const readFileAsBase64 = (filePath) => fs.readFileSync(filePath).toString("base64");
-
-const uploadSnapshot = (backupRepo, snapshotRef, snapshotManifest, uploadEntries, ghEnv) => {
-  const headSha = getBranchHeadSha(backupRepo.fullName, backupRepo.defaultBranch, ghEnv);
-  const baseTreeSha = getCommitTreeSha(backupRepo.fullName, headSha, ghEnv);
-  const treeEntries = [];
+const splitUploadEntriesIntoBatches = (uploadEntries) => {
+  const batches = [];
+  let currentBatch = [];
+  let currentBatchBytes = 0;
 
   for (const entry of uploadEntries) {
-    const blobSha = createBlob(backupRepo.fullName, readFileAsBase64(entry.sourcePath), ghEnv);
-    treeEntries.push({
-      path: entry.repoPath,
-      mode: "100644",
-      type: "blob",
-      sha: blobSha,
+    if (currentBatch.length > 0 && currentBatchBytes + entry.size > MAX_PUSH_BATCH_BYTES) {
+      batches.push(currentBatch);
+      currentBatch = [];
+      currentBatchBytes = 0;
+    }
+
+    currentBatch.push(entry);
+    currentBatchBytes += entry.size;
+  }
+
+  if (currentBatch.length > 0) {
+    batches.push(currentBatch);
+  }
+
+  return batches;
+};
+
+const runGitCommand = (repoDir, args, env) => {
+  const result = spawnSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "protocol.version=2", "-C", repoDir, ...args], {
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+    env,
+  });
+
+  return {
+    success: result.status === 0,
+    status: result.status ?? 1,
+    stdout: (result.stdout || "").trim(),
+    stderr: (result.stderr || "").trim(),
+  };
+};
+
+const ensureGitSuccess = (result, context) => {
+  if (!result.success) {
+    throw new Error(`${context}: ${result.stderr || result.stdout || `exit ${result.status}`}`);
+  }
+  return result;
+};
+
+const runGitCommandWithInput = (repoDir, args, env, input) => {
+  const result = spawnSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "protocol.version=2", "-C", repoDir, ...args], {
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+    env,
+    input,
+  });
+
+  return {
+    success: result.status === 0,
+    status: result.status ?? 1,
+    stdout: (result.stdout || "").trim(),
+    stderr: (result.stderr || "").trim(),
+  };
+};
+
+const buildGitPushEnv = (ghEnv, token) => ({
+  ...ghEnv,
+  GH_TOKEN: token,
+  GITHUB_TOKEN: token,
+  GIT_AUTH_TOKEN: token,
+  GIT_TERMINAL_PROMPT: "0",
+});
+
+const initializeUploadRepo = (repoDir, backupRepo, gitEnv) => {
+  ensureGitSuccess(runGitCommand(repoDir, ["init", "-q"], gitEnv), `failed to init git repo ${repoDir}`);
+  ensureGitSuccess(
+    runGitCommand(repoDir, ["remote", "add", "origin", `https://github.com/${backupRepo.fullName}.git`], gitEnv),
+    `failed to configure git remote for ${backupRepo.fullName}`
+  );
+};
+
+const fetchRemoteBranchTip = (repoDir, branch, gitEnv) => {
+  ensureGitSuccess(
+    runGitCommand(
+      repoDir,
+      [
+        "-c",
+        `credential.helper=${GH_GIT_CREDENTIAL_HELPER}`,
+        "fetch",
+        "--quiet",
+        "--no-tags",
+        "--depth=1",
+        "--filter=blob:none",
+        "origin",
+        `refs/heads/${branch}:refs/remotes/origin/${branch}`,
+      ],
+      gitEnv
+    ),
+    `failed to fetch ${branch} tip from backup repository`
+  );
+  return ensureGitSuccess(
+    runGitCommand(repoDir, ["rev-parse", `refs/remotes/origin/${branch}`], gitEnv),
+    `failed to resolve fetched ${branch} tip`
+  ).stdout;
+};
+
+const hashFileObject = (repoDir, sourcePath, gitEnv) =>
+  ensureGitSuccess(
+    runGitCommand(repoDir, ["hash-object", "-w", sourcePath], gitEnv),
+    `failed to hash ${sourcePath}`
+  ).stdout;
+
+const createTreeObject = (repoDir, entries, gitEnv) => {
+  const body = entries
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map((entry) => `${entry.mode} ${entry.type} ${entry.sha}\t${entry.name}`)
+    .join("\n");
+  return ensureGitSuccess(
+    runGitCommandWithInput(repoDir, ["mktree", "--missing"], gitEnv, body.length > 0 ? `${body}\n` : ""),
+    "failed to create git tree"
+  ).stdout;
+};
+
+const createCommitObject = (repoDir, treeSha, parentSha, message, createdAt, owner, gitEnv) => {
+  const authorEmail = `${owner}@users.noreply.github.com`;
+  const unixSeconds = Math.floor(new Date(createdAt).getTime() / 1000);
+  const commitBody = [
+    `tree ${treeSha}`,
+    `parent ${parentSha}`,
+    `author ${owner} <${authorEmail}> ${unixSeconds} +0000`,
+    `committer ${owner} <${authorEmail}> ${unixSeconds} +0000`,
+    "",
+    message,
+    "",
+  ].join("\n");
+  return ensureGitSuccess(
+    runGitCommandWithInput(repoDir, ["hash-object", "-t", "commit", "-w", "--stdin"], gitEnv, commitBody),
+    "failed to create git commit"
+  ).stdout;
+};
+
+const updateLocalRef = (repoDir, refName, commitSha, gitEnv) =>
+  ensureGitSuccess(
+    runGitCommand(repoDir, ["update-ref", refName, commitSha], gitEnv),
+    `failed to update local ref ${refName}`
+  );
+
+const isNonFastForwardPushError = (result) =>
+  /non-fast-forward|fetch first|rejected/i.test(`${result.stderr}\n${result.stdout}`);
+
+const pushCommitToBranch = (repoDir, sourceRef, branch, gitEnv) =>
+  runGitCommand(
+    repoDir,
+    [
+      "-c",
+      `credential.helper=${GH_GIT_CREDENTIAL_HELPER}`,
+      "push",
+      "origin",
+      `${sourceRef}:refs/heads/${branch}`,
+    ],
+    gitEnv
+  );
+
+const buildFileMapFromTreeEntries = (entries) => {
+  const fileMap = new Map();
+  for (const entry of entries) {
+    if (entry.type === "tree") {
+      continue;
+    }
+    if (typeof entry.path !== "string" || typeof entry.sha !== "string" || typeof entry.mode !== "string") {
+      continue;
+    }
+    fileMap.set(entry.path, {
+      mode: entry.mode,
+      type: entry.type,
+      sha: entry.sha,
+    });
+  }
+  return fileMap;
+};
+
+const buildDirectoryGraph = (fileMap) => {
+  const directories = new Set([""]);
+  const childrenByDir = new Map();
+
+  const addChild = (dirPath, child) => {
+    const current = childrenByDir.get(dirPath) ?? [];
+    current.push(child);
+    childrenByDir.set(dirPath, current);
+  };
+
+  for (const [repoPath, entry] of fileMap.entries()) {
+    const segments = repoPath.split("/");
+    const name = segments.pop();
+    const dirPath = segments.join("/");
+    if (!name) {
+      continue;
+    }
+    directories.add(dirPath);
+    for (let index = 1; index <= segments.length; index += 1) {
+      directories.add(segments.slice(0, index).join("/"));
+    }
+    addChild(dirPath, {
+      name,
+      mode: entry.mode,
+      type: entry.type,
+      sha: entry.sha,
     });
   }
 
-  const manifestPath = `${snapshotRef}/manifest.json`;
-  const manifestBlobSha = createBlob(
-    backupRepo.fullName,
-    Buffer.from(`${JSON.stringify(snapshotManifest, null, 2)}\n`, "utf8").toString("base64"),
-    ghEnv
-  );
-  treeEntries.push({
-    path: manifestPath,
-    mode: "100644",
-    type: "blob",
-    sha: manifestBlobSha,
-  });
-
-  const nextTreeSha = createTree(backupRepo.fullName, baseTreeSha, treeEntries, ghEnv);
-  const nextCommitSha = createCommit(
-    backupRepo.fullName,
-    buildCommitMessage(snapshotManifest.source),
-    nextTreeSha,
-    headSha,
-    ghEnv
-  );
-  updateBranchRef(backupRepo.fullName, backupRepo.defaultBranch, nextCommitSha, ghEnv);
-
   return {
-    commitSha: nextCommitSha,
-    manifestPath,
-    manifestUrl: buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, manifestPath),
+    directories: Array.from(directories).sort((left, right) => {
+      const depthDiff = right.split("/").length - left.split("/").length;
+      return depthDiff !== 0 ? depthDiff : right.localeCompare(left);
+    }),
+    childrenByDir,
+    addChild,
   };
+};
+
+const writeMergedTree = (repoDir, existingEntries, newEntries, gitEnv) => {
+  const fileMap = buildFileMapFromTreeEntries(existingEntries);
+  for (const entry of newEntries) {
+    fileMap.set(entry.repoPath, {
+      mode: "100644",
+      type: "blob",
+      sha: entry.sha,
+    });
+  }
+
+  const { directories, childrenByDir, addChild } = buildDirectoryGraph(fileMap);
+
+  for (const dirPath of directories) {
+    if (dirPath.length === 0) {
+      continue;
+    }
+    const childEntries = childrenByDir.get(dirPath) ?? [];
+    const treeSha = createTreeObject(repoDir, childEntries, gitEnv);
+    const segments = dirPath.split("/");
+    const name = segments.pop();
+    const parentDir = segments.join("/");
+    if (!name) {
+      continue;
+    }
+    addChild(parentDir, {
+      name,
+      mode: "040000",
+      type: "tree",
+      sha: treeSha,
+    });
+  }
+
+  return createTreeObject(repoDir, childrenByDir.get("") ?? [], gitEnv);
+};
+
+const buildUploadCommitMessage = (source, batchIndex, batchCount) =>
+  batchCount <= 1
+    ? buildCommitMessage(source)
+    : `${buildCommitMessage(source)} [batch ${batchIndex}/${batchCount}]`;
+
+const uploadSnapshot = (backupRepo, snapshotRef, snapshotManifest, uploadEntries, ghEnv) => {
+  const token = ghEnv.GITHUB_TOKEN?.trim() || ghEnv.GH_TOKEN?.trim() || "";
+  if (token.length === 0) {
+    throw new Error("GitHub token missing for backup repository push");
+  }
+
+  const uploadRoot = fs.mkdtempSync(path.join(os.tmpdir(), "session-backup-git-push-"));
+  const manifestPath = `${snapshotRef}/manifest.json`;
+  const manifestTempPath = path.join(uploadRoot, "manifest.json");
+  fs.writeFileSync(manifestTempPath, `${JSON.stringify(snapshotManifest, null, 2)}\n`, "utf8");
+  const manifestEntry = {
+    repoPath: manifestPath,
+    sourcePath: manifestTempPath,
+    size: fs.statSync(manifestTempPath).size,
+  };
+  const uploadBatches = splitUploadEntriesIntoBatches([...uploadEntries, manifestEntry]);
+
+  try {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const attemptDir = path.join(uploadRoot, `attempt-${attempt}`);
+      const repoDir = path.join(attemptDir, "repo");
+      fs.mkdirSync(repoDir, { recursive: true });
+      const gitEnv = buildGitPushEnv(ghEnv, token);
+
+      initializeUploadRepo(repoDir, backupRepo, gitEnv);
+      let headSha = fetchRemoteBranchTip(repoDir, backupRepo.defaultBranch, gitEnv);
+      let { entries: existingEntries } = getTreeEntriesForCommit(backupRepo.fullName, headSha, ghEnv);
+      let lastCommitSha = headSha;
+      let shouldRetry = false;
+
+      for (let batchIndex = 0; batchIndex < uploadBatches.length; batchIndex += 1) {
+        const hashedEntries = uploadBatches[batchIndex].map((entry) => ({
+          repoPath: entry.repoPath,
+          sha: hashFileObject(repoDir, entry.sourcePath, gitEnv),
+        }));
+
+        const nextTreeSha = writeMergedTree(repoDir, existingEntries, hashedEntries, gitEnv);
+        const commitSha = createCommitObject(
+          repoDir,
+          nextTreeSha,
+          headSha,
+          buildUploadCommitMessage(snapshotManifest.source, batchIndex + 1, uploadBatches.length),
+          snapshotManifest.source.createdAt,
+          backupRepo.owner,
+          gitEnv
+        );
+        const localRef = `refs/heads/session-backup-upload-${attempt}-${batchIndex + 1}`;
+        updateLocalRef(repoDir, localRef, commitSha, gitEnv);
+        const pushResult = pushCommitToBranch(repoDir, localRef, backupRepo.defaultBranch, gitEnv);
+        if (!pushResult.success) {
+          if (attempt < 3 && isNonFastForwardPushError(pushResult)) {
+            shouldRetry = true;
+            break;
+          }
+          throw new Error(`failed to push backup commit: ${pushResult.stderr || pushResult.stdout || `exit ${pushResult.status}`}`);
+        }
+
+        headSha = commitSha;
+        lastCommitSha = commitSha;
+        existingEntries = existingEntries.concat(
+          hashedEntries.map((entry) => ({
+            path: entry.repoPath,
+            mode: "100644",
+            type: "blob",
+            sha: entry.sha,
+          }))
+        );
+      }
+
+      if (shouldRetry) {
+        continue;
+      }
+
+      return {
+        commitSha: lastCommitSha,
+        manifestPath,
+        manifestUrl: buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, manifestPath),
+      };
+    }
+
+    throw new Error("failed to push backup commit after 3 attempts");
+  } finally {
+    fs.rmSync(uploadRoot, { recursive: true, force: true });
+  }
 };
 
 const sanitizeSnapshotRefForOutput = (snapshotRef) =>
