@@ -1,42 +1,39 @@
 #!/usr/bin/env node
 
 /**
- * List AI Session Backups from GitHub Gists
- *
- * This script lists all AI agent session backup gists created by session-backup-gist.js
- * and allows downloading/restoring them.
+ * List AI Session Backups from the private session backup repository
  *
  * Usage:
  *   node scripts/session-list-gists.js [command] [options]
  *
  * Commands:
- *   list                    List all session backup gists (default)
- *   view <gist-id>          View contents of a specific gist
- *   download <gist-id>      Download gist contents to local directory
+ *   list                        List session snapshots (default)
+ *   view <snapshot-ref>         View metadata for a snapshot
+ *   download <snapshot-ref>     Download snapshot contents to local directory
  *
  * Options:
- *   --limit <number>        Maximum number of gists to list (default: 20)
- *   --repo <owner/repo>     Filter by repository
- *   --output <path>         Output directory for download (default: ./.session-restore)
- *   --verbose               Enable verbose logging
- *
- * @pure false - contains IO effects (network, file system)
- * @effect GitHubGist, FileSystem
+ *   --limit <number>            Maximum number of snapshots to list (default: 20)
+ *   --repo <owner/repo>         Filter by source repository
+ *   --output <path>             Output directory for download (default: ./.session-restore)
+ *   --verbose                   Enable verbose logging
  */
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
 
-/**
- * Parse command line arguments
- * @returns {Object} Parsed arguments
- */
+const {
+  ensureBackupRepo,
+  getFileContent,
+  getTreeEntries,
+  resolveGhEnvironment,
+  sanitizeSnapshotRefForOutput,
+} = require("./session-backup-repo.js");
+
 const parseArgs = () => {
   const args = process.argv.slice(2);
   const result = {
     command: "list",
-    gistId: null,
+    snapshotRef: null,
     limit: 20,
     repo: null,
     output: "./.session-restore",
@@ -65,27 +62,26 @@ const parseArgs = () => {
           console.log(`Usage: session-list-gists.js [command] [options]
 
 Commands:
-  list                    List all session backup gists (default)
-  view <gist-id>          View contents of a specific gist
-  download <gist-id>      Download gist contents to local directory
+  list                        List session snapshots (default)
+  view <snapshot-ref>         View metadata for a snapshot
+  download <snapshot-ref>     Download snapshot contents to local directory
 
 Options:
-  --limit <number>        Maximum number of gists to list (default: 20)
-  --repo <owner/repo>     Filter by repository
-  --output <path>         Output directory for download (default: ./.session-restore)
-  --verbose               Enable verbose logging
-  --help                  Show this help message`);
+  --limit <number>            Maximum number of snapshots to list (default: 20)
+  --repo <owner/repo>         Filter by source repository
+  --output <path>             Output directory for download (default: ./.session-restore)
+  --verbose                   Enable verbose logging
+  --help                      Show this help message`);
           process.exit(0);
       }
     } else if (!result.command || result.command === "list") {
-      // First non-flag argument is the command
       if (arg === "list" || arg === "view" || arg === "download") {
         result.command = arg;
       } else if (result.command !== "list") {
-        result.gistId = arg;
+        result.snapshotRef = arg;
       }
-    } else if (!result.gistId) {
-      result.gistId = arg;
+    } else if (!result.snapshotRef) {
+      result.snapshotRef = arg;
     }
     i++;
   }
@@ -93,193 +89,136 @@ Options:
   return result;
 };
 
-/**
- * Log message if verbose mode is enabled
- * @param {boolean} verbose - Whether verbose mode is enabled
- * @param {string} message - Message to log
- */
 const log = (verbose, message) => {
   if (verbose) {
-    console.log(`[session-gists] ${message}`);
+    console.log(`[session-backups] ${message}`);
   }
 };
 
-/**
- * Execute gh CLI command and return result
- * @param {string[]} args - Command arguments
- * @returns {{success: boolean, stdout: string, stderr: string}}
- */
-const ghCommand = (args) => {
-  const result = spawnSync("gh", args, {
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+const ensureBackupRepoOrExit = (ghEnv, verbose) => {
+  const backupRepo = ensureBackupRepo(ghEnv, (message) => log(verbose, message), false);
+  if (backupRepo === null) {
+    console.log("No private session backup repository found.");
+    process.exit(0);
+  }
+  return backupRepo;
+};
 
+const decodeJsonBuffer = (buffer, context) => {
+  try {
+    return JSON.parse(buffer.toString("utf8"));
+  } catch (error) {
+    console.error(`Failed to parse JSON for ${context}: ${error.message}`);
+    process.exit(1);
+  }
+};
+
+const getManifestRepoPath = (snapshotRef) => `${snapshotRef}/manifest.json`;
+
+const fetchManifest = (backupRepo, snapshotRef, ghEnv) => {
+  const manifestPath = getManifestRepoPath(snapshotRef);
+  const buffer = getFileContent(backupRepo.fullName, manifestPath, ghEnv, backupRepo.defaultBranch);
   return {
-    success: result.status === 0,
-    stdout: result.stdout || "",
-    stderr: result.stderr || "",
+    path: manifestPath,
+    data: decodeJsonBuffer(buffer, manifestPath),
   };
 };
 
-/**
- * List session backup gists
- * @param {number} limit - Maximum number of gists to list
- * @param {string|null} repoFilter - Repository filter
- * @param {boolean} verbose - Whether to log verbosely
- */
-const listGists = (limit, repoFilter, verbose) => {
-  log(verbose, `Fetching gists (limit: ${limit})`);
+const listSnapshots = (limit, repoFilter, backupRepo, ghEnv, verbose) => {
+  log(verbose, `Listing snapshots from ${backupRepo.fullName}`);
+  const { entries } = getTreeEntries(backupRepo.fullName, backupRepo.defaultBranch, ghEnv);
+  const manifestPaths = entries
+    .filter((entry) => entry.type === "blob" && typeof entry.path === "string" && entry.path.endsWith("/manifest.json"))
+    .map((entry) => entry.path);
 
-  const result = ghCommand([
-    "gist",
-    "list",
-    "--limit",
-    limit.toString(),
-  ]);
+  const filtered = repoFilter
+    ? manifestPaths.filter((entryPath) => entryPath.startsWith(`${repoFilter}/`))
+    : manifestPaths;
 
-  if (!result.success) {
-    console.error(`Failed to list gists: ${result.stderr}`);
-    process.exit(1);
-  }
-
-  const lines = result.stdout.trim().split("\n").filter(Boolean);
-  const sessionBackups = [];
-
-  for (const line of lines) {
-    // Parse gist list output: ID  DESCRIPTION  FILES  VISIBILITY  UPDATED
-    const parts = line.split("\t");
-    if (parts.length < 2) continue;
-
-    const [id, description] = parts;
-
-    // Filter for session backups
-    if (description && description.includes("AI Session Backup")) {
-      // Check repo filter if specified
-      if (repoFilter && !description.includes(repoFilter)) {
-        continue;
-      }
-
-      sessionBackups.push({
-        id: id.trim(),
-        description: description.trim(),
-        raw: line,
-      });
-    }
-  }
-
-  if (sessionBackups.length === 0) {
-    console.log("No session backup gists found.");
+  if (filtered.length === 0) {
+    console.log("No session snapshots found.");
     if (repoFilter) {
       console.log(`(Filtered by repo: ${repoFilter})`);
     }
     return;
   }
 
-  console.log("Session Backup Gists:\n");
-  console.log("ID\t\t\t\t\tDescription");
-  console.log("-".repeat(80));
-
-  for (const gist of sessionBackups) {
-    console.log(`${gist.id}\t${gist.description}`);
+  const selected = filtered.slice(0, limit);
+  console.log("Session Snapshots:\n");
+  for (const manifestPath of selected) {
+    const snapshotRef = manifestPath.slice(0, -"/manifest.json".length);
+    const manifest = fetchManifest(backupRepo, snapshotRef, ghEnv);
+    console.log(snapshotRef);
+    console.log(`  Source: ${manifest.data.source.repo}`);
+    console.log(`  Commit: ${manifest.data.source.commitSha}`);
+    console.log(`  Created: ${manifest.data.createdAt}`);
+    console.log(`  Manifest: https://github.com/${backupRepo.fullName}/blob/${encodeURIComponent(backupRepo.defaultBranch)}/${manifest.path.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`);
+    console.log("");
   }
 
-  console.log(`\nTotal: ${sessionBackups.length} session backup(s)`);
-  console.log("\nTo view a gist: node scripts/session-list-gists.js view <gist-id>");
-  console.log("To download: node scripts/session-list-gists.js download <gist-id>");
+  console.log(`Total: ${filtered.length} snapshot(s)`);
 };
 
-/**
- * View contents of a gist
- * @param {string} gistId - Gist ID
- * @param {boolean} verbose - Whether to log verbosely
- */
-const viewGist = (gistId, verbose) => {
-  if (!gistId) {
-    console.error("Error: gist-id is required for view command");
+const viewSnapshot = (snapshotRef, backupRepo, ghEnv, verbose) => {
+  if (!snapshotRef) {
+    console.error("Error: snapshot-ref is required for view command");
     process.exit(1);
   }
 
-  log(verbose, `Viewing gist: ${gistId}`);
-
-  const result = ghCommand(["gist", "view", gistId]);
-
-  if (!result.success) {
-    console.error(`Failed to view gist: ${result.stderr}`);
-    process.exit(1);
-  }
-
-  console.log(result.stdout);
+  log(verbose, `Viewing snapshot: ${snapshotRef}`);
+  const manifest = fetchManifest(backupRepo, snapshotRef, ghEnv);
+  console.log(JSON.stringify(manifest.data, null, 2));
 };
 
-/**
- * Download gist contents to local directory
- * @param {string} gistId - Gist ID
- * @param {string} outputDir - Output directory
- * @param {boolean} verbose - Whether to log verbosely
- */
-const downloadGist = (gistId, outputDir, verbose) => {
-  if (!gistId) {
-    console.error("Error: gist-id is required for download command");
+const downloadSnapshot = (snapshotRef, outputDir, backupRepo, ghEnv, verbose) => {
+  if (!snapshotRef) {
+    console.error("Error: snapshot-ref is required for download command");
     process.exit(1);
   }
 
-  log(verbose, `Downloading gist ${gistId} to ${outputDir}`);
-
-  // Create output directory
-  const outputPath = path.resolve(outputDir, gistId);
+  log(verbose, `Downloading snapshot ${snapshotRef} to ${outputDir}`);
+  const manifest = fetchManifest(backupRepo, snapshotRef, ghEnv);
+  const outputPath = path.resolve(outputDir, sanitizeSnapshotRefForOutput(snapshotRef));
   fs.mkdirSync(outputPath, { recursive: true });
+  fs.writeFileSync(path.join(outputPath, "manifest.json"), `${JSON.stringify(manifest.data, null, 2)}\n`, "utf8");
 
-  // Clone gist
-  const result = ghCommand(["gist", "clone", gistId, outputPath]);
+  for (const file of manifest.data.files) {
+    const targetPath = path.join(outputPath, file.name);
+    if (file.type === "chunked") {
+      const buffers = file.parts.map((part) =>
+        getFileContent(backupRepo.fullName, part.repoPath, ghEnv, backupRepo.defaultBranch)
+      );
+      fs.writeFileSync(targetPath, Buffer.concat(buffers));
+      continue;
+    }
 
-  if (!result.success) {
-    console.error(`Failed to download gist: ${result.stderr}`);
-    process.exit(1);
+    const buffer = getFileContent(backupRepo.fullName, file.repoPath, ghEnv, backupRepo.defaultBranch);
+    fs.writeFileSync(targetPath, buffer);
   }
 
-  console.log(`Downloaded gist to: ${outputPath}`);
-
-  // List downloaded files
-  const files = fs.readdirSync(outputPath).filter(f => !f.startsWith("."));
-  console.log(`\nFiles (${files.length}):`);
-  for (const file of files) {
-    const stats = fs.statSync(path.join(outputPath, file));
-    console.log(`  - ${file} (${stats.size} bytes)`);
-  }
-
+  console.log(`Downloaded snapshot to: ${outputPath}`);
   console.log("\nTo restore session files, copy them to the appropriate location:");
-  console.log("  - .codex/* files -> ~/.codex/");
-  console.log("  - .claude/* files -> ~/.claude/");
-  console.log("  - .gemini/* files -> ~/.gemini/");
-  console.log("  - .knowledge/* files -> ./.knowledge/");
-  console.log("\nFor extracting session dialogs, see: https://github.com/ProverCoderAI/context-doc");
+  console.log("  - .codex_* files -> ~/.codex/");
+  console.log("  - .claude_* files -> ~/.claude/");
+  console.log("  - .gemini_* files -> ~/.gemini/");
+  console.log("  - .knowledge_* files -> ./.knowledge/");
 };
 
-/**
- * Main function
- */
 const main = () => {
   const args = parseArgs();
   const verbose = args.verbose;
-
-  // Check gh CLI availability
-  const authResult = ghCommand(["auth", "status"]);
-  if (!authResult.success) {
-    console.error("Error: GitHub CLI (gh) is not authenticated.");
-    console.error("Run 'gh auth login' to authenticate.");
-    process.exit(1);
-  }
+  const ghEnv = resolveGhEnvironment(process.cwd(), (message) => log(verbose, message));
+  const backupRepo = ensureBackupRepoOrExit(ghEnv, verbose);
 
   switch (args.command) {
     case "list":
-      listGists(args.limit, args.repo, verbose);
+      listSnapshots(args.limit, args.repo, backupRepo, ghEnv, verbose);
       break;
     case "view":
-      viewGist(args.gistId, verbose);
+      viewSnapshot(args.snapshotRef, backupRepo, ghEnv, verbose);
       break;
     case "download":
-      downloadGist(args.gistId, args.output, verbose);
+      downloadSnapshot(args.snapshotRef, args.output, backupRepo, ghEnv, verbose);
       break;
     default:
       console.error(`Unknown command: ${args.command}`);

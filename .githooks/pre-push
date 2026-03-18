@@ -11,13 +11,13 @@ fi
 
 node scripts/pre-push-knowledge-guard.js "$@"
 
-# CHANGE: backup AI session to private gist on push (supports Claude, Codex, Gemini)
-# WHY: allows returning to old AI sessions and provides PR context
+# CHANGE: backup AI session to a private session repository on push (supports Claude, Codex, Gemini)
+# WHY: allows returning to old AI sessions and provides PR context without gist limits
 # QUOTE(ТЗ): "когда происходит push мы сразу заливаем текущую сессию с AI агентом в gits приватный"
 # REF: issue-143
 # PURITY: SHELL
 if [ "${DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
-  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+  if command -v gh >/dev/null 2>&1; then
     node scripts/session-backup-gist.js --verbose || echo "[session-backup] Warning: session backup failed (non-fatal)"
   fi
 fi

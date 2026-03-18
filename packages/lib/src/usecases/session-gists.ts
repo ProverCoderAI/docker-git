@@ -11,7 +11,7 @@ import type {
 import { runCommandWithExitCodes } from "../shell/command-runner.js"
 import { CommandFailedError } from "../shell/errors.js"
 
-// CHANGE: implement session gist operations via shell commands
+// CHANGE: implement session backup repository operations via shell commands
 // WHY: enables CLI access to session backup/list/view/download functionality
 // QUOTE(ТЗ): "иметь возможность возвращаться ко всем старым сессиям с агентами"
 // REF: issue-143
@@ -55,7 +55,7 @@ export const sessionGistBackup = (
     args.push("--no-comment")
   }
   return Effect.gen(function*(_) {
-    yield* _(Effect.log("Backing up AI session to private gist..."))
+    yield* _(Effect.log("Backing up AI session to private session repository..."))
     yield* _(runNodeScript("scripts/session-backup-gist.js", args))
     yield* _(Effect.log("Session backup complete."))
   })
@@ -69,7 +69,7 @@ export const sessionGistList = (
     args.push("--repo", cmd.repo)
   }
   return Effect.gen(function*(_) {
-    yield* _(Effect.log("Listing session backup gists..."))
+    yield* _(Effect.log("Listing session backup snapshots..."))
     yield* _(runNodeScript("scripts/session-list-gists.js", args))
   })
 }
@@ -78,15 +78,15 @@ export const sessionGistView = (
   cmd: SessionGistViewCommand
 ): Effect.Effect<void, SessionGistsError, SessionGistsRequirements> =>
   Effect.gen(function*(_) {
-    yield* _(Effect.log(`Viewing gist: ${cmd.gistId}`))
-    yield* _(runNodeScript("scripts/session-list-gists.js", ["view", cmd.gistId]))
+    yield* _(Effect.log(`Viewing snapshot: ${cmd.snapshotRef}`))
+    yield* _(runNodeScript("scripts/session-list-gists.js", ["view", cmd.snapshotRef]))
   })
 
 export const sessionGistDownload = (
   cmd: SessionGistDownloadCommand
 ): Effect.Effect<void, SessionGistsError, SessionGistsRequirements> =>
   Effect.gen(function*(_) {
-    yield* _(Effect.log(`Downloading gist ${cmd.gistId} to ${cmd.outputDir}...`))
-    yield* _(runNodeScript("scripts/session-list-gists.js", ["download", cmd.gistId, "--output", cmd.outputDir]))
+    yield* _(Effect.log(`Downloading snapshot ${cmd.snapshotRef} to ${cmd.outputDir}...`))
+    yield* _(runNodeScript("scripts/session-list-gists.js", ["download", cmd.snapshotRef, "--output", cmd.outputDir]))
     yield* _(Effect.log("Download complete."))
   })

@@ -1,5 +1,5 @@
-// CHANGE: session gist backup commands for PR-based session history
-// WHY: enables returning to old AI sessions via private gists linked to PRs
+// CHANGE: session backup commands for PR-based session history
+// WHY: enables returning to old AI sessions via a private backup repository
 // QUOTE(ТЗ): "иметь возможность возвращаться ко всем старым сессиям с агентами"
 // REF: issue-143
 // PURITY: CORE
@@ -20,12 +20,12 @@ export interface SessionGistListCommand {
 
 export interface SessionGistViewCommand {
   readonly _tag: "SessionGistView"
-  readonly gistId: string
+  readonly snapshotRef: string
 }
 
 export interface SessionGistDownloadCommand {
   readonly _tag: "SessionGistDownload"
-  readonly gistId: string
+  readonly snapshotRef: string
   readonly outputDir: string
 }
 

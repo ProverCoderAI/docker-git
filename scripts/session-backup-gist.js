@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Session Backup to GitHub Gist
+ * Session Backup to a private GitHub repository
  *
- * This script backs up AI agent session files (~/.codex, ~/.claude, ~/.gemini) to a private GitHub Gist
- * and optionally posts a comment to the associated PR with the gist link.
+ * This script backs up AI agent session files (~/.codex, ~/.claude, ~/.gemini)
+ * to a dedicated private repository and optionally posts a comment to the
+ * associated PR with direct links to the uploaded files.
  *
  * Usage:
  *   node scripts/session-backup-gist.js [options]
@@ -12,7 +13,7 @@
  * Options:
  *   --session-dir <path>    Path to session directory (default: auto-detect ~/.codex, ~/.claude, or ~/.gemini)
  *   --pr-number <number>    PR number to post comment to (optional, auto-detected from branch)
- *   --repo <owner/repo>     Repository (optional, auto-detected from git remote)
+ *   --repo <owner/repo>     Source repository (optional, auto-detected from git remote)
  *   --no-comment            Skip posting PR comment
  *   --dry-run               Show what would be uploaded without actually uploading
  *   --verbose               Enable verbose logging
@@ -21,7 +22,7 @@
  *   DOCKER_GIT_SKIP_SESSION_BACKUP=1  Skip session backup entirely
  *
  * @pure false - contains IO effects (file system, network, git commands)
- * @effect FileSystem, ProcessExec, GitHubGist
+ * @effect FileSystem, ProcessExec, GitHubRepo
  */
 
 const fs = require("node:fs");
@@ -29,15 +30,17 @@ const path = require("node:path");
 const { execSync, spawnSync } = require("node:child_process");
 const os = require("node:os");
 
-// Configuration
-const MAX_GIST_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file limit for gists
+const {
+  buildSnapshotRef,
+  ensureBackupRepo,
+  resolveGhEnvironment,
+  prepareUploadArtifacts,
+  uploadSnapshot,
+} = require("./session-backup-repo.js");
+
 const SESSION_DIR_NAMES = [".codex", ".claude", ".gemini"];
 const KNOWLEDGE_DIR_NAME = ".knowledge";
 
-/**
- * Parse command line arguments
- * @returns {Object} Parsed arguments
- */
 const parseArgs = () => {
   const args = process.argv.slice(2);
   const result = {
@@ -76,7 +79,7 @@ const parseArgs = () => {
 Options:
   --session-dir <path>    Path to session directory
   --pr-number <number>    PR number to post comment to
-  --repo <owner/repo>     Repository
+  --repo <owner/repo>     Source repository
   --no-comment            Skip posting PR comment
   --dry-run               Show what would be uploaded
   --verbose               Enable verbose logging
@@ -88,23 +91,12 @@ Options:
   return result;
 };
 
-/**
- * Log message if verbose mode is enabled
- * @param {boolean} verbose - Whether verbose mode is enabled
- * @param {string} message - Message to log
- */
 const log = (verbose, message) => {
   if (verbose) {
     console.log(`[session-backup] ${message}`);
   }
 };
 
-/**
- * Execute shell command and return stdout
- * @param {string} command - Command to execute
- * @param {Object} options - Execution options
- * @returns {string|null} Command output or null on error
- */
 const execCommand = (command, options = {}) => {
   try {
     return execSync(command, {
@@ -117,15 +109,11 @@ const execCommand = (command, options = {}) => {
   }
 };
 
-/**
- * Execute gh CLI command and return result
- * @param {string[]} args - Command arguments
- * @returns {{success: boolean, stdout: string, stderr: string}}
- */
-const ghCommand = (args) => {
+const ghCommand = (args, ghEnv) => {
   const result = spawnSync("gh", args, {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
+    env: ghEnv,
   });
 
   return {
@@ -135,11 +123,6 @@ const ghCommand = (args) => {
   };
 };
 
-/**
- * Parse a GitHub repository from a remote URL
- * @param {string} remoteUrl - Remote URL
- * @returns {string|null} Repository in owner/repo format or null
- */
 const parseGitHubRepoFromRemoteUrl = (remoteUrl) => {
   if (!remoteUrl) {
     return null;
@@ -168,28 +151,10 @@ const rankRemoteName = (remoteName) => {
   return 2;
 };
 
-/**
- * Get current git branch name
- * @returns {string|null} Branch name or null
- */
-const getCurrentBranch = () => {
-  return execCommand("git rev-parse --abbrev-ref HEAD");
-};
+const getCurrentBranch = () => execCommand("git rev-parse --abbrev-ref HEAD");
 
-/**
- * Get HEAD commit sha
- * @returns {string|null} Commit sha or null
- */
-const getHeadCommitSha = () => {
-  return execCommand("git rev-parse HEAD");
-};
+const getHeadCommitSha = () => execCommand("git rev-parse HEAD");
 
-/**
- * Get repository candidates from git remotes
- * @param {string|null} explicitRepo - Explicit repository override
- * @param {boolean} verbose - Whether to log verbosely
- * @returns {string[]} Candidate repositories in owner/repo format
- */
 const getRepoCandidates = (explicitRepo, verbose) => {
   if (explicitRepo) {
     return [explicitRepo];
@@ -231,13 +196,7 @@ const getRepoCandidates = (explicitRepo, verbose) => {
   return repos;
 };
 
-/**
- * Get PR number from current branch
- * @param {string} repo - Repository in owner/repo format
- * @param {string} branch - Branch name
- * @returns {number|null} PR number or null
- */
-const getPrNumberFromBranch = (repo, branch) => {
+const getPrNumberFromBranch = (repo, branch, ghEnv) => {
   const result = ghCommand([
     "pr",
     "list",
@@ -249,21 +208,15 @@ const getPrNumberFromBranch = (repo, branch) => {
     "number",
     "--jq",
     ".[0].number",
-  ]);
+  ], ghEnv);
 
-  if (result.success && result.stdout && !isNaN(parseInt(result.stdout, 10))) {
+  if (result.success && result.stdout && !Number.isNaN(parseInt(result.stdout, 10))) {
     return parseInt(result.stdout, 10);
   }
   return null;
 };
 
-/**
- * Check whether a PR exists in a repository
- * @param {string} repo - Repository in owner/repo format
- * @param {number} prNumber - PR number
- * @returns {boolean} Whether the PR exists
- */
-const prExists = (repo, prNumber) => {
+const prExists = (repo, prNumber, ghEnv) => {
   const result = ghCommand([
     "pr",
     "view",
@@ -274,16 +227,11 @@ const prExists = (repo, prNumber) => {
     "number",
     "--jq",
     ".number",
-  ]);
+  ], ghEnv);
 
   return result.success && result.stdout === prNumber.toString();
 };
 
-/**
- * Extract a PR number from a docker-git workspace branch
- * @param {string} branch - Branch name
- * @returns {number|null} PR number or null
- */
 const getPrNumberFromWorkspaceBranch = (branch) => {
   const match = branch.match(/^pr-refs-pull-([0-9]+)-head$/);
   if (!match) {
@@ -294,17 +242,10 @@ const getPrNumberFromWorkspaceBranch = (branch) => {
   return Number.isNaN(prNumber) ? null : prNumber;
 };
 
-/**
- * Find an open PR for the current branch across repo candidates
- * @param {string[]} repos - Candidate repositories
- * @param {string} branch - Branch name
- * @param {boolean} verbose - Whether to log verbosely
- * @returns {{repo: string, prNumber: number} | null} PR context or null
- */
-const findPrContext = (repos, branch, verbose) => {
+const findPrContext = (repos, branch, verbose, ghEnv) => {
   for (const repo of repos) {
     log(verbose, `Checking open PR in ${repo} for branch ${branch}`);
-    const prNumber = getPrNumberFromBranch(repo, branch);
+    const prNumber = getPrNumberFromBranch(repo, branch, ghEnv);
     if (prNumber !== null) {
       return { repo, prNumber };
     }
@@ -316,11 +257,8 @@ const findPrContext = (repos, branch, verbose) => {
   }
 
   for (const repo of repos) {
-    log(
-      verbose,
-      `Checking workspace PR #${workspacePrNumber} in ${repo} for branch ${branch}`
-    );
-    if (prExists(repo, workspacePrNumber)) {
+    log(verbose, `Checking workspace PR #${workspacePrNumber} in ${repo} for branch ${branch}`);
+    if (prExists(repo, workspacePrNumber, ghEnv)) {
       return { repo, prNumber: workspacePrNumber };
     }
   }
@@ -328,12 +266,6 @@ const findPrContext = (repos, branch, verbose) => {
   return null;
 };
 
-/**
- * Find session directories to backup
- * @param {string|null} explicitPath - Explicit session directory path
- * @param {boolean} verbose - Whether to log verbosely
- * @returns {Array<{name: string, path: string}>} List of session directories
- */
 const findSessionDirs = (explicitPath, verbose) => {
   const dirs = [];
 
@@ -344,7 +276,6 @@ const findSessionDirs = (explicitPath, verbose) => {
     return dirs;
   }
 
-  // Check home directory for session directories
   const homeDir = os.homedir();
   for (const dirName of SESSION_DIR_NAMES) {
     const dirPath = path.join(homeDir, dirName);
@@ -354,7 +285,6 @@ const findSessionDirs = (explicitPath, verbose) => {
     }
   }
 
-  // Check current working directory for .knowledge
   const cwd = process.cwd();
   const knowledgePath = path.join(cwd, KNOWLEDGE_DIR_NAME);
   if (fs.existsSync(knowledgePath)) {
@@ -365,13 +295,6 @@ const findSessionDirs = (explicitPath, verbose) => {
   return dirs;
 };
 
-/**
- * Collect session files from a directory
- * @param {string} dirPath - Directory path
- * @param {string} baseName - Base name for the directory
- * @param {boolean} verbose - Whether to log verbosely
- * @returns {Array<{name: string, content: string}>} List of files with content
- */
 const collectSessionFiles = (dirPath, baseName, verbose) => {
   const files = [];
 
@@ -383,13 +306,11 @@ const collectSessionFiles = (dirPath, baseName, verbose) => {
       const relPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
 
       if (entry.isDirectory()) {
-        // Skip certain directories
         if (entry.name === "node_modules" || entry.name === ".git") {
           continue;
         }
         walk(fullPath, relPath);
       } else if (entry.isFile()) {
-        // Only include specific file types
         const ext = path.extname(entry.name).toLowerCase();
         const isSessionFile =
           ext === ".jsonl" ||
@@ -399,20 +320,21 @@ const collectSessionFiles = (dirPath, baseName, verbose) => {
           entry.name.endsWith(".part3") ||
           entry.name.endsWith(".chunks.json");
 
-        if (isSessionFile) {
-          try {
-            const stats = fs.statSync(fullPath);
-            if (stats.size <= MAX_GIST_FILE_SIZE) {
-              const content = fs.readFileSync(fullPath, "utf8");
-              const fileName = `${baseName}/${relPath}`.replace(/\//g, "_");
-              files.push({ name: fileName, content });
-              log(verbose, `Collected file: ${fileName} (${stats.size} bytes)`);
-            } else {
-              log(verbose, `Skipping large file: ${relPath} (${stats.size} bytes)`);
-            }
-          } catch (err) {
-            log(verbose, `Error reading file ${fullPath}: ${err.message}`);
-          }
+        if (!isSessionFile) {
+          continue;
+        }
+
+        try {
+          const stats = fs.statSync(fullPath);
+          const logicalName = `${baseName}/${relPath}`.replace(/\//g, "_");
+          files.push({
+            logicalName,
+            sourcePath: fullPath,
+            size: stats.size,
+          });
+          log(verbose, `Collected file: ${logicalName} (${stats.size} bytes)`);
+        } catch (error) {
+          log(verbose, `Error reading file ${fullPath}: ${error.message}`);
         }
       }
     }
@@ -422,119 +344,63 @@ const collectSessionFiles = (dirPath, baseName, verbose) => {
   return files;
 };
 
-/**
- * Create a gist with the given files
- * @param {Array<{name: string, content: string}>} files - Files to upload
- * @param {string} description - Gist description
- * @param {boolean} dryRun - Whether to perform a dry run
- * @param {boolean} verbose - Whether to log verbosely
- * @returns {string|null} Gist URL or null on error
- */
-const createGist = (files, description, dryRun, verbose) => {
-  if (files.length === 0) {
-    log(verbose, "No files to upload");
-    return null;
+const buildManifest = ({ backupRepo, snapshotRef, source, files, createdAt }) => ({
+  version: 1,
+  createdAt,
+  storage: {
+    repo: backupRepo.fullName,
+    branch: backupRepo.defaultBranch,
+    snapshotRef,
+  },
+  source,
+  files,
+});
+
+const buildCommentBody = ({ backupRepo, source, manifestUrl, files }) => {
+  const lines = [
+    "## AI Session Backup",
+    "",
+    "A snapshot of the AI agent session has been saved to the private session backup repository.",
+    "",
+    `**Backup Repo:** ${backupRepo.fullName}`,
+    `**Source Commit:** \`${source.commitSha}\``,
+    "",
+    `**Manifest:** ${manifestUrl}`,
+    "",
+    "**Files:**",
+  ];
+
+  for (const file of files) {
+    if (file.type === "chunked") {
+      lines.push(`- ${file.name} (chunked): ${file.chunkManifestUrl}`);
+    } else {
+      lines.push(`- ${file.name}: ${file.url}`);
+    }
   }
 
-  if (dryRun) {
-    console.log(`[dry-run] Would create gist with ${files.length} files:`);
-    for (const file of files) {
-      console.log(`  - ${file.name} (${file.content.length} bytes)`);
-    }
-    return "https://gist.github.com/dry-run/example";
-  }
-
-  // Create temporary directory for files
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "session-backup-"));
-
-  try {
-    // Write files to temp directory
-    const filePaths = [];
-    for (const file of files) {
-      const filePath = path.join(tmpDir, file.name);
-      fs.writeFileSync(filePath, file.content, "utf8");
-      filePaths.push(filePath);
-    }
-
-    // Create gist using gh CLI
-    const fileArgs = filePaths.map(f => `"${f}"`).join(" ");
-    const command = `gh gist create ${fileArgs} --desc "${description}"`;
-
-    log(verbose, `Creating gist: ${command}`);
-
-    const result = spawnSync("gh", ["gist", "create", ...filePaths, "--desc", description], {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-
-    if (result.status !== 0) {
-      console.error(`[session-backup] Failed to create gist: ${result.stderr}`);
-      return null;
-    }
-
-    const gistUrl = result.stdout.trim();
-    log(verbose, `Created gist: ${gistUrl}`);
-    return gistUrl;
-  } finally {
-    // Cleanup temp directory
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
+  lines.push("");
+  lines.push("For extracting session dialogs, see: https://github.com/ProverCoderAI/context-doc");
+  lines.push("");
+  lines.push("---");
+  lines.push(`*Backup created at: ${source.createdAt}*`);
+  lines.push(`<!-- docker-git-session-backup:${source.commitSha}:${source.createdAt} -->`);
+  return lines.join("\n");
 };
 
-/**
- * Post a comment to a PR with the gist link
- * @param {string} repo - Repository in owner/repo format
- * @param {number} prNumber - PR number
- * @param {string} gistUrl - Gist URL
- * @param {boolean} dryRun - Whether to perform a dry run
- * @param {boolean} verbose - Whether to log verbosely
- * @returns {boolean} Whether the comment was posted successfully
- */
-const postPrComment = (repo, prNumber, gistUrl, commitSha, dryRun, verbose) => {
-  const timestamp = new Date().toISOString();
-  const commitLine = commitSha ? `**Commit:** \`${commitSha}\`\n\n` : "";
-  const commitMarker = commitSha ? `\n<!-- docker-git-session-backup:${commitSha} -->` : "";
-  const comment = `## AI Session Backup
-
-A snapshot of the AI agent session has been saved to a private gist:
-
-${commitLine}**Gist URL:** ${gistUrl}
-
-To resume this session, you can use:
-\`\`\`bash
-# For Codex
-codex resume <session-id>
-
-# For Claude
-claude --resume <session-id>
-
-# For Gemini
-gemini --resume <session-id>
-\`\`\`
-
-For extracting session dialogs, see: https://github.com/ProverCoderAI/context-doc
-
----
-*Backup created at: ${timestamp}*${commitMarker}`;
-
-  if (dryRun) {
-    console.log(`[dry-run] Would post comment to PR #${prNumber} in ${repo}:`);
-    console.log(comment);
-    return true;
-  }
-
+const postPrComment = (repo, prNumber, comment, verbose, ghEnv) => {
   log(verbose, `Posting comment to PR #${prNumber}`);
 
-  const result = spawnSync(
-    "gh",
-    ["pr", "comment", prNumber.toString(), "--repo", repo, "--body", comment],
-    {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }
-  );
+  const result = ghCommand([
+    "pr",
+    "comment",
+    prNumber.toString(),
+    "--repo",
+    repo,
+    "--body",
+    comment,
+  ], ghEnv);
 
-  if (result.status !== 0) {
+  if (!result.success) {
     console.error(`[session-backup] Failed to post PR comment: ${result.stderr}`);
     return false;
   }
@@ -543,11 +409,7 @@ For extracting session dialogs, see: https://github.com/ProverCoderAI/context-do
   return true;
 };
 
-/**
- * Main function
- */
 const main = () => {
-  // Check if backup is disabled
   if (process.env.DOCKER_GIT_SKIP_SESSION_BACKUP === "1") {
     console.log("[session-backup] Skipped (DOCKER_GIT_SKIP_SESSION_BACKUP=1)");
     return;
@@ -555,19 +417,18 @@ const main = () => {
 
   const args = parseArgs();
   const verbose = args.verbose;
+  const ghEnv = resolveGhEnvironment(process.cwd(), (message) => log(verbose, message));
 
   log(verbose, "Starting session backup...");
 
-  // Get repository info
   const repoCandidates = getRepoCandidates(args.repo, verbose);
   if (repoCandidates.length === 0) {
-    console.error("[session-backup] Could not determine repository. Use --repo option.");
+    console.error("[session-backup] Could not determine source repository. Use --repo option.");
     process.exit(1);
   }
-  const repo = repoCandidates[0];
-  log(verbose, `Repository: ${repo}`);
+  const sourceRepo = repoCandidates[0];
+  log(verbose, `Repository: ${sourceRepo}`);
 
-  // Get current branch
   const branch = getCurrentBranch();
   if (!branch) {
     console.error("[session-backup] Could not determine current branch.");
@@ -575,12 +436,17 @@ const main = () => {
   }
   log(verbose, `Branch: ${branch}`);
 
-  // Get PR number
+  const commitSha = getHeadCommitSha();
+  if (!commitSha) {
+    console.error("[session-backup] Could not determine current commit.");
+    process.exit(1);
+  }
+
   let prContext = null;
   if (args.prNumber !== null) {
-    prContext = { repo, prNumber: args.prNumber };
+    prContext = { repo: sourceRepo, prNumber: args.prNumber };
   } else if (args.postComment) {
-    prContext = findPrContext(repoCandidates, branch, verbose);
+    prContext = findPrContext(repoCandidates, branch, verbose, ghEnv);
   }
 
   if (prContext !== null) {
@@ -589,61 +455,98 @@ const main = () => {
     log(verbose, "No PR found for current branch, skipping comment");
   }
 
-  // Find session directories
   const sessionDirs = findSessionDirs(args.sessionDir, verbose);
   if (sessionDirs.length === 0) {
     log(verbose, "No session directories found");
     return;
   }
 
-  // Collect all session files
-  const allFiles = [];
+  const sessionFiles = [];
   for (const dir of sessionDirs) {
-    const files = collectSessionFiles(dir.path, dir.name, verbose);
-    allFiles.push(...files);
+    sessionFiles.push(...collectSessionFiles(dir.path, dir.name, verbose));
   }
 
-  if (allFiles.length === 0) {
+  if (sessionFiles.length === 0) {
     log(verbose, "No session files found to backup");
     return;
   }
+  log(verbose, `Total files to backup: ${sessionFiles.length}`);
 
-  log(verbose, `Total files to backup: ${allFiles.length}`);
-
-  // Create gist
-  const commitSha = getHeadCommitSha();
-  const descriptionParts = [
-    "AI Session Backup",
-    prContext !== null ? prContext.repo : repo,
-    branch,
-  ];
-  if (commitSha) {
-    descriptionParts.push(commitSha.slice(0, 12));
-  }
-  descriptionParts.push(new Date().toISOString());
-  const description = descriptionParts.join(" - ");
-  const gistUrl = createGist(allFiles, description, args.dryRun, verbose);
-
-  if (!gistUrl) {
-    console.error("[session-backup] Failed to create gist");
+  const backupRepo = ensureBackupRepo(ghEnv, (message) => log(verbose, message), !args.dryRun);
+  if (backupRepo === null) {
+    console.error("[session-backup] Failed to resolve or create the private session backup repository");
     process.exit(1);
   }
 
-  console.log(`[session-backup] Created gist: ${gistUrl}`);
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "session-backup-repo-"));
 
-  // Post PR comment
-  if (args.postComment && prContext !== null) {
-    postPrComment(
-      prContext.repo,
-      prContext.prNumber,
-      gistUrl,
-      commitSha,
-      args.dryRun,
-      verbose
+  try {
+    const snapshotCreatedAt = new Date().toISOString();
+    const snapshotRef = buildSnapshotRef(sourceRepo, prContext?.prNumber ?? null, commitSha, snapshotCreatedAt);
+    const prepared = prepareUploadArtifacts(
+      sessionFiles,
+      snapshotRef,
+      backupRepo.fullName,
+      backupRepo.defaultBranch,
+      tmpDir,
+      (message) => log(verbose, message)
     );
-  }
 
-  console.log("[session-backup] Session backup complete");
+    const source = {
+      repo: sourceRepo,
+      branch,
+      prNumber: prContext?.prNumber ?? null,
+      commitSha,
+      createdAt: snapshotCreatedAt,
+    };
+
+    const manifest = buildManifest({
+      backupRepo,
+      snapshotRef,
+      source,
+      files: prepared.manifestFiles,
+      createdAt: snapshotCreatedAt,
+    });
+    if (args.dryRun) {
+      console.log(`[dry-run] Would upload snapshot to ${backupRepo.fullName}:${snapshotRef}`);
+      console.log(`[dry-run] Would write ${prepared.uploadEntries.length + 1} file(s) including manifest.`);
+      const manifestUrl = `https://github.com/${backupRepo.fullName}/blob/${
+        encodeURIComponent(backupRepo.defaultBranch)
+      }/${snapshotRef.split("/").map((segment) => encodeURIComponent(segment)).join("/")}/manifest.json`;
+      console.log(`[dry-run] Manifest URL: ${manifestUrl}`);
+      if (args.postComment && prContext !== null) {
+        console.log(`[dry-run] Would post comment to PR #${prContext.prNumber} in ${prContext.repo}:`);
+        console.log(buildCommentBody({ backupRepo, source, manifestUrl, files: prepared.manifestFiles }));
+      }
+      return;
+    }
+
+    log(verbose, `Uploading snapshot to ${backupRepo.fullName}:${snapshotRef}`);
+    const uploadResult = uploadSnapshot(
+      backupRepo,
+      snapshotRef,
+      manifest,
+      prepared.uploadEntries,
+      ghEnv
+    );
+
+    console.log(`[session-backup] Uploaded snapshot to ${backupRepo.fullName}`);
+    console.log(`[session-backup] Manifest: ${uploadResult.manifestUrl}`);
+
+    if (args.postComment && prContext !== null) {
+      const comment = buildCommentBody({
+        backupRepo,
+        source,
+        manifestUrl: uploadResult.manifestUrl,
+        files: prepared.manifestFiles,
+      });
+      postPrComment(prContext.repo, prContext.prNumber, comment, verbose, ghEnv);
+    }
+
+    console.log("[session-backup] Session backup complete");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 };
 
 main();
