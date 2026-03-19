@@ -31,6 +31,7 @@ const { execSync, spawnSync } = require("node:child_process");
 const os = require("node:os");
 
 const {
+  buildBlobUrl,
   buildSnapshotRef,
   ensureBackupRepo,
   resolveGhEnvironment,
@@ -370,33 +371,66 @@ const buildManifest = ({ backupRepo, snapshotRef, source, files, createdAt }) =>
   files,
 });
 
-const buildCommentBody = ({ backupRepo, source, manifestUrl, files }) => {
+const formatBytes = (bytes) => {
+  if (bytes >= 1_000_000_000) {
+    return `${(bytes / 1_000_000_000).toFixed(2)} GB`;
+  }
+  if (bytes >= 1_000_000) {
+    return `${(bytes / 1_000_000).toFixed(2)} MB`;
+  }
+  if (bytes >= 1_000) {
+    return `${(bytes / 1_000).toFixed(2)} KB`;
+  }
+  return `${bytes} B`;
+};
+
+const summarizeFiles = (files) => ({
+  fileCount: files.length,
+  totalBytes: files.reduce(
+    (sum, file) => sum + (file.type === "chunked" ? (file.originalSize ?? 0) : (file.size ?? 0)),
+    0
+  ),
+});
+
+const buildSnapshotReadme = ({ backupRepo, source, manifestUrl, summary, sessionRoots }) =>
+  [
+    "# AI Session Backup",
+    "",
+    "This snapshot contains AI session data used during development.",
+    "",
+    `- Backup Repo: \`${backupRepo.fullName}\``,
+    `- Source Repo: \`${source.repo}\``,
+    `- Source Branch: \`${source.branch}\``,
+    `- Source Commit: \`${source.commitSha}\``,
+    source.prNumber === null ? "- Pull Request: none" : `- Pull Request: #${source.prNumber}`,
+    `- Created At: \`${source.createdAt}\``,
+    `- Files: \`${summary.fileCount}\``,
+    `- Total Size: \`${formatBytes(summary.totalBytes)}\``,
+    `- Session Roots: \`${sessionRoots.join("`, `")}\``,
+    "",
+    `- Manifest: ${manifestUrl}`,
+    "",
+    "Generated automatically by the docker-git `pre-push` session backup hook.",
+    "",
+  ].join("\n");
+
+const buildCommentBody = ({ backupRepo, source, manifestUrl, readmeUrl, summary }) => {
   const lines = [
     "## AI Session Backup",
     "",
-    "A snapshot of the AI agent session has been saved to the private session backup repository.",
+    "A snapshot of the AI session context used during development has been saved.",
     "",
-    `**Backup Repo:** ${backupRepo.fullName}`,
-    `**Source Commit:** \`${source.commitSha}\``,
+    `Backup Repo: ${backupRepo.fullName}`,
+    `Source Commit: ${source.commitSha}`,
+    `Created At: ${source.createdAt}`,
+    `Files: ${summary.fileCount} (${formatBytes(summary.totalBytes)})`,
     "",
-    `**Manifest:** ${manifestUrl}`,
+    `README: ${readmeUrl}`,
+    `Manifest: ${manifestUrl}`,
     "",
-    "**Files:**",
+    "This snapshot metadata was used during development.",
   ];
 
-  for (const file of files) {
-    if (file.type === "chunked") {
-      lines.push(`- ${file.name} (chunked): ${file.chunkManifestUrl}`);
-    } else {
-      lines.push(`- ${file.name}: ${file.url}`);
-    }
-  }
-
-  lines.push("");
-  lines.push("For extracting session dialogs, see: https://github.com/ProverCoderAI/context-doc");
-  lines.push("");
-  lines.push("---");
-  lines.push(`*Backup created at: ${source.createdAt}*`);
   lines.push(`<!-- docker-git-session-backup:${source.commitSha}:${source.createdAt} -->`);
   return lines.join("\n");
 };
@@ -513,6 +547,11 @@ const main = () => {
       commitSha,
       createdAt: snapshotCreatedAt,
     };
+    const summary = summarizeFiles(prepared.manifestFiles);
+    const sessionRoots = sessionDirs.map((dir) => `~/${dir.name}`);
+    const manifestUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, `${snapshotRef}/manifest.json`);
+    const readmeRepoPath = `${snapshotRef}/README.md`;
+    const readmeUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, readmeRepoPath);
 
     const manifest = buildManifest({
       backupRepo,
@@ -521,16 +560,35 @@ const main = () => {
       files: prepared.manifestFiles,
       createdAt: snapshotCreatedAt,
     });
+    const readmePath = path.join(tmpDir, "README.md");
+    fs.writeFileSync(
+      readmePath,
+      buildSnapshotReadme({
+        backupRepo,
+        source,
+        manifestUrl,
+        summary,
+        sessionRoots,
+      }),
+      "utf8"
+    );
+    const uploadEntries = [
+      ...prepared.uploadEntries,
+      {
+        repoPath: readmeRepoPath,
+        sourcePath: readmePath,
+        type: "readme",
+        size: fs.statSync(readmePath).size,
+      },
+    ];
     if (args.dryRun) {
       console.log(`[dry-run] Would upload snapshot to ${backupRepo.fullName}:${snapshotRef}`);
-      console.log(`[dry-run] Would write ${prepared.uploadEntries.length + 1} file(s) including manifest.`);
-      const manifestUrl = `https://github.com/${backupRepo.fullName}/blob/${
-        encodeURIComponent(backupRepo.defaultBranch)
-      }/${snapshotRef.split("/").map((segment) => encodeURIComponent(segment)).join("/")}/manifest.json`;
+      console.log(`[dry-run] Would write ${uploadEntries.length + 1} file(s) including README and manifest.`);
+      console.log(`[dry-run] README URL: ${readmeUrl}`);
       console.log(`[dry-run] Manifest URL: ${manifestUrl}`);
       if (args.postComment && prContext !== null) {
         console.log(`[dry-run] Would post comment to PR #${prContext.prNumber} in ${prContext.repo}:`);
-        console.log(buildCommentBody({ backupRepo, source, manifestUrl, files: prepared.manifestFiles }));
+        console.log(buildCommentBody({ backupRepo, source, manifestUrl, readmeUrl, summary }));
       }
       return;
     }
@@ -540,11 +598,12 @@ const main = () => {
       backupRepo,
       snapshotRef,
       manifest,
-      prepared.uploadEntries,
+      uploadEntries,
       ghEnv
     );
 
     console.log(`[session-backup] Uploaded snapshot to ${backupRepo.fullName}`);
+    console.log(`[session-backup] README: ${readmeUrl}`);
     console.log(`[session-backup] Manifest: ${uploadResult.manifestUrl}`);
 
     if (args.postComment && prContext !== null) {
@@ -552,7 +611,8 @@ const main = () => {
         backupRepo,
         source,
         manifestUrl: uploadResult.manifestUrl,
-        files: prepared.manifestFiles,
+        readmeUrl,
+        summary,
       });
       postPrComment(prContext.repo, prContext.prNumber, comment, verbose, ghEnv);
     }
