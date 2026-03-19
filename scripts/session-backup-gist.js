@@ -3,7 +3,7 @@
 /**
  * Session Backup to a private GitHub repository
  *
- * This script backs up AI agent session files (~/.codex, ~/.claude, ~/.gemini)
+ * This script backs up AI agent session files (~/.codex, ~/.claude, ~/.qwen, ~/.gemini)
  * to a dedicated private repository and optionally posts a comment to the
  * associated PR with direct links to the uploaded files.
  *
@@ -11,7 +11,7 @@
  *   node scripts/session-backup-gist.js [options]
  *
  * Options:
- *   --session-dir <path>    Path to session directory (default: auto-detect ~/.codex, ~/.claude, or ~/.gemini)
+ *   --session-dir <path>    Path to session directory under $HOME (default: auto-detect ~/.codex, ~/.claude, ~/.qwen, or ~/.gemini)
  *   --pr-number <number>    PR number to post comment to (optional, auto-detected from branch)
  *   --repo <owner/repo>     Source repository (optional, auto-detected from git remote)
  *   --no-comment            Skip posting PR comment
@@ -38,8 +38,36 @@ const {
   uploadSnapshot,
 } = require("./session-backup-repo.js");
 
-const SESSION_DIR_NAMES = [".codex", ".claude", ".gemini"];
-const KNOWLEDGE_DIR_NAME = ".knowledge";
+const SESSION_DIR_NAMES = [".codex", ".claude", ".qwen", ".gemini"];
+
+const isPathWithinParent = (targetPath, parentPath) => {
+  const relative = path.relative(parentPath, targetPath);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+};
+
+const getAllowedSessionRoots = () => {
+  const homeDir = os.homedir();
+  return SESSION_DIR_NAMES.map((dirName) => ({
+    name: dirName,
+    path: path.join(homeDir, dirName),
+  })).filter((entry) => fs.existsSync(entry.path));
+};
+
+const resolveAllowedSessionDir = (candidatePath, verbose) => {
+  const resolvedPath = path.resolve(candidatePath);
+  if (!fs.existsSync(resolvedPath)) {
+    return null;
+  }
+
+  for (const root of getAllowedSessionRoots()) {
+    if (isPathWithinParent(resolvedPath, root.path)) {
+      return resolvedPath;
+    }
+  }
+
+  log(verbose, `Skipping non-session directory: ${candidatePath}`);
+  return null;
+};
 
 const parseArgs = () => {
   const args = process.argv.slice(2);
@@ -77,7 +105,7 @@ const parseArgs = () => {
         console.log(`Usage: session-backup-gist.js [options]
 
 Options:
-  --session-dir <path>    Path to session directory
+  --session-dir <path>    Path to session directory under $HOME
   --pr-number <number>    PR number to post comment to
   --repo <owner/repo>     Source repository
   --no-comment            Skip posting PR comment
@@ -270,26 +298,25 @@ const findSessionDirs = (explicitPath, verbose) => {
   const dirs = [];
 
   if (explicitPath) {
-    if (fs.existsSync(explicitPath)) {
-      dirs.push({ name: path.basename(explicitPath), path: explicitPath });
+    const allowedPath = resolveAllowedSessionDir(path.resolve(explicitPath), verbose);
+    if (allowedPath === null) {
+      console.error(
+        `[session-backup] --session-dir must point to a directory under ${SESSION_DIR_NAMES
+          .map((dirName) => `~/${dirName}`)
+          .join(", ")}`
+      );
+      process.exit(1);
     }
+    dirs.push({ name: path.basename(allowedPath), path: allowedPath });
     return dirs;
   }
 
-  const homeDir = os.homedir();
-  for (const dirName of SESSION_DIR_NAMES) {
-    const dirPath = path.join(homeDir, dirName);
-    if (fs.existsSync(dirPath)) {
-      log(verbose, `Found session directory: ${dirPath}`);
-      dirs.push({ name: dirName, path: dirPath });
+  for (const root of getAllowedSessionRoots()) {
+    const allowedPath = resolveAllowedSessionDir(root.path, verbose);
+    if (allowedPath !== null) {
+      log(verbose, `Found session directory: ${allowedPath}`);
+      dirs.push({ name: root.name, path: allowedPath });
     }
-  }
-
-  const cwd = process.cwd();
-  const knowledgePath = path.join(cwd, KNOWLEDGE_DIR_NAME);
-  if (fs.existsSync(knowledgePath)) {
-    log(verbose, `Found knowledge directory: ${knowledgePath}`);
-    dirs.push({ name: KNOWLEDGE_DIR_NAME, path: knowledgePath });
   }
 
   return dirs;
@@ -311,22 +338,9 @@ const collectSessionFiles = (dirPath, baseName, verbose) => {
         }
         walk(fullPath, relPath);
       } else if (entry.isFile()) {
-        const ext = path.extname(entry.name).toLowerCase();
-        const isSessionFile =
-          ext === ".jsonl" ||
-          ext === ".json" ||
-          entry.name.endsWith(".part1") ||
-          entry.name.endsWith(".part2") ||
-          entry.name.endsWith(".part3") ||
-          entry.name.endsWith(".chunks.json");
-
-        if (!isSessionFile) {
-          continue;
-        }
-
         try {
           const stats = fs.statSync(fullPath);
-          const logicalName = `${baseName}/${relPath}`.replace(/\//g, "_");
+          const logicalName = path.posix.join(baseName, relPath.split(path.sep).join(path.posix.sep));
           files.push({
             logicalName,
             sourcePath: fullPath,

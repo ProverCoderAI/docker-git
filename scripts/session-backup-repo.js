@@ -355,6 +355,7 @@ const splitLargeFile = (sourcePath, logicalName, outputDir) => {
   let partBytesWritten = 0;
   let partName = `${logicalName}.part${partIndex}`;
   let partPath = path.join(outputDir, partName);
+  fs.mkdirSync(path.dirname(partPath), { recursive: true });
   let partFd = fs.openSync(partPath, "w");
   partNames.push(partName);
 
@@ -373,6 +374,7 @@ const splitLargeFile = (sourcePath, logicalName, outputDir) => {
           partBytesWritten = 0;
           partName = `${logicalName}.part${partIndex}`;
           partPath = path.join(outputDir, partName);
+          fs.mkdirSync(path.dirname(partPath), { recursive: true });
           partFd = fs.openSync(partPath, "w");
           partNames.push(partName);
         }
@@ -427,6 +429,7 @@ const prepareUploadArtifacts = (sessionFiles, snapshotRef, repoFullName, branch,
     const split = splitLargeFile(file.sourcePath, file.logicalName, tmpDir);
     const chunkManifest = buildChunkManifest(file.logicalName, split.originalSize, split.partNames);
     const chunkManifestPath = path.join(tmpDir, split.manifestName);
+    fs.mkdirSync(path.dirname(chunkManifestPath), { recursive: true });
     fs.writeFileSync(chunkManifestPath, `${JSON.stringify(chunkManifest, null, 2)}\n`, "utf8");
 
     const partEntries = split.partNames.map((partName) => {

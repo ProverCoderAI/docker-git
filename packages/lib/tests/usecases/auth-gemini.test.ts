@@ -5,6 +5,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
 import { authGeminiLogin, geminiAuthRoot } from "../../src/usecases/auth-gemini.js"
+import { hasOauthCredentials } from "../../src/usecases/auth-gemini-helpers.js"
 
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
@@ -64,6 +65,22 @@ describe("authGeminiLogin", () => {
         expect(settings.mcpServers.playwright.command).toBe("docker-git-playwright-mcp")
         expect(settings.security.folderTrust.enabled).toBe(false)
         expect(settings.tools.allowed).toContain("googleSearch")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("detects oauth_creds.json as valid Gemini OAuth credentials", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const accountPath = path.join(root, "default")
+        const credentialsDir = path.join(accountPath, ".gemini")
+
+        yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(credentialsDir, "oauth_creds.json"), "{\"access_token\":\"test\"}\n"))
+
+        const detected = yield* _(hasOauthCredentials(fs, accountPath))
+        expect(detected).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

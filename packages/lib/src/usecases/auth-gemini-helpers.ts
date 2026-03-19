@@ -162,6 +162,7 @@ export const hasOauthCredentials = (
     }
     // Check for various possible credential files Gemini CLI might create
     const possibleFiles = [
+      `${credentialsDir}/oauth_creds.json`,
       `${credentialsDir}/oauth-tokens.json`,
       `${credentialsDir}/credentials.json`,
       `${credentialsDir}/application_default_credentials.json`

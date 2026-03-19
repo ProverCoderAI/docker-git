@@ -184,6 +184,7 @@ const downloadSnapshot = (snapshotRef, outputDir, backupRepo, ghEnv, verbose) =>
 
   for (const file of manifest.data.files) {
     const targetPath = path.join(outputPath, file.name);
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
     if (file.type === "chunked") {
       const buffers = file.parts.map((part) =>
         getFileContent(backupRepo.fullName, part.repoPath, ghEnv, backupRepo.defaultBranch)
@@ -198,10 +199,10 @@ const downloadSnapshot = (snapshotRef, outputDir, backupRepo, ghEnv, verbose) =>
 
   console.log(`Downloaded snapshot to: ${outputPath}`);
   console.log("\nTo restore session files, copy them to the appropriate location:");
-  console.log("  - .codex_* files -> ~/.codex/");
-  console.log("  - .claude_* files -> ~/.claude/");
-  console.log("  - .gemini_* files -> ~/.gemini/");
-  console.log("  - .knowledge_* files -> ./.knowledge/");
+  console.log("  - .codex/... -> ~/.codex/");
+  console.log("  - .claude/... -> ~/.claude/");
+  console.log("  - .qwen/... -> ~/.qwen/");
+  console.log("  - .gemini/... -> ~/.gemini/");
 };
 
 const main = () => {

@@ -12,7 +12,7 @@ import type { TemplateConfig } from "../domain.js"
 const geminiAuthRootContainerPath = (sshUser: string): string => `/home/${sshUser}/.docker-git/.orch/auth/gemini`
 
 const geminiAuthConfigTemplate = String
-  .raw`# Gemini CLI: expose GEMINI_HOME for sessions (OAuth cache lives under ~/.docker-git/.orch/auth/gemini)
+  .raw`# Gemini CLI: keep ~/.gemini as a real home directory while sharing auth files from ~/.docker-git/.orch/auth/gemini
 GEMINI_LABEL_RAW="$GEMINI_AUTH_LABEL"
 if [[ -z "$GEMINI_LABEL_RAW" ]]; then
   GEMINI_LABEL_RAW="default"
@@ -31,6 +31,8 @@ export GEMINI_CONFIG_DIR="$GEMINI_AUTH_ROOT/$GEMINI_LABEL_NORM"
 mkdir -p "$GEMINI_CONFIG_DIR" || true
 GEMINI_HOME_DIR="__GEMINI_HOME_DIR__"
 mkdir -p "$GEMINI_HOME_DIR" || true
+GEMINI_SHARED_HOME_DIR="$GEMINI_CONFIG_DIR/.gemini"
+mkdir -p "$GEMINI_SHARED_HOME_DIR" || true
 
 docker_git_link_gemini_file() {
   local source_path="$1"
@@ -47,9 +49,32 @@ docker_git_link_gemini_file() {
   ln -sfn "$source_path" "$link_path" || true
 }
 
+docker_git_prepare_gemini_home_dir() {
+  if [[ -L "$GEMINI_HOME_DIR" ]]; then
+    local previous_target
+    previous_target="$(readlink -f "$GEMINI_HOME_DIR" || true)"
+    rm -f "$GEMINI_HOME_DIR" || true
+    mkdir -p "$GEMINI_HOME_DIR" || true
+    if [[ -n "$previous_target" && -d "$previous_target" ]]; then
+      cp -a "$previous_target"/. "$GEMINI_HOME_DIR"/ 2>/dev/null || true
+    fi
+    return 0
+  fi
+
+  mkdir -p "$GEMINI_HOME_DIR" || true
+}
+
+docker_git_prepare_gemini_home_dir
+
 # Link .api-key and .env from central auth storage to container home
 docker_git_link_gemini_file "$GEMINI_CONFIG_DIR/.api-key" "$GEMINI_HOME_DIR/.api-key"
 docker_git_link_gemini_file "$GEMINI_CONFIG_DIR/.env" "$GEMINI_HOME_DIR/.env"
+docker_git_link_gemini_file "$GEMINI_SHARED_HOME_DIR/oauth_creds.json" "$GEMINI_HOME_DIR/oauth_creds.json"
+docker_git_link_gemini_file "$GEMINI_SHARED_HOME_DIR/oauth-tokens.json" "$GEMINI_HOME_DIR/oauth-tokens.json"
+docker_git_link_gemini_file "$GEMINI_SHARED_HOME_DIR/credentials.json" "$GEMINI_HOME_DIR/credentials.json"
+docker_git_link_gemini_file "$GEMINI_SHARED_HOME_DIR/application_default_credentials.json" "$GEMINI_HOME_DIR/application_default_credentials.json"
+docker_git_link_gemini_file "$GEMINI_SHARED_HOME_DIR/google_accounts.json" "$GEMINI_HOME_DIR/google_accounts.json"
+docker_git_link_gemini_file "$GEMINI_SHARED_HOME_DIR/projects.json" "$GEMINI_HOME_DIR/projects.json"
 
 # Ensure gemini YOLO wrapper exists
 GEMINI_REAL_BIN="$(command -v gemini || echo "/usr/local/bin/gemini")"
@@ -65,18 +90,6 @@ EOF
     chmod 0755 "$GEMINI_WRAPPER_BIN" || true
     # Create an alias or symlink if needed, but here we just ensure it exists
   fi
-fi
-
-# Special case for .gemini folder: we want the folder itself to be the link if it doesn't exist
-# or its content to be linked if we want to manage it.
-if [[ -d "$GEMINI_CONFIG_DIR/.gemini" ]]; then
-  if [[ -L "$GEMINI_HOME_DIR" ]]; then
-    rm -f "$GEMINI_HOME_DIR"
-  elif [[ -d "$GEMINI_HOME_DIR" ]]; then
-    # If it's a real directory, move it aside if it's empty or just has our managed files
-    mv "$GEMINI_HOME_DIR" "$GEMINI_HOME_DIR.bak-$(date +%s)" || true
-  fi
-  ln -sfn "$GEMINI_CONFIG_DIR/.gemini" "$GEMINI_HOME_DIR"
 fi
 
 docker_git_refresh_gemini_env() {
