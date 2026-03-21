@@ -9,7 +9,14 @@ export const successExitCode = Number(ExitCode(0))
 
 export const gitBaseEnv: Readonly<Record<string, string>> = {
   // Avoid blocking on interactive credential prompts in CI / TUI contexts.
-  GIT_TERMINAL_PROMPT: "0"
+  GIT_TERMINAL_PROMPT: "0",
+  // Avoid SSH hanging on host key prompts or passphrases
+  GIT_SSH_COMMAND: "ssh -o BatchMode=yes",
+  // Ensure git commits never fail due to missing identity.
+  GIT_AUTHOR_NAME: "docker-git",
+  GIT_AUTHOR_EMAIL: "docker-git@users.noreply.github.com",
+  GIT_COMMITTER_NAME: "docker-git",
+  GIT_COMMITTER_EMAIL: "docker-git@users.noreply.github.com"
 }
 
 export const git = (

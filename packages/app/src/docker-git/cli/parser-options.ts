@@ -37,6 +37,10 @@ interface ValueOptionSpec {
     | "projectDir"
     | "lines"
     | "agentAutoMode"
+    | "prNumber"
+    | "repo"
+    | "limit"
+    | "output"
 }
 
 const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
@@ -75,7 +79,12 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--out-dir", key: "outDir" },
   { flag: "--project-dir", key: "projectDir" },
   { flag: "--lines", key: "lines" },
-  { flag: "--auto", key: "agentAutoMode" }
+  { flag: "--auto", key: "agentAutoMode" },
+  { flag: "--pr-number", key: "prNumber" },
+  { flag: "--pr", key: "prNumber" },
+  { flag: "--repo", key: "repo" },
+  { flag: "--limit", key: "limit" },
+  { flag: "--output", key: "output" }
 ]
 
 const valueOptionSpecByFlag: ReadonlyMap<string, ValueOptionSpec> = new Map(
@@ -97,7 +106,8 @@ const booleanFlagUpdaters: Readonly<Record<string, (raw: RawOptions) => RawOptio
   "--no-wipe": (raw) => ({ ...raw, wipe: false }),
   "--web": (raw) => ({ ...raw, authWeb: true }),
   "--include-default": (raw) => ({ ...raw, includeDefault: true }),
-  "--auto": (raw) => ({ ...raw, agentAutoMode: "auto" })
+  "--auto": (raw) => ({ ...raw, agentAutoMode: "auto" }),
+  "--no-comment": (raw) => ({ ...raw, noComment: true })
 }
 
 const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: string) => RawOptions } = {
@@ -131,7 +141,11 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   outDir: (raw, value) => ({ ...raw, outDir: value }),
   projectDir: (raw, value) => ({ ...raw, projectDir: value }),
   lines: (raw, value) => ({ ...raw, lines: value }),
-  agentAutoMode: (raw, value) => ({ ...raw, agentAutoMode: value.trim().toLowerCase() })
+  agentAutoMode: (raw, value) => ({ ...raw, agentAutoMode: value.trim().toLowerCase() }),
+  prNumber: (raw, value) => ({ ...raw, prNumber: value }),
+  repo: (raw, value) => ({ ...raw, repo: value }),
+  limit: (raw, value) => ({ ...raw, limit: value }),
+  output: (raw, value) => ({ ...raw, output: value })
 }
 
 export const applyCommandBooleanFlag = (raw: RawOptions, token: string): RawOptions | null => {

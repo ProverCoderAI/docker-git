@@ -88,6 +88,8 @@ type PathConfig = {
   readonly codexAuthPath: string
   readonly codexSharedAuthPath: string
   readonly codexHome: string
+  readonly geminiAuthPath: string
+  readonly geminiHome: string
   readonly outDir: string
 }
 
@@ -97,6 +99,7 @@ type DefaultPathConfig = {
   readonly envGlobalPath: string
   readonly envProjectPath: string
   readonly codexAuthPath: string
+  readonly geminiAuthPath: string
 }
 
 const resolveNormalizedSecretsRoot = (value: string | undefined): string | undefined => {
@@ -113,7 +116,8 @@ const buildDefaultPathConfig = (
       authorizedKeysPath: defaultTemplateConfig.authorizedKeysPath,
       envGlobalPath: defaultTemplateConfig.envGlobalPath,
       envProjectPath: defaultTemplateConfig.envProjectPath,
-      codexAuthPath: defaultTemplateConfig.codexAuthPath
+      codexAuthPath: defaultTemplateConfig.codexAuthPath,
+      geminiAuthPath: defaultTemplateConfig.geminiAuthPath
     }
     : {
       // NOTE: Keep docker-git root mount stable (projects root) so caches like
@@ -122,7 +126,8 @@ const buildDefaultPathConfig = (
       authorizedKeysPath: defaultTemplateConfig.authorizedKeysPath,
       envGlobalPath: `${normalizedSecretsRoot}/global.env`,
       envProjectPath: defaultTemplateConfig.envProjectPath,
-      codexAuthPath: `${normalizedSecretsRoot}/codex`
+      codexAuthPath: `${normalizedSecretsRoot}/codex`,
+      geminiAuthPath: `${normalizedSecretsRoot}/gemini`
     }
 
 const resolvePaths = (
@@ -145,6 +150,8 @@ const resolvePaths = (
     )
     const codexSharedAuthPath = codexAuthPath
     const codexHome = yield* _(nonEmpty("--codex-home", raw.codexHome, defaultTemplateConfig.codexHome))
+    const geminiAuthPath = defaults.geminiAuthPath
+    const geminiHome = defaultTemplateConfig.geminiHome
     const outDir = yield* _(nonEmpty("--out-dir", raw.outDir, `.docker-git/${repoPath}`))
 
     return {
@@ -155,6 +162,8 @@ const resolvePaths = (
       codexAuthPath,
       codexSharedAuthPath,
       codexHome,
+      geminiAuthPath,
+      geminiHome,
       outDir
     }
   })
@@ -224,6 +233,8 @@ const buildTemplateConfig = ({
   codexAuthPath: paths.codexAuthPath,
   codexSharedAuthPath: paths.codexSharedAuthPath,
   codexHome: paths.codexHome,
+  geminiAuthPath: paths.geminiAuthPath,
+  geminiHome: paths.geminiHome,
   cpuLimit,
   ramLimit,
   dockerNetworkMode,

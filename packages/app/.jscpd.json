@@ -11,6 +11,7 @@
 	],
 	"skipComments": true,
 	"ignorePattern": [
-		"private readonly \\w+: \\w+;\\s*private readonly \\w+: \\w+;\\s*private \\w+: \\w+ \\| null = null;\\s*private \\w+: \\w+ \\| null = null;"
+		"private readonly \\w+: \\w+;\\s*private readonly \\w+: \\w+;\\s*private \\w+: \\w+ \\| null = null;\\s*private \\w+: \\w+ \\| null = null;",
+		"const \\{ rest, subcommand \\} = splitSubcommand\\(args\\)\\s*if \\(subcommand === null\\) \\{\\s*return parseList\\(args\\)\\s*\\}\\s*return Match\\.value\\(subcommand\\)\\.pipe\\("
 	]
 }

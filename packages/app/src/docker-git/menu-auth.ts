@@ -1,21 +1,18 @@
-import { Effect, Match, pipe } from "effect"
+import { Effect, pipe } from "effect"
 
-import { authClaudeLogin, authClaudeLogout, authGithubLogin, claudeAuthRoot } from "@effect-template/lib/usecases/auth"
 import type { AppError } from "@effect-template/lib/usecases/errors"
-import { renderError } from "@effect-template/lib/usecases/errors"
 
 import {
   type AuthMenuAction,
   authMenuActionByIndex,
   authMenuSize,
   authViewSteps,
-  readAuthSnapshot,
-  successMessage,
-  writeAuthFlow
+  readAuthSnapshot
 } from "./menu-auth-data.js"
+import { resolveAuthPromptEffect, runAuthPromptEffect, startAuthMenuWithSnapshot } from "./menu-auth-effects.js"
 import { nextBufferValue } from "./menu-buffer-input.js"
 import { handleMenuNumberInput, submitPromptStep } from "./menu-input-utils.js"
-import { pauseOnError, resetToMenu, resumeSshWithSkipInputs, withSuspendedTui } from "./menu-shared.js"
+import { resetToMenu } from "./menu-shared.js"
 import type {
   AuthFlow,
   AuthSnapshot,
@@ -44,14 +41,6 @@ const defaultLabel = (value: string): string => {
   return trimmed.length > 0 ? trimmed : "default"
 }
 
-const startAuthMenuWithSnapshot = (
-  snapshot: AuthSnapshot,
-  context: Pick<MenuViewContext, "setView" | "setMessage">
-) => {
-  context.setView({ _tag: "AuthMenu", selected: 0, snapshot })
-  context.setMessage(null)
-}
-
 const startAuthPrompt = (
   snapshot: AuthSnapshot,
   flow: AuthFlow,
@@ -66,75 +55,6 @@ const startAuthPrompt = (
     snapshot
   })
   context.setMessage(null)
-}
-
-const resolveLabelOption = (values: Readonly<Record<string, string>>): string | null => {
-  const labelValue = (values["label"] ?? "").trim()
-  return labelValue.length > 0 ? labelValue : null
-}
-
-const resolveAuthPromptEffect = (
-  view: AuthPromptView,
-  cwd: string,
-  values: Readonly<Record<string, string>>
-): Effect.Effect<void, AppError, MenuEnv> => {
-  const labelOption = resolveLabelOption(values)
-  return Match.value(view.flow).pipe(
-    Match.when("GithubOauth", () =>
-      authGithubLogin({
-        _tag: "AuthGithubLogin",
-        label: labelOption,
-        token: null,
-        scopes: null,
-        envGlobalPath: view.snapshot.globalEnvPath
-      })),
-    Match.when("ClaudeOauth", () =>
-      authClaudeLogin({
-        _tag: "AuthClaudeLogin",
-        label: labelOption,
-        claudeAuthPath: claudeAuthRoot
-      })),
-    Match.when("ClaudeLogout", () =>
-      authClaudeLogout({
-        _tag: "AuthClaudeLogout",
-        label: labelOption,
-        claudeAuthPath: claudeAuthRoot
-      })),
-    Match.when("GithubRemove", (flow) => writeAuthFlow(cwd, flow, values)),
-    Match.when("GitSet", (flow) => writeAuthFlow(cwd, flow, values)),
-    Match.when("GitRemove", (flow) => writeAuthFlow(cwd, flow, values)),
-    Match.exhaustive
-  )
-}
-
-const runAuthPromptEffect = (
-  effect: Effect.Effect<void, AppError, MenuEnv>,
-  view: AuthPromptView,
-  label: string,
-  context: AuthInputContext,
-  options: { readonly suspendTui: boolean }
-) => {
-  const withOptionalSuspension = options.suspendTui
-    ? withSuspendedTui(effect, {
-      onError: pauseOnError(renderError),
-      onResume: resumeSshWithSkipInputs(context)
-    })
-    : effect
-
-  context.setSshActive(options.suspendTui)
-  context.runner.runEffect(
-    pipe(
-      withOptionalSuspension,
-      Effect.zipRight(readAuthSnapshot(context.state.cwd)),
-      Effect.tap((snapshot) =>
-        Effect.sync(() => {
-          startAuthMenuWithSnapshot(snapshot, context)
-          context.setMessage(successMessage(view.flow, label))
-        })
-      ),
-      Effect.asVoid
-    )
-  )
 }
 
 const loadAuthMenuView = (
@@ -167,10 +87,7 @@ const runAuthAction = (
   startAuthPrompt(view.snapshot, action, context)
 }
 
-const submitAuthPrompt = (
-  view: AuthPromptView,
-  context: AuthInputContext
-) => {
+const submitAuthPrompt = (view: AuthPromptView, context: AuthInputContext) => {
   const steps = authViewSteps(view.flow)
   submitPromptStep(
     view,
@@ -182,8 +99,9 @@ const submitAuthPrompt = (
     (nextValues) => {
       const label = defaultLabel(nextValues["label"] ?? "")
       const effect = resolveAuthPromptEffect(view, context.state.cwd, nextValues)
-      runAuthPromptEffect(effect, view, label, context, {
-        suspendTui: view.flow === "GithubOauth" || view.flow === "ClaudeOauth" || view.flow === "ClaudeLogout"
+      runAuthPromptEffect(effect, view, label, { ...context, cwd: context.state.cwd }, {
+        suspendTui: view.flow === "GithubOauth" || view.flow === "ClaudeOauth" || view.flow === "ClaudeLogout" ||
+          view.flow === "GeminiOauth"
       })
     }
   )
@@ -257,6 +175,22 @@ const handleAuthMenuInput = (
   handleAuthMenuNumberInput(input, view, context)
 }
 
+type SetAuthPromptBufferArgs = {
+  readonly input: string
+  readonly key: MenuKeyInput
+  readonly view: Extract<ViewState, { readonly _tag: "AuthPrompt" }>
+  readonly context: Pick<MenuViewContext, "setView">
+}
+
+const setAuthPromptBuffer = (args: SetAuthPromptBufferArgs) => {
+  const { context, input, key, view } = args
+  const nextBuffer = nextBufferValue(input, key, view.buffer)
+  if (nextBuffer === null) {
+    return
+  }
+  context.setView({ ...view, buffer: nextBuffer })
+}
+
 const handleAuthPromptInput = (
   input: string,
   key: MenuKeyInput,
@@ -272,24 +206,6 @@ const handleAuthPromptInput = (
     return
   }
   setAuthPromptBuffer({ input, key, view, context })
-}
-
-type SetAuthPromptBufferArgs = {
-  readonly input: string
-  readonly key: MenuKeyInput
-  readonly view: Extract<ViewState, { readonly _tag: "AuthPrompt" }>
-  readonly context: Pick<MenuViewContext, "setView">
-}
-
-const setAuthPromptBuffer = (
-  args: SetAuthPromptBufferArgs
-) => {
-  const { context, input, key, view } = args
-  const nextBuffer = nextBufferValue(input, key, view.buffer)
-  if (nextBuffer === null) {
-    return
-  }
-  context.setView({ ...view, buffer: nextBuffer })
 }
 
 export const openAuthMenu = (context: AuthContext): void => {

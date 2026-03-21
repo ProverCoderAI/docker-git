@@ -47,24 +47,28 @@ export const runCommandWithExitCodes = <E>(
     yield* _(ensureExitCode(numericExitCode, okExitCodes, onFailure))
   })
 
-// CHANGE: run a command and return the exit code
-// WHY: enable status checks without throwing on non-zero exits
+// CHANGE: run a command and return the exit code, draining stdout/stderr to prevent buffer deadlock
+// WHY: piped stdout/stderr fill the OS buffer (~64 KB) causing the child process to hang indefinitely
 // QUOTE(ТЗ): "система авторизации"
 // REF: user-request-2026-01-28-auth
 // SOURCE: n/a
 // FORMAT THEOREM: forall cmd: exitCode(cmd) = n
 // PURITY: SHELL
 // EFFECT: Effect<number, PlatformError, CommandExecutor>
-// INVARIANT: stdout/stderr are suppressed for status checks
+// INVARIANT: stdout/stderr are drained asynchronously so the child process never blocks
 // COMPLEXITY: O(command)
 export const runCommandExitCode = (
   spec: RunCommandSpec
 ): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
-  Effect.map(
-    Command.exitCode(
-      buildCommand(spec, "pipe", "pipe", "inherit")
-    ),
-    Number
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const executor = yield* _(CommandExecutor.CommandExecutor)
+      const process = yield* _(executor.start(buildCommand(spec, "pipe", "pipe", "pipe")))
+      yield* _(Effect.forkDaemon(Stream.runDrain(process.stdout)))
+      yield* _(Effect.forkDaemon(Stream.runDrain(process.stderr)))
+      const exitCode = yield* _(process.exitCode)
+      return Number(exitCode)
+    })
   )
 
 const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
@@ -75,15 +79,15 @@ const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
     return next
   })
 
-// CHANGE: run a command and capture stdout
-// WHY: allow auth flows to retrieve tokens from CLI tools
+// CHANGE: run a command and capture stdout, draining stderr to prevent buffer deadlock
+// WHY: if stderr fills the OS buffer (~64 KB) the child process hangs; drain it asynchronously
 // QUOTE(ТЗ): "система авторизации"
 // REF: user-request-2026-01-28-auth
 // SOURCE: n/a
 // FORMAT THEOREM: forall cmd: capture(cmd) -> stdout(cmd)
 // PURITY: SHELL
 // EFFECT: Effect<string, E | PlatformError, CommandExecutor>
-// INVARIANT: stderr is captured but ignored for output
+// INVARIANT: stderr is drained asynchronously; stdout is fully collected before returning
 // COMPLEXITY: O(command)
 export const runCommandCapture = <E>(
   spec: RunCommandSpec,
@@ -94,11 +98,13 @@ export const runCommandCapture = <E>(
     Effect.gen(function*(_) {
       const executor = yield* _(CommandExecutor.CommandExecutor)
       const process = yield* _(executor.start(buildCommand(spec, "pipe", "pipe", "pipe")))
+      yield* _(Effect.forkDaemon(Stream.runDrain(process.stderr)))
       const bytes = yield* _(
         pipe(process.stdout, Stream.runCollect, Effect.map((chunks) => collectUint8Array(chunks)))
       )
       const exitCode = yield* _(process.exitCode)
-      yield* _(ensureExitCode(Number(exitCode), okExitCodes, onFailure))
+      const numericExitCode = Number(exitCode)
+      yield* _(ensureExitCode(numericExitCode, okExitCodes, onFailure))
       return new TextDecoder("utf-8").decode(bytes)
     })
   )

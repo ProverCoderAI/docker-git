@@ -3,7 +3,7 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
-import { Duration, Effect, Schedule } from "effect"
+import { Duration, Effect, Match, Schedule } from "effect"
 
 import type { AuthGithubLoginCommand, AuthGithubLogoutCommand, AuthGithubStatusCommand } from "../core/domain.js"
 import { defaultTemplateConfig } from "../core/domain.js"
@@ -15,8 +15,11 @@ import { buildDockerAuthSpec, normalizeAccountLabel } from "./auth-helpers.js"
 import { migrateLegacyOrchLayout } from "./auth-sync.js"
 import { ensureEnvFile, parseEnvEntries, readEnvText, removeEnvKey, upsertEnvKey } from "./env-file.js"
 import { ensureGhAuthImage, ghAuthDir, ghAuthRoot, ghImageName } from "./github-auth-image.js"
+import type { GithubTokenValidationResult } from "./github-token-validation.js"
+import { validateGithubToken } from "./github-token-validation.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
+import { ensureStateDotDockerGitRepo } from "./state-repo-github.js"
 import { autoSyncState } from "./state-repo.js"
 
 type GithubTokenEntry = {
@@ -33,6 +36,8 @@ type EnvContext = {
   readonly envPath: string
   readonly current: string
 }
+
+type GithubTokenStatusEntry = GithubTokenEntry & GithubTokenValidationResult
 
 const ensureGithubOrchLayout = (
   cwd: string,
@@ -113,6 +118,33 @@ const withEnvContext = <A, E, R>(
       const current = yield* _(readEnvText(fs, envPath))
       return yield* _(run({ fs, envPath, current }))
     })
+  )
+
+const renderGithubTokenStatusLine = (entry: GithubTokenStatusEntry): string =>
+  Match.value(entry.status).pipe(
+    Match.when("valid", () =>
+      entry.login === null
+        ? `- ${entry.label}: valid (owner unavailable)`
+        : `- ${entry.label}: valid (owner: ${entry.login})`),
+    Match.when("invalid", () => `- ${entry.label}: invalid`),
+    Match.when("unknown", () => `- ${entry.label}: unknown (validation unavailable)`),
+    Match.exhaustive
+  )
+
+const renderGithubTokenStatusReport = (entries: ReadonlyArray<GithubTokenStatusEntry>): string =>
+  [`GitHub tokens (${entries.length}):`, ...entries.map((entry) => renderGithubTokenStatusLine(entry))].join("\n")
+
+const validateGithubTokenEntry = (
+  entry: GithubTokenEntry
+): Effect.Effect<GithubTokenStatusEntry> =>
+  validateGithubToken(entry.token).pipe(
+    Effect.map((validation) => ({
+      key: entry.key,
+      label: entry.label,
+      token: entry.token,
+      status: validation.status,
+      login: validation.login
+    }))
   )
 
 const resolveGithubTokenFromGh = (
@@ -200,7 +232,7 @@ const runGithubInteractiveLogin = (
   path: Path.Path,
   envPath: string,
   command: AuthGithubLoginCommand
-): Effect.Effect<void, AuthError | CommandFailedError | PlatformError, GithubRuntime> =>
+): Effect.Effect<string, AuthError | CommandFailedError | PlatformError, GithubRuntime> =>
   Effect.gen(function*(_) {
     const rootPath = resolvePathFromCwd(path, cwd, ghAuthRoot)
     const accountLabel = normalizeAccountLabel(command.label, "default")
@@ -214,6 +246,7 @@ const runGithubInteractiveLogin = (
     yield* _(ensureEnvFile(fs, path, envPath))
     const key = buildGithubTokenKey(command.label)
     yield* _(persistGithubToken(fs, envPath, key, resolved))
+    return resolved
   })
 
 // CHANGE: login to GitHub by persisting a token in the shared env file
@@ -221,10 +254,10 @@ const runGithubInteractiveLogin = (
 // QUOTE(ТЗ): "система авторизации"
 // REF: user-request-2026-01-28-auth
 // SOURCE: n/a
-// FORMAT THEOREM: forall t: login(t) -> env(GITHUB_TOKEN)=t
+// FORMAT THEOREM: forall t: login(t) -> env(GITHUB_TOKEN)=t ∧ cloned(~/.docker-git)
 // PURITY: SHELL
 // EFFECT: Effect<void, CommandFailedError | PlatformError, CommandExecutor>
-// INVARIANT: token is never logged
+// INVARIANT: token is never logged; state repo setup is best-effort
 // COMPLEXITY: O(n) where n = |env|
 export const authGithubLogin = (
   command: AuthGithubLoginCommand
@@ -239,24 +272,26 @@ export const authGithubLogin = (
       if (token.length > 0) {
         yield* _(ensureEnvFile(fs, path, envPath))
         yield* _(persistGithubToken(fs, envPath, key, token))
+        yield* _(ensureStateDotDockerGitRepo(token))
         yield* _(autoSyncState(`chore(state): auth gh ${label}`))
         return
       }
-      yield* _(runGithubInteractiveLogin(cwd, fs, path, envPath, command))
+      const resolvedToken = yield* _(runGithubInteractiveLogin(cwd, fs, path, envPath, command))
+      yield* _(ensureStateDotDockerGitRepo(resolvedToken))
       yield* _(autoSyncState(`chore(state): auth gh ${label}`))
     })
   )
 
-// CHANGE: show GitHub auth status from the shared env file
-// WHY: surface current account labels without leaking tokens
+// CHANGE: show GitHub auth status with live token validation and owner login
+// WHY: presence in the env file is weaker than actual GitHub validity for operator diagnostics
 // QUOTE(ТЗ): "система авторизации"
-// REF: user-request-2026-01-28-auth
+// REF: user-request-2026-03-19-github-token-status-owner
 // SOURCE: n/a
-// FORMAT THEOREM: forall env: status(env) -> labels(env)
+// FORMAT THEOREM: forall env: status(env) -> validated(labels(env))
 // PURITY: SHELL
 // EFFECT: Effect<void, PlatformError, FileSystem | Path>
 // INVARIANT: tokens are never logged
-// COMPLEXITY: O(n) where n = |env|
+// COMPLEXITY: O(n) env scan + O(n) network round-trips where n = |tokens|
 export const authGithubStatus = (
   command: AuthGithubStatusCommand
 ): Effect.Effect<void, PlatformError, GithubFsRuntime> =>
@@ -267,10 +302,10 @@ export const authGithubStatus = (
         yield* _(Effect.log(`GitHub not connected (no tokens in ${envPath}).`))
         return
       }
-      const sample = tokens.slice(0, 20).map((entry) => entry.label).join(", ")
-      const remaining = tokens.length - Math.min(tokens.length, 20)
-      const suffix = remaining > 0 ? ` ... (+${remaining} more)` : ""
-      yield* _(Effect.log(`GitHub tokens (${tokens.length}): ${sample}${suffix}`))
+
+      const statuses = yield* _(Effect.all(tokens.map((entry) => validateGithubTokenEntry(entry))))
+
+      yield* _(Effect.log(renderGithubTokenStatusReport(statuses)))
     }))
 
 // CHANGE: remove GitHub auth token from the shared env file

@@ -2,23 +2,12 @@ import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import { Effect } from "effect"
 
+import { hasFileAtPath } from "./menu-project-auth-helpers.js"
+
 const oauthTokenFileName = ".oauth-token"
 const legacyConfigFileName = ".config.json"
 const credentialsFileName = ".credentials.json"
 const nestedCredentialsFileName = ".claude/.credentials.json"
-
-const hasFileAtPath = (
-  fs: FileSystem.FileSystem,
-  filePath: string
-): Effect.Effect<boolean, PlatformError> =>
-  Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(filePath))
-    if (!exists) {
-      return false
-    }
-    const info = yield* _(fs.stat(filePath))
-    return info.type === "File"
-  })
 
 const hasNonEmptyOauthToken = (
   fs: FileSystem.FileSystem,

@@ -6,11 +6,10 @@ import { Effect } from "effect"
 
 import type { CreateCommand } from "../core/domain.js"
 import { parseGithubRepoUrl } from "../core/repo.js"
-import { runDockerAuthCapture } from "../shell/docker-auth.js"
 import { CommandFailedError } from "../shell/errors.js"
-import { buildDockerAuthSpec } from "./auth-helpers.js"
 import { parseEnvEntries, readEnvText } from "./env-file.js"
-import { ensureGhAuthImage, ghAuthDir, ghAuthRoot, ghImageName } from "./github-auth-image.js"
+import { runGhApiCapture, runGhApiNullable } from "./github-api-helpers.js"
+import { ensureGhAuthImage, ghAuthRoot } from "./github-auth-image.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 
@@ -25,37 +24,6 @@ const resolveGithubToken = (envText: string): string | null => {
   const labeled = entries.find((entry) => entry.key.startsWith("GITHUB_TOKEN__"))
   return labeled && labeled.value.trim().length > 0 ? labeled.value.trim() : null
 }
-
-const runGhApiCapture = (
-  cwd: string,
-  hostPath: string,
-  token: string,
-  args: ReadonlyArray<string>
-): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  runDockerAuthCapture(
-    buildDockerAuthSpec({
-      cwd,
-      image: ghImageName,
-      hostPath,
-      containerPath: ghAuthDir,
-      env: `GH_TOKEN=${token}`,
-      args: ["api", ...args],
-      interactive: false
-    }),
-    [0],
-    (exitCode) => new CommandFailedError({ command: `gh api ${args.join(" ")}`, exitCode })
-  ).pipe(Effect.map((raw) => raw.trim()))
-
-const runGhApiCloneUrl = (
-  cwd: string,
-  hostPath: string,
-  token: string,
-  args: ReadonlyArray<string>
-): Effect.Effect<string | null, PlatformError, CommandExecutor.CommandExecutor> =>
-  runGhApiCapture(cwd, hostPath, token, args).pipe(
-    Effect.catchTag("CommandFailedError", () => Effect.succeed("")),
-    Effect.map((raw) => (raw.length === 0 ? null : raw))
-  )
 
 const resolveViewerLogin = (
   cwd: string,
@@ -77,7 +45,7 @@ const resolveRepoCloneUrl = (
   token: string,
   fullName: string
 ): Effect.Effect<string | null, PlatformError, CommandExecutor.CommandExecutor> =>
-  runGhApiCloneUrl(cwd, hostPath, token, [`/repos/${fullName}`, "--jq", ".clone_url"])
+  runGhApiNullable(cwd, hostPath, token, [`/repos/${fullName}`, "--jq", ".clone_url"])
 
 const createFork = (
   cwd: string,
@@ -86,7 +54,7 @@ const createFork = (
   owner: string,
   repo: string
 ): Effect.Effect<string | null, PlatformError, CommandExecutor.CommandExecutor> =>
-  runGhApiCloneUrl(cwd, hostPath, token, [
+  runGhApiNullable(cwd, hostPath, token, [
     "-X",
     "POST",
     `/repos/${owner}/${repo}/forks`,

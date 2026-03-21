@@ -7,7 +7,7 @@ import { type AppError } from "@effect-template/lib/usecases/errors"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import { autoSyncState } from "@effect-template/lib/usecases/state-repo"
 
-import { countAuthAccountDirectories } from "./menu-auth-helpers.js"
+import { countAuthAccountEntries } from "./menu-auth-snapshot-builder.js"
 import { buildLabeledEnvKey, countKeyEntries, normalizeLabel } from "./menu-labeled-env.js"
 import type { AuthFlow, AuthSnapshot, MenuEnv } from "./menu-types.js"
 
@@ -21,7 +21,7 @@ type AuthMenuItem = {
 export type AuthEnvFlow = Extract<AuthFlow, "GithubRemove" | "GitSet" | "GitRemove">
 
 export type AuthPromptStep = {
-  readonly key: "label" | "token" | "user"
+  readonly key: "label" | "token" | "user" | "apiKey"
   readonly label: string
   readonly required: boolean
   readonly secret: boolean
@@ -34,6 +34,9 @@ const authMenuItems: ReadonlyArray<AuthMenuItem> = [
   { action: "GitRemove", label: "Git: remove credentials" },
   { action: "ClaudeOauth", label: "Claude Code: login via OAuth (web)" },
   { action: "ClaudeLogout", label: "Claude Code: logout (clear cache)" },
+  { action: "GeminiOauth", label: "Gemini CLI: login via OAuth (Google account)" },
+  { action: "GeminiApiKey", label: "Gemini CLI: set API key" },
+  { action: "GeminiLogout", label: "Gemini CLI: logout (clear credentials)" },
   { action: "Refresh", label: "Refresh snapshot" },
   { action: "Back", label: "Back to main menu" }
 ]
@@ -58,6 +61,16 @@ const flowSteps: Readonly<Record<AuthFlow, ReadonlyArray<AuthPromptStep>>> = {
   ],
   ClaudeLogout: [
     { key: "label", label: "Label to logout (empty = default)", required: false, secret: false }
+  ],
+  GeminiOauth: [
+    { key: "label", label: "Label (empty = default)", required: false, secret: false }
+  ],
+  GeminiApiKey: [
+    { key: "label", label: "Label (empty = default)", required: false, secret: false },
+    { key: "apiKey", label: "Gemini API key (from ai.google.dev)", required: true, secret: true }
+  ],
+  GeminiLogout: [
+    { key: "label", label: "Label to logout (empty = default)", required: false, secret: false }
   ]
 }
 
@@ -69,6 +82,9 @@ const flowTitle = (flow: AuthFlow): string =>
     Match.when("GitRemove", () => "Git remove"),
     Match.when("ClaudeOauth", () => "Claude Code OAuth"),
     Match.when("ClaudeLogout", () => "Claude Code logout"),
+    Match.when("GeminiOauth", () => "Gemini CLI OAuth"),
+    Match.when("GeminiApiKey", () => "Gemini CLI API key"),
+    Match.when("GeminiLogout", () => "Gemini CLI logout"),
     Match.exhaustive
   )
 
@@ -80,17 +96,22 @@ export const successMessage = (flow: AuthFlow, label: string): string =>
     Match.when("GitRemove", () => `Removed Git credentials (${label}).`),
     Match.when("ClaudeOauth", () => `Saved Claude Code login (${label}).`),
     Match.when("ClaudeLogout", () => `Logged out Claude Code (${label}).`),
+    Match.when("GeminiOauth", () => `Saved Gemini CLI OAuth login (${label}).`),
+    Match.when("GeminiApiKey", () => `Saved Gemini API key (${label}).`),
+    Match.when("GeminiLogout", () => `Logged out Gemini CLI (${label}).`),
     Match.exhaustive
   )
 
 const buildGlobalEnvPath = (cwd: string): string => `${defaultProjectsRoot(cwd)}/.orch/env/global.env`
 const buildClaudeAuthPath = (cwd: string): string => `${defaultProjectsRoot(cwd)}/.orch/auth/claude`
+const buildGeminiAuthPath = (cwd: string): string => `${defaultProjectsRoot(cwd)}/.orch/auth/gemini`
 
 type AuthEnvText = {
   readonly fs: FileSystem.FileSystem
   readonly path: Path.Path
   readonly globalEnvPath: string
   readonly claudeAuthPath: string
+  readonly geminiAuthPath: string
   readonly envText: string
 }
 
@@ -102,9 +123,10 @@ const loadAuthEnvText = (
     const path = yield* _(Path.Path)
     const globalEnvPath = buildGlobalEnvPath(cwd)
     const claudeAuthPath = buildClaudeAuthPath(cwd)
+    const geminiAuthPath = buildGeminiAuthPath(cwd)
     yield* _(ensureEnvFile(fs, path, globalEnvPath))
     const envText = yield* _(readEnvText(fs, globalEnvPath))
-    return { fs, path, globalEnvPath, claudeAuthPath, envText }
+    return { fs, path, globalEnvPath, claudeAuthPath, geminiAuthPath, envText }
   })
 
 export const readAuthSnapshot = (
@@ -112,17 +134,18 @@ export const readAuthSnapshot = (
 ): Effect.Effect<AuthSnapshot, AppError, MenuEnv> =>
   pipe(
     loadAuthEnvText(cwd),
-    Effect.flatMap(({ claudeAuthPath, envText, fs, globalEnvPath, path }) =>
-      pipe(
-        countAuthAccountDirectories(fs, path, claudeAuthPath),
-        Effect.map((claudeAuthEntries) => ({
+    Effect.flatMap(({ claudeAuthPath, envText, fs, geminiAuthPath, globalEnvPath, path }) =>
+      countAuthAccountEntries(fs, path, claudeAuthPath, geminiAuthPath).pipe(
+        Effect.map(({ claudeAuthEntries, geminiAuthEntries }) => ({
           globalEnvPath,
           claudeAuthPath,
+          geminiAuthPath,
           totalEntries: parseEnvEntries(envText).filter((entry) => entry.value.trim().length > 0).length,
           githubTokenEntries: countKeyEntries(envText, "GITHUB_TOKEN"),
           gitTokenEntries: countKeyEntries(envText, "GIT_AUTH_TOKEN"),
           gitUserEntries: countKeyEntries(envText, "GIT_AUTH_USER"),
-          claudeAuthEntries
+          claudeAuthEntries,
+          geminiAuthEntries
         }))
       )
     )

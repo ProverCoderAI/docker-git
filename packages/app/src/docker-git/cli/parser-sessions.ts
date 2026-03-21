@@ -2,25 +2,9 @@ import { Either, Match } from "effect"
 
 import { type ParseError, type SessionsCommand } from "@effect-template/lib/core/domain"
 
-import { parseProjectDirWithOptions } from "./parser-shared.js"
+import { parsePositiveInt, parseProjectDirWithOptions, splitSubcommand } from "./parser-shared.js"
 
 const defaultLines = 200
-
-const parsePositiveInt = (
-  option: string,
-  raw: string
-): Either.Either<number, ParseError> => {
-  const value = Number.parseInt(raw, 10)
-  if (!Number.isFinite(value) || value <= 0) {
-    const error: ParseError = {
-      _tag: "InvalidOption",
-      option,
-      reason: "expected positive integer"
-    }
-    return Either.left(error)
-  }
-  return Either.right(value)
-}
 
 const parseList = (args: ReadonlyArray<string>): Either.Either<SessionsCommand, ParseError> =>
   Either.map(parseProjectDirWithOptions(args), ({ projectDir, raw }) => ({
@@ -73,17 +57,12 @@ const parseLogs = (args: ReadonlyArray<string>): Either.Either<SessionsCommand, 
 export const parseSessions = (
   args: ReadonlyArray<string>
 ): Either.Either<SessionsCommand, ParseError> => {
-  if (args.length === 0) {
+  const { rest, subcommand } = splitSubcommand(args)
+  if (subcommand === null) {
     return parseList(args)
   }
 
-  const first = args[0] ?? ""
-  if (first.startsWith("-")) {
-    return parseList(args)
-  }
-
-  const rest = args.slice(1)
-  return Match.value(first).pipe(
+  return Match.value(subcommand).pipe(
     Match.when("list", () => parseList(rest)),
     Match.when("kill", () => parseKill(rest)),
     Match.when("stop", () => parseKill(rest)),
@@ -93,7 +72,7 @@ export const parseSessions = (
       const error: ParseError = {
         _tag: "InvalidOption",
         option: "sessions",
-        reason: `unknown action ${first}`
+        reason: `unknown action ${subcommand}`
       }
       return Either.left(error)
     })

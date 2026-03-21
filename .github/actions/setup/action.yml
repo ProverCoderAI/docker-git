@@ -10,7 +10,7 @@ runs:
   using: composite
   steps:
     - name: Install pnpm
-      uses: pnpm/action-setup@v3
+      uses: pnpm/action-setup@v5
     - name: Install node
       uses: actions/setup-node@v6
       with:
@@ -18,4 +18,4 @@ runs:
         node-version: ${{ inputs.node-version }}
     - name: Install dependencies
       shell: bash
-      run: pnpm install
+      run: pnpm install --frozen-lockfile

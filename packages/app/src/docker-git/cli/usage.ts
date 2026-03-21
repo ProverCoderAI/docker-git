@@ -14,6 +14,10 @@ docker-git scrap <action> [<url>] [options]
 docker-git sessions [list] [<url>] [options]
 docker-git sessions kill <pid> [<url>] [options]
 docker-git sessions logs <pid> [<url>] [options]
+docker-git session-gists [list] [options]
+docker-git session-gists backup [<url>] [options]
+docker-git session-gists view <snapshot-ref>
+docker-git session-gists download <snapshot-ref> [options]
 docker-git ps
 docker-git down-all
 docker-git auth <provider> <action> [options]
@@ -30,6 +34,7 @@ Commands:
   panes, terms        List tmux panes for a docker-git project
   scrap               Export/import project scrap (session snapshot + rebuildable deps)
   sessions            List/kill/log container terminal processes
+  session-gists       Manage AI session backups via a private session repository (backup/list/view/download)
   ps, status          Show docker compose status for all docker-git projects
   down-all            Stop all docker-git containers (docker compose down)
   auth                Manage GitHub/Codex/Claude Code auth for docker-git
@@ -64,6 +69,11 @@ Options:
   --wipe | --no-wipe        Wipe workspace before scrap import (default: --wipe)
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list
+  --pr-number <n>           PR number for session backup comment
+  --repo <owner/repo>       Repository for session backup operations
+  --limit <n>               Limit for session backup snapshot list (default: 20)
+  --output <path>           Output directory for session backup download (default: ./.session-restore)
+  --no-comment              Skip posting PR comment after session backup
   --up | --no-up            Run docker compose up after init (default: --up)
   --ssh | --no-ssh          Auto-open SSH after create/clone (default: clone=--ssh, create=--no-ssh)
   --mcp-playwright | --no-mcp-playwright  Enable Playwright MCP + Chromium sidecar (default: --no-mcp-playwright)

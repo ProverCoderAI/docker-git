@@ -81,6 +81,8 @@ const successMessage = (flow: ProjectAuthFlow, label: string): string =>
     Match.when("ProjectGitDisconnect", () => "Disconnected Git from project."),
     Match.when("ProjectClaudeConnect", () => `Connected Claude label (${label}) to project.`),
     Match.when("ProjectClaudeDisconnect", () => "Disconnected Claude from project."),
+    Match.when("ProjectGeminiConnect", () => `Connected Gemini label (${label}) to project.`),
+    Match.when("ProjectGeminiDisconnect", () => "Disconnected Gemini from project."),
     Match.exhaustive
   )
 
@@ -141,7 +143,10 @@ const runProjectAuthAction = (
   }
 
   if (
-    action === "ProjectGithubDisconnect" || action === "ProjectGitDisconnect" || action === "ProjectClaudeDisconnect"
+    action === "ProjectGithubDisconnect" ||
+    action === "ProjectGitDisconnect" ||
+    action === "ProjectClaudeDisconnect" ||
+    action === "ProjectGeminiDisconnect"
   ) {
     runProjectAuthEffect(view.project, action, {}, "default", context)
     return

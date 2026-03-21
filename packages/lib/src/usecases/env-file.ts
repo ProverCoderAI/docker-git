@@ -8,6 +8,16 @@ type EnvEntry = {
   readonly value: string
 }
 
+export type InvalidComposeEnvLine = {
+  readonly lineNumber: number
+  readonly content: string
+}
+
+export type ComposeEnvInspection = {
+  readonly sanitized: string
+  readonly invalidLines: ReadonlyArray<InvalidComposeEnvLine>
+}
+
 const splitLines = (input: string): ReadonlyArray<string> =>
   input.replaceAll("\r\n", "\n").replaceAll("\r", "\n").split("\n")
 
@@ -68,6 +78,19 @@ const parseEnvLine = (line: string): EnvEntry | null => {
   }
   const value = raw.slice(eqIndex + 1).trim()
   return { key, value }
+}
+
+const inspectComposeEnvLine = (line: string): string | null => {
+  const trimmed = line.trim()
+  if (trimmed.length === 0) {
+    return ""
+  }
+  if (trimmed.startsWith("#")) {
+    return trimmed
+  }
+
+  const parsed = parseEnvLine(line)
+  return parsed ? `${parsed.key}=${parsed.value}` : null
 }
 
 // CHANGE: parse env file contents into key/value entries
@@ -150,6 +173,73 @@ export const upsertEnvKey = (input: string, key: string, value: string): string 
 // INVARIANT: env ends with newline
 // COMPLEXITY: O(n) where n = |lines|
 export const removeEnvKey = (input: string, key: string): string => upsertEnvKey(input, key, "")
+
+// CHANGE: inspect compose env text and canonicalize supported assignments
+// WHY: docker compose env_file rejects merge markers and shell-only syntax
+// QUOTE(ТЗ): n/a
+// REF: user-request-2026-02-26-invalid-project-env
+// SOURCE: n/a
+// FORMAT THEOREM: ∀l ∈ lines(input): valid_env(l) ∨ comment(l) ∨ empty(l) → l ∈ sanitized(input)
+// PURITY: CORE
+// INVARIANT: invalid non-comment lines are removed and reported with 1-based line numbers
+// COMPLEXITY: O(n) where n = |lines|
+export const inspectComposeEnvText = (input: string): ComposeEnvInspection => {
+  const sanitizedLines: Array<string> = []
+  const invalidLines: Array<InvalidComposeEnvLine> = []
+  const lines = splitLines(input)
+
+  for (const [index, line] of lines.entries()) {
+    const sanitizedLine = inspectComposeEnvLine(line)
+
+    if (sanitizedLine === null) {
+      invalidLines.push({
+        lineNumber: index + 1,
+        content: line
+      })
+      continue
+    }
+
+    sanitizedLines.push(sanitizedLine)
+  }
+
+  return {
+    sanitized: normalizeEnvText(joinLines(sanitizedLines)),
+    invalidLines
+  }
+}
+
+// CHANGE: sanitize compose env file contents in place
+// WHY: make docker compose env_file inputs deterministic and parseable
+// QUOTE(ТЗ): n/a
+// REF: user-request-2026-02-26-invalid-project-env
+// SOURCE: n/a
+// FORMAT THEOREM: ∀p: exists_file(p) → compose_safe(read(p)) after sanitize(p)
+// PURITY: SHELL
+// EFFECT: Effect<ReadonlyArray<InvalidComposeEnvLine>, PlatformError, FileSystem>
+// INVARIANT: missing or non-file paths are ignored
+// COMPLEXITY: O(n) where n = |file|
+export const sanitizeComposeEnvFile = (
+  fs: FileSystem.FileSystem,
+  envPath: string
+): Effect.Effect<ReadonlyArray<InvalidComposeEnvLine>, PlatformError> =>
+  Effect.gen(function*(_) {
+    const exists = yield* _(fs.exists(envPath))
+    if (!exists) {
+      return []
+    }
+
+    const info = yield* _(fs.stat(envPath))
+    if (info.type !== "File") {
+      return []
+    }
+
+    const current = yield* _(fs.readFileString(envPath))
+    const inspected = inspectComposeEnvText(current)
+    if (inspected.sanitized !== normalizeEnvText(current)) {
+      yield* _(fs.writeFileString(envPath, inspected.sanitized))
+    }
+    return inspected.invalidLines
+  })
 
 export const defaultEnvContents = "# docker-git env\n# KEY=value\n"
 

@@ -91,7 +91,7 @@ const buildPlaywrightFragments = (
     maybeBrowserService:
       `\n  ${browserServiceName}:\n    build:\n      context: .\n      dockerfile: ${browserDockerfile}\n    container_name: ${browserContainerName}\n    restart: unless-stopped\n${
         renderResourceLimits(resourceLimits)
-      }    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`,
+      }    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`,
     maybeBrowserVolume: `  ${browserVolumeName}:`
   }
 }
@@ -158,6 +158,10 @@ ${renderResourceLimits(resourceLimits)}    volumes:
       - ${sharedCodexVolumeKey}:${config.codexHome}-shared
 ${fragments.maybeBootstrapMounts}
       - /var/run/docker.sock:/var/run/docker.sock
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     networks:
       - ${fragments.networkName}
 ${fragments.maybeBrowserService}`

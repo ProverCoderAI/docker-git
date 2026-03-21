@@ -1,4 +1,7 @@
+import { Match } from "effect"
 import type { TemplateConfig } from "../domain.js"
+
+type AgentMode = "claude" | "codex" | "gemini"
 
 const indentBlock = (block: string, size = 2): string => {
   const prefix = " ".repeat(size)
@@ -35,6 +38,7 @@ AGENT_ENV_FILE="/run/docker-git/agent-env.sh"
 {
   [[ -f /etc/profile.d/gh-token.sh ]] && cat /etc/profile.d/gh-token.sh
   [[ -f /etc/profile.d/claude-config.sh ]] && cat /etc/profile.d/claude-config.sh
+  [[ -f /etc/profile.d/gemini-config.sh ]] && cat /etc/profile.d/gemini-config.sh
 } > "$AGENT_ENV_FILE" 2>/dev/null || true
 chmod 644 "$AGENT_ENV_FILE"`,
     renderAgentPrompt(),
@@ -45,14 +49,17 @@ if [[ -n "$AGENT_PROMPT" ]]; then
 fi`
   ].join("\n\n")
 
-const renderAgentPromptCommand = (mode: "claude" | "codex"): string =>
-  mode === "claude"
-    ? String.raw`claude --dangerously-skip-permissions -p \"\$(cat \"$AGENT_PROMPT_FILE\")\"`
-    : String.raw`codex exec \"\$(cat \"$AGENT_PROMPT_FILE\")\"`
+const renderAgentPromptCommand = (mode: AgentMode): string =>
+  Match.value(mode).pipe(
+    Match.when("claude", () => String.raw`claude --dangerously-skip-permissions -p \"\$(cat \"$AGENT_PROMPT_FILE\")\"`),
+    Match.when("codex", () => String.raw`codex exec \"\$(cat \"$AGENT_PROMPT_FILE\")\"`),
+    Match.when("gemini", () => String.raw`gemini --approval-mode=yolo \"\$(cat \"$AGENT_PROMPT_FILE\")\"`),
+    Match.exhaustive
+  )
 
 const renderAgentAutoLaunchCommand = (
   config: TemplateConfig,
-  mode: "claude" | "codex"
+  mode: AgentMode
 ): string =>
   String
     .raw`su - ${config.sshUser} -s /bin/bash -c "bash -lc '. /etc/profile 2>/dev/null || true; . \"$AGENT_ENV_FILE\" 2>/dev/null || true; cd \"$TARGET_DIR\" && ${
@@ -61,7 +68,7 @@ const renderAgentAutoLaunchCommand = (
 
 const renderAgentModeBlock = (
   config: TemplateConfig,
-  mode: "claude" | "codex"
+  mode: AgentMode
 ): string => {
   const startMessage = `[agent] starting ${mode}...`
   const interactiveMessage = `[agent] ${mode} started in interactive mode (use SSH to connect)`
@@ -84,6 +91,7 @@ const renderAgentModeCase = (config: TemplateConfig): string =>
     String.raw`case "$AGENT_MODE" in`,
     indentBlock(renderAgentModeBlock(config, "claude")),
     indentBlock(renderAgentModeBlock(config, "codex")),
+    indentBlock(renderAgentModeBlock(config, "gemini")),
     indentBlock(
       String.raw`*)
   echo "[agent] unknown agent mode: $AGENT_MODE"

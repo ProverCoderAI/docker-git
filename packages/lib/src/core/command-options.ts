@@ -41,6 +41,7 @@ export interface RawOptions {
   readonly scopes?: string
   readonly message?: string
   readonly authWeb?: boolean
+  readonly authOauth?: boolean
   readonly outDir?: string
   readonly projectDir?: string
   readonly lines?: string
@@ -50,6 +51,12 @@ export interface RawOptions {
   readonly force?: boolean
   readonly forceEnv?: boolean
   readonly agentAutoMode?: string
+  // Session gist options (issue-143)
+  readonly prNumber?: string
+  readonly repo?: string
+  readonly noComment?: boolean
+  readonly limit?: string
+  readonly output?: string
 }
 
 // CHANGE: helper type alias for builder signatures that produce parse errors

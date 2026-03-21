@@ -12,6 +12,7 @@ import {
   renderEntrypointZshShell,
   renderEntrypointZshUserRc
 } from "./templates-entrypoint/base.js"
+import { renderEntrypointDnsRepair } from "./templates-entrypoint/dns-repair.js"
 import { renderEntrypointClaudeConfig } from "./templates-entrypoint/claude.js"
 import {
   renderEntrypointCodexHome,
@@ -19,6 +20,7 @@ import {
   renderEntrypointCodexSharedAuth,
   renderEntrypointMcpPlaywright
 } from "./templates-entrypoint/codex.js"
+import { renderEntrypointGeminiConfig } from "./templates-entrypoint/gemini.js"
 import { renderEntrypointGitConfig, renderEntrypointGitHooks } from "./templates-entrypoint/git.js"
 import { renderEntrypointDockerGitBootstrap } from "./templates-entrypoint/nested-docker-git.js"
 import { renderEntrypointOpenCodeConfig } from "./templates-entrypoint/opencode.js"
@@ -33,6 +35,7 @@ import {
 export const renderEntrypoint = (config: TemplateConfig): string =>
   [
     renderEntrypointHeader(config),
+    renderEntrypointDnsRepair(),
     renderEntrypointPackageCache(config),
     renderEntrypointDockerGitBootstrap(config),
     renderEntrypointAuthorizedKeys(config),
@@ -52,6 +55,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointDockerSocket(config),
     renderEntrypointGitConfig(config),
     renderEntrypointClaudeConfig(config),
+    renderEntrypointGeminiConfig(config),
     renderEntrypointGitHooks(),
     renderEntrypointBackgroundTasks(config),
     renderEntrypointBaseline(),

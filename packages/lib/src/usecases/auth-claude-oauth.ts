@@ -6,6 +6,7 @@ import * as Fiber from "effect/Fiber"
 import type * as Scope from "effect/Scope"
 import * as Stream from "effect/Stream"
 
+import { stripAnsi, writeChunkToFd } from "../shell/ansi-strip.js"
 import { resolveDefaultDockerUser, resolveDockerVolumeHostPath } from "../shell/docker-auth.js"
 import { AuthError, CommandFailedError } from "../shell/errors.js"
 
@@ -15,69 +16,6 @@ const tokenFooterMarker = "Store this token securely."
 const outputWindowSize = 262_144
 
 const oauthTokenRegex = /([A-Za-z0-9][A-Za-z0-9._-]{20,})/u
-
-const ansiEscape = "\u001B"
-const ansiBell = "\u0007"
-
-const isAnsiFinalByte = (codePoint: number | undefined): boolean =>
-  codePoint !== undefined && codePoint >= 0x40 && codePoint <= 0x7E
-
-const skipCsiSequence = (raw: string, start: number): number => {
-  const length = raw.length
-  let index = start + 2
-  while (index < length) {
-    const codePoint = raw.codePointAt(index)
-    if (isAnsiFinalByte(codePoint)) {
-      return index + 1
-    }
-    index += 1
-  }
-  return index
-}
-
-const skipOscSequence = (raw: string, start: number): number => {
-  const length = raw.length
-  let index = start + 2
-  while (index < length) {
-    const char = raw[index] ?? ""
-    if (char === ansiBell) {
-      return index + 1
-    }
-    if (char === ansiEscape && raw[index + 1] === "\\") {
-      return index + 2
-    }
-    index += 1
-  }
-  return index
-}
-
-const skipEscapeSequence = (raw: string, start: number): number => {
-  const next = raw[start + 1] ?? ""
-  if (next === "[") {
-    return skipCsiSequence(raw, start)
-  }
-  if (next === "]") {
-    return skipOscSequence(raw, start)
-  }
-  return Math.min(raw.length, start + 2)
-}
-
-const stripAnsi = (raw: string): string => {
-  const cleaned: Array<string> = []
-  let index = 0
-
-  while (index < raw.length) {
-    const current = raw[index] ?? ""
-    if (current !== ansiEscape) {
-      cleaned.push(current)
-      index += 1
-      continue
-    }
-    index = skipEscapeSequence(raw, index)
-  }
-
-  return cleaned.join("")
-}
 
 const extractOauthToken = (rawOutput: string): string | null => {
   const normalized = stripAnsi(rawOutput).replaceAll("\r", "\n")
@@ -170,14 +108,6 @@ const startDockerProcess = (
       Command.stderr("pipe")
     )
   )
-
-const writeChunkToFd = (fd: number, chunk: Uint8Array): void => {
-  if (fd === 2) {
-    process.stderr.write(chunk)
-    return
-  }
-  process.stdout.write(chunk)
-}
 
 const pumpDockerOutput = (
   source: Stream.Stream<Uint8Array, PlatformError>,

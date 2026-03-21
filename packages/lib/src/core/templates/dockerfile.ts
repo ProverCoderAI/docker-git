@@ -60,7 +60,11 @@ RUN set -eu; \
   npm install -g oh-my-opencode@latest "oh-my-opencode-linux-\${OH_MY_OPENCODE_ARCH}@latest"
 RUN oh-my-opencode --version
 RUN npm install -g @anthropic-ai/claude-code@latest
-RUN claude --version`
+RUN claude --version
+RUN npm install -g @google/gemini-cli@latest --force
+RUN gemini --version`
+
+const openCodeVersion = "1.2.27"
 
 const renderDockerfileOpenCode = (): string =>
   `# Tooling: OpenCode (binary)
@@ -83,7 +87,7 @@ RUN set -eu; \
   for attempt in 1 2 3 4 5; do \
     tmp_archive="$(mktemp)"; \
     if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
-      "https://github.com/anomalyco/opencode/releases/latest/download/$OPENCODE_ARCHIVE" \
+      "https://github.com/anomalyco/opencode/releases/download/v${openCodeVersion}/$OPENCODE_ARCHIVE" \
       -o "$tmp_archive" \
       && tar -xzf "$tmp_archive" -C /usr/local/.opencode/bin opencode; then \
       rm -f "$tmp_archive"; \
@@ -251,7 +255,7 @@ RUN mkdir -p /opt/docker-git/bootstrap/.orch/auth/codex \
   /opt/docker-git/bootstrap/.orch/env/project.env
 
 COPY entrypoint.sh /entrypoint.sh
-RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
+RUN sed -i 's/\\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 EXPOSE 22
 ENTRYPOINT ["/entrypoint.sh"]`

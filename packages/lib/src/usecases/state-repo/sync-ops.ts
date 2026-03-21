@@ -52,13 +52,17 @@ const sanitizeBranchComponent = (value: string): string =>
     .replaceAll("^", "-")
     .replaceAll("~", "-")
 
-const rebaseOntoOriginIfPossible = (
+// CHANGE: stash local changes → hard reset to remote → restore local changes on top
+// WHY: remote is source of truth; local changes must overlay latest remote without losing remote updates
+// PURITY: SHELL
+// EFFECT: Effect<void, CommandFailedError | PlatformError, CommandExecutor>
+// INVARIANT: after pull, working tree == origin/{baseBranch} ∧ local modifications restored on top
+const pullRemoteAndRestoreLocal = (
   root: string,
   baseBranch: string,
   env: GitAuthEnv
-): Effect.Effect<"ok" | "skipped" | "conflict", CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
-    // Ensure we see the latest remote branch tip before attempting to rebase.
     const fetchExit = yield* _(gitExitCode(root, ["fetch", "origin", "--prune"], env))
     if (fetchExit !== successExitCode) {
       return yield* _(Effect.fail(new CommandFailedError({ command: "git fetch origin --prune", exitCode: fetchExit })))
@@ -67,17 +71,26 @@ const rebaseOntoOriginIfPossible = (
     const remoteRef = `refs/remotes/origin/${baseBranch}`
     const hasRemoteBranchExit = yield* _(gitExitCode(root, ["show-ref", "--verify", "--quiet", remoteRef], env))
     if (hasRemoteBranchExit !== successExitCode) {
-      return "skipped"
+      return // Remote branch does not exist yet (brand-new repo)
     }
 
-    const rebaseExit = yield* _(gitExitCode(root, ["rebase", `origin/${baseBranch}`], env))
-    if (rebaseExit === successExitCode) {
-      return "ok"
-    }
+    // Stash local uncommitted changes (including untracked files)
+    yield* _(git(root, ["add", "-A"], env))
+    const stashExit = yield* _(gitExitCode(root, ["stash", "--include-untracked"], env))
 
-    // Best-effort: avoid leaving the repo in a rebase-in-progress state.
-    yield* _(gitExitCode(root, ["rebase", "--abort"], env))
-    return "conflict"
+    // Hard reset: working tree + index + HEAD = exact remote state
+    yield* _(git(root, ["reset", "--hard", `origin/${baseBranch}`], env))
+
+    // Restore local changes on top of remote
+    if (stashExit === successExitCode) {
+      const popExit = yield* _(gitExitCode(root, ["stash", "pop"], env))
+      if (popExit !== successExitCode) {
+        // Resolve conflicts by keeping local (stashed) version — local changes always win
+        yield* _(gitExitCode(root, ["checkout", "--theirs", "--", "."], env))
+        yield* _(git(root, ["add", "-A"], env))
+        yield* _(gitExitCode(root, ["stash", "drop"], env))
+      }
+    }
   })
 
 const pushToNewBranch = (
@@ -116,20 +129,14 @@ export const runStateSyncOps = (
     const originPushUrlOverride = options?.originPushUrlOverride ?? null
     const originPushTarget = resolveOriginPushTarget(originPushUrlOverride)
     yield* _(normalizeLegacyStateProjects(root))
-    yield* _(commitAllIfNeeded(root, resolveSyncMessage(message), env))
 
     const branch = yield* _(getCurrentBranch(root, env))
     const baseBranch = resolveBaseBranch(branch)
 
-    const rebaseResult = yield* _(rebaseOntoOriginIfPossible(root, baseBranch, env))
-    if (rebaseResult === "conflict") {
-      const prBranch = yield* _(pushToNewBranch(root, baseBranch, originPushTarget, env))
-      const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
-
-      yield* _(Effect.logWarning(`State sync needs manual merge: pushed changes to branch '${prBranch}'.`))
-      yield* _(logOpenPr(originUrl, baseBranch, prBranch, compareUrl))
-      return
-    }
+    // First: pull latest remote state, stashing and restoring local changes
+    yield* _(pullRemoteAndRestoreLocal(root, baseBranch, env))
+    // Then: commit local changes on top of remote
+    yield* _(commitAllIfNeeded(root, resolveSyncMessage(message), env))
 
     const pushExit = yield* _(
       gitExitCode(root, ["push", "--no-verify", originPushTarget, `HEAD:refs/heads/${baseBranch}`], env)

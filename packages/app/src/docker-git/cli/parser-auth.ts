@@ -9,6 +9,7 @@ type AuthOptions = {
   readonly envGlobalPath: string
   readonly codexAuthPath: string
   readonly claudeAuthPath: string
+  readonly geminiAuthPath: string
   readonly label: string | null
   readonly token: string | null
   readonly scopes: string | null
@@ -34,11 +35,13 @@ const normalizeLabel = (value: string | undefined): string | null => {
 const defaultEnvGlobalPath = ".docker-git/.orch/env/global.env"
 const defaultCodexAuthPath = ".docker-git/.orch/auth/codex"
 const defaultClaudeAuthPath = ".docker-git/.orch/auth/claude"
+const defaultGeminiAuthPath = ".docker-git/.orch/auth/gemini"
 
 const resolveAuthOptions = (raw: RawOptions): AuthOptions => ({
   envGlobalPath: raw.envGlobalPath ?? defaultEnvGlobalPath,
   codexAuthPath: raw.codexAuthPath ?? defaultCodexAuthPath,
   claudeAuthPath: defaultClaudeAuthPath,
+  geminiAuthPath: defaultGeminiAuthPath,
   label: normalizeLabel(raw.label),
   token: normalizeLabel(raw.token),
   scopes: normalizeLabel(raw.scopes),
@@ -117,6 +120,40 @@ const buildClaudeCommand = (action: string, options: AuthOptions): Either.Either
     Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
   )
 
+// CHANGE: add Gemini CLI auth command parsing
+// WHY: enable Gemini CLI authentication management via docker-git CLI
+// QUOTE(ТЗ): "Добавь поддержку gemini CLI"
+// REF: issue-146
+// SOURCE: https://geminicli.com/docs/get-started/authentication/
+// FORMAT THEOREM: forall action: buildGeminiCommand(action, opts) = AuthCommand | ParseError
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: geminiAuthPath is always set from defaults or options
+// COMPLEXITY: O(1)
+const buildGeminiCommand = (action: string, options: AuthOptions): Either.Either<AuthCommand, ParseError> =>
+  Match.value(action).pipe(
+    Match.when("login", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthGeminiLogin",
+        label: options.label,
+        geminiAuthPath: options.geminiAuthPath,
+        isWeb: options.authWeb
+      })),
+    Match.when("status", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthGeminiStatus",
+        label: options.label,
+        geminiAuthPath: options.geminiAuthPath
+      })),
+    Match.when("logout", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthGeminiLogout",
+        label: options.label,
+        geminiAuthPath: options.geminiAuthPath
+      })),
+    Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
+  )
+
 const buildAuthCommand = (
   provider: string,
   action: string,
@@ -128,6 +165,7 @@ const buildAuthCommand = (
     Match.when("codex", () => buildCodexCommand(action, options)),
     Match.when("claude", () => buildClaudeCommand(action, options)),
     Match.when("cc", () => buildClaudeCommand(action, options)),
+    Match.when("gemini", () => buildGeminiCommand(action, options)),
     Match.orElse(() => Either.left(invalidArgument("auth provider", `unknown provider '${provider}'`)))
   )
 

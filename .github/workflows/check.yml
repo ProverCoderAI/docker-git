@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Build (docker-git package)
+        run: pnpm --filter ./packages/app build
 
   types:
     name: Types

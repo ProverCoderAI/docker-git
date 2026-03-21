@@ -11,6 +11,42 @@
 # COMPLEXITY: O(network + repo_size)
 set -euo pipefail
 
+# 0) Ensure DNS resolution works; repair /etc/resolv.conf if Docker DNS is broken
+docker_git_repair_dns() {
+  local test_domain="github.com"
+  local resolv="/etc/resolv.conf"
+  local fallback_dns="8.8.8.8 8.8.4.4 1.1.1.1"
+
+  if getent hosts "$test_domain" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "[dns-repair] DNS resolution failed for $test_domain; attempting repair..."
+
+  local has_external=0
+  for ns in $fallback_dns; do
+    if grep -q "nameserver $ns" "$resolv" 2>/dev/null; then
+      has_external=1
+    fi
+  done
+
+  if [[ "$has_external" -eq 0 ]]; then
+    for ns in $fallback_dns; do
+      printf "nameserver %s\n" "$ns" >> "$resolv"
+    done
+    echo "[dns-repair] appended fallback nameservers to $resolv"
+  fi
+
+  if getent hosts "$test_domain" >/dev/null 2>&1; then
+    echo "[dns-repair] DNS resolution restored"
+    return 0
+  fi
+
+  echo "[dns-repair] WARNING: DNS resolution still failing after repair attempt"
+  return 1
+}
+docker_git_repair_dns || true
+
 REPO_URL="${REPO_URL:-}"
 REPO_REF="${REPO_REF:-}"
 TARGET_DIR="${TARGET_DIR:-/work/app}"

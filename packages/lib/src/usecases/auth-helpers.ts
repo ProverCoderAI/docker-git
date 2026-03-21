@@ -1,3 +1,7 @@
+import type { PlatformError } from "@effect/platform/Error"
+import type * as FileSystem from "@effect/platform/FileSystem"
+import { Effect } from "effect"
+
 import { trimLeftChar, trimRightChar } from "../core/strings.js"
 import type { DockerAuthSpec } from "../shell/docker-auth.js"
 
@@ -50,3 +54,26 @@ export const buildDockerAuthSpec = (input: DockerAuthSpecInput): DockerAuthSpec 
   args: input.args,
   interactive: input.interactive
 })
+
+// CHANGE: add isRegularFile helper for auth modules
+// WHY: deduplicate file existence checks across Claude and Gemini auth
+// QUOTE(ТЗ): "система авторизации"
+// REF: issue-146
+// SOURCE: n/a
+// FORMAT THEOREM: forall p: isRegularFile(fs, p) = true iff exists(p) ∧ type(p) = "File"
+// PURITY: SHELL
+// EFFECT: Effect<boolean, PlatformError>
+// INVARIANT: returns false for directories, symlinks, and non-existent paths
+// COMPLEXITY: O(1)
+export const isRegularFile = (
+  fs: FileSystem.FileSystem,
+  filePath: string
+): Effect.Effect<boolean, PlatformError> =>
+  Effect.gen(function*(_) {
+    const exists = yield* _(fs.exists(filePath))
+    if (!exists) {
+      return false
+    }
+    const info = yield* _(fs.stat(filePath))
+    return info.type === "File"
+  })

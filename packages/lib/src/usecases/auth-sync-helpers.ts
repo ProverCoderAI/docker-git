@@ -158,4 +158,7 @@ export type AuthSyncSpec = {
   readonly target: AuthPaths
 }
 
-export type LegacyOrchPaths = AuthPaths & { readonly ghAuthPath: string }
+export type LegacyOrchPaths = AuthPaths & {
+  readonly ghAuthPath: string
+  readonly geminiAuthPath?: string
+}

@@ -12,6 +12,10 @@ services:
       DOCKER_GIT_FEDERATION_ACTOR: ${DOCKER_GIT_FEDERATION_ACTOR:-docker-git}
     ports:
       - "${DOCKER_GIT_API_BIND_HOST:-127.0.0.1}:${DOCKER_GIT_API_PORT:-3334}:${DOCKER_GIT_API_PORT:-3334}"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - docker_git_projects:${DOCKER_GIT_PROJECTS_ROOT:-/home/dev/.docker-git}

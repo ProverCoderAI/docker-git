@@ -12,6 +12,7 @@ import {
   runDockerComposeUpRecreate,
   runDockerExecExitCode,
   runDockerInspectContainerBridgeIp,
+  runDockerInspectContainerIp,
   runDockerNetworkConnectBridge
 } from "../../shell/docker.js"
 import type { DockerCommandError } from "../../shell/errors.js"
@@ -32,14 +33,29 @@ const agentFailPath = "/run/docker-git/agent.failed"
 const logSshAccess = (
   baseDir: string,
   config: CreateCommand["config"]
-): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
+
+    const isInsideContainer = yield* _(fs.exists("/.dockerenv"))
+    let ipAddress: string | undefined
+
+    if (isInsideContainer) {
+      const containerIp = yield* _(
+        runDockerInspectContainerIp(baseDir, config.containerName).pipe(
+          Effect.orElse(() => Effect.succeed(""))
+        )
+      )
+      if (containerIp.length > 0) {
+        ipAddress = containerIp
+      }
+    }
+
     const resolvedAuthorizedKeys = resolveAuthorizedKeysPath(path, baseDir, config.authorizedKeysPath)
     const authExists = yield* _(fs.exists(resolvedAuthorizedKeys))
     const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
-    const sshCommand = buildSshCommand(config, sshKey)
+    const sshCommand = buildSshCommand(config, sshKey, ipAddress)
 
     yield* _(Effect.log(`SSH access: ${sshCommand}`))
     if (!authExists) {

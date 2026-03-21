@@ -255,6 +255,18 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 done
 EOF
 chmod 0755 "$PRE_PUSH_HOOK"
+
+cat <<'EOF' >> "$PRE_PUSH_HOOK"
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$REPO_ROOT"
+
+if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
+  if command -v gh >/dev/null 2>&1; then
+    node scripts/session-backup-gist.js --verbose || echo "[session-backup] Warning: session backup failed (non-fatal)"
+  fi
+fi
+EOF
 git config --system core.hooksPath "$HOOKS_DIR" || true
 git config --global core.hooksPath "$HOOKS_DIR" || true`
 

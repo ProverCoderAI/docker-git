@@ -37,6 +37,13 @@ const TemplateConfigSchema = Schema.Struct({
     default: () => defaultTemplateConfig.codexSharedAuthPath
   }),
   codexHome: Schema.String,
+  geminiAuthLabel: Schema.optional(Schema.String),
+  geminiAuthPath: Schema.optionalWith(Schema.String, {
+    default: () => defaultTemplateConfig.geminiAuthPath
+  }),
+  geminiHome: Schema.optionalWith(Schema.String, {
+    default: () => defaultTemplateConfig.geminiHome
+  }),
   cpuLimit: Schema.optionalWith(Schema.String, {
     default: () => defaultTemplateConfig.cpuLimit
   }),

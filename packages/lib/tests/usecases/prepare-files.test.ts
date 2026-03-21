@@ -23,6 +23,36 @@ const withTempDir = <A, E, R>(
     })
   )
 
+const withPatchedEnv = <A, E, R>(
+  patch: Readonly<Record<string, string | undefined>>,
+  effect: Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R> =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const previous = new Map<string, string | undefined>()
+      for (const [key, value] of Object.entries(patch)) {
+        previous.set(key, process.env[key])
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+      return previous
+    }),
+    () => effect,
+    (previous) =>
+      Effect.sync(() => {
+        for (const [key, value] of previous.entries()) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      })
+  )
+
 const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   containerName: "dg-test",
   serviceName: "dg-test",
@@ -95,6 +125,9 @@ const readEnableMcpPlaywrightFlag = (value: unknown): boolean | undefined => {
   return typeof flag === "boolean" ? flag : undefined
 }
 
+const countOccurrences = (source: string, fragment: string): number =>
+  source.split(fragment).length - 1
+
 describe("prepareProjectFiles", () => {
   it.effect("force-env refresh rewrites managed templates", () =>
     withTempDir((root) =>
@@ -117,6 +150,7 @@ describe("prepareProjectFiles", () => {
         const entrypointPath = path.join(outDir, "entrypoint.sh")
         const entrypoint = yield* _(fs.readFileString(entrypointPath))
         const composeBefore = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+        const dnsBlock = "    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1"
         const entrypointSyntaxExitCode = yield* _(
           runCommandExitCode({
             cwd: outDir,
@@ -152,6 +186,11 @@ describe("prepareProjectFiles", () => {
         expect(entrypoint).toContain('. /etc/profile 2>/dev/null || true;')
         expect(entrypoint).toContain("codex exec")
         expect(entrypoint).not.toContain("codex --approval-mode full-auto")
+        expect(entrypoint).toContain("docker_git_repair_dns() {")
+        expect(entrypoint).toContain('local test_domain="github.com"')
+        expect(entrypoint).toContain('local fallback_dns="8.8.8.8 8.8.4.4 1.1.1.1"')
+        expect(entrypoint).toContain('printf "nameserver %s\\n" "$ns" >> "$resolv"')
+        expect(entrypoint).toContain("docker_git_repair_dns || true")
         expect(entrypoint).toContain('"plugin": ["oh-my-opencode"]')
         expect(entrypoint).toContain("branch '$REPO_REF' missing; retrying without --branch")
         expect(entrypoint).not.toContain("git ls-remote --symref")
@@ -176,6 +215,7 @@ describe("prepareProjectFiles", () => {
         expect(composeBefore).toContain("docker-git-shared")
         expect(composeBefore).toContain("docker-git-shared-codex")
         expect(composeBefore).toContain("external: true")
+        expect(countOccurrences(composeBefore, dnsBlock)).toBe(1)
 
         yield* _(
           prepareProjectFiles(outDir, root, globalConfig, withMcp, {
@@ -199,6 +239,7 @@ describe("prepareProjectFiles", () => {
         expect(composeAfter).toContain("container_name: dg-test-browser\n    restart: unless-stopped")
         expect(composeAfter).toContain("docker-git-shared")
         expect(composeAfter).toContain("external: true")
+        expect(countOccurrences(composeAfter, dnsBlock)).toBe(2)
         expect(readEnableMcpPlaywrightFlag(configAfter)).toBe(true)
         expect(configAfterText).toContain('"cpuLimit": "30%"')
         expect(configAfterText).toContain('"ramLimit": "30%"')
@@ -228,6 +269,52 @@ describe("prepareProjectFiles", () => {
         expect(compose).toContain("dg-test-net")
         expect(compose).toContain("driver: bridge")
         expect(compose).not.toContain("dg-test-net:\n    external: true")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("appends the active public key to the managed authorized_keys file", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const homeDir = path.join(root, "home")
+        const projectsRoot = path.join(homeDir, ".docker-git")
+        const outDir = path.join(projectsRoot, "org", "repo")
+        const authorizedKeysPath = path.join(projectsRoot, "authorized_keys")
+        const sshPrivateKeyPath = path.join(homeDir, ".ssh", "id_ed25519")
+        const sshPublicKeyPath = `${sshPrivateKeyPath}.pub`
+        const staleKey = "ssh-ed25519 AAAA-stale stale@example\n"
+        const currentKey = "ssh-ed25519 AAAA-current current@example\n"
+        const globalConfig = makeGlobalConfig(projectsRoot, path)
+        const projectConfig = {
+          ...makeProjectConfig(outDir, false, path),
+          authorizedKeysPath: "../../authorized_keys"
+        }
+
+        yield* _(fs.makeDirectory(path.dirname(authorizedKeysPath), { recursive: true }))
+        yield* _(fs.makeDirectory(path.dirname(sshPrivateKeyPath), { recursive: true }))
+        yield* _(fs.writeFileString(authorizedKeysPath, staleKey))
+        yield* _(fs.writeFileString(sshPrivateKeyPath, "PRIVATE\n"))
+        yield* _(fs.writeFileString(sshPublicKeyPath, currentKey))
+
+        yield* _(
+          withPatchedEnv(
+            {
+              HOME: homeDir,
+              DOCKER_GIT_PROJECTS_ROOT: projectsRoot,
+              DOCKER_GIT_AUTHORIZED_KEYS: undefined,
+              DOCKER_GIT_SSH_KEY: undefined
+            },
+            prepareProjectFiles(outDir, projectsRoot, globalConfig, projectConfig, {
+              force: false,
+              forceEnv: false
+            })
+          )
+        )
+
+        const synchronizedAuthorizedKeys = yield* _(fs.readFileString(authorizedKeysPath))
+        expect(synchronizedAuthorizedKeys).toContain(staleKey.trim())
+        expect(synchronizedAuthorizedKeys).toContain(currentKey.trim())
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

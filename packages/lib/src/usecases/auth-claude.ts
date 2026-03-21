@@ -10,7 +10,7 @@ import { runDockerAuth, runDockerAuthExitCode } from "../shell/docker-auth.js"
 import type { AuthError } from "../shell/errors.js"
 import { CommandFailedError } from "../shell/errors.js"
 import { runClaudeOauthLoginWithPrompt } from "./auth-claude-oauth.js"
-import { buildDockerAuthSpec, normalizeAccountLabel } from "./auth-helpers.js"
+import { buildDockerAuthSpec, isRegularFile, normalizeAccountLabel } from "./auth-helpers.js"
 import { migrateLegacyOrchLayout } from "./auth-sync.js"
 import { ensureDockerImage } from "./docker-image.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
@@ -42,19 +42,6 @@ const claudeConfigPath = (accountPath: string): string => `${accountPath}/${clau
 const claudeCredentialsPath = (accountPath: string): string => `${accountPath}/${claudeCredentialsFileName}`
 const claudeNestedCredentialsPath = (accountPath: string): string =>
   `${accountPath}/${claudeCredentialsDirName}/${claudeCredentialsFileName}`
-
-const isRegularFile = (
-  fs: FileSystem.FileSystem,
-  filePath: string
-): Effect.Effect<boolean, PlatformError> =>
-  Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(filePath))
-    if (!exists) {
-      return false
-    }
-    const info = yield* _(fs.stat(filePath))
-    return info.type === "File"
-  })
 
 const syncClaudeCredentialsFile = (
   fs: FileSystem.FileSystem,

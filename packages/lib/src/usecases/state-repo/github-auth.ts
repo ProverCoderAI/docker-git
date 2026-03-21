@@ -7,7 +7,7 @@ import { gitBaseEnv } from "./git-commands.js"
 
 const githubTokenKey = "GITHUB_TOKEN"
 
-const githubHttpsRemoteRe = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/
+const githubHttpsRemoteRe = /^https:\/\/(?:[^/]+@)?github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/
 const githubSshRemoteRe = /^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/
 const githubSshUrlRemoteRe = /^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/
 
@@ -43,7 +43,18 @@ export const tryBuildGithubCompareUrl = (
   }?expand=1`
 }
 
-export const isGithubHttpsRemote = (url: string): boolean => /^https:\/\/github\.com\//.test(url.trim())
+export const isGithubHttpsRemote = (url: string): boolean => /^https:\/\/(?:[^/]+@)?github\.com\//.test(url.trim())
+
+export const normalizeGithubHttpsRemote = (url: string): string | null => {
+  if (!isGithubHttpsRemote(url)) {
+    return null
+  }
+  const parts = tryParseGithubRemoteParts(url)
+  return parts === null ? null : `https://github.com/${parts.owner}/${parts.repo}.git`
+}
+
+export const requiresGithubAuthHint = (originUrl: string, token: string | null | undefined): boolean =>
+  isGithubHttpsRemote(originUrl) && (token?.trim() ?? "").length === 0
 
 const resolveTokenFromProcessEnv = (): string | null => {
   const github = process.env["GITHUB_TOKEN"]

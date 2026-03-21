@@ -26,10 +26,12 @@ import {
 // EFFECT: Effect<void, PlatformError, FileSystem | Path>
 // INVARIANT: output is deterministic for a stable filesystem
 // COMPLEXITY: O(n) where n = |projects|
+export type ListProjectsContext = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+
 export const listProjects: Effect.Effect<
   void,
   PlatformError,
-  FileSystem.FileSystem | Path.Path
+  ListProjectsContext
 > = pipe(
   withProjectIndexAndSsh((index, sshKey) =>
     Effect.gen(function*(_) {
@@ -78,9 +80,12 @@ const emptyItems = (): ReadonlyArray<ProjectItem> => []
 const collectProjectValues = <A, B, E>(
   configPaths: ReadonlyArray<string>,
   sshKey: string | null,
-  load: (configPath: string, sshKey: string | null) => Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+  load: (
+    configPath: string,
+    sshKey: string | null
+  ) => Effect.Effect<A, E, ListProjectsContext>,
   toValue: (value: A) => B
-): Effect.Effect<ReadonlyArray<B>, never, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<ReadonlyArray<B>, never, ListProjectsContext> =>
   Effect.gen(function*(_) {
     const available: Array<B> = []
 
@@ -102,10 +107,17 @@ const collectProjectValues = <A, B, E>(
   })
 
 const listProjectValues = <A, B, E>(
-  load: (configPath: string, sshKey: string | null) => Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+  load: (
+    configPath: string,
+    sshKey: string | null
+  ) => Effect.Effect<A, E, ListProjectsContext>,
   toValue: (value: A) => B,
   empty: () => ReadonlyArray<B>
-): Effect.Effect<ReadonlyArray<B>, PlatformError, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<
+  ReadonlyArray<B>,
+  PlatformError,
+  ListProjectsContext
+> =>
   pipe(
     withProjectIndexAndSsh((index, sshKey) => collectProjectValues(index.configPaths, sshKey, load, toValue)),
     Effect.map((values) => values ?? empty())
@@ -114,7 +126,7 @@ const listProjectValues = <A, B, E>(
 export const listProjectSummaries: Effect.Effect<
   ReadonlyArray<string>,
   PlatformError,
-  FileSystem.FileSystem | Path.Path
+  ListProjectsContext
 > = listProjectValues(loadProjectSummary, renderProjectSummary, emptySummaries)
 
 // CHANGE: load docker-git projects for TUI selection
@@ -130,7 +142,7 @@ export const listProjectSummaries: Effect.Effect<
 export const listProjectItems: Effect.Effect<
   ReadonlyArray<ProjectItem>,
   PlatformError,
-  FileSystem.FileSystem | Path.Path
+  ListProjectsContext
 > = listProjectValues(loadProjectItem, (value) => value, emptyItems)
 
 // CHANGE: list only running docker-git projects (for "Stop container" UI)
@@ -146,7 +158,7 @@ export const listProjectItems: Effect.Effect<
 export const listRunningProjectItems: Effect.Effect<
   ReadonlyArray<ProjectItem>,
   PlatformError | CommandFailedError,
-  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+  ListProjectsContext
 > = pipe(
   Effect.all([listProjectItems, runDockerPsNames(process.cwd())]),
   Effect.map(([items, runningNames]) => items.filter((item) => runningNames.includes(item.containerName)))
