@@ -10,7 +10,7 @@
 // INVARIANT: after execution, at least one nameserver in /etc/resolv.conf resolves external domains
 // COMPLEXITY: O(1) per probe attempt, O(max_attempts) worst case
 export const renderEntrypointDnsRepair = (): string =>
-  `# 0) Ensure DNS resolution works; repair /etc/resolv.conf if Docker DNS is broken
+  String.raw`# 0) Ensure DNS resolution works; repair /etc/resolv.conf if Docker DNS is broken
 docker_git_repair_dns() {
   local test_domain="github.com"
   local resolv="/etc/resolv.conf"
@@ -32,7 +32,7 @@ docker_git_repair_dns() {
 
   if [[ "$has_external" -eq 0 ]]; then
     for ns in $fallback_dns; do
-      printf "nameserver %s\\n" "$ns" >> "$resolv"
+      printf "nameserver %s\n" "$ns" >> "$resolv"
     done
     echo "[dns-repair] appended fallback nameservers to $resolv"
   fi

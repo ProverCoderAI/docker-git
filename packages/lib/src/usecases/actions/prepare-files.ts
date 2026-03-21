@@ -85,6 +85,88 @@ const resolveAuthorizedKeysSource = (
       : matchingPublicKey
   })
 
+const resolveManagedAuthorizedKeysSource = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  baseDir: string,
+  preferredSource: string,
+  resolved: string
+): Effect.Effect<string | null, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const preferred = resolvePathFromBase(path, baseDir, preferredSource)
+    const preferredExists = yield* _(fs.exists(preferred))
+    if (preferredExists && preferred !== resolved) {
+      return preferred
+    }
+
+    return yield* _(resolveAuthorizedKeysSource(fs, path, process.cwd()))
+  })
+
+const ensureMissingAuthorizedKeysPlaceholder = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  resolved: string,
+  state: ExistingFileState
+): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    if (state === "missing") {
+      yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
+      yield* _(fs.writeFileString(resolved, ""))
+    }
+
+    yield* _(
+      Effect.logError(
+        `Authorized keys not found. Create ${resolved} with your public key to enable SSH.`
+      )
+    )
+  })
+
+const readAuthorizedKeysContents = (
+  fs: FileSystem.FileSystem,
+  source: string
+): Effect.Effect<string | null, PlatformError> =>
+  Effect.gen(function*(_) {
+    const desiredContents = (yield* _(fs.readFileString(source))).trim()
+    if (desiredContents.length === 0) {
+      yield* _(Effect.logWarning(`Authorized keys source ${source} is empty. Skipping SSH key sync.`))
+      return null
+    }
+
+    return desiredContents
+  })
+
+type AuthorizedKeysSyncTarget = {
+  readonly fs: FileSystem.FileSystem
+  readonly path: Path.Path
+  readonly state: ExistingFileState
+  readonly resolved: string
+  readonly managedDefaultAuthorizedKeys: string
+  readonly source: string
+  readonly desiredContents: string
+}
+
+const syncAuthorizedKeysTarget = ({
+  desiredContents,
+  fs,
+  managedDefaultAuthorizedKeys,
+  path,
+  resolved,
+  source,
+  state
+}: AuthorizedKeysSyncTarget): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    if (state === "exists") {
+      if (resolved === managedDefaultAuthorizedKeys) {
+        yield* _(appendKeyIfMissing(fs, resolved, source, desiredContents))
+      }
+      return
+    }
+
+    yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
+    yield* _(fs.copyFile(source, resolved))
+    yield* _(Effect.log(`Authorized keys copied from ${source} to ${resolved}`))
+  })
+
 const ensureAuthorizedKeys = (
   baseDir: string,
   authorizedKeysPath: string,
@@ -107,41 +189,30 @@ const ensureAuthorizedKeys = (
         return
       }
 
-      const preferred = resolvePathFromBase(path, baseDir, preferredSource)
-      const preferredExists = yield* _(fs.exists(preferred))
-      const preferredManagedSource = preferredExists && preferred !== resolved ? preferred : null
-      const source = preferredManagedSource === null
-        ? yield* _(resolveAuthorizedKeysSource(fs, path, process.cwd()))
-        : preferredManagedSource
+      const source = yield* _(
+        resolveManagedAuthorizedKeysSource(fs, path, baseDir, preferredSource, resolved)
+      )
       if (source === null) {
-        if (state === "missing") {
-          yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
-          yield* _(fs.writeFileString(resolved, ""))
-        }
-        yield* _(
-          Effect.logError(
-            `Authorized keys not found. Create ${resolved} with your public key to enable SSH.`
-          )
-        )
+        yield* _(ensureMissingAuthorizedKeysPlaceholder(fs, path, resolved, state))
         return
       }
 
-      const desiredContents = (yield* _(fs.readFileString(source))).trim()
-      if (desiredContents.length === 0) {
-        yield* _(Effect.logWarning(`Authorized keys source ${source} is empty. Skipping SSH key sync.`))
+      const desiredContents = yield* _(readAuthorizedKeysContents(fs, source))
+      if (desiredContents === null) {
         return
       }
 
-      if (state === "exists") {
-        if (resolved === managedDefaultAuthorizedKeys) {
-          yield* _(appendKeyIfMissing(fs, resolved, source, desiredContents))
-        }
-        return
-      }
-
-      yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
-      yield* _(fs.copyFile(source, resolved))
-      yield* _(Effect.log(`Authorized keys copied from ${source} to ${resolved}`))
+      yield* _(
+        syncAuthorizedKeysTarget({
+          fs,
+          path,
+          state,
+          resolved,
+          managedDefaultAuthorizedKeys,
+          source,
+          desiredContents
+        })
+      )
     })
   )
 
