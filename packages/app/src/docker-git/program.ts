@@ -19,7 +19,11 @@ import {
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import { mcpPlaywrightUp } from "@effect-template/lib/usecases/mcp-playwright"
-import { applyAllDockerGitProjects, downAllDockerGitProjects, listProjectStatus } from "@effect-template/lib/usecases/projects"
+import {
+  applyAllDockerGitProjects,
+  downAllDockerGitProjects,
+  listProjectStatus
+} from "@effect-template/lib/usecases/projects"
 import { exportScrap, importScrap } from "@effect-template/lib/usecases/scrap"
 import {
   sessionGistBackup,

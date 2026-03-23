@@ -15,13 +15,16 @@ RUN useradd -m -s /bin/bash dev
 # sshd runtime dir
 RUN mkdir -p /run/sshd
 
-# Harden sshd: disable password auth and root login
+# sshd: password auth enabled so users can connect without key setup
 RUN printf "%s\n" \
-  "PasswordAuthentication no" \
+  "PasswordAuthentication yes" \
   "PermitRootLogin no" \
   "PubkeyAuthentication yes" \
   "AllowUsers dev" \
   > /etc/ssh/sshd_config.d/dev.conf
+
+# Default password = username (works out of the box; key auth still accepted if authorized_keys provided)
+RUN echo "dev:dev" | chpasswd
 
 # Workspace in dev home
 RUN mkdir -p /home/dev/app && chown -R dev:dev /home/dev

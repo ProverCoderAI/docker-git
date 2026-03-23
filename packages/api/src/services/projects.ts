@@ -1,12 +1,13 @@
 import { buildCreateCommand, createProject, formatParseError, listProjectItems, readProjectConfig } from "@effect-template/lib"
 import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
-import { deleteDockerGitProject } from "@effect-template/lib/usecases/projects"
+import { applyProjectConfig } from "@effect-template/lib/usecases/apply"
+import { deleteDockerGitProject, downAllDockerGitProjects } from "@effect-template/lib/usecases/projects"
 import type { RawOptions } from "@effect-template/lib/core/command-options"
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import { Effect, Either } from "effect"
 
-import type { CreateProjectRequest, ProjectDetails, ProjectStatus, ProjectSummary } from "../api/contracts.js"
+import type { ApplyRequest, CreateProjectRequest, ProjectDetails, ProjectStatus, ProjectSummary } from "../api/contracts.js"
 import { ApiInternalError, ApiNotFoundError, ApiBadRequestError } from "../api/errors.js"
 import { emitProjectEvent } from "./events.js"
 
@@ -339,3 +340,41 @@ export const readProjectLogs = (
   })
 
 export const resolveProjectById = findProjectById
+
+export const downAllProjects = () =>
+  downAllDockerGitProjects.pipe(
+    Effect.mapError(
+      (cause) =>
+        new ApiInternalError({
+          message: String(cause),
+          cause: cause instanceof Error ? cause : new Error(String(cause))
+        })
+    )
+  )
+
+export const applyProject = (projectId: string, request: ApplyRequest) =>
+  getProject(projectId).pipe(
+    Effect.flatMap((project) =>
+      applyProjectConfig({
+        _tag: "Apply",
+        projectDir: project.projectDir,
+        runUp: request.runUp ?? false,
+        gitTokenLabel: request.gitTokenLabel,
+        codexTokenLabel: request.codexTokenLabel,
+        claudeTokenLabel: request.claudeTokenLabel,
+        cpuLimit: request.cpuLimit,
+        ramLimit: request.ramLimit,
+        enableMcpPlaywright: request.enableMcpPlaywright
+      })
+    ),
+    Effect.map((template) => ({ applied: true, containerName: template.containerName })),
+    Effect.mapError((e) => {
+      if (e instanceof ApiNotFoundError) {
+        return e
+      }
+      return new ApiInternalError({
+        message: String(e),
+        cause: e instanceof Error ? e : new Error(String(e))
+      })
+    })
+  )

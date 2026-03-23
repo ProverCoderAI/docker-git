@@ -28,56 +28,59 @@ import {
 import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
 import { ensureTerminalCursorVisible } from "./terminal-cursor.js"
 
-const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
-  const host = item.ipAddress ?? "localhost"
-  const port = item.ipAddress ? 22 : item.sshPort
-  const args: Array<string> = []
-  if (item.sshKeyPath !== null) {
-    args.push("-i", item.sshKeyPath)
-  }
-  args.push(
-    "-tt",
-    "-Y",
-    "-o",
-    "LogLevel=ERROR",
-    "-o",
-    "StrictHostKeyChecking=no",
-    "-o",
-    "UserKnownHostsFile=/dev/null",
-    "-p",
-    String(port),
-    `${item.sshUser}@${host}`
-  )
-  return args
+// CHANGE: wrap ssh args with sshpass when no key is available
+// WHY: password = sshUser (set via chpasswd at build time); sshpass embeds it in one command
+// PURITY: CORE
+// INVARIANT: sshKeyPath !== null → key auth; sshKeyPath === null → sshpass with default password
+type SshSpec = { readonly command: string; readonly args: ReadonlyArray<string> }
+
+const sshSecurityOptions: ReadonlyArray<string> = [
+  "-o",
+  "LogLevel=ERROR",
+  "-o",
+  "StrictHostKeyChecking=no",
+  "-o",
+  "UserKnownHostsFile=/dev/null"
+]
+
+const sshProbeTimeouts: ReadonlyArray<string> = [
+  "-o",
+  "ConnectTimeout=2",
+  "-o",
+  "ConnectionAttempts=1"
+]
+
+const resolveSshTarget = (item: ProjectItem): { host: string; port: number } => ({
+  host: item.ipAddress ?? "localhost",
+  port: item.ipAddress ? 22 : item.sshPort
+})
+
+const wrapWithSshpass = (item: ProjectItem, args: ReadonlyArray<string>): SshSpec =>
+  item.sshKeyPath === null
+    ? { command: "sshpass", args: ["-p", item.sshUser, "ssh", ...args] }
+    : { command: "ssh", args }
+
+const buildSshArgs = (item: ProjectItem): SshSpec => {
+  const { host, port } = resolveSshTarget(item)
+  const keyArgs = item.sshKeyPath === null ? [] : ["-i", item.sshKeyPath]
+  const args = [...keyArgs, "-tt", "-Y", ...sshSecurityOptions, "-p", String(port), `${item.sshUser}@${host}`]
+  return wrapWithSshpass(item, args)
 }
 
-const buildSshProbeArgs = (item: ProjectItem): ReadonlyArray<string> => {
-  const host = item.ipAddress ?? "localhost"
-  const port = item.ipAddress ? 22 : item.sshPort
-  const args: Array<string> = []
-  if (item.sshKeyPath !== null) {
-    args.push("-i", item.sshKeyPath)
-  }
-  args.push(
+const buildSshProbeArgs = (item: ProjectItem): SshSpec => {
+  const { host, port } = resolveSshTarget(item)
+  const authArgs = item.sshKeyPath === null ? [] : ["-i", item.sshKeyPath, "-o", "BatchMode=yes"]
+  const args = [
+    ...authArgs,
     "-T",
-    "-o",
-    "BatchMode=yes",
-    "-o",
-    "ConnectTimeout=2",
-    "-o",
-    "ConnectionAttempts=1",
-    "-o",
-    "LogLevel=ERROR",
-    "-o",
-    "StrictHostKeyChecking=no",
-    "-o",
-    "UserKnownHostsFile=/dev/null",
+    ...sshProbeTimeouts,
+    ...sshSecurityOptions,
     "-p",
     String(port),
     `${item.sshUser}@${host}`,
     "true"
-  )
-  return args
+  ]
+  return wrapWithSshpass(item, args)
 }
 
 const waitForSshReady = (
@@ -85,12 +88,13 @@ const waitForSshReady = (
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
   const host = item.ipAddress ?? "localhost"
   const port = item.ipAddress ? 22 : item.sshPort
+  const probeSpec = buildSshProbeArgs(item)
   const probe = Effect.gen(function*(_) {
     const exitCode = yield* _(
       runCommandExitCode({
         cwd: process.cwd(),
-        command: "ssh",
-        args: buildSshProbeArgs(item)
+        command: probeSpec.command,
+        args: probeSpec.args
       })
     )
     if (exitCode !== 0) {
@@ -125,15 +129,16 @@ const waitForSshReady = (
 // COMPLEXITY: O(1)
 export const connectProjectSsh = (
   item: ProjectItem
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  pipe(
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const sshSpec = buildSshArgs(item)
+  return pipe(
     ensureTerminalCursorVisible(),
     Effect.zipRight(
       runCommandWithExitCodes(
         {
           cwd: process.cwd(),
-          command: "ssh",
-          args: buildSshArgs(item)
+          command: sshSpec.command,
+          args: sshSpec.args
         },
         [0, 130],
         (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
@@ -141,6 +146,7 @@ export const connectProjectSsh = (
     ),
     Effect.ensuring(ensureTerminalCursorVisible())
   )
+}
 
 // CHANGE: ensure docker compose is up before SSH connection
 // WHY: selected project should auto-start when not running

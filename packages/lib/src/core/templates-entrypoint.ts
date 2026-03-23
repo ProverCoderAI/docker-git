@@ -11,7 +11,6 @@ import {
   renderEntrypointZshShell,
   renderEntrypointZshUserRc
 } from "./templates-entrypoint/base.js"
-import { renderEntrypointDnsRepair } from "./templates-entrypoint/dns-repair.js"
 import { renderEntrypointClaudeConfig } from "./templates-entrypoint/claude.js"
 import {
   renderEntrypointAgentsNotice,
@@ -20,6 +19,7 @@ import {
   renderEntrypointCodexSharedAuth,
   renderEntrypointMcpPlaywright
 } from "./templates-entrypoint/codex.js"
+import { renderEntrypointDnsRepair } from "./templates-entrypoint/dns-repair.js"
 import { renderEntrypointGeminiConfig } from "./templates-entrypoint/gemini.js"
 import { renderEntrypointGitConfig, renderEntrypointGitHooks } from "./templates-entrypoint/git.js"
 import { renderEntrypointDockerGitBootstrap } from "./templates-entrypoint/nested-docker-git.js"

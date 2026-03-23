@@ -37,7 +37,9 @@ export const applyAllDockerGitProjects: Effect.Effect<
             runDockerComposeUpWithPortCheck(status.projectDir).pipe(
               Effect.catchTag("DockerCommandError", (error: DockerCommandError) =>
                 Effect.logWarning(
-                  `apply failed for ${status.projectDir}: ${renderError(error)}. Check the project docker-compose config (e.g. env files for merge conflicts, port conflicts in docker-compose.yml config) and retry.`
+                  `apply failed for ${status.projectDir}: ${
+                    renderError(error)
+                  }. Check the project docker-compose config (e.g. env files for merge conflicts, port conflicts in docker-compose.yml config) and retry.`
                 )),
               Effect.catchTag("ConfigNotFoundError", (error) =>
                 Effect.logWarning(

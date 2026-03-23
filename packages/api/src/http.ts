@@ -37,6 +37,51 @@ import {
   recreateProject,
   upProject
 } from "./services/projects.js"
+import {
+  runAuthClaudeLogin,
+  runAuthClaudeLogout,
+  runAuthClaudeStatus,
+  runAuthCodexLogin,
+  runAuthCodexLogout,
+  runAuthCodexStatus,
+  runAuthGithubLogin,
+  runAuthGithubLogout,
+  runAuthGithubStatus
+} from "./services/auth.js"
+import { runMcpPlaywrightUp } from "./services/mcp-playwright.js"
+import { applyProject, downAllProjects } from "./services/projects.js"
+import { runScrapExport, runScrapImport } from "./services/scrap.js"
+import { runSessionsKill, runSessionsList, runSessionsLogs } from "./services/sessions.js"
+import {
+  runStateCommit,
+  runStateInit,
+  runStatePath,
+  runStatePull,
+  runStatePush,
+  runStateStatus,
+  runStateSync
+} from "./services/state.js"
+import {
+  AuthClaudeLoginRequestSchema,
+  AuthClaudeLogoutRequestSchema,
+  AuthClaudeStatusRequestSchema,
+  AuthCodexLoginRequestSchema,
+  AuthCodexLogoutRequestSchema,
+  AuthCodexStatusRequestSchema,
+  AuthGithubLoginRequestSchema,
+  AuthGithubLogoutRequestSchema,
+  AuthGithubStatusRequestSchema,
+  ApplyRequestSchema,
+  McpPlaywrightUpRequestSchema,
+  ScrapExportRequestSchema,
+  ScrapImportRequestSchema,
+  SessionsKillRequestSchema,
+  SessionsListRequestSchema,
+  SessionsLogsRequestSchema,
+  StateCommitRequestSchema,
+  StateInitRequestSchema,
+  StateSyncRequestSchema
+} from "./api/schema.js"
 
 const ProjectParamsSchema = Schema.Struct({
   projectId: Schema.String
@@ -396,7 +441,208 @@ export const makeRouter = () => {
     )
   )
 
-  return withAgents.pipe(
+  const withAuth = withAgents.pipe(
+    HttpRouter.post(
+      "/auth/github/login",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(AuthGithubLoginRequestSchema))
+        const result = yield* _(runAuthGithubLogin(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/github/status",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(AuthGithubStatusRequestSchema))
+        const result = yield* _(runAuthGithubStatus(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/github/logout",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(AuthGithubLogoutRequestSchema))
+        const result = yield* _(runAuthGithubLogout(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/codex/login",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(AuthCodexLoginRequestSchema))
+        const result = yield* _(runAuthCodexLogin(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/codex/status",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(AuthCodexStatusRequestSchema))
+        const result = yield* _(runAuthCodexStatus(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/codex/logout",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(AuthCodexLogoutRequestSchema))
+        const result = yield* _(runAuthCodexLogout(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/claude/login",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(AuthClaudeLoginRequestSchema))
+        const result = yield* _(runAuthClaudeLogin(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/claude/status",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(AuthClaudeStatusRequestSchema))
+        const result = yield* _(runAuthClaudeStatus(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/claude/logout",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(AuthClaudeLogoutRequestSchema))
+        const result = yield* _(runAuthClaudeLogout(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    )
+  )
+
+  const withState = withAuth.pipe(
+    HttpRouter.get(
+      "/state/path",
+      runStatePath().pipe(
+        Effect.flatMap((result) => jsonResponse(result, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/state/init",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(StateInitRequestSchema))
+        const result = yield* _(runStateInit(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/state/status",
+      runStateStatus().pipe(
+        Effect.flatMap((result) => jsonResponse(result, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/state/pull",
+      runStatePull().pipe(
+        Effect.flatMap((result) => jsonResponse(result, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/state/push",
+      runStatePush().pipe(
+        Effect.flatMap((result) => jsonResponse(result, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/state/commit",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(StateCommitRequestSchema))
+        const result = yield* _(runStateCommit(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/state/sync",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(StateSyncRequestSchema))
+        const result = yield* _(runStateSync(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    )
+  )
+
+  const withScrapAndSessions = withState.pipe(
+    HttpRouter.post(
+      "/scrap/export",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(ScrapExportRequestSchema))
+        const result = yield* _(runScrapExport(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/scrap/import",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(ScrapImportRequestSchema))
+        const result = yield* _(runScrapImport(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/mcp-playwright",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(McpPlaywrightUpRequestSchema))
+        const result = yield* _(runMcpPlaywrightUp(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/sessions/list",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(SessionsListRequestSchema))
+        const result = yield* _(runSessionsList(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/sessions/kill",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(SessionsKillRequestSchema))
+        const result = yield* _(runSessionsKill(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/sessions/logs",
+      Effect.gen(function*(_) {
+        const req = yield* _(HttpServerRequest.schemaBodyJson(SessionsLogsRequestSchema))
+        const result = yield* _(runSessionsLogs(req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    )
+  )
+
+  // NOTE: POST /projects/down-all MUST be before /:projectId routes
+  const withProjectExtensions = withScrapAndSessions.pipe(
+    HttpRouter.post(
+      "/projects/down-all",
+      downAllProjects().pipe(
+        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/apply",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const req = yield* _(HttpServerRequest.schemaBodyJson(ApplyRequestSchema))
+        const result = yield* _(applyProject(projectId, req))
+        return yield* _(jsonResponse(result, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    )
+  )
+
+  return withProjectExtensions.pipe(
     HttpRouter.get(
       "/projects/:projectId/events",
       projectParams.pipe(

@@ -20,6 +20,10 @@ const sshOptions = "-tt -Y -o LogLevel=ERROR -o StrictHostKeyChecking=no -o User
 
 export type ProjectLoadError = PlatformError | ConfigNotFoundError | ConfigDecodeError
 
+// CHANGE: use sshpass when no key provided so the command works without interaction
+// WHY: password = sshUser (set via chpasswd at build time); sshpass embeds it in one command
+// PURITY: CORE
+// INVARIANT: sshKey !== null → key auth; sshKey === null → sshpass with default password
 export const buildSshCommand = (
   config: TemplateConfig,
   sshKey: string | null,
@@ -28,7 +32,7 @@ export const buildSshCommand = (
   const host = ipAddress ?? "localhost"
   const port = ipAddress ? 22 : config.sshPort
   return sshKey === null
-    ? `ssh ${sshOptions} -p ${port} ${config.sshUser}@${host}`
+    ? `sshpass -p ${config.sshUser} ssh ${sshOptions} -p ${port} ${config.sshUser}@${host}`
     : `ssh -i ${sshKey} ${sshOptions} -p ${port} ${config.sshUser}@${host}`
 }
 
