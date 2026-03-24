@@ -230,8 +230,11 @@ docker_git_upsert_ssh_env "GEMINI_CLI_DISABLE_UPDATE_CHECK" "true"
 docker_git_upsert_ssh_env "GEMINI_CLI_NONINTERACTIVE" "true"
 docker_git_upsert_ssh_env "GEMINI_CLI_APPROVAL_MODE" "yolo"`
 
-const entrypointGeminiNoticeTemplate = String.raw`# Ensure global GEMINI.md exists for container context
-GEMINI_MD_PATH="__GEMINI_HOME__/GEMINI.md"
+const renderEntrypointGeminiNotice = (config: TemplateConfig): string => {
+  const promptContent = renderSharedPrompt(config.targetDir, "$GEMINI_WORKSPACE_CONTEXT")
+
+  return String.raw`# Ensure global GEMINI.md exists for container context
+GEMINI_MD_PATH="${config.geminiHome}/GEMINI.md"
 GEMINI_WORKSPACE_CONTEXT="Контекст workspace: repository"
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
@@ -267,15 +270,11 @@ fi
 
 cat <<EOF > "$GEMINI_MD_PATH"
 <!-- docker-git-managed:gemini-md -->
-${renderSharedPrompt("$GEMINI_WORKSPACE_CONTEXT")}
+${promptContent}
 <!-- /docker-git-managed:gemini-md -->
 EOF
 chown 1000:1000 "$GEMINI_MD_PATH" || true`
-
-const renderEntrypointGeminiNotice = (config: TemplateConfig): string =>
-  entrypointGeminiNoticeTemplate
-    .replaceAll("__GEMINI_HOME__", config.geminiHome)
-    .replaceAll("__TARGET_DIR__", config.targetDir)
+}
 
 export const renderEntrypointGeminiConfig = (config: TemplateConfig): string =>
   [

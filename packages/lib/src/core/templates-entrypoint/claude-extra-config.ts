@@ -1,13 +1,27 @@
 import type { TemplateConfig } from "../domain.js"
 import { renderSharedPrompt } from "./claude-system-prompt.js"
 
-const entrypointClaudeGlobalPromptTemplate = String
-  .raw`# Claude Code: managed global memory (CLAUDE.md is auto-loaded by Claude Code)
-CLAUDE_GLOBAL_PROMPT_FILE="/home/__SSH_USER__/.claude/CLAUDE.md"
+const escapeForDoubleQuotes = (value: string): string => {
+  const backslash = String.fromCodePoint(92)
+  const quote = String.fromCodePoint(34)
+  const escapedBackslash = `${backslash}${backslash}`
+  const escapedQuote = `${backslash}${quote}`
+  return value
+    .replaceAll(backslash, escapedBackslash)
+    .replaceAll(quote, escapedQuote)
+}
+
+export const renderClaudeGlobalPromptSetup = (config: TemplateConfig): string => {
+  const promptContent = renderSharedPrompt(config.targetDir, "$CLAUDE_WORKSPACE_CONTEXT")
+  const repoRefDefault = escapeForDoubleQuotes(config.repoRef)
+  const repoUrlDefault = escapeForDoubleQuotes(config.repoUrl)
+
+  return String.raw`# Claude Code: managed global memory (CLAUDE.md is auto-loaded by Claude Code)
+CLAUDE_GLOBAL_PROMPT_FILE="/home/${config.sshUser}/.claude/CLAUDE.md"
 CLAUDE_AUTO_SYSTEM_PROMPT="${"$"}{CLAUDE_AUTO_SYSTEM_PROMPT:-1}"
 CLAUDE_WORKSPACE_CONTEXT="Контекст workspace: repository"
-REPO_REF_VALUE="${"$"}{REPO_REF:-__REPO_REF_DEFAULT__}"
-REPO_URL_VALUE="${"$"}{REPO_URL:-__REPO_URL_DEFAULT__}"
+REPO_REF_VALUE="${"$"}{REPO_REF:-${repoRefDefault}}"
+REPO_URL_VALUE="${"$"}{REPO_URL:-${repoUrlDefault}}"
 
 if [[ "$REPO_REF_VALUE" == issue-* ]]; then
   ISSUE_ID_VALUE="$(printf "%s" "$REPO_REF_VALUE" | sed -E 's#^issue-##')"
@@ -47,7 +61,7 @@ if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
   if [[ ! -f "$CLAUDE_GLOBAL_PROMPT_FILE" ]] || grep -q "^<!-- docker-git-managed:claude-md -->$" "$CLAUDE_GLOBAL_PROMPT_FILE"; then
     cat <<EOF > "$CLAUDE_GLOBAL_PROMPT_FILE"
 <!-- docker-git-managed:claude-md -->
-${renderSharedPrompt("$CLAUDE_WORKSPACE_CONTEXT")}
+${promptContent}
 <!-- /docker-git-managed:claude-md -->
 EOF
     chmod 0644 "$CLAUDE_GLOBAL_PROMPT_FILE" || true
@@ -56,23 +70,7 @@ EOF
 fi
 
 export CLAUDE_AUTO_SYSTEM_PROMPT`
-
-const escapeForDoubleQuotes = (value: string): string => {
-  const backslash = String.fromCodePoint(92)
-  const quote = String.fromCodePoint(34)
-  const escapedBackslash = `${backslash}${backslash}`
-  const escapedQuote = `${backslash}${quote}`
-  return value
-    .replaceAll(backslash, escapedBackslash)
-    .replaceAll(quote, escapedQuote)
 }
-
-export const renderClaudeGlobalPromptSetup = (config: TemplateConfig): string =>
-  entrypointClaudeGlobalPromptTemplate
-    .replaceAll("__TARGET_DIR__", config.targetDir)
-    .replaceAll("__SSH_USER__", config.sshUser)
-    .replaceAll("__REPO_REF_DEFAULT__", escapeForDoubleQuotes(config.repoRef))
-    .replaceAll("__REPO_URL_DEFAULT__", escapeForDoubleQuotes(config.repoUrl))
 
 export const renderClaudeWrapperSetup = (): string =>
   String.raw`CLAUDE_WRAPPER_BIN="/usr/local/bin/claude"
