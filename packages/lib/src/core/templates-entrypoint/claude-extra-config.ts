@@ -1,5 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
-import { claudeSystemPromptContent } from "./claude-system-prompt.js"
+import { renderSharedPrompt } from "./claude-system-prompt.js"
 
 const entrypointClaudeGlobalPromptTemplate = String
   .raw`# Claude Code: managed global memory (CLAUDE.md is auto-loaded by Claude Code)
@@ -47,7 +47,7 @@ if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
   if [[ ! -f "$CLAUDE_GLOBAL_PROMPT_FILE" ]] || grep -q "^<!-- docker-git-managed:claude-md -->$" "$CLAUDE_GLOBAL_PROMPT_FILE"; then
     cat <<EOF > "$CLAUDE_GLOBAL_PROMPT_FILE"
 <!-- docker-git-managed:claude-md -->
-${claudeSystemPromptContent}
+${renderSharedPrompt("$CLAUDE_WORKSPACE_CONTEXT")}
 <!-- /docker-git-managed:claude-md -->
 EOF
     chmod 0644 "$CLAUDE_GLOBAL_PROMPT_FILE" || true

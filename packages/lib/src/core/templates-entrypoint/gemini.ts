@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
+import { renderSharedPrompt } from "./claude-system-prompt.js"
 
 // CHANGE: add Gemini CLI entrypoint configuration
 // WHY: enable Gemini CLI in Docker with automated auth, trust settings and MCP
@@ -266,14 +267,7 @@ fi
 
 cat <<EOF > "$GEMINI_MD_PATH"
 <!-- docker-git-managed:gemini-md -->
-Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, gemini, claude, opencode, oh-my-opencode, sshpass, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
-Рабочая папка проекта (git clone): __TARGET_DIR__
-Доступные workspace пути: __TARGET_DIR__
-$GEMINI_WORKSPACE_CONTEXT
-Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
-Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
-Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
-Если ты видишь файлы AGENTS.md, GEMINI.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
+${renderSharedPrompt("$GEMINI_WORKSPACE_CONTEXT")}
 <!-- /docker-git-managed:gemini-md -->
 EOF
 chown 1000:1000 "$GEMINI_MD_PATH" || true`
