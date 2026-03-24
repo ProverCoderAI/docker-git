@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
+import { claudeSystemPromptContent } from "./claude-system-prompt.js"
 
 const entrypointClaudeGlobalPromptTemplate = String
   .raw`# Claude Code: managed global memory (CLAUDE.md is auto-loaded by Claude Code)
@@ -46,14 +47,7 @@ if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
   if [[ ! -f "$CLAUDE_GLOBAL_PROMPT_FILE" ]] || grep -q "^<!-- docker-git-managed:claude-md -->$" "$CLAUDE_GLOBAL_PROMPT_FILE"; then
     cat <<EOF > "$CLAUDE_GLOBAL_PROMPT_FILE"
 <!-- docker-git-managed:claude-md -->
-Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, opencode, oh-my-opencode, sshpass, claude, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
-Рабочая папка проекта (git clone): __TARGET_DIR__
-Доступные workspace пути: __TARGET_DIR__
-$CLAUDE_WORKSPACE_CONTEXT
-Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
-Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
-Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
-Если ты видишь файлы AGENTS.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
+${claudeSystemPromptContent}
 <!-- /docker-git-managed:claude-md -->
 EOF
     chmod 0644 "$CLAUDE_GLOBAL_PROMPT_FILE" || true
