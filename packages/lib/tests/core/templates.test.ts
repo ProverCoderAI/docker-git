@@ -60,6 +60,10 @@ describe("renderEntrypointGitHooks", () => {
     expect(hooks).toContain("Run session backup after successful push")
     expect(hooks).toContain("node \"$BACKUP_SCRIPT\"")
     expect(hooks).not.toContain("node \"$BACKUP_SCRIPT\" --verbose")
+    expect(hooks.indexOf('$REPO_ROOT/scripts/session-backup-gist.js')).toBeLessThan(
+      hooks.indexOf("/opt/docker-git/scripts/session-backup-gist.js")
+    )
+    expect(hooks).toContain("[session-backup] Warning: gh CLI not found")
   })
 })
 

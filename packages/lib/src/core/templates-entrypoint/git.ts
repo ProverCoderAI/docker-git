@@ -271,14 +271,18 @@ cd "$REPO_ROOT"
 if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
   if command -v gh >/dev/null 2>&1; then
     BACKUP_SCRIPT=""
-    if [ -f /opt/docker-git/scripts/session-backup-gist.js ]; then
-      BACKUP_SCRIPT="/opt/docker-git/scripts/session-backup-gist.js"
-    elif [ -f "$REPO_ROOT/scripts/session-backup-gist.js" ]; then
+    if [ -f "$REPO_ROOT/scripts/session-backup-gist.js" ]; then
       BACKUP_SCRIPT="$REPO_ROOT/scripts/session-backup-gist.js"
+    elif [ -f /opt/docker-git/scripts/session-backup-gist.js ]; then
+      BACKUP_SCRIPT="/opt/docker-git/scripts/session-backup-gist.js"
     fi
     if [ -n "$BACKUP_SCRIPT" ]; then
       node "$BACKUP_SCRIPT" || echo "[session-backup] Warning: session backup failed (non-fatal)"
+    else
+      echo "[session-backup] Warning: script not found (expected repo or global path)"
     fi
+  else
+    echo "[session-backup] Warning: gh CLI not found (skipping session backup)"
   fi
 fi
 EOF
