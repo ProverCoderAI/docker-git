@@ -7,6 +7,7 @@ const { spawnSync } = require("node:child_process");
 
 const BACKUP_REPO_NAME = "docker-git-sessions";
 const BACKUP_DEFAULT_BRANCH = "main";
+const GH_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
 // Keep each stored object below GitHub's 100 MB limit while transport batches stay smaller.
 const MAX_REPO_FILE_SIZE = 99 * 1000 * 1000;
 const MAX_PUSH_BATCH_BYTES = 50 * 1000 * 1000;
@@ -163,6 +164,7 @@ const ghCommand = (args, ghEnv, inputFilePath = null) => {
   const result = spawnSync("gh", resolvedArgs, {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
+    maxBuffer: GH_MAX_BUFFER_BYTES,
     env: ghEnv,
   });
 

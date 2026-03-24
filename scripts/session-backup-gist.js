@@ -29,6 +29,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execSync, spawnSync } = require("node:child_process");
 const os = require("node:os");
+const GH_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
 
 const {
   buildBlobUrl,
@@ -142,6 +143,7 @@ const ghCommand = (args, ghEnv) => {
   const result = spawnSync("gh", args, {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
+    maxBuffer: GH_MAX_BUFFER_BYTES,
     env: ghEnv,
   });
 
