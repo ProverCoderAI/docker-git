@@ -410,7 +410,7 @@ const buildSnapshotReadme = ({ backupRepo, source, manifestUrl, summary, session
     "",
     `- Manifest: ${manifestUrl}`,
     "",
-    "Generated automatically by the docker-git `pre-push` session backup hook.",
+    "Generated automatically by the docker-git `post-push` session backup hook.",
     "",
   ].join("\n");
 

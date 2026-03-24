@@ -129,6 +129,7 @@ const entrypointGitHooksTemplate = String
   .raw`# 3) Install global git hooks to protect main/master + managed AGENTS context
 HOOKS_DIR="/opt/docker-git/hooks"
 PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"
+POST_PUSH_HOOK="$HOOKS_DIR/post-push"
 mkdir -p "$HOOKS_DIR"
 
 cat <<'EOF' > "$PRE_PUSH_HOOK"
@@ -256,14 +257,17 @@ done
 EOF
 chmod 0755 "$PRE_PUSH_HOOK"
 
-cat <<'EOF' >> "$PRE_PUSH_HOOK"
+cat <<'EOF' > "$POST_PUSH_HOOK"
+#!/usr/bin/env bash
+set -euo pipefail
 
+# 5) Run session backup after successful push
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$REPO_ROOT"
 
-# CHANGE: resolve session-backup script from /opt/docker-git/scripts (embedded) or repo-local fallback
-# WHY: docker-git scripts are now embedded in the container image at /opt/docker-git/scripts
-# REF: issue-176
+# CHANGE: run session backup in post-push so source commit has already landed in remote
+# WHY: backups should mirror successfully pushed state and not block push validation
+# REF: issue-192
 if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
   if command -v gh >/dev/null 2>&1; then
     BACKUP_SCRIPT=""
@@ -273,11 +277,13 @@ if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
       BACKUP_SCRIPT="$REPO_ROOT/scripts/session-backup-gist.js"
     fi
     if [ -n "$BACKUP_SCRIPT" ]; then
-      node "$BACKUP_SCRIPT" --verbose || echo "[session-backup] Warning: session backup failed (non-fatal)"
+      node "$BACKUP_SCRIPT" || echo "[session-backup] Warning: session backup failed (non-fatal)"
     fi
   fi
 fi
 EOF
+chmod 0755 "$POST_PUSH_HOOK"
+
 git config --system core.hooksPath "$HOOKS_DIR" || true
 git config --global core.hooksPath "$HOOKS_DIR" || true`
 

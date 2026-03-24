@@ -4,6 +4,7 @@ import { defaultTemplateConfig, type TemplateConfig } from "../../src/core/domai
 import { renderDockerCompose } from "../../src/core/templates/docker-compose.js"
 import { renderEntrypoint } from "../../src/core/templates-entrypoint.js"
 import { renderEntrypointDnsRepair } from "../../src/core/templates-entrypoint/dns-repair.js"
+import { renderEntrypointGitHooks } from "../../src/core/templates-entrypoint/git.js"
 
 const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateConfig => ({
   ...defaultTemplateConfig,
@@ -44,6 +45,21 @@ describe("renderEntrypointDnsRepair", () => {
 
     expect(dnsRepairIndex).toBeGreaterThanOrEqual(0)
     expect(packageCacheIndex).toBeGreaterThan(dnsRepairIndex)
+  })
+})
+
+describe("renderEntrypointGitHooks", () => {
+  it("installs pre-push protection checks and post-push backup hook", () => {
+    const hooks = renderEntrypointGitHooks()
+
+    expect(hooks).toContain('PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"')
+    expect(hooks).toContain('POST_PUSH_HOOK="$HOOKS_DIR/post-push"')
+    expect(hooks).toContain("cat <<'EOF' > \"$PRE_PUSH_HOOK\"")
+    expect(hooks).toContain("cat <<'EOF' > \"$POST_PUSH_HOOK\"")
+    expect(hooks).toContain("check_issue_managed_block_range")
+    expect(hooks).toContain("Run session backup after successful push")
+    expect(hooks).toContain("node \"$BACKUP_SCRIPT\"")
+    expect(hooks).not.toContain("node \"$BACKUP_SCRIPT\" --verbose")
   })
 })
 
