@@ -48,6 +48,43 @@ docker_git_git_subcommand() {
   return 1
 }
 
+docker_git_git_resolve_repo_root() {
+  local -a git_context=()
+  local expect_value="0"
+  local arg=""
+
+  for arg in "$@"; do
+    if [[ "$expect_value" == "1" ]]; then
+      git_context+=("$arg")
+      expect_value="0"
+      continue
+    fi
+
+    case "$arg" in
+      -c|-C|--git-dir|--work-tree|--namespace|--exec-path|--super-prefix|--config-env)
+        git_context+=("$arg")
+        expect_value="1"
+        continue
+        ;;
+      --git-dir=*|--work-tree=*|--namespace=*|--exec-path=*|--super-prefix=*|--config-env=*|--bare|--no-pager|--paginate|--literal-pathspecs|--no-literal-pathspecs|--glob-pathspecs|--noglob-pathspecs|--icase-pathspecs|--no-optional-locks|--no-lazy-fetch)
+        git_context+=("$arg")
+        continue
+        ;;
+      --)
+        break
+        ;;
+      -*)
+        continue
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  "$DOCKER_GIT_REAL_GIT_BIN" "${"${"}git_context[@]}" rev-parse --show-toplevel 2>/dev/null
+}
+
 docker_git_git_push_is_dry_run() {
   local expect_value="0"
   local parsing_push_args="0"
@@ -91,12 +128,18 @@ docker_git_git_push_is_dry_run() {
 }
 
 docker_git_post_push_action() {
+  local repo_root=""
+
   if [[ "${"${"}DOCKER_GIT_SKIP_POST_PUSH_ACTION:-}" == "1" ]]; then
     return 0
   fi
 
   if [[ -x "$DOCKER_GIT_POST_PUSH_ACTION" ]]; then
-    DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 "$DOCKER_GIT_POST_PUSH_ACTION" || true
+    if repo_root="$(docker_git_git_resolve_repo_root "$@")" && [[ -n "$repo_root" ]]; then
+      DOCKER_GIT_POST_PUSH_REPO_ROOT="$repo_root" DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 "$DOCKER_GIT_POST_PUSH_ACTION" || true
+    else
+      DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 "$DOCKER_GIT_POST_PUSH_ACTION" || true
+    fi
   fi
 }
 
@@ -109,7 +152,7 @@ if subcommand="$(docker_git_git_subcommand "$@")" && [[ "$subcommand" == "push" 
   fi
 
   if [[ "$status" -eq 0 ]] && ! docker_git_git_push_is_dry_run "$@"; then
-    docker_git_post_push_action
+    docker_git_post_push_action "$@"
   fi
 
   exit "$status"
