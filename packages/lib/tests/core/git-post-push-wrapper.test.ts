@@ -3,17 +3,20 @@
 // REF: issue-201
 // PURITY: SHELL (executes generated bash scripts in isolated temp directories)
 
-import { execFileSync } from "node:child_process"
-import fs from "node:fs"
-import os from "node:os"
-import path from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import * as Command from "@effect/platform/Command"
+import * as CommandExecutor from "@effect/platform/CommandExecutor"
+import * as FileSystem from "@effect/platform/FileSystem"
+import * as Path from "@effect/platform/Path"
+import { NodeContext } from "@effect/platform-node"
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, pipe } from "effect"
+import * as Chunk from "effect/Chunk"
+import * as Stream from "effect/Stream"
 
 import { renderEntrypointGitHooks } from "../../src/core/templates-entrypoint/git.js"
 import { renderEntrypointGitPostPushWrapperInstall } from "../../src/core/templates-entrypoint/git-post-push-wrapper.js"
 
 type WrapperHarness = {
-  readonly rootDir: string
   readonly repoDir: string
   readonly externalDir: string
   readonly binDir: string
@@ -23,8 +26,6 @@ type WrapperHarness = {
   readonly nodeRepoRootLogPath: string
   readonly nodeScriptLogPath: string
 }
-
-const tempRoots: string[] = []
 
 const fakeGitScript = `#!/usr/bin/env bash
 set -euo pipefail
@@ -100,11 +101,13 @@ set -euo pipefail
 exit 0
 `
 
-const writeExecutable = (filePath: string, content: string): void => {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-  fs.writeFileSync(filePath, content)
-  fs.chmodSync(filePath, 0o755)
-}
+const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
+  Chunk.reduce(chunks, new Uint8Array(), (acc, curr) => {
+    const next = new Uint8Array(acc.length + curr.length)
+    next.set(acc)
+    next.set(curr, acc.length)
+    return next
+  })
 
 const extractEmbeddedScript = (template: string, target: string): string => {
   const marker = `cat <<'EOF' > "${target}"\n`
@@ -122,68 +125,65 @@ const extractEmbeddedScript = (template: string, target: string): string => {
   return template.slice(bodyStart, bodyEnd)
 }
 
-const readLogLines = (filePath: string): ReadonlyArray<string> => {
-  if (!fs.existsSync(filePath)) {
-    return []
-  }
+const writeExecutable = (
+  filePath: string,
+  content: string
+): Effect.Effect<void, Error, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    yield* _(fs.makeDirectory(path.dirname(filePath), { recursive: true }))
+    yield* _(fs.writeFileString(filePath, content))
+    yield* _(fs.chmod(filePath, 0o755))
+  })
 
-  const contents = fs.readFileSync(filePath, "utf8").trim()
-  return contents.length === 0 ? [] : contents.split("\n")
-}
+const readLogLines = (
+  filePath: string
+): Effect.Effect<ReadonlyArray<string>, Error, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const exists = yield* _(fs.exists(filePath))
+    if (!exists) {
+      return []
+    }
 
-const makeHarness = (): WrapperHarness => {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "docker-git-post-push-"))
-  tempRoots.push(rootDir)
+    const contents = yield* _(fs.readFileString(filePath))
+    const trimmed = contents.trim()
+    return trimmed.length === 0 ? [] : trimmed.split("\n")
+  })
 
-  const repoDir = path.join(rootDir, "repo")
-  const externalDir = path.join(rootDir, "external")
-  const binDir = path.join(rootDir, "bin")
-  const hooksDir = path.join(rootDir, "hooks")
-  const gitLogPath = path.join(rootDir, "git.log")
-  const nodeCwdLogPath = path.join(rootDir, "node-cwd.log")
-  const nodeRepoRootLogPath = path.join(rootDir, "node-repo-root.log")
-  const nodeScriptLogPath = path.join(rootDir, "node-script.log")
+const runCommand = (
+  command: string,
+  args: ReadonlyArray<string>,
+  cwd: string,
+  env?: Readonly<Record<string, string | undefined>>
+): Effect.Effect<string, Error, CommandExecutor.CommandExecutor> =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const executor = yield* _(CommandExecutor.CommandExecutor)
+      const cmd = pipe(
+        Command.make(command, ...args),
+        Command.workingDirectory(cwd),
+        env ? Command.env(env) : (value) => value,
+        Command.stdout("pipe"),
+        Command.stderr("pipe"),
+        Command.stdin("pipe")
+      )
+      const proc = yield* _(executor.start(cmd))
+      yield* _(Effect.forkDaemon(Stream.runDrain(proc.stderr)))
+      const stdoutBytes = yield* _(
+        pipe(proc.stdout, Stream.runCollect, Effect.map((chunks) => collectUint8Array(chunks)))
+      )
+      const exitCode = yield* _(proc.exitCode)
+      if (Number(exitCode) !== 0) {
+        return yield* _(Effect.fail(new Error(`${command} ${args.join(" ")} exited with ${String(exitCode)}`)))
+      }
 
-  fs.mkdirSync(path.join(repoDir, ".git"), { recursive: true })
-  fs.mkdirSync(path.join(repoDir, "scripts"), { recursive: true })
-  fs.mkdirSync(externalDir, { recursive: true })
-  fs.mkdirSync(binDir, { recursive: true })
-  fs.mkdirSync(hooksDir, { recursive: true })
-  fs.writeFileSync(path.join(repoDir, "scripts", "session-backup-gist.js"), "// test placeholder\n")
-
-  writeExecutable(path.join(binDir, "git"), fakeGitScript)
-  writeExecutable(path.join(binDir, "git-real"), fakeGitScript)
-  writeExecutable(path.join(binDir, "gh"), fakeGhScript)
-  writeExecutable(path.join(binDir, "node"), fakeNodeScript)
-
-  const postPushScript = extractEmbeddedScript(renderEntrypointGitHooks(), "$POST_PUSH_ACTION")
-  const postPushPath = path.join(hooksDir, "post-push")
-  writeExecutable(postPushPath, postPushScript)
-
-  const wrapperTemplate = extractEmbeddedScript(
-    renderEntrypointGitPostPushWrapperInstall(),
-    "$GIT_WRAPPER_BIN"
+      return new TextDecoder("utf-8").decode(stdoutBytes).trim()
+    })
   )
-  const wrapperPath = path.join(rootDir, "git-wrapper")
-  const wrapperScript = wrapperTemplate
-    .replace("__DOCKER_GIT_REAL_BIN__", path.join(binDir, "git-real"))
-    .replace("/opt/docker-git/hooks/post-push", postPushPath)
-  writeExecutable(wrapperPath, wrapperScript)
 
-  return {
-    rootDir,
-    repoDir,
-    externalDir,
-    binDir,
-    wrapperPath,
-    gitLogPath,
-    nodeCwdLogPath,
-    nodeRepoRootLogPath,
-    nodeScriptLogPath
-  }
-}
-
-const makeHarnessEnv = (harness: WrapperHarness): NodeJS.ProcessEnv => ({
+const makeHarnessEnv = (harness: WrapperHarness): Readonly<Record<string, string | undefined>> => ({
   ...process.env,
   PATH: `${harness.binDir}:${process.env["PATH"] ?? ""}`,
   FAKE_GIT_LOG_PATH: harness.gitLogPath,
@@ -196,62 +196,118 @@ const runWrapper = (
   harness: WrapperHarness,
   cwd: string,
   args: ReadonlyArray<string>
-): void => {
-  execFileSync(harness.wrapperPath, args, {
-    cwd,
-    env: makeHarnessEnv(harness),
-    encoding: "utf8",
-    stdio: "pipe"
-  })
-}
+): Effect.Effect<void, Error, CommandExecutor.CommandExecutor> =>
+  runCommand(harness.wrapperPath, args, cwd, makeHarnessEnv(harness)).pipe(Effect.asVoid)
+
+const withHarness = <A, E, R>(
+  use: (harness: WrapperHarness) => Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R | FileSystem.FileSystem | Path.Path> =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const fs = yield* _(FileSystem.FileSystem)
+      const path = yield* _(Path.Path)
+      const rootDir = yield* _(
+        fs.makeTempDirectoryScoped({
+          prefix: "docker-git-post-push-"
+        })
+      )
+
+      const repoDir = path.join(rootDir, "repo")
+      const externalDir = path.join(rootDir, "external")
+      const binDir = path.join(rootDir, "bin")
+      const hooksDir = path.join(rootDir, "hooks")
+      const gitLogPath = path.join(rootDir, "git.log")
+      const nodeCwdLogPath = path.join(rootDir, "node-cwd.log")
+      const nodeRepoRootLogPath = path.join(rootDir, "node-repo-root.log")
+      const nodeScriptLogPath = path.join(rootDir, "node-script.log")
+
+      yield* _(fs.makeDirectory(path.join(repoDir, ".git"), { recursive: true }))
+      yield* _(fs.makeDirectory(path.join(repoDir, "scripts"), { recursive: true }))
+      yield* _(fs.makeDirectory(externalDir, { recursive: true }))
+      yield* _(fs.makeDirectory(binDir, { recursive: true }))
+      yield* _(fs.makeDirectory(hooksDir, { recursive: true }))
+      yield* _(fs.writeFileString(path.join(repoDir, "scripts", "session-backup-gist.js"), "// test placeholder\n"))
+
+      yield* _(writeExecutable(path.join(binDir, "git"), fakeGitScript))
+      yield* _(writeExecutable(path.join(binDir, "git-real"), fakeGitScript))
+      yield* _(writeExecutable(path.join(binDir, "gh"), fakeGhScript))
+      yield* _(writeExecutable(path.join(binDir, "node"), fakeNodeScript))
+
+      const postPushScript = extractEmbeddedScript(renderEntrypointGitHooks(), "$POST_PUSH_ACTION")
+      const postPushPath = path.join(hooksDir, "post-push")
+      yield* _(writeExecutable(postPushPath, postPushScript))
+
+      const wrapperTemplate = extractEmbeddedScript(
+        renderEntrypointGitPostPushWrapperInstall(),
+        "$GIT_WRAPPER_BIN"
+      )
+      const wrapperPath = path.join(rootDir, "git-wrapper")
+      const wrapperScript = wrapperTemplate
+        .replace("__DOCKER_GIT_REAL_BIN__", path.join(binDir, "git-real"))
+        .replace("/opt/docker-git/hooks/post-push", postPushPath)
+      yield* _(writeExecutable(wrapperPath, wrapperScript))
+
+      return yield* _(
+        use({
+          repoDir,
+          externalDir,
+          binDir,
+          wrapperPath,
+          gitLogPath,
+          nodeCwdLogPath,
+          nodeRepoRootLogPath,
+          nodeScriptLogPath
+        })
+      )
+    })
+  )
 
 describe("git post-push wrapper", () => {
-  afterEach(() => {
-    while (tempRoots.length > 0) {
-      const root = tempRoots.pop()
-      if (root !== undefined) {
-        fs.rmSync(root, { recursive: true, force: true })
-      }
-    }
-  })
+  it.effect("runs session backup from the repository root for a normal push", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"]))
 
-  it("runs session backup from the repository root for a normal push", () => {
-    const harness = makeHarness()
+        const nodeCwd = yield* _(readLogLines(harness.nodeCwdLogPath))
+        const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
 
-    runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"])
+        expect(nodeCwd).toEqual([harness.repoDir])
+        expect(nodeRepoRoot).toEqual([harness.repoDir])
+        expect(nodeScript).toEqual([`${harness.repoDir}/scripts/session-backup-gist.js`])
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
 
-    expect(readLogLines(harness.nodeCwdLogPath)).toEqual([harness.repoDir])
-    expect(readLogLines(harness.nodeRepoRootLogPath)).toEqual([harness.repoDir])
-    expect(readLogLines(harness.nodeScriptLogPath)).toEqual([
-      path.join(harness.repoDir, "scripts", "session-backup-gist.js")
-    ])
-  })
+  it.effect("preserves the pushed repository context for git -C push invocations", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(runWrapper(harness, harness.externalDir, ["-C", harness.repoDir, "push", "origin", "HEAD"]))
 
-  it("preserves the pushed repository context for git -C push invocations", () => {
-    const harness = makeHarness()
+        const nodeCwd = yield* _(readLogLines(harness.nodeCwdLogPath))
+        const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const gitLog = yield* _(readLogLines(harness.gitLogPath))
 
-    runWrapper(harness, harness.externalDir, ["-C", harness.repoDir, "push", "origin", "HEAD"])
+        expect(nodeCwd).toEqual([harness.repoDir])
+        expect(nodeRepoRoot).toEqual([harness.repoDir])
+        expect(nodeScript).toEqual([`${harness.repoDir}/scripts/session-backup-gist.js`])
+        expect(gitLog.some((line) => line.startsWith(`${harness.externalDir}\t-C ${harness.repoDir} push`))).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
 
-    expect(readLogLines(harness.nodeCwdLogPath)).toEqual([harness.repoDir])
-    expect(readLogLines(harness.nodeRepoRootLogPath)).toEqual([harness.repoDir])
-    expect(readLogLines(harness.nodeScriptLogPath)).toEqual([
-      path.join(harness.repoDir, "scripts", "session-backup-gist.js")
-    ])
-    expect(readLogLines(harness.gitLogPath).some((line) => line.startsWith(`${harness.externalDir}\t-C ${harness.repoDir} push`))).toBe(
-      true
-    )
-  })
+  it.effect("does not run session backup for dry-run push variants", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(runWrapper(harness, harness.externalDir, ["-C", harness.repoDir, "push", "--dry-run", "origin", "HEAD"]))
+        yield* _(runWrapper(harness, harness.externalDir, ["-C", harness.repoDir, "push", "-n", "origin", "HEAD"]))
 
-  it.each([
-    ["--dry-run"],
-    ["-n"]
-  ])("does not run session backup for dry-run push (%s)", (dryRunFlag) => {
-    const harness = makeHarness()
+        const nodeCwd = yield* _(readLogLines(harness.nodeCwdLogPath))
+        const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
 
-    runWrapper(harness, harness.externalDir, ["-C", harness.repoDir, "push", dryRunFlag, "origin", "HEAD"])
-
-    expect(readLogLines(harness.nodeCwdLogPath)).toEqual([])
-    expect(readLogLines(harness.nodeRepoRootLogPath)).toEqual([])
-    expect(readLogLines(harness.nodeScriptLogPath)).toEqual([])
-  })
+        expect(nodeCwd).toEqual([])
+        expect(nodeRepoRoot).toEqual([])
+        expect(nodeScript).toEqual([])
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
 })
