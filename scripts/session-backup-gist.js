@@ -140,7 +140,7 @@ const execCommand = (command, options = {}) => {
 };
 
 const getGitStatus = () => {
-  const status = execCommand("git status --short");
+  const status = execCommand("git status");
   if (status === null) {
     return null;
   }
@@ -151,7 +151,7 @@ const getGitStatus = () => {
 };
 
 const printGitStatus = (status) => {
-  console.log("[session-backup] git status --short:");
+  console.log("[session-backup] git status:");
   if (status === null) {
     console.log("[session-backup] (unavailable)");
     return;
@@ -454,7 +454,7 @@ const buildCommentBody = ({ source, manifestUrl, readmeUrl, summary, gitStatus }
     `Files: ${summary.fileCount} (${formatBytes(summary.totalBytes)})`,
     `Links: [README](${readmeUrl}) | [Manifest](${manifestUrl})`,
     "",
-    "`git status --short`",
+    "`git status`",
     "```",
     statusText,
     "```",
