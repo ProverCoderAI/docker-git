@@ -11,8 +11,8 @@
 /**
  * Names of docker-git scripts that must be available inside generated containers.
  *
- * These scripts are referenced by git hooks (pre-push, pre-commit) and session
- * backup workflows. They are copied into each project's build context under
+ * These scripts are referenced by git hooks (pre-push, post-push, pre-commit) and
+ * session backup workflows. They are copied into each project's build context under
  * `scripts/` and embedded into the Docker image at `/opt/docker-git/scripts/`.
  *
  * @pure true

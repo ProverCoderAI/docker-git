@@ -12,7 +12,7 @@
  *
  * Options:
  *   --session-dir <path>    Path to session directory under $HOME (default: auto-detect ~/.codex, ~/.claude, ~/.qwen, or ~/.gemini)
- *   --pr-number <number>    PR number to post comment to (optional, auto-detected from branch)
+ *   --pr-number <number>    Open PR number to post comment to (optional, auto-detected from branch)
  *   --repo <owner/repo>     Source repository (optional, auto-detected from git remote)
  *   --no-comment            Skip posting PR comment
  *   --dry-run               Show what would be uploaded without actually uploading
@@ -29,6 +29,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execSync, spawnSync } = require("node:child_process");
 const os = require("node:os");
+const GH_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
 
 const {
   buildBlobUrl,
@@ -107,7 +108,7 @@ const parseArgs = () => {
 
 Options:
   --session-dir <path>    Path to session directory under $HOME
-  --pr-number <number>    PR number to post comment to
+  --pr-number <number>    Open PR number to post comment to
   --repo <owner/repo>     Source repository
   --no-comment            Skip posting PR comment
   --dry-run               Show what would be uploaded
@@ -142,6 +143,7 @@ const ghCommand = (args, ghEnv) => {
   const result = spawnSync("gh", args, {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
+    maxBuffer: GH_MAX_BUFFER_BYTES,
     env: ghEnv,
   });
 
@@ -245,7 +247,7 @@ const getPrNumberFromBranch = (repo, branch, ghEnv) => {
   return null;
 };
 
-const prExists = (repo, prNumber, ghEnv) => {
+const getPrState = (repo, prNumber, ghEnv) => {
   const result = ghCommand([
     "pr",
     "view",
@@ -253,12 +255,16 @@ const prExists = (repo, prNumber, ghEnv) => {
     "--repo",
     repo,
     "--json",
-    "number",
+    "state",
     "--jq",
-    ".number",
+    ".state",
   ], ghEnv);
 
-  return result.success && result.stdout === prNumber.toString();
+  return result.success ? result.stdout : null;
+};
+
+const prIsOpen = (repo, prNumber, ghEnv) => {
+  return getPrState(repo, prNumber, ghEnv) === "OPEN";
 };
 
 const getPrNumberFromWorkspaceBranch = (branch) => {
@@ -275,8 +281,11 @@ const findPrContext = (repos, branch, verbose, ghEnv) => {
   for (const repo of repos) {
     log(verbose, `Checking open PR in ${repo} for branch ${branch}`);
     const prNumber = getPrNumberFromBranch(repo, branch, ghEnv);
-    if (prNumber !== null) {
+    if (prNumber !== null && prIsOpen(repo, prNumber, ghEnv)) {
       return { repo, prNumber };
+    }
+    if (prNumber !== null) {
+      log(verbose, `Skipping PR #${prNumber} in ${repo}: PR is not open`);
     }
   }
 
@@ -287,7 +296,7 @@ const findPrContext = (repos, branch, verbose, ghEnv) => {
 
   for (const repo of repos) {
     log(verbose, `Checking workspace PR #${workspacePrNumber} in ${repo} for branch ${branch}`);
-    if (prExists(repo, workspacePrNumber, ghEnv)) {
+    if (prIsOpen(repo, workspacePrNumber, ghEnv)) {
       return { repo, prNumber: workspacePrNumber };
     }
   }
@@ -410,7 +419,7 @@ const buildSnapshotReadme = ({ backupRepo, source, manifestUrl, summary, session
     "",
     `- Manifest: ${manifestUrl}`,
     "",
-    "Generated automatically by the docker-git `pre-push` session backup hook.",
+    "Generated automatically by the docker-git `post-push` session backup hook.",
     "",
   ].join("\n");
 
@@ -492,7 +501,11 @@ const main = () => {
 
   let prContext = null;
   if (args.prNumber !== null) {
-    prContext = { repo: sourceRepo, prNumber: args.prNumber };
+    if (prIsOpen(sourceRepo, args.prNumber, ghEnv)) {
+      prContext = { repo: sourceRepo, prNumber: args.prNumber };
+    } else {
+      console.log(`[session-backup] Skipping PR comment: PR #${args.prNumber} is not open`);
+    }
   } else if (args.postComment) {
     prContext = findPrContext(repoCandidates, branch, verbose, ghEnv);
   }
