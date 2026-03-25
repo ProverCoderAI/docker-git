@@ -423,21 +423,12 @@ const buildSnapshotReadme = ({ backupRepo, source, manifestUrl, summary, session
     "",
   ].join("\n");
 
-const buildCommentBody = ({ backupRepo, source, manifestUrl, readmeUrl, summary }) => {
+const buildCommentBody = ({ source, manifestUrl, readmeUrl, summary }) => {
   const lines = [
     "## AI Session Backup",
-    "",
-    "A snapshot of the AI session context used during development has been saved.",
-    "",
-    `Backup Repo: ${backupRepo.fullName}`,
-    `Source Commit: ${source.commitSha}`,
-    `Created At: ${source.createdAt}`,
+    `Commit: ${source.commitSha}`,
     `Files: ${summary.fileCount} (${formatBytes(summary.totalBytes)})`,
-    "",
-    `README: ${readmeUrl}`,
-    `Manifest: ${manifestUrl}`,
-    "",
-    "This snapshot metadata was used during development.",
+    `Links: [README](${readmeUrl}) | [Manifest](${manifestUrl})`,
   ];
 
   lines.push(`<!-- docker-git-session-backup:${source.commitSha}:${source.createdAt} -->`);
@@ -504,7 +495,7 @@ const main = () => {
     if (prIsOpen(sourceRepo, args.prNumber, ghEnv)) {
       prContext = { repo: sourceRepo, prNumber: args.prNumber };
     } else {
-      console.log(`[session-backup] Skipping PR comment: PR #${args.prNumber} is not open`);
+      log(verbose, `Skipping PR comment: PR #${args.prNumber} is not open`);
     }
   } else if (args.postComment) {
     prContext = findPrContext(repoCandidates, branch, verbose, ghEnv);
@@ -595,13 +586,15 @@ const main = () => {
       },
     ];
     if (args.dryRun) {
-      console.log(`[dry-run] Would upload snapshot to ${backupRepo.fullName}:${snapshotRef}`);
-      console.log(`[dry-run] Would write ${uploadEntries.length + 1} file(s) including README and manifest.`);
-      console.log(`[dry-run] README URL: ${readmeUrl}`);
-      console.log(`[dry-run] Manifest URL: ${manifestUrl}`);
+      console.log(
+        `[session-backup] dry-run: ${source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`
+      );
+      log(verbose, `[dry-run] Upload target: ${backupRepo.fullName}:${snapshotRef}`);
+      log(verbose, `[dry-run] README URL: ${readmeUrl}`);
+      log(verbose, `[dry-run] Manifest URL: ${manifestUrl}`);
       if (args.postComment && prContext !== null) {
-        console.log(`[dry-run] Would post comment to PR #${prContext.prNumber} in ${prContext.repo}:`);
-        console.log(buildCommentBody({ backupRepo, source, manifestUrl, readmeUrl, summary }));
+        log(verbose, `Would post comment to PR #${prContext.prNumber} in ${prContext.repo}:`);
+        log(verbose, buildCommentBody({ source, manifestUrl, readmeUrl, summary }));
       }
       return;
     }
@@ -615,13 +608,14 @@ const main = () => {
       ghEnv
     );
 
-    console.log(`[session-backup] Uploaded snapshot to ${backupRepo.fullName}`);
-    console.log(`[session-backup] README: ${readmeUrl}`);
-    console.log(`[session-backup] Manifest: ${uploadResult.manifestUrl}`);
+    console.log(
+      `[session-backup] ok: ${source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`
+    );
+    log(verbose, `[session-backup] Uploaded snapshot to ${backupRepo.fullName}:${snapshotRef}`);
+    log(verbose, `[session-backup] Manifest: ${uploadResult.manifestUrl}`);
 
     if (args.postComment && prContext !== null) {
       const comment = buildCommentBody({
-        backupRepo,
         source,
         manifestUrl: uploadResult.manifestUrl,
         readmeUrl,
@@ -629,8 +623,6 @@ const main = () => {
       });
       postPrComment(prContext.repo, prContext.prNumber, comment, verbose, ghEnv);
     }
-
-    console.log("[session-backup] Session backup complete");
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
