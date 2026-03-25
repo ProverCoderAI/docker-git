@@ -26,6 +26,7 @@ import {
   withProjectIndexAndSsh
 } from "./projects-core.js"
 import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
+import { buildEditorSshAccess, formatEditorSshAccessSummary } from "./ssh-access.js"
 import { ensureTerminalCursorVisible } from "./terminal-cursor.js"
 
 const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
@@ -213,8 +214,11 @@ export const listProjectStatus: Effect.Effect<
         getContainerIpIfInsideContainer(fs, status.projectDir, status.config.template.containerName)
       )
 
+      const editorAccess = buildEditorSshAccess(status.config.template, sshKey, ipAddress)
+
       yield* _(Effect.log(renderProjectStatusHeader(status)))
       yield* _(Effect.log(`SSH access: ${buildSshCommand(status.config.template, sshKey, ipAddress)}`))
+      yield* _(Effect.log(formatEditorSshAccessSummary(editorAccess, status.config.template.clonedOnHostname)))
 
       const raw = yield* _(runDockerComposePsFormatted(status.projectDir))
       const rows = parseComposePsOutput(raw)

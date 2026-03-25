@@ -10,34 +10,41 @@ export const isRepoUrlInput = (input: string): boolean => {
     trimmed.startsWith("git@")
 }
 
+type ConnectionInfoOptions = {
+  readonly authorizedKeysPath: string
+  readonly authorizedKeysExists: boolean
+  readonly sshCommand: string
+  readonly editorAccessDetails?: string
+}
+
 export const formatConnectionInfo = (
   cwd: string,
   config: ProjectConfig,
-  authorizedKeysPath: string,
-  authorizedKeysExists: boolean,
-  sshCommand: string
+  options: ConnectionInfoOptions
 ): string => {
   const hostnameLabel = config.template.clonedOnHostname === undefined
     ? ""
     : `\nCloned on device: ${config.template.clonedOnHostname}`
+  const editorAccessLabel = options.editorAccessDetails === undefined ? "" : `\n${options.editorAccessDetails}`
   return `Project directory: ${cwd}
 ` +
     `Container: ${config.template.containerName}
 ` +
     `Service: ${config.template.serviceName}
 ` +
-    `SSH command: ${sshCommand}
+    `SSH command: ${options.sshCommand}
 ` +
     `Repo: ${config.template.repoUrl} (${config.template.repoRef})
 ` +
     `Workspace: ${config.template.targetDir}
 ` +
-    `Authorized keys: ${authorizedKeysPath}${authorizedKeysExists ? "" : " (missing)"}
+    `Authorized keys: ${options.authorizedKeysPath}${options.authorizedKeysExists ? "" : " (missing)"}
 ` +
     `Env global: ${config.template.envGlobalPath}
 ` +
     `Env project: ${config.template.envProjectPath}
 ` +
     `Codex auth: ${config.template.codexAuthPath} -> ${config.template.codexHome}` +
+    editorAccessLabel +
     hostnameLabel
 }

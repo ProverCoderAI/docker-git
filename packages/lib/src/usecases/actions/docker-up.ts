@@ -1,7 +1,7 @@
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
+import type * as FileSystem from "@effect/platform/FileSystem"
+import type * as Path from "@effect/platform/Path"
 import { Duration, Effect, Fiber, Schedule } from "effect"
 
 import type { CreateCommand } from "../../core/domain.js"
@@ -12,14 +12,12 @@ import {
   runDockerComposeUpRecreate,
   runDockerExecExitCode,
   runDockerInspectContainerBridgeIp,
-  runDockerInspectContainerIp,
   runDockerNetworkConnectBridge
 } from "../../shell/docker.js"
 import type { DockerCommandError } from "../../shell/errors.js"
 import { AgentFailedError, CloneFailedError } from "../../shell/errors.js"
 import { ensureComposeNetworkReady } from "../docker-network-gc.js"
-import { findSshPrivateKey, resolveAuthorizedKeysPath } from "../path-helpers.js"
-import { buildSshCommand } from "../projects.js"
+import { formatEditorSshAccessDetails, resolveProjectSshAccess } from "../ssh-access.js"
 
 const maxPortAttempts = 25
 const clonePollInterval = Duration.seconds(1)
@@ -34,33 +32,14 @@ const logSshAccess = (
   config: CreateCommand["config"]
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
+    const access = yield* _(resolveProjectSshAccess(baseDir, config))
 
-    const isInsideContainer = yield* _(fs.exists("/.dockerenv"))
-    let ipAddress: string | undefined
-
-    if (isInsideContainer) {
-      const containerIp = yield* _(
-        runDockerInspectContainerIp(baseDir, config.containerName).pipe(
-          Effect.orElse(() => Effect.succeed(""))
-        )
-      )
-      if (containerIp.length > 0) {
-        ipAddress = containerIp
-      }
-    }
-
-    const resolvedAuthorizedKeys = resolveAuthorizedKeysPath(path, baseDir, config.authorizedKeysPath)
-    const authExists = yield* _(fs.exists(resolvedAuthorizedKeys))
-    const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
-    const sshCommand = buildSshCommand(config, sshKey, ipAddress)
-
-    yield* _(Effect.log(`SSH access: ${sshCommand}`))
-    if (!authExists) {
+    yield* _(Effect.log(`SSH access: ${access.sshCommand}`))
+    yield* _(Effect.log(formatEditorSshAccessDetails(access.editor, config.clonedOnHostname)))
+    if (!access.authorizedKeysExists) {
       yield* _(
         Effect.logWarning(
-          `Authorized keys file missing: ${resolvedAuthorizedKeys} (SSH may fail without a matching key).`
+          `Authorized keys file missing: ${access.authorizedKeysPath} (SSH may fail without a matching key).`
         )
       )
     }

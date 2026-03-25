@@ -4,7 +4,7 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
-import type { ProjectConfig, TemplateConfig } from "../core/domain.js"
+import type { ProjectConfig } from "../core/domain.js"
 import { deriveRepoPathParts } from "../core/domain.js"
 import { readProjectConfig } from "../shell/config.js"
 import { runDockerInspectContainerIp } from "../shell/docker.js"
@@ -15,27 +15,15 @@ import { renderError } from "./errors.js"
 import { defaultProjectsRoot, formatConnectionInfo } from "./menu-helpers.js"
 import { findSshPrivateKey, resolveAuthorizedKeysPath, resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
-
-const sshOptions = "-tt -Y -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+import { buildEditorSshAccess, buildSshCommand, formatEditorSshAccessDetails } from "./ssh-access.js"
 
 export type ProjectLoadError = PlatformError | ConfigNotFoundError | ConfigDecodeError
-
-export const buildSshCommand = (
-  config: TemplateConfig,
-  sshKey: string | null,
-  ipAddress?: string
-): string => {
-  const host = ipAddress ?? "localhost"
-  const port = ipAddress ? 22 : config.sshPort
-  return sshKey === null
-    ? `ssh ${sshOptions} -p ${port} ${config.sshUser}@${host}`
-    : `ssh -i ${sshKey} ${sshOptions} -p ${port} ${config.sshUser}@${host}`
-}
 
 export type ProjectSummary = {
   readonly projectDir: string
   readonly config: ProjectConfig
   readonly sshCommand: string
+  readonly sshKeyPath: string | null
   readonly ipAddress?: string | undefined
   readonly authorizedKeysPath: string
   readonly authorizedKeysExists: boolean
@@ -140,6 +128,7 @@ export const loadProjectSummary = (
       projectDir,
       config,
       sshCommand,
+      sshKeyPath: sshKey,
       ipAddress,
       authorizedKeysPath: resolvedAuthorizedKeys,
       authorizedKeysExists: authExists
@@ -158,9 +147,15 @@ export const renderProjectSummary = (summary: ProjectSummary): string =>
   formatConnectionInfo(
     summary.projectDir,
     summary.config,
-    summary.authorizedKeysPath,
-    summary.authorizedKeysExists,
-    summary.sshCommand
+    {
+      authorizedKeysPath: summary.authorizedKeysPath,
+      authorizedKeysExists: summary.authorizedKeysExists,
+      sshCommand: summary.sshCommand,
+      editorAccessDetails: formatEditorSshAccessDetails(
+        buildEditorSshAccess(summary.config.template, summary.sshKeyPath, summary.ipAddress),
+        summary.config.template.clonedOnHostname
+      )
+    }
   )
 
 const formatDisplayName = (repoUrl: string): string => {
@@ -315,3 +310,5 @@ export const withProjectIndexAndSsh = <A, E, R>(
         })
     )
   )
+
+export { buildSshCommand } from "./ssh-access.js"
