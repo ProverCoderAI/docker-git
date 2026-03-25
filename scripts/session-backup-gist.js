@@ -423,21 +423,12 @@ const buildSnapshotReadme = ({ backupRepo, source, manifestUrl, summary, session
     "",
   ].join("\n");
 
-const buildCommentBody = ({ backupRepo, source, manifestUrl, readmeUrl, summary }) => {
+const buildCommentBody = ({ source, manifestUrl, readmeUrl, summary }) => {
   const lines = [
     "## AI Session Backup",
-    "",
-    "A snapshot of the AI session context used during development has been saved.",
-    "",
-    `Backup Repo: ${backupRepo.fullName}`,
-    `Source Commit: ${source.commitSha}`,
-    `Created At: ${source.createdAt}`,
+    `Commit: ${source.commitSha}`,
     `Files: ${summary.fileCount} (${formatBytes(summary.totalBytes)})`,
-    "",
-    `README: ${readmeUrl}`,
-    `Manifest: ${manifestUrl}`,
-    "",
-    "This snapshot metadata was used during development.",
+    `Links: [README](${readmeUrl}) | [Manifest](${manifestUrl})`,
   ];
 
   lines.push(`<!-- docker-git-session-backup:${source.commitSha}:${source.createdAt} -->`);
