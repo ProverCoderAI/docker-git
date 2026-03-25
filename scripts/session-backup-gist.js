@@ -139,6 +139,29 @@ const execCommand = (command, options = {}) => {
   }
 };
 
+const getGitStatus = () => {
+  const status = execCommand("git status");
+  if (status === null) {
+    return null;
+  }
+  if (!status) {
+    return "clean";
+  }
+  return status;
+};
+
+const printGitStatus = (status) => {
+  console.log("[session-backup] git status:");
+  if (status === null) {
+    console.log("[session-backup] (unavailable)");
+    return;
+  }
+
+  for (const line of status.split("\n")) {
+    console.log(`[session-backup] ${line}`);
+  }
+};
+
 const ghCommand = (args, ghEnv) => {
   const result = spawnSync("gh", args, {
     encoding: "utf8",
@@ -423,12 +446,18 @@ const buildSnapshotReadme = ({ backupRepo, source, manifestUrl, summary, session
     "",
   ].join("\n");
 
-const buildCommentBody = ({ source, manifestUrl, readmeUrl, summary }) => {
+const buildCommentBody = ({ source, manifestUrl, readmeUrl, summary, gitStatus }) => {
+  const statusText = gitStatus === null ? "(unavailable)" : gitStatus;
   const lines = [
     "## AI Session Backup",
     `Commit: ${source.commitSha}`,
     `Files: ${summary.fileCount} (${formatBytes(summary.totalBytes)})`,
     `Links: [README](${readmeUrl}) | [Manifest](${manifestUrl})`,
+    "",
+    "`git status`",
+    "```",
+    statusText,
+    "```",
   ];
 
   lines.push(`<!-- docker-git-session-backup:${source.commitSha}:${source.createdAt} -->`);
@@ -556,6 +585,7 @@ const main = () => {
     const manifestUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, `${snapshotRef}/manifest.json`);
     const readmeRepoPath = `${snapshotRef}/README.md`;
     const readmeUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, readmeRepoPath);
+    const gitStatus = getGitStatus();
 
     const manifest = buildManifest({
       backupRepo,
@@ -589,12 +619,13 @@ const main = () => {
       console.log(
         `[session-backup] dry-run: ${source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`
       );
+      printGitStatus(gitStatus);
       log(verbose, `[dry-run] Upload target: ${backupRepo.fullName}:${snapshotRef}`);
       log(verbose, `[dry-run] README URL: ${readmeUrl}`);
       log(verbose, `[dry-run] Manifest URL: ${manifestUrl}`);
       if (args.postComment && prContext !== null) {
         log(verbose, `Would post comment to PR #${prContext.prNumber} in ${prContext.repo}:`);
-        log(verbose, buildCommentBody({ source, manifestUrl, readmeUrl, summary }));
+        log(verbose, buildCommentBody({ source, manifestUrl, readmeUrl, summary, gitStatus }));
       }
       return;
     }
@@ -611,6 +642,7 @@ const main = () => {
     console.log(
       `[session-backup] ok: ${source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`
     );
+    printGitStatus(gitStatus);
     log(verbose, `[session-backup] Uploaded snapshot to ${backupRepo.fullName}:${snapshotRef}`);
     log(verbose, `[session-backup] Manifest: ${uploadResult.manifestUrl}`);
 
@@ -620,6 +652,7 @@ const main = () => {
         manifestUrl: uploadResult.manifestUrl,
         readmeUrl,
         summary,
+        gitStatus,
       });
       postPrComment(prContext.repo, prContext.prNumber, comment, verbose, ghEnv);
     }
