@@ -1,7 +1,7 @@
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
+import type * as FileSystem from "@effect/platform/FileSystem"
+import type * as Path from "@effect/platform/Path"
 import { Duration, Effect, Fiber, Schedule } from "effect"
 
 import type { CreateCommand } from "../../core/domain.js"

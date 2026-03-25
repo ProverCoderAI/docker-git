@@ -14,11 +14,10 @@ import { findDockerGitConfigPaths } from "./docker-git-config-search.js"
 import { renderError } from "./errors.js"
 import { defaultProjectsRoot, formatConnectionInfo } from "./menu-helpers.js"
 import { findSshPrivateKey, resolveAuthorizedKeysPath, resolvePathFromCwd } from "./path-helpers.js"
-import { buildEditorSshAccess, buildSshCommand, formatEditorSshAccessDetails } from "./ssh-access.js"
 import { withFsPathContext } from "./runtime.js"
+import { buildEditorSshAccess, buildSshCommand, formatEditorSshAccessDetails } from "./ssh-access.js"
 
 export type ProjectLoadError = PlatformError | ConfigNotFoundError | ConfigDecodeError
-export { buildSshCommand }
 
 export type ProjectSummary = {
   readonly projectDir: string
@@ -148,13 +147,15 @@ export const renderProjectSummary = (summary: ProjectSummary): string =>
   formatConnectionInfo(
     summary.projectDir,
     summary.config,
-    summary.authorizedKeysPath,
-    summary.authorizedKeysExists,
-    summary.sshCommand,
-    formatEditorSshAccessDetails(
-      buildEditorSshAccess(summary.config.template, summary.sshKeyPath, summary.ipAddress),
-      summary.config.template.clonedOnHostname
-    )
+    {
+      authorizedKeysPath: summary.authorizedKeysPath,
+      authorizedKeysExists: summary.authorizedKeysExists,
+      sshCommand: summary.sshCommand,
+      editorAccessDetails: formatEditorSshAccessDetails(
+        buildEditorSshAccess(summary.config.template, summary.sshKeyPath, summary.ipAddress),
+        summary.config.template.clonedOnHostname
+      )
+    }
   )
 
 const formatDisplayName = (repoUrl: string): string => {
@@ -309,3 +310,5 @@ export const withProjectIndexAndSsh = <A, E, R>(
         })
     )
   )
+
+export { buildSshCommand } from "./ssh-access.js"

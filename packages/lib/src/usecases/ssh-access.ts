@@ -10,12 +10,43 @@ import { findSshPrivateKey, resolveAuthorizedKeysPath } from "./path-helpers.js"
 
 const sshOptions = "-tt -Y -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
+const aliasCharPattern = /^[A-Za-z0-9._-]$/u
+
+const isAliasChar = (value: string): boolean => aliasCharPattern.test(value)
+
+const trimAliasEdges = (value: string): string => {
+  let start = 0
+  let end = value.length
+
+  while (start < end && (value[start] === "." || value[start] === "-")) {
+    start += 1
+  }
+
+  while (end > start && (value[end - 1] === "." || value[end - 1] === "-")) {
+    end -= 1
+  }
+
+  return value.slice(start, end)
+}
+
 const sanitizeSshHostAlias = (value: string): string => {
-  const normalized = value
-    .trim()
-    .replace(/[^A-Za-z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^[.-]+|[.-]+$/g, "")
+  let normalized = ""
+  let previousWasDash = false
+
+  for (const char of value.trim()) {
+    if (isAliasChar(char)) {
+      normalized += char
+      previousWasDash = false
+      continue
+    }
+
+    if (!previousWasDash) {
+      normalized += "-"
+      previousWasDash = true
+    }
+  }
+
+  normalized = trimAliasEdges(normalized)
   return normalized.length === 0 ? "docker-git" : normalized
 }
 

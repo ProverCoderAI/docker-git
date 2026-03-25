@@ -25,8 +25,8 @@ import {
   renderProjectStatusHeader,
   withProjectIndexAndSsh
 } from "./projects-core.js"
-import { buildEditorSshAccess, formatEditorSshAccessSummary } from "./ssh-access.js"
 import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
+import { buildEditorSshAccess, formatEditorSshAccessSummary } from "./ssh-access.js"
 import { ensureTerminalCursorVisible } from "./terminal-cursor.js"
 
 const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {

@@ -29,27 +29,33 @@ const makeProjectConfig = (overrides: Partial<ProjectConfig["template"]> = {}): 
 describe("formatConnectionInfo", () => {
   it("includes clonedOnHostname when present", () => {
     const config = makeProjectConfig({ clonedOnHostname: "my-laptop" })
-    const output = formatConnectionInfo("/project", config, "/keys", true, "ssh dev@localhost")
+    const output = formatConnectionInfo("/project", config, {
+      authorizedKeysPath: "/keys",
+      authorizedKeysExists: true,
+      sshCommand: "ssh dev@localhost"
+    })
     expect(output).toContain("Cloned on device: my-laptop")
   })
 
   it("omits clonedOnHostname line when undefined", () => {
     const config = makeProjectConfig()
-    const output = formatConnectionInfo("/project", config, "/keys", true, "ssh dev@localhost")
+    const output = formatConnectionInfo("/project", config, {
+      authorizedKeysPath: "/keys",
+      authorizedKeysExists: true,
+      sshCommand: "ssh dev@localhost"
+    })
     expect(output).not.toContain("Cloned on device")
   })
 
   it("includes Remote-SSH details when provided", () => {
     const config = makeProjectConfig({ clonedOnHostname: "meadav" })
     const editorAccess = buildEditorSshAccess(config.template, "/home/user/.ssh/id_ed25519")
-    const output = formatConnectionInfo(
-      "/project",
-      config,
-      "/keys",
-      true,
-      "ssh dev@localhost",
-      formatEditorSshAccessDetails(editorAccess, config.template.clonedOnHostname)
-    )
+    const output = formatConnectionInfo("/project", config, {
+      authorizedKeysPath: "/keys",
+      authorizedKeysExists: true,
+      sshCommand: "ssh dev@localhost",
+      editorAccessDetails: formatEditorSshAccessDetails(editorAccess, config.template.clonedOnHostname)
+    })
     expect(output).toContain("Remote-SSH host: dg-test")
     expect(output).toContain("Terminal shortcut: ssh dg-test")
     expect(output).toContain("VS Code/Cursor: Connect to Host... -> dg-test")
