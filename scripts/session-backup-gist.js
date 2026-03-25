@@ -442,7 +442,7 @@ const buildSnapshotReadme = ({ backupRepo, source, manifestUrl, summary, session
     "",
     `- Manifest: ${manifestUrl}`,
     "",
-    "Generated automatically by the docker-git `post-push` session backup hook.",
+    "Generated automatically by the docker-git `git push` post-action.",
     "",
   ].join("\n");
 

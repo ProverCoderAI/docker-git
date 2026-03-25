@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
+import { renderEntrypointGitPostPushWrapperInstall } from "./git-post-push-wrapper.js"
 
 const renderAuthLabelResolution = (): string =>
   String.raw`# 2) Ensure GitHub auth vars are available for SSH sessions.
@@ -129,7 +130,7 @@ const entrypointGitHooksTemplate = String
   .raw`# 3) Install global git hooks to protect main/master + managed AGENTS context
 HOOKS_DIR="/opt/docker-git/hooks"
 PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"
-POST_PUSH_HOOK="$HOOKS_DIR/post-push"
+POST_PUSH_ACTION="$HOOKS_DIR/post-push"
 mkdir -p "$HOOKS_DIR"
 
 cat <<'EOF' > "$PRE_PUSH_HOOK"
@@ -257,7 +258,7 @@ done
 EOF
 chmod 0755 "$PRE_PUSH_HOOK"
 
-cat <<'EOF' > "$POST_PUSH_HOOK"
+cat <<'EOF' > "$POST_PUSH_ACTION"
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -265,8 +266,9 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$REPO_ROOT"
 
-# CHANGE: run session backup in post-push so source commit has already landed in remote
-# WHY: backups should mirror successfully pushed state and not block push validation
+# CHANGE: keep post-push backup logic in a reusable action script
+# WHY: git has no client-side post-push hook, so the global git wrapper
+#      invokes this after a successful git push
 # REF: issue-192
 if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
   if command -v gh >/dev/null 2>&1; then
@@ -277,7 +279,7 @@ if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
       BACKUP_SCRIPT="/opt/docker-git/scripts/session-backup-gist.js"
     fi
     if [ -n "$BACKUP_SCRIPT" ]; then
-      node "$BACKUP_SCRIPT" || echo "[session-backup] Warning: session backup failed (non-fatal)"
+      DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 node "$BACKUP_SCRIPT" || echo "[session-backup] Warning: session backup failed (non-fatal)"
     else
       echo "[session-backup] Warning: script not found (expected repo or global path)"
     fi
@@ -286,7 +288,9 @@ if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
   fi
 fi
 EOF
-chmod 0755 "$POST_PUSH_HOOK"
+chmod 0755 "$POST_PUSH_ACTION"
+
+${renderEntrypointGitPostPushWrapperInstall()}
 
 git config --system core.hooksPath "$HOOKS_DIR" || true
 git config --global core.hooksPath "$HOOKS_DIR" || true`
