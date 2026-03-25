@@ -15,11 +15,13 @@ export const formatConnectionInfo = (
   config: ProjectConfig,
   authorizedKeysPath: string,
   authorizedKeysExists: boolean,
-  sshCommand: string
+  sshCommand: string,
+  editorAccessDetails?: string
 ): string => {
   const hostnameLabel = config.template.clonedOnHostname === undefined
     ? ""
     : `\nCloned on device: ${config.template.clonedOnHostname}`
+  const editorAccessLabel = editorAccessDetails === undefined ? "" : `\n${editorAccessDetails}`
   return `Project directory: ${cwd}
 ` +
     `Container: ${config.template.containerName}
@@ -39,5 +41,6 @@ export const formatConnectionInfo = (
     `Env project: ${config.template.envProjectPath}
 ` +
     `Codex auth: ${config.template.codexAuthPath} -> ${config.template.codexHome}` +
+    editorAccessLabel +
     hostnameLabel
 }
