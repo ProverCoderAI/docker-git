@@ -616,7 +616,6 @@ const main = () => {
 
     if (args.postComment && prContext !== null) {
       const comment = buildCommentBody({
-        backupRepo,
         source,
         manifestUrl: uploadResult.manifestUrl,
         readmeUrl,
