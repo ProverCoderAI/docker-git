@@ -232,6 +232,12 @@ docker_git_upsert_ssh_env "GEMINI_CLI_APPROVAL_MODE" "yolo"`
 const entrypointGeminiNoticeTemplate = String.raw`# Ensure global GEMINI.md exists for container context
 GEMINI_MD_PATH="__GEMINI_HOME__/GEMINI.md"
 GEMINI_WORKSPACE_CONTEXT="Контекст workspace: repository"
+GEMINI_PUBLIC_API_URL_VALUE="${"$"}{DOCKER_GIT_API_PUBLIC_URL:-}"
+GEMINI_PUBLIC_API_LINE="Публичный API docker-git: не задан."
+GEMINI_PUBLIC_API_USAGE_LINE="Если пользователь просит ссылку на docker-git API или просит выполнить API-вызов, используй только публичный API адрес выше. Никогда не подставляй localhost/127.0.0.1."
+if [[ -n "$GEMINI_PUBLIC_API_URL_VALUE" ]]; then
+  GEMINI_PUBLIC_API_LINE="Публичный API docker-git: $GEMINI_PUBLIC_API_URL_VALUE"
+fi
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
   ISSUE_URL=""
@@ -272,6 +278,8 @@ cat <<EOF > "$GEMINI_MD_PATH"
 $GEMINI_WORKSPACE_CONTEXT
 Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
+$GEMINI_PUBLIC_API_LINE
+$GEMINI_PUBLIC_API_USAGE_LINE
 Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
 Если ты видишь файлы AGENTS.md, GEMINI.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
 <!-- /docker-git-managed:gemini-md -->

@@ -79,6 +79,20 @@ describe("renderEntrypoint auth bridge", () => {
       expect(entrypoint).toContain("CLAUDE_GLOBAL_PROMPT_FILE=\"/home/dev/.claude/CLAUDE.md\"")
       expect(entrypoint).toContain("CLAUDE_AUTO_SYSTEM_PROMPT=\"${CLAUDE_AUTO_SYSTEM_PROMPT:-1}\"")
       expect(entrypoint).toContain("docker-git-managed:claude-md")
+      expect(entrypoint).toContain("DOCKER_GIT_API_PUBLIC_URL=\"${DOCKER_GIT_API_PUBLIC_URL:-}\"")
+      expect(entrypoint).toContain(
+        "docker_git_upsert_ssh_env \"DOCKER_GIT_API_PUBLIC_URL\" \"$DOCKER_GIT_API_PUBLIC_URL\""
+      )
+      expect(entrypoint).toContain(
+        "PUBLIC_API_USAGE_LINE=\"Если пользователь просит ссылку на docker-git API или просит выполнить API-вызов, используй только публичный API адрес выше. Никогда не подставляй localhost/127.0.0.1.\""
+      )
+      expect(entrypoint).toContain("Публичный API docker-git: не задан.")
+      expect(entrypoint).toContain(
+        "AGENT_API_PROMPT=\" When mentioning or calling the docker-git API, use the public URL $DOCKER_GIT_API_PUBLIC_URL and never localhost/127.0.0.1.\""
+      )
+      expect(entrypoint).toContain(
+        "AGENT_API_PROMPT=\" Do not invent localhost/127.0.0.1 links for the docker-git API.\""
+      )
       expect(entrypoint).toContain(
         "SUBAGENTS_LINE=\"Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.\""
       )

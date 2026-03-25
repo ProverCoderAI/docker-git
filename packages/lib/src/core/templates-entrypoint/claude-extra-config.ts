@@ -7,6 +7,13 @@ CLAUDE_AUTO_SYSTEM_PROMPT="${"$"}{CLAUDE_AUTO_SYSTEM_PROMPT:-1}"
 CLAUDE_WORKSPACE_CONTEXT="Контекст workspace: repository"
 REPO_REF_VALUE="${"$"}{REPO_REF:-__REPO_REF_DEFAULT__}"
 REPO_URL_VALUE="${"$"}{REPO_URL:-__REPO_URL_DEFAULT__}"
+CLAUDE_PUBLIC_API_URL_VALUE="${"$"}{DOCKER_GIT_API_PUBLIC_URL:-}"
+CLAUDE_PUBLIC_API_LINE="Публичный API docker-git: не задан."
+CLAUDE_PUBLIC_API_USAGE_LINE="Если пользователь просит ссылку на docker-git API или просит выполнить API-вызов, используй только публичный API адрес выше. Никогда не подставляй localhost/127.0.0.1."
+
+if [[ -n "$CLAUDE_PUBLIC_API_URL_VALUE" ]]; then
+  CLAUDE_PUBLIC_API_LINE="Публичный API docker-git: $CLAUDE_PUBLIC_API_URL_VALUE"
+fi
 
 if [[ "$REPO_REF_VALUE" == issue-* ]]; then
   ISSUE_ID_VALUE="$(printf "%s" "$REPO_REF_VALUE" | sed -E 's#^issue-##')"
@@ -52,6 +59,8 @@ if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
 $CLAUDE_WORKSPACE_CONTEXT
 Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
+$CLAUDE_PUBLIC_API_LINE
+$CLAUDE_PUBLIC_API_USAGE_LINE
 Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
 Если ты видишь файлы AGENTS.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
 <!-- /docker-git-managed:claude-md -->

@@ -35,6 +35,7 @@ Optional env:
 
 - `DOCKER_GIT_API_BIND_HOST` (default: `127.0.0.1`)
 - `DOCKER_GIT_API_PORT` (default: `3334`)
+- `DOCKER_GIT_API_PUBLIC_URL` (optional public base URL for prompts and externally visible API links)
 - `DOCKER_GIT_PROJECTS_ROOT_HOST` (host path with docker-git projects, default: `/home/dev/.docker-git`)
 - `DOCKER_GIT_PROJECTS_ROOT` (container path, default: `/home/dev/.docker-git`)
 - `DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN` (optional public ActivityPub origin)

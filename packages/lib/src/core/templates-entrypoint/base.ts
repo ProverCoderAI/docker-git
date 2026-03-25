@@ -26,6 +26,7 @@ GIT_USER_EMAIL="\${GIT_USER_EMAIL:-}"
 CODEX_AUTO_UPDATE="\${CODEX_AUTO_UPDATE:-1}"
 AGENT_MODE="\${AGENT_MODE:-}"
 AGENT_AUTO="\${AGENT_AUTO:-}"
+DOCKER_GIT_API_PUBLIC_URL="\${DOCKER_GIT_API_PUBLIC_URL:-}"
 MCP_PLAYWRIGHT_ENABLE="\${MCP_PLAYWRIGHT_ENABLE:-${config.enableMcpPlaywright ? "1" : "0"}}"
 MCP_PLAYWRIGHT_CDP_ENDPOINT="\${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"
 MCP_PLAYWRIGHT_ISOLATED="\${MCP_PLAYWRIGHT_ISOLATED:-1}"
@@ -49,7 +50,9 @@ docker_git_upsert_ssh_env() {
   printf "%s\n" "$key=$value" >> "$SSH_ENV_PATH"
   chmod 600 "$SSH_ENV_PATH" || true
   chown 1000:1000 "$SSH_ENV_PATH" || true
-}`
+}
+
+docker_git_upsert_ssh_env "DOCKER_GIT_API_PUBLIC_URL" "$DOCKER_GIT_API_PUBLIC_URL"`
 
 export const renderEntrypointPackageCache = (config: TemplateConfig): string =>
   `# Share package manager caches across all docker-git containers

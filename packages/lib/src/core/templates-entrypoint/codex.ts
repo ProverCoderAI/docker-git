@@ -129,7 +129,13 @@ WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
 WORKSPACE_INFO_LINE="Контекст workspace: repository"
 FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__"
 INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
+PUBLIC_API_URL_VALUE="${"$"}{DOCKER_GIT_API_PUBLIC_URL:-}"
+PUBLIC_API_LINE="Публичный API docker-git: не задан."
+PUBLIC_API_USAGE_LINE="Если пользователь просит ссылку на docker-git API или просит выполнить API-вызов, используй только публичный API адрес выше. Никогда не подставляй localhost/127.0.0.1."
 SUBAGENTS_LINE="Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю."
+if [[ -n "$PUBLIC_API_URL_VALUE" ]]; then
+  PUBLIC_API_LINE="Публичный API docker-git: $PUBLIC_API_URL_VALUE"
+fi
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
   ISSUE_URL=""
@@ -171,6 +177,8 @@ $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
 $INTERNET_LINE
+$PUBLIC_API_LINE
+$PUBLIC_API_USAGE_LINE
 $SUBAGENTS_LINE
 $MANAGED_END
 EOF
@@ -190,6 +198,8 @@ $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
 $INTERNET_LINE
+$PUBLIC_API_LINE
+$PUBLIC_API_USAGE_LINE
 $SUBAGENTS_LINE
 $MANAGED_END
 EOF
@@ -210,6 +220,8 @@ EOF
       -e '/^Фокус задачи:/d' \
       -e '/^Issue AGENTS.md:/d' \
       -e '/^Доступ к интернету:/d' \
+      -e '/^Публичный API docker-git:/d' \
+      -e '/^Если пользователь просит ссылку на docker-git API или просит выполнить API-вызов,/d' \
       -e '/^Для решения задач обязательно используй subagents[.]/d' \
       "$AGENTS_PATH" > "$TMP_AGENTS_PATH"
     if [[ -s "$TMP_AGENTS_PATH" ]]; then

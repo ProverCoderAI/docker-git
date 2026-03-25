@@ -14,16 +14,23 @@ const indentBlock = (block: string, size = 2): string => {
 
 const renderAgentPrompt = (): string =>
   String.raw`AGENT_PROMPT=""
+AGENT_API_PROMPT=""
 ISSUE_NUM=""
 if [[ "$REPO_REF" =~ ^issue-([0-9]+)$ ]]; then
   ISSUE_NUM="${"${"}BASH_REMATCH[1]}"
 fi
 
+if [[ -n "${"$"}{DOCKER_GIT_API_PUBLIC_URL:-}" ]]; then
+  AGENT_API_PROMPT=" When mentioning or calling the docker-git API, use the public URL ${"$"}DOCKER_GIT_API_PUBLIC_URL and never localhost/127.0.0.1."
+else
+  AGENT_API_PROMPT=" Do not invent localhost/127.0.0.1 links for the docker-git API."
+fi
+
 if [[ "$AGENT_AUTO" == "1" ]]; then
   if [[ -n "$ISSUE_NUM" ]]; then
-    AGENT_PROMPT="Read GitHub issue #$ISSUE_NUM for this repository (use gh issue view $ISSUE_NUM). Implement the requested changes, commit them, create a PR that closes #$ISSUE_NUM, and push it."
+    AGENT_PROMPT="Read GitHub issue #$ISSUE_NUM for this repository (use gh issue view $ISSUE_NUM). Implement the requested changes, commit them, create a PR that closes #$ISSUE_NUM, and push it.$AGENT_API_PROMPT"
   else
-    AGENT_PROMPT="Analyze this repository, implement any pending tasks, commit changes, create a PR, and push it."
+    AGENT_PROMPT="Analyze this repository, implement any pending tasks, commit changes, create a PR, and push it.$AGENT_API_PROMPT"
   fi
 fi`
 

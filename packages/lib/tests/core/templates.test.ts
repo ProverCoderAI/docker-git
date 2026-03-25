@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { describe, expect, it } from "@effect/vitest"
 
 import { defaultTemplateConfig, type TemplateConfig } from "../../src/core/domain.js"
@@ -45,6 +46,17 @@ describe("renderEntrypointDnsRepair", () => {
 
     expect(dnsRepairIndex).toBeGreaterThanOrEqual(0)
     expect(packageCacheIndex).toBeGreaterThan(dnsRepairIndex)
+  })
+
+  it("renders public API guidance in managed prompts without localhost fallback links", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expect(entrypoint).toContain("DOCKER_GIT_API_PUBLIC_URL=\"${DOCKER_GIT_API_PUBLIC_URL:-}\"")
+    expect(entrypoint).toContain('PUBLIC_API_URL_VALUE="${DOCKER_GIT_API_PUBLIC_URL:-}"')
+    expect(entrypoint).toContain("Публичный API docker-git: не задан.")
+    expect(entrypoint).toContain(
+      "Если пользователь просит ссылку на docker-git API или просит выполнить API-вызов, используй только публичный API адрес выше. Никогда не подставляй localhost/127.0.0.1."
+    )
   })
 })
 
@@ -108,5 +120,14 @@ describe("renderDockerCompose", () => {
     expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
     expect(browserDnsIndex).toBeGreaterThan(browserServiceIndex)
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(2)
+  })
+
+  it("passes through the public API URL to the api compose service", () => {
+    const apiCompose = readFileSync(
+      new URL("../../../../docker-compose.api.yml", import.meta.url),
+      "utf8"
+    )
+
+    expect(apiCompose).toContain("DOCKER_GIT_API_PUBLIC_URL: ${DOCKER_GIT_API_PUBLIC_URL:-}")
   })
 })
