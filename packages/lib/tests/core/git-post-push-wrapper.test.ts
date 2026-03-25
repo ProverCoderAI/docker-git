@@ -77,6 +77,10 @@ if [[ "$subcommand" == "rev-parse" ]]; then
   fi
 fi
 
+if [[ "$subcommand" == "push" && -n "\${FAKE_GIT_PUSH_EXIT_CODE:-}" ]]; then
+  exit "$FAKE_GIT_PUSH_EXIT_CODE"
+fi
+
 exit 0
 `
 
@@ -156,7 +160,8 @@ const runCommand = (
   command: string,
   args: ReadonlyArray<string>,
   cwd: string,
-  env?: Readonly<Record<string, string | undefined>>
+  env?: Readonly<Record<string, string | undefined>>,
+  okExitCodes: ReadonlyArray<number> = [0]
 ): Effect.Effect<string, Error, CommandExecutor.CommandExecutor> =>
   Effect.scoped(
     Effect.gen(function*(_) {
@@ -175,7 +180,8 @@ const runCommand = (
         pipe(proc.stdout, Stream.runCollect, Effect.map((chunks) => collectUint8Array(chunks)))
       )
       const exitCode = yield* _(proc.exitCode)
-      if (Number(exitCode) !== 0) {
+      const numericExitCode = Number(exitCode)
+      if (!okExitCodes.includes(numericExitCode)) {
         return yield* _(Effect.fail(new Error(`${command} ${args.join(" ")} exited with ${String(exitCode)}`)))
       }
 
@@ -183,21 +189,35 @@ const runCommand = (
     })
   )
 
-const makeHarnessEnv = (harness: WrapperHarness): Readonly<Record<string, string | undefined>> => ({
+const makeHarnessEnv = (
+  harness: WrapperHarness,
+  overrides: Readonly<Record<string, string | undefined>> = {}
+): Readonly<Record<string, string | undefined>> => ({
   ...process.env,
   PATH: `${harness.binDir}:${process.env["PATH"] ?? ""}`,
   FAKE_GIT_LOG_PATH: harness.gitLogPath,
   FAKE_NODE_CWD_LOG_PATH: harness.nodeCwdLogPath,
   FAKE_NODE_REPO_ROOT_LOG_PATH: harness.nodeRepoRootLogPath,
-  FAKE_NODE_SCRIPT_LOG_PATH: harness.nodeScriptLogPath
+  FAKE_NODE_SCRIPT_LOG_PATH: harness.nodeScriptLogPath,
+  ...overrides
 })
 
 const runWrapper = (
   harness: WrapperHarness,
   cwd: string,
-  args: ReadonlyArray<string>
+  args: ReadonlyArray<string>,
+  options: {
+    readonly env?: Readonly<Record<string, string | undefined>>
+    readonly okExitCodes?: ReadonlyArray<number>
+  } = {}
 ): Effect.Effect<void, Error, CommandExecutor.CommandExecutor> =>
-  runCommand(harness.wrapperPath, args, cwd, makeHarnessEnv(harness)).pipe(Effect.asVoid)
+  runCommand(
+    harness.wrapperPath,
+    args,
+    cwd,
+    makeHarnessEnv(harness, options.env),
+    options.okExitCodes
+  ).pipe(Effect.asVoid)
 
 const withHarness = <A, E, R>(
   use: (harness: WrapperHarness) => Effect.Effect<A, E, R>
@@ -300,6 +320,31 @@ describe("git post-push wrapper", () => {
       Effect.gen(function*(_) {
         yield* _(runWrapper(harness, harness.externalDir, ["-C", harness.repoDir, "push", "--dry-run", "origin", "HEAD"]))
         yield* _(runWrapper(harness, harness.externalDir, ["-C", harness.repoDir, "push", "-n", "origin", "HEAD"]))
+
+        const nodeCwd = yield* _(readLogLines(harness.nodeCwdLogPath))
+        const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+
+        expect(nodeCwd).toEqual([])
+        expect(nodeRepoRoot).toEqual([])
+        expect(nodeScript).toEqual([])
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("does not run session backup when git push fails", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(
+          runWrapper(
+            harness,
+            harness.externalDir,
+            ["-C", harness.repoDir, "push", "origin", "HEAD"],
+            {
+              env: { FAKE_GIT_PUSH_EXIT_CODE: "1" },
+              okExitCodes: [1]
+            }
+          )
+        )
 
         const nodeCwd = yield* _(readLogLines(harness.nodeCwdLogPath))
         const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
