@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
+import { systemPromptBehavior } from "./system-prompt-content.js"
 
 export { renderEntrypointCodexResumeHint } from "./codex-resume-hint.js"
 
@@ -129,7 +130,7 @@ WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
 WORKSPACE_INFO_LINE="Контекст workspace: repository"
 FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__"
 INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
-SUBAGENTS_LINE="Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю."
+BEHAVIOR_BLOCK="__SYSTEM_PROMPT_BEHAVIOR__"
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
   ISSUE_URL=""
@@ -171,7 +172,7 @@ $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
 $INTERNET_LINE
-$SUBAGENTS_LINE
+$BEHAVIOR_BLOCK
 $MANAGED_END
 EOF
 )"
@@ -190,7 +191,7 @@ $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
 $INTERNET_LINE
-$SUBAGENTS_LINE
+$BEHAVIOR_BLOCK
 $MANAGED_END
 EOF
 )"
@@ -233,3 +234,4 @@ export const renderEntrypointAgentsNotice = (config: TemplateConfig): string =>
     "__SSH_USER__",
     config.sshUser
   ).replaceAll("__TARGET_DIR__", config.targetDir)
+    .replaceAll("__SYSTEM_PROMPT_BEHAVIOR__", systemPromptBehavior)

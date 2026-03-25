@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
+import { systemPromptBehavior } from "./system-prompt-content.js"
 
 const entrypointClaudeGlobalPromptTemplate = String
   .raw`# Claude Code: managed global memory (CLAUDE.md is auto-loaded by Claude Code)
@@ -52,7 +53,7 @@ if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
 $CLAUDE_WORKSPACE_CONTEXT
 Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
-Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
+__SYSTEM_PROMPT_BEHAVIOR__
 Если ты видишь файлы AGENTS.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
 <!-- /docker-git-managed:claude-md -->
 EOF
@@ -79,6 +80,7 @@ export const renderClaudeGlobalPromptSetup = (config: TemplateConfig): string =>
     .replaceAll("__SSH_USER__", config.sshUser)
     .replaceAll("__REPO_REF_DEFAULT__", escapeForDoubleQuotes(config.repoRef))
     .replaceAll("__REPO_URL_DEFAULT__", escapeForDoubleQuotes(config.repoUrl))
+    .replaceAll("__SYSTEM_PROMPT_BEHAVIOR__", systemPromptBehavior)
 
 export const renderClaudeWrapperSetup = (): string =>
   String.raw`CLAUDE_WRAPPER_BIN="/usr/local/bin/claude"

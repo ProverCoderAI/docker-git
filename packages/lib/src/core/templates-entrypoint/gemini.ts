@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
+import { systemPromptBehavior } from "./system-prompt-content.js"
 
 // CHANGE: add Gemini CLI entrypoint configuration
 // WHY: enable Gemini CLI in Docker with automated auth, trust settings and MCP
@@ -272,7 +273,7 @@ cat <<EOF > "$GEMINI_MD_PATH"
 $GEMINI_WORKSPACE_CONTEXT
 Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
-Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
+__SYSTEM_PROMPT_BEHAVIOR__
 Если ты видишь файлы AGENTS.md, GEMINI.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
 <!-- /docker-git-managed:gemini-md -->
 EOF
@@ -282,6 +283,7 @@ const renderEntrypointGeminiNotice = (config: TemplateConfig): string =>
   entrypointGeminiNoticeTemplate
     .replaceAll("__GEMINI_HOME__", config.geminiHome)
     .replaceAll("__TARGET_DIR__", config.targetDir)
+    .replaceAll("__SYSTEM_PROMPT_BEHAVIOR__", systemPromptBehavior)
 
 export const renderEntrypointGeminiConfig = (config: TemplateConfig): string =>
   [
