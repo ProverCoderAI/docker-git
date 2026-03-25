@@ -263,7 +263,10 @@ cat <<'EOF' > "$POST_PUSH_ACTION"
 set -euo pipefail
 
 # 5) Run session backup after successful push
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+REPO_ROOT="${"${"}DOCKER_GIT_POST_PUSH_REPO_ROOT:-}"
+if [[ -z "$REPO_ROOT" || ! -d "$REPO_ROOT" ]]; then
+  REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
 cd "$REPO_ROOT"
 
 # CHANGE: keep post-push backup logic in a reusable action script
