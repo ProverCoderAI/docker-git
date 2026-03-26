@@ -97,6 +97,9 @@ const AI_DIR_STAGING_SNIPPET = `for ai_dir in .gemini .claude .codex; do
     git add -A -- "$ai_dir"
   fi
 done`
+const KNOWLEDGE_TMP_PRUNE_SNIPPET = `find . \\
+    \\( -name ".git" -o -name "tmp" \\) -type d -prune -o \\
+    \\( -type d \\( -name ".knowledge" -o -name ".knowlenge" \\) -print0 \\)`
 
 // Tests that require an isolated temp git repo
 describe("pre-commit hook (isolated repo)", () => {
@@ -182,6 +185,7 @@ describe("pre-commit hook (isolated repo)", () => {
       expect(hookContent).toContain(".claude")
       expect(hookContent).toContain(".codex")
       expect(hookContent).toContain(AI_DIR_STAGING_SNIPPET)
+      expect(hookContent).toContain(KNOWLEDGE_TMP_PRUNE_SNIPPET)
     })
 
     // INVARIANT: core.hooksPath = ".githooks" after setup
@@ -227,6 +231,7 @@ describe("committed hook files", () => {
     const content = fs.readFileSync(path.resolve(repoRoot, ".githooks/pre-commit"), "utf8")
 
     expect(content).toContain(AI_DIR_STAGING_SNIPPET)
+    expect(content).toContain(KNOWLEDGE_TMP_PRUNE_SNIPPET)
     expect(content.startsWith("#!/usr/bin/env bash\n")).toBe(true)
     expect(content).toContain("set -euo pipefail")
   })

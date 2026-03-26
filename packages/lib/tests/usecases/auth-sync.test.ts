@@ -161,10 +161,13 @@ describe("syncGithubAuthKeys", () => {
         const path = yield* _(Path.Path)
         const legacyClaudeDefault = path.join(root, ".orch", "auth", "claude", "default")
         const legacyTokenPath = path.join(legacyClaudeDefault, ".oauth-token")
+        const ignoredTmpTokenPath = path.join(root, ".orch", "auth", "claude", "tmp", ".oauth-token")
         const expectedToken = "legacy-claude-token\n"
 
         yield* _(fs.makeDirectory(legacyClaudeDefault, { recursive: true }))
         yield* _(fs.writeFileString(legacyTokenPath, expectedToken))
+        yield* _(fs.makeDirectory(path.dirname(ignoredTmpTokenPath), { recursive: true }))
+        yield* _(fs.writeFileString(ignoredTmpTokenPath, "ignored-claude-token\n"))
 
         yield* _(
           migrateLegacyOrchLayout(root, {
@@ -186,7 +189,18 @@ describe("syncGithubAuthKeys", () => {
           ".oauth-token"
         )
         const migratedToken = yield* _(fs.readFileString(migratedTokenPath))
+        const migratedTmpTokenPath = path.join(
+          root,
+          ".docker-git",
+          ".orch",
+          "auth",
+          "claude",
+          "tmp",
+          ".oauth-token"
+        )
+        const hasMigratedTmpToken = yield* _(fs.exists(migratedTmpTokenPath))
         expect(migratedToken).toBe(expectedToken)
+        expect(hasMigratedTmpToken).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
