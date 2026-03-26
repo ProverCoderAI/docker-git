@@ -43,6 +43,14 @@ const {
 const SESSION_DIR_NAMES = [".codex", ".claude", ".qwen", ".gemini"];
 const SESSION_WALK_IGNORE_DIR_NAMES = new Set([".git", "node_modules", "tmp"]);
 
+const toLogicalRelativePath = (relativePath) =>
+  relativePath.split(path.sep).join(path.posix.sep);
+
+const shouldIgnoreSessionPath = (relativePath) => {
+  const logicalPath = toLogicalRelativePath(relativePath);
+  return logicalPath === "tmp" || logicalPath.startsWith("tmp/") || logicalPath.includes("/tmp/");
+};
+
 const isPathWithinParent = (targetPath, parentPath) => {
   const relative = path.relative(parentPath, targetPath);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
@@ -365,6 +373,12 @@ const collectSessionFiles = (dirPath, baseName, verbose) => {
     for (const entry of entries) {
       const fullPath = path.join(currentPath, entry.name);
       const relPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+      const logicalRelPath = toLogicalRelativePath(relPath);
+
+      if (shouldIgnoreSessionPath(logicalRelPath)) {
+        log(verbose, `Skipping tmp path: ${path.posix.join(baseName, logicalRelPath)}`);
+        continue;
+      }
 
       if (entry.isDirectory()) {
         if (SESSION_WALK_IGNORE_DIR_NAMES.has(entry.name)) {
@@ -374,7 +388,7 @@ const collectSessionFiles = (dirPath, baseName, verbose) => {
       } else if (entry.isFile()) {
         try {
           const stats = fs.statSync(fullPath);
-          const logicalName = path.posix.join(baseName, relPath.split(path.sep).join(path.posix.sep));
+          const logicalName = path.posix.join(baseName, logicalRelPath);
           files.push({
             logicalName,
             sourcePath: fullPath,
@@ -662,4 +676,11 @@ const main = () => {
   }
 };
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  collectSessionFiles,
+  shouldIgnoreSessionPath,
+};
