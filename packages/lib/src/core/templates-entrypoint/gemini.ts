@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
+import { renderSharedPrompt } from "./claude-system-prompt.js"
 
 // CHANGE: add Gemini CLI entrypoint configuration
 // WHY: enable Gemini CLI in Docker with automated auth, trust settings and MCP
@@ -229,8 +230,11 @@ docker_git_upsert_ssh_env "GEMINI_CLI_DISABLE_UPDATE_CHECK" "true"
 docker_git_upsert_ssh_env "GEMINI_CLI_NONINTERACTIVE" "true"
 docker_git_upsert_ssh_env "GEMINI_CLI_APPROVAL_MODE" "yolo"`
 
-const entrypointGeminiNoticeTemplate = String.raw`# Ensure global GEMINI.md exists for container context
-GEMINI_MD_PATH="__GEMINI_HOME__/GEMINI.md"
+const renderEntrypointGeminiNotice = (config: TemplateConfig): string => {
+  const promptContent = renderSharedPrompt(config.targetDir, "$GEMINI_WORKSPACE_CONTEXT")
+
+  return String.raw`# Ensure global GEMINI.md exists for container context
+GEMINI_MD_PATH="${config.geminiHome}/GEMINI.md"
 GEMINI_WORKSPACE_CONTEXT="Контекст workspace: repository"
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
@@ -266,22 +270,11 @@ fi
 
 cat <<EOF > "$GEMINI_MD_PATH"
 <!-- docker-git-managed:gemini-md -->
-Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, gemini, claude, opencode, oh-my-opencode, sshpass, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
-Рабочая папка проекта (git clone): __TARGET_DIR__
-Доступные workspace пути: __TARGET_DIR__
-$GEMINI_WORKSPACE_CONTEXT
-Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
-Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
-Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
-Если ты видишь файлы AGENTS.md, GEMINI.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
+${promptContent}
 <!-- /docker-git-managed:gemini-md -->
 EOF
 chown 1000:1000 "$GEMINI_MD_PATH" || true`
-
-const renderEntrypointGeminiNotice = (config: TemplateConfig): string =>
-  entrypointGeminiNoticeTemplate
-    .replaceAll("__GEMINI_HOME__", config.geminiHome)
-    .replaceAll("__TARGET_DIR__", config.targetDir)
+}
 
 export const renderEntrypointGeminiConfig = (config: TemplateConfig): string =>
   [

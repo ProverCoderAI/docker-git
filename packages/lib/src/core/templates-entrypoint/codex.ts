@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
+import { PROMPT_FILES, PROMPT_INTERNET, PROMPT_INTRO, PROMPT_SUBAGENTS, renderFocusLine } from "./claude-system-prompt.js"
 
 export { renderEntrypointCodexResumeHint } from "./codex-resume-hint.js"
 
@@ -127,9 +128,9 @@ LEGACY_AGENTS_PATH="/home/__SSH_USER__/AGENTS.md"
 PROJECT_LINE="Рабочая папка проекта (git clone): __TARGET_DIR__"
 WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
 WORKSPACE_INFO_LINE="Контекст workspace: repository"
-FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__"
-INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
-SUBAGENTS_LINE="Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю."
+FOCUS_LINE="__FOCUS_LINE__"
+INTERNET_LINE="${PROMPT_INTERNET}"
+SUBAGENTS_LINE="${PROMPT_SUBAGENTS}"
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
   ISSUE_URL=""
@@ -176,9 +177,9 @@ $MANAGED_END
 EOF
 )"
   cat <<EOF > "$AGENTS_PATH"
-Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, opencode, oh-my-opencode, sshpass, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
+${PROMPT_INTRO}
 $MANAGED_BLOCK
-Если ты видишь файлы AGENTS.md внутри проекта, ты обязан их читать и соблюдать инструкции.
+${PROMPT_FILES}
 EOF
   chown 1000:1000 "$AGENTS_PATH" || true
 fi
@@ -229,7 +230,8 @@ if [[ -f "$LEGACY_AGENTS_PATH" && -f "$AGENTS_PATH" ]]; then
 fi`
 
 export const renderEntrypointAgentsNotice = (config: TemplateConfig): string =>
-  entrypointAgentsNoticeTemplate.replaceAll("__CODEX_HOME__", config.codexHome).replaceAll(
-    "__SSH_USER__",
-    config.sshUser
-  ).replaceAll("__TARGET_DIR__", config.targetDir)
+  entrypointAgentsNoticeTemplate
+    .replaceAll("__CODEX_HOME__", config.codexHome)
+    .replaceAll("__SSH_USER__", config.sshUser)
+    .replaceAll("__TARGET_DIR__", config.targetDir)
+    .replaceAll("__FOCUS_LINE__", renderFocusLine(config.targetDir))
