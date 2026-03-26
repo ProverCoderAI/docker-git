@@ -41,6 +41,7 @@ const {
 } = require("./session-backup-repo.js");
 
 const SESSION_DIR_NAMES = [".codex", ".claude", ".qwen", ".gemini"];
+const SESSION_WALK_IGNORE_DIR_NAMES = new Set([".git", "node_modules", "tmp"]);
 
 const isPathWithinParent = (targetPath, parentPath) => {
   const relative = path.relative(parentPath, targetPath);
@@ -366,7 +367,7 @@ const collectSessionFiles = (dirPath, baseName, verbose) => {
       const relPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
 
       if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === ".git") {
+        if (SESSION_WALK_IGNORE_DIR_NAMES.has(entry.name)) {
           continue;
         }
         walk(fullPath, relPath);
