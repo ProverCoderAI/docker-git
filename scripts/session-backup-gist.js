@@ -41,6 +41,9 @@ const {
 } = require("./session-backup-repo.js");
 
 const SESSION_DIR_NAMES = [".codex", ".claude", ".qwen", ".gemini"];
+const TRANSIENT_SESSION_PREFIXES = {
+  ".codex": ["tmp"],
+};
 
 const isPathWithinParent = (targetPath, parentPath) => {
   const relative = path.relative(parentPath, targetPath);
@@ -69,6 +72,16 @@ const resolveAllowedSessionDir = (candidatePath, verbose) => {
 
   log(verbose, `Skipping non-session directory: ${candidatePath}`);
   return null;
+};
+
+const toLogicalRelativePath = (relativePath) =>
+  relativePath.split(path.sep).join(path.posix.sep);
+
+const shouldIgnoreSessionPath = (baseName, relativePath) => {
+  const prefixes = TRANSIENT_SESSION_PREFIXES[baseName] ?? [];
+  const logicalPath = toLogicalRelativePath(relativePath);
+
+  return prefixes.some((prefix) => logicalPath === prefix || logicalPath.startsWith(`${prefix}/`));
 };
 
 const parseArgs = () => {
@@ -364,6 +377,12 @@ const collectSessionFiles = (dirPath, baseName, verbose) => {
     for (const entry of entries) {
       const fullPath = path.join(currentPath, entry.name);
       const relPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+      const logicalRelPath = toLogicalRelativePath(relPath);
+
+      if (shouldIgnoreSessionPath(baseName, logicalRelPath)) {
+        log(verbose, `Skipping transient path: ${path.posix.join(baseName, logicalRelPath)}`);
+        continue;
+      }
 
       if (entry.isDirectory()) {
         if (entry.name === "node_modules" || entry.name === ".git") {
@@ -373,7 +392,7 @@ const collectSessionFiles = (dirPath, baseName, verbose) => {
       } else if (entry.isFile()) {
         try {
           const stats = fs.statSync(fullPath);
-          const logicalName = path.posix.join(baseName, relPath.split(path.sep).join(path.posix.sep));
+          const logicalName = path.posix.join(baseName, logicalRelPath);
           files.push({
             logicalName,
             sourcePath: fullPath,
@@ -661,4 +680,11 @@ const main = () => {
   }
 };
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  collectSessionFiles,
+  shouldIgnoreSessionPath,
+};
