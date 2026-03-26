@@ -7,6 +7,7 @@ import {
   renderEntrypointHeader,
   renderEntrypointInputRc,
   renderEntrypointPackageCache,
+  renderEntrypointPublicIp,
   renderEntrypointSshd,
   renderEntrypointZshShell,
   renderEntrypointZshUserRc
@@ -37,6 +38,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointHeader(config),
     renderEntrypointDnsRepair(),
     renderEntrypointPackageCache(config),
+    renderEntrypointPublicIp(),
     renderEntrypointAuthorizedKeys(config),
     renderEntrypointCodexHome(config),
     renderEntrypointCodexSharedAuth(config),

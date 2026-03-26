@@ -129,6 +129,15 @@ WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
 WORKSPACE_INFO_LINE="Контекст workspace: repository"
 FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__"
 INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
+PUBLIC_ACCESS_BLOCK=""
+if [[ -n "$DOCKER_GIT_PUBLIC_IP" ]]; then
+  PUBLIC_ACCESS_BLOCK="$(cat <<EOF
+Публичный IP контейнера: $DOCKER_GIT_PUBLIC_IP
+Если даёшь пользователю URL для HTTP API, dev-сервера, UI или другого сервиса из контейнера, используй этот IP вместо localhost и 127.0.0.1.
+Формат внешнего адреса: http://$DOCKER_GIT_PUBLIC_IP:<port>
+EOF
+)"
+fi
 SUBAGENTS_LINE="Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю."
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
@@ -171,6 +180,7 @@ $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
 $INTERNET_LINE
+$PUBLIC_ACCESS_BLOCK
 $SUBAGENTS_LINE
 $MANAGED_END
 EOF
@@ -190,6 +200,7 @@ $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
 $INTERNET_LINE
+$PUBLIC_ACCESS_BLOCK
 $SUBAGENTS_LINE
 $MANAGED_END
 EOF

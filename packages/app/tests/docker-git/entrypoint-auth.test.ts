@@ -79,12 +79,22 @@ describe("renderEntrypoint auth bridge", () => {
       expect(entrypoint).toContain("CLAUDE_GLOBAL_PROMPT_FILE=\"/home/dev/.claude/CLAUDE.md\"")
       expect(entrypoint).toContain("CLAUDE_AUTO_SYSTEM_PROMPT=\"${CLAUDE_AUTO_SYSTEM_PROMPT:-1}\"")
       expect(entrypoint).toContain("docker-git-managed:claude-md")
+      expect(entrypoint).toContain("DOCKER_GIT_PUBLIC_IP=\"${DOCKER_GIT_PUBLIC_IP:-}\"")
+      expect(entrypoint).toContain("docker_git_detect_public_ip()")
+      expect(entrypoint).toContain("PUBLIC_IP_PROFILE=\"/etc/profile.d/docker-git-public-ip.sh\"")
+      expect(entrypoint).toContain("docker_git_upsert_ssh_env \"DOCKER_GIT_PUBLIC_IP\" \"$DOCKER_GIT_PUBLIC_IP\"")
+      expect(entrypoint).toContain("Публичный IP контейнера: $DOCKER_GIT_PUBLIC_IP")
+      expect(entrypoint).toContain(
+        "Если даёшь пользователю URL для HTTP API, dev-сервера, UI или другого сервиса из контейнера, используй этот IP вместо localhost и 127.0.0.1."
+      )
+      expect(entrypoint).toContain("Формат внешнего адреса: http://$DOCKER_GIT_PUBLIC_IP:<port>")
       expect(entrypoint).toContain(
         "SUBAGENTS_LINE=\"Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.\""
       )
       expect(entrypoint.split("Для решения задач обязательно используй subagents.").length - 1).toBeGreaterThanOrEqual(
         2
       )
+      expect(entrypoint.split("Публичный IP контейнера: $DOCKER_GIT_PUBLIC_IP").length - 1).toBeGreaterThanOrEqual(3)
       expect(entrypoint).toContain("token=\"${GITHUB_TOKEN:-}\"")
       expect(entrypoint).toContain("token=\"${GH_TOKEN:-}\"")
       expect(entrypoint).toContain(String.raw`printf "%s\n" "password=$token"`)
