@@ -232,6 +232,7 @@ docker_git_upsert_ssh_env "GEMINI_CLI_APPROVAL_MODE" "yolo"`
 const entrypointGeminiNoticeTemplate = String.raw`# Ensure global GEMINI.md exists for container context
 GEMINI_MD_PATH="__GEMINI_HOME__/GEMINI.md"
 GEMINI_WORKSPACE_CONTEXT="Контекст workspace: repository"
+GEMINI_PUBLIC_ACCESS_BLOCK=""
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
   ISSUE_URL=""
@@ -264,6 +265,15 @@ elif [[ "$REPO_REF" == refs/pull/*/head ]]; then
   fi
 fi
 
+if [[ -n "$DOCKER_GIT_PUBLIC_IP" ]]; then
+  GEMINI_PUBLIC_ACCESS_BLOCK="$(cat <<EOF
+Публичный IP контейнера: $DOCKER_GIT_PUBLIC_IP
+Если даёшь пользователю URL для HTTP API, dev-сервера, UI или другого сервиса из контейнера, используй этот IP вместо localhost и 127.0.0.1.
+Формат внешнего адреса: http://$DOCKER_GIT_PUBLIC_IP:<port>
+EOF
+)"
+fi
+
 cat <<EOF > "$GEMINI_MD_PATH"
 <!-- docker-git-managed:gemini-md -->
 Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, gemini, claude, opencode, oh-my-opencode, sshpass, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
@@ -272,6 +282,7 @@ cat <<EOF > "$GEMINI_MD_PATH"
 $GEMINI_WORKSPACE_CONTEXT
 Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
+$GEMINI_PUBLIC_ACCESS_BLOCK
 Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
 Если ты видишь файлы AGENTS.md, GEMINI.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
 <!-- /docker-git-managed:gemini-md -->

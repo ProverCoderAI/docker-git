@@ -5,6 +5,7 @@ const entrypointClaudeGlobalPromptTemplate = String
 CLAUDE_GLOBAL_PROMPT_FILE="/home/__SSH_USER__/.claude/CLAUDE.md"
 CLAUDE_AUTO_SYSTEM_PROMPT="${"$"}{CLAUDE_AUTO_SYSTEM_PROMPT:-1}"
 CLAUDE_WORKSPACE_CONTEXT="Контекст workspace: repository"
+CLAUDE_PUBLIC_ACCESS_BLOCK=""
 REPO_REF_VALUE="${"$"}{REPO_REF:-__REPO_REF_DEFAULT__}"
 REPO_URL_VALUE="${"$"}{REPO_URL:-__REPO_URL_DEFAULT__}"
 
@@ -40,6 +41,15 @@ elif [[ "$REPO_REF_VALUE" == refs/pull/*/head ]]; then
   fi
 fi
 
+if [[ -n "$DOCKER_GIT_PUBLIC_IP" ]]; then
+  CLAUDE_PUBLIC_ACCESS_BLOCK="$(cat <<EOF
+Публичный IP контейнера: $DOCKER_GIT_PUBLIC_IP
+Если даёшь пользователю URL для HTTP API, dev-сервера, UI или другого сервиса из контейнера, используй этот IP вместо localhost и 127.0.0.1.
+Формат внешнего адреса: http://$DOCKER_GIT_PUBLIC_IP:<port>
+EOF
+)"
+fi
+
 if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
   mkdir -p "$(dirname "$CLAUDE_GLOBAL_PROMPT_FILE")"
   chown 1000:1000 "$(dirname "$CLAUDE_GLOBAL_PROMPT_FILE")" 2>/dev/null || true
@@ -52,6 +62,7 @@ if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
 $CLAUDE_WORKSPACE_CONTEXT
 Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
+$CLAUDE_PUBLIC_ACCESS_BLOCK
 Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
 Если ты видишь файлы AGENTS.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
 <!-- /docker-git-managed:claude-md -->

@@ -76,6 +76,40 @@ docker_git_upsert_ssh_env "NPM_CONFIG_CACHE" "$PACKAGE_NPM_CACHE"
 docker_git_upsert_ssh_env "npm_config_cache" "$PACKAGE_NPM_CACHE"
 docker_git_upsert_ssh_env "YARN_CACHE_FOLDER" "$PACKAGE_YARN_CACHE"`
 
+export const renderEntrypointPublicIp = (): string =>
+  `# Detect a non-local container IP and expose it for user-facing service URLs
+DOCKER_GIT_PUBLIC_IP="\${DOCKER_GIT_PUBLIC_IP:-}"
+
+docker_git_detect_public_ip() {
+  local candidate=""
+  if [[ -n "$DOCKER_GIT_PUBLIC_IP" ]]; then
+    printf "%s" "$DOCKER_GIT_PUBLIC_IP"
+    return 0
+  fi
+
+  if command -v ip >/dev/null 2>&1; then
+    candidate="$(ip -o -4 addr show scope global 2>/dev/null \
+      | awk '{split($4, parts, "/"); if (parts[1] != "127.0.0.1") { print parts[1]; exit }}')"
+  fi
+
+  if [[ -z "$candidate" ]] && command -v hostname >/dev/null 2>&1; then
+    candidate="$(hostname -I 2>/dev/null | awk '{for (i = 1; i <= NF; i += 1) if ($i != "127.0.0.1") { print $i; exit }}')"
+  fi
+
+  printf "%s" "$candidate"
+}
+
+DOCKER_GIT_PUBLIC_IP="$(docker_git_detect_public_ip)"
+export DOCKER_GIT_PUBLIC_IP
+
+PUBLIC_IP_PROFILE="/etc/profile.d/docker-git-public-ip.sh"
+cat <<EOF > "$PUBLIC_IP_PROFILE"
+export DOCKER_GIT_PUBLIC_IP="$DOCKER_GIT_PUBLIC_IP"
+EOF
+chmod 0644 "$PUBLIC_IP_PROFILE" || true
+
+docker_git_upsert_ssh_env "DOCKER_GIT_PUBLIC_IP" "$DOCKER_GIT_PUBLIC_IP"`
+
 export const renderEntrypointAuthorizedKeys = (config: TemplateConfig): string =>
   `# 1) Authorized keys are mounted from host at /authorized_keys
 mkdir -p /home/${config.sshUser}/.ssh
