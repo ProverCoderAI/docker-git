@@ -11,7 +11,12 @@ type DockerGitConfigSearchState = {
 const isDockerGitConfig = (entry: string): boolean => entry.endsWith("docker-git.json")
 
 const shouldSkipDir = (entry: string): boolean =>
-  entry === ".git" || entry === ".orch" || entry === ".docker-git" || entry === ".cache" || entry === "node_modules"
+  entry === ".git" ||
+  entry === ".orch" ||
+  entry === ".docker-git" ||
+  entry === ".cache" ||
+  entry === "node_modules" ||
+  entry === "tmp"
 
 const isNotFoundStatError = (error: PlatformError): boolean =>
   error._tag === "SystemError" && error.reason === "NotFound"
