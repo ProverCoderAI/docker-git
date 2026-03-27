@@ -121,6 +121,51 @@ export const renderEntrypointMcpPlaywright = (config: TemplateConfig): string =>
     .replaceAll("__CODEX_HOME__", config.codexHome)
     .replaceAll("__SERVICE_NAME__", config.serviceName)
 
+const entrypointProjectCodexSkillsSyncTemplate = String.raw`# Mirror project-owned Codex skill trees into CODEX_HOME without overwriting global skills.
+docker_git_sync_project_codex_skills() {
+  local codex_home="${"$"}{CODEX_HOME:-__CODEX_HOME__}"
+  local project_dir="${"$"}{TARGET_DIR:-}"
+  local project_skills_root="$codex_home/skills/.docker-git-project"
+  local linked=0
+  local spec=""
+  local mount_name=""
+  local relative_path=""
+
+  if [[ -z "$project_dir" || ! -d "$project_dir" ]]; then
+    return 0
+  fi
+
+  mkdir -p "$codex_home/skills"
+  rm -rf "$project_skills_root"
+  mkdir -p "$project_skills_root"
+
+  # Priority goes from generic/shared skill trees -> Codex-specific trees.
+  for spec in \
+    "10-root-skills::.skills" \
+    "20-agents-skills::.agents/skills" \
+    "30-agents-dot-skills::.agents/.skills" \
+    "80-codex-skills::.codex/skills" \
+    "90-codex-dot-skills::.codex/.skills"; do
+    mount_name="${"$"}{spec%%::*}"
+    relative_path="${"$"}{spec#*::}"
+
+    if [[ -d "$project_dir/$relative_path" ]]; then
+      ln -sfn "$project_dir/$relative_path" "$project_skills_root/$mount_name"
+      chown -h 1000:1000 "$project_skills_root/$mount_name" 2>/dev/null || true
+      linked=1
+    fi
+  done
+
+  chown 1000:1000 "$codex_home/skills" "$project_skills_root" 2>/dev/null || true
+
+  if [[ "$linked" -eq 1 ]]; then
+    echo "[codex-skills] linked project skill trees into $project_skills_root"
+  fi
+}`
+
+export const renderEntrypointProjectCodexSkillsSync = (config: TemplateConfig): string =>
+  entrypointProjectCodexSkillsSyncTemplate.replaceAll("__CODEX_HOME__", config.codexHome)
+
 const entrypointAgentsNoticeTemplate = String.raw`# Ensure global AGENTS.md exists for container context
 AGENTS_PATH="__CODEX_HOME__/AGENTS.md"
 LEGACY_AGENTS_PATH="/home/__SSH_USER__/AGENTS.md"
