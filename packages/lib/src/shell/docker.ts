@@ -139,7 +139,7 @@ export const runDockerComposeDown = (
 export const runDockerComposeDownVolumes = (
   cwd: string
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
-  runCompose(cwd, ["down", "-v"], [Number(ExitCode(0))])
+  runCompose(cwd, ["down", "-v", "--remove-orphans"], [Number(ExitCode(0))])
 
 // CHANGE: recreate docker compose environment in the target directory
 // WHY: allow a clean rebuild of the container from the UI

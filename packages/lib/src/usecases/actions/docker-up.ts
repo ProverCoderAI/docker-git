@@ -4,6 +4,7 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Duration, Effect, Fiber, Schedule } from "effect"
 
+import { runCommandWithExitCodes } from "../../shell/command-runner.js"
 import type { CreateCommand } from "../../core/domain.js"
 import {
   runDockerComposeDownVolumes,
@@ -15,7 +16,7 @@ import {
   runDockerNetworkConnectBridge
 } from "../../shell/docker.js"
 import type { DockerCommandError } from "../../shell/errors.js"
-import { AgentFailedError, CloneFailedError } from "../../shell/errors.js"
+import { CommandFailedError, AgentFailedError, CloneFailedError } from "../../shell/errors.js"
 import { ensureComposeNetworkReady } from "../docker-network-gc.js"
 import { formatEditorSshAccessDetails, resolveProjectSshAccess } from "../ssh-access.js"
 
@@ -56,6 +57,26 @@ type DockerUpOptions = {
   readonly force: boolean
   readonly forceEnv: boolean
 }
+
+const removeConflictingContainer = (
+  cwd: string,
+  containerName: string
+): Effect.Effect<void, never, CommandExecutor.CommandExecutor> =>
+  runCommandWithExitCodes(
+    {
+      cwd,
+      command: "docker",
+      args: ["rm", "-f", containerName]
+    },
+    [0],
+    (exitCode) => new CommandFailedError({ command: `docker rm -f ${containerName}`, exitCode })
+  ).pipe(
+    Effect.matchEffect({
+      onFailure: () => Effect.void,
+      onSuccess: () => Effect.log(`Removed container before force restart: ${containerName}`)
+    }),
+    Effect.asVoid
+  )
 
 const checkCloneState = (
   cwd: string,
@@ -172,8 +193,12 @@ const runDockerComposeUpByMode = (
     yield* _(ensureComposeNetworkReady(resolvedOutDir, projectConfig))
 
     if (force) {
-      yield* _(Effect.log("Force enabled: wiping docker compose volumes (docker compose down -v)..."))
+      yield* _(Effect.log("Force enabled: removing stale containers and wiping docker compose volumes..."))
       yield* _(runDockerComposeDownVolumes(resolvedOutDir))
+      yield* _(removeConflictingContainer(resolvedOutDir, projectConfig.containerName))
+      if (projectConfig.enableMcpPlaywright) {
+        yield* _(removeConflictingContainer(resolvedOutDir, `${projectConfig.containerName}-browser`))
+      }
       yield* _(Effect.log("Running: docker compose up -d --build"))
       yield* _(runDockerComposeUp(resolvedOutDir))
       return
