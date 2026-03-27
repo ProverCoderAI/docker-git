@@ -139,13 +139,11 @@ docker_git_sync_project_codex_skills() {
   rm -rf "$project_skills_root"
   mkdir -p "$project_skills_root"
 
-  # Priority goes from generic -> shared agent dirs -> agent-specific Codex dirs.
+  # Priority goes from generic/shared skill trees -> Codex-specific trees.
   for spec in \
     "10-root-skills::.skills" \
     "20-agents-skills::.agents/skills" \
     "30-agents-dot-skills::.agents/.skills" \
-    "40-claude-skills::.claude/skills" \
-    "50-claude-dot-skills::.claude/.skills" \
     "80-codex-skills::.codex/skills" \
     "90-codex-dot-skills::.codex/.skills"; do
     mount_name="${"$"}{spec%%::*}"
