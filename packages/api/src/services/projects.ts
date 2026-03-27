@@ -121,7 +121,8 @@ const toProjectDetails = (
   envGlobalPath: project.envGlobalPath,
   envProjectPath: project.envProjectPath,
   codexAuthPath: project.codexAuthPath,
-  codexHome: project.codexHome
+  codexHome: project.codexHome,
+  clonedOnHostname: project.clonedOnHostname
 })
 
 const findProjectById = (projectId: string) =>

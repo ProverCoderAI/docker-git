@@ -135,6 +135,10 @@ const restrictedSyntaxBaseNoServiceFactory = [
 
 export default tseslint.config(
   {
+    name: "effect-ts-compliance-ignore-shell-tests",
+    ignores: ["tests/hooks/**"]
+  },
+  {
     name: "effect-ts-compliance-check",
     files: ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
     languageOptions: {

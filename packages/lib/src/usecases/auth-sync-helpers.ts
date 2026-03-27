@@ -29,21 +29,19 @@ const JsonRecordFromStringSchema = Schema.parseJson(JsonRecordSchema)
 const defaultEnvContents = "# docker-git env\n# KEY=value\n"
 const codexConfigMarker = "# docker-git codex config"
 
-// CHANGE: switch default model to gpt-5.4 and pin xhigh reasoning for default + plan mode
-// WHY: keep plan mode aligned with development mode while preserving long-context defaults
-// QUOTE(ТЗ): "Сделать plan mode тоже с xhigh режимом как и разработка по дефолту. Так же заменить модель на gpt-5.4"
-// REF: github-issue-109
+// CHANGE: move model_context_window and model_auto_compact_token_limit to [profiles.longcontx]
+// WHY: global context window settings apply to all models; profile-scoped settings allow opt-in
+// QUOTE(ТЗ): "добавь longcontx"
+// REF: github-issue-183
 // SOURCE: n/a
-// FORMAT THEOREM: ∀c: config(c) -> model(c)="gpt-5.4" ∧ reasoning(c)=xhigh ∧ plan_reasoning(c)=xhigh
+// FORMAT THEOREM: ∀c: config(c) -> model(c)="gpt-5.4" ∧ reasoning(c)=xhigh ∧ longcontx_profile(c)=defined
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: default config stays deterministic
+// INVARIANT: default config stays deterministic; longcontx profile always present
 // COMPLEXITY: O(1)
 export const defaultCodexConfig = [
   "# docker-git codex config",
   "model = \"gpt-5.4\"",
-  "model_context_window = 1050000",
-  "model_auto_compact_token_limit = 945000",
   "model_reasoning_effort = \"xhigh\"",
   "plan_mode_reasoning_effort = \"xhigh\"",
   "personality = \"pragmatic\"",
@@ -56,7 +54,14 @@ export const defaultCodexConfig = [
   "shell_snapshot = true",
   "multi_agent = true",
   "apps = true",
-  "shell_tool = true"
+  "shell_tool = true",
+  "",
+  "[profiles.longcontx]",
+  "model = \"gpt-5.4\"",
+  "model_context_window = 1050000",
+  "model_auto_compact_token_limit = 945000",
+  "model_reasoning_effort = \"xhigh\"",
+  "plan_mode_reasoning_effort = \"xhigh\""
 ].join("\n")
 
 export const resolvePathFromBase = (

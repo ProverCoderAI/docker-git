@@ -19,7 +19,11 @@ import {
 import type { AppError } from "@effect-template/lib/usecases/errors"
 import { renderError } from "@effect-template/lib/usecases/errors"
 import { mcpPlaywrightUp } from "@effect-template/lib/usecases/mcp-playwright"
-import { downAllDockerGitProjects, listProjectStatus } from "@effect-template/lib/usecases/projects"
+import {
+  applyAllDockerGitProjects,
+  downAllDockerGitProjects,
+  listProjectStatus
+} from "@effect-template/lib/usecases/projects"
 import { exportScrap, importScrap } from "@effect-template/lib/usecases/scrap"
 import {
   sessionGistBackup,
@@ -28,6 +32,7 @@ import {
   sessionGistView
 } from "@effect-template/lib/usecases/session-gists"
 import {
+  autoPullState,
   stateCommit,
   stateInit,
   statePath,
@@ -80,6 +85,7 @@ type NonBaseCommand = Exclude<
   | { readonly _tag: "Create" }
   | { readonly _tag: "Status" }
   | { readonly _tag: "DownAll" }
+  | { readonly _tag: "ApplyAll" }
   | { readonly _tag: "Menu" }
 >
 
@@ -123,24 +129,26 @@ const handleNonBaseCommand = (command: NonBaseCommand) =>
       Match.exhaustive
     )
 
-// CHANGE: compose CLI program with typed errors and shell effects
-// WHY: keep a thin entry layer over pure parsing and template generation
-// QUOTE(ТЗ): "CLI команду... создавать докер образы"
-// REF: user-request-2026-01-07
+// CHANGE: compose CLI program with typed errors and shell effects; auto-pull .docker-git on startup
+// WHY: keep a thin entry layer over pure parsing and template generation; ensure state is fresh
+// QUOTE(ТЗ): "Сделать что бы когда вызывается команда docker-git то происходит git pull для .docker-git папки"
+// REF: issue-178
 // SOURCE: n/a
-// FORMAT THEOREM: forall cmd: handle(cmd) terminates with typed outcome
+// FORMAT THEOREM: forall cmd: autoPull() *> handle(cmd) terminates with typed outcome
 // PURITY: SHELL
 // EFFECT: Effect<void, AppError, FileSystem | Path | CommandExecutor>
-// INVARIANT: help is printed without side effects beyond logs
+// INVARIANT: auto-pull never blocks command execution; help is printed without side effects beyond logs
 // COMPLEXITY: O(n) where n = |files|
 export const program = pipe(
-  readCommand,
+  autoPullState,
+  Effect.flatMap(() => readCommand),
   Effect.flatMap((command: Command) =>
     Match.value(command).pipe(
       Match.when({ _tag: "Help" }, ({ message }) => Effect.log(message)),
       Match.when({ _tag: "Create" }, (create) => createProject(create)),
       Match.when({ _tag: "Status" }, () => listProjectStatus),
       Match.when({ _tag: "DownAll" }, () => downAllDockerGitProjects),
+      Match.when({ _tag: "ApplyAll" }, (cmd) => applyAllDockerGitProjects(cmd)),
       Match.when({ _tag: "Menu" }, () => runMenu),
       Match.orElse((cmd) => handleNonBaseCommand(cmd))
     )

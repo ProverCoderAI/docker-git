@@ -90,11 +90,12 @@ export const buildSelectLabels = (
   items.map((item, index) => {
     const prefix = index === selected ? ">" : " "
     const refLabel = formatRepoRef(item.repoRef)
+    const hostLabel = item.clonedOnHostname === undefined ? "" : ` @${item.clonedOnHostname}`
     const runtime = runtimeForProject(runtimeByProject, item)
     const runtimeSuffix = purpose === "Down" || purpose === "Delete"
       ? ` [${renderRuntimeLabel(runtime)}]`
       : ` [started=${renderStartedAtCompact(runtime)}]`
-    return `${prefix} ${index + 1}. ${item.displayName} (${refLabel})${runtimeSuffix}`
+    return `${prefix} ${index + 1}. ${item.displayName} (${refLabel})${hostLabel}${runtimeSuffix}`
   })
 
 export type SelectListWindow = {

@@ -1,5 +1,7 @@
 import type { TemplateConfig } from "../domain.js"
 
+export { renderEntrypointCodexResumeHint } from "./codex-resume-hint.js"
+
 export const renderEntrypointCodexHome = (config: TemplateConfig): string =>
   `# Ensure Codex home exists if mounted
 mkdir -p ${config.codexHome} && chown -R 1000:1000 ${config.codexHome}
@@ -71,8 +73,6 @@ else
     cat <<'EOF' > "$CODEX_CONFIG_FILE"
 # docker-git codex config
 model = "gpt-5.4"
-model_context_window = 1050000
-model_auto_compact_token_limit = 945000
 model_reasoning_effort = "xhigh"
 plan_mode_reasoning_effort = "xhigh"
 personality = "pragmatic"
@@ -86,6 +86,13 @@ shell_snapshot = true
 multi_agent = true
 apps = true
 shell_tool = true
+
+[profiles.longcontx]
+model = "gpt-5.4"
+model_context_window = 1050000
+model_auto_compact_token_limit = 945000
+model_reasoning_effort = "xhigh"
+plan_mode_reasoning_effort = "xhigh"
 EOF
     chown 1000:1000 "$CODEX_CONFIG_FILE" || true
   fi
@@ -120,96 +127,48 @@ export const renderEntrypointMcpPlaywright = (config: TemplateConfig): string =>
     .replaceAll("__CODEX_HOME__", config.codexHome)
     .replaceAll("__SERVICE_NAME__", config.serviceName)
 
-const entrypointCodexResumeHintTemplate = `# Ensure codex resume hint is shown for interactive shells
-CODEX_HINT_PATH="/etc/profile.d/zz-codex-resume.sh"
-if [[ ! -s "$CODEX_HINT_PATH" ]]; then
-  cat <<'EOF' > "$CODEX_HINT_PATH"
-docker_git_workspace_context_line() {
-  REPO_REF_VALUE="\${REPO_REF:-__REPO_REF_DEFAULT__}"
-  REPO_URL_VALUE="\${REPO_URL:-__REPO_URL_DEFAULT__}"
+const entrypointProjectCodexSkillsSyncTemplate = String
+  .raw`# Mirror project-owned Codex skill trees into CODEX_HOME without overwriting global skills.
+docker_git_sync_project_codex_skills() {
+  local codex_home="${"$"}{CODEX_HOME:-__CODEX_HOME__}"
+  local project_dir="${"$"}{TARGET_DIR:-}"
+  local project_skills_root="$codex_home/skills/.docker-git-project"
+  local linked=0
+  local spec=""
+  local mount_name=""
+  local relative_path=""
 
-  if [[ "$REPO_REF_VALUE" == issue-* ]]; then
-    ISSUE_ID_VALUE="$(printf "%s" "$REPO_REF_VALUE" | sed -E 's#^issue-##')"
-    ISSUE_URL_VALUE=""
-    if [[ "$REPO_URL_VALUE" == https://github.com/* ]]; then
-      ISSUE_REPO_VALUE="$(printf "%s" "$REPO_URL_VALUE" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##')"
-      if [[ -n "$ISSUE_REPO_VALUE" ]]; then
-        ISSUE_URL_VALUE="https://github.com/$ISSUE_REPO_VALUE/issues/$ISSUE_ID_VALUE"
-      fi
-    fi
-    if [[ -n "$ISSUE_URL_VALUE" ]]; then
-      printf "%s\n" "Контекст workspace: issue #$ISSUE_ID_VALUE ($ISSUE_URL_VALUE)"
-    else
-      printf "%s\n" "Контекст workspace: issue #$ISSUE_ID_VALUE"
-    fi
-    return
+  if [[ -z "$project_dir" || ! -d "$project_dir" ]]; then
+    return 0
   fi
 
-  if [[ "$REPO_REF_VALUE" == refs/pull/*/head ]]; then
-    PR_ID_VALUE="$(printf "%s" "$REPO_REF_VALUE" | sed -nE 's#^refs/pull/([0-9]+)/head$#\\1#p')"
-    PR_URL_VALUE=""
-    if [[ "$REPO_URL_VALUE" == https://github.com/* && -n "$PR_ID_VALUE" ]]; then
-      PR_REPO_VALUE="$(printf "%s" "$REPO_URL_VALUE" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##')"
-      if [[ -n "$PR_REPO_VALUE" ]]; then
-        PR_URL_VALUE="https://github.com/$PR_REPO_VALUE/pull/$PR_ID_VALUE"
-      fi
+  mkdir -p "$codex_home/skills"
+  rm -rf "$project_skills_root"
+  mkdir -p "$project_skills_root"
+
+  # Priority goes from generic/shared skill trees -> Codex-specific trees.
+  for spec in \
+    "10-root-skills::.skills" \
+    "20-agents-skills::.agents/skills" \
+    "30-agents-dot-skills::.agents/.skills" \
+    "80-codex-skills::.codex/skills" \
+    "90-codex-dot-skills::.codex/.skills"; do
+    mount_name="${"$"}{spec%%::*}"
+    relative_path="${"$"}{spec#*::}"
+
+    if [[ -d "$project_dir/$relative_path" ]]; then
+      ln -sfn "$project_dir/$relative_path" "$project_skills_root/$mount_name"
+      chown -h 1000:1000 "$project_skills_root/$mount_name" 2>/dev/null || true
+      linked=1
     fi
-    if [[ -n "$PR_ID_VALUE" && -n "$PR_URL_VALUE" ]]; then
-      printf "%s\n" "Контекст workspace: PR #$PR_ID_VALUE ($PR_URL_VALUE)"
-    elif [[ -n "$PR_ID_VALUE" ]]; then
-      printf "%s\n" "Контекст workspace: PR #$PR_ID_VALUE"
-    elif [[ -n "$REPO_REF_VALUE" ]]; then
-      printf "%s\n" "Контекст workspace: pull request ($REPO_REF_VALUE)"
-    fi
-    return
+  done
+
+  chown 1000:1000 "$codex_home/skills" "$project_skills_root" 2>/dev/null || true
+
+  if [[ "$linked" -eq 1 ]]; then
+    echo "[codex-skills] linked project skill trees into $project_skills_root"
   fi
+}`
 
-  if [[ -n "$REPO_URL_VALUE" ]]; then
-    printf "%s\n" "Контекст workspace: $REPO_URL_VALUE"
-  fi
-}
-
-docker_git_print_codex_resume_hint() {
-  if [ -z "\${CODEX_RESUME_HINT_SHOWN-}" ]; then
-    DOCKER_GIT_CONTEXT_LINE="$(docker_git_workspace_context_line)"
-    if [[ -n "$DOCKER_GIT_CONTEXT_LINE" ]]; then
-      echo "$DOCKER_GIT_CONTEXT_LINE"
-    fi
-    echo "Старые сессии можно запустить с помощью codex resume или codex resume <id>, если знаешь айди."
-    export CODEX_RESUME_HINT_SHOWN=1
-  fi
-}
-
-if [ -n "$BASH_VERSION" ]; then
-  case "$-" in
-    *i*)
-      docker_git_print_codex_resume_hint
-      ;;
-  esac
-fi
-if [ -n "$ZSH_VERSION" ]; then
-  if [[ "$-" == *i* ]]; then
-    docker_git_print_codex_resume_hint
-  fi
-fi
-EOF
-  chmod 0644 "$CODEX_HINT_PATH"
-fi
-if ! grep -q "zz-codex-resume.sh" /etc/bash.bashrc 2>/dev/null; then
-  printf "%s\\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then . /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/bash.bashrc
-fi
-if [[ -s /etc/zsh/zshrc ]] && ! grep -q "zz-codex-resume.sh" /etc/zsh/zshrc 2>/dev/null; then
-  printf "%s\\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then source /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/zsh/zshrc
-fi`
-
-const escapeForDoubleQuotes = (value: string): string => {
-  const backslash = String.fromCodePoint(92)
-  return value
-    .replaceAll(backslash, `${backslash}${backslash}`)
-    .replaceAll(String.fromCodePoint(34), `${backslash}${String.fromCodePoint(34)}`)
-}
-
-export const renderEntrypointCodexResumeHint = (config: TemplateConfig): string =>
-  entrypointCodexResumeHintTemplate
-    .replaceAll("__REPO_REF_DEFAULT__", escapeForDoubleQuotes(config.repoRef))
-    .replaceAll("__REPO_URL_DEFAULT__", escapeForDoubleQuotes(config.repoUrl))
+export const renderEntrypointProjectCodexSkillsSync = (config: TemplateConfig): string =>
+  entrypointProjectCodexSkillsSyncTemplate.replaceAll("__CODEX_HOME__", config.codexHome)

@@ -1,3 +1,4 @@
+export { applyAllDockerGitProjects } from "./projects-apply-all.js"
 export {
   buildSshCommand,
   loadProjectItem,

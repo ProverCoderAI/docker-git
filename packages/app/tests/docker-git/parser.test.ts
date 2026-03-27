@@ -36,6 +36,8 @@ describe("parseArgs", () => {
       expect(command.config.serviceName).toBe("dg-repo")
       expect(command.config.volumeName).toBe("dg-repo-home")
       expect(command.config.sshPort).toBe(defaultTemplateConfig.sshPort)
+      expect(typeof command.config.clonedOnHostname).toBe("string")
+      expect(String(command.config.clonedOnHostname).length).toBeGreaterThan(0)
     }))
 
   it.effect("parses create resource limit flags", () =>
@@ -263,6 +265,12 @@ describe("parseArgs", () => {
       expect(command.cpuLimit).toBe("2")
       expect(command.ramLimit).toBe("4g")
       expect(command.enableMcpPlaywright).toBe(true)
+    }))
+
+  it.effect("parses apply-all and update-all commands", () =>
+    Effect.sync(() => {
+      expect(parseOrThrow(["apply-all"])._tag).toBe("ApplyAll")
+      expect(parseOrThrow(["update-all"])._tag).toBe("ApplyAll")
     }))
 
   it.effect("parses down-all command", () =>

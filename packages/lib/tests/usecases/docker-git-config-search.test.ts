@@ -44,6 +44,7 @@ describe("findDockerGitConfigPaths", () => {
         const ignoredOrch = path.join(root, "org/repo-a/.orch/docker-git.json")
         const ignoredRootCache = path.join(root, ".cache/packages/pnpm/store/v10/index/docker-git.json")
         const ignoredDockerGit = path.join(root, ".docker-git/.cache/git-mirrors/docker-git.json")
+        const ignoredTmp = path.join(root, "org/tmp/repo-c/docker-git.json")
 
         yield* _(writeFileWithParents(fs, path, includedMain))
         yield* _(writeFileWithParents(fs, path, includedNested))
@@ -51,6 +52,7 @@ describe("findDockerGitConfigPaths", () => {
         yield* _(writeFileWithParents(fs, path, ignoredOrch))
         yield* _(writeFileWithParents(fs, path, ignoredRootCache))
         yield* _(writeFileWithParents(fs, path, ignoredDockerGit))
+        yield* _(writeFileWithParents(fs, path, ignoredTmp))
 
         const found = yield* _(findDockerGitConfigPaths(fs, path, root))
         expect([...found].sort()).toEqual([includedMain, includedNested].sort())

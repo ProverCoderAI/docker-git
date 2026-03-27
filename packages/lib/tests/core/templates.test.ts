@@ -4,6 +4,7 @@ import { defaultTemplateConfig, type TemplateConfig } from "../../src/core/domai
 import { renderDockerCompose } from "../../src/core/templates/docker-compose.js"
 import { renderEntrypoint } from "../../src/core/templates-entrypoint.js"
 import { renderEntrypointDnsRepair } from "../../src/core/templates-entrypoint/dns-repair.js"
+import { renderEntrypointGitHooks } from "../../src/core/templates-entrypoint/git.js"
 
 const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateConfig => ({
   ...defaultTemplateConfig,
@@ -42,6 +43,39 @@ describe("renderEntrypointDnsRepair", () => {
 
     expect(dnsRepairIndex).toBeGreaterThanOrEqual(0)
     expect(packageCacheIndex).toBeGreaterThan(dnsRepairIndex)
+  })
+})
+
+describe("renderEntrypointGitHooks", () => {
+  it("installs pre-push protection checks and a global git post-push runtime", () => {
+    const hooks = renderEntrypointGitHooks()
+
+    expect(hooks).toContain('PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"')
+    expect(hooks).toContain('POST_PUSH_ACTION="$HOOKS_DIR/post-push"')
+    expect(hooks).toContain('GIT_WRAPPER_BIN="/usr/local/bin/git"')
+    expect(hooks).toContain('type -aP git')
+    expect(hooks).toContain("cat <<'EOF' > \"$PRE_PUSH_HOOK\"")
+    expect(hooks).toContain("cat <<'EOF' > \"$POST_PUSH_ACTION\"")
+    expect(hooks).toContain("cat <<'EOF' > \"$GIT_WRAPPER_BIN\"")
+    expect(hooks).toContain("check_issue_managed_block_range")
+    expect(hooks).toContain("Run session backup after successful push")
+    expect(hooks).toContain("git has no client-side post-push hook")
+    expect(hooks).toContain("docker-git managed git wrapper")
+    expect(hooks).toContain("DOCKER_GIT_SKIP_POST_PUSH_ACTION=1")
+    expect(hooks).toContain("DOCKER_GIT_POST_PUSH_REPO_ROOT")
+    expect(hooks).toContain("docker_git_git_push_is_dry_run")
+    expect(hooks).toContain("docker_git_git_resolve_repo_root")
+    expect(hooks).toContain("--dry-run|-n")
+    expect(hooks).toContain("--help|-h|--version|--html-path|--man-path|--info-path|--list-cmds|--list-cmds=*")
+    expect(hooks).not.toContain('POST_PUSH_RUNTIME="/etc/profile.d/zz-git-post-push.sh"')
+    expect(hooks).not.toContain("source /etc/profile.d/zz-git-post-push.sh")
+    expect(hooks).toContain('REPO_ROOT="${DOCKER_GIT_POST_PUSH_REPO_ROOT:-}"')
+    expect(hooks).toContain("node \"$BACKUP_SCRIPT\"")
+    expect(hooks).not.toContain("node \"$BACKUP_SCRIPT\" --verbose")
+    expect(hooks.indexOf('$REPO_ROOT/scripts/session-backup-gist.js')).toBeLessThan(
+      hooks.indexOf("/opt/docker-git/scripts/session-backup-gist.js")
+    )
+    expect(hooks).toContain("[session-backup] Warning: gh CLI not found")
   })
 })
 

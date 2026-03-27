@@ -23,6 +23,20 @@ const menuCommand: Command = { _tag: "Menu" }
 const statusCommand: Command = { _tag: "Status" }
 const downAllCommand: Command = { _tag: "DownAll" }
 
+// CHANGE: parse --active flag for apply-all command to restrict to running containers
+// WHY: allow users to apply config only to currently active containers via --active flag
+// QUOTE(ТЗ): "сделать это возможным через атрибут --active применять только к активным контейнерам, а не ко всем"
+// REF: issue-185
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: activeOnly is true only when --active flag is present
+// COMPLEXITY: O(n) where n = |args|
+const parseApplyAll = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> => {
+  const activeOnly = args.includes("--active")
+  const command: Command = { _tag: "ApplyAll", activeOnly }
+  return Either.right(command)
+}
+
 const parseCreate = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> =>
   Either.flatMap(parseRawOptions(args), (raw) => buildCreateCommand(raw))
 
@@ -75,6 +89,8 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("ui", () => Either.right(menuCommand))
     )
     .pipe(
+      Match.when("apply-all", () => parseApplyAll(rest)),
+      Match.when("update-all", () => parseApplyAll(rest)),
       Match.when("auth", () => parseAuth(rest)),
       Match.when("open", () => parseAttach(rest)),
       Match.when("apply", () => parseApply(rest)),

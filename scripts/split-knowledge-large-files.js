@@ -5,7 +5,7 @@ const path = require("node:path");
 
 const MAX_BYTES = 99 * 1000 * 1000;
 const KNOWLEDGE_DIR_NAMES = new Set([".knowledge", ".knowlenge"]);
-const WALK_IGNORE_DIR_NAMES = new Set([".git", "node_modules"]);
+const WALK_IGNORE_DIR_NAMES = new Set([".git", "node_modules", "tmp"]);
 const MANIFEST_SUFFIX = ".chunks.json";
 const CHUNK_BYTES = 1024 * 1024;
 
@@ -85,6 +85,7 @@ const walk = (dir) => {
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (WALK_IGNORE_DIR_NAMES.has(entry.name)) continue;
       walk(fullPath);
       continue;
     }

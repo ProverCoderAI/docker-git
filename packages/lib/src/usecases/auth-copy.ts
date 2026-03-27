@@ -3,6 +3,8 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
+const shouldSkipCopiedDir = (entry: string): boolean => entry === "tmp"
+
 const copyDirRecursive = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
@@ -19,6 +21,9 @@ const copyDirRecursive = (
     for (const entry of entries) {
       const sourceEntry = path.join(sourcePath, entry)
       const targetEntry = path.join(targetPath, entry)
+      if (shouldSkipCopiedDir(entry)) {
+        continue
+      }
       const entryInfo = yield* _(fs.stat(sourceEntry))
       if (entryInfo.type === "Directory") {
         yield* _(copyDirRecursive(fs, path, sourceEntry, targetEntry))

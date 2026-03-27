@@ -13,6 +13,9 @@ const renderGitignore = (): string =>
   `# docker-git project files
 # NOTE: bootstrap secrets stay local-only and should not be committed.
 
+# docker-git scripts (copied from workspace, rebuilt on each project update)
+scripts/
+
 # Volatile Codex artifacts (do not commit)
 authorized_keys
 .orch/auth/codex/auth.json

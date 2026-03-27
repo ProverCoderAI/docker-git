@@ -153,6 +153,11 @@ describe("applyProjectFiles", () => {
         expect(composeAfter).toContain("cpus:")
         expect(composeAfter).toContain('mem_limit: "')
 
+        const entrypointAfter = yield* _(fs.readFileString(path.join(outDir, "entrypoint.sh")))
+        expect(entrypointAfter).toContain("docker_git_prepare_active_agent_project_rules()")
+        expect(entrypointAfter).toContain('"20-agents-skills::.agents/skills"')
+        expect(entrypointAfter).toContain('$project_dir/.claude/settings.json')
+
         const configAfter = yield* _(fs.readFileString(configPath))
         expect(configAfter).toContain('"cpuLimit": "30%"')
         expect(configAfter).toContain('"ramLimit": "30%"')

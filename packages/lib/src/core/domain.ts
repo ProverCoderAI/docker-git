@@ -49,6 +49,7 @@ export interface TemplateConfig {
   readonly pnpmVersion: string
   readonly agentMode?: AgentMode | undefined
   readonly agentAuto?: boolean | undefined
+  readonly clonedOnHostname?: string | undefined
 }
 
 export interface ProjectConfig {
@@ -144,6 +145,20 @@ export interface ApplyCommand {
   readonly cpuLimit?: string | undefined
   readonly ramLimit?: string | undefined
   readonly enableMcpPlaywright?: boolean | undefined
+}
+
+// CHANGE: add apply-all command to apply docker-git config to every known project; support --active flag
+// WHY: allow bulk-updating all containers in one command; --active restricts to currently running containers only
+// QUOTE(ТЗ): "Сделать команду которая сама на все контейнеры применит новые настройки"
+// QUOTE(ТЗ): "сделать это возможным через атрибут --active применять только к активным контейнерам, а не ко всем"
+// REF: issue-164, issue-185
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: when activeOnly=false applies to all discovered projects; when activeOnly=true applies only to running containers; individual failures do not abort the batch
+// COMPLEXITY: O(1)
+export interface ApplyAllCommand {
+  readonly _tag: "ApplyAll"
+  readonly activeOnly: boolean
 }
 
 export interface HelpCommand {
@@ -324,6 +339,7 @@ export type Command =
   | ScrapCommand
   | McpPlaywrightUpCommand
   | ApplyCommand
+  | ApplyAllCommand
   | HelpCommand
   | StatusCommand
   | DownAllCommand

@@ -12,7 +12,7 @@
  *
  * Options:
  *   --session-dir <path>    Path to session directory under $HOME (default: auto-detect ~/.codex, ~/.claude, ~/.qwen, or ~/.gemini)
- *   --pr-number <number>    PR number to post comment to (optional, auto-detected from branch)
+ *   --pr-number <number>    Open PR number to post comment to (optional, auto-detected from branch)
  *   --repo <owner/repo>     Source repository (optional, auto-detected from git remote)
  *   --no-comment            Skip posting PR comment
  *   --dry-run               Show what would be uploaded without actually uploading
@@ -29,6 +29,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execSync, spawnSync } = require("node:child_process");
 const os = require("node:os");
+const GH_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
 
 const {
   buildBlobUrl,
@@ -40,6 +41,15 @@ const {
 } = require("./session-backup-repo.js");
 
 const SESSION_DIR_NAMES = [".codex", ".claude", ".qwen", ".gemini"];
+const SESSION_WALK_IGNORE_DIR_NAMES = new Set([".git", "node_modules", "tmp"]);
+
+const toLogicalRelativePath = (relativePath) =>
+  relativePath.split(path.sep).join(path.posix.sep);
+
+const shouldIgnoreSessionPath = (relativePath) => {
+  const logicalPath = toLogicalRelativePath(relativePath);
+  return logicalPath === "tmp" || logicalPath.startsWith("tmp/") || logicalPath.includes("/tmp/");
+};
 
 const isPathWithinParent = (targetPath, parentPath) => {
   const relative = path.relative(parentPath, targetPath);
@@ -107,7 +117,7 @@ const parseArgs = () => {
 
 Options:
   --session-dir <path>    Path to session directory under $HOME
-  --pr-number <number>    PR number to post comment to
+  --pr-number <number>    Open PR number to post comment to
   --repo <owner/repo>     Source repository
   --no-comment            Skip posting PR comment
   --dry-run               Show what would be uploaded
@@ -138,10 +148,34 @@ const execCommand = (command, options = {}) => {
   }
 };
 
+const getGitStatus = () => {
+  const status = execCommand("git status");
+  if (status === null) {
+    return null;
+  }
+  if (!status) {
+    return "clean";
+  }
+  return status;
+};
+
+const printGitStatus = (status) => {
+  console.log("[session-backup] git status:");
+  if (status === null) {
+    console.log("[session-backup] (unavailable)");
+    return;
+  }
+
+  for (const line of status.split("\n")) {
+    console.log(`[session-backup] ${line}`);
+  }
+};
+
 const ghCommand = (args, ghEnv) => {
   const result = spawnSync("gh", args, {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
+    maxBuffer: GH_MAX_BUFFER_BYTES,
     env: ghEnv,
   });
 
@@ -245,7 +279,7 @@ const getPrNumberFromBranch = (repo, branch, ghEnv) => {
   return null;
 };
 
-const prExists = (repo, prNumber, ghEnv) => {
+const getPrState = (repo, prNumber, ghEnv) => {
   const result = ghCommand([
     "pr",
     "view",
@@ -253,12 +287,16 @@ const prExists = (repo, prNumber, ghEnv) => {
     "--repo",
     repo,
     "--json",
-    "number",
+    "state",
     "--jq",
-    ".number",
+    ".state",
   ], ghEnv);
 
-  return result.success && result.stdout === prNumber.toString();
+  return result.success ? result.stdout : null;
+};
+
+const prIsOpen = (repo, prNumber, ghEnv) => {
+  return getPrState(repo, prNumber, ghEnv) === "OPEN";
 };
 
 const getPrNumberFromWorkspaceBranch = (branch) => {
@@ -275,8 +313,11 @@ const findPrContext = (repos, branch, verbose, ghEnv) => {
   for (const repo of repos) {
     log(verbose, `Checking open PR in ${repo} for branch ${branch}`);
     const prNumber = getPrNumberFromBranch(repo, branch, ghEnv);
-    if (prNumber !== null) {
+    if (prNumber !== null && prIsOpen(repo, prNumber, ghEnv)) {
       return { repo, prNumber };
+    }
+    if (prNumber !== null) {
+      log(verbose, `Skipping PR #${prNumber} in ${repo}: PR is not open`);
     }
   }
 
@@ -287,7 +328,7 @@ const findPrContext = (repos, branch, verbose, ghEnv) => {
 
   for (const repo of repos) {
     log(verbose, `Checking workspace PR #${workspacePrNumber} in ${repo} for branch ${branch}`);
-    if (prExists(repo, workspacePrNumber, ghEnv)) {
+    if (prIsOpen(repo, workspacePrNumber, ghEnv)) {
       return { repo, prNumber: workspacePrNumber };
     }
   }
@@ -332,16 +373,22 @@ const collectSessionFiles = (dirPath, baseName, verbose) => {
     for (const entry of entries) {
       const fullPath = path.join(currentPath, entry.name);
       const relPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+      const logicalRelPath = toLogicalRelativePath(relPath);
+
+      if (shouldIgnoreSessionPath(logicalRelPath)) {
+        log(verbose, `Skipping tmp path: ${path.posix.join(baseName, logicalRelPath)}`);
+        continue;
+      }
 
       if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === ".git") {
+        if (SESSION_WALK_IGNORE_DIR_NAMES.has(entry.name)) {
           continue;
         }
         walk(fullPath, relPath);
       } else if (entry.isFile()) {
         try {
           const stats = fs.statSync(fullPath);
-          const logicalName = path.posix.join(baseName, relPath.split(path.sep).join(path.posix.sep));
+          const logicalName = path.posix.join(baseName, logicalRelPath);
           files.push({
             logicalName,
             sourcePath: fullPath,
@@ -410,25 +457,22 @@ const buildSnapshotReadme = ({ backupRepo, source, manifestUrl, summary, session
     "",
     `- Manifest: ${manifestUrl}`,
     "",
-    "Generated automatically by the docker-git `pre-push` session backup hook.",
+    "Generated automatically by the docker-git `git push` post-action.",
     "",
   ].join("\n");
 
-const buildCommentBody = ({ backupRepo, source, manifestUrl, readmeUrl, summary }) => {
+const buildCommentBody = ({ source, manifestUrl, readmeUrl, summary, gitStatus }) => {
+  const statusText = gitStatus === null ? "(unavailable)" : gitStatus;
   const lines = [
     "## AI Session Backup",
-    "",
-    "A snapshot of the AI session context used during development has been saved.",
-    "",
-    `Backup Repo: ${backupRepo.fullName}`,
-    `Source Commit: ${source.commitSha}`,
-    `Created At: ${source.createdAt}`,
+    `Commit: ${source.commitSha}`,
     `Files: ${summary.fileCount} (${formatBytes(summary.totalBytes)})`,
+    `Links: [README](${readmeUrl}) | [Manifest](${manifestUrl})`,
     "",
-    `README: ${readmeUrl}`,
-    `Manifest: ${manifestUrl}`,
-    "",
-    "This snapshot metadata was used during development.",
+    "`git status`",
+    "```",
+    statusText,
+    "```",
   ];
 
   lines.push(`<!-- docker-git-session-backup:${source.commitSha}:${source.createdAt} -->`);
@@ -492,7 +536,11 @@ const main = () => {
 
   let prContext = null;
   if (args.prNumber !== null) {
-    prContext = { repo: sourceRepo, prNumber: args.prNumber };
+    if (prIsOpen(sourceRepo, args.prNumber, ghEnv)) {
+      prContext = { repo: sourceRepo, prNumber: args.prNumber };
+    } else {
+      log(verbose, `Skipping PR comment: PR #${args.prNumber} is not open`);
+    }
   } else if (args.postComment) {
     prContext = findPrContext(repoCandidates, branch, verbose, ghEnv);
   }
@@ -552,6 +600,7 @@ const main = () => {
     const manifestUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, `${snapshotRef}/manifest.json`);
     const readmeRepoPath = `${snapshotRef}/README.md`;
     const readmeUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, readmeRepoPath);
+    const gitStatus = getGitStatus();
 
     const manifest = buildManifest({
       backupRepo,
@@ -582,13 +631,16 @@ const main = () => {
       },
     ];
     if (args.dryRun) {
-      console.log(`[dry-run] Would upload snapshot to ${backupRepo.fullName}:${snapshotRef}`);
-      console.log(`[dry-run] Would write ${uploadEntries.length + 1} file(s) including README and manifest.`);
-      console.log(`[dry-run] README URL: ${readmeUrl}`);
-      console.log(`[dry-run] Manifest URL: ${manifestUrl}`);
+      console.log(
+        `[session-backup] dry-run: ${source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`
+      );
+      printGitStatus(gitStatus);
+      log(verbose, `[dry-run] Upload target: ${backupRepo.fullName}:${snapshotRef}`);
+      log(verbose, `[dry-run] README URL: ${readmeUrl}`);
+      log(verbose, `[dry-run] Manifest URL: ${manifestUrl}`);
       if (args.postComment && prContext !== null) {
-        console.log(`[dry-run] Would post comment to PR #${prContext.prNumber} in ${prContext.repo}:`);
-        console.log(buildCommentBody({ backupRepo, source, manifestUrl, readmeUrl, summary }));
+        log(verbose, `Would post comment to PR #${prContext.prNumber} in ${prContext.repo}:`);
+        log(verbose, buildCommentBody({ source, manifestUrl, readmeUrl, summary, gitStatus }));
       }
       return;
     }
@@ -602,25 +654,33 @@ const main = () => {
       ghEnv
     );
 
-    console.log(`[session-backup] Uploaded snapshot to ${backupRepo.fullName}`);
-    console.log(`[session-backup] README: ${readmeUrl}`);
-    console.log(`[session-backup] Manifest: ${uploadResult.manifestUrl}`);
+    console.log(
+      `[session-backup] ok: ${source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`
+    );
+    printGitStatus(gitStatus);
+    log(verbose, `[session-backup] Uploaded snapshot to ${backupRepo.fullName}:${snapshotRef}`);
+    log(verbose, `[session-backup] Manifest: ${uploadResult.manifestUrl}`);
 
     if (args.postComment && prContext !== null) {
       const comment = buildCommentBody({
-        backupRepo,
         source,
         manifestUrl: uploadResult.manifestUrl,
         readmeUrl,
         summary,
+        gitStatus,
       });
       postPrComment(prContext.repo, prContext.prNumber, comment, verbose, ghEnv);
     }
-
-    console.log("[session-backup] Session backup complete");
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 };
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  collectSessionFiles,
+  shouldIgnoreSessionPath,
+};

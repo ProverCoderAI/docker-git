@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
+import { renderEntrypointGitPostPushWrapperInstall } from "./git-post-push-wrapper.js"
 
 const renderAuthLabelResolution = (): string =>
   String.raw`# 2) Ensure GitHub auth vars are available for SSH sessions.
@@ -129,6 +130,7 @@ const entrypointGitHooksTemplate = String
   .raw`# 3) Install global git hooks to protect main/master + managed AGENTS context
 HOOKS_DIR="/opt/docker-git/hooks"
 PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"
+POST_PUSH_ACTION="$HOOKS_DIR/post-push"
 mkdir -p "$HOOKS_DIR"
 
 cat <<'EOF' > "$PRE_PUSH_HOOK"
@@ -256,17 +258,43 @@ done
 EOF
 chmod 0755 "$PRE_PUSH_HOOK"
 
-cat <<'EOF' >> "$PRE_PUSH_HOOK"
+cat <<'EOF' > "$POST_PUSH_ACTION"
+#!/usr/bin/env bash
+set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# 5) Run session backup after successful push
+REPO_ROOT="${"${"}DOCKER_GIT_POST_PUSH_REPO_ROOT:-}"
+if [[ -z "$REPO_ROOT" || ! -d "$REPO_ROOT" ]]; then
+  REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
 cd "$REPO_ROOT"
 
+# CHANGE: keep post-push backup logic in a reusable action script
+# WHY: git has no client-side post-push hook, so the global git wrapper
+#      invokes this after a successful git push
+# REF: issue-192
 if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
   if command -v gh >/dev/null 2>&1; then
-    node scripts/session-backup-gist.js --verbose || echo "[session-backup] Warning: session backup failed (non-fatal)"
+    BACKUP_SCRIPT=""
+    if [ -f "$REPO_ROOT/scripts/session-backup-gist.js" ]; then
+      BACKUP_SCRIPT="$REPO_ROOT/scripts/session-backup-gist.js"
+    elif [ -f /opt/docker-git/scripts/session-backup-gist.js ]; then
+      BACKUP_SCRIPT="/opt/docker-git/scripts/session-backup-gist.js"
+    fi
+    if [ -n "$BACKUP_SCRIPT" ]; then
+      DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 node "$BACKUP_SCRIPT" || echo "[session-backup] Warning: session backup failed (non-fatal)"
+    else
+      echo "[session-backup] Warning: script not found (expected repo or global path)"
+    fi
+  else
+    echo "[session-backup] Warning: gh CLI not found (skipping session backup)"
   fi
 fi
 EOF
+chmod 0755 "$POST_PUSH_ACTION"
+
+${renderEntrypointGitPostPushWrapperInstall()}
+
 git config --system core.hooksPath "$HOOKS_DIR" || true
 git config --global core.hooksPath "$HOOKS_DIR" || true`
 

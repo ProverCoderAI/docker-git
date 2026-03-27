@@ -3,6 +3,7 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect, Match } from "effect"
 
+import { dockerGitScriptNames } from "../core/docker-git-scripts.js"
 import { type TemplateConfig } from "../core/domain.js"
 import { resolveComposeResourceLimits, withDefaultResourceLimitIntent } from "../core/resource-limits.js"
 import { type FileSpec, planFiles } from "../core/templates.js"
@@ -102,6 +103,40 @@ const failOnExistingFiles = (
   return Effect.fail(new FileExistsError({ path: firstPath }))
 }
 
+// CHANGE: discover and copy docker-git scripts into the project build context
+// WHY: scripts must be part of the Docker build context for COPY into the image
+// REF: issue-176
+// PURITY: SHELL
+// EFFECT: Effect<void, PlatformError, FileSystem | Path>
+// INVARIANT: only copies scripts that exist in the workspace; missing scripts are skipped
+// COMPLEXITY: O(|dockerGitScriptNames|)
+const provisionDockerGitScripts = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  baseDir: string
+): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    const workspaceRoot = process.cwd()
+    const sourceScriptsDir = path.join(workspaceRoot, "scripts")
+    const targetScriptsDir = path.join(baseDir, "scripts")
+
+    const sourceExists = yield* _(fs.exists(sourceScriptsDir))
+    if (!sourceExists) {
+      return
+    }
+
+    yield* _(fs.makeDirectory(targetScriptsDir, { recursive: true }))
+
+    for (const scriptName of dockerGitScriptNames) {
+      const sourcePath = path.join(sourceScriptsDir, scriptName)
+      const targetPath = path.join(targetScriptsDir, scriptName)
+      const exists = yield* _(fs.exists(sourcePath))
+      if (exists) {
+        yield* _(fs.copyFile(sourcePath, targetPath))
+      }
+    }
+  })
+
 // CHANGE: write generated docker-git files to disk
 // WHY: isolate all filesystem effects in a thin shell
 // QUOTE(ТЗ): "создавать докер образы"
@@ -149,6 +184,11 @@ export const writeProjectFiles = (
         created.push(resolveSpecPath(path, baseDir, spec))
       }
     }
+
+    // CHANGE: provision docker-git scripts into project build context
+    // WHY: Dockerfile COPY scripts/ requires scripts to be in the build context
+    // REF: issue-176
+    yield* _(provisionDockerGitScripts(fs, path, baseDir))
 
     return created
   })

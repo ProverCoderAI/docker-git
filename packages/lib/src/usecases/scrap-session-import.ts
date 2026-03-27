@@ -159,7 +159,8 @@ const prepareRepoForImport = (
     `git -c safe.directory="$SAFE" reset --hard ${shellEscape(ctx.manifest.repo.head)}`,
     "git -c safe.directory=\"$SAFE\" clean -fd",
     // Remove common heavy caches that are easy to rebuild with internet access.
-    "find . -name node_modules -type d -prune -exec rm -rf '{}' + 2>/dev/null || true"
+    String
+      .raw`find . \( -name tmp -o -name .git \) -type d -prune -o -name node_modules -type d -prune -exec rm -rf '{}' + 2>/dev/null || true`
   ].join("\n")
 
   return runDockerExec(

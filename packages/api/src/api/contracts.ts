@@ -25,6 +25,7 @@ export type ProjectDetails = ProjectSummary & {
   readonly envProjectPath: string
   readonly codexAuthPath: string
   readonly codexHome: string
+  readonly clonedOnHostname?: string | undefined
 }
 
 export type CreateProjectRequest = {

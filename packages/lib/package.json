@@ -73,7 +73,7 @@
     "eslint-plugin-sonarjs": "^4.0.2",
     "eslint-plugin-sort-destructure-keys": "^3.0.0",
     "eslint-plugin-unicorn": "^63.0.0",
-    "@vitest/eslint-plugin": "^1.6.12",
+    "@vitest/eslint-plugin": "^1.6.13",
     "globals": "^17.4.0",
     "jscpd": "^4.0.8",
     "typescript": "^5.9.3",

@@ -1,6 +1,77 @@
 import { describe, expect, it } from "@effect/vitest"
 
-import { dockerComposeUpRecreateArgs, parseDockerPublishedHostPorts } from "../../src/shell/docker.js"
+import { runDockerComposeDownVolumes, dockerComposeUpRecreateArgs, parseDockerPublishedHostPorts } from "../../src/shell/docker.js"
+
+import * as Command from "@effect/platform/Command"
+import * as CommandExecutor from "@effect/platform/CommandExecutor"
+import { Effect } from "effect"
+import * as Stream from "effect/Stream"
+
+type RecordedCommand = {
+  readonly command: string
+  readonly args: ReadonlyArray<string>
+}
+
+const makeCommandRecorder = (recorded: Array<RecordedCommand>): CommandExecutor.CommandExecutor => {
+  const start = (command: Command.Command): Effect.Effect<CommandExecutor.Process, never> =>
+    Effect.gen(function*(_) {
+      const flattened = Command.flatten(command)
+      for (const entry of flattened) {
+        recorded.push({ command: entry.command, args: entry.args })
+      }
+
+      const process: CommandExecutor.Process = {
+        [CommandExecutor.ProcessTypeId]: CommandExecutor.ProcessTypeId,
+        pid: CommandExecutor.ProcessId(1),
+        exitCode: Effect.succeed(CommandExecutor.ExitCode(0)),
+        isRunning: Effect.succeed(false),
+        kill: (_signal) => Effect.void,
+        stderr: Stream.empty,
+        stdin: (_data) => Effect.void,
+        stdout: Stream.empty,
+        toJSON: () => ({ _tag: "DockerTestProcess" }),
+        toString: () => "DockerTestProcess",
+      }
+
+      return process
+    })
+
+  return CommandExecutor.makeExecutor(start)
+}
+
+const includesArgsInOrder = (
+  args: ReadonlyArray<string>,
+  expected: ReadonlyArray<string>
+): boolean => {
+  let offset = 0
+  for (const token of expected) {
+    const foundAt = args.indexOf(token, offset)
+    if (foundAt === -1) {
+      return false
+    }
+    offset = foundAt + 1
+  }
+  return true
+}
+
+it("passes docker compose down -v --remove-orphans", async () => {
+  const recorded: Array<RecordedCommand> = []
+  const executor = makeCommandRecorder(recorded)
+
+  const command = await runDockerComposeDownVolumes("/tmp").pipe(
+    Effect.provideService(CommandExecutor.CommandExecutor, executor),
+    Effect.runPromise
+  )
+
+  expect(
+    recorded.some(
+      (entry) =>
+        entry.command === "docker" &&
+        includesArgsInOrder(entry.args, ["compose", "down", "-v", "--remove-orphans"])
+    )
+  ).toBe(true)
+  expect(command).toBeUndefined()
+})
 
 describe("docker compose args", () => {
   it("uses build when force-env recreates containers", () => {

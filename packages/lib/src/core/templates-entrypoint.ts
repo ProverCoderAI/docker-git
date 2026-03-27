@@ -17,13 +17,15 @@ import {
   renderEntrypointCodexHome,
   renderEntrypointCodexResumeHint,
   renderEntrypointCodexSharedAuth,
-  renderEntrypointMcpPlaywright
+  renderEntrypointMcpPlaywright,
+  renderEntrypointProjectCodexSkillsSync
 } from "./templates-entrypoint/codex.js"
 import { renderEntrypointDnsRepair } from "./templates-entrypoint/dns-repair.js"
 import { renderEntrypointGeminiConfig } from "./templates-entrypoint/gemini.js"
 import { renderEntrypointGitConfig, renderEntrypointGitHooks } from "./templates-entrypoint/git.js"
 import { renderEntrypointDockerGitBootstrap } from "./templates-entrypoint/nested-docker-git.js"
 import { renderEntrypointOpenCodeConfig } from "./templates-entrypoint/opencode.js"
+import { renderEntrypointProjectAgentRules } from "./templates-entrypoint/project-rules.js"
 import { renderEntrypointBackgroundTasks } from "./templates-entrypoint/tasks.js"
 import {
   renderEntrypointBashCompletion,
@@ -51,6 +53,8 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointInputRc(config),
     renderEntrypointZshConfig(),
     renderEntrypointCodexResumeHint(config),
+    renderEntrypointProjectCodexSkillsSync(config),
+    renderEntrypointProjectAgentRules(),
     renderEntrypointAgentsNotice(config),
     renderEntrypointDockerSocket(config),
     renderEntrypointGitConfig(config),

@@ -1,4 +1,5 @@
 import { Either } from "effect"
+import { hostname } from "node:os"
 
 import { expandContainerHome } from "../usecases/scrap-path.js"
 import { resolveAutoAgentFlags } from "./auto-agent-flags.js"
@@ -198,12 +199,14 @@ type BuildTemplateConfigInput = {
   readonly enableMcpPlaywright: boolean
   readonly agentMode: AgentMode | undefined
   readonly agentAuto: boolean
+  readonly clonedOnHostname: string
 }
 
 const buildTemplateConfig = ({
   agentAuto,
   agentMode,
   claudeAuthLabel,
+  clonedOnHostname,
   codexAuthLabel,
   cpuLimit,
   dockerNetworkMode,
@@ -242,7 +245,8 @@ const buildTemplateConfig = ({
   enableMcpPlaywright,
   pnpmVersion: defaultTemplateConfig.pnpmVersion,
   agentMode,
-  agentAuto
+  agentAuto,
+  clonedOnHostname
 })
 
 // CHANGE: build a typed create command from raw options (CLI or API)
@@ -295,7 +299,8 @@ export const buildCreateCommand = (
         claudeAuthLabel,
         enableMcpPlaywright: behavior.enableMcpPlaywright,
         agentMode,
-        agentAuto
+        agentAuto,
+        clonedOnHostname: hostname()
       })
     }
   })

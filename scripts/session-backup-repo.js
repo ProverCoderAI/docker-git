@@ -7,6 +7,7 @@ const { spawnSync } = require("node:child_process");
 
 const BACKUP_REPO_NAME = "docker-git-sessions";
 const BACKUP_DEFAULT_BRANCH = "main";
+const GH_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
 // Keep each stored object below GitHub's 100 MB limit while transport batches stay smaller.
 const MAX_REPO_FILE_SIZE = 99 * 1000 * 1000;
 const MAX_PUSH_BATCH_BYTES = 50 * 1000 * 1000;
@@ -14,6 +15,7 @@ const GH_GIT_CREDENTIAL_HELPER = "!gh auth git-credential";
 const CHUNK_MANIFEST_SUFFIX = ".chunks.json";
 const DOCKER_GIT_CONFIG_FILE = "docker-git.json";
 const GITHUB_ENV_KEYS = ["GITHUB_TOKEN", "GH_TOKEN"];
+const PROJECT_WALK_IGNORE_DIR_NAMES = new Set([".git", "node_modules", ".cache", "tmp"]);
 
 const parseEnvText = (text) => {
   const entries = [];
@@ -89,7 +91,7 @@ const findDockerGitProjectForTarget = (projectsRoot, targetDir, log) => {
       if (!entry.isDirectory()) {
         continue;
       }
-      if (entry.name === ".git" || entry.name === "node_modules" || entry.name === ".cache") {
+      if (PROJECT_WALK_IGNORE_DIR_NAMES.has(entry.name)) {
         continue;
       }
       stack.push(path.join(currentDir, entry.name));
@@ -163,6 +165,7 @@ const ghCommand = (args, ghEnv, inputFilePath = null) => {
   const result = spawnSync("gh", resolvedArgs, {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
+    maxBuffer: GH_MAX_BUFFER_BYTES,
     env: ghEnv,
   });
 

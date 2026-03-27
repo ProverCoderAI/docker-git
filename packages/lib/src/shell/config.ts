@@ -59,7 +59,8 @@ const TemplateConfigSchema = Schema.Struct({
   enableMcpPlaywright: Schema.optionalWith(Schema.Boolean, {
     default: () => defaultTemplateConfig.enableMcpPlaywright
   }),
-  pnpmVersion: Schema.String
+  pnpmVersion: Schema.String,
+  clonedOnHostname: Schema.optional(Schema.String)
 })
 
 const ProjectConfigSchema = Schema.Struct({

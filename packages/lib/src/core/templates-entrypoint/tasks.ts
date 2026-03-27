@@ -186,10 +186,26 @@ const renderCloneBody = (config: TemplateConfig): string =>
     renderCloneCacheFinalize(config)
   ].join("\n")
 
+// CHANGE: provision docker-git scripts into workspace after successful clone
+// WHY: git hooks reference scripts/ relative to repo root (e.g. "node scripts/session-backup-gist.js");
+//      symlinking embedded /opt/docker-git/scripts makes them available in any cloned repo
+// REF: issue-176
+// PURITY: SHELL
+// INVARIANT: symlink created only when /opt/docker-git/scripts exists ∧ TARGET_DIR/scripts absent
+// COMPLEXITY: O(1)
 const renderCloneFinalize = (): string =>
   `if [[ "$CLONE_OK" -eq 1 ]]; then
   echo "[clone] done"
   touch "$CLONE_DONE_PATH"
+
+  # Provision docker-git scripts into workspace (symlink if not already present)
+  if [[ -d /opt/docker-git/scripts && -n "$TARGET_DIR" && "$TARGET_DIR" != "/" ]]; then
+    if [[ ! -e "$TARGET_DIR/scripts" ]]; then
+      ln -s /opt/docker-git/scripts "$TARGET_DIR/scripts" || true
+      chown -h 1000:1000 "$TARGET_DIR/scripts" 2>/dev/null || true
+      echo "[scripts] provisioned docker-git scripts into workspace"
+    fi
+  fi
 else
   echo "[clone] failed"
   touch "$CLONE_FAIL_PATH"
@@ -204,6 +220,10 @@ export const renderEntrypointBackgroundTasks = (config: TemplateConfig): string 
 ${renderEntrypointAutoUpdate()}
 
 ${renderEntrypointClone(config)}
+
+if [[ "$CLONE_OK" -eq 1 ]]; then
+  docker_git_prepare_active_agent_project_rules
+fi
 
 ${renderAgentLaunch(config)}
 ) &`
