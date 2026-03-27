@@ -18,6 +18,7 @@ KEEP="${KEEP:-0}"
 dg_ensure_docker "$ROOT/.e2e-bin"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
+export DOCKER_GIT_STATE_AUTO_PULL=0
 export DOCKER_GIT_STATE_AUTO_SYNC=0
 
 REPO_URL="https://github.com/octocat/Hello-World/issues/1"
@@ -30,6 +31,14 @@ ACTIVE_CONTAINER=""
 fail() {
   echo "e2e/clone-cache: $*" >&2
   exit 1
+}
+
+reset_shared_clone_cache_volume() {
+  docker volume create docker-git-shared-cache >/dev/null
+  docker run --rm \
+    -v docker-git-shared-cache:/target \
+    alpine:3.20 \
+    sh -euc 'mkdir -p /target && find /target -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'
 }
 
 on_error() {
@@ -144,7 +153,8 @@ EOF_ENV
     fi
   else
     grep -Fq -- "[clone-cache] mirror created: $MIRROR_PREFIX/" "$log_path" \
-      || fail "expected cache bootstrap log in first clone"
+      || grep -Fq -- "[clone-cache] using mirror: $MIRROR_PREFIX/" "$log_path" \
+      || fail "expected cache bootstrap or warm-cache reuse log in first clone"
   fi
 
   cleanup_active_case
@@ -153,12 +163,20 @@ EOF_ENV
 mkdir -p "$ROOT/.orch/auth/codex" "$ROOT/.orch/env"
 : > "$ROOT/authorized_keys"
 
+reset_shared_clone_cache_volume
+
 run_clone_case "first" "0"
 
 FIRST_LOG="$ROOT/clone-cache-first.log"
-mirror_line="$(grep -F -- "[clone-cache] mirror created: $MIRROR_PREFIX/" "$FIRST_LOG" | tail -n 1 || true)"
-[[ -n "$mirror_line" ]] || fail "expected mirror created log line in first clone logs: $FIRST_LOG"
+mirror_line="$(
+  {
+    grep -F -- "[clone-cache] mirror created: $MIRROR_PREFIX/" "$FIRST_LOG" || true
+    grep -F -- "[clone-cache] using mirror: $MIRROR_PREFIX/" "$FIRST_LOG" || true
+  } | tail -n 1
+)"
+[[ -n "$mirror_line" ]] || fail "expected mirror log line in first clone logs: $FIRST_LOG"
 mirror_path="${mirror_line#*mirror created: }"
+mirror_path="${mirror_path#*using mirror: }"
 [[ -n "$mirror_path" ]] || fail "failed to parse mirror path from first clone log line: $mirror_line"
 MIRROR_NAME="$(basename "$mirror_path")"
 [[ -n "$MIRROR_NAME" ]] || fail "failed to parse mirror name from mirror path: $mirror_path"

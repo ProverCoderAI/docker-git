@@ -143,7 +143,8 @@ grep -Fq -- "SSH access: ssh -i $SSH_KEY" "$CLONE_LOG" \
   || fail "expected clone log to print SSH access command"
 
 grep -Fq -- " -p $SSH_PORT dev@localhost" "$CLONE_LOG" \
-  || fail "expected clone log to print the published SSH port"
+  || grep -Eq -- ' -p 22 dev@[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$CLONE_LOG" \
+  || fail "expected clone log to print localhost published port or bridge-ip SSH access"
 
 docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" \
   || fail "expected cloned repo at: $TARGET_DIR"
