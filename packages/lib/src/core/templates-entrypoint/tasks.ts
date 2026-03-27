@@ -221,5 +221,9 @@ ${renderEntrypointAutoUpdate()}
 
 ${renderEntrypointClone(config)}
 
+if [[ "$CLONE_OK" -eq 1 ]]; then
+  docker_git_sync_project_codex_skills
+fi
+
 ${renderAgentLaunch(config)}
 ) &`

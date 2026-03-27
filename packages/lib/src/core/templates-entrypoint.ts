@@ -15,6 +15,7 @@ import { renderEntrypointClaudeConfig } from "./templates-entrypoint/claude.js"
 import {
   renderEntrypointAgentsNotice,
   renderEntrypointCodexHome,
+  renderEntrypointProjectCodexSkillsSync,
   renderEntrypointCodexResumeHint,
   renderEntrypointCodexSharedAuth,
   renderEntrypointMcpPlaywright
@@ -51,6 +52,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointInputRc(config),
     renderEntrypointZshConfig(),
     renderEntrypointCodexResumeHint(config),
+    renderEntrypointProjectCodexSkillsSync(config),
     renderEntrypointAgentsNotice(config),
     renderEntrypointDockerSocket(config),
     renderEntrypointGitConfig(config),

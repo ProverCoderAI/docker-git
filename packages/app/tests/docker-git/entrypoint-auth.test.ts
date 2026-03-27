@@ -79,6 +79,13 @@ describe("renderEntrypoint auth bridge", () => {
       expect(entrypoint).toContain("CLAUDE_GLOBAL_PROMPT_FILE=\"/home/dev/.claude/CLAUDE.md\"")
       expect(entrypoint).toContain("CLAUDE_AUTO_SYSTEM_PROMPT=\"${CLAUDE_AUTO_SYSTEM_PROMPT:-1}\"")
       expect(entrypoint).toContain("docker-git-managed:claude-md")
+      expect(entrypoint).toContain("docker_git_sync_project_codex_skills()")
+      expect(entrypoint).toContain('project_skills_root="$codex_home/skills/.docker-git-project"')
+      expect(entrypoint).toContain('"20-agents-skills::.agents/skills"')
+      expect(entrypoint).toContain('"30-agents-dot-skills::.agents/.skills"')
+      expect(entrypoint).toContain('"80-codex-skills::.codex/skills"')
+      expect(entrypoint).toContain('"90-codex-dot-skills::.codex/.skills"')
+      expect(entrypoint).toContain('docker_git_sync_project_codex_skills')
       expect(entrypoint).toContain(
         "SUBAGENTS_LINE=\"Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.\""
       )
