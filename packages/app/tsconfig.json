@@ -1,6 +1,7 @@
 {
 	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
+		"allowJs": true,
 		"rootDir": ".",
 		"outDir": "dist",
 		"types": ["vitest"],
@@ -11,6 +12,7 @@
 		}
 	},
 	"include": [
+		"eslint/**/*",
 		"src/**/*",
 		"tests/**/*",
 		"vite.config.ts",

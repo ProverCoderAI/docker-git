@@ -15,6 +15,7 @@ import simpleImportSort from "eslint-plugin-simple-import-sort";
 import sortDestructureKeys from "eslint-plugin-sort-destructure-keys";
 import globals from "globals";
 import eslintCommentsConfigs from "@eslint-community/eslint-plugin-eslint-comments/configs";
+import { appLegacyLibImportAllowlist, noLibImportsRule } from "./eslint/no-lib-imports.mjs";
 
 const codegenPlugin = fixupPluginRules(
 	codegen as unknown as Parameters<typeof fixupPluginRules>[0],
@@ -53,6 +54,7 @@ export default defineConfig(
 		sonarjs,
 		unicorn,
 		import: fixupPluginRules(importPlugin),
+		local: { rules: { "no-lib-imports": noLibImportsRule } },
 		"sort-destructure-keys": sortDestructureKeys,
 		"simple-import-sort": simpleImportSort,
 		codegen: codegenPlugin,
@@ -71,6 +73,9 @@ export default defineConfig(
 	rules: {
 		...sonarjs.configs.recommended.rules,
 		...unicorn.configs.recommended.rules,
+		"local/no-lib-imports": ["error", {
+			allowInFiles: appLegacyLibImportAllowlist,
+		}],
 		"no-restricted-imports": ["error", {
 			paths: [
 				{

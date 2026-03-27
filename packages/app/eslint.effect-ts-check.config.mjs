@@ -10,6 +10,7 @@
 import eslintComments from "@eslint-community/eslint-plugin-eslint-comments"
 import globals from "globals"
 import tseslint from "typescript-eslint"
+import { appLegacyLibImportAllowlist, noLibImportsRule } from "./eslint/no-lib-imports.mjs"
 
 const restrictedImports = [
   {
@@ -147,9 +148,13 @@ export default tseslint.config(
     },
     plugins: {
       "@typescript-eslint": tseslint.plugin,
-      "eslint-comments": eslintComments
+      "eslint-comments": eslintComments,
+      local: { rules: { "no-lib-imports": noLibImportsRule } }
     },
     rules: {
+      "local/no-lib-imports": ["error", {
+        allowInFiles: appLegacyLibImportAllowlist
+      }],
       "no-console": "error",
       "no-restricted-imports": ["error", {
         paths: restrictedImports,
