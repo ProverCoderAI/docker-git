@@ -1,13 +1,11 @@
 import * as Command from "@effect/platform/Command"
 import * as CommandExecutor from "@effect/platform/CommandExecutor"
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
+import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as Inspectable from "effect/Inspectable"
 import * as Sink from "effect/Sink"
 import * as Stream from "effect/Stream"
-import * as nodePath from "node:path"
 
 import { runDockerUpIfNeeded } from "../../src/usecases/actions/docker-up.js"
 import type { CreateCommand } from "../../src/core/domain.js"
@@ -44,19 +42,6 @@ const isUp = (command: RecordedCommand): boolean =>
 
 const isRmContainer = (name: string) => (command: RecordedCommand): boolean =>
   command.command === "docker" && includesArgsInOrder(command.args, ["rm", "-f", name])
-
-const fakePath: Path.Path = {
-  join: (...segments) => nodePath.join(...segments),
-  resolve: (...segments) => nodePath.resolve(...segments),
-  isAbsolute: (value) => nodePath.isAbsolute(value),
-  dirname: (value) => nodePath.dirname(value)
-} as Path.Path
-
-const fakeFileSystem: FileSystem.FileSystem = {
-  exists: () => Effect.succeed(false),
-  makeDirectory: () => Effect.void,
-  makeTempDirectoryScoped: () => Effect.succeed("/tmp/docker-git-bootstrap-staging")
-} as FileSystem.FileSystem
 
 const makeFakeExecutor = (recorded: Array<RecordedCommand>): CommandExecutor.CommandExecutor => {
   const start = (command: Command.Command): Effect.Effect<CommandExecutor.Process, never> =>
@@ -149,8 +134,7 @@ describe("runDockerUpIfNeeded with force", () => {
           forceEnv: false
         }).pipe(
           Effect.provideService(CommandExecutor.CommandExecutor, recordedExecutor),
-          Effect.provideService(FileSystem.FileSystem, fakeFileSystem),
-          Effect.provideService(Path.Path, fakePath)
+          Effect.provide(NodeContext.layer)
         )
       )
 

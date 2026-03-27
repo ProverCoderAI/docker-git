@@ -1,22 +1,54 @@
-import type { SessionGistCommand } from "./session-gist-domain.js"
+import type { AuthCommand } from "./auth-domain.js"
+import type { SessionsCommand } from "./sessions-domain.js"
+import type { StateCommand } from "./state-domain.js"
 
+export type {
+  AuthClaudeLoginCommand,
+  AuthClaudeLogoutCommand,
+  AuthClaudeStatusCommand,
+  AuthCodexLoginCommand,
+  AuthCodexLogoutCommand,
+  AuthCodexStatusCommand,
+  AuthCommand,
+  AuthGeminiLoginCommand,
+  AuthGeminiLogoutCommand,
+  AuthGeminiStatusCommand,
+  AuthGithubLoginCommand,
+  AuthGithubLogoutCommand,
+  AuthGithubStatusCommand
+} from "./auth-domain.js"
 export type { MenuAction, ParseError } from "./menu.js"
 export { parseMenuSelection } from "./menu.js"
 export { deriveRepoPathParts, deriveRepoSlug, resolveRepoInput } from "./repo.js"
+export type {
+  SessionsCommand,
+  SessionsKillCommand,
+  SessionsListCommand,
+  SessionsLogsCommand
+} from "./sessions-domain.js"
+export type {
+  StateCommand,
+  StateCommitCommand,
+  StateInitCommand,
+  StatePathCommand,
+  StatePullCommand,
+  StatePushCommand,
+  StateStatusCommand,
+  StateSyncCommand
+} from "./state-domain.js"
+export {
+  defaultCpuLimit,
+  defaultDockerNetworkMode,
+  defaultDockerSharedNetworkName,
+  defaultRamLimit,
+  defaultTemplateConfig,
+  dockerGitSharedCacheVolumeName,
+  dockerGitSharedCodexVolumeName
+} from "./template-defaults.js"
 
 export type AgentMode = "claude" | "codex" | "gemini"
 
 export type DockerNetworkMode = "shared" | "project"
-
-export const defaultDockerNetworkMode: DockerNetworkMode = "shared"
-
-export const defaultDockerSharedNetworkName = "docker-git-shared"
-export const dockerGitSharedCacheVolumeName = "docker-git-shared-cache"
-export const dockerGitSharedCodexVolumeName = "docker-git-shared-codex"
-
-export const defaultCpuLimit = "30%"
-
-export const defaultRamLimit = "30%"
 
 export interface TemplateConfig {
   readonly containerName: string
@@ -80,25 +112,6 @@ export interface AttachCommand {
 export interface PanesCommand {
   readonly _tag: "Panes"
   readonly projectDir: string
-}
-
-export interface SessionsListCommand {
-  readonly _tag: "SessionsList"
-  readonly projectDir: string
-  readonly includeDefault: boolean
-}
-
-export interface SessionsKillCommand {
-  readonly _tag: "SessionsKill"
-  readonly projectDir: string
-  readonly pid: number
-}
-
-export interface SessionsLogsCommand {
-  readonly _tag: "SessionsLogs"
-  readonly projectDir: string
-  readonly pid: number
-  readonly lines: number
 }
 
 // CHANGE: remove scrap cache mode and keep only the reproducible session snapshot.
@@ -174,122 +187,6 @@ export interface DownAllCommand {
   readonly _tag: "DownAll"
 }
 
-export interface StatePathCommand {
-  readonly _tag: "StatePath"
-}
-
-export interface StateInitCommand {
-  readonly _tag: "StateInit"
-  readonly repoUrl: string
-  readonly repoRef: string
-}
-
-export interface StatePullCommand {
-  readonly _tag: "StatePull"
-}
-
-export interface StatePushCommand {
-  readonly _tag: "StatePush"
-}
-
-export interface StateStatusCommand {
-  readonly _tag: "StateStatus"
-}
-
-export interface StateCommitCommand {
-  readonly _tag: "StateCommit"
-  readonly message: string
-}
-
-export interface StateSyncCommand {
-  readonly _tag: "StateSync"
-  readonly message: string | null
-}
-
-export interface AuthGithubLoginCommand {
-  readonly _tag: "AuthGithubLogin"
-  readonly label: string | null
-  readonly token: string | null
-  readonly scopes: string | null
-  readonly envGlobalPath: string
-}
-
-export interface AuthGithubStatusCommand {
-  readonly _tag: "AuthGithubStatus"
-  readonly envGlobalPath: string
-}
-
-export interface AuthGithubLogoutCommand {
-  readonly _tag: "AuthGithubLogout"
-  readonly label: string | null
-  readonly envGlobalPath: string
-}
-
-export interface AuthCodexLoginCommand {
-  readonly _tag: "AuthCodexLogin"
-  readonly label: string | null
-  readonly codexAuthPath: string
-}
-
-export interface AuthCodexStatusCommand {
-  readonly _tag: "AuthCodexStatus"
-  readonly label: string | null
-  readonly codexAuthPath: string
-}
-
-export interface AuthCodexLogoutCommand {
-  readonly _tag: "AuthCodexLogout"
-  readonly label: string | null
-  readonly codexAuthPath: string
-}
-
-export interface AuthClaudeLoginCommand {
-  readonly _tag: "AuthClaudeLogin"
-  readonly label: string | null
-  readonly claudeAuthPath: string
-}
-
-export interface AuthClaudeStatusCommand {
-  readonly _tag: "AuthClaudeStatus"
-  readonly label: string | null
-  readonly claudeAuthPath: string
-}
-
-export interface AuthClaudeLogoutCommand {
-  readonly _tag: "AuthClaudeLogout"
-  readonly label: string | null
-  readonly claudeAuthPath: string
-}
-
-// CHANGE: add Gemini CLI auth commands
-// WHY: enable Gemini CLI authentication management similar to Claude/Codex
-// QUOTE(ТЗ): "Добавь поддержку gemini CLI"
-// REF: issue-146
-// SOURCE: https://geminicli.com/docs/get-started/authentication/
-// FORMAT THEOREM: forall cmd ∈ AuthGeminiCommand: cmd.geminiAuthPath is valid path
-// PURITY: CORE
-// EFFECT: n/a
-// INVARIANT: authentication state is isolated by label
-// COMPLEXITY: O(1)
-export interface AuthGeminiLoginCommand {
-  readonly _tag: "AuthGeminiLogin"
-  readonly label: string | null
-  readonly geminiAuthPath: string
-  readonly isWeb: boolean
-}
-
-export interface AuthGeminiStatusCommand {
-  readonly _tag: "AuthGeminiStatus"
-  readonly label: string | null
-  readonly geminiAuthPath: string
-}
-
-export interface AuthGeminiLogoutCommand {
-  readonly _tag: "AuthGeminiLogout"
-  readonly label: string | null
-  readonly geminiAuthPath: string
-}
-
 export type {
   SessionGistBackupCommand,
   SessionGistCommand,
@@ -297,38 +194,10 @@ export type {
   SessionGistListCommand,
   SessionGistViewCommand
 } from "./session-gist-domain.js"
-export type SessionsCommand =
-  | SessionsListCommand
-  | SessionsKillCommand
-  | SessionsLogsCommand
-  | SessionGistCommand
 
 export type ScrapCommand =
   | ScrapExportCommand
   | ScrapImportCommand
-
-export type AuthCommand =
-  | AuthGithubLoginCommand
-  | AuthGithubStatusCommand
-  | AuthGithubLogoutCommand
-  | AuthCodexLoginCommand
-  | AuthCodexStatusCommand
-  | AuthCodexLogoutCommand
-  | AuthClaudeLoginCommand
-  | AuthClaudeStatusCommand
-  | AuthClaudeLogoutCommand
-  | AuthGeminiLoginCommand
-  | AuthGeminiStatusCommand
-  | AuthGeminiLogoutCommand
-
-export type StateCommand =
-  | StatePathCommand
-  | StateInitCommand
-  | StatePullCommand
-  | StatePushCommand
-  | StateStatusCommand
-  | StateCommitCommand
-  | StateSyncCommand
 
 export type Command =
   | CreateCommand
@@ -389,28 +258,3 @@ export const resolveComposeNetworkName = (
 export const resolveProjectBootstrapVolumeName = (
   config: Pick<TemplateConfig, "volumeName">
 ): string => `${config.volumeName}-bootstrap`
-
-export const defaultTemplateConfig = {
-  containerName: "dev-ssh",
-  serviceName: "dev",
-  sshUser: "dev",
-  sshPort: 2222,
-  repoRef: "main",
-  targetDir: "/home/dev/app",
-  volumeName: "dev_home",
-  dockerGitPath: "./.docker-git",
-  authorizedKeysPath: "./.docker-git/authorized_keys",
-  envGlobalPath: "./.docker-git/.orch/env/global.env",
-  envProjectPath: "./.orch/env/project.env",
-  codexAuthPath: "./.docker-git/.orch/auth/codex",
-  codexSharedAuthPath: "./.docker-git/.orch/auth/codex",
-  codexHome: "/home/dev/.codex",
-  geminiAuthPath: "./.docker-git/.orch/auth/gemini",
-  geminiHome: "/home/dev/.gemini",
-  cpuLimit: defaultCpuLimit,
-  ramLimit: defaultRamLimit,
-  dockerNetworkMode: defaultDockerNetworkMode,
-  dockerSharedNetworkName: defaultDockerSharedNetworkName,
-  enableMcpPlaywright: false,
-  pnpmVersion: "10.27.0"
-}
