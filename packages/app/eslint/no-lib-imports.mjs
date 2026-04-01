@@ -2,22 +2,68 @@
 
 const bannedPackageName = "@effect-template/lib"
 
+/**
+ * @typedef {{ readonly type: "Literal", readonly value: unknown }} LiteralSourceNode
+ * @typedef {{ readonly value: { readonly cooked: string | null } }} TemplateQuasiNode
+ * @typedef {{
+ *   readonly type: "TemplateLiteral",
+ *   readonly expressions: ReadonlyArray<unknown>,
+ *   readonly quasis: ReadonlyArray<TemplateQuasiNode>
+ * }} TemplateLiteralSourceNode
+ * @typedef {LiteralSourceNode | TemplateLiteralSourceNode} StaticSourceNode
+ * @typedef {{ readonly type: "Identifier", readonly name: string }} IdentifierNode
+ * @typedef {{ readonly type: "SpreadElement" }} SpreadElementNode
+ */
+
 /** @param {string} value */
 const isDirectLibImport = (value) =>
   value === bannedPackageName || value.startsWith(`${bannedPackageName}/`)
 
-/** @param {(import("eslint").JSSyntaxElement & { readonly value?: unknown }) | null | undefined} source */
-const readSourceText = (source) => {
-  if (source == null) {
-    return null
-  }
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+const isRecord = (value) => typeof value === "object" && value !== null
 
-  if (source.type === "Literal" && typeof source.value === "string") {
+/**
+ * @param {unknown} value
+ * @returns {value is LiteralSourceNode}
+ */
+const isLiteralSourceNode = (value) =>
+  isRecord(value) && value["type"] === "Literal" && "value" in value
+
+/**
+ * @param {unknown} value
+ * @returns {value is TemplateLiteralSourceNode}
+ */
+const isTemplateLiteralSourceNode = (value) =>
+  isRecord(value) &&
+  value["type"] === "TemplateLiteral" &&
+  Array.isArray(value["expressions"]) &&
+  Array.isArray(value["quasis"])
+
+/**
+ * @param {unknown} value
+ * @returns {value is IdentifierNode}
+ */
+const isIdentifierNode = (value) =>
+  isRecord(value) && value["type"] === "Identifier" && typeof value["name"] === "string"
+
+/**
+ * @param {unknown} value
+ * @returns {value is SpreadElementNode}
+ */
+const isSpreadElementNode = (value) =>
+  isRecord(value) && value["type"] === "SpreadElement"
+
+/** @param {unknown} source */
+const readSourceText = (source) => {
+  if (isLiteralSourceNode(source) && typeof source.value === "string") {
     return source.value
   }
 
   if (
-    source.type === "TemplateLiteral" &&
+    isTemplateLiteralSourceNode(source) &&
     source.expressions.length === 0 &&
     source.quasis.length === 1
   ) {
@@ -33,7 +79,7 @@ const readSourceText = (source) => {
  * @returns {import("eslint").Rule.RuleListener}
  */
 const createRuleListener = (context) => {
-  /** @param {(import("eslint").JSSyntaxElement & { readonly value?: unknown }) | null | undefined} source */
+  /** @param {unknown} source */
   const checkSource = (source) => {
     if (source == null) {
       return
@@ -45,17 +91,17 @@ const createRuleListener = (context) => {
     }
 
     context.report({
-      node: source,
+      node: /** @type {import("eslint").JSSyntaxElement} */ (source),
       messageId: "noLibImport",
       data: { source: sourceText }
     })
   }
 
   return {
-    /** @param {{ readonly callee?: import("eslint").JSSyntaxElement | null | undefined, readonly arguments?: ReadonlyArray<import("eslint").JSSyntaxElement | import("eslint").SpreadElement> | null | undefined }} node */
+    /** @param {{ readonly callee?: unknown, readonly arguments?: ReadonlyArray<unknown> | null | undefined }} node */
     CallExpression(node) {
       if (
-        node.callee?.type !== "Identifier" ||
+        !isIdentifierNode(node.callee) ||
         node.callee.name !== "require" ||
         !Array.isArray(node.arguments)
       ) {
@@ -63,33 +109,33 @@ const createRuleListener = (context) => {
       }
 
       const [firstArgument] = node.arguments
-      if (firstArgument?.type === "SpreadElement") {
+      if (isSpreadElementNode(firstArgument)) {
         return
       }
 
       checkSource(firstArgument)
     },
-    /** @param {{ readonly source?: (import("eslint").JSSyntaxElement & { readonly value?: unknown }) | null | undefined }} node */
+    /** @param {{ readonly source?: unknown }} node */
     ExportAllDeclaration(node) {
       checkSource(node.source)
     },
-    /** @param {{ readonly source?: (import("eslint").JSSyntaxElement & { readonly value?: unknown }) | null | undefined }} node */
+    /** @param {{ readonly source?: unknown }} node */
     ExportNamedDeclaration(node) {
       checkSource(node.source)
     },
-    /** @param {{ readonly source?: (import("eslint").JSSyntaxElement & { readonly value?: unknown }) | null | undefined }} node */
+    /** @param {{ readonly source?: unknown }} node */
     ImportDeclaration(node) {
       checkSource(node.source)
     },
-    /** @param {{ readonly source?: (import("eslint").JSSyntaxElement & { readonly value?: unknown }) | null | undefined }} node */
+    /** @param {{ readonly source?: unknown }} node */
     ImportExpression(node) {
       checkSource(node.source)
     },
-    /** @param {{ readonly source?: (import("eslint").JSSyntaxElement & { readonly value?: unknown }) | null | undefined, readonly argument?: (import("eslint").JSSyntaxElement & { readonly value?: unknown }) | null | undefined }} node */
+    /** @param {{ readonly source?: unknown, readonly argument?: unknown }} node */
     TSImportType(node) {
       checkSource("source" in node ? node.source : node.argument)
     },
-    /** @param {{ readonly expression?: (import("eslint").JSSyntaxElement & { readonly value?: unknown }) | null | undefined }} node */
+    /** @param {{ readonly expression?: unknown }} node */
     TSExternalModuleReference(node) {
       checkSource(node.expression)
     }

@@ -1,6 +1,4 @@
-import { Match } from "effect"
-
-import type { ParseError } from "@lib/core/domain"
+export { formatParseError } from "@lib/core/parse-errors"
 
 export const usageText = `docker-git menu
 docker-git create [--repo-url <url>] [options]
@@ -127,24 +125,3 @@ State actions:
 State options:
   --message, -m <message>    Commit message for state commit
 `
-
-// CHANGE: normalize parse errors into user-facing messages
-// WHY: keep formatting deterministic and centralized
-// QUOTE(ТЗ): "Надо написать CLI команду"
-// REF: user-request-2026-01-07
-// SOURCE: n/a
-// FORMAT THEOREM: forall e: format(e) = s -> deterministic(s)
-// PURITY: CORE
-// EFFECT: Effect<string, never, never>
-// INVARIANT: each ParseError maps to exactly one message
-// COMPLEXITY: O(1)
-export const formatParseError = (error: ParseError): string =>
-  Match.value(error).pipe(
-    Match.when({ _tag: "UnknownCommand" }, ({ command }) => `Unknown command: ${command}`),
-    Match.when({ _tag: "UnknownOption" }, ({ option }) => `Unknown option: ${option}`),
-    Match.when({ _tag: "MissingOptionValue" }, ({ option }) => `Missing value for option: ${option}`),
-    Match.when({ _tag: "MissingRequiredOption" }, ({ option }) => `Missing required option: ${option}`),
-    Match.when({ _tag: "InvalidOption" }, ({ option, reason }) => `Invalid option ${option}: ${reason}`),
-    Match.when({ _tag: "UnexpectedArgument" }, ({ value }) => `Unexpected argument: ${value}`),
-    Match.exhaustive
-  )

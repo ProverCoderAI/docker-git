@@ -1,5 +1,4 @@
 import { Either } from "effect"
-import { hostname } from "node:os"
 
 import { expandContainerHome } from "../usecases/scrap-path.js"
 import { resolveAutoAgentFlags } from "./auto-agent-flags.js"
@@ -199,7 +198,7 @@ type BuildTemplateConfigInput = {
   readonly enableMcpPlaywright: boolean
   readonly agentMode: AgentMode | undefined
   readonly agentAuto: boolean
-  readonly clonedOnHostname: string
+  readonly clonedOnHostname?: string | undefined
 }
 
 const buildTemplateConfig = ({
@@ -299,8 +298,7 @@ export const buildCreateCommand = (
         claudeAuthLabel,
         enableMcpPlaywright: behavior.enableMcpPlaywright,
         agentMode,
-        agentAuto,
-        clonedOnHostname: hostname()
+        agentAuto
       })
     }
   })

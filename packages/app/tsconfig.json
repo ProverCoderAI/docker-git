@@ -10,7 +10,7 @@
 		"paths": {
 			"@/*": ["src/*"],
 			"@lib": ["src/lib/index.ts"],
-			"@lib/*": ["src/lib/*"]
+			"@lib/*": ["src/lib/*.ts"]
 		}
 	},
 	"include": [

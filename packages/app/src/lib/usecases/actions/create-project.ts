@@ -2,7 +2,7 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
-import { Effect } from "effect"
+import { Effect, Either } from "effect"
 
 import type { CreateCommand, ParseError } from "../../core/domain.js"
 import { deriveRepoPathParts } from "../../core/domain.js"
@@ -51,6 +51,15 @@ type CreateContext = {
   readonly baseDir: string
   readonly resolveRootPath: (value: string) => string
 }
+
+const resolveClonedOnHostname = (): Effect.Effect<string | undefined> =>
+  Effect.tryPromise({
+    try: () => import("node:os").then((os) => os.hostname()),
+    catch: () => new Error("hostname lookup failed")
+  }).pipe(
+    Effect.either,
+    Effect.map((result) => Either.match(result, { onLeft: () => undefined, onRight: (hostname) => hostname }))
+  )
 
 const makeCreateContext = (path: Path.Path, baseDir: string): CreateContext => {
   const projectsRoot = path.resolve(defaultProjectsRoot(baseDir))
@@ -224,6 +233,17 @@ const resolveFinalAgentConfig = (
     return resolvedAgentMode === undefined ? resolvedConfig : { ...resolvedConfig, agentMode: resolvedAgentMode }
   })
 
+const resolveRuntimeConfig = (
+  resolvedConfig: CreateCommand["config"]
+): Effect.Effect<CreateCommand["config"], ParseError | PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const finalAgentConfig = yield* _(resolveFinalAgentConfig(resolvedConfig))
+    const clonedOnHostname = yield* _(resolveClonedOnHostname())
+    return clonedOnHostname === undefined
+      ? finalAgentConfig
+      : { ...finalAgentConfig, clonedOnHostname }
+  })
+
 const maybeCleanupAfterAgent = (
   waitForAgent: boolean,
   resolvedOutDir: string
@@ -252,7 +272,7 @@ const runCreateProject = (
     yield* _(validateGithubCloneAuthTokenPreflight(rootedConfig))
 
     const resolvedConfig = yield* _(resolveCreateConfig(rootedConfig, resolvedOutDir))
-    const finalConfig = yield* _(resolveFinalAgentConfig(resolvedConfig))
+    const finalConfig = yield* _(resolveRuntimeConfig(resolvedConfig))
     const { globalConfig, projectConfig } = buildProjectConfigs(path, ctx.baseDir, resolvedOutDir, finalConfig)
 
     yield* _(migrateProjectOrchLayout(ctx.baseDir, globalConfig, ctx.resolveRootPath))
