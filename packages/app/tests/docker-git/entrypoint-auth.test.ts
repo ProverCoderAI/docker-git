@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
-import { defaultTemplateConfig } from "@effect-template/lib/core/domain"
-import { renderEntrypoint } from "@effect-template/lib/core/templates-entrypoint"
+import { defaultTemplateConfig } from "@lib/core/domain"
+import { renderEntrypoint } from "@lib/core/templates-entrypoint"
 
 describe("renderEntrypoint auth bridge", () => {
   it.effect("maps GH token fallback to git auth and sets git credential helper", () =>

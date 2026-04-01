@@ -1,6 +1,6 @@
 import { Either } from "effect"
 
-import { type AttachCommand, type ParseError } from "@effect-template/lib/core/domain"
+import { type AttachCommand, type ParseError } from "@lib/core/domain"
 
 import { parseProjectDirArgs } from "./parser-shared.js"
 

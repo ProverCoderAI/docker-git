@@ -1,5 +1,5 @@
-import { parseMenuSelection } from "@effect-template/lib/core/domain"
-import { isRepoUrlInput } from "@effect-template/lib/usecases/menu-helpers"
+import { parseMenuSelection } from "@lib/core/domain"
+import { isRepoUrlInput } from "@lib/usecases/menu-helpers"
 import { Either } from "effect"
 
 import { handleMenuActionSelection, type MenuSelectionContext } from "./menu-actions.js"

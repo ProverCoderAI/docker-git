@@ -1,4 +1,4 @@
-import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import type { ProjectItem } from "@lib/usecases/projects"
 
 export const makeProjectItem = (
   overrides: Partial<ProjectItem> = {}

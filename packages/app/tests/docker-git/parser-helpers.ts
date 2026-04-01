@@ -1,7 +1,7 @@
 import { expect } from "@effect/vitest"
 import { Effect, Either } from "effect"
 
-import type { Command } from "@effect-template/lib/core/domain"
+import type { Command } from "@lib/core/domain"
 import { parseArgs } from "../../src/docker-git/cli/parser.js"
 
 export type CreateCommand = Extract<Command, { _tag: "Create" }>

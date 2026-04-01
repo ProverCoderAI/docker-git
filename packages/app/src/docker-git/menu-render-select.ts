@@ -2,7 +2,7 @@ import { Match } from "effect"
 import { Text } from "ink"
 import type React from "react"
 
-import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import type { ProjectItem } from "@lib/usecases/projects"
 import type { SelectProjectRuntime } from "./menu-types.js"
 
 export type SelectPurpose = "Connect" | "Down" | "Info" | "Delete" | "Auth"

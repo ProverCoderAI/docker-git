@@ -1,7 +1,7 @@
 import { Either, Match } from "effect"
 
-import type { RawOptions } from "@effect-template/lib/core/command-options"
-import { type AuthCommand, type Command, type ParseError } from "@effect-template/lib/core/domain"
+import type { RawOptions } from "@lib/core/command-options"
+import { type AuthCommand, type Command, type ParseError } from "@lib/core/domain"
 
 import { parseRawOptions } from "./parser-options.js"
 

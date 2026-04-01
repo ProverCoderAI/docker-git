@@ -1,13 +1,13 @@
-import { runDockerComposeDown } from "@effect-template/lib/shell/docker"
-import type { AppError } from "@effect-template/lib/usecases/errors"
-import { renderError } from "@effect-template/lib/usecases/errors"
-import { mcpPlaywrightUp } from "@effect-template/lib/usecases/mcp-playwright"
+import { runDockerComposeDown } from "@lib/shell/docker"
+import type { AppError } from "@lib/usecases/errors"
+import { renderError } from "@lib/usecases/errors"
+import { mcpPlaywrightUp } from "@lib/usecases/mcp-playwright"
 import {
   connectProjectSshWithUp,
   deleteDockerGitProject,
   listRunningProjectItems,
   type ProjectItem
-} from "@effect-template/lib/usecases/projects"
+} from "@lib/usecases/projects"
 import { Effect, pipe } from "effect"
 
 import { openProjectAuthMenu } from "./menu-project-auth.js"

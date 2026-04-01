@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
-import { defaultTemplateConfig } from "@effect-template/lib/core/domain"
-import { expandContainerHome } from "@effect-template/lib/usecases/scrap-path"
+import { defaultTemplateConfig } from "@lib/core/domain"
+import { expandContainerHome } from "@lib/usecases/scrap-path"
 import {
   type CreateCommand,
   expectAttachProjectDirCommand,

@@ -1,6 +1,6 @@
 import { Match } from "effect"
 
-import type { ParseError } from "@effect-template/lib/core/domain"
+import type { ParseError } from "@lib/core/domain"
 
 export const usageText = `docker-git menu
 docker-git create [--repo-url <url>] [options]

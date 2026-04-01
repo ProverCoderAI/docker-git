@@ -2,7 +2,7 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
-import type { AppError } from "@effect-template/lib/usecases/errors"
+import type { AppError } from "@lib/usecases/errors"
 import { countAuthAccountDirectories } from "./menu-auth-helpers.js"
 
 export type AuthAccountCounts = {

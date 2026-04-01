@@ -4,26 +4,22 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
-import type { AttachCommand, PanesCommand } from "@effect-template/lib/core/domain"
-import { deriveRepoPathParts, deriveRepoSlug } from "@effect-template/lib/core/domain"
-import {
-  runCommandCapture,
-  runCommandExitCode,
-  runCommandWithExitCodes
-} from "@effect-template/lib/shell/command-runner"
-import { readProjectConfig } from "@effect-template/lib/shell/config"
+import type { AttachCommand, PanesCommand } from "@lib/core/domain"
+import { deriveRepoPathParts, deriveRepoSlug } from "@lib/core/domain"
+import { runCommandCapture, runCommandExitCode, runCommandWithExitCodes } from "@lib/shell/command-runner"
+import { readProjectConfig } from "@lib/shell/config"
 import type {
   ConfigDecodeError,
   ConfigNotFoundError,
   DockerCommandError,
   FileExistsError,
   PortProbeError
-} from "@effect-template/lib/shell/errors"
-import { CommandFailedError } from "@effect-template/lib/shell/errors"
-import { resolveBaseDir } from "@effect-template/lib/shell/paths"
-import { findSshPrivateKey } from "@effect-template/lib/usecases/path-helpers"
-import { buildSshCommand } from "@effect-template/lib/usecases/projects"
-import { runDockerComposeUpWithPortCheck } from "@effect-template/lib/usecases/projects-up"
+} from "@lib/shell/errors"
+import { CommandFailedError } from "@lib/shell/errors"
+import { resolveBaseDir } from "@lib/shell/paths"
+import { findSshPrivateKey } from "@lib/usecases/path-helpers"
+import { buildSshCommand } from "@lib/usecases/projects"
+import { runDockerComposeUpWithPortCheck } from "@lib/usecases/projects-up"
 
 const tmuxOk = [0]
 const layoutVersion = "v14"

@@ -3,9 +3,9 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import type * as Effect from "effect/Effect"
 
-import type { MenuAction } from "@effect-template/lib/core/domain"
-import type { AppError } from "@effect-template/lib/usecases/errors"
-import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import type { MenuAction } from "@lib/core/domain"
+import type { AppError } from "@lib/usecases/errors"
+import type { ProjectItem } from "@lib/usecases/projects"
 
 // CHANGE: isolate TUI types/constants into a shared module
 // WHY: keep menu rendering and input handling small and focused

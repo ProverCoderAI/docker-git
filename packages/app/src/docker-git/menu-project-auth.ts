@@ -1,7 +1,7 @@
 import { Effect, Match, pipe } from "effect"
 
-import type { AppError } from "@effect-template/lib/usecases/errors"
-import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import type { AppError } from "@lib/usecases/errors"
+import type { ProjectItem } from "@lib/usecases/projects"
 
 import { nextBufferValue } from "./menu-buffer-input.js"
 import { handleMenuNumberInput, submitPromptStep } from "./menu-input-utils.js"

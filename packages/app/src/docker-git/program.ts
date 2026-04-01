@@ -1,6 +1,6 @@
-import type { Command, ParseError } from "@effect-template/lib/core/domain"
-import { createProject } from "@effect-template/lib/usecases/actions"
-import { applyProjectConfig } from "@effect-template/lib/usecases/apply"
+import type { Command, ParseError } from "@lib/core/domain"
+import { createProject } from "@lib/usecases/actions"
+import { applyProjectConfig } from "@lib/usecases/apply"
 import {
   authClaudeLogin,
   authClaudeLogout,
@@ -15,22 +15,13 @@ import {
   authGithubLogin,
   authGithubLogout,
   authGithubStatus
-} from "@effect-template/lib/usecases/auth"
-import type { AppError } from "@effect-template/lib/usecases/errors"
-import { renderError } from "@effect-template/lib/usecases/errors"
-import { mcpPlaywrightUp } from "@effect-template/lib/usecases/mcp-playwright"
-import {
-  applyAllDockerGitProjects,
-  downAllDockerGitProjects,
-  listProjectStatus
-} from "@effect-template/lib/usecases/projects"
-import { exportScrap, importScrap } from "@effect-template/lib/usecases/scrap"
-import {
-  sessionGistBackup,
-  sessionGistDownload,
-  sessionGistList,
-  sessionGistView
-} from "@effect-template/lib/usecases/session-gists"
+} from "@lib/usecases/auth"
+import type { AppError } from "@lib/usecases/errors"
+import { renderError } from "@lib/usecases/errors"
+import { mcpPlaywrightUp } from "@lib/usecases/mcp-playwright"
+import { applyAllDockerGitProjects, downAllDockerGitProjects, listProjectStatus } from "@lib/usecases/projects"
+import { exportScrap, importScrap } from "@lib/usecases/scrap"
+import { sessionGistBackup, sessionGistDownload, sessionGistList, sessionGistView } from "@lib/usecases/session-gists"
 import {
   autoPullState,
   stateCommit,
@@ -40,12 +31,8 @@ import {
   statePush,
   stateStatus,
   stateSync
-} from "@effect-template/lib/usecases/state-repo"
-import {
-  killTerminalProcess,
-  listTerminalSessions,
-  tailTerminalLogs
-} from "@effect-template/lib/usecases/terminal-sessions"
+} from "@lib/usecases/state-repo"
+import { killTerminalProcess, listTerminalSessions, tailTerminalLogs } from "@lib/usecases/terminal-sessions"
 import { Effect, Match, pipe } from "effect"
 import { readCommand } from "./cli/read-command.js"
 import { attachTmux, listTmuxPanes } from "./tmux.js"

@@ -1,16 +1,16 @@
-import { type MenuAction, type ProjectConfig } from "@effect-template/lib/core/domain"
-import { readProjectConfig } from "@effect-template/lib/shell/config"
-import { runDockerComposeDown, runDockerComposeLogs, runDockerComposePs } from "@effect-template/lib/shell/docker"
-import { gcProjectNetworkByTemplate } from "@effect-template/lib/usecases/docker-network-gc"
-import type { AppError } from "@effect-template/lib/usecases/errors"
-import { renderError } from "@effect-template/lib/usecases/errors"
+import { type MenuAction, type ProjectConfig } from "@lib/core/domain"
+import { readProjectConfig } from "@lib/shell/config"
+import { runDockerComposeDown, runDockerComposeLogs, runDockerComposePs } from "@lib/shell/docker"
+import { gcProjectNetworkByTemplate } from "@lib/usecases/docker-network-gc"
+import type { AppError } from "@lib/usecases/errors"
+import { renderError } from "@lib/usecases/errors"
 import {
   downAllDockerGitProjects,
   listProjectItems,
   listProjectStatus,
   listRunningProjectItems
-} from "@effect-template/lib/usecases/projects"
-import { runDockerComposeUpWithPortCheck } from "@effect-template/lib/usecases/projects-up"
+} from "@lib/usecases/projects"
+import { runDockerComposeUpWithPortCheck } from "@lib/usecases/projects-up"
 import { Effect, Match, pipe } from "effect"
 
 import { openAuthMenu } from "./menu-auth.js"

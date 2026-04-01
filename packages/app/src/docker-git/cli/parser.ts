@@ -1,6 +1,6 @@
 import { Either, Match } from "effect"
 
-import { type Command, type ParseError } from "@effect-template/lib/core/domain"
+import { type Command, type ParseError } from "@lib/core/domain"
 
 import { parseApply } from "./parser-apply.js"
 import { parseAttach } from "./parser-attach.js"
