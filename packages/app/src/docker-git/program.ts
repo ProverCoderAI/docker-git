@@ -1,4 +1,3 @@
-import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { Command } from "@lib/core/domain"
 import { Effect, Match, pipe } from "effect"
 
@@ -80,7 +79,7 @@ const unsupported = (command: string, message: string): Effect.Effect<void, Unsu
 
 const withControllerReady = <E>(
   effect: Effect.Effect<void, E>
-): Effect.Effect<void, E | CliError, CommandExecutor.CommandExecutor> =>
+) =>
   pipe(
     ensureControllerReady,
     Effect.zipRight(effect)
@@ -276,6 +275,8 @@ export const program = pipe(
       ? Effect.log(usageText)
       : dispatchOperationalCommand(command)
   ),
-  Effect.catchAll((error: CliError) => logAndExit(error)),
-  Effect.asVoid
+  Effect.matchEffect({
+    onFailure: (error: CliError) => logAndExit(error),
+    onSuccess: () => Effect.void
+  })
 )

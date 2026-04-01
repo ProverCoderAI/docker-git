@@ -1,8 +1,9 @@
 import { FetchHttpClient, HttpClient } from "@effect/platform"
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import type { PlatformError } from "@effect/platform/Error"
+import * as FileSystem from "@effect/platform/FileSystem"
+import * as Path from "@effect/platform/Path"
 import { Duration, Effect, pipe, Schedule } from "effect"
-import { existsSync } from "node:fs"
-import path from "node:path"
 
 import { runCommandExitCode } from "@lib/shell/command-runner"
 
@@ -10,6 +11,16 @@ import type { ControllerBootstrapError } from "./host-errors.js"
 
 const defaultApiPort = "3334"
 const defaultApiHost = "127.0.0.1"
+
+type ControllerRuntime =
+  | CommandExecutor.CommandExecutor
+  | FileSystem.FileSystem
+  | Path.Path
+
+const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
+  _tag: "ControllerBootstrapError",
+  message
+})
 
 const trimTrailingSlashes = (value: string): string => {
   const parts = value.split("/")
@@ -33,22 +44,29 @@ export const resolveApiBaseUrl = (): string => {
   return `http://${host}:${port}`
 }
 
-const composeFilePath = (): string => {
-  let current = process.cwd()
+const composeFilePath = (): Effect.Effect<string, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    let current = process.cwd()
 
-  for (;;) {
-    const candidate = path.join(current, "docker-compose.yml")
-    if (existsSync(candidate)) {
-      return candidate
-    }
+    for (;;) {
+      const candidate = path.join(current, "docker-compose.yml")
+      const exists = yield* _(fs.exists(candidate))
+      if (exists) {
+        return candidate
+      }
 
-    const parent = path.dirname(current)
-    if (parent === current) {
-      return path.resolve(process.cwd(), "docker-compose.yml")
+      const parent = path.dirname(current)
+      if (parent === current) {
+        return path.resolve(process.cwd(), "docker-compose.yml")
+      }
+      current = parent
     }
-    current = parent
-  }
-}
+  })
+
+const mapComposePathError = (error: PlatformError): ControllerBootstrapError =>
+  controllerBootstrapError(`Failed to resolve docker-compose.yml path.\nDetails: ${String(error)}`)
 
 const runExitCode = (
   command: string,
@@ -58,7 +76,12 @@ const runExitCode = (
     cwd: process.cwd(),
     command,
     args
-  }).pipe(Effect.catchAll(() => Effect.succeed(1)))
+  }).pipe(
+    Effect.match({
+      onFailure: () => 1,
+      onSuccess: (exitCode) => exitCode
+    })
+  )
 
 export const resolveDockerCommand = (): Effect.Effect<
   ReadonlyArray<string>,
@@ -77,15 +100,16 @@ export const resolveDockerCommand = (): Effect.Effect<
 
 const runCompose = (
   args: ReadonlyArray<string>
-): Effect.Effect<void, ControllerBootstrapError, CommandExecutor.CommandExecutor> =>
+): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
     const dockerCommand = yield* _(resolveDockerCommand())
+    const composePath = yield* _(composeFilePath().pipe(Effect.mapError(mapComposePathError)))
     const command = dockerCommand[0] ?? "docker"
     const commandArgs = [
       ...dockerCommand.slice(1),
       "compose",
       "-f",
-      composeFilePath(),
+      composePath,
       ...args
     ]
     const exitCode = yield* _(runExitCode(command, commandArgs))
@@ -96,14 +120,13 @@ const runCompose = (
 
     return yield* _(
       Effect.fail(
-        {
-          _tag: "ControllerBootstrapError",
-          message: [
+        controllerBootstrapError(
+          [
             "Failed to start docker-git controller.",
             `Command: ${[command, ...commandArgs].join(" ")}`,
             `Exit code: ${exitCode}`
           ].join("\n")
-        } satisfies ControllerBootstrapError
+        )
       )
     )
   })
@@ -119,10 +142,9 @@ const probeHealth = (apiBaseUrl: string): Effect.Effect<void, ControllerBootstra
 
     return yield* _(
       Effect.fail(
-        {
-          _tag: "ControllerBootstrapError",
-          message: `docker-git controller health returned ${response.status} at ${apiBaseUrl}/health`
-        } satisfies ControllerBootstrapError
+        controllerBootstrapError(
+          `docker-git controller health returned ${response.status} at ${apiBaseUrl}/health`
+        )
       )
     )
   }).pipe(
@@ -163,8 +185,10 @@ export const ensureControllerReady = Effect.gen(function*(_) {
   const apiBaseUrl = resolveApiBaseUrl()
   const healthy = yield* _(
     probeHealth(apiBaseUrl).pipe(
-      Effect.as(true),
-      Effect.catchAll(() => Effect.succeed(false))
+      Effect.match({
+        onFailure: () => false,
+        onSuccess: () => true
+      })
     )
   )
 

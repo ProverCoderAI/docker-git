@@ -2,7 +2,7 @@ import { FetchHttpClient, HttpBody, HttpClient } from "@effect/platform"
 import type * as HttpClientError from "@effect/platform/HttpClientError"
 import { Effect } from "effect"
 
-import { asObject, type JsonRequest, type JsonValue, parseResponseBody } from "./api-json.js"
+import { asObject, asString, type JsonRequest, type JsonValue, parseResponseBody } from "./api-json.js"
 import { resolveApiBaseUrl } from "./controller.js"
 import type { ApiAuthRequiredError, ApiRequestError } from "./host-errors.js"
 
@@ -18,10 +18,12 @@ type ApiErrorEnvelope = {
   }
 }
 
-const jsonHeaders = {
+type ApiErrorPayload = NonNullable<ApiErrorEnvelope["error"]>
+
+const jsonHeaders: Readonly<Record<string, string>> = {
   "content-type": "application/json",
   accept: "application/json"
-} as const
+}
 
 const defaultGithubLoginCommand = "docker-git auth github login --web"
 
@@ -29,8 +31,31 @@ const isApiTransportError = (
   error: ApiTransportError | HttpClientError.HttpClientError
 ): error is ApiTransportError => error._tag === "ApiRequestError" || error._tag === "ApiAuthRequiredError"
 
-const readErrorPayload = (body: JsonValue): ApiErrorEnvelope["error"] | undefined =>
-  (asObject(body) as ApiErrorEnvelope | null)?.error
+const readErrorPayload = (body: JsonValue): ApiErrorPayload | undefined => {
+  const envelope = asObject(body)
+  if (envelope === null) {
+    return undefined
+  }
+
+  const error = asObject(envelope["error"])
+  if (error === null) {
+    return undefined
+  }
+
+  const type = asString(error["type"])
+  const message = asString(error["message"])
+  const provider = asString(error["provider"])
+  const command = asString(error["command"])
+  const details = error["details"]
+
+  return {
+    ...(type === null ? {} : { type }),
+    ...(message === null ? {} : { message }),
+    ...(provider === null ? {} : { provider }),
+    ...(command === null ? {} : { command }),
+    ...(details === undefined ? {} : { details })
+  }
+}
 
 const isAuthRequired = (
   status: number,
