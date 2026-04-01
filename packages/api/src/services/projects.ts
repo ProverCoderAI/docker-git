@@ -2,6 +2,8 @@ import {
   buildCreateCommand,
   createProject,
   formatParseError,
+  applyAllDockerGitProjects,
+  downAllDockerGitProjects,
   listProjectItems,
   readProjectConfig,
   runDockerComposeUpWithPortCheck
@@ -15,6 +17,7 @@ import { Effect, Either } from "effect"
 
 import type { CreateProjectRequest, ProjectDetails, ProjectStatus, ProjectSummary } from "../api/contracts.js"
 import { ApiInternalError, ApiNotFoundError, ApiBadRequestError } from "../api/errors.js"
+import { ensureGithubAuthForCreate } from "./auth.js"
 import { emitProjectEvent } from "./events.js"
 
 const readComposePsFormatted = (cwd: string) =>
@@ -162,6 +165,14 @@ export const listProjects = () =>
     Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<ProjectSummary>))
   )
 
+export const applyAllProjects = (activeOnly: boolean) =>
+  applyAllDockerGitProjects({
+    _tag: "ApplyAll",
+    activeOnly
+  })
+
+export const downAllProjects = () => downAllDockerGitProjects
+
 export const getProject = (
   projectId: string
 ) =>
@@ -230,8 +241,11 @@ export const createProjectFromRequest = (
 
     const command = {
       ...parsed.right,
-      openSsh: false
+      openSsh: false,
+      waitForClone: request.waitForClone ?? parsed.right.waitForClone
     }
+
+    yield* _(ensureGithubAuthForCreate(command.config))
 
     yield* _(
       Effect.sync(() => {

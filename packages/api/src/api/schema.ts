@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema"
 
 const OptionalString = Schema.optional(Schema.String)
 const OptionalBoolean = Schema.optional(Schema.Boolean)
+const OptionalNullableString = Schema.optional(Schema.NullOr(Schema.String))
 
 export const CreateProjectRequestSchema = Schema.Struct({
   repoUrl: OptionalString,
@@ -31,7 +32,22 @@ export const CreateProjectRequestSchema = Schema.Struct({
   up: OptionalBoolean,
   openSsh: OptionalBoolean,
   force: OptionalBoolean,
-  forceEnv: OptionalBoolean
+  forceEnv: OptionalBoolean,
+  waitForClone: OptionalBoolean
+})
+
+export const GithubAuthLoginRequestSchema = Schema.Struct({
+  label: OptionalNullableString,
+  token: OptionalNullableString,
+  scopes: OptionalNullableString
+})
+
+export const GithubAuthLogoutRequestSchema = Schema.Struct({
+  label: OptionalNullableString
+})
+
+export const ApplyAllRequestSchema = Schema.Struct({
+  activeOnly: OptionalBoolean
 })
 
 export const AgentProviderSchema = Schema.Literal("codex", "opencode", "claude", "custom")
@@ -84,5 +100,8 @@ export const AgentLogLineSchema = Schema.Struct({
 })
 
 export type CreateProjectRequestInput = Schema.Schema.Type<typeof CreateProjectRequestSchema>
+export type GithubAuthLoginRequestInput = Schema.Schema.Type<typeof GithubAuthLoginRequestSchema>
+export type GithubAuthLogoutRequestInput = Schema.Schema.Type<typeof GithubAuthLogoutRequestSchema>
+export type ApplyAllRequestInput = Schema.Schema.Type<typeof ApplyAllRequestSchema>
 export type CreateAgentRequestInput = Schema.Schema.Type<typeof CreateAgentRequestSchema>
 export type CreateFollowRequestInput = Schema.Schema.Type<typeof CreateFollowRequestSchema>

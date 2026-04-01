@@ -1,5 +1,11 @@
 import { Data } from "effect"
 
+export class ApiAuthRequiredError extends Data.TaggedError("ApiAuthRequiredError")<{
+  readonly provider: "github"
+  readonly message: string
+  readonly command: string
+}> {}
+
 export class ApiBadRequestError extends Data.TaggedError("ApiBadRequestError")<{
   readonly message: string
   readonly details?: unknown
@@ -19,6 +25,7 @@ export class ApiInternalError extends Data.TaggedError("ApiInternalError")<{
 }> {}
 
 export type ApiKnownError =
+  | ApiAuthRequiredError
   | ApiBadRequestError
   | ApiNotFoundError
   | ApiConflictError

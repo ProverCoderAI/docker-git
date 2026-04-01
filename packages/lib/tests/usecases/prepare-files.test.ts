@@ -329,4 +329,44 @@ describe("prepareProjectFiles", () => {
         expect(synchronizedAuthorizedKeys).toContain(currentKey.trim())
       })
     ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("ignores missing Claude debug symlinks when seeding project auth", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const globalConfig = makeGlobalConfig(root, path)
+        const projectConfig = makeProjectConfig(outDir, false, path)
+        const sourceClaudeDefault = path.join(root, ".orch", "auth", "claude", "default")
+        const sourceOauthToken = path.join(sourceClaudeDefault, ".oauth-token")
+        const sourceDebugDir = path.join(sourceClaudeDefault, "debug")
+        const sourceBrokenDebugLink = path.join(sourceDebugDir, "latest")
+        const targetOauthToken = path.join(outDir, ".orch", "auth", "claude", "default", ".oauth-token")
+        const targetBrokenDebugLink = path.join(outDir, ".orch", "auth", "claude", "default", "debug", "latest")
+
+        yield* _(fs.makeDirectory(sourceDebugDir, { recursive: true }))
+        yield* _(fs.writeFileString(sourceOauthToken, "oauth-token\n"))
+        const linkExitCode = yield* _(
+          runCommandExitCode({
+            cwd: root,
+            command: "ln",
+            args: ["-s", "/missing/claude-debug.txt", sourceBrokenDebugLink]
+          })
+        )
+        expect(linkExitCode).toBe(0)
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          })
+        )
+
+        const synchronizedOauthToken = yield* _(fs.readFileString(targetOauthToken))
+        const hasBrokenDebugLink = yield* _(fs.exists(targetBrokenDebugLink))
+        expect(synchronizedOauthToken).toBe("oauth-token\n")
+        expect(hasBrokenDebugLink).toBe(false)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
 })

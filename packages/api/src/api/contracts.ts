@@ -28,6 +28,38 @@ export type ProjectDetails = ProjectSummary & {
   readonly clonedOnHostname?: string | undefined
 }
 
+export type GithubAuthTokenStatus = {
+  readonly key: string
+  readonly label: string
+  readonly status: "valid" | "invalid" | "unknown"
+  readonly login: string | null
+}
+
+export type GithubAuthStatus = {
+  readonly summary: string
+  readonly tokens: ReadonlyArray<GithubAuthTokenStatus>
+}
+
+export type GithubAuthLoginRequest = {
+  readonly label?: string | null | undefined
+  readonly token?: string | null | undefined
+  readonly scopes?: string | null | undefined
+}
+
+export type GithubAuthLogoutRequest = {
+  readonly label?: string | null | undefined
+}
+
+export type ApplyAllRequest = {
+  readonly activeOnly?: boolean | undefined
+}
+
+export type ApiAuthRequired = {
+  readonly provider: "github"
+  readonly message: string
+  readonly command: string
+}
+
 export type CreateProjectRequest = {
   readonly repoUrl?: string | undefined
   readonly repoRef?: string | undefined
@@ -57,6 +89,7 @@ export type CreateProjectRequest = {
   readonly openSsh?: boolean | undefined
   readonly force?: boolean | undefined
   readonly forceEnv?: boolean | undefined
+  readonly waitForClone?: boolean | undefined
 }
 
 export type AgentEnvVar = {

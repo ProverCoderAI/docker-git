@@ -16,6 +16,8 @@ import {
 
 export { githubInvalidTokenMessage } from "./github-token-validation.js"
 
+export const githubMissingTokenMessage = "GitHub auth is required. Register GitHub: docker-git auth github login --web"
+
 const defaultGithubTokenKeys: ReadonlyArray<string> = [
   "GIT_AUTH_TOKEN",
   "GITHUB_TOKEN",
@@ -85,7 +87,7 @@ export const resolveGithubCloneAuthToken = (
 // FORMAT THEOREM: ∀cfg: invalid_token(cfg) → fail_before_start(cfg)
 // PURITY: SHELL
 // EFFECT: Effect<void, AuthError | PlatformError, FileSystem>
-// INVARIANT: only GitHub repo URLs with a configured token are validated
+// INVARIANT: only GitHub repo URLs are gated; missing or invalid token fails before clone starts
 // COMPLEXITY: O(|env|) + O(1) network round-trip
 export const validateGithubCloneAuthTokenPreflight = (
   config: Pick<TemplateConfig, "repoUrl" | "gitTokenLabel" | "envGlobalPath">
@@ -96,7 +98,7 @@ export const validateGithubCloneAuthTokenPreflight = (
     const token = resolveGithubCloneAuthToken(envText, config)
 
     if (token === null) {
-      return
+      return yield* _(Effect.fail(new AuthError({ message: githubMissingTokenMessage })))
     }
 
     const validation = yield* _(validateGithubToken(token))

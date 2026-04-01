@@ -6,6 +6,20 @@ import { Effect } from "effect"
 
 const shouldSkipCopiedDir = (entry: string): boolean => entry === "tmp"
 
+const isNotFoundSystemError = (error: PlatformError): boolean =>
+  error._tag === "SystemError" && error.reason === "NotFound"
+
+const statIfPresent = (
+  fs: FileSystem.FileSystem,
+  targetPath: string
+) =>
+  fs.stat(targetPath).pipe(
+    Effect.catchTag("SystemError", (error) =>
+      isNotFoundSystemError(error)
+        ? Effect.succeed(null)
+        : Effect.fail(error))
+  )
+
 const copyDirRecursive = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
@@ -13,7 +27,10 @@ const copyDirRecursive = (
   targetPath: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
-    const sourceInfo = yield* _(fs.stat(sourcePath))
+    const sourceInfo = yield* _(statIfPresent(fs, sourcePath))
+    if (sourceInfo === null) {
+      return
+    }
     if (sourceInfo.type !== "Directory") {
       return
     }
@@ -25,7 +42,10 @@ const copyDirRecursive = (
       if (shouldSkipCopiedDir(entry)) {
         continue
       }
-      const entryInfo = yield* _(fs.stat(sourceEntry))
+      const entryInfo = yield* _(statIfPresent(fs, sourceEntry))
+      if (entryInfo === null) {
+        continue
+      }
       if (entryInfo.type === "Directory") {
         yield* _(copyDirRecursive(fs, path, sourceEntry, targetEntry))
       } else if (entryInfo.type === "File") {
@@ -54,7 +74,10 @@ const sourceDirReady = (
     if (!sourceExists) {
       return false
     }
-    const sourceInfo = yield* _(fs.stat(sourceDir))
+    const sourceInfo = yield* _(statIfPresent(fs, sourceDir))
+    if (sourceInfo === null) {
+      return false
+    }
     return sourceInfo.type === "Directory"
   })
 
@@ -106,7 +129,10 @@ const copyMissingRecursive = (
   targetPath: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
-    const sourceInfo = yield* _(fs.stat(sourcePath))
+    const sourceInfo = yield* _(statIfPresent(fs, sourcePath))
+    if (sourceInfo === null) {
+      return
+    }
     if (sourceInfo.type === "Directory") {
       yield* _(fs.makeDirectory(targetPath, { recursive: true }))
       const entries = yield* _(fs.readDirectory(sourcePath))

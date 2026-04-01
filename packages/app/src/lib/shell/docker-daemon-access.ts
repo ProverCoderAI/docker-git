@@ -18,6 +18,9 @@ const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
     return next
   })
 
+const formatDockerFallbackFailure = (dockerHost: string, details: string): string =>
+  `Fallback DOCKER_HOST=${dockerHost} failed: ${details}`
+
 const resolveDockerHostFallbackCandidates = (): ReadonlyArray<string> => {
   if (process.env["DOCKER_HOST"] !== undefined) {
     return []
@@ -119,8 +122,7 @@ export const ensureDockerDaemonAccess = (
         )
       }
 
-      let fallbackErrorDetails = primaryResult.details
-      let fallbackIssue: DockerAccessIssue = primaryIssue
+      let failureDetails = primaryResult.details
 
       for (const fallbackHost of resolveDockerHostFallbackCandidates()) {
         const fallbackResult = yield* _(
@@ -135,15 +137,14 @@ export const ensureDockerDaemonAccess = (
           return
         }
 
-        fallbackErrorDetails = fallbackResult.details
-        fallbackIssue = classifyDockerAccessIssue(fallbackResult.details)
+        failureDetails = `${failureDetails}\n${formatDockerFallbackFailure(fallbackHost, fallbackResult.details)}`
       }
 
       return yield* _(
         Effect.fail(
           new DockerAccessError({
-            issue: fallbackIssue,
-            details: fallbackErrorDetails
+            issue: primaryIssue,
+            details: failureDetails
           })
         )
       )

@@ -8,6 +8,7 @@ import {
   ensureClaudeAuthSeedFromHome,
   ensureCodexConfigFile,
   migrateLegacyOrchLayout,
+  syncAuthArtifacts,
   syncGithubAuthKeys
 } from "../../src/usecases/auth-sync.js"
 
@@ -274,6 +275,47 @@ describe("syncGithubAuthKeys", () => {
         const seededCredentialsText = yield* _(fs.readFileString(seededCredentials))
         expect(seededJsonText).toContain("\"oauthAccount\"")
         expect(seededCredentialsText).toContain("\"claudeAiOauth\"")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("skips broken Claude debug symlinks during auth bootstrap sync", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const sourceRoot = path.join(root, "source")
+        const targetRoot = path.join(root, "target")
+        const sourceClaudeDefault = path.join(sourceRoot, ".orch", "auth", "claude", "default")
+        const sourceDebugDir = path.join(sourceClaudeDefault, "debug")
+        const targetClaudeDefault = path.join(targetRoot, ".orch", "auth", "claude", "default")
+
+        yield* _(fs.makeDirectory(sourceDebugDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(sourceClaudeDefault, ".oauth-token"), "token-1\n"))
+        yield* _(fs.symlink("/claude-home/debug/missing.txt", path.join(sourceDebugDir, "latest")))
+
+        yield* _(
+          syncAuthArtifacts({
+            sourceBase: sourceRoot,
+            targetBase: targetRoot,
+            source: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            },
+            target: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            }
+          })
+        )
+
+        const copiedOauthToken = yield* _(fs.readFileString(path.join(targetClaudeDefault, ".oauth-token")))
+        const copiedLatest = yield* _(fs.exists(path.join(targetClaudeDefault, "debug", "latest")))
+        expect(copiedOauthToken).toBe("token-1\n")
+        expect(copiedLatest).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

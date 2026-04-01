@@ -1,167 +1,281 @@
-import type { Command, ParseError } from "@lib/core/domain"
-import { createProject } from "@lib/usecases/actions"
-import { applyProjectConfig } from "@lib/usecases/apply"
-import {
-  authClaudeLogin,
-  authClaudeLogout,
-  authClaudeStatus,
-  authCodexLogin,
-  authCodexLogout,
-  authCodexStatus,
-  authGeminiLoginCli,
-  authGeminiLoginOauth,
-  authGeminiLogout,
-  authGeminiStatus,
-  authGithubLogin,
-  authGithubLogout,
-  authGithubStatus
-} from "@lib/usecases/auth"
-import type { AppError } from "@lib/usecases/errors"
-import { renderError } from "@lib/usecases/errors"
-import { mcpPlaywrightUp } from "@lib/usecases/mcp-playwright"
-import { applyAllDockerGitProjects, downAllDockerGitProjects, listProjectStatus } from "@lib/usecases/projects"
-import { exportScrap, importScrap } from "@lib/usecases/scrap"
-import { sessionGistBackup, sessionGistDownload, sessionGistList, sessionGistView } from "@lib/usecases/session-gists"
-import {
-  autoPullState,
-  stateCommit,
-  stateInit,
-  statePath,
-  statePull,
-  statePush,
-  stateStatus,
-  stateSync
-} from "@lib/usecases/state-repo"
-import { killTerminalProcess, listTerminalSessions, tailTerminalLogs } from "@lib/usecases/terminal-sessions"
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import type { Command } from "@lib/core/domain"
 import { Effect, Match, pipe } from "effect"
+
+import {
+  type ApiProjectDetails,
+  type ApiProjectSummary,
+  applyAllProjects,
+  createProject,
+  downAllProjects,
+  githubLogin,
+  githubLogout,
+  githubStatus,
+  listProjects,
+  renderJsonPayload,
+  renderProjectSummaryLine
+} from "./api-client.js"
 import { readCommand } from "./cli/read-command.js"
-import { attachTmux, listTmuxPanes } from "./tmux.js"
+import { usageText } from "./cli/usage.js"
+import { ensureControllerReady } from "./controller.js"
+import type { CliError, UnsupportedCommandError } from "./host-errors.js"
+import { renderCliError } from "./host-errors.js"
 
-import { runMenu } from "./menu.js"
+type OperationalCommand = Exclude<Command, { readonly _tag: "Help" }>
+type UnsupportedOperationalCommandTag =
+  | "Menu"
+  | "Attach"
+  | "Panes"
+  | "SessionsList"
+  | "SessionsKill"
+  | "SessionsLogs"
+  | "ScrapExport"
+  | "ScrapImport"
+  | "McpPlaywrightUp"
+  | "Apply"
+  | "SessionGistBackup"
+  | "SessionGistList"
+  | "SessionGistView"
+  | "SessionGistDownload"
+  | "StatePath"
+  | "StateInit"
+  | "StateStatus"
+  | "StatePull"
+  | "StateCommit"
+  | "StatePush"
+  | "StateSync"
+  | "AuthCodexLogin"
+  | "AuthCodexStatus"
+  | "AuthCodexLogout"
+  | "AuthClaudeLogin"
+  | "AuthClaudeStatus"
+  | "AuthClaudeLogout"
+  | "AuthGeminiLogin"
+  | "AuthGeminiStatus"
+  | "AuthGeminiLogout"
 
-const isParseError = (error: AppError): error is ParseError =>
-  error._tag === "UnknownCommand" ||
-  error._tag === "UnknownOption" ||
-  error._tag === "MissingOptionValue" ||
-  error._tag === "MissingRequiredOption" ||
-  error._tag === "InvalidOption" ||
-  error._tag === "UnexpectedArgument"
+type UnsupportedOperationalCommand = Extract<
+  OperationalCommand,
+  { readonly _tag: UnsupportedOperationalCommandTag }
+>
 
 const setExitCode = (code: number) =>
   Effect.sync(() => {
     process.exitCode = code
   })
 
-const logWarningAndExit = (error: AppError) =>
+const logAndExit = (error: CliError, level: "warning" | "error" = "error") =>
   pipe(
-    Effect.logWarning(renderError(error)),
+    level === "warning" ? Effect.logWarning(renderCliError(error)) : Effect.logError(renderCliError(error)),
     Effect.tap(() => setExitCode(1)),
     Effect.asVoid
   )
 
-const logErrorAndExit = (error: AppError) =>
+const unsupported = (command: string, message: string): Effect.Effect<void, UnsupportedCommandError> =>
+  Effect.fail({
+    _tag: "UnsupportedCommandError",
+    command,
+    message
+  })
+
+const withControllerReady = <E>(
+  effect: Effect.Effect<void, E>
+): Effect.Effect<void, E | CliError, CommandExecutor.CommandExecutor> =>
   pipe(
-    Effect.logError(renderError(error)),
-    Effect.tap(() => setExitCode(1)),
-    Effect.asVoid
+    ensureControllerReady,
+    Effect.zipRight(effect)
   )
 
-type NonBaseCommand = Exclude<
-  Command,
-  | { readonly _tag: "Help" }
-  | { readonly _tag: "Create" }
-  | { readonly _tag: "Status" }
-  | { readonly _tag: "DownAll" }
-  | { readonly _tag: "ApplyAll" }
-  | { readonly _tag: "Menu" }
->
+const renderProjectList = (projects: ReadonlyArray<ApiProjectSummary>) =>
+  Effect.gen(function*(_) {
+    if (projects.length === 0) {
+      yield* _(Effect.log("No docker-git projects found."))
+      return
+    }
 
-const handleNonBaseCommand = (command: NonBaseCommand) =>
-  Match.value(command)
-    .pipe(
-      Match.when({ _tag: "StatePath" }, () => statePath),
-      Match.when({ _tag: "StateInit" }, (cmd) => stateInit(cmd)),
-      Match.when({ _tag: "StateStatus" }, () => stateStatus),
-      Match.when({ _tag: "StatePull" }, () => statePull),
-      Match.when({ _tag: "StateCommit" }, (cmd) => stateCommit(cmd.message)),
-      Match.when({ _tag: "StatePush" }, () => statePush),
-      Match.when({ _tag: "StateSync" }, (cmd) => stateSync(cmd.message)),
-      Match.when({ _tag: "AuthGithubLogin" }, (cmd) => authGithubLogin(cmd)),
-      Match.when({ _tag: "AuthGithubStatus" }, (cmd) => authGithubStatus(cmd)),
-      Match.when({ _tag: "AuthGithubLogout" }, (cmd) => authGithubLogout(cmd)),
-      Match.when({ _tag: "AuthCodexLogin" }, (cmd) => authCodexLogin(cmd)),
-      Match.when({ _tag: "AuthCodexStatus" }, (cmd) => authCodexStatus(cmd)),
-      Match.when({ _tag: "AuthCodexLogout" }, (cmd) => authCodexLogout(cmd)),
-      Match.when({ _tag: "AuthClaudeLogin" }, (cmd) => authClaudeLogin(cmd)),
-      Match.when({ _tag: "AuthClaudeStatus" }, (cmd) => authClaudeStatus(cmd)),
-      Match.when({ _tag: "AuthClaudeLogout" }, (cmd) => authClaudeLogout(cmd)),
-      Match.when({ _tag: "Attach" }, (cmd) => attachTmux(cmd)),
-      Match.when({ _tag: "Panes" }, (cmd) => listTmuxPanes(cmd)),
-      Match.when({ _tag: "SessionsList" }, (cmd) => listTerminalSessions(cmd))
-    )
-    .pipe(
-      Match.when({ _tag: "AuthGeminiLogin" }, (cmd) => cmd.isWeb ? authGeminiLoginOauth(cmd) : authGeminiLoginCli(cmd)),
-      Match.when({ _tag: "AuthGeminiStatus" }, (cmd) => authGeminiStatus(cmd)),
-      Match.when({ _tag: "AuthGeminiLogout" }, (cmd) => authGeminiLogout(cmd)),
-      Match.when({ _tag: "SessionsKill" }, (cmd) => killTerminalProcess(cmd)),
-      Match.when({ _tag: "Apply" }, (cmd) => applyProjectConfig(cmd)),
-      Match.when({ _tag: "SessionsLogs" }, (cmd) => tailTerminalLogs(cmd)),
-      Match.when({ _tag: "ScrapExport" }, (cmd) => exportScrap(cmd)),
-      Match.when({ _tag: "ScrapImport" }, (cmd) => importScrap(cmd)),
-      Match.when({ _tag: "McpPlaywrightUp" }, (cmd) => mcpPlaywrightUp(cmd)),
-      Match.when({ _tag: "SessionGistBackup" }, (cmd) => sessionGistBackup(cmd)),
-      Match.when({ _tag: "SessionGistList" }, (cmd) => sessionGistList(cmd)),
-      Match.when({ _tag: "SessionGistView" }, (cmd) => sessionGistView(cmd)),
-      Match.when({ _tag: "SessionGistDownload" }, (cmd) => sessionGistDownload(cmd)),
-      Match.exhaustive
-    )
+    yield* _(Effect.log(`Found ${projects.length} docker-git project(s):`))
+    for (const project of projects) {
+      yield* _(Effect.log(renderProjectSummaryLine(project)))
+    }
+  })
 
-// CHANGE: compose CLI program with typed errors and shell effects; auto-pull .docker-git on startup
-// WHY: keep a thin entry layer over pure parsing and template generation; ensure state is fresh
-// QUOTE(ТЗ): "Сделать что бы когда вызывается команда docker-git то происходит git pull для .docker-git папки"
-// REF: issue-178
-// SOURCE: n/a
-// FORMAT THEOREM: forall cmd: autoPull() *> handle(cmd) terminates with typed outcome
-// PURITY: SHELL
-// EFFECT: Effect<void, AppError, FileSystem | Path | CommandExecutor>
-// INVARIANT: auto-pull never blocks command execution; help is printed without side effects beyond logs
-// COMPLEXITY: O(n) where n = |files|
-export const program = pipe(
-  autoPullState,
-  Effect.flatMap(() => readCommand),
-  Effect.flatMap((command: Command) =>
-    Match.value(command).pipe(
-      Match.when({ _tag: "Help" }, ({ message }) => Effect.log(message)),
-      Match.when({ _tag: "Create" }, (create) => createProject(create)),
-      Match.when({ _tag: "Status" }, () => listProjectStatus),
-      Match.when({ _tag: "DownAll" }, () => downAllDockerGitProjects),
-      Match.when({ _tag: "ApplyAll" }, (cmd) => applyAllDockerGitProjects(cmd)),
-      Match.when({ _tag: "Menu" }, () => runMenu),
-      Match.orElse((cmd) => handleNonBaseCommand(cmd))
-    )
-  ),
-  Effect.catchTag("FileExistsError", (error) =>
+const renderCreateResult = (project: ApiProjectDetails | null) =>
+  Effect.gen(function*(_) {
+    if (project === null) {
+      yield* _(Effect.log("Project created."))
+      return
+    }
+
+    yield* _(Effect.log(`Project created: ${project.displayName}`))
+    yield* _(Effect.log(`Project ID: ${project.id}`))
+    yield* _(Effect.log(`Status: ${project.statusLabel}`))
+  })
+
+const handleCreateCommand = (command: Extract<OperationalCommand, { readonly _tag: "Create" }>) =>
+  withControllerReady(
+    pipe(createProject(command), Effect.flatMap((project) => renderCreateResult(project)))
+  )
+
+const handleStatusCommand = () =>
+  withControllerReady(pipe(listProjects(), Effect.flatMap((projects) => renderProjectList(projects))))
+
+const handleDownAllCommand = () =>
+  withControllerReady(pipe(downAllProjects(), Effect.zipRight(Effect.log("All docker-git projects were stopped."))))
+
+const handleApplyAllCommand = (command: Extract<OperationalCommand, { readonly _tag: "ApplyAll" }>) =>
+  withControllerReady(
     pipe(
-      Effect.logWarning(renderError(error)),
-      Effect.asVoid
-    )),
-  Effect.catchTag("DockerAccessError", logWarningAndExit),
-  Effect.catchTag("DockerCommandError", logWarningAndExit),
-  Effect.catchTag("AuthError", logWarningAndExit),
-  Effect.catchTag("AgentFailedError", logWarningAndExit),
-  Effect.catchTag("CommandFailedError", logWarningAndExit),
-  Effect.catchTag("ScrapArchiveNotFoundError", logErrorAndExit),
-  Effect.catchTag("ScrapTargetDirUnsupportedError", logErrorAndExit),
-  Effect.catchTag("ScrapWipeRefusedError", logErrorAndExit),
-  Effect.matchEffect({
-    onFailure: (error) =>
-      isParseError(error)
-        ? logErrorAndExit(error)
-        : pipe(
-          Effect.logError(renderError(error)),
-          Effect.flatMap(() => Effect.fail(error))
-        ),
-    onSuccess: () => Effect.void
-  }),
+      applyAllProjects(command.activeOnly),
+      Effect.zipRight(
+        Effect.log(
+          command.activeOnly
+            ? "Applied docker-git config to running projects."
+            : "Applied docker-git config to all projects."
+        )
+      )
+    )
+  )
+
+const handleGithubLoginCommand = (command: Extract<OperationalCommand, { readonly _tag: "AuthGithubLogin" }>) =>
+  withControllerReady(
+    pipe(githubLogin(command), Effect.flatMap((payload) => Effect.log(renderJsonPayload(payload))))
+  )
+
+const handleGithubStatusCommand = (command: Extract<OperationalCommand, { readonly _tag: "AuthGithubStatus" }>) =>
+  withControllerReady(
+    pipe(githubStatus(command), Effect.flatMap((payload) => Effect.log(renderJsonPayload(payload))))
+  )
+
+const handleGithubLogoutCommand = (
+  command: Extract<OperationalCommand, { readonly _tag: "AuthGithubLogout" }>
+) =>
+  withControllerReady(
+    pipe(
+      githubLogout(command),
+      Effect.zipRight(Effect.log("GitHub auth removed from controller state."))
+    )
+  )
+
+const unsupportedOperationalCommands: Record<
+  UnsupportedOperationalCommandTag,
+  { readonly command: string; readonly message: string }
+> = {
+  Menu: {
+    command: "menu",
+    message: "Interactive menu is not available in API-only host mode. Use `docker-git status` or `docker-git create`."
+  },
+  Attach: { command: "attach", message: "Host-side SSH attach is disabled in API-only mode." },
+  Panes: { command: "panes", message: "Host-side pane inspection is disabled in API-only mode." },
+  SessionsList: { command: "sessions", message: "Terminal session inspection is disabled in API-only mode." },
+  SessionsKill: { command: "sessions kill", message: "Terminal session control is disabled in API-only mode." },
+  SessionsLogs: { command: "sessions logs", message: "Terminal session log access is disabled in API-only mode." },
+  ScrapExport: { command: "scrap export", message: "Scrap export is disabled in API-only host mode." },
+  ScrapImport: { command: "scrap import", message: "Scrap import is disabled in API-only host mode." },
+  McpPlaywrightUp: {
+    command: "mcp-playwright",
+    message: "Playwright sidecar management is disabled in API-only host mode."
+  },
+  Apply: {
+    command: "Apply",
+    message: "Command Apply is not available in API-only host mode."
+  },
+  SessionGistBackup: {
+    command: "session-gists backup",
+    message: "Session gist backup is disabled in API-only host mode."
+  },
+  SessionGistList: {
+    command: "session-gists list",
+    message: "Session gist list is disabled in API-only host mode."
+  },
+  SessionGistView: {
+    command: "session-gists view",
+    message: "Session gist view is disabled in API-only host mode."
+  },
+  SessionGistDownload: {
+    command: "session-gists download",
+    message: "Session gist download is disabled in API-only host mode."
+  },
+  StatePath: { command: "state path", message: "Host state commands are disabled in API-only mode." },
+  StateInit: { command: "state init", message: "Host state commands are disabled in API-only mode." },
+  StateStatus: { command: "state status", message: "Host state commands are disabled in API-only mode." },
+  StatePull: { command: "state pull", message: "Host state commands are disabled in API-only mode." },
+  StateCommit: { command: "state commit", message: "Host state commands are disabled in API-only mode." },
+  StatePush: { command: "state push", message: "Host state commands are disabled in API-only mode." },
+  StateSync: { command: "state sync", message: "Host state commands are disabled in API-only mode." },
+  AuthCodexLogin: {
+    command: "auth codex login",
+    message: "Only GitHub auth is routed through the controller in host API mode."
+  },
+  AuthCodexStatus: {
+    command: "auth codex status",
+    message: "Only GitHub auth is routed through the controller in host API mode."
+  },
+  AuthCodexLogout: {
+    command: "auth codex logout",
+    message: "Only GitHub auth is routed through the controller in host API mode."
+  },
+  AuthClaudeLogin: {
+    command: "auth claude login",
+    message: "Only GitHub auth is routed through the controller in host API mode."
+  },
+  AuthClaudeStatus: {
+    command: "auth claude status",
+    message: "Only GitHub auth is routed through the controller in host API mode."
+  },
+  AuthClaudeLogout: {
+    command: "auth claude logout",
+    message: "Only GitHub auth is routed through the controller in host API mode."
+  },
+  AuthGeminiLogin: {
+    command: "auth gemini login",
+    message: "Only GitHub auth is routed through the controller in host API mode."
+  },
+  AuthGeminiStatus: {
+    command: "auth gemini status",
+    message: "Only GitHub auth is routed through the controller in host API mode."
+  },
+  AuthGeminiLogout: {
+    command: "auth gemini logout",
+    message: "Only GitHub auth is routed through the controller in host API mode."
+  }
+}
+
+const unsupportedOperationalCommand = (
+  command: UnsupportedOperationalCommand
+): Effect.Effect<void, UnsupportedCommandError> => {
+  const spec = unsupportedOperationalCommands[command._tag]
+  return unsupported(spec.command, spec.message)
+}
+
+const dispatchOperationalCommand = (command: OperationalCommand) =>
+  Match.value(command).pipe(
+    Match.when({ _tag: "Create" }, handleCreateCommand),
+    Match.when({ _tag: "Status" }, handleStatusCommand),
+    Match.when({ _tag: "DownAll" }, handleDownAllCommand),
+    Match.when({ _tag: "ApplyAll" }, handleApplyAllCommand),
+    Match.when({ _tag: "AuthGithubLogin" }, handleGithubLoginCommand),
+    Match.when({ _tag: "AuthGithubStatus" }, handleGithubStatusCommand),
+    Match.when({ _tag: "AuthGithubLogout" }, handleGithubLogoutCommand),
+    Match.orElse((unsupported) => unsupportedOperationalCommand(unsupported))
+  )
+
+// CHANGE: route host CLI commands through the API controller only
+// WHY: host must not read local .docker-git state or execute project lifecycle directly
+// QUOTE(ТЗ): "app(cli) инструмент общается только с API"
+// REF: user-request-2026-04-01-api-only-host
+// SOURCE: n/a
+// FORMAT THEOREM: forall cmd: operational(cmd) -> api(cmd)
+// PURITY: SHELL
+// EFFECT: Effect<void, CliError, never>
+// INVARIANT: help remains local; unsupported commands fail explicitly
+// COMPLEXITY: O(1) per command plus API round-trips
+export const program = pipe(
+  readCommand,
+  Effect.flatMap((command: Command) =>
+    command._tag === "Help"
+      ? Effect.log(usageText)
+      : dispatchOperationalCommand(command)
+  ),
+  Effect.catchAll((error: CliError) => logAndExit(error)),
   Effect.asVoid
 )

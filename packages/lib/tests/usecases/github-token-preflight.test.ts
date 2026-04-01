@@ -9,6 +9,7 @@ import type { CreateCommand, TemplateConfig } from "../../src/core/domain.js"
 import { createProject } from "../../src/usecases/actions/create-project.js"
 import {
   githubInvalidTokenMessage,
+  githubMissingTokenMessage,
   resolveGithubCloneAuthToken
 } from "../../src/usecases/github-token-preflight.js"
 
@@ -129,6 +130,36 @@ describe("github token preflight", () => {
         expect(error._tag).toBe("AuthError")
         expect(error.message).toBe(githubInvalidTokenMessage)
         expect(fetchMock).toHaveBeenCalledTimes(1)
+
+        const outDirExists = yield* _(fs.exists(outDir))
+        expect(outDirExists).toBe(false)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("fails createProject before writing files when GitHub auth is missing", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const command = makeCommand(root, outDir, path)
+
+        yield* _(fs.makeDirectory(path.join(root, ".orch", "env"), { recursive: true }))
+        yield* _(
+          fs.writeFileString(
+            command.config.envGlobalPath,
+            [
+              "# docker-git env",
+              "UNRELATED=1",
+              ""
+            ].join("\n")
+          )
+        )
+
+        const error = yield* _(createProject(command).pipe(Effect.flip))
+
+        expect(error._tag).toBe("AuthError")
+        expect(error.message).toBe(githubMissingTokenMessage)
 
         const outDirExists = yield* _(fs.exists(outDir))
         expect(outDirExists).toBe(false)
