@@ -52,10 +52,23 @@ const expectMessages = (
 
 describe("noLibImportsRule", () => {
   const violationCases = [
-    ["rejects import declarations from lib", line("import { listProjects } from \"@effect-template/lib\""), [["Direct import", "@effect-template/lib"]]],
-    ["rejects type-only import declarations from lib", line("import type { TemplateConfig } from \"@effect-template/lib/core/domain\""), [["@effect-template/lib/core/domain"]]],
-    ["rejects type import expressions from lib", line("type Template = import(\"@effect-template/lib/core/domain\").TemplateConfig"), [["@effect-template/lib/core/domain"]]],
-    ["rejects require calls from lib", line("const templateLib = require(\"@effect-template/lib\")"), [["@effect-template/lib"]]],
+    ["rejects import declarations from lib", line("import { listProjects } from \"@effect-template/lib\""), [[
+      "Direct import",
+      "@effect-template/lib"
+    ]]],
+    [
+      "rejects type-only import declarations from lib",
+      line("import type { TemplateConfig } from \"@effect-template/lib/core/domain\""),
+      [["@effect-template/lib/core/domain"]]
+    ],
+    [
+      "rejects type import expressions from lib",
+      line("type Template = import(\"@effect-template/lib/core/domain\").TemplateConfig"),
+      [["@effect-template/lib/core/domain"]]
+    ],
+    ["rejects require calls from lib", line("const templateLib = require(\"@effect-template/lib\")"), [[
+      "@effect-template/lib"
+    ]]],
     [
       "rejects template literal module calls from lib",
       lines([
@@ -64,7 +77,11 @@ describe("noLibImportsRule", () => {
       ]),
       [["@effect-template/lib/core/domain"], ["@effect-template/lib/usecases/projects"]]
     ],
-    ["rejects import equals require from lib", line("import templateLib = require(\"@effect-template/lib/core/domain\")"), [["@effect-template/lib/core/domain"]]],
+    [
+      "rejects import equals require from lib",
+      line("import templateLib = require(\"@effect-template/lib/core/domain\")"),
+      [["@effect-template/lib/core/domain"]]
+    ],
     [
       "rejects re-export declarations from lib",
       lines([
@@ -73,7 +90,9 @@ describe("noLibImportsRule", () => {
       ]),
       [["@effect-template/lib"], ["@effect-template/lib/core/domain"]]
     ],
-    ["rejects migrated legacy paths too", line("import { listProjects } from \"@effect-template/lib\""), [["Direct import"]], "src/docker-git/program.ts"]
+    ["rejects migrated legacy paths too", line("import { listProjects } from \"@effect-template/lib\""), [[
+      "Direct import"
+    ]], "src/docker-git/program.ts"]
   ] as const
 
   for (const [name, source, expectedMessages, filePath] of violationCases) {
