@@ -2,7 +2,7 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
-import { Effect, Either } from "effect"
+import { Effect } from "effect"
 
 import type { CreateCommand, ParseError } from "../../core/domain.js"
 import { deriveRepoPathParts } from "../../core/domain.js"
@@ -57,8 +57,10 @@ const resolveClonedOnHostname = (): Effect.Effect<string | undefined> =>
     try: () => import("node:os").then((os) => os.hostname()),
     catch: () => new Error("hostname lookup failed")
   }).pipe(
-    Effect.either,
-    Effect.map((result) => Either.match(result, { onLeft: () => undefined, onRight: (hostname) => hostname }))
+    Effect.match({
+      onFailure: (): string | undefined => undefined,
+      onSuccess: (hostname): string | undefined => hostname
+    })
   )
 
 const makeCreateContext = (path: Path.Path, baseDir: string): CreateContext => {
