@@ -50,8 +50,15 @@ const expectMessages = (
   }
 }
 
+type ViolationCase = readonly [
+  name: string,
+  source: string,
+  expectedMessages: ReadonlyArray<ReadonlyArray<string>>,
+  filePath?: string
+]
+
 describe("noLibImportsRule", () => {
-  const violationCases = [
+  const violationCases: ReadonlyArray<ViolationCase> = [
     ["rejects import declarations from lib", line("import { listProjects } from \"@effect-template/lib\""), [[
       "Direct import",
       "@effect-template/lib"
@@ -93,7 +100,7 @@ describe("noLibImportsRule", () => {
     ["rejects migrated legacy paths too", line("import { listProjects } from \"@effect-template/lib\""), [[
       "Direct import"
     ]], "src/docker-git/program.ts"]
-  ] as const
+  ]
 
   for (const [name, source, expectedMessages, filePath] of violationCases) {
     it(name, () => {
