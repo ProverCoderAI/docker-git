@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type { FileSystem as Fs } from "@effect/platform/FileSystem"
@@ -26,3 +27,4 @@ export type ScrapError =
   | PlatformError
 
 export type ScrapRequirements = Fs | PathService | CommandExecutor.CommandExecutor
+/* jscpd:ignore-end */

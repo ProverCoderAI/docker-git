@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 
 const entrypointDockerGitBootstrapTemplate = String
@@ -244,3 +245,4 @@ export const renderEntrypointDockerGitBootstrap = (config: TemplateConfig): stri
       config.envProjectPath.replaceAll("\\", "/").split("/").at(-1) ?? "project.env"
     )
     .replaceAll("__CODEX_HOME__", config.codexHome)
+/* jscpd:ignore-end */

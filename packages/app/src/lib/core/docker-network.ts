@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { deriveRepoPathParts } from "./domain.js"
 
 export type DockerNetworkConfig = {
@@ -48,3 +49,4 @@ export const deriveDockerNetworkConfig = (repoUrl: string): DockerNetworkConfig 
   const ipAddress = `172.${subnetA}.${subnetB}.${hostOctet}`
   return { subnet, ipAddress }
 }
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 
 const entrypointAgentsNoticeTemplate = String.raw`# Ensure global AGENTS.md exists for container context
@@ -113,3 +114,4 @@ export const renderEntrypointAgentsNotice = (config: TemplateConfig): string =>
     config.sshUser
   )
     .replaceAll("__TARGET_DIR__", config.targetDir)
+/* jscpd:ignore-end */

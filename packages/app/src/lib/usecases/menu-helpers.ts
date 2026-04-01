@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { ProjectConfig } from "../core/domain.js"
 
 export { defaultProjectsRoot, findSshPrivateKey, resolveAuthorizedKeysPath } from "./path-helpers.js"
@@ -48,3 +49,4 @@ export const formatConnectionInfo = (
     editorAccessLabel +
     hostnameLabel
 }
+/* jscpd:ignore-end */

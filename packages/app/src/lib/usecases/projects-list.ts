@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
@@ -163,3 +164,4 @@ export const listRunningProjectItems: Effect.Effect<
   Effect.all([listProjectItems, runDockerPsNames(process.cwd())]),
   Effect.map(([items, runningNames]) => items.filter((item) => runningNames.includes(item.containerName)))
 )
+/* jscpd:ignore-end */

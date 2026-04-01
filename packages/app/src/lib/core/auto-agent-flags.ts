@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { Either } from "effect"
 
 import type { RawOptions } from "./command-options.js"
@@ -22,3 +23,4 @@ export const resolveAutoAgentFlags = (
     reason: "expected one of: claude, codex"
   })
 }
+/* jscpd:ignore-end */

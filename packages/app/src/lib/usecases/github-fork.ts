@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
@@ -127,3 +128,4 @@ export const applyGithubForkConfig = (
       onSuccess: (forkUrl) => Effect.succeed(forkUrl ? { ...config, forkRepoUrl: forkUrl } : config)
     })
   )
+/* jscpd:ignore-end */

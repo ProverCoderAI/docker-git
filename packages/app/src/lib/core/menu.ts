@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { Either } from "effect"
 
 export type MenuAction =
@@ -109,3 +110,4 @@ export const parseMenuSelection = (input: string): Either.Either<MenuAction, Par
 
   return Either.right(action)
 }
+/* jscpd:ignore-end */

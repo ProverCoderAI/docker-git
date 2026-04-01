@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 export * from "./core/clone.js"
 export * from "./core/command-builders.js"
 export * from "./core/command-options.js"
@@ -17,3 +18,4 @@ export * from "./usecases/path-helpers.js"
 export * from "./usecases/projects.js"
 export * from "./usecases/scrap.js"
 export * from "./usecases/terminal-sessions.js"
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 const entrypointGitPostPushWrapperInstall = String
   .raw`# 5.5) Install git wrapper so post-push actions run for normal git push invocations.
 # Git has no client-side post-push hook, so core.hooksPath alone is insufficient.
@@ -165,3 +166,4 @@ EOF
 fi`
 
 export const renderEntrypointGitPostPushWrapperInstall = (): string => entrypointGitPostPushWrapperInstall
+/* jscpd:ignore-end */

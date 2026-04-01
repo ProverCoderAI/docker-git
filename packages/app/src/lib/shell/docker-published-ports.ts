@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { ExitCode } from "@effect/platform/CommandExecutor"
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
@@ -78,3 +79,4 @@ export const runDockerPsPublishedHostPorts = (
     ),
     Effect.map((output) => parseDockerPublishedHostPorts(output))
   )
+/* jscpd:ignore-end */

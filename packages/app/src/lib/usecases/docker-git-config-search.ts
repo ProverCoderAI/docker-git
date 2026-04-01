@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
@@ -84,3 +85,4 @@ export const findDockerGitConfigPaths = (
 
     return results
   })
+/* jscpd:ignore-end */

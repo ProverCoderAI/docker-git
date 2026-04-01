@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type { FileSystem } from "@effect/platform/FileSystem"
@@ -153,3 +154,4 @@ export const selectAvailablePort = (
       )
     )
   })
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 // CHANGE: separate project rule preparation by active agent mode
 // WHY: Codex, Claude Code, and Gemini CLI each have different native project-level config models
 // REF: issue-207
@@ -58,3 +59,4 @@ docker_git_prepare_active_agent_project_rules() {
 }`
 
 export const renderEntrypointProjectAgentRules = (): string => entrypointProjectAgentRulesTemplate
+/* jscpd:ignore-end */

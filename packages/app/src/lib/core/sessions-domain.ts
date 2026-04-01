@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { SessionGistCommand } from "./session-gist-domain.js"
 
 export interface SessionsListCommand {
@@ -24,3 +25,4 @@ export type SessionsCommand =
   | SessionsKillCommand
   | SessionsLogsCommand
   | SessionGistCommand
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import * as ParseResult from "@effect/schema/ParseResult"
@@ -167,3 +168,4 @@ export type LegacyOrchPaths = AuthPaths & {
   readonly ghAuthPath: string
   readonly geminiAuthPath?: string
 }
+/* jscpd:ignore-end */

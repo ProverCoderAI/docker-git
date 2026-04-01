@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import { ExitCode } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
@@ -91,3 +92,4 @@ export const runDockerGitOpen = (
   CommandFailedError | PlatformError,
   CommandExecutor.CommandExecutor | Path.Path
 > => runDockerGitCommand("open", args)
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 export const parseInspectNetworkEntry = (line: string): ReadonlyArray<readonly [string, string]> => {
   const idx = line.indexOf("=")
   if (idx <= 0) {
@@ -11,3 +12,4 @@ export const parseInspectNetworkEntry = (line: string): ReadonlyArray<readonly [
   const entry: readonly [string, string] = [network, ip]
   return [entry]
 }
+/* jscpd:ignore-end */

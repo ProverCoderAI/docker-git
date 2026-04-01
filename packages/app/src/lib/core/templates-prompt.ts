@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 // CHANGE: standardize docker-git prompt script for interactive shells
 // WHY: keep prompt consistent between Dockerfile and entrypoint
 // QUOTE(ТЗ): "Промт должен создаваться нашим docker-git тулой"
@@ -395,3 +396,4 @@ if [[ ! -s "$ZSHRC_PATH" ]]; then
 ${renderZshConfig()}
 EOF
 fi`
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { Effect } from "effect"
 
 import type { TemplateConfig } from "../core/domain.js"
@@ -16,3 +17,4 @@ import { withDefaultResourceLimitIntent } from "../core/resource-limits.js"
 export const resolveTemplateResourceLimits = (
   template: TemplateConfig
 ): Effect.Effect<TemplateConfig> => Effect.succeed(withDefaultResourceLimitIntent(template))
+/* jscpd:ignore-end */

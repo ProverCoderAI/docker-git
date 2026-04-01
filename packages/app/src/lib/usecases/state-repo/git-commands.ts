@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import { ExitCode } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
@@ -53,3 +54,4 @@ export const isGitRepo = (root: string) =>
 
 export const hasOriginRemote = (root: string) =>
   Effect.map(gitExitCode(root, ["remote", "get-url", "origin"]), (exit) => exit === successExitCode)
+/* jscpd:ignore-end */

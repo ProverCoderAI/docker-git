@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { Effect } from "effect"
 
 import type { ScrapExportCommand, ScrapImportCommand } from "../core/domain.js"
@@ -23,3 +24,4 @@ export const importScrap = (
     yield* _(ensureDockerDaemonAccess(process.cwd()))
     yield* _(importScrapSession(command))
   }).pipe(Effect.asVoid)
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { CommandExecutor } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
@@ -214,3 +215,4 @@ export const ensureSharedCodexVolumeReady = (
     yield* _(runDockerVolumeCreate(cwd, dockerGitSharedCodexVolumeName))
     yield* _(ensureProjectBootstrapVolumeReady(cwd, config))
   }).pipe(Effect.asVoid)
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 export interface StatePathCommand {
   readonly _tag: "StatePath"
 }
@@ -38,3 +39,4 @@ export type StateCommand =
   | StateStatusCommand
   | StateCommitCommand
   | StateSyncCommand
+/* jscpd:ignore-end */

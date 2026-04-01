@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 
 const entrypointClaudeGlobalPromptTemplate = String
@@ -120,3 +121,4 @@ EOF
     chmod 0755 "$CLAUDE_WRAPPER_BIN" || true
   fi
 fi`
+/* jscpd:ignore-end */

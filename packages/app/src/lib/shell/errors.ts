@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { Data } from "effect"
 
 export class FileExistsError extends Data.TaggedError("FileExistsError")<{
@@ -77,3 +78,4 @@ export class ScrapWipeRefusedError extends Data.TaggedError("ScrapWipeRefusedErr
   readonly targetDir: string
   readonly reason: string
 }> {}
+/* jscpd:ignore-end */

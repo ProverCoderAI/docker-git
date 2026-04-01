@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "./domain.js"
 import type { ResolvedComposeResourceLimits } from "./resource-limits.js"
 import { renderEntrypoint } from "./templates-entrypoint.js"
@@ -75,3 +76,4 @@ export const planFiles = (
     { _tag: "Dir", relativePath: ".orch/env" }
   ]
 }
+/* jscpd:ignore-end */

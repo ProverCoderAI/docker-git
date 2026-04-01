@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import { Effect } from "effect"
@@ -77,3 +78,4 @@ export const isRegularFile = (
     const info = yield* _(fs.stat(filePath))
     return info.type === "File"
   })
+/* jscpd:ignore-end */

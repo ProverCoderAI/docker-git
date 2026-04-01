@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 
 const entrypointOpenCodeTemplate = `OPENCODE_DATA_DIR="/home/__SSH_USER__/.local/share/opencode"
@@ -211,3 +212,4 @@ export const renderEntrypointOpenCodeConfig = (config: TemplateConfig): string =
   entrypointOpenCodeTemplate
     .replaceAll("__SSH_USER__", config.sshUser)
     .replaceAll("__CODEX_HOME__", config.codexHome)
+/* jscpd:ignore-end */

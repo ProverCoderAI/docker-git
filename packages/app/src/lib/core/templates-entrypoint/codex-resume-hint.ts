@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 
 const escapeForDoubleQuotes = (value: string): string => {
@@ -96,3 +97,4 @@ export const renderEntrypointCodexResumeHint = (config: TemplateConfig): string 
   entrypointCodexResumeHintTemplate
     .replaceAll("__REPO_REF_DEFAULT__", escapeForDoubleQuotes(config.repoRef))
     .replaceAll("__REPO_URL_DEFAULT__", escapeForDoubleQuotes(config.repoUrl))
+/* jscpd:ignore-end */

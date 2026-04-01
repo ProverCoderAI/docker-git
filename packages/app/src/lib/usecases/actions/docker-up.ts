@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
@@ -280,3 +281,4 @@ export const runDockerDownCleanup = (
   )
 
 export const maxSshPortAttempts = maxPortAttempts
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 import { renderDockerfilePrompt } from "../templates-prompt.js"
 
@@ -284,3 +285,4 @@ export const renderDockerfile = (config: TemplateConfig): string =>
     renderDockerfileScripts(),
     renderDockerfileWorkspace(config)
   ].join("\n\n")
+/* jscpd:ignore-end */

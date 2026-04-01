@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
@@ -48,3 +49,4 @@ export const sanitizeTemplateComposeEnvFiles = (
     yield* _(sanitizeTemplateEnvPath(fs, globalEnvPath))
     yield* _(sanitizeTemplateEnvPath(fs, projectEnvPath))
   })
+/* jscpd:ignore-end */

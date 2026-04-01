@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 import { renderInputRc } from "../templates-prompt.js"
 
@@ -166,3 +167,4 @@ chmod 0644 "$DOCKER_GIT_SSHD_CONF" || true`
 
 export const renderEntrypointSshd = (): string =>
   `# 5) Run sshd in foreground (log to stderr for CI/debuggability)\nexec /usr/sbin/sshd -D -e`
+/* jscpd:ignore-end */

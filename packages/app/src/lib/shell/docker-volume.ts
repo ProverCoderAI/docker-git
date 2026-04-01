@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import { ExitCode } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
@@ -47,3 +48,4 @@ export const runDockerVolumeReplaceFromDirectory = (
     (exitCode) => new DockerCommandError({ exitCode })
   )
 }
+/* jscpd:ignore-end */

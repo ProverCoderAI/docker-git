@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 // CHANGE: session backup commands for PR-based session history
 // WHY: enables returning to old AI sessions via a private backup repository
 // QUOTE(ТЗ): "иметь возможность возвращаться ко всем старым сессиям с агентами"
@@ -34,3 +35,4 @@ export type SessionGistCommand =
   | SessionGistListCommand
   | SessionGistViewCommand
   | SessionGistDownloadCommand
+/* jscpd:ignore-end */

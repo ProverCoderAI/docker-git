@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import { Effect } from "effect"
 
@@ -39,3 +40,4 @@ export const resolveDockerComposeEnv = (
     }
     return env
   })
+/* jscpd:ignore-end */

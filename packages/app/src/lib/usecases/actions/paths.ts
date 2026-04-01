@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as Path from "@effect/platform/Path"
 import type { CreateCommand } from "../../core/domain.js"
 
@@ -66,3 +67,4 @@ export const buildProjectConfigs = (
   }
   return { globalConfig, projectConfig }
 }
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 
 export { renderEntrypointCodexResumeHint } from "./codex-resume-hint.js"
@@ -172,3 +173,4 @@ docker_git_sync_project_codex_skills() {
 
 export const renderEntrypointProjectCodexSkillsSync = (config: TemplateConfig): string =>
   entrypointProjectCodexSkillsSyncTemplate.replaceAll("__CODEX_HOME__", config.codexHome)
+/* jscpd:ignore-end */

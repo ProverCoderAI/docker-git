@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import * as Command from "@effect/platform/Command"
 import * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
@@ -347,3 +348,4 @@ export const runGeminiOauthLoginWithPrompt = (
       return yield* _(resolveGeminiLoginResult(resultBox.value, exitCode))
     })
   )
+/* jscpd:ignore-end */

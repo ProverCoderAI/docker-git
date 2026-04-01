@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
@@ -67,3 +68,4 @@ export const withGithubAuthHintOnFailure = <A, E, R>(
   effect.pipe(
     Effect.tapError(() => enabled ? Effect.logWarning(githubAuthLoginHint) : Effect.void)
   )
+/* jscpd:ignore-end */

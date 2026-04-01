@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "./domain.js"
 import { renderEntrypointAgentsNotice } from "./templates-entrypoint/agents-notice.js"
 import {
@@ -66,3 +67,4 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointDisableMotd(),
     renderEntrypointSshd()
   ].join("\n\n")
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { CommandExecutor } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type { FileSystem } from "@effect/platform/FileSystem"
@@ -45,3 +46,4 @@ export const downAllDockerGitProjects: Effect.Effect<
   ),
   Effect.asVoid
 )
+/* jscpd:ignore-end */

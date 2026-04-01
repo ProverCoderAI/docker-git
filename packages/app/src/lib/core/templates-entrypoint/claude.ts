@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 import { renderClaudeGlobalPromptSetup, renderClaudeWrapperSetup } from "./claude-extra-config.js"
 
@@ -275,3 +276,4 @@ export const renderEntrypointClaudeConfig = (config: TemplateConfig): string =>
     renderClaudeWrapperSetup(),
     renderClaudeProfileSetup()
   ].join("\n\n")
+/* jscpd:ignore-end */

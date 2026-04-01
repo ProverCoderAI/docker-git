@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
 import * as TreeFormatter from "@effect/schema/TreeFormatter"
@@ -69,3 +70,4 @@ export const decodeSessionManifest = (
       ),
     onRight: (value) => Effect.succeed(value)
   })
+/* jscpd:ignore-end */

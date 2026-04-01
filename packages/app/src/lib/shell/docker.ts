@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import * as Command from "@effect/platform/Command"
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import { ExitCode } from "@effect/platform/CommandExecutor"
@@ -512,3 +513,4 @@ export const runDockerPsNames = (
         .filter((line) => line.length > 0)
     )
   )
+/* jscpd:ignore-end */

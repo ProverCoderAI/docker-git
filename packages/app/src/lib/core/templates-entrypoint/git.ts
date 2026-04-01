@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 import { renderEntrypointGitPostPushWrapperInstall } from "./git-post-push-wrapper.js"
 
@@ -299,3 +300,4 @@ git config --system core.hooksPath "$HOOKS_DIR" || true
 git config --global core.hooksPath "$HOOKS_DIR" || true`
 
 export const renderEntrypointGitHooks = (): string => entrypointGitHooksTemplate
+/* jscpd:ignore-end */

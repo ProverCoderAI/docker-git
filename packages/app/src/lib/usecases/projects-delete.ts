@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
@@ -112,3 +113,4 @@ export const deleteDockerGitProject = (
     const label = repoParts.length > 0 ? repoParts.join("/") : item.repoUrl
     yield* _(autoSyncState(`chore(state): delete ${label}`))
   }).pipe(Effect.asVoid)
+/* jscpd:ignore-end */

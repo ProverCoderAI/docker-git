@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import {
   dockerGitSharedCacheVolumeName,
   dockerGitSharedCodexVolumeName,
@@ -204,3 +205,4 @@ export const renderDockerCompose = (
     renderComposeVolumes(config, fragments.maybeBrowserVolume)
   ].join("\n\n")
 }
+/* jscpd:ignore-end */

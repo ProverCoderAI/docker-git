@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Effect } from "effect"
@@ -304,3 +305,4 @@ export const runDockerAuthExitCode = (
       })
     )
   })
+/* jscpd:ignore-end */

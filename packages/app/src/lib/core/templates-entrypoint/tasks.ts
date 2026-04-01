@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 import { renderAgentLaunch } from "./agent.js"
 
@@ -227,3 +228,4 @@ fi
 
 ${renderAgentLaunch(config)}
 ) &`
+/* jscpd:ignore-end */

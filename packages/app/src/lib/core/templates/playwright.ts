@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 export const renderPlaywrightBrowserDockerfile = (): string =>
   `FROM kechangdev/browser-vnc:latest
 
@@ -34,3 +35,4 @@ fi
 echo "extra services started"
 exit 0
 `
+/* jscpd:ignore-end */

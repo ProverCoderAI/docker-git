@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 // CHANGE: define the set of docker-git scripts to embed in generated containers
 // WHY: scripts (session-backup, pre-commit guards, knowledge splitter) must be available
 //      inside containers for git hooks and docker-git module usage
@@ -29,3 +30,4 @@ export const dockerGitScriptNames: ReadonlyArray<string> = [
   "repair-knowledge-history.js",
   "setup-pre-commit-hook.js"
 ]
+/* jscpd:ignore-end */

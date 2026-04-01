@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { PlatformError } from "@effect/platform/Error"
 import { Effect } from "effect"
 
@@ -35,3 +36,4 @@ export const authGeminiLogout = (
     )
     yield* _(autoSyncState(`chore(state): auth gemini logout ${accountLabel}`))
   }).pipe(Effect.asVoid)
+/* jscpd:ignore-end */

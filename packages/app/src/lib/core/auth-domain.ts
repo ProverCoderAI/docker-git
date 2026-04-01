@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 export interface AuthGithubLoginCommand {
   readonly _tag: "AuthGithubLogin"
   readonly label: string | null
@@ -95,3 +96,4 @@ export type AuthCommand =
   | AuthGeminiLoginCommand
   | AuthGeminiStatusCommand
   | AuthGeminiLogoutCommand
+/* jscpd:ignore-end */

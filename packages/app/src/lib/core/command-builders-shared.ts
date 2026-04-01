@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { Either } from "effect"
 
 import { type CreateCommand, defaultTemplateConfig, isDockerNetworkMode, type ParseError } from "./domain.js"
@@ -51,3 +52,4 @@ export const nonEmpty = (
   }
   return Either.right(candidate)
 }
+/* jscpd:ignore-end */

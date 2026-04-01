@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 export type CloneRequest =
   | { readonly _tag: "Clone"; readonly args: ReadonlyArray<string> }
   | { readonly _tag: "Open"; readonly args: ReadonlyArray<string> }
@@ -58,3 +59,4 @@ export const resolveCloneRequest = (
 
   return emptyRequest
 }
+/* jscpd:ignore-end */

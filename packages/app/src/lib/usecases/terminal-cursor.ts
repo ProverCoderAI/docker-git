@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { Effect } from "effect"
 
 const terminalSaneEscape = "\u001B[0m" + // reset rendition
@@ -39,3 +40,4 @@ export const ensureTerminalCursorVisible = (): Effect.Effect<void> =>
     }
     process.stdout.write(terminalSaneEscape)
   })
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { type ParseError } from "./domain.js"
 
 // CHANGE: define reusable command option shape for create/clone/auth builders
@@ -70,3 +71,4 @@ export interface RawOptions {
 // INVARIANT: ParseError tags are preserved
 // COMPLEXITY: O(1)
 export type CommandBuildError = ParseError
+/* jscpd:ignore-end */

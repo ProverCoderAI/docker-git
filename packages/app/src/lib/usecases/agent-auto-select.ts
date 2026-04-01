@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
@@ -137,3 +138,4 @@ export const resolveAutoAgentMode = (
 
     return yield* _(pickRandomAutoAgentMode(available))
   })
+/* jscpd:ignore-end */

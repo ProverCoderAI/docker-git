@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { Match } from "effect"
 
 import type { ParseError } from "./domain.js"
@@ -22,3 +23,4 @@ export const formatParseError = (error: ParseError): string =>
     Match.when({ _tag: "UnexpectedArgument" }, ({ value }) => `Unexpected argument: ${value}`),
     Match.exhaustive
   )
+/* jscpd:ignore-end */

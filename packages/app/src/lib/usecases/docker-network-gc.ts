@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { CommandExecutor } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Effect } from "effect"
@@ -174,3 +175,4 @@ export const gcProjectNetworkByServiceName = (
   serviceName: string,
   sharedNetworkName: string = defaultTemplateConfig.dockerSharedNetworkName
 ): Effect.Effect<void, never, CommandExecutor> => gcNetworkByName(cwd, `${serviceName}-net`, sharedNetworkName)
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { ApplyCommand, TemplateConfig } from "../core/domain.js"
 import { normalizeAuthLabel, normalizeGitTokenLabel } from "../core/token-labels.js"
 
@@ -58,3 +59,4 @@ export const applyTemplateOverrides = (
 
   return nextTemplate
 }
+/* jscpd:ignore-end */

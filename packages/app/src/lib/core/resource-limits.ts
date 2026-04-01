@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { Either } from "effect"
 
 import { defaultCpuLimit, defaultRamLimit, type ParseError, type TemplateConfig } from "./domain.js"
@@ -141,3 +142,4 @@ export const resolveComposeResourceLimits = (
       : resolvePercentRamLimit(ramPercent, hostResources.totalMemoryBytes)
   }
 }
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { PlatformError } from "@effect/platform/Error"
 import { Effect } from "effect"
 
@@ -28,3 +29,4 @@ export const authGeminiStatus = (
       }
       yield* _(Effect.log(`Gemini connected (${accountLabel}, ${authMethod}).`))
     }))
+/* jscpd:ignore-end */

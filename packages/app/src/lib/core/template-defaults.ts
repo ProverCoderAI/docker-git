@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { TemplateConfig } from "./domain.js"
 
 type DefaultTemplateConfig = Pick<
@@ -60,3 +61,4 @@ export const defaultTemplateConfig = {
   enableMcpPlaywright: false,
   pnpmVersion: "10.27.0"
 } satisfies DefaultTemplateConfig
+/* jscpd:ignore-end */

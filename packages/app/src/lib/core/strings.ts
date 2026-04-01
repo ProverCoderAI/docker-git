@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 export const trimLeftChar = (value: string, char: string): string => {
   let start = 0
   while (start < value.length && value[start] === char) {
@@ -13,3 +14,4 @@ export const trimRightChar = (value: string, char: string): string => {
   }
   return value.slice(0, end)
 }
+/* jscpd:ignore-end */

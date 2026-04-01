@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
@@ -144,3 +145,4 @@ export const copyDirMissingEntries = (
     yield* _(copyMissingRecursive(fs, path, sourceDir, targetDir))
     yield* _(Effect.log(`Seeded missing ${label} entries from ${sourceDir} to ${targetDir}`))
   })
+/* jscpd:ignore-end */

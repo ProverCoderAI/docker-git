@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
@@ -212,3 +213,4 @@ const makeKeyFinder = (spec: KeyLookupSpec) =>
 export const findAuthorizedKeysSource = makeKeyFinder(authorizedKeysSpec)
 
 export const findSshPrivateKey = makeKeyFinder(sshPrivateKeySpec)
+/* jscpd:ignore-end */

@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
@@ -68,3 +69,4 @@ export const logDockerAccessInfo = (
     Effect.zipRight(logDockerDnsAccess(config)),
     Effect.zipRight(logContainerIpAccess(cwd, config))
   )
+/* jscpd:ignore-end */

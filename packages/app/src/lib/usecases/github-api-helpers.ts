@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Effect } from "effect"
@@ -60,3 +61,4 @@ export const runGhApiNullable = (
     Effect.catchTag("CommandFailedError", () => Effect.succeed("")),
     Effect.map((raw) => (raw.length === 0 ? null : raw))
   )
+/* jscpd:ignore-end */

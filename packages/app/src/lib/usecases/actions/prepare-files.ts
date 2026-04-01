@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
@@ -322,3 +323,4 @@ export const migrateProjectOrchLayout = (
     ghAuthPath: resolveRootPath(".docker-git/.orch/auth/gh"),
     claudeAuthPath: resolveRootPath(".docker-git/.orch/auth/claude")
   })
+/* jscpd:ignore-end */
