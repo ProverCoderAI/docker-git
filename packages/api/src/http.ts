@@ -12,6 +12,8 @@ import * as Schema from "effect/Schema"
 import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
 import {
   ApplyAllRequestSchema,
+  CodexAuthImportRequestSchema,
+  CodexAuthLogoutRequestSchema,
   CreateAgentRequestSchema,
   CreateFollowRequestSchema,
   CreateProjectRequestSchema,
@@ -20,7 +22,14 @@ import {
   UpProjectRequestSchema
 } from "./api/schema.js"
 import { uiHtml, uiScript, uiStyles } from "./ui.js"
-import { loginGithubAuth, logoutGithubAuth, readGithubAuthStatus } from "./services/auth.js"
+import {
+  importCodexAuth,
+  loginGithubAuth,
+  logoutCodexAuth,
+  logoutGithubAuth,
+  readCodexAuthStatus,
+  readGithubAuthStatus
+} from "./services/auth.js"
 import { getAgent, getAgentAttachInfo, listAgents, readAgentLogs, startAgent, stopAgent } from "./services/agents.js"
 import { latestProjectCursor, listProjectEventsSince } from "./services/events.js"
 import {
@@ -149,6 +158,8 @@ const readCreateProjectRequest = () => HttpServerRequest.schemaBodyJson(CreatePr
 const readCreateFollowRequest = () => HttpServerRequest.schemaBodyJson(CreateFollowRequestSchema)
 const readGithubAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLoginRequestSchema)
 const readGithubAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLogoutRequestSchema)
+const readCodexAuthImportRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthImportRequestSchema)
+const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLogoutRequestSchema)
 const readApplyAllRequest = () => HttpServerRequest.schemaBodyJson(ApplyAllRequestSchema)
 const readUpProjectRequest = () =>
   HttpServerRequest.schemaBodyJson(UpProjectRequestSchema).pipe(
@@ -237,6 +248,31 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(readGithubAuthLogoutRequest())
         const status = yield* _(logoutGithubAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/auth/codex/status",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const label = new URL(request.url, "http://localhost").searchParams.get("label")
+        const status = yield* _(readCodexAuthStatus(label))
+        return yield* _(jsonResponse({ status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/codex/import",
+      Effect.gen(function*(_) {
+        const request = yield* _(readCodexAuthImportRequest())
+        const status = yield* _(importCodexAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/codex/logout",
+      Effect.gen(function*(_) {
+        const request = yield* _(readCodexAuthLogoutRequest())
+        const status = yield* _(logoutCodexAuth(request))
         return yield* _(jsonResponse({ ok: true, status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),

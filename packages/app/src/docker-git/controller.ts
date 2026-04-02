@@ -122,24 +122,26 @@ const waitForReachableApiBaseUrl = (
     Effect.retry(
       Schedule.addDelay(Schedule.recurs(30), () => Duration.seconds(2))
     ),
-    Effect.catchAll((error) =>
-      Effect.gen(function*(_) {
-        const diagnostics = yield* _(
-          collectReachabilityDiagnostics(candidateUrls, currentContainerNetworks, controllerNetworks)
-        )
-        return yield* _(
-          Effect.fail(
-            controllerBootstrapError(
-              [
-                "docker-git controller did not become reachable.",
-                error.message,
-                diagnostics
-              ].join("\n")
+    Effect.matchEffect({
+      onFailure: (error) =>
+        Effect.gen(function*(_) {
+          const diagnostics = yield* _(
+            collectReachabilityDiagnostics(candidateUrls, currentContainerNetworks, controllerNetworks)
+          )
+          return yield* _(
+            Effect.fail(
+              controllerBootstrapError(
+                [
+                  "docker-git controller did not become reachable.",
+                  error.message,
+                  diagnostics
+                ].join("\n")
+              )
             )
           )
-        )
-      })
-    )
+        }),
+      onSuccess: (apiBaseUrl) => Effect.succeed(apiBaseUrl)
+    })
   )
 
 const failIfRemoteDockerWithoutApiUrl = (): Effect.Effect<void, ControllerBootstrapError> => {

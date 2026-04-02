@@ -171,6 +171,7 @@ export const syncAuthArtifacts = (
       yield* _(syncGithubTokenKeysInFile(sourceGlobal, targetGlobal))
       yield* _(copyFileIfNeeded(sourceProject, targetProject))
       yield* _(fs.makeDirectory(targetCodex, { recursive: true }))
+      yield* _(copyCodexFile(fs, path, { sourceDir: sourceCodex, targetDir: targetCodex, fileName: "auth.json", label: "auth" }))
       if (sourceCodex !== targetCodex) {
         yield* _(
           copyCodexFile(fs, path, {

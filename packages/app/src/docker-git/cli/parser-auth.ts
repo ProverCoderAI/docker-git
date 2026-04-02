@@ -82,6 +82,12 @@ const buildCodexCommand = (action: string, options: AuthOptions): Either.Either<
         label: options.label,
         codexAuthPath: options.codexAuthPath
       })),
+    Match.when("import", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthCodexImport",
+        label: options.label,
+        codexAuthPath: options.codexAuthPath
+      })),
     Match.when("status", () =>
       Either.right<AuthCommand>({
         _tag: "AuthCodexStatus",

@@ -72,7 +72,7 @@ const parseNetworkEntry = (line: string): readonly [string, string] | null => {
     return null
   }
 
-  return [name, ip] as const
+  return [name, ip]
 }
 
 export const parseDockerNetworkIps = (output: string): DockerNetworkIps =>

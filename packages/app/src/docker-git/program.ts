@@ -5,6 +5,9 @@ import {
   type ApiProjectDetails,
   type ApiProjectSummary,
   applyAllProjects,
+  codexImport,
+  codexLogout,
+  codexStatus,
   createProject,
   downAllProjects,
   githubLogin,
@@ -46,8 +49,6 @@ type UnsupportedOperationalCommandTag =
   | "StatePush"
   | "StateSync"
   | "AuthCodexLogin"
-  | "AuthCodexStatus"
-  | "AuthCodexLogout"
   | "AuthClaudeLogin"
   | "AuthClaudeStatus"
   | "AuthClaudeLogout"
@@ -168,6 +169,30 @@ const handleGithubLogoutCommand = (
     )
   )
 
+const handleCodexImportCommand = (
+  command: Extract<OperationalCommand, { readonly _tag: "AuthCodexImport" }>
+) =>
+  withControllerReady(
+    pipe(codexImport(command), Effect.flatMap((payload) => Effect.log(renderJsonPayload(payload))))
+  )
+
+const handleCodexStatusCommand = (
+  command: Extract<OperationalCommand, { readonly _tag: "AuthCodexStatus" }>
+) =>
+  withControllerReady(
+    pipe(codexStatus(command), Effect.flatMap((payload) => Effect.log(renderJsonPayload(payload))))
+  )
+
+const handleCodexLogoutCommand = (
+  command: Extract<OperationalCommand, { readonly _tag: "AuthCodexLogout" }>
+) =>
+  withControllerReady(
+    pipe(
+      codexLogout(command),
+      Effect.zipRight(Effect.log("Codex auth removed from controller state."))
+    )
+  )
+
 const unsupportedOperationalCommands: Record<
   UnsupportedOperationalCommandTag,
   { readonly command: string; readonly message: string }
@@ -212,14 +237,6 @@ const unsupportedOperationalCommands: Record<
   StateSync: { command: "state sync", message: "Host state commands are disabled in API-only mode." },
   AuthCodexLogin: {
     command: "auth codex login",
-    message: "Only GitHub auth is routed through the controller in host API mode."
-  },
-  AuthCodexStatus: {
-    command: "auth codex status",
-    message: "Only GitHub auth is routed through the controller in host API mode."
-  },
-  AuthCodexLogout: {
-    command: "auth codex logout",
     message: "Only GitHub auth is routed through the controller in host API mode."
   },
   AuthClaudeLogin: {
@@ -268,6 +285,9 @@ const dispatchOperationalCommand = (
     Match.when({ _tag: "AuthGithubLogin" }, handleGithubLoginCommand),
     Match.when({ _tag: "AuthGithubStatus" }, handleGithubStatusCommand),
     Match.when({ _tag: "AuthGithubLogout" }, handleGithubLogoutCommand),
+    Match.when({ _tag: "AuthCodexImport" }, handleCodexImportCommand),
+    Match.when({ _tag: "AuthCodexStatus" }, handleCodexStatusCommand),
+    Match.when({ _tag: "AuthCodexLogout" }, handleCodexLogoutCommand),
     Match.orElse((unsupported) => unsupportedOperationalCommand(unsupported))
   )
 

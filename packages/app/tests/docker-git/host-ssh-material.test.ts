@@ -1,18 +1,26 @@
+import { NodeContext } from "@effect/platform-node"
+/* jscpd:ignore-start */
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
-import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, type Exit } from "effect"
 
+import type { HostSshMaterial } from "../../src/docker-git/host-ssh-material.js"
+import { resolveHostSshMaterial, resolveManagedHostSshMaterial } from "../../src/docker-git/host-ssh-material.js"
 import type { CreateCommand } from "../../src/lib/core/domain.js"
-import {
-  resolveHostSshMaterial,
-  resolveManagedHostSshMaterial
-} from "../../src/docker-git/host-ssh-material.js"
+import type { CommandFailedError } from "../../src/lib/shell/errors.js"
+
+type HostSshMaterialError = PlatformError | CommandFailedError
+type HostSshMaterialServices =
+  | CommandExecutor.CommandExecutor
+  | FileSystem.FileSystem
+  | Path.Path
 
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
-) =>
+): Effect.Effect<A, PlatformError | E, R | FileSystem.FileSystem> =>
   Effect.scoped(
     Effect.gen(function*(_) {
       const fs = yield* _(FileSystem.FileSystem)
@@ -25,21 +33,31 @@ const withTempDir = <A, E, R>(
     })
   )
 
+const withResource = <A, E, R, T>(
+  acquire: Effect.Effect<T, E, R>,
+  use: (value: T) => Effect.Effect<A, E, R>,
+  release: (value: T, exit: Exit.Exit<A, E>) => Effect.Effect<void, never, R>
+) => Effect.acquireUseRelease(acquire, use, release)
+
 const withPatchedEnv = <A, E, R>(
   patch: Readonly<Record<string, string | undefined>>,
   effect: Effect.Effect<A, E, R>
 ) =>
-  Effect.acquireUseRelease(
+  withResource(
     Effect.sync(() => {
       const previous = new Map<string, string | undefined>()
+
       for (const [key, value] of Object.entries(patch)) {
         previous.set(key, process.env[key])
+
         if (value === undefined) {
-          delete process.env[key]
-        } else {
-          process.env[key] = value
+          Reflect.deleteProperty(process.env, key)
+          continue
         }
+
+        process.env[key] = value
       }
+
       return previous
     }),
     () => effect,
@@ -47,10 +65,11 @@ const withPatchedEnv = <A, E, R>(
       Effect.sync(() => {
         for (const [key, value] of previous.entries()) {
           if (value === undefined) {
-            delete process.env[key]
-          } else {
-            process.env[key] = value
+            Reflect.deleteProperty(process.env, key)
+            continue
           }
+
+          process.env[key] = value
         }
       })
   )
@@ -59,7 +78,7 @@ const withWorkingDirectory = <A, E, R>(
   cwd: string,
   effect: Effect.Effect<A, E, R>
 ) =>
-  Effect.acquireUseRelease(
+  withResource(
     Effect.sync(() => {
       const previous = process.cwd()
       process.chdir(cwd)
@@ -72,6 +91,66 @@ const withWorkingDirectory = <A, E, R>(
       })
   )
 
+const runMaterialCase = (
+  resolver: (
+    workspaceDir: string,
+    path: Path.Path,
+    projectsRoot: string
+  ) => Effect.Effect<HostSshMaterial, HostSshMaterialError, HostSshMaterialServices>,
+  assert: (
+    material: HostSshMaterial,
+    fs: FileSystem.FileSystem,
+    path: Path.Path,
+    projectsRoot: string
+  ) => Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path>
+): Effect.Effect<void, HostSshMaterialError> =>
+  withTempDir((root) =>
+    Effect.gen(function*(_) {
+      const fs = yield* _(FileSystem.FileSystem)
+      const path = yield* _(Path.Path)
+      const workspaceDir = path.join(root, "workspace")
+      const homeDir = path.join(root, "home")
+      const projectsRoot = path.join(root, ".docker-git")
+
+      yield* _(fs.makeDirectory(workspaceDir, { recursive: true }))
+      yield* _(fs.makeDirectory(homeDir, { recursive: true }))
+
+      const material = yield* _(
+        withPatchedEnv(
+          {
+            HOME: homeDir,
+            DOCKER_GIT_PROJECTS_ROOT: projectsRoot,
+            DOCKER_GIT_AUTHORIZED_KEYS: undefined,
+            DOCKER_GIT_SSH_KEY: undefined
+          },
+          withWorkingDirectory(workspaceDir, resolver(workspaceDir, path, projectsRoot))
+        )
+      )
+
+      yield* _(assert(material, fs, path, projectsRoot))
+    })
+  ).pipe(Effect.provide(NodeContext.layer))
+
+const assertManagedHostSshMaterial = (
+  material: HostSshMaterial,
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  projectsRoot: string,
+  checkPublicKey: boolean
+) => {
+  expect(material.privateKeyPath).toBe(path.join(projectsRoot, "dev_ssh_key"))
+  expect(material.authorizedKeysContents).toContain("ssh-ed25519")
+
+  return Effect.gen(function*(_) {
+    expect(yield* _(fs.exists(material.privateKeyPath))).toBe(true)
+
+    if (checkPublicKey) {
+      expect(yield* _(fs.exists(`${material.privateKeyPath}.pub`))).toBe(true)
+    }
+  })
+}
+
+/* jscpd:ignore-start */
 const makeCommand = (outDir: string, path: Path.Path): CreateCommand => ({
   _tag: "Create",
   config: {
@@ -105,72 +184,19 @@ const makeCommand = (outDir: string, path: Path.Path): CreateCommand => ({
   forceEnv: false,
   waitForClone: true
 })
+/* jscpd:ignore-end */
 
 describe("host ssh material", () => {
   it.effect("creates a managed SSH keypair when no host key exists", () =>
-    withTempDir((root) =>
-      Effect.gen(function*(_) {
-        const fs = yield* _(FileSystem.FileSystem)
-        const path = yield* _(Path.Path)
-        const workspaceDir = path.join(root, "workspace")
-        const homeDir = path.join(root, "home")
-        const projectsRoot = path.join(root, ".docker-git")
-
-        yield* _(fs.makeDirectory(workspaceDir, { recursive: true }))
-        yield* _(fs.makeDirectory(homeDir, { recursive: true }))
-
-        const material = yield* _(
-          withPatchedEnv(
-            {
-              HOME: homeDir,
-              DOCKER_GIT_PROJECTS_ROOT: projectsRoot,
-              DOCKER_GIT_AUTHORIZED_KEYS: undefined,
-              DOCKER_GIT_SSH_KEY: undefined
-            },
-            withWorkingDirectory(
-              workspaceDir,
-              resolveHostSshMaterial(makeCommand(path.join(workspaceDir, "project"), path))
-            )
-          )
-        )
-
-        expect(material.privateKeyPath).toBe(path.join(projectsRoot, "dev_ssh_key"))
-        expect(material.authorizedKeysContents).toContain("ssh-ed25519")
-        expect(yield* _(fs.exists(material.privateKeyPath))).toBe(true)
-        expect(yield* _(fs.exists(`${material.privateKeyPath}.pub`))).toBe(true)
-      })
-    ).pipe(Effect.provide(NodeContext.layer)))
+    runMaterialCase(
+      (workspaceDir, path, _projectsRoot) =>
+        resolveHostSshMaterial(makeCommand(path.join(workspaceDir, "project"), path)),
+      (material, fs, path, projectsRoot) => assertManagedHostSshMaterial(material, fs, path, projectsRoot, true)
+    ))
 
   it.effect("resolves managed SSH material for existing projects without create-command overrides", () =>
-    withTempDir((root) =>
-      Effect.gen(function*(_) {
-        const fs = yield* _(FileSystem.FileSystem)
-        const path = yield* _(Path.Path)
-        const workspaceDir = path.join(root, "workspace")
-        const homeDir = path.join(root, "home")
-        const projectsRoot = path.join(root, ".docker-git")
-
-        yield* _(fs.makeDirectory(workspaceDir, { recursive: true }))
-        yield* _(fs.makeDirectory(homeDir, { recursive: true }))
-
-        const material = yield* _(
-          withPatchedEnv(
-            {
-              HOME: homeDir,
-              DOCKER_GIT_PROJECTS_ROOT: projectsRoot,
-              DOCKER_GIT_AUTHORIZED_KEYS: undefined,
-              DOCKER_GIT_SSH_KEY: undefined
-            },
-            withWorkingDirectory(
-              workspaceDir,
-              resolveManagedHostSshMaterial()
-            )
-          )
-        )
-
-        expect(material.privateKeyPath).toBe(path.join(projectsRoot, "dev_ssh_key"))
-        expect(material.authorizedKeysContents).toContain("ssh-ed25519")
-        expect(yield* _(fs.exists(material.privateKeyPath))).toBe(true)
-      })
-    ).pipe(Effect.provide(NodeContext.layer)))
+    runMaterialCase(
+      () => resolveManagedHostSshMaterial(),
+      (material, fs, path, projectsRoot) => assertManagedHostSshMaterial(material, fs, path, projectsRoot, false)
+    ))
 })

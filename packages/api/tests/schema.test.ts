@@ -3,6 +3,8 @@ import { Effect, Either, ParseResult, Schema } from "effect"
 
 import {
   ApplyAllRequestSchema,
+  CodexAuthImportRequestSchema,
+  CodexAuthLogoutRequestSchema,
   CreateAgentRequestSchema,
   CreateFollowRequestSchema,
   CreateProjectRequestSchema,
@@ -90,6 +92,40 @@ describe("api schemas", () => {
           expect(value.label).toBe("default")
           expect(value.token).toBe("token")
           expect(value.scopes).toBe("repo,workflow")
+        }
+      })
+    }))
+
+  it.effect("decodes codex auth import payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(CodexAuthImportRequestSchema)({
+        label: "team-a",
+        authText: JSON.stringify({ openai: { type: "api", key: "test" } })
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.label).toBe("team-a")
+          expect(value.authText).toContain('"key":"test"')
+        }
+      })
+    }))
+
+  it.effect("decodes codex auth logout payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(CodexAuthLogoutRequestSchema)({
+        label: "team-a"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.label).toBe("team-a")
         }
       })
     }))

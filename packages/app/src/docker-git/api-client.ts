@@ -1,11 +1,17 @@
+import * as FileSystem from "@effect/platform/FileSystem"
+import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
 import type {
+  AuthCodexImportCommand,
+  AuthCodexLogoutCommand,
+  AuthCodexStatusCommand,
   AuthGithubLoginCommand,
   AuthGithubLogoutCommand,
   AuthGithubStatusCommand,
   CreateCommand
 } from "@lib/core/domain"
+import { resolvePathFromCwd } from "@lib/usecases/path-helpers"
 
 import { request, requestVoid } from "./api-http.js"
 import { asArray, asObject, asString, type JsonRequest, type JsonValue } from "./api-json.js"
@@ -127,5 +133,30 @@ export const githubStatus = (_command: AuthGithubStatusCommand) => request("GET"
 
 export const githubLogout = (command: AuthGithubLogoutCommand) =>
   requestVoid("POST", "/auth/github/logout", {
+    label: command.label
+  })
+
+const readCodexAuthText = (command: AuthCodexImportCommand) =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const resolvedCodexAuthDir = resolvePathFromCwd(path, process.cwd(), command.codexAuthPath)
+    const authFilePath = path.join(resolvedCodexAuthDir, "auth.json")
+    return yield* _(fs.readFileString(authFilePath))
+  })
+
+export const codexImport = (command: AuthCodexImportCommand) =>
+  Effect.gen(function*(_) {
+    const authText = yield* _(readCodexAuthText(command))
+    return yield* _(request("POST", "/auth/codex/import", { label: command.label, authText }))
+  })
+
+export const codexStatus = (command: AuthCodexStatusCommand) => {
+  const query = command.label === null ? "" : `?label=${encodeURIComponent(command.label)}`
+  return request("GET", `/auth/codex/status${query}`)
+}
+
+export const codexLogout = (command: AuthCodexLogoutCommand) =>
+  requestVoid("POST", "/auth/codex/logout", {
     label: command.label
   })

@@ -79,7 +79,7 @@ mkdir -p "$ROOT/.orch/auth/codex"
 
 # Seed a fake (but structurally valid) Codex auth.json so the entrypoint can
 # auto-connect OpenCode without manual /connect.
-node <<'NODE' | dg_write_docker_host_file "$ROOT/.orch/auth/codex/auth.json" 600
+node <<'NODE' > "$ROOT/.orch/auth/codex/auth.json"
 const now = Math.floor(Date.now() / 1000)
 const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url")
 const jwt = (payload) => `${b64({ alg: "none", typ: "JWT" })}.${b64(payload)}.sig`
@@ -111,6 +111,22 @@ CODEX_SHARE_AUTH=1
 OPENCODE_SHARE_AUTH=1
 OPENCODE_AUTO_CONNECT=1
 EOF_ENV
+
+AUTH_LOG="$ROOT/codex-auth.log"
+(
+  cd "$REPO_ROOT"
+  pnpm run docker-git auth codex import --codex-auth "$ROOT/.orch/auth/codex"
+  pnpm run docker-git auth codex status --codex-auth "$ROOT/.orch/auth/codex"
+) >"$AUTH_LOG" 2>&1
+
+grep -Fq -- "Codex auth imported into controller state." "$AUTH_LOG" \
+  || fail "expected controller-owned Codex auth import confirmation"
+
+grep -Fq -- '"present": true' "$AUTH_LOG" \
+  || fail "expected controller-owned Codex auth status confirmation"
+
+grep -Fq -- '"authPath":' "$AUTH_LOG" \
+  || fail "expected controller-owned Codex auth status payload"
 
 clone_attempts=3
 clone_attempt=1

@@ -24,6 +24,12 @@ export interface AuthCodexLoginCommand {
   readonly codexAuthPath: string
 }
 
+export interface AuthCodexImportCommand {
+  readonly _tag: "AuthCodexImport"
+  readonly label: string | null
+  readonly codexAuthPath: string
+}
+
 export interface AuthCodexStatusCommand {
   readonly _tag: "AuthCodexStatus"
   readonly label: string | null
@@ -88,6 +94,7 @@ export type AuthCommand =
   | AuthGithubStatusCommand
   | AuthGithubLogoutCommand
   | AuthCodexLoginCommand
+  | AuthCodexImportCommand
   | AuthCodexStatusCommand
   | AuthCodexLogoutCommand
   | AuthClaudeLoginCommand

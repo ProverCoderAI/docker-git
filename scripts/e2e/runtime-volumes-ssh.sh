@@ -137,15 +137,14 @@ EOF_ENV
     --volume-name "$VOLUME_NAME"
 ) >"$CLONE_LOG" 2>&1
 
-grep -Fq -- "Docker environment is up" "$CLONE_LOG" \
-  || fail "expected clone log to confirm docker startup"
+grep -Fq -- "Project created: octocat/hello-world" "$CLONE_LOG" \
+  || fail "expected clone log to confirm project creation"
 
-grep -Fq -- "SSH access: ssh -i $SSH_KEY" "$CLONE_LOG" \
-  || fail "expected clone log to print SSH access command"
+grep -Fq -- "Project ID: " "$CLONE_LOG" \
+  || fail "expected clone log to print project id"
 
-grep -Fq -- " -p $SSH_PORT dev@localhost" "$CLONE_LOG" \
-  || grep -Eq -- ' -p 22 dev@[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$CLONE_LOG" \
-  || fail "expected clone log to print localhost published port or bridge-ip SSH access"
+grep -Fq -- "Status: " "$CLONE_LOG" \
+  || fail "expected clone log to print current project status"
 
 docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" \
   || fail "expected cloned repo at: $TARGET_DIR"

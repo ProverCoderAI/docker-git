@@ -6,7 +6,13 @@ import { Effect } from "effect"
 import { vi } from "vitest"
 
 import { ApiAuthRequiredError } from "../src/api/errors.js"
-import { ensureGithubAuthForCreate, readGithubAuthStatus } from "../src/services/auth.js"
+import {
+  ensureGithubAuthForCreate,
+  importCodexAuth,
+  logoutCodexAuth,
+  readCodexAuthStatus,
+  readGithubAuthStatus
+} from "../src/services/auth.js"
 import { createProjectFromRequest } from "../src/services/projects.js"
 
 const withTempDir = <A, E, R>(
@@ -183,6 +189,77 @@ describe("api auth", () => {
             )
           )
         )
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("imports Codex auth into the controller-owned auth directory", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const authDir = path.join(projectsRoot, ".orch", "auth", "codex")
+        const authText = JSON.stringify({ openai: { type: "oauth", refresh: "refresh", access: "access" } }, null, 2)
+
+        yield* _(fs.makeDirectory(projectsRoot, { recursive: true }))
+
+        const status = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              importCodexAuth({ authText })
+            )
+          )
+        )
+
+        expect(status.present).toBe(true)
+        expect(status.authPath).toBe(path.join(authDir, "auth.json"))
+        expect(status.message).toBe("Codex auth imported into controller state.")
+
+        const fileText = yield* _(fs.readFileString(path.join(authDir, "auth.json")))
+        expect(fileText).toContain('"refresh": "refresh"')
+
+        const readStatus = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(root, readCodexAuthStatus())
+          )
+        )
+
+        expect(readStatus.present).toBe(true)
+        expect(readStatus.authPath).toBe(path.join(authDir, "auth.json"))
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("removes labeled Codex auth from controller state", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const labeledAuthDir = path.join(projectsRoot, ".orch", "auth", "codex", "team-a")
+        const authText = JSON.stringify({ tokens: { access_token: "access", refresh_token: "refresh" } }, null, 2)
+
+        yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              importCodexAuth({ label: "team-a", authText })
+            )
+          )
+        )
+
+        const removed = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(root, logoutCodexAuth({ label: "team-a" }))
+          )
+        )
+
+        expect(removed.present).toBe(false)
+        expect(removed.label).toBe("team-a")
+        expect(removed.authPath).toBe(path.join(labeledAuthDir, "auth.json"))
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

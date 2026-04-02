@@ -104,6 +104,7 @@ Auth providers:
 Auth actions:
   login             Run login flow and store credentials
   status            Show current auth status
+  import            Import credentials from the configured auth directory
   logout            Remove stored credentials
 
 Auth options:

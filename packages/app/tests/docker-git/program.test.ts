@@ -3,23 +3,20 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { beforeEach, vi } from "vitest"
 
+import type { Command } from "../../src/lib/core/domain.js"
+
 const ensureControllerReadyMock = vi.hoisted(() => vi.fn(() => Effect.void))
-const runMenuCallMock = vi.hoisted(() => vi.fn(() => undefined))
+const runMenuCallMock = vi.hoisted(() => vi.fn(() => {}))
+
+const menuCommand: Extract<Command, { readonly _tag: "Menu" }> = { _tag: "Menu" }
 
 vi.mock("../../src/docker-git/cli/read-command.js", () => ({
-  readCommand: Effect.succeed({ _tag: "Menu" } as const)
+  readCommand: Effect.succeed(menuCommand)
 }))
 
-vi.mock("../../src/docker-git/controller.js", async () => {
-  const actual = await vi.importActual<typeof import("../../src/docker-git/controller.js")>(
-    "../../src/docker-git/controller.js"
-  )
-
-  return {
-    ...actual,
-    ensureControllerReady: ensureControllerReadyMock
-  }
-})
+vi.mock("../../src/docker-git/controller.js", () => ({
+  ensureControllerReady: ensureControllerReadyMock
+}))
 
 vi.mock("../../src/docker-git/menu.js", () => ({
   runMenu: Effect.sync(() => {

@@ -48,6 +48,15 @@ export const GithubAuthLogoutRequestSchema = Schema.Struct({
   label: OptionalNullableString
 })
 
+export const CodexAuthImportRequestSchema = Schema.Struct({
+  label: OptionalNullableString,
+  authText: Schema.String
+})
+
+export const CodexAuthLogoutRequestSchema = Schema.Struct({
+  label: OptionalNullableString
+})
+
 export const ApplyAllRequestSchema = Schema.Struct({
   activeOnly: OptionalBoolean
 })
@@ -108,6 +117,8 @@ export const AgentLogLineSchema = Schema.Struct({
 export type CreateProjectRequestInput = Schema.Schema.Type<typeof CreateProjectRequestSchema>
 export type GithubAuthLoginRequestInput = Schema.Schema.Type<typeof GithubAuthLoginRequestSchema>
 export type GithubAuthLogoutRequestInput = Schema.Schema.Type<typeof GithubAuthLogoutRequestSchema>
+export type CodexAuthImportRequestInput = Schema.Schema.Type<typeof CodexAuthImportRequestSchema>
+export type CodexAuthLogoutRequestInput = Schema.Schema.Type<typeof CodexAuthLogoutRequestSchema>
 export type ApplyAllRequestInput = Schema.Schema.Type<typeof ApplyAllRequestSchema>
 export type UpProjectRequestInput = Schema.Schema.Type<typeof UpProjectRequestSchema>
 export type CreateAgentRequestInput = Schema.Schema.Type<typeof CreateAgentRequestSchema>

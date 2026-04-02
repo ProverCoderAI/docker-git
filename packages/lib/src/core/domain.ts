@@ -7,6 +7,7 @@ export type {
   AuthClaudeLogoutCommand,
   AuthClaudeStatusCommand,
   AuthCodexLoginCommand,
+  AuthCodexImportCommand,
   AuthCodexLogoutCommand,
   AuthCodexStatusCommand,
   AuthCommand,

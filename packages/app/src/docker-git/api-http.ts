@@ -140,14 +140,16 @@ export const request = (
     const client = yield* _(HttpClient.HttpClient)
     const response = yield* _(
       executeRequest(client, resolveApiBaseUrl(), method, path, body).pipe(
-        Effect.catchAll((error) =>
-          ensureControllerReady().pipe(
-            Effect.matchEffect({
-              onFailure: () => Effect.fail(error),
-              onSuccess: () => executeRequest(client, resolveApiBaseUrl(), method, path, body)
-            })
-          )
-        )
+        Effect.matchEffect({
+          onFailure: (error) =>
+            ensureControllerReady().pipe(
+              Effect.matchEffect({
+                onFailure: () => Effect.fail(error),
+                onSuccess: () => executeRequest(client, resolveApiBaseUrl(), method, path, body)
+              })
+            ),
+          onSuccess: (value) => Effect.succeed(value)
+        })
       )
     )
     const parsed = yield* _(response.text.pipe(Effect.flatMap((text) => parseResponseBody(text))))

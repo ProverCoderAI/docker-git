@@ -50,6 +50,22 @@ export type GithubAuthLogoutRequest = {
   readonly label?: string | null | undefined
 }
 
+export type CodexAuthImportRequest = {
+  readonly label?: string | null | undefined
+  readonly authText: string
+}
+
+export type CodexAuthStatus = {
+  readonly label: string
+  readonly message: string
+  readonly present: boolean
+  readonly authPath: string
+}
+
+export type CodexAuthLogoutRequest = {
+  readonly label?: string | null | undefined
+}
+
 export type ApplyAllRequest = {
   readonly activeOnly?: boolean | undefined
 }

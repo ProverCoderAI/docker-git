@@ -93,6 +93,44 @@ describe("syncGithubAuthKeys", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("copies Codex auth.json into the target auth dir", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const sourceBase = path.join(root, "source")
+        const targetBase = path.join(root, "target")
+        const sourceCodexDir = path.join(sourceBase, ".orch", "auth", "codex")
+        const targetCodexDir = path.join(targetBase, ".orch", "auth", "codex")
+        const authText = JSON.stringify({ openai: { type: "oauth", refresh: "refresh", access: "access" } }, null, 2)
+
+        yield* _(fs.makeDirectory(sourceCodexDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(sourceCodexDir, "auth.json"), authText))
+
+        yield* _(
+          syncAuthArtifacts({
+            sourceBase,
+            targetBase,
+            source: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            },
+            target: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            }
+          })
+        )
+
+        const copiedAuthText = yield* _(fs.readFileString(path.join(targetCodexDir, "auth.json")))
+        expect(copiedAuthText).toBe(authText)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("rewrites managed codex config to include gpt-5.4 and plan mode xhigh", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {

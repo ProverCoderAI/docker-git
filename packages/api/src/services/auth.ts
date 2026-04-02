@@ -10,20 +10,25 @@ import {
   resolveGithubCloneAuthToken
 } from "@effect-template/lib/usecases/github-token-preflight"
 import { validateGithubToken, type GithubTokenValidationResult } from "@effect-template/lib/usecases/github-token-validation"
+import { normalizeAccountLabel } from "@effect-template/lib/usecases/auth-helpers"
 import { resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
 import { Effect, Match } from "effect"
 
 import type {
+  CodexAuthImportRequest,
+  CodexAuthLogoutRequest,
+  CodexAuthStatus,
   GithubAuthLoginRequest,
   GithubAuthLogoutRequest,
   GithubAuthStatus,
   GithubAuthTokenStatus
 } from "../api/contracts.js"
-import { ApiAuthRequiredError } from "../api/errors.js"
+import { ApiAuthRequiredError, ApiBadRequestError } from "../api/errors.js"
 
 export const githubAuthRequiredCommand = "docker-git auth github login --web"
 export const githubAuthRequiredMessage = "GitHub authentication is required. Run: docker-git auth github login --web"
 export const githubAuthEnvGlobalPath = defaultTemplateConfig.envGlobalPath
+export const codexAuthPath = defaultTemplateConfig.codexAuthPath
 
 const githubTokenKey = "GITHUB_TOKEN"
 const githubTokenPrefix = "GITHUB_TOKEN__"
@@ -90,6 +95,29 @@ const resolveControllerEnvPath = (
 ): string =>
   resolvePathFromCwd(path, process.cwd(), envGlobalPath)
 
+const resolveControllerCodexPath = (path: Path.Path, authPath: string): string =>
+  resolvePathFromCwd(path, process.cwd(), authPath)
+
+const resolveCodexLabel = (label: string | null | undefined): string =>
+  normalizeAccountLabel(label ?? null, "default")
+
+const resolveCodexAccountPath = (
+  path: Path.Path,
+  authPath: string,
+  label: string | null | undefined
+): string => {
+  const basePath = resolveControllerCodexPath(path, authPath)
+  const normalizedLabel = resolveCodexLabel(label)
+  return normalizedLabel === "default" ? basePath : path.join(basePath, normalizedLabel)
+}
+
+const resolveCodexAuthFilePath = (
+  path: Path.Path,
+  authPath: string,
+  label: string | null | undefined
+): string =>
+  path.join(resolveCodexAccountPath(path, authPath, label), "auth.json")
+
 const readGithubAuthTokens = (
   envGlobalPath: string
 ): Effect.Effect<GithubAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
@@ -142,6 +170,89 @@ export const logoutGithubAuth = (request: GithubAuthLogoutRequest) =>
       })
     )
     return yield* _(readGithubAuthTokens(githubAuthEnvGlobalPath))
+  })
+
+const codexAuthStatus = (
+  present: boolean,
+  label: string,
+  authPath: string
+): CodexAuthStatus => ({
+  label,
+  message: present
+    ? "Codex auth imported into controller state."
+    : "Codex auth not found in controller state.",
+  present,
+  authPath
+})
+
+export const readCodexAuthStatus = (
+  label?: string | null | undefined
+): Effect.Effect<CodexAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const resolvedLabel = resolveCodexLabel(label)
+    const resolvedAuthPath = resolveCodexAuthFilePath(path, codexAuthPath, label)
+    const exists = yield* _(fs.exists(resolvedAuthPath))
+    if (!exists) {
+      return codexAuthStatus(false, resolvedLabel, resolvedAuthPath)
+    }
+
+    const info = yield* _(fs.stat(resolvedAuthPath))
+    if (info.type !== "File") {
+      return codexAuthStatus(false, resolvedLabel, resolvedAuthPath)
+    }
+
+    return codexAuthStatus(true, resolvedLabel, resolvedAuthPath)
+  })
+
+export const importCodexAuth = (
+  request: CodexAuthImportRequest
+): Effect.Effect<CodexAuthStatus, ApiBadRequestError | PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const resolvedAuthPath = resolveCodexAuthFilePath(path, codexAuthPath, request.label)
+    const parsed = yield* _(
+      Effect.try({
+        try: () => JSON.parse(request.authText),
+        catch: (cause) =>
+          new ApiBadRequestError({
+            message: "Invalid Codex auth JSON.",
+            details: cause
+          })
+      })
+    )
+
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return yield* _(
+        Effect.fail(
+          new ApiBadRequestError({
+            message: "Codex auth JSON must be an object."
+          })
+        )
+      )
+    }
+
+    yield* _(fs.makeDirectory(path.dirname(resolvedAuthPath), { recursive: true }))
+    yield* _(fs.writeFileString(resolvedAuthPath, JSON.stringify(parsed, null, 2)))
+    return yield* _(readCodexAuthStatus(request.label))
+  })
+
+export const logoutCodexAuth = (
+  request: CodexAuthLogoutRequest
+): Effect.Effect<CodexAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const resolvedAuthPath = resolveCodexAuthFilePath(path, codexAuthPath, request.label)
+    const exists = yield* _(fs.exists(resolvedAuthPath))
+
+    if (exists) {
+      yield* _(fs.remove(resolvedAuthPath))
+    }
+
+    return yield* _(readCodexAuthStatus(request.label))
   })
 
 export const ensureGithubAuthForCreate = (config: {

@@ -3,7 +3,6 @@ import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
-import { hostname } from "node:os"
 
 import { runCommandCapture, runCommandExitCode } from "@lib/shell/command-runner"
 
@@ -175,7 +174,7 @@ export const inspectContainerNetworks = (
     `Failed to inspect Docker networks for ${containerName}`
   ).pipe(
     Effect.map((output) => parseDockerNetworkIps(output)),
-    Effect.catchAll(() => Effect.succeed({}))
+    Effect.orElseSucceed((): DockerNetworkIps => ({}))
   )
 
 export const inspectControllerPublishedPorts = (): Effect.Effect<string, never, ControllerRuntime> =>
@@ -184,11 +183,11 @@ export const inspectControllerPublishedPorts = (): Effect.Effect<string, never, 
     `Failed to inspect published ports for ${controllerContainerName}`
   ).pipe(
     Effect.map((output) => output.trim()),
-    Effect.catchAll(() => Effect.succeed("unavailable"))
+    Effect.orElseSucceed((): string => "unavailable")
   )
 
 export const resolveCurrentContainerNetworks = (): Effect.Effect<DockerNetworkIps, never, ControllerRuntime> =>
-  inspectContainerNetworks(hostname())
+  inspectContainerNetworks(process.env["HOSTNAME"]?.trim() ?? "")
 
 const connectControllerToNetworkBestEffort = (
   networkName: string
@@ -198,10 +197,7 @@ const connectControllerToNetworkBestEffort = (
     return Effect.void
   }
 
-  return runDockerExitCodeCommand(["network", "connect", trimmed, controllerContainerName]).pipe(
-    Effect.catchAll(() => Effect.succeed(1)),
-    Effect.asVoid
-  )
+  return runDockerExitCodeCommand(["network", "connect", trimmed, controllerContainerName]).pipe(Effect.asVoid)
 }
 
 export const ensureControllerReachabilityNetworks = (
