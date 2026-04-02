@@ -15,6 +15,7 @@ export const CreateProjectRequestSchema = Schema.Struct({
   volumeName: OptionalString,
   secretsRoot: OptionalString,
   authorizedKeysPath: OptionalString,
+  authorizedKeysContents: OptionalString,
   envGlobalPath: OptionalString,
   envProjectPath: OptionalString,
   codexAuthPath: OptionalString,
@@ -26,6 +27,7 @@ export const CreateProjectRequestSchema = Schema.Struct({
   enableMcpPlaywright: OptionalBoolean,
   outDir: OptionalString,
   gitTokenLabel: OptionalString,
+  skipGithubAuth: OptionalBoolean,
   codexTokenLabel: OptionalString,
   claudeTokenLabel: OptionalString,
   agentAutoMode: OptionalString,
@@ -48,6 +50,10 @@ export const GithubAuthLogoutRequestSchema = Schema.Struct({
 
 export const ApplyAllRequestSchema = Schema.Struct({
   activeOnly: OptionalBoolean
+})
+
+export const UpProjectRequestSchema = Schema.Struct({
+  authorizedKeysContents: OptionalString
 })
 
 export const AgentProviderSchema = Schema.Literal("codex", "opencode", "claude", "custom")
@@ -103,5 +109,6 @@ export type CreateProjectRequestInput = Schema.Schema.Type<typeof CreateProjectR
 export type GithubAuthLoginRequestInput = Schema.Schema.Type<typeof GithubAuthLoginRequestSchema>
 export type GithubAuthLogoutRequestInput = Schema.Schema.Type<typeof GithubAuthLogoutRequestSchema>
 export type ApplyAllRequestInput = Schema.Schema.Type<typeof ApplyAllRequestSchema>
+export type UpProjectRequestInput = Schema.Schema.Type<typeof UpProjectRequestSchema>
 export type CreateAgentRequestInput = Schema.Schema.Type<typeof CreateAgentRequestSchema>
 export type CreateFollowRequestInput = Schema.Schema.Type<typeof CreateFollowRequestSchema>

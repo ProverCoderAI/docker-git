@@ -67,13 +67,10 @@ export const selectTitle = (purpose: SelectPurpose): string =>
 
 export const selectHint = (
   purpose: SelectPurpose,
-  connectEnableMcpPlaywright: boolean
+  _connectEnableMcpPlaywright: boolean
 ): string =>
   Match.value(purpose).pipe(
-    Match.when(
-      "Connect",
-      () => `Enter = select + SSH, P = toggle Playwright MCP (${connectEnableMcpPlaywright ? "on" : "off"}), Esc = back`
-    ),
+    Match.when("Connect", () => "Enter = select + SSH, Esc = back"),
     Match.when("Auth", () => "Enter = open project auth menu, Esc = back"),
     Match.when("Down", () => "Enter = stop container, Esc = back"),
     Match.when("Info", () => "Use arrows to browse details, Enter = set active, Esc = back"),

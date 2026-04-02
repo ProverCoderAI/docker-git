@@ -8,8 +8,9 @@ import type {
 } from "@lib/core/domain"
 
 import { request, requestVoid } from "./api-http.js"
-import { asArray, asObject, type JsonRequest } from "./api-json.js"
+import { asArray, asObject, asString, type JsonRequest, type JsonValue } from "./api-json.js"
 import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
+import { resolveHostSshMaterial, resolveManagedHostSshMaterial } from "./host-ssh-material.js"
 
 export { type JsonObject, type JsonRequest, type JsonValue, renderJsonPayload } from "./api-json.js"
 export {
@@ -19,6 +20,13 @@ export {
   decodeProjectSummary,
   renderProjectSummaryLine
 } from "./api-project-codec.js"
+
+const projectPath = (projectId: string, suffix = ""): string => `/projects/${encodeURIComponent(projectId)}${suffix}`
+
+const readProjectOutput = (payload: JsonValue): string => {
+  const object = asObject(payload)
+  return asString(object?.["output"]) ?? ""
+}
 
 export const listProjects = () =>
   request("GET", "/projects").pipe(
@@ -31,41 +39,78 @@ export const listProjects = () =>
     })
   )
 
-export const createProject = (command: CreateCommand) => {
-  const config = command.config
-  const body = {
-    repoUrl: config.repoUrl,
-    repoRef: config.repoRef,
-    targetDir: config.targetDir,
-    sshPort: String(config.sshPort),
-    sshUser: config.sshUser,
-    containerName: config.containerName,
-    serviceName: config.serviceName,
-    volumeName: config.volumeName,
-    cpuLimit: config.cpuLimit,
-    ramLimit: config.ramLimit,
-    dockerNetworkMode: config.dockerNetworkMode,
-    dockerSharedNetworkName: config.dockerSharedNetworkName,
-    enableMcpPlaywright: config.enableMcpPlaywright,
-    outDir: command.outDir,
-    gitTokenLabel: config.gitTokenLabel,
-    codexTokenLabel: config.codexAuthLabel,
-    claudeTokenLabel: config.claudeAuthLabel,
-    agentAutoMode: config.agentAuto ? (config.agentMode ?? "auto") : undefined,
-    up: command.runUp,
-    openSsh: false,
-    force: command.force,
-    forceEnv: command.forceEnv,
-    waitForClone: command.waitForClone
-  } satisfies JsonRequest
-
-  return request("POST", "/projects", body).pipe(
+export const getProject = (projectId: string) =>
+  request("GET", projectPath(projectId)).pipe(
     Effect.map((payload) => {
       const object = asObject(payload)
       return object === null ? decodeProjectDetails(payload) : decodeProjectDetails(object["project"] ?? payload)
     })
   )
-}
+
+export const createProject = (command: CreateCommand) =>
+  Effect.gen(function*(_) {
+    const config = command.config
+    const sshMaterial = yield* _(resolveHostSshMaterial(command))
+    const body = {
+      repoUrl: config.repoUrl,
+      repoRef: config.repoRef,
+      targetDir: config.targetDir,
+      sshPort: String(config.sshPort),
+      sshUser: config.sshUser,
+      containerName: config.containerName,
+      serviceName: config.serviceName,
+      volumeName: config.volumeName,
+      cpuLimit: config.cpuLimit,
+      ramLimit: config.ramLimit,
+      dockerNetworkMode: config.dockerNetworkMode,
+      dockerSharedNetworkName: config.dockerSharedNetworkName,
+      enableMcpPlaywright: config.enableMcpPlaywright,
+      outDir: command.outDir,
+      gitTokenLabel: config.gitTokenLabel,
+      skipGithubAuth: config.skipGithubAuth,
+      authorizedKeysContents: sshMaterial.authorizedKeysContents.length > 0
+        ? sshMaterial.authorizedKeysContents
+        : undefined,
+      codexTokenLabel: config.codexAuthLabel,
+      claudeTokenLabel: config.claudeAuthLabel,
+      agentAutoMode: config.agentAuto ? (config.agentMode ?? "auto") : undefined,
+      up: command.runUp,
+      openSsh: false,
+      force: command.force,
+      forceEnv: command.forceEnv,
+      waitForClone: command.waitForClone
+    } satisfies JsonRequest
+
+    const payload = yield* _(request("POST", "/projects", body))
+    const object = asObject(payload)
+    return object === null ? decodeProjectDetails(payload) : decodeProjectDetails(object["project"] ?? payload)
+  })
+
+export const deleteProject = (projectId: string) => requestVoid("DELETE", projectPath(projectId))
+
+export const upProject = (projectId: string) =>
+  Effect.gen(function*(_) {
+    const sshMaterial = yield* _(resolveManagedHostSshMaterial())
+    return yield* _(
+      requestVoid("POST", projectPath(projectId, "/up"), {
+        authorizedKeysContents: sshMaterial.authorizedKeysContents.length > 0
+          ? sshMaterial.authorizedKeysContents
+          : undefined
+      })
+    )
+  })
+
+export const downProject = (projectId: string) => requestVoid("POST", projectPath(projectId, "/down"))
+
+export const readProjectPs = (projectId: string) =>
+  request("GET", projectPath(projectId, "/ps")).pipe(
+    Effect.map((payload) => readProjectOutput(payload))
+  )
+
+export const readProjectLogs = (projectId: string) =>
+  request("GET", projectPath(projectId, "/logs")).pipe(
+    Effect.map((payload) => readProjectOutput(payload))
+  )
 
 export const applyAllProjects = (activeOnly: boolean) => requestVoid("POST", "/projects/apply-all", { activeOnly })
 

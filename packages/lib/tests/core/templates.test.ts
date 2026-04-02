@@ -110,4 +110,21 @@ describe("renderDockerCompose", () => {
     expect(browserDnsIndex).toBeGreaterThan(browserServiceIndex)
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(2)
   })
+
+  it("renders explicit anonymous GitHub clone override for public repos", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        skipGithubAuth: true
+      })
+    )
+    const entrypoint = renderEntrypoint(
+      makeTemplateConfig({
+        skipGithubAuth: true
+      })
+    )
+
+    expect(compose).toContain('GITHUB_AUTH_SKIP: "1"')
+    expect(entrypoint).toContain('GITHUB_AUTH_SKIP="${GITHUB_AUTH_SKIP:-0}"')
+    expect(entrypoint).toContain('if [[ "${GITHUB_AUTH_SKIP:-0}" == "1" ]]; then')
+  })
 })

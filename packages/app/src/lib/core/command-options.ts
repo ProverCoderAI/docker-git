@@ -49,6 +49,7 @@ export interface RawOptions {
   readonly includeDefault?: boolean
   readonly up?: boolean
   readonly openSsh?: boolean
+  readonly skipGithubAuth?: boolean
   readonly force?: boolean
   readonly forceEnv?: boolean
   readonly agentAutoMode?: string

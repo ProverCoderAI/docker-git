@@ -29,6 +29,7 @@ const makeConfig = (root: string, path: Path.Path): TemplateConfig => ({
   sshPort: 2222,
   repoUrl: "https://github.com/org/repo.git",
   repoRef: "issue-119",
+  skipGithubAuth: false,
   targetDir: "/home/dev/org/repo",
   volumeName: "dg-test-home",
   dockerGitPath: path.join(root, ".docker-git"),

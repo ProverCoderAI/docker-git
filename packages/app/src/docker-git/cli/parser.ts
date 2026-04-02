@@ -8,6 +8,7 @@ import { parseAuth } from "./parser-auth.js"
 import { parseClone } from "./parser-clone.js"
 import { buildCreateCommand } from "./parser-create.js"
 import { parseMcpPlaywright } from "./parser-mcp-playwright.js"
+import { parseOpen } from "./parser-open.js"
 import { parseRawOptions } from "./parser-options.js"
 import { parsePanes } from "./parser-panes.js"
 import { parseScrap } from "./parser-scrap.js"
@@ -92,7 +93,7 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("apply-all", () => parseApplyAll(rest)),
       Match.when("update-all", () => parseApplyAll(rest)),
       Match.when("auth", () => parseAuth(rest)),
-      Match.when("open", () => parseAttach(rest)),
+      Match.when("open", () => parseOpen(rest)),
       Match.when("apply", () => parseApply(rest)),
       Match.when("state", () => parseState(rest)),
       Match.when("session-gists", () => parseSessionGists(rest)),

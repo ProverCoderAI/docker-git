@@ -61,6 +61,7 @@ const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   repoUrl: "https://github.com/org/repo.git",
   repoRef: "main",
   gitTokenLabel: undefined,
+  skipGithubAuth: false,
   targetDir: "/home/dev/org/repo",
   volumeName: "dg-test-home",
   dockerGitPath: path.join(root, ".docker-git"),
@@ -91,6 +92,7 @@ const makeProjectConfig = (
   repoUrl: "https://github.com/org/repo.git",
   repoRef: "main",
   gitTokenLabel,
+  skipGithubAuth: false,
   codexAuthLabel,
   claudeAuthLabel,
   targetDir: "/home/dev/org/repo",
@@ -325,6 +327,36 @@ describe("prepareProjectFiles", () => {
         )
 
         const synchronizedAuthorizedKeys = yield* _(fs.readFileString(authorizedKeysPath))
+        expect(synchronizedAuthorizedKeys).toContain(staleKey.trim())
+        expect(synchronizedAuthorizedKeys).toContain(currentKey.trim())
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("force refresh appends new keys into an existing project authorized_keys file", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const globalConfig = makeGlobalConfig(root, path)
+        const projectConfig = makeProjectConfig(outDir, false, path)
+        const sourceAuthorizedKeysPath = path.join(root, "authorized_keys")
+        const projectAuthorizedKeysPath = path.join(outDir, "authorized_keys")
+        const staleKey = "ssh-ed25519 AAAA-stale stale@example\n"
+        const currentKey = "ssh-ed25519 AAAA-current current@example\n"
+
+        yield* _(fs.makeDirectory(path.dirname(projectAuthorizedKeysPath), { recursive: true }))
+        yield* _(fs.writeFileString(sourceAuthorizedKeysPath, currentKey))
+        yield* _(fs.writeFileString(projectAuthorizedKeysPath, staleKey))
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: true,
+            forceEnv: false
+          })
+        )
+
+        const synchronizedAuthorizedKeys = yield* _(fs.readFileString(projectAuthorizedKeysPath))
         expect(synchronizedAuthorizedKeys).toContain(staleKey.trim())
         expect(synchronizedAuthorizedKeys).toContain(currentKey.trim())
       })

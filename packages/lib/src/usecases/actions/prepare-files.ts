@@ -143,12 +143,14 @@ type AuthorizedKeysSyncTarget = {
   readonly managedDefaultAuthorizedKeys: string
   readonly source: string
   readonly desiredContents: string
+  readonly overwriteExisting: boolean
 }
 
 const syncAuthorizedKeysTarget = ({
   desiredContents,
   fs,
   managedDefaultAuthorizedKeys,
+  overwriteExisting,
   path,
   resolved,
   source,
@@ -156,7 +158,7 @@ const syncAuthorizedKeysTarget = ({
 }: AuthorizedKeysSyncTarget): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
     if (state === "exists") {
-      if (resolved === managedDefaultAuthorizedKeys) {
+      if (overwriteExisting || resolved === managedDefaultAuthorizedKeys) {
         yield* _(appendKeyIfMissing(fs, resolved, source, desiredContents))
       }
       return
@@ -170,7 +172,8 @@ const syncAuthorizedKeysTarget = ({
 const ensureAuthorizedKeys = (
   baseDir: string,
   authorizedKeysPath: string,
-  preferredSource: string
+  preferredSource: string,
+  overwriteExisting: boolean
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
@@ -185,7 +188,7 @@ const ensureAuthorizedKeys = (
         )
       )
 
-      if (state === "exists" && resolved !== managedDefaultAuthorizedKeys) {
+      if (state === "exists" && resolved !== managedDefaultAuthorizedKeys && !overwriteExisting) {
         return
       }
 
@@ -210,7 +213,8 @@ const ensureAuthorizedKeys = (
           resolved,
           managedDefaultAuthorizedKeys,
           source,
-          desiredContents
+          desiredContents,
+          overwriteExisting
         })
       )
     })
@@ -271,19 +275,10 @@ export const prepareProjectFiles = (
     const path = yield* _(Path.Path)
     const rewriteManagedFiles = options.force || options.forceEnv
     const envOnlyRefresh = options.forceEnv && !options.force
-    const createdFiles = yield* _(
-      writeProjectFiles(resolvedOutDir, projectConfig, rewriteManagedFiles)
-    )
-    yield* _(ensureAuthorizedKeys(resolvedOutDir, projectConfig.authorizedKeysPath, globalConfig.authorizedKeysPath))
+    const createdFiles = yield* _(writeProjectFiles(resolvedOutDir, projectConfig, rewriteManagedFiles))
+    yield* _(ensureAuthorizedKeys(resolvedOutDir, projectConfig.authorizedKeysPath, globalConfig.authorizedKeysPath, options.force))
     yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envGlobalPath, defaultGlobalEnvContents))
-    yield* _(
-      ensureEnvFile(
-        resolvedOutDir,
-        projectConfig.envProjectPath,
-        defaultProjectEnvContents,
-        envOnlyRefresh
-      )
-    )
+    yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envProjectPath, defaultProjectEnvContents, envOnlyRefresh))
     yield* _(ensureCodexConfigFile(baseDir, globalConfig.codexAuthPath))
     const globalClaudeAuthPath = path.join(path.dirname(globalConfig.codexAuthPath), "claude")
     yield* _(ensureClaudeAuthSeedFromHome(baseDir, globalClaudeAuthPath))
@@ -305,7 +300,6 @@ export const prepareProjectFiles = (
         }
       })
     )
-    // Ensure per-project config stays in sync even when `.orch/auth/codex` already exists.
     yield* _(ensureCodexConfigFile(resolvedOutDir, projectConfig.codexAuthPath))
     return createdFiles
   })

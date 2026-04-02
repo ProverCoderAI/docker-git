@@ -121,6 +121,7 @@ while [[ "$clone_attempt" -le "$clone_attempts" ]]; do
     cd "$REPO_ROOT"
 	    pnpm run docker-git clone "$REPO_URL" \
 	      --force \
+	      --gh-skip \
 	      --no-ssh \
 	      --repo-ref master \
 	      --env-project "$OUT_DIR/.orch/env/project.env" \

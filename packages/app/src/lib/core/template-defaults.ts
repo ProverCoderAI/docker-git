@@ -10,6 +10,7 @@ type DefaultTemplateConfig = Pick<
   | "repoRef"
   | "targetDir"
   | "volumeName"
+  | "skipGithubAuth"
   | "dockerGitPath"
   | "authorizedKeysPath"
   | "envGlobalPath"
@@ -45,6 +46,7 @@ export const defaultTemplateConfig = {
   repoRef: "main",
   targetDir: "/home/dev/app",
   volumeName: "dev_home",
+  skipGithubAuth: false,
   dockerGitPath: "./.docker-git",
   authorizedKeysPath: "./.docker-git/authorized_keys",
   envGlobalPath: "./.docker-git/.orch/env/global.env",

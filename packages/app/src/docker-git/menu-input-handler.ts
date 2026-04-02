@@ -33,7 +33,9 @@ const activateInput = (
     return { activated: false, allowProcessing: true }
   }
 
-  if (input.trim().length > 0) {
+  const normalized = input.trim()
+
+  if (normalized.length > 1) {
     context.setInputStage("active")
     return { activated: true, allowProcessing: true }
   }
@@ -43,9 +45,14 @@ const activateInput = (
     return { activated: true, allowProcessing: false }
   }
 
+  if (normalized.length === 1) {
+    context.setInputStage("active")
+    return { activated: true, allowProcessing: false }
+  }
+
   if (input.length > 0) {
     context.setInputStage("active")
-    return { activated: true, allowProcessing: true }
+    return { activated: true, allowProcessing: false }
   }
 
   return { activated: false, allowProcessing: false }
@@ -74,6 +81,7 @@ const handleMenuViewInput = (
   handleMenuInput(input, key, {
     selected: context.selected,
     setSelected: context.setSelected,
+    setSkipInputs: context.setSkipInputs,
     state: context.state,
     runner: context.runner,
     exit: context.exit,

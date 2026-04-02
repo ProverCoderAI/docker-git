@@ -82,7 +82,7 @@ const buildSshProbeArgs = (item: ProjectItem): ReadonlyArray<string> => {
   return args
 }
 
-const waitForSshReady = (
+export const waitForProjectSshReady = (
   item: ProjectItem
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
   const host = item.ipAddress ?? "localhost"
@@ -189,7 +189,7 @@ export const connectProjectSshWithUp = (
       ipAddress
     }
 
-    yield* _(waitForSshReady(updated))
+    yield* _(waitForProjectSshReady(updated))
     yield* _(connectProjectSsh(updated))
   })
 

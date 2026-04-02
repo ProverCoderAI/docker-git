@@ -4,8 +4,8 @@ import type * as Path from "@effect/platform/Path"
 import type * as Effect from "effect/Effect"
 
 import type { MenuAction } from "@lib/core/domain"
-import type { AppError } from "@lib/usecases/errors"
 import type { ProjectItem } from "@lib/usecases/projects"
+import type { MenuError } from "./menu-errors.js"
 
 // CHANGE: isolate TUI types/constants into a shared module
 // WHY: keep menu rendering and input handling small and focused
@@ -26,7 +26,7 @@ export type MenuState = {
 export type MenuEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 
 export type MenuRunner = {
-  readonly runEffect: (effect: Effect.Effect<void, AppError, MenuEnv>) => void
+  readonly runEffect: <E extends MenuError>(effect: Effect.Effect<void, E, MenuEnv>) => void
 }
 
 export type MenuViewContext = {

@@ -147,10 +147,15 @@ export const logoutGithubAuth = (request: GithubAuthLogoutRequest) =>
 export const ensureGithubAuthForCreate = (config: {
   readonly repoUrl: string
   readonly gitTokenLabel?: string | undefined
+  readonly skipGithubAuth?: boolean | undefined
   readonly envGlobalPath: string
 }): Effect.Effect<void, ApiAuthRequiredError | PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     if (parseGithubRepoUrl(config.repoUrl) === null) {
+      return
+    }
+
+    if (config.skipGithubAuth === true) {
       return
     }
 

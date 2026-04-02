@@ -100,6 +100,7 @@ describe("runDockerUpIfNeeded with force", () => {
         sshPort: 2237,
         repoUrl: "https://github.com/org/repo.git",
         repoRef: "main",
+        skipGithubAuth: false,
         targetDir: "/home/dev/workspaces/org/repo",
         volumeName: "dg-force-test-home",
         dockerGitPath: `${resolvedOutDir}/.docker-git`,

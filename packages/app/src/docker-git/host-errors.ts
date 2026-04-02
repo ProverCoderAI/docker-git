@@ -1,4 +1,6 @@
 import type { ParseError } from "@lib/core/domain"
+import type { AppError } from "@lib/usecases/errors"
+import { renderError } from "@lib/usecases/errors"
 import { formatParseError } from "./cli/usage.js"
 
 export type ControllerBootstrapError = {
@@ -26,13 +28,19 @@ export type UnsupportedCommandError = {
   readonly message: string
 }
 
+export type ProjectResolutionError = {
+  readonly _tag: "ProjectResolutionError"
+  readonly message: string
+}
+
 export type HostError =
   | ControllerBootstrapError
   | ApiRequestError
   | ApiAuthRequiredError
+  | ProjectResolutionError
   | UnsupportedCommandError
 
-export type CliError = ParseError | HostError
+export type CliError = AppError | HostError
 
 const isParseError = (error: CliError): error is ParseError =>
   error._tag === "UnknownCommand" ||
@@ -59,8 +67,16 @@ export const renderCliError = (error: CliError): string => {
     return error.message
   }
 
-  return [
-    `${error.method} ${error.path} failed`,
-    error.message
-  ].join("\n")
+  if (error._tag === "ProjectResolutionError") {
+    return error.message
+  }
+
+  if ("method" in error && "path" in error) {
+    return [
+      `${error.method} ${error.path} failed`,
+      error.message
+    ].join("\n")
+  }
+
+  return renderError(error)
 }

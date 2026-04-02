@@ -61,12 +61,8 @@ const handleConnectOptionToggle = (
   if (view.purpose !== "Connect" || !isConnectMcpToggleInput(input)) {
     return false
   }
-  const nextValue = !view.connectEnableMcpPlaywright
-  context.setView({ ...view, connectEnableMcpPlaywright: nextValue, confirmDelete: false })
   context.setMessage(
-    nextValue
-      ? "Playwright MCP will be enabled before SSH (press Enter to connect)."
-      : "Playwright MCP toggle is OFF (press Enter to connect without changes)."
+    "Playwright MCP pre-connect toggle is not routed through the controller yet."
   )
   return true
 }

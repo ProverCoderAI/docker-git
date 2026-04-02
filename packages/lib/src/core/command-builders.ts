@@ -172,6 +172,7 @@ const resolvePaths = (
 type CreateBehavior = {
   readonly runUp: boolean
   readonly openSsh: boolean
+  readonly skipGithubAuth: boolean
   readonly force: boolean
   readonly forceEnv: boolean
   readonly enableMcpPlaywright: boolean
@@ -180,6 +181,7 @@ type CreateBehavior = {
 const resolveCreateBehavior = (raw: RawOptions): CreateBehavior => ({
   runUp: raw.up ?? true,
   openSsh: raw.openSsh ?? false,
+  skipGithubAuth: raw.skipGithubAuth ?? false,
   force: raw.force ?? false,
   forceEnv: raw.forceEnv ?? false,
   enableMcpPlaywright: raw.enableMcpPlaywright ?? false
@@ -194,6 +196,7 @@ type BuildTemplateConfigInput = {
   readonly dockerNetworkMode: CreateCommand["config"]["dockerNetworkMode"]
   readonly dockerSharedNetworkName: string
   readonly gitTokenLabel: string | undefined
+  readonly skipGithubAuth: boolean
   readonly codexAuthLabel: string | undefined
   readonly claudeAuthLabel: string | undefined
   readonly enableMcpPlaywright: boolean
@@ -213,6 +216,7 @@ const buildTemplateConfig = ({
   dockerSharedNetworkName,
   enableMcpPlaywright,
   gitTokenLabel,
+  skipGithubAuth,
   names,
   paths,
   ramLimit,
@@ -225,6 +229,7 @@ const buildTemplateConfig = ({
   repoUrl: repo.repoUrl,
   repoRef: repo.repoRef,
   gitTokenLabel,
+  skipGithubAuth,
   codexAuthLabel,
   claudeAuthLabel,
   targetDir: repo.targetDir,
@@ -295,6 +300,7 @@ export const buildCreateCommand = (
         dockerNetworkMode,
         dockerSharedNetworkName,
         gitTokenLabel,
+        skipGithubAuth: behavior.skipGithubAuth,
         codexAuthLabel,
         claudeAuthLabel,
         enableMcpPlaywright: behavior.enableMcpPlaywright,

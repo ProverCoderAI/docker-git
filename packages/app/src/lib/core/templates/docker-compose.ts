@@ -11,6 +11,7 @@ import type { ResolvedComposeResourceLimits } from "../resource-limits.js"
 type ComposeFragments = {
   readonly networkMode: TemplateConfig["dockerNetworkMode"]
   readonly networkName: string
+  readonly maybeGithubAuthSkipEnv: string
   readonly maybeGitTokenLabelEnv: string
   readonly maybeCodexAuthLabelEnv: string
   readonly maybeClaudeAuthLabelEnv: string
@@ -36,6 +37,11 @@ const bootstrapVolumeKey = "docker_git_bootstrap"
 const renderGitTokenLabelEnv = (gitTokenLabel: string): string =>
   gitTokenLabel.length > 0
     ? `      GITHUB_AUTH_LABEL: "${gitTokenLabel}"\n      GIT_AUTH_LABEL: "${gitTokenLabel}"\n`
+    : ""
+
+const renderGithubAuthSkipEnv = (skipGithubAuth: boolean): string =>
+  skipGithubAuth
+    ? `      GITHUB_AUTH_SKIP: "1"\n`
     : ""
 
 const renderCodexAuthLabelEnv = (codexAuthLabel: string): string =>
@@ -104,6 +110,7 @@ const buildComposeFragments = (
   const networkMode = config.dockerNetworkMode
   const networkName = resolveComposeNetworkName(config)
   const forkRepoUrl = config.forkRepoUrl ?? ""
+  const maybeGithubAuthSkipEnv = renderGithubAuthSkipEnv(config.skipGithubAuth)
   const gitTokenLabel = config.gitTokenLabel?.trim() ?? ""
   const codexAuthLabel = config.codexAuthLabel?.trim() ?? ""
   const claudeAuthLabel = config.claudeAuthLabel?.trim() ?? ""
@@ -117,6 +124,7 @@ const buildComposeFragments = (
   return {
     networkMode,
     networkName,
+    maybeGithubAuthSkipEnv,
     maybeGitTokenLabelEnv,
     maybeCodexAuthLabelEnv,
     maybeClaudeAuthLabelEnv,
@@ -145,6 +153,7 @@ const renderComposeServices = (
       REPO_URL: "${config.repoUrl}"
       REPO_REF: "${config.repoRef}"
       FORK_REPO_URL: "${fragments.forkRepoUrl}"
+${fragments.maybeGithubAuthSkipEnv}      # Optional anonymous public GitHub clone override
 ${fragments.maybeGitTokenLabelEnv}      # Optional token label selector (maps to GITHUB_TOKEN__<LABEL>/GIT_AUTH_TOKEN__<LABEL>)
 ${fragments.maybeCodexAuthLabelEnv}      # Optional Codex account label selector (maps to CODEX_AUTH_LABEL)
 ${fragments.maybeClaudeAuthLabelEnv}${fragments.maybeAgentModeEnv}${fragments.maybeAgentAutoEnv}      # Optional Claude account label selector (maps to CLAUDE_AUTH_LABEL)

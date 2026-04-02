@@ -6,7 +6,7 @@ import { Effect } from "effect"
 import { vi } from "vitest"
 
 import { ApiAuthRequiredError } from "../src/api/errors.js"
-import { readGithubAuthStatus } from "../src/services/auth.js"
+import { ensureGithubAuthForCreate, readGithubAuthStatus } from "../src/services/auth.js"
 import { createProjectFromRequest } from "../src/services/projects.js"
 
 const withTempDir = <A, E, R>(
@@ -154,6 +154,35 @@ describe("api auth", () => {
         expect(status.tokens).toHaveLength(1)
         expect(status.tokens[0]?.status).toBe("valid")
         expect(status.tokens[0]?.login).toBe("octocat")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("skips API GitHub auth gate when anonymous clone override is enabled", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const envDir = path.join(projectsRoot, ".orch", "env")
+        const envPath = path.join(envDir, "global.env")
+
+        yield* _(fs.makeDirectory(envDir, { recursive: true }))
+        yield* _(fs.writeFileString(envPath, "# docker-git env\n"))
+
+        yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              ensureGithubAuthForCreate({
+                repoUrl: "https://github.com/ProverCoderAI/docker-git",
+                gitTokenLabel: undefined,
+                skipGithubAuth: true,
+                envGlobalPath: ".docker-git/.orch/env/global.env"
+              })
+            )
+          )
+        )
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

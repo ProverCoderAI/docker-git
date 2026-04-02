@@ -54,6 +54,10 @@ export type ApplyAllRequest = {
   readonly activeOnly?: boolean | undefined
 }
 
+export type UpProjectRequest = {
+  readonly authorizedKeysContents?: string | undefined
+}
+
 export type ApiAuthRequired = {
   readonly provider: "github"
   readonly message: string
@@ -71,6 +75,7 @@ export type CreateProjectRequest = {
   readonly volumeName?: string | undefined
   readonly secretsRoot?: string | undefined
   readonly authorizedKeysPath?: string | undefined
+  readonly authorizedKeysContents?: string | undefined
   readonly envGlobalPath?: string | undefined
   readonly envProjectPath?: string | undefined
   readonly codexAuthPath?: string | undefined
@@ -82,6 +87,7 @@ export type CreateProjectRequest = {
   readonly enableMcpPlaywright?: boolean | undefined
   readonly outDir?: string | undefined
   readonly gitTokenLabel?: string | undefined
+  readonly skipGithubAuth?: boolean | undefined
   readonly codexTokenLabel?: string | undefined
   readonly claudeTokenLabel?: string | undefined
   readonly agentAutoMode?: string | undefined

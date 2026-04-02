@@ -5,14 +5,15 @@ import { renderEntrypointGitPostPushWrapperInstall } from "./git-post-push-wrapp
 const renderAuthLabelResolution = (): string =>
   String.raw`# 2) Ensure GitHub auth vars are available for SSH sessions.
 # Prefer a label-selected token (same selection model as clone/create) when present.
+GITHUB_AUTH_SKIP="${"${"}GITHUB_AUTH_SKIP:-0}"
 RESOLVED_AUTH_LABEL=""
 AUTH_LABEL_RAW="${"${"}GIT_AUTH_LABEL:-${"${"}GITHUB_AUTH_LABEL:-}}"
 
-if [[ -z "$AUTH_LABEL_RAW" && "$REPO_URL" == https://github.com/* ]]; then
+if [[ "$GITHUB_AUTH_SKIP" != "1" && -z "$AUTH_LABEL_RAW" && "$REPO_URL" == https://github.com/* ]]; then
   AUTH_LABEL_RAW="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##' | cut -d/ -f1)"
 fi
 
-if [[ -n "$AUTH_LABEL_RAW" ]]; then
+if [[ "$GITHUB_AUTH_SKIP" != "1" && -n "$AUTH_LABEL_RAW" ]]; then
   RESOLVED_AUTH_LABEL="$(printf "%s" "$AUTH_LABEL_RAW" | tr '[:lower:]' '[:upper:]' | sed -E 's/[^A-Z0-9]+/_/g; s/^_+//; s/_+$//')"
   if [[ "$RESOLVED_AUTH_LABEL" == "DEFAULT" ]]; then
     RESOLVED_AUTH_LABEL=""
@@ -20,29 +21,32 @@ if [[ -n "$AUTH_LABEL_RAW" ]]; then
 fi`
 
 const renderEffectiveTokenResolution = (): string =>
-  String.raw`EFFECTIVE_GITHUB_TOKEN="$GITHUB_TOKEN"
-if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
-  EFFECTIVE_GITHUB_TOKEN="$GH_TOKEN"
-fi
-if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
-  EFFECTIVE_GITHUB_TOKEN="$GIT_AUTH_TOKEN"
-fi
+  String.raw`EFFECTIVE_GITHUB_TOKEN=""
+if [[ "$GITHUB_AUTH_SKIP" != "1" ]]; then
+  EFFECTIVE_GITHUB_TOKEN="$GITHUB_TOKEN"
+  if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
+    EFFECTIVE_GITHUB_TOKEN="$GH_TOKEN"
+  fi
+  if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
+    EFFECTIVE_GITHUB_TOKEN="$GIT_AUTH_TOKEN"
+  fi
 
-if [[ -n "$RESOLVED_AUTH_LABEL" ]]; then
-  LABELED_GIT_TOKEN_KEY="GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL"
-  LABELED_GITHUB_TOKEN_KEY="GITHUB_TOKEN__$RESOLVED_AUTH_LABEL"
-  LABELED_GH_TOKEN_KEY="GH_TOKEN__$RESOLVED_AUTH_LABEL"
+  if [[ -n "$RESOLVED_AUTH_LABEL" ]]; then
+    LABELED_GIT_TOKEN_KEY="GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL"
+    LABELED_GITHUB_TOKEN_KEY="GITHUB_TOKEN__$RESOLVED_AUTH_LABEL"
+    LABELED_GH_TOKEN_KEY="GH_TOKEN__$RESOLVED_AUTH_LABEL"
 
-  LABELED_GIT_TOKEN="${"${"}!LABELED_GIT_TOKEN_KEY-}"
-  LABELED_GITHUB_TOKEN="${"${"}!LABELED_GITHUB_TOKEN_KEY-}"
-  LABELED_GH_TOKEN="${"${"}!LABELED_GH_TOKEN_KEY-}"
+    LABELED_GIT_TOKEN="${"${"}!LABELED_GIT_TOKEN_KEY-}"
+    LABELED_GITHUB_TOKEN="${"${"}!LABELED_GITHUB_TOKEN_KEY-}"
+    LABELED_GH_TOKEN="${"${"}!LABELED_GH_TOKEN_KEY-}"
 
-  if [[ -n "$LABELED_GIT_TOKEN" ]]; then
-    EFFECTIVE_GITHUB_TOKEN="$LABELED_GIT_TOKEN"
-  elif [[ -n "$LABELED_GITHUB_TOKEN" ]]; then
-    EFFECTIVE_GITHUB_TOKEN="$LABELED_GITHUB_TOKEN"
-  elif [[ -n "$LABELED_GH_TOKEN" ]]; then
-    EFFECTIVE_GITHUB_TOKEN="$LABELED_GH_TOKEN"
+    if [[ -n "$LABELED_GIT_TOKEN" ]]; then
+      EFFECTIVE_GITHUB_TOKEN="$LABELED_GIT_TOKEN"
+    elif [[ -n "$LABELED_GITHUB_TOKEN" ]]; then
+      EFFECTIVE_GITHUB_TOKEN="$LABELED_GITHUB_TOKEN"
+    elif [[ -n "$LABELED_GH_TOKEN" ]]; then
+      EFFECTIVE_GITHUB_TOKEN="$LABELED_GH_TOKEN"
+    fi
   fi
 fi`
 

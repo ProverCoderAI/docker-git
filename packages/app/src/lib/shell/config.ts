@@ -19,6 +19,9 @@ const TemplateConfigSchema = Schema.Struct({
   repoUrl: Schema.String,
   repoRef: Schema.String,
   gitTokenLabel: Schema.optional(Schema.String),
+  skipGithubAuth: Schema.optionalWith(Schema.Boolean, {
+    default: () => defaultTemplateConfig.skipGithubAuth
+  }),
   codexAuthLabel: Schema.optional(Schema.String),
   claudeAuthLabel: Schema.optional(Schema.String),
   targetDir: Schema.String,

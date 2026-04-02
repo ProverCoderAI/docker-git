@@ -1,20 +1,18 @@
-import { type MenuAction, type ProjectConfig } from "@lib/core/domain"
-import { readProjectConfig } from "@lib/shell/config"
-import { runDockerComposeDown, runDockerComposeLogs, runDockerComposePs } from "@lib/shell/docker"
-import { gcProjectNetworkByTemplate } from "@lib/usecases/docker-network-gc"
-import type { AppError } from "@lib/usecases/errors"
-import { renderError } from "@lib/usecases/errors"
-import {
-  downAllDockerGitProjects,
-  listProjectItems,
-  listProjectStatus,
-  listRunningProjectItems
-} from "@lib/usecases/projects"
-import { runDockerComposeUpWithPortCheck } from "@lib/usecases/projects-up"
+import type { MenuAction } from "@lib/core/domain"
 import { Effect, Match, pipe } from "effect"
 
-import { openAuthMenu } from "./menu-auth.js"
+import { downAllProjects, downProject, upProject } from "./api-client.js"
+import {
+  listMenuProjectItems,
+  listMenuRunningProjectItems,
+  renderGithubAuthStatusSummary,
+  renderMenuProjectLogs,
+  renderMenuProjectPs,
+  renderMenuProjectSummaries
+} from "./menu-api.js"
 import { startCreateView } from "./menu-create.js"
+import type { MenuError } from "./menu-errors.js"
+import { renderMenuError } from "./menu-errors.js"
 import { loadSelectView } from "./menu-select-load.js"
 import { withSuspendedTui, writeErrorAndPause } from "./menu-shared.js"
 import { type MenuEnv, type MenuRunner, type MenuState, type MenuViewContext } from "./menu-types.js"
@@ -26,16 +24,9 @@ import { type MenuEnv, type MenuRunner, type MenuState, type MenuViewContext } f
 // SOURCE: n/a
 // FORMAT THEOREM: forall a: action(a) -> effect(a)
 // PURITY: SHELL
-// EFFECT: Effect<void, AppError, MenuEnv>
+// EFFECT: Effect<void, MenuError, MenuEnv>
 // INVARIANT: menu selection runs exactly one action
 // COMPLEXITY: O(1) per keypress
-
-const continueOutcome = (state: MenuState): { readonly _tag: "Continue"; readonly state: MenuState } => ({
-  _tag: "Continue",
-  state
-})
-
-const quitOutcome: { readonly _tag: "Quit" } = { _tag: "Quit" }
 
 export type MenuContext = {
   readonly state: MenuState
@@ -46,6 +37,7 @@ export type MenuContext = {
 export type MenuSelectionContext = MenuContext & {
   readonly selected: number
   readonly setSelected: (update: (value: number) => number) => void
+  readonly setSkipInputs: (update: (value: number) => number) => void
 }
 
 const actionLabel = (action: MenuAction): string =>
@@ -61,7 +53,7 @@ const actionLabel = (action: MenuAction): string =>
   )
 
 const runWithSuspendedTui = (
-  effect: Effect.Effect<void, AppError, MenuEnv>,
+  effect: Effect.Effect<void, MenuError, MenuEnv>,
   context: MenuContext,
   label: string
 ) => {
@@ -70,7 +62,11 @@ const runWithSuspendedTui = (
       Effect.sync(() => {
         context.setMessage(`${label}...`)
       }),
-      Effect.zipRight(withSuspendedTui(effect, { onError: (error) => writeErrorAndPause(renderError(error)) })),
+      Effect.zipRight(
+        withSuspendedTui(effect, {
+          onError: (error) => writeErrorAndPause(renderMenuError(error))
+        })
+      ),
       Effect.tap(() =>
         Effect.sync(() => {
           context.setMessage(`${label} finished.`)
@@ -81,86 +77,16 @@ const runWithSuspendedTui = (
   )
 }
 
-const requireActiveProject = (context: MenuContext): boolean => {
-  if (context.state.activeDir) {
-    return true
+const requireActiveProjectId = (context: MenuContext): string | null => {
+  if (context.state.activeDir !== null) {
+    return context.state.activeDir
   }
+
   context.setMessage(
-    "No active project. Use Create or paste a repo URL to set one before running this action."
+    "No active project. Use Create or Select project before running this action."
   )
-  return false
+  return null
 }
-
-const handleMissingConfig = (
-  state: MenuState,
-  setMessage: (message: string | null) => void,
-  error: AppError
-) =>
-  pipe(
-    Effect.sync(() => {
-      setMessage(renderError(error))
-    }),
-    Effect.as(continueOutcome(state))
-  )
-
-const withProjectConfig = <R>(
-  state: MenuState,
-  setMessage: (message: string | null) => void,
-  f: (config: ProjectConfig) => Effect.Effect<void, AppError, R>
-) =>
-  pipe(
-    readProjectConfig(state.activeDir ?? state.cwd),
-    Effect.matchEffect({
-      onFailure: (error) =>
-        error._tag === "ConfigNotFoundError" || error._tag === "ConfigDecodeError"
-          ? handleMissingConfig(state, setMessage, error)
-          : Effect.fail(error),
-      onSuccess: (config) =>
-        pipe(
-          f(config),
-          Effect.as(continueOutcome(state))
-        )
-    })
-  )
-
-const handleMenuAction = (
-  state: MenuState,
-  setMessage: (message: string | null) => void,
-  action: MenuAction
-): Effect.Effect<
-  { readonly _tag: "Continue"; readonly state: MenuState } | { readonly _tag: "Quit" },
-  AppError,
-  MenuEnv
-> =>
-  Match.value(action).pipe(
-    Match.when({ _tag: "Quit" }, () => Effect.succeed(quitOutcome)),
-    Match.when({ _tag: "Create" }, () => Effect.succeed(continueOutcome(state))),
-    Match.when({ _tag: "Select" }, () => Effect.succeed(continueOutcome(state))),
-    Match.when({ _tag: "Auth" }, () => Effect.succeed(continueOutcome(state))),
-    Match.when({ _tag: "ProjectAuth" }, () => Effect.succeed(continueOutcome(state))),
-    Match.when({ _tag: "Info" }, () => Effect.succeed(continueOutcome(state))),
-    Match.when({ _tag: "Delete" }, () => Effect.succeed(continueOutcome(state))),
-    Match.when({ _tag: "Up" }, () =>
-      withProjectConfig(state, setMessage, () =>
-        runDockerComposeUpWithPortCheck(state.activeDir ?? state.cwd).pipe(Effect.asVoid))),
-    Match.when({ _tag: "Status" }, () =>
-      withProjectConfig(state, setMessage, () =>
-        runDockerComposePs(state.activeDir ?? state.cwd))),
-    Match.when({ _tag: "Logs" }, () =>
-      withProjectConfig(state, setMessage, () =>
-        runDockerComposeLogs(state.activeDir ?? state.cwd))),
-    Match.when({ _tag: "Down" }, () =>
-      withProjectConfig(state, setMessage, (config) =>
-        runDockerComposeDown(state.activeDir ?? state.cwd).pipe(
-          Effect.zipRight(gcProjectNetworkByTemplate(state.activeDir ?? state.cwd, config.template))
-        ))),
-    Match.when({ _tag: "DownAll" }, () =>
-      pipe(
-        downAllDockerGitProjects,
-        Effect.as(continueOutcome(state))
-      )),
-    Match.exhaustive
-  )
 
 const runCreateAction = (context: MenuContext) => {
   startCreateView(context.setView, context.setMessage)
@@ -168,65 +94,78 @@ const runCreateAction = (context: MenuContext) => {
 
 const runSelectAction = (context: MenuContext) => {
   context.setMessage(null)
-  context.runner.runEffect(loadSelectView(listProjectItems, "Connect", context))
+  context.runner.runEffect(loadSelectView(listMenuProjectItems, "Connect", context))
 }
 
 const runAuthProfilesAction = (context: MenuContext) => {
-  context.setMessage(null)
-  openAuthMenu({
-    state: context.state,
-    runner: context.runner,
-    setView: context.setView,
-    setMessage: context.setMessage,
-    setActiveDir: context.setActiveDir
-  })
+  context.runner.runEffect(
+    pipe(
+      renderGithubAuthStatusSummary(),
+      Effect.tap((summary) =>
+        Effect.sync(() => {
+          context.setMessage(
+            `${summary} Use \`docker-git auth github login --web\` or \`docker-git auth github logout\`.`
+          )
+        })
+      ),
+      Effect.asVoid
+    )
+  )
 }
 
 const runProjectAuthAction = (context: MenuContext) => {
-  context.setMessage(null)
-  context.runner.runEffect(loadSelectView(listProjectItems, "Auth", context))
+  context.setMessage("Project auth binding is not routed through the controller yet.")
 }
 
 const runDownAllAction = (context: MenuContext) => {
   context.setMessage(null)
-  runWithSuspendedTui(downAllDockerGitProjects, context, "Stopping all docker-git containers")
+  runWithSuspendedTui(downAllProjects(), context, "Stopping all docker-git containers")
 }
 
 const runDownAction = (context: MenuContext, action: MenuAction) => {
   context.setMessage(null)
   if (context.state.activeDir === null) {
-    context.runner.runEffect(loadSelectView(listRunningProjectItems, "Down", context))
+    context.runner.runEffect(loadSelectView(listMenuRunningProjectItems, "Down", context))
     return
   }
+
   runComposeAction(action, context)
 }
 
 const runInfoAction = (context: MenuContext) => {
   context.setMessage(null)
-  context.runner.runEffect(loadSelectView(listProjectItems, "Info", context))
+  context.runner.runEffect(loadSelectView(listMenuProjectItems, "Info", context))
 }
 
 const runDeleteAction = (context: MenuContext) => {
   context.setMessage(null)
-  context.runner.runEffect(loadSelectView(listProjectItems, "Delete", context))
+  context.runner.runEffect(loadSelectView(listMenuProjectItems, "Delete", context))
 }
 
 const runComposeAction = (action: MenuAction, context: MenuContext) => {
   if (action._tag === "Status" && context.state.activeDir === null) {
-    runWithSuspendedTui(listProjectStatus, context, "docker compose ps (all projects)")
+    runWithSuspendedTui(renderMenuProjectSummaries(), context, "Loading project status")
     return
   }
-  if (!requireActiveProject(context)) {
+
+  const projectId = requireActiveProjectId(context)
+  if (projectId === null) {
     return
   }
-  const effect = pipe(handleMenuAction(context.state, context.setMessage, action), Effect.asVoid)
+
+  const effect = Match.value(action).pipe(
+    Match.when({ _tag: "Up" }, () => upProject(projectId)),
+    Match.when({ _tag: "Status" }, () => renderMenuProjectPs(projectId)),
+    Match.when({ _tag: "Logs" }, () => renderMenuProjectLogs(projectId)),
+    Match.when({ _tag: "Down" }, () => downProject(projectId)),
+    Match.orElse(() => Effect.void)
+  )
+
   runWithSuspendedTui(effect, context, actionLabel(action))
 }
 
-const runQuitAction = (context: MenuContext, action: MenuAction) => {
-  context.runner.runEffect(
-    pipe(handleMenuAction(context.state, context.setMessage, action), Effect.asVoid)
-  )
+const runQuitAction = (context: MenuContext) => {
+  context.setMessage(null)
   context.exit()
 }
 
@@ -265,8 +204,8 @@ export const handleMenuActionSelection = (action: MenuAction, context: MenuConte
     Match.when({ _tag: "DownAll" }, () => {
       runDownAllAction(context)
     }),
-    Match.when({ _tag: "Quit" }, (selected) => {
-      runQuitAction(context, selected)
+    Match.when({ _tag: "Quit" }, () => {
+      runQuitAction(context)
     }),
     Match.exhaustive
   )

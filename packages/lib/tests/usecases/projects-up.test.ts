@@ -132,6 +132,7 @@ const makeTemplateConfig = (
   sshPort: 2237,
   repoUrl: "https://github.com/org/repo.git",
   repoRef: "main",
+  skipGithubAuth: false,
   targetDir,
   volumeName: "dg-test-home",
   dockerGitPath: path.join(root, ".docker-git"),

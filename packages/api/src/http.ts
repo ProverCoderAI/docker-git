@@ -10,7 +10,15 @@ import * as ParseResult from "effect/ParseResult"
 import * as Schema from "effect/Schema"
 
 import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
-import { ApplyAllRequestSchema, CreateAgentRequestSchema, CreateFollowRequestSchema, CreateProjectRequestSchema, GithubAuthLoginRequestSchema, GithubAuthLogoutRequestSchema } from "./api/schema.js"
+import {
+  ApplyAllRequestSchema,
+  CreateAgentRequestSchema,
+  CreateFollowRequestSchema,
+  CreateProjectRequestSchema,
+  GithubAuthLoginRequestSchema,
+  GithubAuthLogoutRequestSchema,
+  UpProjectRequestSchema
+} from "./api/schema.js"
 import { uiHtml, uiScript, uiStyles } from "./ui.js"
 import { loginGithubAuth, logoutGithubAuth, readGithubAuthStatus } from "./services/auth.js"
 import { getAgent, getAgentAttachInfo, listAgents, readAgentLogs, startAgent, stopAgent } from "./services/agents.js"
@@ -142,6 +150,10 @@ const readCreateFollowRequest = () => HttpServerRequest.schemaBodyJson(CreateFol
 const readGithubAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLoginRequestSchema)
 const readGithubAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLogoutRequestSchema)
 const readApplyAllRequest = () => HttpServerRequest.schemaBodyJson(ApplyAllRequestSchema)
+const readUpProjectRequest = () =>
+  HttpServerRequest.schemaBodyJson(UpProjectRequestSchema).pipe(
+    Effect.catchAll(() => Effect.succeed({ authorizedKeysContents: undefined }))
+  )
 const readInboxPayload = () => HttpServerRequest.schemaBodyJson(Schema.Unknown)
 
 const configuredFederationPublicOrigin =
@@ -351,9 +363,12 @@ export const makeRouter = () => {
     ),
     HttpRouter.post(
       "/projects/:projectId/up",
-      projectParams.pipe(
-        Effect.flatMap(({ projectId }) => upProject(projectId)),
-        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(readUpProjectRequest())
+        yield* _(upProject(projectId, request.authorizedKeysContents))
+        return yield* _(jsonResponse({ ok: true }, 200))
+      }).pipe(
         Effect.catchAll(errorResponse)
       )
     ),

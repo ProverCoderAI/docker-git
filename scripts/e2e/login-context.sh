@@ -101,6 +101,7 @@ EOF_ENV
     cd "$REPO_ROOT"
     pnpm run docker-git clone "$repo_url" \
       --force \
+      --gh-skip \
       --no-ssh \
       --authorized-keys "$ROOT/authorized_keys" \
       --ssh-port "$ssh_port" \

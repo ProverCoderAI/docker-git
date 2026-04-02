@@ -17,6 +17,11 @@ describe("renderEntrypoint auth bridge", () => {
         "GIT_AUTH_TOKEN=\"${GIT_AUTH_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}\""
       )
       expect(entrypoint).toContain("GITHUB_TOKEN=\"${GITHUB_TOKEN:-${GH_TOKEN:-}}\"")
+      expect(entrypoint).toContain("GITHUB_AUTH_SKIP=\"${GITHUB_AUTH_SKIP:-0}\"")
+      expect(entrypoint).toContain(
+        "if [[ \"$GITHUB_AUTH_SKIP\" != \"1\" && -z \"$AUTH_LABEL_RAW\" && \"$REPO_URL\" == https://github.com/* ]]; then"
+      )
+      expect(entrypoint).toContain("if [[ \"${GITHUB_AUTH_SKIP:-0}\" == \"1\" ]]; then")
       expect(entrypoint).toContain("AUTH_LABEL_RAW=\"${GIT_AUTH_LABEL:-${GITHUB_AUTH_LABEL:-}}\"")
       expect(entrypoint).toContain("LABELED_GITHUB_TOKEN_KEY=\"GITHUB_TOKEN__$RESOLVED_AUTH_LABEL\"")
       expect(entrypoint).toContain("LABELED_GIT_TOKEN_KEY=\"GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL\"")

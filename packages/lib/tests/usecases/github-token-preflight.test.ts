@@ -9,8 +9,8 @@ import type { CreateCommand, TemplateConfig } from "../../src/core/domain.js"
 import { createProject } from "../../src/usecases/actions/create-project.js"
 import {
   githubInvalidTokenMessage,
-  githubMissingTokenMessage,
-  resolveGithubCloneAuthToken
+  resolveGithubCloneAuthToken,
+  validateGithubCloneAuthTokenPreflight
 } from "../../src/usecases/github-token-preflight.js"
 
 const withTempDir = <A, E, R>(
@@ -53,6 +53,7 @@ const makeCommand = (root: string, outDir: string, path: Path.Path): CreateComma
     sshPort: 2222,
     repoUrl: "https://github.com/TelegramGPT/go-login-ozon.git",
     repoRef: "main",
+    skipGithubAuth: false,
     targetDir: "/home/dev/workspaces/telegramgpt/go-login-ozon",
     volumeName: "dg-test-home",
     dockerGitPath: path.join(root, ".docker-git"),
@@ -136,13 +137,12 @@ describe("github token preflight", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("fails createProject before writing files when GitHub auth is missing", () =>
+  it.effect("allows missing GitHub auth on the shared preflight layer", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const fs = yield* _(FileSystem.FileSystem)
         const path = yield* _(Path.Path)
-        const outDir = path.join(root, "project")
-        const command = makeCommand(root, outDir, path)
+        const command = makeCommand(root, path.join(root, "project"), path)
 
         yield* _(fs.makeDirectory(path.join(root, ".orch", "env"), { recursive: true }))
         yield* _(
@@ -156,13 +156,43 @@ describe("github token preflight", () => {
           )
         )
 
-        const error = yield* _(createProject(command).pipe(Effect.flip))
+        yield* _(validateGithubCloneAuthTokenPreflight(command.config))
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
 
-        expect(error._tag).toBe("AuthError")
-        expect(error.message).toBe(githubMissingTokenMessage)
+  it.effect("skips GitHub token validation when anonymous clone override is enabled", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const command = makeCommand(root, path.join(root, "project"), path)
+        const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
+          Effect.runPromise(Effect.succeed(new Response(null, { status: 401 })))
+        )
 
-        const outDirExists = yield* _(fs.exists(outDir))
-        expect(outDirExists).toBe(false)
+        yield* _(fs.makeDirectory(path.join(root, ".orch", "env"), { recursive: true }))
+        yield* _(
+          fs.writeFileString(
+            command.config.envGlobalPath,
+            [
+              "# docker-git env",
+              "GITHUB_TOKEN=dead-token",
+              ""
+            ].join("\n")
+          )
+        )
+
+        yield* _(
+          withPatchedFetch(
+            fetchMock,
+            validateGithubCloneAuthTokenPreflight({
+              ...command.config,
+              skipGithubAuth: true
+            })
+          )
+        )
+
+        expect(fetchMock).toHaveBeenCalledTimes(0)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

@@ -8,8 +8,11 @@ import {
   readProjectConfig,
   runDockerComposeUpWithPortCheck
 } from "@effect-template/lib"
+import * as FileSystem from "@effect/platform/FileSystem"
+import * as Path from "@effect/platform/Path"
 import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
+import { defaultProjectsRoot, resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
 import { deleteDockerGitProject } from "@effect-template/lib/usecases/projects"
 import type { RawOptions } from "@effect-template/lib/core/command-options"
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
@@ -159,6 +162,52 @@ const resolveCreatedProject = (
     })
   )
 
+const normalizeAuthorizedKeys = (value: string): ReadonlyArray<string> =>
+  value
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+
+const mergeAuthorizedKeys = (
+  current: ReadonlyArray<string>,
+  next: ReadonlyArray<string>
+): string => {
+  const merged = [...current]
+  for (const line of next) {
+    if (!merged.includes(line)) {
+      merged.push(line)
+    }
+  }
+  return merged.length === 0 ? "" : `${merged.join("\n")}\n`
+}
+
+export const seedAuthorizedKeysForCreate = (
+  outDir: string,
+  authorizedKeysContents: string | undefined
+) =>
+  Effect.gen(function*(_) {
+    const normalized = normalizeAuthorizedKeys(authorizedKeysContents ?? "")
+    if (normalized.length === 0) {
+      return
+    }
+
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const defaultAuthorizedKeysPath = path.join(defaultProjectsRoot(process.cwd()), "authorized_keys")
+    const resolvedOutDir = resolvePathFromCwd(path, process.cwd(), outDir)
+    const projectAuthorizedKeysPath = path.join(resolvedOutDir, "authorized_keys")
+    const targets = Array.from(new Set([defaultAuthorizedKeysPath, projectAuthorizedKeysPath]))
+
+    for (const target of targets) {
+      const exists = yield* _(fs.exists(target))
+      const current = exists ? yield* _(fs.readFileString(target)) : ""
+      const merged = mergeAuthorizedKeys(normalizeAuthorizedKeys(current), normalized)
+
+      yield* _(fs.makeDirectory(path.dirname(target), { recursive: true }))
+      yield* _(fs.writeFileString(target, merged))
+    }
+  })
+
 export const listProjects = () =>
   listProjectItems.pipe(
     Effect.flatMap((projects) => Effect.forEach(projects, withProjectRuntime, { concurrency: "unbounded" })),
@@ -218,6 +267,7 @@ export const createProjectFromRequest = (
       ...(request.enableMcpPlaywright === undefined ? {} : { enableMcpPlaywright: request.enableMcpPlaywright }),
       ...(request.outDir === undefined ? {} : { outDir: request.outDir }),
       ...(request.gitTokenLabel === undefined ? {} : { gitTokenLabel: request.gitTokenLabel }),
+      ...(request.skipGithubAuth === undefined ? {} : { skipGithubAuth: request.skipGithubAuth }),
       ...(request.codexTokenLabel === undefined ? {} : { codexTokenLabel: request.codexTokenLabel }),
       ...(request.claudeTokenLabel === undefined ? {} : { claudeTokenLabel: request.claudeTokenLabel }),
       ...(request.agentAutoMode === undefined ? {} : { agentAutoMode: request.agentAutoMode }),
@@ -244,6 +294,8 @@ export const createProjectFromRequest = (
       openSsh: false,
       waitForClone: request.waitForClone ?? parsed.right.waitForClone
     }
+
+    yield* _(seedAuthorizedKeysForCreate(command.outDir, request.authorizedKeysContents))
 
     yield* _(ensureGithubAuthForCreate(command.config))
 
@@ -297,13 +349,89 @@ const markDeployment = (projectId: string, phase: string, message: string) =>
     emitProjectEvent(projectId, "project.deployment.status", { phase, message })
   })
 
+const syncContainerAuthorizedKeys = (
+  project: ProjectItem
+) =>
+  Effect.gen(function*(_) {
+    const path = yield* _(Path.Path)
+    const sourcePath = path.join(project.projectDir, "authorized_keys")
+
+    yield* _(
+      runCommandCapture(
+        {
+          cwd: project.projectDir,
+          command: "docker",
+          args: [
+            "exec",
+            project.containerName,
+            "sh",
+            "-c",
+            [
+              "set -eu",
+              `mkdir -p /home/${project.sshUser}/.docker-git`,
+              `mkdir -p /home/${project.sshUser}/.ssh`
+            ].join("; ")
+          ]
+        },
+        [0],
+        (exitCode) => new CommandFailedError({ command: "docker exec prepare authorized_keys sync", exitCode })
+      ).pipe(Effect.asVoid)
+    )
+
+    yield* _(
+      runCommandCapture(
+        {
+          cwd: project.projectDir,
+          command: "docker",
+          args: [
+            "cp",
+            sourcePath,
+            `${project.containerName}:/home/${project.sshUser}/.docker-git/authorized_keys`
+          ]
+        },
+        [0],
+        (exitCode) => new CommandFailedError({ command: "docker cp authorized_keys", exitCode })
+      ).pipe(Effect.asVoid)
+    )
+
+    yield* _(
+      runCommandCapture(
+        {
+          cwd: project.projectDir,
+          command: "docker",
+          args: [
+            "exec",
+            project.containerName,
+            "sh",
+            "-c",
+            [
+              "set -eu",
+              `cp /home/${project.sshUser}/.docker-git/authorized_keys /home/${project.sshUser}/.ssh/authorized_keys`,
+              `chown ${project.sshUser}:${project.sshUser} /home/${project.sshUser}/.docker-git/authorized_keys`,
+              `chmod 600 /home/${project.sshUser}/.docker-git/authorized_keys`,
+              `chown ${project.sshUser}:${project.sshUser} /home/${project.sshUser}/.ssh/authorized_keys`,
+              `chmod 600 /home/${project.sshUser}/.ssh/authorized_keys`
+            ].join("; ")
+          ]
+        },
+        [0],
+        (exitCode) => new CommandFailedError({ command: "docker exec sync authorized_keys", exitCode })
+      ).pipe(Effect.asVoid)
+    )
+  })
+
 export const upProject = (
-  projectId: string
+  projectId: string,
+  authorizedKeysContents?: string
 ) =>
   Effect.gen(function*(_) {
     const project = yield* _(findProjectById(projectId))
+    yield* _(seedAuthorizedKeysForCreate(project.projectDir, authorizedKeysContents))
     yield* _(markDeployment(projectId, "build", "docker compose up -d --build"))
     yield* _(runDockerComposeUpWithPortCheck(project.projectDir))
+    if ((authorizedKeysContents ?? "").trim().length > 0) {
+      yield* _(syncContainerAuthorizedKeys(project))
+    }
     yield* _(markDeployment(projectId, "running", "Container running"))
   })
 

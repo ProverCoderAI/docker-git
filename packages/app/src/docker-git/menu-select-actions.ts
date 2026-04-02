@@ -1,16 +1,8 @@
-import { runDockerComposeDown } from "@lib/shell/docker"
-import type { AppError } from "@lib/usecases/errors"
-import { renderError } from "@lib/usecases/errors"
-import { mcpPlaywrightUp } from "@lib/usecases/mcp-playwright"
-import {
-  connectProjectSshWithUp,
-  deleteDockerGitProject,
-  listRunningProjectItems,
-  type ProjectItem
-} from "@lib/usecases/projects"
+import type { ProjectItem } from "@lib/usecases/projects"
 import { Effect, pipe } from "effect"
 
-import { openProjectAuthMenu } from "./menu-project-auth.js"
+import { deleteMenuProject, downMenuProject, listMenuRunningProjectItems } from "./menu-api.js"
+import { renderMenuError } from "./menu-errors.js"
 import { buildConnectEffect } from "./menu-select-connect.js"
 import { loadRuntimeByProject } from "./menu-select-runtime.js"
 import { startSelectView } from "./menu-select-view.js"
@@ -22,6 +14,7 @@ import {
   withSuspendedTui
 } from "./menu-shared.js"
 import type { MenuRunner, MenuViewContext } from "./menu-types.js"
+import { openResolvedProjectSsh } from "./open-project.js"
 
 export type SelectContext = MenuViewContext & {
   readonly activeDir: string | null
@@ -35,28 +28,24 @@ export const runConnectSelection = (
   context: SelectContext,
   enableMcpPlaywright: boolean
 ) => {
-  context.setMessage(
-    enableMcpPlaywright
-      ? `Enabling Playwright MCP for ${selected.displayName}, then connecting...`
-      : `Connecting to ${selected.displayName}...`
-  )
+  if (enableMcpPlaywright) {
+    context.setMessage(
+      "Playwright MCP pre-connect toggle is not routed through the controller yet."
+    )
+    return
+  }
+
+  context.setMessage(`Connecting to ${selected.displayName}...`)
   context.setSshActive(true)
   context.runner.runEffect(
     pipe(
       withSuspendedTui(
-        buildConnectEffect(selected, enableMcpPlaywright, {
-          connectWithUp: (item) =>
-            connectProjectSshWithUp(item).pipe(
-              Effect.mapError((error): AppError => error)
-            ),
-          enableMcpPlaywright: (projectDir) =>
-            mcpPlaywrightUp({ _tag: "McpPlaywrightUp", projectDir, runUp: false }).pipe(
-              Effect.asVoid,
-              Effect.mapError((error): AppError => error)
-            )
+        buildConnectEffect(selected, false, {
+          connectWithUp: (item) => openResolvedProjectSsh(item),
+          enableMcpPlaywright: () => Effect.void
         }),
         {
-          onError: pauseOnError(renderError),
+          onError: pauseOnError(renderMenuError),
           onResume: resumeSshWithSkipInputs(context)
         }
       ),
@@ -75,8 +64,8 @@ export const runDownSelection = (selected: ProjectItem, context: SelectContext) 
   context.runner.runEffect(
     withSuspendedTui(
       pipe(
-        runDockerComposeDown(selected.projectDir),
-        Effect.zipRight(listRunningProjectItems),
+        downMenuProject(selected),
+        Effect.zipRight(listMenuRunningProjectItems),
         Effect.flatMap((items) =>
           pipe(
             loadRuntimeByProject(items),
@@ -97,7 +86,7 @@ export const runDownSelection = (selected: ProjectItem, context: SelectContext) 
         Effect.asVoid
       ),
       {
-        onError: pauseOnError(renderError),
+        onError: pauseOnError(renderMenuError),
         onResume: resumeWithSkipInputs(context)
       }
     )
@@ -108,14 +97,8 @@ export const runInfoSelection = (selected: ProjectItem, context: SelectContext) 
   context.setMessage(`Details for ${selected.displayName} are shown on the right. Press Esc to return to the menu.`)
 }
 
-export const runAuthSelection = (selected: ProjectItem, context: SelectContext) => {
-  openProjectAuthMenu({
-    project: selected,
-    runner: context.runner,
-    setView: context.setView,
-    setMessage: context.setMessage,
-    setActiveDir: context.setActiveDir
-  })
+export const runAuthSelection = (_selected: ProjectItem, context: SelectContext) => {
+  context.setMessage("Project auth binding is not routed through the controller yet.")
 }
 
 export const runDeleteSelection = (selected: ProjectItem, context: SelectContext) => {
@@ -123,7 +106,7 @@ export const runDeleteSelection = (selected: ProjectItem, context: SelectContext
   context.runner.runEffect(
     pipe(
       withSuspendedTui(
-        deleteDockerGitProject(selected).pipe(
+        deleteMenuProject(selected).pipe(
           Effect.tap(() =>
             Effect.sync(() => {
               if (context.activeDir === selected.projectDir) {
@@ -135,7 +118,7 @@ export const runDeleteSelection = (selected: ProjectItem, context: SelectContext
           Effect.asVoid
         ),
         {
-          onError: pauseOnError(renderError),
+          onError: pauseOnError(renderMenuError),
           onResume: resumeWithSkipInputs(context)
         }
       ),

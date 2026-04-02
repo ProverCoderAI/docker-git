@@ -98,6 +98,7 @@ const booleanFlagUpdaters: Readonly<Record<string, (raw: RawOptions) => RawOptio
   "--no-up": (raw) => ({ ...raw, up: false }),
   "--ssh": (raw) => ({ ...raw, openSsh: true }),
   "--no-ssh": (raw) => ({ ...raw, openSsh: false }),
+  "--gh-skip": (raw) => ({ ...raw, skipGithubAuth: true }),
   "--force": (raw) => ({ ...raw, force: true }),
   "--force-env": (raw) => ({ ...raw, forceEnv: true }),
   "--mcp-playwright": (raw) => ({ ...raw, enableMcpPlaywright: true }),

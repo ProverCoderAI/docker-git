@@ -177,6 +177,7 @@ const makeCommand = (root: string, outDir: string, path: Path.Path): CreateComma
     sshPort: 2222,
     repoUrl: "https://github.com/org/repo.git",
     repoRef: "main",
+    skipGithubAuth: false,
     targetDir: "/home/dev/org/repo",
     volumeName: "dg-test-home",
     dockerGitPath: path.join(root, ".docker-git"),

@@ -30,11 +30,13 @@ const handleMenuEnter = (context: MenuSelectionContext) => {
 const handleMenuTextInput = (input: string, context: MenuSelectionContext): boolean => {
   const trimmed = input.trim()
   if (trimmed.length > 0 && isRepoUrlInput(trimmed)) {
+    context.setSkipInputs(() => 1)
     startCreateView(context.setView, context.setMessage, trimmed)
     return true
   }
   const selection = parseMenuSelection(input)
   if (Either.isRight(selection)) {
+    context.setSkipInputs(() => 1)
     handleMenuActionSelection(selection.right, context)
     return true
   }

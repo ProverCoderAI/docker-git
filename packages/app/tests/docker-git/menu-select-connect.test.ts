@@ -49,7 +49,7 @@ describe("menu-select-connect", () => {
   })
 
   it("renders connect hint with current Playwright toggle state", () => {
-    expect(selectHint("Connect", true)).toContain("toggle Playwright MCP (on)")
-    expect(selectHint("Connect", false)).toContain("toggle Playwright MCP (off)")
+    expect(selectHint("Connect", true)).toBe("Enter = select + SSH, Esc = back")
+    expect(selectHint("Connect", false)).toBe("Enter = select + SSH, Esc = back")
   })
 })

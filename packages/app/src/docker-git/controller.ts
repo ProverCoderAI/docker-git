@@ -1,135 +1,43 @@
 import { FetchHttpClient, HttpClient } from "@effect/platform"
-import type * as CommandExecutor from "@effect/platform/CommandExecutor"
-import type { PlatformError } from "@effect/platform/Error"
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
-import { runCommandExitCode } from "@lib/shell/command-runner"
-
+import {
+  controllerContainerName,
+  type ControllerRuntime,
+  ensureControllerReachabilityNetworks,
+  inspectContainerNetworks,
+  inspectControllerPublishedPorts,
+  resolveCurrentContainerNetworks,
+  runCompose
+} from "./controller-docker.js"
+import {
+  buildApiBaseUrlCandidates,
+  type DockerNetworkIps,
+  formatNetworkIps,
+  isRemoteDockerHost,
+  resolveApiPort,
+  resolveConfiguredApiBaseUrl,
+  resolveExplicitApiBaseUrl,
+  trimTrailingSlashes
+} from "./controller-reachability.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
-const defaultApiPort = "3334"
-const defaultApiHost = "127.0.0.1"
+export type { ControllerRuntime } from "./controller-docker.js"
+export { buildApiBaseUrlCandidates, isRemoteDockerHost } from "./controller-reachability.js"
 
-type ControllerRuntime =
-  | CommandExecutor.CommandExecutor
-  | FileSystem.FileSystem
-  | Path.Path
+let selectedApiBaseUrl: string | undefined
 
 const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
   _tag: "ControllerBootstrapError",
   message
 })
 
-const trimTrailingSlashes = (value: string): string => {
-  const parts = value.split("/")
-  let end = parts.length
-
-  while (end > 0 && parts[end - 1] === "") {
-    end -= 1
-  }
-
-  return end === parts.length ? value : parts.slice(0, end).join("/")
+const rememberSelectedApiBaseUrl = (value: string): void => {
+  selectedApiBaseUrl = trimTrailingSlashes(value)
 }
 
-export const resolveApiBaseUrl = (): string => {
-  const explicit = process.env["DOCKER_GIT_API_URL"]?.trim()
-  if (explicit !== undefined && explicit.length > 0) {
-    return trimTrailingSlashes(explicit)
-  }
-
-  const host = process.env["DOCKER_GIT_API_BIND_HOST"]?.trim() || defaultApiHost
-  const port = process.env["DOCKER_GIT_API_PORT"]?.trim() || defaultApiPort
-  return `http://${host}:${port}`
-}
-
-const composeFilePath = (): Effect.Effect<string, PlatformError, FileSystem.FileSystem | Path.Path> =>
-  Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
-    let current = process.cwd()
-
-    for (;;) {
-      const candidate = path.join(current, "docker-compose.yml")
-      const exists = yield* _(fs.exists(candidate))
-      if (exists) {
-        return candidate
-      }
-
-      const parent = path.dirname(current)
-      if (parent === current) {
-        return path.resolve(process.cwd(), "docker-compose.yml")
-      }
-      current = parent
-    }
-  })
-
-const mapComposePathError = (error: PlatformError): ControllerBootstrapError =>
-  controllerBootstrapError(`Failed to resolve docker-compose.yml path.\nDetails: ${String(error)}`)
-
-const runExitCode = (
-  command: string,
-  args: ReadonlyArray<string>
-): Effect.Effect<number, never, CommandExecutor.CommandExecutor> =>
-  runCommandExitCode({
-    cwd: process.cwd(),
-    command,
-    args
-  }).pipe(
-    Effect.match({
-      onFailure: () => 1,
-      onSuccess: (exitCode) => exitCode
-    })
-  )
-
-export const resolveDockerCommand = (): Effect.Effect<
-  ReadonlyArray<string>,
-  never,
-  CommandExecutor.CommandExecutor
-> =>
-  Effect.gen(function*(_) {
-    const dockerInfoExit = yield* _(runExitCode("docker", ["info"]))
-    if (dockerInfoExit === 0) {
-      return ["docker"]
-    }
-
-    const sudoDockerInfoExit = yield* _(runExitCode("sudo", ["-n", "docker", "info"]))
-    return sudoDockerInfoExit === 0 ? ["sudo", "docker"] : ["docker"]
-  })
-
-const runCompose = (
-  args: ReadonlyArray<string>
-): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
-  Effect.gen(function*(_) {
-    const dockerCommand = yield* _(resolveDockerCommand())
-    const composePath = yield* _(composeFilePath().pipe(Effect.mapError(mapComposePathError)))
-    const command = dockerCommand[0] ?? "docker"
-    const commandArgs = [
-      ...dockerCommand.slice(1),
-      "compose",
-      "-f",
-      composePath,
-      ...args
-    ]
-    const exitCode = yield* _(runExitCode(command, commandArgs))
-
-    if (exitCode === 0) {
-      return
-    }
-
-    return yield* _(
-      Effect.fail(
-        controllerBootstrapError(
-          [
-            "Failed to start docker-git controller.",
-            `Command: ${[command, ...commandArgs].join(" ")}`,
-            `Exit code: ${exitCode}`
-          ].join("\n")
-        )
-      )
-    )
-  })
+export const resolveApiBaseUrl = (): string =>
+  resolveExplicitApiBaseUrl() ?? selectedApiBaseUrl ?? resolveConfiguredApiBaseUrl()
 
 const probeHealth = (apiBaseUrl: string): Effect.Effect<void, ControllerBootstrapError> =>
   Effect.gen(function*(_) {
@@ -159,17 +67,98 @@ const probeHealth = (apiBaseUrl: string): Effect.Effect<void, ControllerBootstra
     )
   )
 
-const waitForHealth = (apiBaseUrl: string) =>
+const findReachableApiBaseUrl = (
+  candidateUrls: ReadonlyArray<string>
+): Effect.Effect<string, ControllerBootstrapError> =>
+  Effect.gen(function*(_) {
+    if (candidateUrls.length === 0) {
+      return yield* _(
+        Effect.fail(controllerBootstrapError("No docker-git controller endpoint candidates were generated."))
+      )
+    }
+
+    for (const candidateUrl of candidateUrls) {
+      const healthy = yield* _(
+        probeHealth(candidateUrl).pipe(
+          Effect.match({
+            onFailure: () => false,
+            onSuccess: () => true
+          })
+        )
+      )
+
+      if (healthy) {
+        return candidateUrl
+      }
+    }
+
+    return yield* _(Effect.fail(controllerBootstrapError("No docker-git controller endpoint responded to /health.")))
+  })
+
+const collectReachabilityDiagnostics = (
+  candidateUrls: ReadonlyArray<string>,
+  currentContainerNetworks: DockerNetworkIps,
+  controllerNetworks: DockerNetworkIps
+): Effect.Effect<string, never, ControllerRuntime> =>
+  Effect.gen(function*(_) {
+    const publishedPorts = yield* _(inspectControllerPublishedPorts())
+
+    return [
+      "Tried endpoints:",
+      ...candidateUrls.map((candidateUrl) => `- ${candidateUrl}`),
+      `Published ports: ${publishedPorts.length > 0 ? publishedPorts : "unavailable"}`,
+      `Current runtime networks: ${formatNetworkIps(currentContainerNetworks)}`,
+      `Controller networks: ${formatNetworkIps(controllerNetworks)}`
+    ].join("\n")
+  })
+
+const waitForReachableApiBaseUrl = (
+  candidateUrls: ReadonlyArray<string>,
+  currentContainerNetworks: DockerNetworkIps,
+  controllerNetworks: DockerNetworkIps
+): Effect.Effect<string, ControllerBootstrapError, ControllerRuntime> =>
   pipe(
-    probeHealth(apiBaseUrl),
+    findReachableApiBaseUrl(candidateUrls),
     Effect.retry(
       Schedule.addDelay(Schedule.recurs(30), () => Duration.seconds(2))
     ),
-    Effect.mapError((error): ControllerBootstrapError => ({
-      _tag: "ControllerBootstrapError",
-      message: `docker-git controller did not become healthy at ${apiBaseUrl}/health\nDetails: ${error.message}`
-    }))
+    Effect.catchAll((error) =>
+      Effect.gen(function*(_) {
+        const diagnostics = yield* _(
+          collectReachabilityDiagnostics(candidateUrls, currentContainerNetworks, controllerNetworks)
+        )
+        return yield* _(
+          Effect.fail(
+            controllerBootstrapError(
+              [
+                "docker-git controller did not become reachable.",
+                error.message,
+                diagnostics
+              ].join("\n")
+            )
+          )
+        )
+      })
+    )
   )
+
+const failIfRemoteDockerWithoutApiUrl = (): Effect.Effect<void, ControllerBootstrapError> => {
+  const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
+  if (!isRemoteDockerHost() || explicitApiBaseUrl !== undefined) {
+    return Effect.void
+  }
+
+  const dockerHost = process.env["DOCKER_HOST"]?.trim() ?? ""
+  return Effect.fail(
+    controllerBootstrapError(
+      [
+        "docker-git host CLI cannot auto-discover the controller over a remote DOCKER_HOST.",
+        `DOCKER_HOST: ${dockerHost.length > 0 ? dockerHost : "unknown"}`,
+        "Set DOCKER_GIT_API_URL to a reachable controller URL."
+      ].join("\n")
+    )
+  )
+}
 
 // CHANGE: bootstrap the API controller before issuing host-side API requests
 // WHY: host CLI must not fall back to local state; controller owns .docker-git and project runtime
@@ -179,23 +168,52 @@ const waitForHealth = (apiBaseUrl: string) =>
 // FORMAT THEOREM: ∀cmd: controller(cmd) starts before api(cmd)
 // PURITY: SHELL
 // EFFECT: Effect<void, ControllerBootstrapError, CommandExecutor>
-// INVARIANT: controller is healthy before any host API dispatch
+// INVARIANT: controller is reachable from the current runtime before any host API dispatch
 // COMPLEXITY: O(1) compose + O(k) health checks
-export const ensureControllerReady = Effect.gen(function*(_) {
-  const apiBaseUrl = resolveApiBaseUrl()
-  const healthy = yield* _(
-    probeHealth(apiBaseUrl).pipe(
-      Effect.match({
-        onFailure: () => false,
-        onSuccess: () => true
-      })
+export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
+  Effect.gen(function*(_) {
+    yield* _(failIfRemoteDockerWithoutApiUrl())
+
+    const currentContainerNetworks = yield* _(resolveCurrentContainerNetworks())
+    const initialControllerNetworks = yield* _(inspectContainerNetworks(controllerContainerName))
+    const initialCandidates = buildApiBaseUrlCandidates({
+      explicitApiBaseUrl: resolveExplicitApiBaseUrl(),
+      cachedApiBaseUrl: selectedApiBaseUrl,
+      defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
+      currentContainerNetworks,
+      controllerNetworks: initialControllerNetworks,
+      port: resolveApiPort()
+    })
+
+    const reachableBeforeStart = yield* _(
+      findReachableApiBaseUrl(initialCandidates).pipe(
+        Effect.match({
+          onFailure: () => {},
+          onSuccess: (apiBaseUrl) => apiBaseUrl
+        })
+      )
     )
-  )
 
-  if (healthy) {
-    return
-  }
+    if (reachableBeforeStart !== undefined) {
+      rememberSelectedApiBaseUrl(reachableBeforeStart)
+      return
+    }
 
-  yield* _(runCompose(["up", "-d", "--build"]))
-  return yield* _(waitForHealth(apiBaseUrl))
-})
+    yield* _(runCompose(["up", "-d", "--build"]))
+    yield* _(ensureControllerReachabilityNetworks(currentContainerNetworks))
+
+    const controllerNetworks = yield* _(inspectContainerNetworks(controllerContainerName))
+    const candidateUrls = buildApiBaseUrlCandidates({
+      explicitApiBaseUrl: resolveExplicitApiBaseUrl(),
+      cachedApiBaseUrl: selectedApiBaseUrl,
+      defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
+      currentContainerNetworks,
+      controllerNetworks,
+      port: resolveApiPort()
+    })
+    const reachableApiBaseUrl = yield* _(
+      waitForReachableApiBaseUrl(candidateUrls, currentContainerNetworks, controllerNetworks)
+    )
+
+    rememberSelectedApiBaseUrl(reachableApiBaseUrl)
+  })

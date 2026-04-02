@@ -5,6 +5,7 @@ import type { Command } from "@lib/core/domain"
 import { parseArgs } from "../../src/docker-git/cli/parser.js"
 
 export type CreateCommand = Extract<Command, { _tag: "Create" }>
+export type OpenCommand = Extract<Command, { _tag: "Open" }>
 type ProjectDirRunUpCommand = Extract<Command, { readonly projectDir: string; readonly runUp: boolean }>
 
 export const expectParseErrorTag = (
@@ -61,6 +62,18 @@ export const expectAttachProjectDirCommand = (
       throw new Error("expected Attach command")
     }
     expect(command.projectDir).toBe(expectedProjectDir)
+  })
+
+export const expectOpenCommand = (
+  args: ReadonlyArray<string>,
+  onRight: (command: OpenCommand) => void
+) =>
+  Effect.sync(() => {
+    const command = parseOrThrow(args)
+    if (command._tag !== "Open") {
+      throw new Error("expected Open command")
+    }
+    onRight(command)
   })
 
 export const expectCreateCommand = (

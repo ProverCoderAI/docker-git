@@ -87,18 +87,22 @@ export const resolveGithubCloneAuthToken = (
 // FORMAT THEOREM: ∀cfg: invalid_token(cfg) → fail_before_start(cfg)
 // PURITY: SHELL
 // EFFECT: Effect<void, AuthError | PlatformError, FileSystem>
-// INVARIANT: only GitHub repo URLs are gated; missing or invalid token fails before clone starts
+// INVARIANT: only GitHub repo URLs are gated; missing token is allowed here, invalid token fails unless auth is explicitly skipped
 // COMPLEXITY: O(|env|) + O(1) network round-trip
 export const validateGithubCloneAuthTokenPreflight = (
-  config: Pick<TemplateConfig, "repoUrl" | "gitTokenLabel" | "envGlobalPath">
+  config: Pick<TemplateConfig, "repoUrl" | "gitTokenLabel" | "skipGithubAuth" | "envGlobalPath">
 ): Effect.Effect<void, AuthError | PlatformError, FileSystem.FileSystem> =>
   Effect.gen(function*(_) {
+    if (parseGithubRepoUrl(config.repoUrl) === null || config.skipGithubAuth) {
+      return
+    }
+
     const fs = yield* _(FileSystem.FileSystem)
     const envText = yield* _(readEnvText(fs, config.envGlobalPath))
     const token = resolveGithubCloneAuthToken(envText, config)
 
     if (token === null) {
-      return yield* _(Effect.fail(new AuthError({ message: githubMissingTokenMessage })))
+      return
     }
 
     const validation = yield* _(validateGithubToken(token))

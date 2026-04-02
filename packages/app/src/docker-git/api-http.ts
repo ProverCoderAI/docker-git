@@ -3,10 +3,11 @@ import type * as HttpClientError from "@effect/platform/HttpClientError"
 import { Effect } from "effect"
 
 import { asObject, asString, type JsonRequest, type JsonValue, parseResponseBody } from "./api-json.js"
-import { resolveApiBaseUrl } from "./controller.js"
+import { type ControllerRuntime, ensureControllerReady, resolveApiBaseUrl } from "./controller.js"
 import type { ApiAuthRequiredError, ApiRequestError } from "./host-errors.js"
 
 type ApiTransportError = ApiRequestError | ApiAuthRequiredError
+type ApiHttpMethod = "GET" | "POST" | "DELETE"
 
 type ApiErrorEnvelope = {
   readonly error?: {
@@ -57,10 +58,8 @@ const readErrorPayload = (body: JsonValue): ApiErrorPayload | undefined => {
   }
 }
 
-const isAuthRequired = (
-  status: number,
-  error: ApiErrorEnvelope["error"] | undefined
-): boolean => status === 401 || (error?.type ?? "").toLowerCase().includes("authrequired")
+const isAuthRequired = (status: number, error: ApiErrorEnvelope["error"] | undefined): boolean =>
+  status === 401 || (error?.type ?? "").toLowerCase().includes("authrequired")
 
 const renderDetails = (details: JsonValue | undefined): string | null =>
   details === undefined ? null : `Details: ${JSON.stringify(details, null, 2)}`
@@ -99,33 +98,58 @@ const toRequestError = (
   body: JsonValue
 ): ApiTransportError => {
   const error = readErrorPayload(body)
-  if (isAuthRequired(status, error)) {
-    return toAuthRequiredError(error, status)
-  }
-  return toApiRequestError(method, path, status, error)
+  return isAuthRequired(status, error)
+    ? toAuthRequiredError(error, status)
+    : toApiRequestError(method, path, status, error)
 }
+
+const requestBody = (body: JsonRequest | undefined) => body === undefined ? HttpBody.empty : HttpBody.unsafeJson(body)
 
 const executeRequest = (
   client: HttpClient.HttpClient,
-  method: "GET" | "POST",
+  apiBaseUrl: string,
+  method: ApiHttpMethod,
   path: string,
   body: JsonRequest | undefined
-) =>
-  method === "GET"
-    ? client.get(`${resolveApiBaseUrl()}${path}`, { headers: jsonHeaders })
-    : client.post(`${resolveApiBaseUrl()}${path}`, {
+) => {
+  const url = `${apiBaseUrl}${path}`
+
+  if (method === "GET") {
+    return client.get(url, { headers: jsonHeaders })
+  }
+
+  if (method === "DELETE") {
+    return client.del(url, {
       headers: jsonHeaders,
-      body: body === undefined ? HttpBody.empty : HttpBody.unsafeJson(body)
+      body: requestBody(body)
     })
+  }
+
+  return client.post(url, {
+    headers: jsonHeaders,
+    body: requestBody(body)
+  })
+}
 
 export const request = (
-  method: "GET" | "POST",
+  method: ApiHttpMethod,
   path: string,
   body?: JsonRequest
-): Effect.Effect<JsonValue, ApiTransportError> =>
+): Effect.Effect<JsonValue, ApiTransportError, ControllerRuntime> =>
   Effect.gen(function*(_) {
     const client = yield* _(HttpClient.HttpClient)
-    const response = yield* _(executeRequest(client, method, path, body))
+    const response = yield* _(
+      executeRequest(client, resolveApiBaseUrl(), method, path, body).pipe(
+        Effect.catchAll((error) =>
+          ensureControllerReady().pipe(
+            Effect.matchEffect({
+              onFailure: () => Effect.fail(error),
+              onSuccess: () => executeRequest(client, resolveApiBaseUrl(), method, path, body)
+            })
+          )
+        )
+      )
+    )
     const parsed = yield* _(response.text.pipe(Effect.flatMap((text) => parseResponseBody(text))))
 
     if (response.status >= 400) {
@@ -147,5 +171,5 @@ export const request = (
     )
   )
 
-export const requestVoid = (method: "GET" | "POST", path: string, body?: JsonRequest) =>
+export const requestVoid = (method: ApiHttpMethod, path: string, body?: JsonRequest) =>
   request(method, path, body).pipe(Effect.asVoid)

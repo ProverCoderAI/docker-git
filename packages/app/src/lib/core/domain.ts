@@ -60,6 +60,7 @@ export interface TemplateConfig {
   readonly repoRef: string
   readonly forkRepoUrl?: string
   readonly gitTokenLabel?: string | undefined
+  readonly skipGithubAuth: boolean
   readonly codexAuthLabel?: string | undefined
   readonly claudeAuthLabel?: string | undefined
   readonly targetDir: string
@@ -108,6 +109,12 @@ export interface MenuCommand {
 export interface AttachCommand {
   readonly _tag: "Attach"
   readonly projectDir: string
+}
+
+export interface OpenCommand {
+  readonly _tag: "Open"
+  readonly projectRef?: string | undefined
+  readonly projectDir?: string | undefined
 }
 
 export interface PanesCommand {
@@ -204,6 +211,7 @@ export type Command =
   | CreateCommand
   | MenuCommand
   | AttachCommand
+  | OpenCommand
   | PanesCommand
   | SessionsCommand
   | ScrapCommand

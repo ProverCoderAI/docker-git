@@ -46,7 +46,12 @@ else
   chown -R 1000:1000 /home/${config.sshUser}`
 
 const renderCloneAuthSelection = (): string =>
-  `  RESOLVED_GIT_AUTH_USER="$GIT_AUTH_USER"
+  `  if [[ "\${GITHUB_AUTH_SKIP:-0}" == "1" ]]; then
+    RESOLVED_GIT_AUTH_USER=""
+    RESOLVED_GIT_AUTH_TOKEN=""
+    RESOLVED_GIT_AUTH_LABEL=""
+  else
+    RESOLVED_GIT_AUTH_USER="$GIT_AUTH_USER"
   RESOLVED_GIT_AUTH_TOKEN="$GIT_AUTH_TOKEN"
   RESOLVED_GIT_AUTH_LABEL=""
   GIT_TOKEN_LABEL_RAW="\${GIT_AUTH_LABEL:-\${GITHUB_AUTH_LABEL:-}}"
@@ -80,7 +85,8 @@ const renderCloneAuthSelection = (): string =>
     if [[ -n "$LABELED_GIT_USER" ]]; then
       RESOLVED_GIT_AUTH_USER="$LABELED_GIT_USER"
     fi
-  fi`
+  fi
+fi`
 
 const renderCloneAuthRepoUrl = (): string =>
   `  AUTH_REPO_URL="$REPO_URL"

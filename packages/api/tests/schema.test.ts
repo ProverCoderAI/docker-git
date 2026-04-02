@@ -7,7 +7,8 @@ import {
   CreateFollowRequestSchema,
   CreateProjectRequestSchema,
   GithubAuthLoginRequestSchema,
-  GithubAuthLogoutRequestSchema
+  GithubAuthLogoutRequestSchema,
+  UpProjectRequestSchema
 } from "../src/api/schema.js"
 
 describe("api schemas", () => {
@@ -16,6 +17,8 @@ describe("api schemas", () => {
       const result = Schema.decodeUnknownEither(CreateProjectRequestSchema)({
         repoUrl: "https://github.com/ProverCoderAI/docker-git",
         repoRef: "main",
+        authorizedKeysContents: "ssh-ed25519 AAAA-test test@example\n",
+        skipGithubAuth: true,
         up: true,
         force: false
       })
@@ -26,6 +29,8 @@ describe("api schemas", () => {
         },
         onRight: (value) => {
           expect(value.repoRef).toBe("main")
+          expect(value.authorizedKeysContents).toContain("ssh-ed25519")
+          expect(value.skipGithubAuth).toBe(true)
           expect(value.up).toBe(true)
         }
       })
@@ -117,6 +122,22 @@ describe("api schemas", () => {
         },
         onRight: (value) => {
           expect(value.activeOnly).toBe(true)
+        }
+      })
+    }))
+
+  it.effect("decodes up-project payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(UpProjectRequestSchema)({
+        authorizedKeysContents: "ssh-ed25519 AAAA-test test@example\n"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.authorizedKeysContents).toContain("ssh-ed25519")
         }
       })
     }))

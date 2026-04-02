@@ -3,10 +3,10 @@ export { formatParseError } from "@lib/core/parse-errors"
 export const usageText = `docker-git menu
 docker-git create [--repo-url <url>] [options]
 docker-git clone <url> [options]
-docker-git open [<url>] [options]
+docker-git open [<selector>] [options]
 docker-git apply [<url>] [options]
 docker-git mcp-playwright [<url>] [options]
-docker-git attach [<url>] [options]
+docker-git attach [<project-dir>] [options]
 docker-git panes [<url>] [options]
 docker-git scrap <action> [<url>] [options]
 docker-git sessions [list] [<url>] [options]
@@ -26,10 +26,10 @@ Commands:
   menu                Interactive menu (default when no args)
   create, init        Generate docker development environment (repo URL optional)
   clone               Create + run container and clone repo
-  open                Open existing docker-git project workspace
+  open                Open an existing docker-git project by selector, URL, or path
   apply               Apply docker-git config to an existing project/container (current dir by default)
   mcp-playwright      Enable Playwright MCP + Chromium sidecar for an existing project dir
-  attach, tmux        Alias for open
+  attach, tmux        Attach to an existing docker-git project workspace with tmux
   panes, terms        List tmux panes for a docker-git project
   scrap               Export/import project scrap (session snapshot + rebuildable deps)
   sessions            List/kill/log container terminal processes
@@ -64,6 +64,7 @@ Options:
   --archive <path>          Scrap snapshot directory (default: .orch/scrap/session)
   --mode <session>          Scrap mode (default: session)
   --git-token <label>       Token label for clone/create (maps to GITHUB_TOKEN__<LABEL>, example: agiens)
+  --gh-skip                 Skip GitHub auth for public clone/create and force anonymous HTTPS clone
   --codex-token <label>     Codex auth label for clone/create (maps to CODEX_AUTH_LABEL, example: agien)
   --claude-token <label>    Claude auth label for clone/create (maps to CLAUDE_AUTH_LABEL, example: agien)
   --wipe | --no-wipe        Wipe workspace before scrap import (default: --wipe)

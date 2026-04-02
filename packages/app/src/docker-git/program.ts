@@ -16,13 +16,15 @@ import {
 } from "./api-client.js"
 import { readCommand } from "./cli/read-command.js"
 import { usageText } from "./cli/usage.js"
-import { ensureControllerReady } from "./controller.js"
+import { type ControllerRuntime, ensureControllerReady } from "./controller.js"
 import type { CliError, UnsupportedCommandError } from "./host-errors.js"
 import { renderCliError } from "./host-errors.js"
+import { autoOpenProjectSsh } from "./host-ssh.js"
+import { runMenu } from "./menu.js"
+import { openExistingProjectSsh } from "./open-project.js"
 
 type OperationalCommand = Exclude<Command, { readonly _tag: "Help" }>
 type UnsupportedOperationalCommandTag =
-  | "Menu"
   | "Attach"
   | "Panes"
   | "SessionsList"
@@ -77,11 +79,11 @@ const unsupported = (command: string, message: string): Effect.Effect<void, Unsu
     message
   })
 
-const withControllerReady = <E>(
-  effect: Effect.Effect<void, E>
+const withControllerReady = <E, R>(
+  effect: Effect.Effect<void, E, R>
 ) =>
   pipe(
-    ensureControllerReady,
+    ensureControllerReady(),
     Effect.zipRight(effect)
   )
 
@@ -112,8 +114,19 @@ const renderCreateResult = (project: ApiProjectDetails | null) =>
 
 const handleCreateCommand = (command: Extract<OperationalCommand, { readonly _tag: "Create" }>) =>
   withControllerReady(
-    pipe(createProject(command), Effect.flatMap((project) => renderCreateResult(project)))
+    pipe(
+      createProject(command),
+      Effect.flatMap((project) =>
+        pipe(
+          renderCreateResult(project),
+          Effect.zipRight(autoOpenProjectSsh(command, project))
+        )
+      )
+    )
   )
+
+const handleOpenCommand = (command: Extract<OperationalCommand, { readonly _tag: "Open" }>) =>
+  withControllerReady(openExistingProjectSsh(command))
 
 const handleStatusCommand = () =>
   withControllerReady(pipe(listProjects(), Effect.flatMap((projects) => renderProjectList(projects))))
@@ -159,10 +172,6 @@ const unsupportedOperationalCommands: Record<
   UnsupportedOperationalCommandTag,
   { readonly command: string; readonly message: string }
 > = {
-  Menu: {
-    command: "menu",
-    message: "Interactive menu is not available in API-only host mode. Use `docker-git status` or `docker-git create`."
-  },
   Attach: { command: "attach", message: "Host-side SSH attach is disabled in API-only mode." },
   Panes: { command: "panes", message: "Host-side pane inspection is disabled in API-only mode." },
   SessionsList: { command: "sessions", message: "Terminal session inspection is disabled in API-only mode." },
@@ -246,9 +255,13 @@ const unsupportedOperationalCommand = (
   return unsupported(spec.command, spec.message)
 }
 
-const dispatchOperationalCommand = (command: OperationalCommand) =>
+const dispatchOperationalCommand = (
+  command: OperationalCommand
+): Effect.Effect<void, CliError, ControllerRuntime> =>
   Match.value(command).pipe(
+    Match.when({ _tag: "Menu" }, () => withControllerReady(runMenu)),
     Match.when({ _tag: "Create" }, handleCreateCommand),
+    Match.when({ _tag: "Open" }, handleOpenCommand),
     Match.when({ _tag: "Status" }, handleStatusCommand),
     Match.when({ _tag: "DownAll" }, handleDownAllCommand),
     Match.when({ _tag: "ApplyAll" }, handleApplyAllCommand),
@@ -257,6 +270,15 @@ const dispatchOperationalCommand = (command: OperationalCommand) =>
     Match.when({ _tag: "AuthGithubLogout" }, handleGithubLogoutCommand),
     Match.orElse((unsupported) => unsupportedOperationalCommand(unsupported))
   )
+
+const runCommand: Effect.Effect<void, CliError, ControllerRuntime> = pipe(
+  readCommand,
+  Effect.flatMap((command: Command) =>
+    command._tag === "Help"
+      ? Effect.log(usageText)
+      : dispatchOperationalCommand(command)
+  )
+)
 
 // CHANGE: route host CLI commands through the API controller only
 // WHY: host must not read local .docker-git state or execute project lifecycle directly
@@ -269,12 +291,7 @@ const dispatchOperationalCommand = (command: OperationalCommand) =>
 // INVARIANT: help remains local; unsupported commands fail explicitly
 // COMPLEXITY: O(1) per command plus API round-trips
 export const program = pipe(
-  readCommand,
-  Effect.flatMap((command: Command) =>
-    command._tag === "Help"
-      ? Effect.log(usageText)
-      : dispatchOperationalCommand(command)
-  ),
+  runCommand,
   Effect.matchEffect({
     onFailure: (error: CliError) => logAndExit(error),
     onSuccess: () => Effect.void
