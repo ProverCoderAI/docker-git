@@ -9,9 +9,27 @@ import * as HttpServerError from "@effect/platform/HttpServerError"
 import * as ParseResult from "effect/ParseResult"
 import * as Schema from "effect/Schema"
 
-import { ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
-import { CreateAgentRequestSchema, CreateFollowRequestSchema, CreateProjectRequestSchema } from "./api/schema.js"
+import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
+import {
+  ApplyAllRequestSchema,
+  CodexAuthImportRequestSchema,
+  CodexAuthLogoutRequestSchema,
+  CreateAgentRequestSchema,
+  CreateFollowRequestSchema,
+  CreateProjectRequestSchema,
+  GithubAuthLoginRequestSchema,
+  GithubAuthLogoutRequestSchema,
+  UpProjectRequestSchema
+} from "./api/schema.js"
 import { uiHtml, uiScript, uiStyles } from "./ui.js"
+import {
+  importCodexAuth,
+  loginGithubAuth,
+  logoutCodexAuth,
+  logoutGithubAuth,
+  readCodexAuthStatus,
+  readGithubAuthStatus
+} from "./services/auth.js"
 import { getAgent, getAgentAttachInfo, listAgents, readAgentLogs, startAgent, stopAgent } from "./services/agents.js"
 import { latestProjectCursor, listProjectEventsSince } from "./services/events.js"
 import {
@@ -27,8 +45,10 @@ import {
   makeFederationOutboxCollection
 } from "./services/federation.js"
 import {
+  applyAllProjects,
   createProjectFromRequest,
   deleteProjectById,
+  downAllProjects,
   downProject,
   getProject,
   listProjects,
@@ -48,6 +68,7 @@ const AgentParamsSchema = Schema.Struct({
 })
 
 type ApiError =
+  | ApiAuthRequiredError
   | ApiBadRequestError
   | ApiNotFoundError
   | ApiConflictError
@@ -93,6 +114,20 @@ const errorResponse = (error: ApiError | unknown) => {
     return jsonResponse({ error: { type: error._tag, message: error.message, details: error.details } }, 400)
   }
 
+  if (error instanceof ApiAuthRequiredError) {
+    return jsonResponse(
+      {
+        error: {
+          type: error._tag,
+          message: error.message,
+          provider: error.provider,
+          command: error.command
+        }
+      },
+      401
+    )
+  }
+
   if (error instanceof ApiNotFoundError) {
     return jsonResponse({ error: { type: error._tag, message: error.message } }, 404)
   }
@@ -121,6 +156,15 @@ const agentParams = HttpRouter.schemaParams(AgentParamsSchema)
 
 const readCreateProjectRequest = () => HttpServerRequest.schemaBodyJson(CreateProjectRequestSchema)
 const readCreateFollowRequest = () => HttpServerRequest.schemaBodyJson(CreateFollowRequestSchema)
+const readGithubAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLoginRequestSchema)
+const readGithubAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLogoutRequestSchema)
+const readCodexAuthImportRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthImportRequestSchema)
+const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLogoutRequestSchema)
+const readApplyAllRequest = () => HttpServerRequest.schemaBodyJson(ApplyAllRequestSchema)
+const readUpProjectRequest = () =>
+  HttpServerRequest.schemaBodyJson(UpProjectRequestSchema).pipe(
+    Effect.catchAll(() => Effect.succeed({ authorizedKeysContents: undefined }))
+  )
 const readInboxPayload = () => HttpServerRequest.schemaBodyJson(Schema.Unknown)
 
 const configuredFederationPublicOrigin =
@@ -184,6 +228,54 @@ export const makeRouter = () => {
     HttpRouter.get("/ui/styles.css", textResponse(uiStyles, "text/css; charset=utf-8", 200)),
     HttpRouter.get("/ui/app.js", textResponse(uiScript, "application/javascript; charset=utf-8", 200)),
     HttpRouter.get("/health", jsonResponse({ ok: true }, 200)),
+    HttpRouter.get(
+      "/auth/github/status",
+      Effect.gen(function*(_) {
+        const status = yield* _(readGithubAuthStatus())
+        return yield* _(jsonResponse({ status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/github/login",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGithubAuthLoginRequest())
+        const status = yield* _(loginGithubAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/github/logout",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGithubAuthLogoutRequest())
+        const status = yield* _(logoutGithubAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/auth/codex/status",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const label = new URL(request.url, "http://localhost").searchParams.get("label")
+        const status = yield* _(readCodexAuthStatus(label))
+        return yield* _(jsonResponse({ status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/codex/import",
+      Effect.gen(function*(_) {
+        const request = yield* _(readCodexAuthImportRequest())
+        const status = yield* _(importCodexAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/codex/logout",
+      Effect.gen(function*(_) {
+        const request = yield* _(readCodexAuthLogoutRequest())
+        const status = yield* _(logoutCodexAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
     HttpRouter.get(
       "/federation/issues",
       Effect.sync(() => ({ issues: listFederationIssues() })).pipe(
@@ -274,6 +366,21 @@ export const makeRouter = () => {
         return yield* _(jsonResponse({ project }, 201))
       }).pipe(Effect.catchAll(errorResponse))
     ),
+    HttpRouter.post(
+      "/projects/apply-all",
+      Effect.gen(function*(_) {
+        const request = yield* _(readApplyAllRequest())
+        yield* _(applyAllProjects(request.activeOnly ?? false))
+        return yield* _(jsonResponse({ ok: true }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/projects/down-all",
+      downAllProjects().pipe(
+        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
     HttpRouter.get(
       "/projects/:projectId",
       projectParams.pipe(
@@ -292,9 +399,12 @@ export const makeRouter = () => {
     ),
     HttpRouter.post(
       "/projects/:projectId/up",
-      projectParams.pipe(
-        Effect.flatMap(({ projectId }) => upProject(projectId)),
-        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(readUpProjectRequest())
+        yield* _(upProject(projectId, request.authorizedKeysContents))
+        return yield* _(jsonResponse({ ok: true }, 200))
+      }).pipe(
         Effect.catchAll(errorResponse)
       )
     ),

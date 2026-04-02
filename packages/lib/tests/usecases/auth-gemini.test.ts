@@ -22,50 +22,78 @@ const withTempDir = <A, E, R>(
     })
   )
 
+const withPatchedEnv = <A, E, R>(
+  patch: Readonly<Record<string, string | undefined>>,
+  effect: Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R> =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const previous = new Map<string, string | undefined>()
+      for (const [key, value] of Object.entries(patch)) {
+        previous.set(key, process.env[key])
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+      return previous
+    }),
+    () => effect,
+    (previous) =>
+      Effect.sync(() => {
+        for (const [key, value] of previous.entries()) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      })
+  )
+
 describe("authGeminiLogin", () => {
   it.effect("generates settings.json with correct 1:1 configuration", () =>
     withTempDir((root) =>
-      Effect.gen(function*(_) {
-        const fs = yield* _(FileSystem.FileSystem)
-        const path = yield* _(Path.Path)
-        
-        // Mock the environment by setting the auth path to our temp root
-        const geminiAuthPath = ".docker-git/.orch/auth/gemini"
-        const accountLabel = "test-account"
-        // In the real app, resolvePathFromCwd is used. 
-        // For the test, we'll bypass the complex resolution and check if we can call the core logic.
-        // However, authGeminiLogin calls withGeminiAuth which calls ensureGeminiOrchLayout.
-        // We need to be careful with where it writes.
-        
-        // Let's mock the command to use our temp root as the 'geminiAuthPath'
-        const relativeGeminiAuthPath = path.join(root, geminiAuthPath)
+      withPatchedEnv(
+        {
+          HOME: root,
+          DOCKER_GIT_STATE_AUTO_SYNC: "0"
+        },
+        Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const geminiAuthPath = ".docker-git/.orch/auth/gemini"
+          const accountLabel = "test-account"
+          const relativeGeminiAuthPath = path.join(root, geminiAuthPath)
 
-        yield* _(
-          authGeminiLogin(
-            {
-              _tag: "AuthGeminiLogin",
-              label: accountLabel,
-              geminiAuthPath: relativeGeminiAuthPath,
-              isWeb: false
-            },
-            "test-api-key"
-          ).pipe(
-             Effect.provideService(FileSystem.FileSystem, fs),
-             Effect.provideService(Path.Path, path)
+          yield* _(
+            authGeminiLogin(
+              {
+                _tag: "AuthGeminiLogin",
+                label: accountLabel,
+                geminiAuthPath: relativeGeminiAuthPath,
+                isWeb: false
+              },
+              "test-api-key"
+            ).pipe(
+              Effect.provideService(FileSystem.FileSystem, fs),
+              Effect.provideService(Path.Path, path)
+            )
           )
-        )
 
-        const settingsPath = path.join(relativeGeminiAuthPath, accountLabel, ".gemini", "settings.json")
-        const settingsContent = yield* _(fs.readFileString(settingsPath))
-        const settings = JSON.parse(settingsContent)
+          const settingsPath = path.join(relativeGeminiAuthPath, accountLabel, ".gemini", "settings.json")
+          const settingsContent = yield* _(fs.readFileString(settingsPath))
+          const settings = JSON.parse(settingsContent)
 
-        expect(settings.model.name).toBe("gemini-3.1-pro-preview")
-        expect(settings.modelConfigs.customAliases["yolo-ultra"]).toBeDefined()
-        expect(settings.general.defaultApprovalMode).toBe("auto_edit")
-        expect(settings.mcpServers.playwright.command).toBe("docker-git-playwright-mcp")
-        expect(settings.security.folderTrust.enabled).toBe(false)
-        expect(settings.tools.allowed).toContain("googleSearch")
-      })
+          expect(settings.model.name).toBe("gemini-3.1-pro-preview")
+          expect(settings.modelConfigs.customAliases["yolo-ultra"]).toBeDefined()
+          expect(settings.general.defaultApprovalMode).toBe("auto_edit")
+          expect(settings.mcpServers.playwright.command).toBe("docker-git-playwright-mcp")
+          expect(settings.security.folderTrust.enabled).toBe(false)
+          expect(settings.tools.allowed).toContain("googleSearch")
+        })
+      )
     ).pipe(Effect.provide(NodeContext.layer)))
 
   it.effect("detects oauth_creds.json as valid Gemini OAuth credentials", () =>

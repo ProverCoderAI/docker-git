@@ -3,7 +3,7 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import { copyCodexFile, copyDirIfEmpty } from "./auth-copy.js"
+import { copyCodexFile, copyDirIfEmpty, copyDirMissingEntries } from "./auth-copy.js"
 import {
   type AuthSyncSpec,
   defaultCodexConfig,
@@ -164,33 +164,25 @@ export const syncAuthArtifacts = (
       const targetProject = resolvePathFromBase(path, spec.targetBase, spec.target.envProjectPath)
       const sourceCodex = resolvePathFromBase(path, spec.sourceBase, spec.source.codexAuthPath)
       const targetCodex = resolvePathFromBase(path, spec.targetBase, spec.target.codexAuthPath)
+      const sourceClaude = resolvePathFromBase(path, spec.sourceBase, spec.source.claudeAuthPath)
+      const targetClaude = resolvePathFromBase(path, spec.targetBase, spec.target.claudeAuthPath)
 
       yield* _(copyFileIfNeeded(sourceGlobal, targetGlobal))
       yield* _(syncGithubTokenKeysInFile(sourceGlobal, targetGlobal))
       yield* _(copyFileIfNeeded(sourceProject, targetProject))
       yield* _(fs.makeDirectory(targetCodex, { recursive: true }))
+      yield* _(copyCodexFile(fs, path, { sourceDir: sourceCodex, targetDir: targetCodex, fileName: "auth.json", label: "auth" }))
       if (sourceCodex !== targetCodex) {
-        const sourceExists = yield* _(fs.exists(sourceCodex))
-        if (sourceExists) {
-          const sourceInfo = yield* _(fs.stat(sourceCodex))
-          if (sourceInfo.type === "Directory") {
-            const targetExists = yield* _(fs.exists(targetCodex))
-            if (!targetExists) {
-              yield* _(fs.makeDirectory(targetCodex, { recursive: true }))
-            }
-            // NOTE: We intentionally do not copy auth.json.
-            // ChatGPT refresh tokens are rotating; copying them into each project causes refresh_token_reused.
-            yield* _(
-              copyCodexFile(fs, path, {
-                sourceDir: sourceCodex,
-                targetDir: targetCodex,
-                fileName: "config.toml",
-                label: "config"
-              })
-            )
-          }
-        }
+        yield* _(
+          copyCodexFile(fs, path, {
+            sourceDir: sourceCodex,
+            targetDir: targetCodex,
+            fileName: "config.toml",
+            label: "config"
+          })
+        )
       }
+      yield* _(copyDirMissingEntries(fs, path, sourceClaude, targetClaude, "Claude auth bootstrap"))
     })
   )
 

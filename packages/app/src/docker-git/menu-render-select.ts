@@ -2,7 +2,7 @@ import { Match } from "effect"
 import { Text } from "ink"
 import type React from "react"
 
-import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import type { ProjectItem } from "@lib/usecases/projects"
 import type { SelectProjectRuntime } from "./menu-types.js"
 
 export type SelectPurpose = "Connect" | "Down" | "Info" | "Delete" | "Auth"
@@ -67,13 +67,10 @@ export const selectTitle = (purpose: SelectPurpose): string =>
 
 export const selectHint = (
   purpose: SelectPurpose,
-  connectEnableMcpPlaywright: boolean
+  _connectEnableMcpPlaywright: boolean
 ): string =>
   Match.value(purpose).pipe(
-    Match.when(
-      "Connect",
-      () => `Enter = select + SSH, P = toggle Playwright MCP (${connectEnableMcpPlaywright ? "on" : "off"}), Esc = back`
-    ),
+    Match.when("Connect", () => "Enter = select + SSH, Esc = back"),
     Match.when("Auth", () => "Enter = open project auth menu, Esc = back"),
     Match.when("Down", () => "Enter = stop container, Esc = back"),
     Match.when("Info", () => "Use arrows to browse details, Enter = set active, Esc = back"),

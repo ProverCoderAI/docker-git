@@ -1,7 +1,7 @@
 import { Either, Match } from "effect"
 
-import type { RawOptions } from "@effect-template/lib/core/command-options"
-import { type AuthCommand, type Command, type ParseError } from "@effect-template/lib/core/domain"
+import type { RawOptions } from "@lib/core/command-options"
+import { type AuthCommand, type Command, type ParseError } from "@lib/core/domain"
 
 import { parseRawOptions } from "./parser-options.js"
 
@@ -79,6 +79,12 @@ const buildCodexCommand = (action: string, options: AuthOptions): Either.Either<
     Match.when("login", () =>
       Either.right<AuthCommand>({
         _tag: "AuthCodexLogin",
+        label: options.label,
+        codexAuthPath: options.codexAuthPath
+      })),
+    Match.when("import", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthCodexImport",
         label: options.label,
         codexAuthPath: options.codexAuthPath
       })),

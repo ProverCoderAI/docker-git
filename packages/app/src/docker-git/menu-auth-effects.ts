@@ -8,10 +8,10 @@ import {
   authGeminiLogout,
   authGithubLogin,
   claudeAuthRoot
-} from "@effect-template/lib/usecases/auth"
-import { geminiAuthRoot } from "@effect-template/lib/usecases/auth-gemini-helpers"
-import type { AppError } from "@effect-template/lib/usecases/errors"
-import { renderError } from "@effect-template/lib/usecases/errors"
+} from "@lib/usecases/auth"
+import { geminiAuthRoot } from "@lib/usecases/auth-gemini-helpers"
+import type { AppError } from "@lib/usecases/errors"
+import { renderError } from "@lib/usecases/errors"
 
 import { readAuthSnapshot, successMessage, writeAuthFlow } from "./menu-auth-data.js"
 import { pauseOnError, resumeSshWithSkipInputs, withSuspendedTui } from "./menu-shared.js"

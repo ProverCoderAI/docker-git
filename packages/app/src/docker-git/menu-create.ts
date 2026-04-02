@@ -1,11 +1,11 @@
-import { type CreateCommand, deriveRepoPathParts, resolveRepoInput } from "@effect-template/lib/core/domain"
-import { createProject } from "@effect-template/lib/usecases/actions"
-import type { AppError } from "@effect-template/lib/usecases/errors"
-import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
-import * as Path from "@effect/platform/Path"
+import { type CreateCommand, deriveRepoPathParts, resolveRepoInput } from "@lib/core/domain"
+import { defaultProjectsRoot } from "@lib/usecases/menu-helpers"
 import { Effect, Either, Match, pipe } from "effect"
+
+import { createProject as createProjectViaApi } from "./api-client.js"
 import { parseArgs } from "./cli/parser.js"
 import { formatParseError, usageText } from "./cli/usage.js"
+import type { MenuError } from "./menu-errors.js"
 
 import { nextBufferValue } from "./menu-buffer-input.js"
 import { resetToMenu } from "./menu-shared.js"
@@ -25,13 +25,13 @@ import {
 // SOURCE: n/a
 // FORMAT THEOREM: forall s: step(s) -> step'(s)
 // PURITY: SHELL
-// EFFECT: Effect<void, AppError, FileSystem | Path | CommandExecutor>
+// EFFECT: Effect<void, MenuError, FileSystem | Path | CommandExecutor>
 // INVARIANT: outDir resolves to a stable repo path
 // COMPLEXITY: O(1) per keypress
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
 
-type CreateRunner = { readonly runEffect: (effect: Effect.Effect<void, AppError, MenuEnv>) => void }
+type CreateRunner = { readonly runEffect: <E extends MenuError>(effect: Effect.Effect<void, E, MenuEnv>) => void }
 
 type CreateContext = {
   readonly state: MenuState
@@ -151,12 +151,13 @@ const parseYesDefault = (input: string, fallback: boolean): boolean => {
 const applyCreateCommand = (
   state: MenuState,
   create: CreateCommand
-): Effect.Effect<{ readonly _tag: "Continue"; readonly state: MenuState }, AppError, MenuEnv> =>
+): Effect.Effect<{ readonly _tag: "Continue"; readonly state: MenuState }, MenuError, MenuEnv> =>
   Effect.gen(function*(_) {
-    const path = yield* _(Path.Path)
-    const resolvedOutDir = path.resolve(create.outDir)
-    yield* _(createProject(create))
-    return { _tag: "Continue", state: { ...state, activeDir: resolvedOutDir } }
+    const project = yield* _(createProjectViaApi(create))
+    return {
+      _tag: "Continue",
+      state: { ...state, activeDir: project?.projectDir ?? create.outDir }
+    }
   })
 
 const isCreateCommand = (command: { readonly _tag: string }): command is CreateCommand => command._tag === "Create"
@@ -166,7 +167,7 @@ const buildCreateEffect = (
   state: MenuState,
   setActiveDir: (dir: string | null) => void,
   setMessage: (message: string | null) => void
-): Effect.Effect<void, AppError, MenuEnv> => {
+): Effect.Effect<void, MenuError, MenuEnv> => {
   if (isCreateCommand(command)) {
     return pipe(
       applyCreateCommand(state, command),

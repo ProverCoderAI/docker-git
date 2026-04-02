@@ -1,7 +1,7 @@
 import { Either } from "effect"
 
-import type { RawOptions } from "@effect-template/lib/core/command-options"
-import type { ParseError } from "@effect-template/lib/core/domain"
+import type { RawOptions } from "@lib/core/command-options"
+import type { ParseError } from "@lib/core/domain"
 
 interface ValueOptionSpec {
   readonly flag: string
@@ -98,6 +98,7 @@ const booleanFlagUpdaters: Readonly<Record<string, (raw: RawOptions) => RawOptio
   "--no-up": (raw) => ({ ...raw, up: false }),
   "--ssh": (raw) => ({ ...raw, openSsh: true }),
   "--no-ssh": (raw) => ({ ...raw, openSsh: false }),
+  "--gh-skip": (raw) => ({ ...raw, skipGithubAuth: true }),
   "--force": (raw) => ({ ...raw, force: true }),
   "--force-env": (raw) => ({ ...raw, forceEnv: true }),
   "--mcp-playwright": (raw) => ({ ...raw, enableMcpPlaywright: true }),
@@ -280,4 +281,4 @@ export const parseRawOptions = (args: ReadonlyArray<string>): Either.Either<RawO
   return Either.right(raw)
 }
 
-export { type RawOptions } from "@effect-template/lib/core/command-options"
+export { type RawOptions } from "@lib/core/command-options"

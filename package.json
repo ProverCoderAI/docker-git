@@ -27,6 +27,7 @@
     "e2e": "bash scripts/e2e/run-all.sh",
     "e2e:clone-cache": "bash scripts/e2e/clone-cache.sh",
     "e2e:login-context": "bash scripts/e2e/login-context.sh",
+    "e2e:runtime-volumes-ssh": "bash scripts/e2e/runtime-volumes-ssh.sh",
     "e2e:opencode-autoconnect": "bash scripts/e2e/opencode-autoconnect.sh",
     "list": "pnpm --filter ./packages/app build && node packages/app/dist/main.js list",
     "dev": "pnpm --filter ./packages/app dev",

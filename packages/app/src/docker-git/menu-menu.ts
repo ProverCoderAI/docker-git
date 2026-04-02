@@ -1,5 +1,5 @@
-import { parseMenuSelection } from "@effect-template/lib/core/domain"
-import { isRepoUrlInput } from "@effect-template/lib/usecases/menu-helpers"
+import { parseMenuSelection } from "@lib/core/domain"
+import { isRepoUrlInput } from "@lib/usecases/menu-helpers"
 import { Either } from "effect"
 
 import { handleMenuActionSelection, type MenuSelectionContext } from "./menu-actions.js"
@@ -30,11 +30,13 @@ const handleMenuEnter = (context: MenuSelectionContext) => {
 const handleMenuTextInput = (input: string, context: MenuSelectionContext): boolean => {
   const trimmed = input.trim()
   if (trimmed.length > 0 && isRepoUrlInput(trimmed)) {
+    context.setSkipInputs(() => 1)
     startCreateView(context.setView, context.setMessage, trimmed)
     return true
   }
   const selection = parseMenuSelection(input)
   if (Either.isRight(selection)) {
+    context.setSkipInputs(() => 1)
     handleMenuActionSelection(selection.right, context)
     return true
   }

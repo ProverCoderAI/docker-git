@@ -1,16 +1,20 @@
 {
 	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
+		"allowJs": true,
 		"rootDir": ".",
 		"outDir": "dist",
 		"types": ["vitest"],
 		"jsx": "react-jsx",
 		"baseUrl": ".",
 		"paths": {
-			"@/*": ["src/*"]
+			"@/*": ["src/*"],
+			"@lib": ["src/lib/index.ts"],
+			"@lib/*": ["src/lib/*.ts"]
 		}
 	},
 	"include": [
+		"eslint/**/*",
 		"src/**/*",
 		"tests/**/*",
 		"vite.config.ts",

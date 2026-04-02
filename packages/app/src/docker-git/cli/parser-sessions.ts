@@ -1,6 +1,6 @@
 import { Either, Match } from "effect"
 
-import { type ParseError, type SessionsCommand } from "@effect-template/lib/core/domain"
+import { type ParseError, type SessionsCommand } from "@lib/core/domain"
 
 import { parsePositiveInt, parseProjectDirWithOptions, splitSubcommand } from "./parser-shared.js"
 

@@ -61,6 +61,7 @@ const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   repoUrl: "https://github.com/org/repo.git",
   repoRef: "main",
   gitTokenLabel: undefined,
+  skipGithubAuth: false,
   targetDir: "/home/dev/org/repo",
   volumeName: "dg-test-home",
   dockerGitPath: path.join(root, ".docker-git"),
@@ -91,6 +92,7 @@ const makeProjectConfig = (
   repoUrl: "https://github.com/org/repo.git",
   repoRef: "main",
   gitTokenLabel,
+  skipGithubAuth: false,
   codexAuthLabel,
   claudeAuthLabel,
   targetDir: "/home/dev/org/repo",
@@ -165,7 +167,18 @@ describe("prepareProjectFiles", () => {
           "curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://bun.sh/install -o /tmp/bun-install.sh"
         )
         expect(dockerfile).toContain("bun install attempt ${attempt} failed; retrying...")
+        expect(dockerfile).not.toContain("COPY authorized_keys /opt/docker-git/bootstrap/authorized_keys")
+        expect(dockerfile).not.toContain("COPY .orch /opt/docker-git/bootstrap/.orch")
+        expect(dockerfile).toContain("RUN mkdir -p /opt/docker-git/bootstrap/.orch/auth/codex")
         expect(entrypoint).toContain('DOCKER_GIT_HOME="/home/dev/.docker-git"')
+        expect(entrypoint).toContain('BOOTSTRAP_ROOT="/opt/docker-git/bootstrap"')
+        expect(entrypoint).toContain('BOOTSTRAP_CODEX_SHARED_AUTH_DIR="$BOOTSTRAP_SOURCE_ROOT/shared-auth/codex"')
+        expect(entrypoint).toContain("docker_git_export_env_if_unset()")
+        expect(entrypoint).toContain('if [[ -n "${!key+x}" ]]; then')
+        expect(entrypoint).toContain('docker_git_upsert_ssh_env "$key" "${!key}"')
+        expect(entrypoint).toContain('docker_git_load_env_file "$DOCKER_GIT_ENV_GLOBAL"')
+        expect(entrypoint).toContain('docker_git_load_env_file "$DOCKER_GIT_ENV_PROJECT"')
+        expect(entrypoint).not.toContain('export "$line"')
         expect(entrypoint).toContain('SOURCE_SHARED_AUTH="/home/dev/.codex-shared/auth.json"')
         expect(entrypoint).toContain('CODEX_LABEL_RAW="$CODEX_AUTH_LABEL"')
         expect(entrypoint).toContain('OPENCODE_DATA_DIR="/home/dev/.local/share/opencode"')
@@ -195,16 +208,26 @@ describe("prepareProjectFiles", () => {
         expect(entrypoint).toContain("cat > \"$MOVE_SCRIPT\" << 'EOFMOVE'")
         expect(entrypoint).toMatch(/\nEOFMOVE\n\s*chmod \+x "\$MOVE_SCRIPT"/)
         expect(entrypoint).not.toContain("\n  EOFMOVE\n")
+        expect(entrypoint).toContain('sync_file_if_present "$BOOTSTRAP_AUTH_KEYS" "$DOCKER_GIT_AUTH_KEYS" || true')
+        expect(entrypoint).toContain('sync_labeled_auth_files "$BOOTSTRAP_CODEX_SHARED_AUTH_DIR" "$DOCKER_GIT_AUTH_DIR"')
+        expect(entrypoint).toContain('rm -f "$SHARED_AUTH_FILE" || true')
         expect(entrypoint).toContain(
           "if [[ \"$CLONE_OK\" -eq 1 ]]; then\n  docker_git_prepare_active_agent_project_rules\nfi"
         )
         expect(composeBefore).toContain("container_name: dg-test")
         expect(composeBefore).toContain("restart: unless-stopped")
-        expect(composeBefore).toContain(":/home/dev/.docker-git")
+        expect(composeBefore).not.toContain(":/home/dev/.docker-git\n")
+        expect(composeBefore).toContain("docker_git_shared_cache:/home/dev/.docker-git/.cache")
+        expect(composeBefore).toContain("docker_git_shared_codex:/home/dev/.codex-shared")
+        expect(composeBefore).toContain("docker_git_bootstrap:/opt/docker-git/bootstrap/source:ro")
+        expect(composeBefore).toContain("docker_git_bootstrap:")
+        expect(composeBefore).toContain("name: dg-test-home-bootstrap")
+        expect(composeBefore).not.toContain("env_file:")
         expect(composeBefore).toContain("cpus:")
         expect(composeBefore).toContain('mem_limit: "')
         expect(composeBefore).not.toContain("dg-test-browser")
         expect(composeBefore).toContain("docker-git-shared")
+        expect(composeBefore).toContain("docker-git-shared-codex")
         expect(composeBefore).toContain("external: true")
         expect(countOccurrences(composeBefore, dnsBlock)).toBe(1)
 
@@ -259,7 +282,7 @@ describe("prepareProjectFiles", () => {
         const compose = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
         expect(compose).toContain("dg-test-net")
         expect(compose).toContain("driver: bridge")
-        expect(compose).not.toContain("external: true")
+        expect(compose).not.toContain("dg-test-net:\n    external: true")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -306,6 +329,76 @@ describe("prepareProjectFiles", () => {
         const synchronizedAuthorizedKeys = yield* _(fs.readFileString(authorizedKeysPath))
         expect(synchronizedAuthorizedKeys).toContain(staleKey.trim())
         expect(synchronizedAuthorizedKeys).toContain(currentKey.trim())
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("force refresh appends new keys into an existing project authorized_keys file", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const globalConfig = makeGlobalConfig(root, path)
+        const projectConfig = makeProjectConfig(outDir, false, path)
+        const sourceAuthorizedKeysPath = path.join(root, "authorized_keys")
+        const projectAuthorizedKeysPath = path.join(outDir, "authorized_keys")
+        const staleKey = "ssh-ed25519 AAAA-stale stale@example\n"
+        const currentKey = "ssh-ed25519 AAAA-current current@example\n"
+
+        yield* _(fs.makeDirectory(path.dirname(projectAuthorizedKeysPath), { recursive: true }))
+        yield* _(fs.writeFileString(sourceAuthorizedKeysPath, currentKey))
+        yield* _(fs.writeFileString(projectAuthorizedKeysPath, staleKey))
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: true,
+            forceEnv: false
+          })
+        )
+
+        const synchronizedAuthorizedKeys = yield* _(fs.readFileString(projectAuthorizedKeysPath))
+        expect(synchronizedAuthorizedKeys).toContain(staleKey.trim())
+        expect(synchronizedAuthorizedKeys).toContain(currentKey.trim())
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("ignores missing Claude debug symlinks when seeding project auth", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const globalConfig = makeGlobalConfig(root, path)
+        const projectConfig = makeProjectConfig(outDir, false, path)
+        const sourceClaudeDefault = path.join(root, ".orch", "auth", "claude", "default")
+        const sourceOauthToken = path.join(sourceClaudeDefault, ".oauth-token")
+        const sourceDebugDir = path.join(sourceClaudeDefault, "debug")
+        const sourceBrokenDebugLink = path.join(sourceDebugDir, "latest")
+        const targetOauthToken = path.join(outDir, ".orch", "auth", "claude", "default", ".oauth-token")
+        const targetBrokenDebugLink = path.join(outDir, ".orch", "auth", "claude", "default", "debug", "latest")
+
+        yield* _(fs.makeDirectory(sourceDebugDir, { recursive: true }))
+        yield* _(fs.writeFileString(sourceOauthToken, "oauth-token\n"))
+        const linkExitCode = yield* _(
+          runCommandExitCode({
+            cwd: root,
+            command: "ln",
+            args: ["-s", "/missing/claude-debug.txt", sourceBrokenDebugLink]
+          })
+        )
+        expect(linkExitCode).toBe(0)
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          })
+        )
+
+        const synchronizedOauthToken = yield* _(fs.readFileString(targetOauthToken))
+        const hasBrokenDebugLink = yield* _(fs.exists(targetBrokenDebugLink))
+        expect(synchronizedOauthToken).toBe("oauth-token\n")
+        expect(hasBrokenDebugLink).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

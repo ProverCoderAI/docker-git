@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
-import { defaultTemplateConfig } from "@effect-template/lib/core/domain"
-import { renderEntrypoint } from "@effect-template/lib/core/templates-entrypoint"
+import { defaultTemplateConfig } from "@lib/core/domain"
+import { renderEntrypoint } from "@lib/core/templates-entrypoint"
 
 describe("renderEntrypoint auth bridge", () => {
   it.effect("maps GH token fallback to git auth and sets git credential helper", () =>
@@ -17,6 +17,11 @@ describe("renderEntrypoint auth bridge", () => {
         "GIT_AUTH_TOKEN=\"${GIT_AUTH_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}\""
       )
       expect(entrypoint).toContain("GITHUB_TOKEN=\"${GITHUB_TOKEN:-${GH_TOKEN:-}}\"")
+      expect(entrypoint).toContain("GITHUB_AUTH_SKIP=\"${GITHUB_AUTH_SKIP:-0}\"")
+      expect(entrypoint).toContain(
+        "if [[ \"$GITHUB_AUTH_SKIP\" != \"1\" && -z \"$AUTH_LABEL_RAW\" && \"$REPO_URL\" == https://github.com/* ]]; then"
+      )
+      expect(entrypoint).toContain("if [[ \"${GITHUB_AUTH_SKIP:-0}\" == \"1\" ]]; then")
       expect(entrypoint).toContain("AUTH_LABEL_RAW=\"${GIT_AUTH_LABEL:-${GITHUB_AUTH_LABEL:-}}\"")
       expect(entrypoint).toContain("LABELED_GITHUB_TOKEN_KEY=\"GITHUB_TOKEN__$RESOLVED_AUTH_LABEL\"")
       expect(entrypoint).toContain("LABELED_GIT_TOKEN_KEY=\"GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL\"")
@@ -80,23 +85,23 @@ describe("renderEntrypoint auth bridge", () => {
       expect(entrypoint).toContain("CLAUDE_AUTO_SYSTEM_PROMPT=\"${CLAUDE_AUTO_SYSTEM_PROMPT:-1}\"")
       expect(entrypoint).toContain("docker-git-managed:claude-md")
       expect(entrypoint).toContain("docker_git_sync_project_codex_skills()")
-      expect(entrypoint).toContain('project_skills_root="$codex_home/skills/.docker-git-project"')
+      expect(entrypoint).toContain("project_skills_root=\"$codex_home/skills/.docker-git-project\"")
       expect(entrypoint).toContain("docker_git_prepare_active_agent_project_rules()")
-      expect(entrypoint).toContain('docker_git_detect_claude_project_rules()')
-      expect(entrypoint).toContain('docker_git_detect_gemini_project_rules()')
-      expect(entrypoint).toContain('"codex")')
-      expect(entrypoint).toContain('"claude")')
-      expect(entrypoint).toContain('"gemini")')
-      expect(entrypoint).toContain('"20-agents-skills::.agents/skills"')
-      expect(entrypoint).toContain('"30-agents-dot-skills::.agents/.skills"')
-      expect(entrypoint).toContain('"80-codex-skills::.codex/skills"')
-      expect(entrypoint).toContain('"90-codex-dot-skills::.codex/.skills"')
-      expect(entrypoint).not.toContain('"40-claude-skills::.claude/skills"')
-      expect(entrypoint).toContain('$project_dir/.claude/settings.json')
-      expect(entrypoint).toContain('$project_dir/.claude/agents')
-      expect(entrypoint).toContain('$project_dir/.gemini/settings.json')
-      expect(entrypoint).toContain('$project_dir/.gemini/commands')
-      expect(entrypoint).toContain('$project_dir/.gemini/skills')
+      expect(entrypoint).toContain("docker_git_detect_claude_project_rules()")
+      expect(entrypoint).toContain("docker_git_detect_gemini_project_rules()")
+      expect(entrypoint).toContain("\"codex\")")
+      expect(entrypoint).toContain("\"claude\")")
+      expect(entrypoint).toContain("\"gemini\")")
+      expect(entrypoint).toContain("\"20-agents-skills::.agents/skills\"")
+      expect(entrypoint).toContain("\"30-agents-dot-skills::.agents/.skills\"")
+      expect(entrypoint).toContain("\"80-codex-skills::.codex/skills\"")
+      expect(entrypoint).toContain("\"90-codex-dot-skills::.codex/.skills\"")
+      expect(entrypoint).not.toContain("\"40-claude-skills::.claude/skills\"")
+      expect(entrypoint).toContain("$project_dir/.claude/settings.json")
+      expect(entrypoint).toContain("$project_dir/.claude/agents")
+      expect(entrypoint).toContain("$project_dir/.gemini/settings.json")
+      expect(entrypoint).toContain("$project_dir/.gemini/commands")
+      expect(entrypoint).toContain("$project_dir/.gemini/skills")
       expect(entrypoint).toContain(
         "SUBAGENTS_LINE=\"Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.\""
       )

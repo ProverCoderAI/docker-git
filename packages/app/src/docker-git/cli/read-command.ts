@@ -1,6 +1,6 @@
 import { Effect, Either, pipe } from "effect"
 
-import { type Command, type ParseError } from "@effect-template/lib/core/domain"
+import { type Command, type ParseError } from "@lib/core/domain"
 
 import { parseArgs } from "./parser.js"
 

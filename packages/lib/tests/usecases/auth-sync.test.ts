@@ -8,6 +8,7 @@ import {
   ensureClaudeAuthSeedFromHome,
   ensureCodexConfigFile,
   migrateLegacyOrchLayout,
+  syncAuthArtifacts,
   syncGithubAuthKeys
 } from "../../src/usecases/auth-sync.js"
 
@@ -89,6 +90,44 @@ describe("syncGithubAuthKeys", () => {
         expect(configText).toContain("model_auto_compact_token_limit = 945000")
         expect(configText).toContain("model_reasoning_effort = \"xhigh\"")
         expect(configText).toContain("plan_mode_reasoning_effort = \"xhigh\"")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("copies Codex auth.json into the target auth dir", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const sourceBase = path.join(root, "source")
+        const targetBase = path.join(root, "target")
+        const sourceCodexDir = path.join(sourceBase, ".orch", "auth", "codex")
+        const targetCodexDir = path.join(targetBase, ".orch", "auth", "codex")
+        const authText = JSON.stringify({ openai: { type: "oauth", refresh: "refresh", access: "access" } }, null, 2)
+
+        yield* _(fs.makeDirectory(sourceCodexDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(sourceCodexDir, "auth.json"), authText))
+
+        yield* _(
+          syncAuthArtifacts({
+            sourceBase,
+            targetBase,
+            source: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            },
+            target: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            }
+          })
+        )
+
+        const copiedAuthText = yield* _(fs.readFileString(path.join(targetCodexDir, "auth.json")))
+        expect(copiedAuthText).toBe(authText)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -274,6 +313,47 @@ describe("syncGithubAuthKeys", () => {
         const seededCredentialsText = yield* _(fs.readFileString(seededCredentials))
         expect(seededJsonText).toContain("\"oauthAccount\"")
         expect(seededCredentialsText).toContain("\"claudeAiOauth\"")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("skips broken Claude debug symlinks during auth bootstrap sync", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const sourceRoot = path.join(root, "source")
+        const targetRoot = path.join(root, "target")
+        const sourceClaudeDefault = path.join(sourceRoot, ".orch", "auth", "claude", "default")
+        const sourceDebugDir = path.join(sourceClaudeDefault, "debug")
+        const targetClaudeDefault = path.join(targetRoot, ".orch", "auth", "claude", "default")
+
+        yield* _(fs.makeDirectory(sourceDebugDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(sourceClaudeDefault, ".oauth-token"), "token-1\n"))
+        yield* _(fs.symlink("/claude-home/debug/missing.txt", path.join(sourceDebugDir, "latest")))
+
+        yield* _(
+          syncAuthArtifacts({
+            sourceBase: sourceRoot,
+            targetBase: targetRoot,
+            source: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            },
+            target: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            }
+          })
+        )
+
+        const copiedOauthToken = yield* _(fs.readFileString(path.join(targetClaudeDefault, ".oauth-token")))
+        const copiedLatest = yield* _(fs.exists(path.join(targetClaudeDefault, "debug", "latest")))
+        expect(copiedOauthToken).toBe("token-1\n")
+        expect(copiedLatest).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

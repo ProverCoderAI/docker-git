@@ -1,9 +1,16 @@
-import { resolveComposeNetworkName, type TemplateConfig } from "../domain.js"
+import {
+  dockerGitSharedCacheVolumeName,
+  dockerGitSharedCodexVolumeName,
+  resolveComposeNetworkName,
+  resolveProjectBootstrapVolumeName,
+  type TemplateConfig
+} from "../domain.js"
 import type { ResolvedComposeResourceLimits } from "../resource-limits.js"
 
 type ComposeFragments = {
   readonly networkMode: TemplateConfig["dockerNetworkMode"]
   readonly networkName: string
+  readonly maybeGithubAuthSkipEnv: string
   readonly maybeGitTokenLabelEnv: string
   readonly maybeCodexAuthLabelEnv: string
   readonly maybeClaudeAuthLabelEnv: string
@@ -13,6 +20,7 @@ type ComposeFragments = {
   readonly maybePlaywrightEnv: string
   readonly maybeBrowserService: string
   readonly maybeBrowserVolume: string
+  readonly maybeBootstrapMounts: string
   readonly forkRepoUrl: string
 }
 
@@ -21,9 +29,18 @@ type PlaywrightFragments = Pick<
   "maybeDependsOn" | "maybePlaywrightEnv" | "maybeBrowserService" | "maybeBrowserVolume"
 >
 
+const sharedCodexVolumeKey = "docker_git_shared_codex"
+const sharedCacheVolumeKey = "docker_git_shared_cache"
+const bootstrapVolumeKey = "docker_git_bootstrap"
+
 const renderGitTokenLabelEnv = (gitTokenLabel: string): string =>
   gitTokenLabel.length > 0
     ? `      GITHUB_AUTH_LABEL: "${gitTokenLabel}"\n      GIT_AUTH_LABEL: "${gitTokenLabel}"\n`
+    : ""
+
+const renderGithubAuthSkipEnv = (skipGithubAuth: boolean): string =>
+  skipGithubAuth
+    ? `      GITHUB_AUTH_SKIP: "1"\n`
     : ""
 
 const renderCodexAuthLabelEnv = (codexAuthLabel: string): string =>
@@ -46,16 +63,12 @@ const renderAgentAutoEnv = (agentAuto: boolean | undefined): string =>
     ? `      AGENT_AUTO: "1"\n`
     : ""
 
-const renderProjectsRootHostMount = (projectsRoot: string): string =>
-  `\${DOCKER_GIT_PROJECTS_ROOT_HOST:-${projectsRoot}}`
-
-const renderSharedCodexHostMount = (projectsRoot: string): string =>
-  `\${DOCKER_GIT_PROJECTS_ROOT_HOST:-${projectsRoot}}/.orch/auth/codex`
-
 const renderResourceLimits = (resourceLimits: ResolvedComposeResourceLimits | undefined): string =>
   resourceLimits === undefined
     ? ""
     : `    cpus: ${resourceLimits.cpuLimit}\n    mem_limit: "${resourceLimits.ramLimit}"\n    memswap_limit: "${resourceLimits.ramLimit}"\n`
+
+const renderBootstrapMounts = (): string => `      - ${bootstrapVolumeKey}:/opt/docker-git/bootstrap/source:ro`
 
 const buildPlaywrightFragments = (
   config: TemplateConfig,
@@ -85,7 +98,7 @@ const buildPlaywrightFragments = (
       `\n  ${browserServiceName}:\n    build:\n      context: .\n      dockerfile: ${browserDockerfile}\n    container_name: ${browserContainerName}\n    restart: unless-stopped\n${
         renderResourceLimits(resourceLimits)
       }    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`,
-    maybeBrowserVolume: `  ${browserVolumeName}:\n`
+    maybeBrowserVolume: `  ${browserVolumeName}:`
   }
 }
 
@@ -96,6 +109,7 @@ const buildComposeFragments = (
   const networkMode = config.dockerNetworkMode
   const networkName = resolveComposeNetworkName(config)
   const forkRepoUrl = config.forkRepoUrl ?? ""
+  const maybeGithubAuthSkipEnv = renderGithubAuthSkipEnv(config.skipGithubAuth)
   const gitTokenLabel = config.gitTokenLabel?.trim() ?? ""
   const codexAuthLabel = config.codexAuthLabel?.trim() ?? ""
   const claudeAuthLabel = config.claudeAuthLabel?.trim() ?? ""
@@ -109,6 +123,7 @@ const buildComposeFragments = (
   return {
     networkMode,
     networkName,
+    maybeGithubAuthSkipEnv,
     maybeGitTokenLabelEnv,
     maybeCodexAuthLabelEnv,
     maybeClaudeAuthLabelEnv,
@@ -118,6 +133,7 @@ const buildComposeFragments = (
     maybePlaywrightEnv: playwright.maybePlaywrightEnv,
     maybeBrowserService: playwright.maybeBrowserService,
     maybeBrowserVolume: playwright.maybeBrowserVolume,
+    maybeBootstrapMounts: renderBootstrapMounts(),
     forkRepoUrl
   }
 }
@@ -136,22 +152,20 @@ const renderComposeServices = (
       REPO_URL: "${config.repoUrl}"
       REPO_REF: "${config.repoRef}"
       FORK_REPO_URL: "${fragments.forkRepoUrl}"
+${fragments.maybeGithubAuthSkipEnv}      # Optional anonymous public GitHub clone override
 ${fragments.maybeGitTokenLabelEnv}      # Optional token label selector (maps to GITHUB_TOKEN__<LABEL>/GIT_AUTH_TOKEN__<LABEL>)
 ${fragments.maybeCodexAuthLabelEnv}      # Optional Codex account label selector (maps to CODEX_AUTH_LABEL)
 ${fragments.maybeClaudeAuthLabelEnv}${fragments.maybeAgentModeEnv}${fragments.maybeAgentAutoEnv}      # Optional Claude account label selector (maps to CLAUDE_AUTH_LABEL)
       TARGET_DIR: "${config.targetDir}"
       CODEX_HOME: "${config.codexHome}"
-${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    env_file:
-      - ${config.envGlobalPath}
-      - ${config.envProjectPath}
+${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    # bootstrap auth/env arrives through docker_git_bootstrap
     ports:
       - "127.0.0.1:${config.sshPort}:22"
 ${renderResourceLimits(resourceLimits)}    volumes:
       - ${config.volumeName}:/home/${config.sshUser}
-      - ${renderProjectsRootHostMount(config.dockerGitPath)}:/home/${config.sshUser}/.docker-git
-      - ${config.authorizedKeysPath}:/authorized_keys:ro
-      - ${config.codexAuthPath}:${config.codexHome}
-      - ${renderSharedCodexHostMount(config.dockerGitPath)}:${config.codexHome}-shared
+      - ${sharedCacheVolumeKey}:/home/${config.sshUser}/.docker-git/.cache
+      - ${sharedCodexVolumeKey}:${config.codexHome}-shared
+${fragments.maybeBootstrapMounts}
       - /var/run/docker.sock:/var/run/docker.sock
     dns:
       - 8.8.8.8
@@ -174,9 +188,19 @@ const renderComposeNetworks = (
     driver: bridge`
 
 const renderComposeVolumes = (config: TemplateConfig, maybeBrowserVolume: string): string =>
-  `volumes:
-  ${config.volumeName}:
-${maybeBrowserVolume}`
+  [
+    "volumes:",
+    `  ${config.volumeName}:`,
+    `  ${bootstrapVolumeKey}:`,
+    `    name: ${resolveProjectBootstrapVolumeName(config)}`,
+    `  ${sharedCacheVolumeKey}:`,
+    "    external: true",
+    `    name: ${dockerGitSharedCacheVolumeName}`,
+    `  ${sharedCodexVolumeKey}:`,
+    "    external: true",
+    `    name: ${dockerGitSharedCodexVolumeName}`,
+    maybeBrowserVolume
+  ].filter((entry) => entry.length > 0).join("\n")
 
 export const renderDockerCompose = (
   config: TemplateConfig,

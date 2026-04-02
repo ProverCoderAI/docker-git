@@ -7,7 +7,7 @@ import {
   type SessionGistDownloadCommand,
   type SessionGistListCommand,
   type SessionGistViewCommand
-} from "@effect-template/lib/core/domain"
+} from "@lib/core/domain"
 
 import { parsePositiveInt, parseProjectDirWithOptions, splitSubcommand } from "./parser-shared.js"
 

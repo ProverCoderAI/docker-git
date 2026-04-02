@@ -1,12 +1,13 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
-import { defaultTemplateConfig } from "@effect-template/lib/core/domain"
-import { expandContainerHome } from "@effect-template/lib/usecases/scrap-path"
+import { defaultTemplateConfig } from "@lib/core/domain"
+import { expandContainerHome } from "@lib/usecases/scrap-path"
 import {
   type CreateCommand,
   expectAttachProjectDirCommand,
   expectCreateCommand,
+  expectOpenCommand,
   expectParseErrorTag,
   expectProjectDirRunUpCommand,
   parseOrThrow
@@ -18,6 +19,7 @@ const expectCreateDefaults = (command: CreateCommand) => {
   expect(command.outDir).toBe(".docker-git/org/repo")
   expect(command.runUp).toBe(true)
   expect(command.forceEnv).toBe(false)
+  expect(command.config.skipGithubAuth).toBe(false)
   expect(command.config.cpuLimit).toBe("30%")
   expect(command.config.ramLimit).toBe("30%")
   expect(command.config.dockerNetworkMode).toBe("shared")
@@ -36,8 +38,7 @@ describe("parseArgs", () => {
       expect(command.config.serviceName).toBe("dg-repo")
       expect(command.config.volumeName).toBe("dg-repo-home")
       expect(command.config.sshPort).toBe(defaultTemplateConfig.sshPort)
-      expect(typeof command.config.clonedOnHostname).toBe("string")
-      expect(String(command.config.clonedOnHostname).length).toBeGreaterThan(0)
+      expect(command.config.clonedOnHostname).toBeUndefined()
     }))
 
   it.effect("parses create resource limit flags", () =>
@@ -111,6 +112,16 @@ describe("parseArgs", () => {
   it.effect("parses clone git token label from inline option and normalizes it", () =>
     expectCreateCommand(["clone", "https://github.com/org/repo.git", "--git-token=#agiens"], (command) => {
       expect(command.config.gitTokenLabel).toBe("AGIENS")
+    }))
+
+  it.effect("parses explicit GitHub auth skip for create", () =>
+    expectCreateCommand(["create", "--repo-url", "https://github.com/org/repo.git", "--gh-skip"], (command) => {
+      expect(command.config.skipGithubAuth).toBe(true)
+    }))
+
+  it.effect("parses explicit GitHub auth skip for clone", () =>
+    expectCreateCommand(["clone", "https://github.com/org/repo.git", "--gh-skip"], (command) => {
+      expect(command.config.skipGithubAuth).toBe(true)
     }))
 
   it.effect("parses clone codex/claude token labels from inline options and normalizes them", () =>
@@ -210,8 +221,29 @@ describe("parseArgs", () => {
   it.effect("parses attach with GitHub issue url into issue workspace", () =>
     expectAttachProjectDirCommand(["attach", "https://github.com/org/repo/issues/7"], ".docker-git/org/repo/issue-7"))
 
-  it.effect("parses open with GitHub issue url into issue workspace", () =>
-    expectAttachProjectDirCommand(["open", "https://github.com/org/repo/issues/7"], ".docker-git/org/repo/issue-7"))
+  it.effect("parses open with GitHub issue url as a raw selector", () =>
+    expectOpenCommand(["open", "https://github.com/org/repo/issues/7"], (command) => {
+      expect(command.projectRef).toBe("https://github.com/org/repo/issues/7")
+      expect(command.projectDir).toBeUndefined()
+    }))
+
+  it.effect("parses open with explicit project dir override", () =>
+    expectOpenCommand(["open", "--project-dir", ".docker-git/org/repo"], (command) => {
+      expect(command.projectRef).toBeUndefined()
+      expect(command.projectDir).toBe(".docker-git/org/repo")
+    }))
+
+  it.effect("parses open with container-name selector flag", () =>
+    expectOpenCommand(["open", "--container-name", "dg-repo-issue-7"], (command) => {
+      expect(command.projectRef).toBe("dg-repo-issue-7")
+      expect(command.projectDir).toBeUndefined()
+    }))
+
+  it.effect("parses open without selector for automatic resolution", () =>
+    expectOpenCommand(["open"], (command) => {
+      expect(command.projectRef).toBeUndefined()
+      expect(command.projectDir).toBeUndefined()
+    }))
 
   it.effect("parses mcp-playwright command in current directory", () =>
     expectProjectDirRunUpCommand(["mcp-playwright"], "McpPlaywrightUp", ".", true))
@@ -311,36 +343,5 @@ describe("parseArgs", () => {
         throw new Error("expected StateSync command")
       }
       expect(command.message).toBe("sync state")
-    }))
-
-  it.effect("parses scrap export with defaults", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["scrap", "export"])
-      if (command._tag !== "ScrapExport") {
-        throw new Error("expected ScrapExport command")
-      }
-      expect(command.projectDir).toBe(".")
-      expect(command.archivePath).toBe(".orch/scrap/session")
-    }))
-
-  it.effect("fails scrap import without archive", () =>
-    expectParseErrorTag(["scrap", "import"], "MissingRequiredOption"))
-
-  it.effect("parses scrap import wipe defaults", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["scrap", "import", "--archive", "workspace.tar.gz"])
-      if (command._tag !== "ScrapImport") {
-        throw new Error("expected ScrapImport command")
-      }
-      expect(command.wipe).toBe(true)
-    }))
-
-  it.effect("parses scrap import --no-wipe", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["scrap", "import", "--archive", "workspace.tar.gz", "--no-wipe"])
-      if (command._tag !== "ScrapImport") {
-        throw new Error("expected ScrapImport command")
-      }
-      expect(command.wipe).toBe(false)
     }))
 })

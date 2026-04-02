@@ -1,0 +1,327 @@
+/* jscpd:ignore-start */
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import type { PlatformError } from "@effect/platform/Error"
+import * as FileSystem from "@effect/platform/FileSystem"
+import * as Path from "@effect/platform/Path"
+import { Effect } from "effect"
+
+import type { CreateCommand, ParseError } from "../../core/domain.js"
+import { deriveRepoPathParts } from "../../core/domain.js"
+import { runCommandWithExitCodes } from "../../shell/command-runner.js"
+import { ensureDockerDaemonAccess } from "../../shell/docker.js"
+import { CommandFailedError } from "../../shell/errors.js"
+import type {
+  AgentFailedError,
+  AuthError,
+  CloneFailedError,
+  DockerAccessError,
+  DockerCommandError,
+  FileExistsError,
+  PortProbeError
+} from "../../shell/errors.js"
+import { logDockerAccessInfo } from "../access-log.js"
+import { resolveAutoAgentMode } from "../agent-auto-select.js"
+import { renderError } from "../errors.js"
+import { applyGithubForkConfig } from "../github-fork.js"
+import { validateGithubCloneAuthTokenPreflight } from "../github-token-preflight.js"
+import { defaultProjectsRoot } from "../menu-helpers.js"
+import { findSshPrivateKey } from "../path-helpers.js"
+import { buildSshCommand, getContainerIpIfInsideContainer } from "../projects-core.js"
+import { resolveTemplateResourceLimits } from "../resource-limits.js"
+import { autoSyncState } from "../state-repo.js"
+import { ensureTerminalCursorVisible } from "../terminal-cursor.js"
+import { runDockerDownCleanup, runDockerUpIfNeeded } from "./docker-up.js"
+import { buildProjectConfigs, resolveDockerGitRootRelativePath } from "./paths.js"
+import { resolveSshPort } from "./ports.js"
+import { migrateProjectOrchLayout, prepareProjectFiles } from "./prepare-files.js"
+
+type CreateProjectRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+
+type CreateProjectError =
+  | FileExistsError
+  | CloneFailedError
+  | AgentFailedError
+  | AuthError
+  | DockerAccessError
+  | DockerCommandError
+  | PortProbeError
+  | ParseError
+  | PlatformError
+
+type CreateContext = {
+  readonly baseDir: string
+  readonly resolveRootPath: (value: string) => string
+}
+
+const resolveClonedOnHostname = (): Effect.Effect<string | undefined> =>
+  Effect.tryPromise({
+    try: () => import("node:os").then((os) => os.hostname()),
+    catch: () => new Error("hostname lookup failed")
+  }).pipe(
+    Effect.match({
+      onFailure: (): string | undefined => undefined,
+      onSuccess: (hostname): string | undefined => hostname
+    })
+  )
+
+const makeCreateContext = (path: Path.Path, baseDir: string): CreateContext => {
+  const projectsRoot = path.resolve(defaultProjectsRoot(baseDir))
+  const resolveRootPath = (value: string): string => resolveDockerGitRootRelativePath(path, projectsRoot, value)
+  return { baseDir, resolveRootPath }
+}
+
+const resolveRootedConfig = (command: CreateCommand, ctx: CreateContext): CreateCommand["config"] => ({
+  ...command.config,
+  dockerGitPath: ctx.resolveRootPath(command.config.dockerGitPath),
+  authorizedKeysPath: ctx.resolveRootPath(command.config.authorizedKeysPath),
+  envGlobalPath: ctx.resolveRootPath(command.config.envGlobalPath),
+  envProjectPath: ctx.resolveRootPath(command.config.envProjectPath),
+  codexAuthPath: ctx.resolveRootPath(command.config.codexAuthPath),
+  codexSharedAuthPath: ctx.resolveRootPath(command.config.codexSharedAuthPath)
+})
+
+const resolveCreateConfig = (
+  rootedConfig: CreateCommand["config"],
+  resolvedOutDir: string
+): Effect.Effect<
+  CreateCommand["config"],
+  PortProbeError | PlatformError,
+  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+> =>
+  resolveSshPort(rootedConfig, resolvedOutDir).pipe(
+    Effect.flatMap((config) => applyGithubForkConfig(config)),
+    Effect.flatMap((config) => resolveTemplateResourceLimits(config))
+  )
+
+const logCreatedProject = (resolvedOutDir: string, createdFiles: ReadonlyArray<string>) =>
+  Effect.gen(function*(_) {
+    yield* _(Effect.log(`Created docker-git project in ${resolvedOutDir}`))
+    for (const file of createdFiles) {
+      yield* _(Effect.log(`  - ${file}`))
+    }
+  }).pipe(Effect.asVoid)
+
+const formatStateSyncLabel = (repoUrl: string): string => {
+  const repoPath = deriveRepoPathParts(repoUrl).pathParts.join("/")
+  return repoPath.length > 0 ? repoPath : repoUrl
+}
+
+const isInteractiveTty = (): boolean => process.stdin.isTTY && process.stdout.isTTY
+
+const buildSshArgs = (
+  config: CreateCommand["config"],
+  sshKeyPath: string | null,
+  remoteCommand?: string,
+  ipAddress?: string
+): ReadonlyArray<string> => {
+  const host = ipAddress ?? "localhost"
+  const port = ipAddress ? 22 : config.sshPort
+  const args: Array<string> = []
+  if (sshKeyPath !== null) {
+    args.push("-i", sshKeyPath)
+  }
+  args.push(
+    "-tt",
+    "-Y",
+    "-o",
+    "LogLevel=ERROR",
+    "-o",
+    "StrictHostKeyChecking=no",
+    "-o",
+    "UserKnownHostsFile=/dev/null",
+    "-p",
+    String(port),
+    `${config.sshUser}@${host}`
+  )
+  if (remoteCommand !== undefined) {
+    args.push(remoteCommand)
+  }
+  return args
+}
+
+// CHANGE: auto-open SSH after environment is created (best-effort)
+// WHY: clone flow should drop the user into the container without manual copy/paste
+// QUOTE(ТЗ): "Мне надо что бы он сразу открыл SSH"
+// REF: issue-39
+// SOURCE: n/a
+// FORMAT THEOREM: forall c: openSsh(c) -> ssh_session_started(c) || warning_logged(c)
+// PURITY: SHELL
+// EFFECT: Effect<void, never, FileSystem | Path | CommandExecutor>
+// INVARIANT: SSH failures do not fail the create/clone command
+// COMPLEXITY: O(1) + ssh
+const openSshBestEffort = (
+  template: CreateCommand["config"],
+  remoteCommand?: string
+): Effect.Effect<void, never, CreateProjectRuntime> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+
+    const ipAddress = yield* _(
+      getContainerIpIfInsideContainer(fs, process.cwd(), template.containerName).pipe(
+        Effect.orElse(() => Effect.succeed<string | undefined>(""))
+      )
+    )
+
+    const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
+    const sshCommand = buildSshCommand(template, sshKey, ipAddress)
+
+    const remoteCommandLabel = remoteCommand === undefined ? "" : ` (${remoteCommand})`
+
+    yield* _(Effect.log(`Opening SSH: ${sshCommand}${remoteCommandLabel}`))
+    yield* _(ensureTerminalCursorVisible())
+    yield* _(
+      runCommandWithExitCodes(
+        {
+          cwd: process.cwd(),
+          command: "ssh",
+          args: buildSshArgs(template, sshKey, remoteCommand, ipAddress)
+        },
+        [0, 130],
+        (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
+      ).pipe(Effect.ensuring(ensureTerminalCursorVisible()))
+    )
+  }).pipe(
+    Effect.asVoid,
+    Effect.matchEffect({
+      onFailure: (error) => Effect.logWarning(`SSH auto-open failed: ${renderError(error)}`),
+      onSuccess: () => Effect.void
+    })
+  )
+
+const resolveInteractiveRemoteCommand = (
+  projectConfig: CreateCommand["config"],
+  interactiveAgent: boolean
+): string | undefined =>
+  interactiveAgent && projectConfig.agentMode !== undefined
+    ? `cd '${projectConfig.targetDir}' && ${projectConfig.agentMode}`
+    : undefined
+
+const maybeOpenSsh = (
+  command: CreateCommand,
+  hasAgent: boolean,
+  waitForAgent: boolean,
+  projectConfig: CreateCommand["config"]
+): Effect.Effect<void, never, CreateProjectRuntime> =>
+  Effect.gen(function*(_) {
+    const interactiveAgent = hasAgent && !waitForAgent
+    if (!command.openSsh || (hasAgent && !interactiveAgent)) {
+      return
+    }
+
+    if (!command.runUp) {
+      yield* _(Effect.logWarning("Skipping SSH auto-open: docker compose up disabled (--no-up)."))
+      return
+    }
+
+    if (!isInteractiveTty()) {
+      yield* _(Effect.logWarning("Skipping SSH auto-open: not running in an interactive TTY."))
+      return
+    }
+
+    const remoteCommand = resolveInteractiveRemoteCommand(projectConfig, interactiveAgent)
+    yield* _(openSshBestEffort(projectConfig, remoteCommand))
+  }).pipe(Effect.asVoid)
+
+const resolveFinalAgentConfig = (
+  resolvedConfig: CreateCommand["config"]
+): Effect.Effect<CreateCommand["config"], ParseError | PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const resolvedAgentMode = yield* _(resolveAutoAgentMode(resolvedConfig))
+    if (
+      (resolvedConfig.agentAuto ?? false) && resolvedConfig.agentMode === undefined && resolvedAgentMode !== undefined
+    ) {
+      yield* _(Effect.log(`Auto agent selected: ${resolvedAgentMode}`))
+    }
+    return resolvedAgentMode === undefined ? resolvedConfig : { ...resolvedConfig, agentMode: resolvedAgentMode }
+  })
+
+const resolveRuntimeConfig = (
+  resolvedConfig: CreateCommand["config"]
+): Effect.Effect<CreateCommand["config"], ParseError | PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const finalAgentConfig = yield* _(resolveFinalAgentConfig(resolvedConfig))
+    const clonedOnHostname = yield* _(resolveClonedOnHostname())
+    return clonedOnHostname === undefined
+      ? finalAgentConfig
+      : { ...finalAgentConfig, clonedOnHostname }
+  })
+
+const maybeCleanupAfterAgent = (
+  waitForAgent: boolean,
+  resolvedOutDir: string
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    if (!waitForAgent) {
+      return
+    }
+    yield* _(Effect.log("Agent finished. Cleaning up container..."))
+    yield* _(runDockerDownCleanup(resolvedOutDir))
+  })
+
+const runCreateProject = (
+  path: Path.Path,
+  command: CreateCommand
+): Effect.Effect<void, CreateProjectError, CreateProjectRuntime> =>
+  Effect.gen(function*(_) {
+    if (command.runUp) {
+      yield* _(ensureDockerDaemonAccess(process.cwd()))
+    }
+
+    const ctx = makeCreateContext(path, process.cwd())
+    const resolvedOutDir = path.resolve(ctx.resolveRootPath(command.outDir))
+    const rootedConfig = resolveRootedConfig(command, ctx)
+
+    yield* _(validateGithubCloneAuthTokenPreflight(rootedConfig))
+
+    const resolvedConfig = yield* _(resolveCreateConfig(rootedConfig, resolvedOutDir))
+    const finalConfig = yield* _(resolveRuntimeConfig(resolvedConfig))
+    const { globalConfig, projectConfig } = buildProjectConfigs(path, ctx.baseDir, resolvedOutDir, finalConfig)
+
+    yield* _(migrateProjectOrchLayout(ctx.baseDir, globalConfig, ctx.resolveRootPath))
+
+    const createdFiles = yield* _(
+      prepareProjectFiles(resolvedOutDir, ctx.baseDir, globalConfig, projectConfig, {
+        force: command.force,
+        forceEnv: command.forceEnv
+      })
+    )
+    yield* _(logCreatedProject(resolvedOutDir, createdFiles))
+
+    const hasAgent = finalConfig.agentMode !== undefined
+    const waitForAgent = hasAgent && (finalConfig.agentAuto ?? false)
+
+    // CHANGE: run autoSyncState before docker compose up to prevent bind-mount inode invalidation
+    // WHY: git reset --hard in autoSyncState deletes and recreates .orch/auth/codex; if docker is
+    //      already running with a bind-mount on that directory, the old inode becomes unreachable
+    //      inside the container — codex fails with "No such file or directory"
+    // QUOTE(ТЗ): n/a
+    // REF: issue-158
+    // SOURCE: n/a
+    // FORMAT THEOREM: ∀p: synced(p) ∧ stable_inode(.orch/auth/codex, p) → valid_mount(docker_up(p))
+    // PURITY: SHELL
+    // EFFECT: Effect<void, never, StateRepoEnv>
+    // INVARIANT: .orch/auth/codex inode is stable when docker compose up runs
+    // COMPLEXITY: O(git_sync) before O(docker_up)
+    yield* _(autoSyncState(`chore(state): update ${formatStateSyncLabel(projectConfig.repoUrl)}`))
+    yield* _(
+      runDockerUpIfNeeded(resolvedOutDir, projectConfig, {
+        runUp: command.runUp,
+        waitForClone: command.waitForClone,
+        waitForAgent,
+        force: command.force,
+        forceEnv: command.forceEnv
+      })
+    )
+    if (command.runUp) {
+      yield* _(logDockerAccessInfo(resolvedOutDir, projectConfig))
+    }
+
+    yield* _(maybeCleanupAfterAgent(waitForAgent, resolvedOutDir))
+
+    yield* _(maybeOpenSsh(command, hasAgent, waitForAgent, projectConfig))
+  }).pipe(Effect.asVoid)
+
+export const createProject = (command: CreateCommand): Effect.Effect<void, CreateProjectError, CreateProjectRuntime> =>
+  Path.Path.pipe(Effect.flatMap((path) => runCreateProject(path, command)))
+/* jscpd:ignore-end */

@@ -1,3 +1,3 @@
-export { buildCreateCommand, nonEmpty } from "@effect-template/lib/core/command-builders"
-export type { RawOptions } from "@effect-template/lib/core/command-options"
-export type { CreateCommand, ParseError } from "@effect-template/lib/core/domain"
+export { buildCreateCommand, nonEmpty } from "@lib/core/command-builders"
+export type { RawOptions } from "@lib/core/command-options"
+export type { CreateCommand, ParseError } from "@lib/core/domain"

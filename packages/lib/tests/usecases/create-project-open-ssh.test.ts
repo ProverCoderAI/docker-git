@@ -81,6 +81,34 @@ const encode = (value: string): Uint8Array => new TextEncoder().encode(value)
 
 const commandIncludes = (args: ReadonlyArray<string>, needle: string): boolean => args.includes(needle)
 
+const includesArgsInOrder = (
+  args: ReadonlyArray<string>,
+  expectedSequence: ReadonlyArray<string>
+): boolean => {
+  let searchFrom = 0
+  for (const expected of expectedSequence) {
+    const foundAt = args.indexOf(expected, searchFrom)
+    if (foundAt === -1) {
+      return false
+    }
+    searchFrom = foundAt + 1
+  }
+  return true
+}
+
+const isDockerComposeDownVolumes = (cmd: RecordedCommand): boolean =>
+  cmd.command === "docker" &&
+  includesArgsInOrder(cmd.args, ["compose", "--ansi", "never", "--progress", "plain", "down", "-v"])
+
+const isDockerComposeUp = (cmd: RecordedCommand): boolean =>
+  cmd.command === "docker" &&
+  includesArgsInOrder(cmd.args, ["compose", "--ansi", "never", "--progress", "plain", "up", "-d", "--build"])
+
+const isBootstrapSeed = (cmd: RecordedCommand): boolean =>
+  cmd.command === "bash" &&
+  (cmd.args[0] === "-c" || cmd.args[0] === "-lc") &&
+  (cmd.args[1] ?? "").includes("docker run --rm -i -v 'dg-test-home-bootstrap:/target' alpine:3.20")
+
 const decideExitCode = (cmd: RecordedCommand): number => {
   if (cmd.command === "git" && cmd.args[0] === "rev-parse") {
     // Auto-sync should detect "not a repo" and exit early.
@@ -149,6 +177,7 @@ const makeCommand = (root: string, outDir: string, path: Path.Path): CreateComma
     sshPort: 2222,
     repoUrl: "https://github.com/org/repo.git",
     repoRef: "main",
+    skipGithubAuth: false,
     targetDir: "/home/dev/org/repo",
     volumeName: "dg-test-home",
     dockerGitPath: path.join(root, ".docker-git"),
@@ -207,6 +236,35 @@ describe("createProject (openSsh)", () => {
         const sshIndex = recorded.findIndex((entry) => entry.command === "ssh")
         expect(cloneDoneIndex).toBeGreaterThanOrEqual(0)
         expect(sshIndex).toBeGreaterThan(cloneDoneIndex)
+      })
+    )
+      .pipe(Effect.provide(NodeContext.layer))
+  )
+
+  it.effect("re-seeds bootstrap volume after force teardown", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+
+        const outDir = path.join(root, "project")
+        const recorded: Array<RecordedCommand> = []
+        const executor = makeFakeExecutor(recorded)
+        const command = makeCommand(root, outDir, path)
+
+        yield* _(
+          withInteractiveProcess(
+            path.join(root, "state"),
+            createProject(command).pipe(Effect.provideService(CommandExecutor.CommandExecutor, executor))
+          )
+        )
+
+        const downVolumesIndex = recorded.findIndex((entry) => isDockerComposeDownVolumes(entry))
+        const bootstrapSeedIndex = recorded.findIndex((entry) => isBootstrapSeed(entry))
+        const composeUpIndex = recorded.findIndex((entry) => isDockerComposeUp(entry))
+
+        expect(downVolumesIndex).toBeGreaterThanOrEqual(0)
+        expect(bootstrapSeedIndex).toBeGreaterThan(downVolumesIndex)
+        expect(composeUpIndex).toBeGreaterThan(bootstrapSeedIndex)
       })
     )
       .pipe(Effect.provide(NodeContext.layer))

@@ -1,7 +1,17 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Either, ParseResult, Schema } from "effect"
 
-import { CreateAgentRequestSchema, CreateFollowRequestSchema, CreateProjectRequestSchema } from "../src/api/schema.js"
+import {
+  ApplyAllRequestSchema,
+  CodexAuthImportRequestSchema,
+  CodexAuthLogoutRequestSchema,
+  CreateAgentRequestSchema,
+  CreateFollowRequestSchema,
+  CreateProjectRequestSchema,
+  GithubAuthLoginRequestSchema,
+  GithubAuthLogoutRequestSchema,
+  UpProjectRequestSchema
+} from "../src/api/schema.js"
 
 describe("api schemas", () => {
   it.effect("decodes create project payload", () =>
@@ -9,6 +19,8 @@ describe("api schemas", () => {
       const result = Schema.decodeUnknownEither(CreateProjectRequestSchema)({
         repoUrl: "https://github.com/ProverCoderAI/docker-git",
         repoRef: "main",
+        authorizedKeysContents: "ssh-ed25519 AAAA-test test@example\n",
+        skipGithubAuth: true,
         up: true,
         force: false
       })
@@ -19,6 +31,8 @@ describe("api schemas", () => {
         },
         onRight: (value) => {
           expect(value.repoRef).toBe("main")
+          expect(value.authorizedKeysContents).toContain("ssh-ed25519")
+          expect(value.skipGithubAuth).toBe(true)
           expect(value.up).toBe(true)
         }
       })
@@ -58,6 +72,108 @@ describe("api schemas", () => {
           expect(value.domain).toBe("social.my-domain.tld")
           expect(value.object).toBe("/issues/followers")
           expect(value.to).toHaveLength(1)
+        }
+      })
+    }))
+
+  it.effect("decodes auth login payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(GithubAuthLoginRequestSchema)({
+        label: "default",
+        token: "token",
+        scopes: "repo,workflow"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.label).toBe("default")
+          expect(value.token).toBe("token")
+          expect(value.scopes).toBe("repo,workflow")
+        }
+      })
+    }))
+
+  it.effect("decodes codex auth import payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(CodexAuthImportRequestSchema)({
+        label: "team-a",
+        authText: JSON.stringify({ openai: { type: "api", key: "test" } })
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.label).toBe("team-a")
+          expect(value.authText).toContain('"key":"test"')
+        }
+      })
+    }))
+
+  it.effect("decodes codex auth logout payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(CodexAuthLogoutRequestSchema)({
+        label: "team-a"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.label).toBe("team-a")
+        }
+      })
+    }))
+
+  it.effect("decodes auth logout payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(GithubAuthLogoutRequestSchema)({
+        label: "default"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.label).toBe("default")
+        }
+      })
+    }))
+
+  it.effect("decodes apply-all payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(ApplyAllRequestSchema)({
+        activeOnly: true
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.activeOnly).toBe(true)
+        }
+      })
+    }))
+
+  it.effect("decodes up-project payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(UpProjectRequestSchema)({
+        authorizedKeysContents: "ssh-ed25519 AAAA-test test@example\n"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.authorizedKeysContents).toContain("ssh-ed25519")
         }
       })
     }))

@@ -1,4 +1,4 @@
-import { listProjects, readCloneRequest, runDockerGitClone, runDockerGitOpen } from "@effect-template/lib"
+import { listProjects, readCloneRequest, runDockerGitClone, runDockerGitOpen } from "@lib"
 import { Console, Effect, Match, pipe } from "effect"
 
 /**

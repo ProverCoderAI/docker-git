@@ -54,24 +54,26 @@ const includesArgsInOrder = (
   return true
 }
 
-it("passes docker compose down -v --remove-orphans", async () => {
-  const recorded: Array<RecordedCommand> = []
-  const executor = makeCommandRecorder(recorded)
-
-  const command = await runDockerComposeDownVolumes("/tmp").pipe(
-    Effect.provideService(CommandExecutor.CommandExecutor, executor),
-    Effect.runPromise
-  )
-
-  expect(
-    recorded.some(
-      (entry) =>
-        entry.command === "docker" &&
-        includesArgsInOrder(entry.args, ["compose", "down", "-v", "--remove-orphans"])
+it.effect("passes docker compose down -v --remove-orphans", () =>
+  Effect.gen(function*(_) {
+    const recorded: Array<RecordedCommand> = []
+    const executor = makeCommandRecorder(recorded)
+    const command = yield* _(
+      runDockerComposeDownVolumes("/tmp").pipe(
+        Effect.provideService(CommandExecutor.CommandExecutor, executor)
+      )
     )
-  ).toBe(true)
-  expect(command).toBeUndefined()
-})
+
+    expect(
+      recorded.some(
+        (entry) =>
+          entry.command === "docker" &&
+          includesArgsInOrder(entry.args, ["compose", "down", "-v", "--remove-orphans"])
+      )
+    ).toBe(true)
+    expect(command).toBeUndefined()
+  })
+)
 
 describe("docker compose args", () => {
   it("uses build when force-env recreates containers", () => {

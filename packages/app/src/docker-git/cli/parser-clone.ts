@@ -1,8 +1,8 @@
 import { Either } from "effect"
 
-import { buildCreateCommand, nonEmpty } from "@effect-template/lib/core/command-builders"
-import type { RawOptions } from "@effect-template/lib/core/command-options"
-import { type Command, type ParseError, resolveRepoInput } from "@effect-template/lib/core/domain"
+import { buildCreateCommand, nonEmpty } from "@lib/core/command-builders"
+import type { RawOptions } from "@lib/core/command-options"
+import { type Command, type ParseError, resolveRepoInput } from "@lib/core/domain"
 
 import { parseRawOptions } from "./parser-options.js"
 import { resolveWorkspaceRepoPath, splitPositionalRepo } from "./parser-shared.js"

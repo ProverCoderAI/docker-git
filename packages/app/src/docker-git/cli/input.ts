@@ -1,7 +1,7 @@
 import * as Terminal from "@effect/platform/Terminal"
 import { Effect } from "effect"
 
-import { InputCancelledError, InputReadError } from "@effect-template/lib/shell/errors"
+import { InputCancelledError, InputReadError } from "@lib/shell/errors"
 
 const normalizeMessage = (error: Error): string => error.message
 

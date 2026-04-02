@@ -11,13 +11,15 @@ export type FileSpec =
 
 const renderGitignore = (): string =>
   `# docker-git project files
-# NOTE: this directory is intended to be committed to the docker-git state repository.
-# It intentionally does not ignore .orch/ or auth files; keep the state repo private.
+# NOTE: bootstrap secrets stay local-only and should not be committed.
 
 # docker-git scripts (copied from workspace, rebuilt on each project update)
 scripts/
 
 # Volatile Codex artifacts (do not commit)
+authorized_keys
+.orch/auth/codex/auth.json
+.orch/auth/claude/
 .orch/auth/codex/log/
 .orch/auth/codex/tmp/
 .orch/auth/codex/sessions/
@@ -26,8 +28,14 @@ scripts/
 
 const renderDockerignore = (): string =>
   `# docker-git build context
-.orch/
 authorized_keys
+.orch/env/
+.orch/auth/codex/
+.orch/auth/claude/
+.orch/auth/codex/log/
+.orch/auth/codex/tmp/
+.orch/auth/codex/sessions/
+.orch/auth/codex/models_cache.json
 `
 
 const renderConfigJson = (config: TemplateConfig): string =>
@@ -63,6 +71,7 @@ export const planFiles = (
     { _tag: "File", relativePath: ".gitignore", contents: renderGitignore() },
     ...maybePlaywrightFiles,
     { _tag: "Dir", relativePath: ".orch/auth/codex" },
+    { _tag: "Dir", relativePath: ".orch/auth/claude" },
     { _tag: "Dir", relativePath: ".orch/env" }
   ]
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
-import { Effect } from "effect"
+import { Effect, pipe } from "effect"
 
 import { program } from "./program.js"
 
@@ -15,6 +15,6 @@ import { program } from "./program.js"
 // EFFECT: Effect<void, unknown, NodeContext>
 // INVARIANT: program runs with NodeContext.layer
 // COMPLEXITY: O(n)
-const main = Effect.provide(program, NodeContext.layer)
+const main = pipe(program, Effect.provide(NodeContext.layer))
 
 NodeRuntime.runMain(main)

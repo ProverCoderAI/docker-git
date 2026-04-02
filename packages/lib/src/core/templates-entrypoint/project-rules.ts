@@ -4,7 +4,8 @@
 // PURITY: CORE
 // INVARIANT: Codex gets a bridge for skills that live outside CODEX_HOME; Claude/Gemini stay on native project-local discovery
 // COMPLEXITY: O(1)
-const entrypointProjectAgentRulesTemplate = String.raw`# Prepare project-local rules using each agent's native conventions.
+const entrypointProjectAgentRulesTemplate = String
+  .raw`# Prepare project-local rules using each agent's native conventions.
 docker_git_detect_claude_project_rules() {
   local project_dir="${"$"}{TARGET_DIR:-}"
 

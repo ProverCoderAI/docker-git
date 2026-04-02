@@ -26,6 +26,7 @@ import { ensureComposeNetworkReady } from "./docker-network-gc.js"
 import { loadReservedPorts, selectAvailablePort } from "./ports-reserve.js"
 import { parseComposePsOutput } from "./projects-core.js"
 import { resolveTemplateResourceLimits } from "./resource-limits.js"
+import { ensureSharedCodexVolumeReady } from "./shared-volume-seed.js"
 
 const maxPortAttempts = 25
 
@@ -191,6 +192,7 @@ export const runDockerComposeUpWithPortCheck = (
     // Keep generated templates in sync with the running CLI version.
     yield* _(syncManagedProjectFiles(projectDir, resolvedTemplate))
     yield* _(ensureComposeNetworkReady(projectDir, resolvedTemplate))
+    yield* _(ensureSharedCodexVolumeReady(projectDir, resolvedTemplate))
     yield* _(runDockerComposeUp(projectDir))
     yield* _(ensureClaudeCliReady(projectDir, resolvedTemplate.containerName))
 

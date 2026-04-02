@@ -4,8 +4,8 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Duration, Effect, Fiber, Schedule } from "effect"
 
-import { runCommandWithExitCodes } from "../../shell/command-runner.js"
 import type { CreateCommand } from "../../core/domain.js"
+import { runCommandWithExitCodes } from "../../shell/command-runner.js"
 import {
   runDockerComposeDownVolumes,
   runDockerComposeLogsFollow,
@@ -16,8 +16,9 @@ import {
   runDockerNetworkConnectBridge
 } from "../../shell/docker.js"
 import type { DockerCommandError } from "../../shell/errors.js"
-import { CommandFailedError, AgentFailedError, CloneFailedError } from "../../shell/errors.js"
+import { AgentFailedError, CloneFailedError, CommandFailedError } from "../../shell/errors.js"
 import { ensureComposeNetworkReady } from "../docker-network-gc.js"
+import { ensureSharedCodexVolumeReady } from "../shared-volume-seed.js"
 import { formatEditorSshAccessDetails, resolveProjectSshAccess } from "../ssh-access.js"
 
 const maxPortAttempts = 25
@@ -188,13 +189,14 @@ const runDockerComposeUpByMode = (
   projectConfig: CreateCommand["config"],
   force: boolean,
   forceEnv: boolean
-): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+): Effect.Effect<void, DockerCommandError | PlatformError, DockerUpEnvironment> =>
   Effect.gen(function*(_) {
     yield* _(ensureComposeNetworkReady(resolvedOutDir, projectConfig))
 
     if (force) {
       yield* _(Effect.log("Force enabled: removing stale containers and wiping docker compose volumes..."))
       yield* _(runDockerComposeDownVolumes(resolvedOutDir))
+      yield* _(ensureSharedCodexVolumeReady(resolvedOutDir, projectConfig))
       yield* _(removeConflictingContainer(resolvedOutDir, projectConfig.containerName))
       if (projectConfig.enableMcpPlaywright) {
         yield* _(removeConflictingContainer(resolvedOutDir, `${projectConfig.containerName}-browser`))
@@ -203,6 +205,7 @@ const runDockerComposeUpByMode = (
       yield* _(runDockerComposeUp(resolvedOutDir))
       return
     }
+    yield* _(ensureSharedCodexVolumeReady(resolvedOutDir, projectConfig))
     if (forceEnv) {
       yield* _(Effect.log("Force env enabled: resetting env defaults and recreating containers (volumes preserved)..."))
       yield* _(runDockerComposeUpRecreate(resolvedOutDir))

@@ -28,6 +28,58 @@ export type ProjectDetails = ProjectSummary & {
   readonly clonedOnHostname?: string | undefined
 }
 
+export type GithubAuthTokenStatus = {
+  readonly key: string
+  readonly label: string
+  readonly status: "valid" | "invalid" | "unknown"
+  readonly login: string | null
+}
+
+export type GithubAuthStatus = {
+  readonly summary: string
+  readonly tokens: ReadonlyArray<GithubAuthTokenStatus>
+}
+
+export type GithubAuthLoginRequest = {
+  readonly label?: string | null | undefined
+  readonly token?: string | null | undefined
+  readonly scopes?: string | null | undefined
+}
+
+export type GithubAuthLogoutRequest = {
+  readonly label?: string | null | undefined
+}
+
+export type CodexAuthImportRequest = {
+  readonly label?: string | null | undefined
+  readonly authText: string
+}
+
+export type CodexAuthStatus = {
+  readonly label: string
+  readonly message: string
+  readonly present: boolean
+  readonly authPath: string
+}
+
+export type CodexAuthLogoutRequest = {
+  readonly label?: string | null | undefined
+}
+
+export type ApplyAllRequest = {
+  readonly activeOnly?: boolean | undefined
+}
+
+export type UpProjectRequest = {
+  readonly authorizedKeysContents?: string | undefined
+}
+
+export type ApiAuthRequired = {
+  readonly provider: "github"
+  readonly message: string
+  readonly command: string
+}
+
 export type CreateProjectRequest = {
   readonly repoUrl?: string | undefined
   readonly repoRef?: string | undefined
@@ -39,6 +91,7 @@ export type CreateProjectRequest = {
   readonly volumeName?: string | undefined
   readonly secretsRoot?: string | undefined
   readonly authorizedKeysPath?: string | undefined
+  readonly authorizedKeysContents?: string | undefined
   readonly envGlobalPath?: string | undefined
   readonly envProjectPath?: string | undefined
   readonly codexAuthPath?: string | undefined
@@ -50,6 +103,7 @@ export type CreateProjectRequest = {
   readonly enableMcpPlaywright?: boolean | undefined
   readonly outDir?: string | undefined
   readonly gitTokenLabel?: string | undefined
+  readonly skipGithubAuth?: boolean | undefined
   readonly codexTokenLabel?: string | undefined
   readonly claudeTokenLabel?: string | undefined
   readonly agentAutoMode?: string | undefined
@@ -57,6 +111,7 @@ export type CreateProjectRequest = {
   readonly openSsh?: boolean | undefined
   readonly force?: boolean | undefined
   readonly forceEnv?: boolean | undefined
+  readonly waitForClone?: boolean | undefined
 }
 
 export type AgentEnvVar = {

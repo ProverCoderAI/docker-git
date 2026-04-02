@@ -1,4 +1,4 @@
-import { parseEnvEntries } from "@effect-template/lib/usecases/env-file"
+import { parseEnvEntries } from "@lib/usecases/env-file"
 
 export const normalizeLabel = (value: string): string => {
   const trimmed = value.trim()

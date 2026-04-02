@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "./domain.js"
+import { renderEntrypointAgentsNotice } from "./templates-entrypoint/agents-notice.js"
 import {
   renderEntrypointAuthorizedKeys,
   renderEntrypointBaseline,
@@ -13,12 +14,11 @@ import {
 } from "./templates-entrypoint/base.js"
 import { renderEntrypointClaudeConfig } from "./templates-entrypoint/claude.js"
 import {
-  renderEntrypointAgentsNotice,
   renderEntrypointCodexHome,
-  renderEntrypointProjectCodexSkillsSync,
   renderEntrypointCodexResumeHint,
   renderEntrypointCodexSharedAuth,
-  renderEntrypointMcpPlaywright
+  renderEntrypointMcpPlaywright,
+  renderEntrypointProjectCodexSkillsSync
 } from "./templates-entrypoint/codex.js"
 import { renderEntrypointDnsRepair } from "./templates-entrypoint/dns-repair.js"
 import { renderEntrypointGeminiConfig } from "./templates-entrypoint/gemini.js"
@@ -39,11 +39,11 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointHeader(config),
     renderEntrypointDnsRepair(),
     renderEntrypointPackageCache(config),
+    renderEntrypointDockerGitBootstrap(config),
     renderEntrypointAuthorizedKeys(config),
     renderEntrypointCodexHome(config),
     renderEntrypointCodexSharedAuth(config),
     renderEntrypointOpenCodeConfig(config),
-    renderEntrypointDockerGitBootstrap(config),
     renderEntrypointMcpPlaywright(config),
     renderEntrypointZshShell(config),
     renderEntrypointZshUserRc(config),

@@ -1,13 +1,14 @@
-import { runDockerPsNames } from "@effect-template/lib/shell/docker"
-import { type InputCancelledError, InputReadError } from "@effect-template/lib/shell/errors"
-import { type AppError, renderError } from "@effect-template/lib/usecases/errors"
-import { listProjectItems, listProjectStatus } from "@effect-template/lib/usecases/projects"
 import { NodeContext } from "@effect/platform-node"
+import { runDockerPsNames } from "@lib/shell/docker"
+import { InputReadError } from "@lib/shell/errors"
 import { Effect, pipe } from "effect"
 import { render, useApp, useInput } from "ink"
 import React, { useEffect, useMemo, useState } from "react"
 
+import { listMenuProjectItems, renderMenuProjectSummaries } from "./menu-api.js"
 import { resolveCreateInputs } from "./menu-create.js"
+import type { MenuError } from "./menu-errors.js"
+import { renderMenuError } from "./menu-errors.js"
 import { handleUserInput, type InputStage } from "./menu-input-handler.js"
 import {
   renderAuthMenu,
@@ -38,14 +39,14 @@ const useRunner = (
   setBusy: (busy: boolean) => void,
   setMessage: (message: string | null) => void
 ) => {
-  const runEffect = function<E extends AppError>(effect: Effect.Effect<void, E, MenuEnv>) {
+  const runEffect = function<E extends MenuError>(effect: Effect.Effect<void, E, MenuEnv>) {
     setBusy(true)
     const program = pipe(
       effect,
       Effect.matchEffect({
         onFailure: (error) =>
           Effect.sync(() => {
-            setMessage(renderError(error))
+            setMessage(renderMenuError(error))
           }),
         onSuccess: () => Effect.void
       }),
@@ -179,10 +180,13 @@ const useStartupSnapshot = (
     let cancelled = false
 
     const startup = pipe(
-      Effect.all([listProjectItems, runDockerPsNames(process.cwd())]),
+      Effect.all([listMenuProjectItems, runDockerPsNames(process.cwd())]),
       Effect.map(([items, runningNames]) => resolveMenuStartupSnapshot(items, runningNames)),
       Effect.match({
-        onFailure: () => defaultMenuStartupSnapshot(),
+        onFailure: (error: MenuError) => ({
+          ...defaultMenuStartupSnapshot(),
+          message: renderMenuError(error)
+        }),
         onSuccess: (snapshot) => snapshot
       }),
       Effect.provide(NodeContext.layer)
@@ -290,31 +294,30 @@ const TuiApp = () => {
 // QUOTE(ТЗ): "вечный цикл зависания на TUI из за ошибки Raw mode is not supported"
 // REF: issue-100
 // SOURCE: https://github.com/vadimdemedes/ink/#israwmodesupported
-// FORMAT THEOREM: ∀ env: isTTY(env) → renderTui ∧ ¬isTTY(env) → listProjectStatus
+// FORMAT THEOREM: ∀ env: isTTY(env) → renderTui ∧ ¬isTTY(env) → listProjects(api)
 // INVARIANT: render() is only called when stdin.isTTY ∧ setRawMode ∈ stdin
-export const runMenu = pipe(
-  Effect.sync(() => process.stdin.isTTY && typeof process.stdin.setRawMode === "function"),
-  Effect.flatMap((hasTty) =>
-    hasTty
-      ? pipe(
-        Effect.sync(() => {
-          resumeTui()
-        }),
-        Effect.zipRight(
-          Effect.tryPromise({
-            try: () => render(React.createElement(TuiApp)).waitUntilExit(),
-            catch: (error) => new InputReadError({ message: error instanceof Error ? error.message : String(error) })
-          })
-        ),
-        Effect.ensuring(
-          Effect.sync(() => {
-            leaveTui()
-          })
-        ),
-        Effect.asVoid
-      )
-      : Effect.ignore(listProjectStatus)
+const runInteractiveMenu = (): Effect.Effect<void, MenuError, MenuEnv> =>
+  pipe(
+    Effect.sync(() => {
+      resumeTui()
+    }),
+    Effect.zipRight(
+      Effect.tryPromise({
+        try: () => render(React.createElement(TuiApp)).waitUntilExit(),
+        catch: (error) => new InputReadError({ message: error instanceof Error ? error.message : String(error) })
+      })
+    ),
+    Effect.ensuring(
+      Effect.sync(() => {
+        leaveTui()
+      })
+    ),
+    Effect.asVoid
   )
+
+export const runMenu: Effect.Effect<void, MenuError, MenuEnv> = pipe(
+  Effect.sync(() => process.stdin.isTTY && typeof process.stdin.setRawMode === "function"),
+  Effect.flatMap((hasTty) => (hasTty ? runInteractiveMenu() : renderMenuProjectSummaries()))
 )
 
-export type MenuError = AppError | InputCancelledError
+export type MenuRuntimeError = MenuError

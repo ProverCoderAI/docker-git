@@ -97,9 +97,9 @@ const AI_DIR_STAGING_SNIPPET = `for ai_dir in .gemini .claude .codex; do
     git add -A -- "$ai_dir"
   fi
 done`
-const KNOWLEDGE_TMP_PRUNE_SNIPPET = `find . \\
-    \\( -name ".git" -o -name "tmp" \\) -type d -prune -o \\
-    \\( -type d \\( -name ".knowledge" -o -name ".knowlenge" \\) -print0 \\)`
+const KNOWLEDGE_TMP_PRUNE_SNIPPET = String.raw`find . \
+    \( -name ".git" -o -name "tmp" \) -type d -prune -o \
+    \( -type d \( -name ".knowledge" -o -name ".knowlenge" \) -print0 \)`
 
 // Tests that require an isolated temp git repo
 describe("pre-commit hook (isolated repo)", () => {

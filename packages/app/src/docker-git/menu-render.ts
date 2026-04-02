@@ -2,7 +2,7 @@ import { Match } from "effect"
 import { Box, Text } from "ink"
 import React from "react"
 
-import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import type { ProjectItem } from "@lib/usecases/projects"
 import { renderLayout } from "./menu-render-layout.js"
 import {
   buildSelectLabels,

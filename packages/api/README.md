@@ -2,6 +2,12 @@
 
 HTTP API for docker-git orchestration (projects, agents, logs/events, federation).
 
+This is now the intended controller plane:
+- the API runs inside `docker-git-api`
+- `.docker-git` state lives in the Docker volume `docker-git-projects`
+- the API talks to Docker through `/var/run/docker.sock`
+- child project containers no longer depend on host bind mounts for bootstrap auth/env
+
 ## UI wrapper
 
 After API startup open:
@@ -22,8 +28,8 @@ pnpm --filter ./packages/api start
 From repository root:
 
 ```bash
-docker compose -f docker-compose.api.yml up -d --build
-curl -s http://127.0.0.1:3334/health
+docker compose up -d --build
+./ctl health
 ```
 
 Default port mapping:
@@ -35,8 +41,8 @@ Optional env:
 
 - `DOCKER_GIT_API_BIND_HOST` (default: `127.0.0.1`)
 - `DOCKER_GIT_API_PORT` (default: `3334`)
-- `DOCKER_GIT_PROJECTS_ROOT_HOST` (host path with docker-git projects, default: `/home/dev/.docker-git`)
 - `DOCKER_GIT_PROJECTS_ROOT` (container path, default: `/home/dev/.docker-git`)
+- `DOCKER_GIT_PROJECTS_ROOT_VOLUME` (Docker volume name for controller state, default: `docker-git-projects`)
 - `DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN` (optional public ActivityPub origin)
 - `DOCKER_GIT_FEDERATION_ACTOR` (default: `docker-git`)
 
@@ -74,20 +80,18 @@ Optional env:
 1. Read actor profile (contains `inbox/outbox/followers/following/liked`):
 
 ```bash
-curl -s http://127.0.0.1:3334/federation/actor
+./ctl request GET /federation/actor
 ```
 
 2. Create follow subscription:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:3334/federation/follows \
-  -H 'content-type: application/json' \
-  -d '{
-    "domain":"https://social.provercoder.ai",
-    "actor":"https://dev.example/users/bot",
-    "object":"https://tracker.example/issues/followers",
-    "capability":"https://tracker.example/caps/follow"
-  }'
+./ctl request POST /federation/follows '{
+  "domain":"https://social.provercoder.ai",
+  "actor":"https://dev.example/users/bot",
+  "object":"https://tracker.example/issues/followers",
+  "capability":"https://tracker.example/caps/follow"
+}'
 ```
 
 `domain` is used as public origin. `.example` hosts in `actor/object/capability` are normalized to that domain.
@@ -95,45 +99,41 @@ curl -sS -X POST http://127.0.0.1:3334/federation/follows \
 3. Confirm subscription by sending `Accept` into inbox:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:3334/federation/inbox \
-  -H 'content-type: application/json' \
-  -d '{
-    "@context":"https://www.w3.org/ns/activitystreams",
-    "type":"Accept",
-    "object":"https://social.provercoder.ai/federation/activities/follows/<id>"
-  }'
+./ctl request POST /federation/inbox '{
+  "@context":"https://www.w3.org/ns/activitystreams",
+  "type":"Accept",
+  "object":"https://social.provercoder.ai/federation/activities/follows/<id>"
+}'
 ```
 
 4. Verify follow state and collections:
 
 ```bash
-curl -s http://127.0.0.1:3334/federation/follows
-curl -s http://127.0.0.1:3334/federation/following
-curl -s http://127.0.0.1:3334/federation/outbox
+./ctl request GET /federation/follows
+./ctl request GET /federation/following
+./ctl request GET /federation/outbox
 ```
 
 5. Push issue offer through ForgeFed inbox:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:3334/federation/inbox \
-  -H 'content-type: application/json' \
-  -d '{
-    "@context":["https://www.w3.org/ns/activitystreams","https://forgefed.org/ns"],
-    "id":"https://social.provercoder.ai/offers/42",
-    "type":"Offer",
-    "target":"https://social.provercoder.ai/issues",
-    "object":{
-      "type":"Ticket",
-      "id":"https://social.provercoder.ai/issues/42",
-      "attributedTo":"https://origin.provercoder.ai/users/alice",
-      "summary":"Need reproducible CI parity",
-      "content":"Implement API behavior matching CLI."
-    }
-  }'
+./ctl request POST /federation/inbox '{
+  "@context":["https://www.w3.org/ns/activitystreams","https://forgefed.org/ns"],
+  "id":"https://social.provercoder.ai/offers/42",
+  "type":"Offer",
+  "target":"https://social.provercoder.ai/issues",
+  "object":{
+    "type":"Ticket",
+    "id":"https://social.provercoder.ai/issues/42",
+    "attributedTo":"https://origin.provercoder.ai/users/alice",
+    "summary":"Need reproducible CI parity",
+    "content":"Implement API behavior matching CLI."
+  }
+}'
 ```
 
 6. Verify persisted issues:
 
 ```bash
-curl -s http://127.0.0.1:3334/federation/issues
+./ctl request GET /federation/issues
 ```

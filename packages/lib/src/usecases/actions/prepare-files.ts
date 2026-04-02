@@ -85,9 +85,95 @@ const resolveAuthorizedKeysSource = (
       : matchingPublicKey
   })
 
+const resolveManagedAuthorizedKeysSource = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  baseDir: string,
+  preferredSource: string,
+  resolved: string
+): Effect.Effect<string | null, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const preferred = resolvePathFromBase(path, baseDir, preferredSource)
+    const preferredExists = yield* _(fs.exists(preferred))
+    if (preferredExists && preferred !== resolved) {
+      return preferred
+    }
+
+    return yield* _(resolveAuthorizedKeysSource(fs, path, process.cwd()))
+  })
+
+const ensureMissingAuthorizedKeysPlaceholder = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  resolved: string,
+  state: ExistingFileState
+): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    if (state === "missing") {
+      yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
+      yield* _(fs.writeFileString(resolved, ""))
+    }
+
+    yield* _(
+      Effect.logError(
+        `Authorized keys not found. Create ${resolved} with your public key to enable SSH.`
+      )
+    )
+  })
+
+const readAuthorizedKeysContents = (
+  fs: FileSystem.FileSystem,
+  source: string
+): Effect.Effect<string | null, PlatformError> =>
+  Effect.gen(function*(_) {
+    const desiredContents = (yield* _(fs.readFileString(source))).trim()
+    if (desiredContents.length === 0) {
+      yield* _(Effect.logWarning(`Authorized keys source ${source} is empty. Skipping SSH key sync.`))
+      return null
+    }
+
+    return desiredContents
+  })
+
+type AuthorizedKeysSyncTarget = {
+  readonly fs: FileSystem.FileSystem
+  readonly path: Path.Path
+  readonly state: ExistingFileState
+  readonly resolved: string
+  readonly managedDefaultAuthorizedKeys: string
+  readonly source: string
+  readonly desiredContents: string
+  readonly overwriteExisting: boolean
+}
+
+const syncAuthorizedKeysTarget = ({
+  desiredContents,
+  fs,
+  managedDefaultAuthorizedKeys,
+  overwriteExisting,
+  path,
+  resolved,
+  source,
+  state
+}: AuthorizedKeysSyncTarget): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    if (state === "exists") {
+      if (overwriteExisting || resolved === managedDefaultAuthorizedKeys) {
+        yield* _(appendKeyIfMissing(fs, resolved, source, desiredContents))
+      }
+      return
+    }
+
+    yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
+    yield* _(fs.copyFile(source, resolved))
+    yield* _(Effect.log(`Authorized keys copied from ${source} to ${resolved}`))
+  })
+
 const ensureAuthorizedKeys = (
   baseDir: string,
-  authorizedKeysPath: string
+  authorizedKeysPath: string,
+  preferredSource: string,
+  overwriteExisting: boolean
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
@@ -102,32 +188,35 @@ const ensureAuthorizedKeys = (
         )
       )
 
-      const source = yield* _(resolveAuthorizedKeysSource(fs, path, process.cwd()))
+      if (state === "exists" && resolved !== managedDefaultAuthorizedKeys && !overwriteExisting) {
+        return
+      }
+
+      const source = yield* _(
+        resolveManagedAuthorizedKeysSource(fs, path, baseDir, preferredSource, resolved)
+      )
       if (source === null) {
-        yield* _(
-          Effect.logError(
-            `Authorized keys not found. Create ${resolved} with your public key to enable SSH.`
-          )
-        )
+        yield* _(ensureMissingAuthorizedKeysPlaceholder(fs, path, resolved, state))
         return
       }
 
-      const desiredContents = (yield* _(fs.readFileString(source))).trim()
-      if (desiredContents.length === 0) {
-        yield* _(Effect.logWarning(`Authorized keys source ${source} is empty. Skipping SSH key sync.`))
+      const desiredContents = yield* _(readAuthorizedKeysContents(fs, source))
+      if (desiredContents === null) {
         return
       }
 
-      if (state === "exists") {
-        if (resolved === managedDefaultAuthorizedKeys) {
-          yield* _(appendKeyIfMissing(fs, resolved, source, desiredContents))
-        }
-        return
-      }
-
-      yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
-      yield* _(fs.copyFile(source, resolved))
-      yield* _(Effect.log(`Authorized keys copied from ${source} to ${resolved}`))
+      yield* _(
+        syncAuthorizedKeysTarget({
+          fs,
+          path,
+          state,
+          resolved,
+          managedDefaultAuthorizedKeys,
+          source,
+          desiredContents,
+          overwriteExisting
+        })
+      )
     })
   )
 
@@ -186,19 +275,10 @@ export const prepareProjectFiles = (
     const path = yield* _(Path.Path)
     const rewriteManagedFiles = options.force || options.forceEnv
     const envOnlyRefresh = options.forceEnv && !options.force
-    const createdFiles = yield* _(
-      writeProjectFiles(resolvedOutDir, projectConfig, rewriteManagedFiles)
-    )
-    yield* _(ensureAuthorizedKeys(resolvedOutDir, projectConfig.authorizedKeysPath))
+    const createdFiles = yield* _(writeProjectFiles(resolvedOutDir, projectConfig, rewriteManagedFiles))
+    yield* _(ensureAuthorizedKeys(resolvedOutDir, projectConfig.authorizedKeysPath, globalConfig.authorizedKeysPath, options.force))
     yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envGlobalPath, defaultGlobalEnvContents))
-    yield* _(
-      ensureEnvFile(
-        resolvedOutDir,
-        projectConfig.envProjectPath,
-        defaultProjectEnvContents,
-        envOnlyRefresh
-      )
-    )
+    yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envProjectPath, defaultProjectEnvContents, envOnlyRefresh))
     yield* _(ensureCodexConfigFile(baseDir, globalConfig.codexAuthPath))
     const globalClaudeAuthPath = path.join(path.dirname(globalConfig.codexAuthPath), "claude")
     yield* _(ensureClaudeAuthSeedFromHome(baseDir, globalClaudeAuthPath))
@@ -209,16 +289,17 @@ export const prepareProjectFiles = (
         source: {
           envGlobalPath: globalConfig.envGlobalPath,
           envProjectPath: globalConfig.envProjectPath,
-          codexAuthPath: globalConfig.codexAuthPath
+          codexAuthPath: globalConfig.codexAuthPath,
+          claudeAuthPath: globalClaudeAuthPath
         },
         target: {
           envGlobalPath: projectConfig.envGlobalPath,
           envProjectPath: projectConfig.envProjectPath,
-          codexAuthPath: projectConfig.codexAuthPath
+          codexAuthPath: projectConfig.codexAuthPath,
+          claudeAuthPath: "./.orch/auth/claude"
         }
       })
     )
-    // Ensure per-project config stays in sync even when `.orch/auth/codex` already exists.
     yield* _(ensureCodexConfigFile(resolvedOutDir, projectConfig.codexAuthPath))
     return createdFiles
   })

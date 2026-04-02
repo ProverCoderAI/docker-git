@@ -39,9 +39,7 @@ describe("renderEntrypointDnsRepair", () => {
     const entrypoint = renderEntrypoint(makeTemplateConfig())
     const dnsRepair = renderEntrypointDnsRepair()
     const dnsRepairIndex = entrypoint.indexOf(dnsRepair)
-    const packageCacheIndex = entrypoint.indexOf(
-      "# Share package manager caches across all docker-git containers"
-    )
+    const packageCacheIndex = entrypoint.indexOf('PACKAGE_CACHE_ROOT="/home/dev/.docker-git/.cache/packages"')
 
     expect(dnsRepairIndex).toBeGreaterThanOrEqual(0)
     expect(packageCacheIndex).toBeGreaterThan(dnsRepairIndex)
@@ -111,5 +109,22 @@ describe("renderDockerCompose", () => {
     expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
     expect(browserDnsIndex).toBeGreaterThan(browserServiceIndex)
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(2)
+  })
+
+  it("renders explicit anonymous GitHub clone override for public repos", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        skipGithubAuth: true
+      })
+    )
+    const entrypoint = renderEntrypoint(
+      makeTemplateConfig({
+        skipGithubAuth: true
+      })
+    )
+
+    expect(compose).toContain('GITHUB_AUTH_SKIP: "1"')
+    expect(entrypoint).toContain('GITHUB_AUTH_SKIP="${GITHUB_AUTH_SKIP:-0}"')
+    expect(entrypoint).toContain('if [[ "${GITHUB_AUTH_SKIP:-0}" == "1" ]]; then')
   })
 })

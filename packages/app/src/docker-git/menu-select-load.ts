@@ -1,4 +1,4 @@
-import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import type { ProjectItem } from "@lib/usecases/projects"
 import { Effect, pipe } from "effect"
 
 import { loadRuntimeByProject } from "./menu-select-runtime.js"

@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 
-import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import type { ProjectItem } from "@lib/usecases/projects"
 
 import { selectHint } from "../../src/docker-git/menu-render-select.js"
 import { buildConnectEffect, isConnectMcpToggleInput } from "../../src/docker-git/menu-select-connect.js"
@@ -20,10 +20,10 @@ const makeConnectDeps = (events: Array<string>) => ({
 const workspaceProject = () =>
   makeProjectItem({
     projectDir: "/home/dev/provercoderai/docker-git/workspaces/org/repo",
-    authorizedKeysPath: "/home/dev/provercoderai/docker-git/workspaces/org/repo/.docker-git/authorized_keys",
-    envGlobalPath: "/home/dev/provercoderai/docker-git/.orch/env/global.env",
+    authorizedKeysPath: "/home/dev/provercoderai/docker-git/workspaces/org/repo/authorized_keys",
+    envGlobalPath: "/home/dev/provercoderai/docker-git/workspaces/org/repo/.orch/env/global.env",
     envProjectPath: "/home/dev/provercoderai/docker-git/workspaces/org/repo/.orch/env/project.env",
-    codexAuthPath: "/home/dev/provercoderai/docker-git/.orch/auth/codex"
+    codexAuthPath: "/home/dev/provercoderai/docker-git/workspaces/org/repo/.orch/auth/codex"
   })
 
 describe("menu-select-connect", () => {
@@ -49,7 +49,7 @@ describe("menu-select-connect", () => {
   })
 
   it("renders connect hint with current Playwright toggle state", () => {
-    expect(selectHint("Connect", true)).toContain("toggle Playwright MCP (on)")
-    expect(selectHint("Connect", false)).toContain("toggle Playwright MCP (off)")
+    expect(selectHint("Connect", true)).toBe("Enter = select + SSH, Esc = back")
+    expect(selectHint("Connect", false)).toBe("Enter = select + SSH, Esc = back")
   })
 })

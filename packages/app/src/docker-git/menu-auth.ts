@@ -1,6 +1,6 @@
 import { Effect, pipe } from "effect"
 
-import type { AppError } from "@effect-template/lib/usecases/errors"
+import type { AppError } from "@lib/usecases/errors"
 
 import {
   type AuthMenuAction,

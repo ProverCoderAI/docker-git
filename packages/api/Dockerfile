@@ -14,6 +14,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
 COPY patches ./patches
+COPY scripts ./scripts
 COPY packages ./packages
 
 RUN pnpm install --frozen-lockfile

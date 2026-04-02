@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 
-import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import type { ProjectItem } from "@lib/usecases/projects"
 
 type ConnectDeps<E, R> = {
   readonly connectWithUp: (

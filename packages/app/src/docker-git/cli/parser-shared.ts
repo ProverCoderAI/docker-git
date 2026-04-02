@@ -1,6 +1,6 @@
 import { Either } from "effect"
 
-import { deriveRepoPathParts, type ParseError, resolveRepoInput } from "@effect-template/lib/core/domain"
+import { deriveRepoPathParts, type ParseError, resolveRepoInput } from "@lib/core/domain"
 
 import { parseRawOptions, type RawOptions } from "./parser-options.js"
 
