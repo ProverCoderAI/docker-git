@@ -7,7 +7,11 @@ import { Effect } from "effect"
 import { runCommandCapture, runCommandExitCode } from "@lib/shell/command-runner"
 
 import { type DockerNetworkIps, parseDockerNetworkIps, uniqueStrings } from "./controller-reachability.js"
-import { computeLocalControllerRevision, controllerRevisionEnvKey, parseControllerRevisionEnvOutput } from "./controller-revision.js"
+import {
+  computeLocalControllerRevision,
+  controllerRevisionEnvKey,
+  parseControllerRevisionEnvOutput
+} from "./controller-revision.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
 export type ControllerRuntime =
@@ -182,24 +186,31 @@ export const controllerExists = (): Effect.Effect<boolean, ControllerBootstrapEr
     Effect.map((exitCode) => exitCode === 0)
   )
 
-export const inspectControllerRevision = (): Effect.Effect<string | null, ControllerBootstrapError, ControllerRuntime> =>
+export const inspectControllerRevision = (): Effect.Effect<
+  string | null,
+  ControllerBootstrapError,
+  ControllerRuntime
+> =>
   controllerExists().pipe(
     Effect.flatMap((exists) =>
       exists
         ? runDockerCapture(
-            ["inspect", "-f", inspectEnvTemplate, controllerContainerName],
-            `Failed to inspect env for ${controllerContainerName}`
-          ).pipe(
-            Effect.map(parseControllerRevisionEnvOutput),
-            Effect.orElseSucceed((): string | null => null)
-          )
-        : Effect.succeed<string | null>(null))
+          ["inspect", "-f", inspectEnvTemplate, controllerContainerName],
+          `Failed to inspect env for ${controllerContainerName}`
+        ).pipe(
+          Effect.map((output) => parseControllerRevisionEnvOutput(output)),
+          Effect.orElseSucceed((): string | null => null)
+        )
+        : Effect.succeed<string | null>(null)
+    )
   )
 
 export const prepareLocalControllerRevision = (): Effect.Effect<string, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
     const composePath = yield* _(composeFilePath().pipe(Effect.mapError(mapComposePathError)))
-    const revision = yield* _(computeLocalControllerRevision(composePath).pipe(Effect.mapError(mapControllerRevisionError)))
+    const revision = yield* _(
+      computeLocalControllerRevision(composePath).pipe(Effect.mapError(mapControllerRevisionError))
+    )
     yield* _(
       Effect.sync(() => {
         process.env[controllerRevisionEnvKey] = revision
@@ -241,7 +252,7 @@ const connectControllerToNetworkBestEffort = (
 
   return runDockerExitCodeCommand(["network", "connect", trimmed, controllerContainerName]).pipe(
     Effect.asVoid,
-    Effect.orElseSucceed(() => undefined)
+    Effect.orElseSucceed(() => {})
   )
 }
 

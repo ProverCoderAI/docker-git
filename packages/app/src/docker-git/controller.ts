@@ -2,8 +2,8 @@ import { FetchHttpClient, HttpClient } from "@effect/platform"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
 import {
-  controllerExists,
   controllerContainerName,
+  controllerExists,
   type ControllerRuntime,
   ensureControllerReachabilityNetworks,
   inspectContainerNetworks,
@@ -13,7 +13,6 @@ import {
   resolveCurrentContainerNetworks,
   runCompose
 } from "./controller-docker.js"
-import { shouldForceRecreateController } from "./controller-revision.js"
 import {
   buildApiBaseUrlCandidates,
   type DockerNetworkIps,
@@ -24,6 +23,7 @@ import {
   resolveExplicitApiBaseUrl,
   trimTrailingSlashes
 } from "./controller-reachability.js"
+import { shouldForceRecreateController } from "./controller-revision.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
 export type { ControllerRuntime } from "./controller-docker.js"
@@ -166,6 +166,150 @@ const failIfRemoteDockerWithoutApiUrl = (): Effect.Effect<void, ControllerBootst
   )
 }
 
+const findReachableApiBaseUrlOption = (
+  candidateUrls: ReadonlyArray<string>
+): Effect.Effect<string | undefined, ControllerBootstrapError> =>
+  findReachableApiBaseUrl(candidateUrls).pipe(
+    Effect.match({
+      onFailure: (): string | undefined => undefined,
+      onSuccess: (apiBaseUrl) => apiBaseUrl
+    })
+  )
+
+const findReachableDirectApiBaseUrl = (
+  explicitApiBaseUrl: string | undefined
+): Effect.Effect<string | undefined, ControllerBootstrapError> =>
+  findReachableApiBaseUrlOption(
+    buildApiBaseUrlCandidates({
+      explicitApiBaseUrl,
+      cachedApiBaseUrl: selectedApiBaseUrl,
+      defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
+      currentContainerNetworks: {},
+      controllerNetworks: {},
+      port: resolveApiPort()
+    })
+  )
+
+const failIfExplicitApiUrlIsUnreachable = (
+  explicitApiBaseUrl: string | undefined
+): Effect.Effect<void, ControllerBootstrapError> =>
+  explicitApiBaseUrl === undefined
+    ? Effect.void
+    : Effect.fail(
+      controllerBootstrapError(
+        [
+          `docker-git controller is not reachable at ${explicitApiBaseUrl}.`,
+          "Set DOCKER_GIT_API_URL to a reachable backend or unset it to allow local Docker bootstrap."
+        ].join("\n")
+      )
+    )
+
+type ControllerBootstrapContext = {
+  readonly explicitApiBaseUrl: string | undefined
+  readonly localControllerRevision: string
+  readonly currentControllerRevision: string | null
+  readonly forceRecreateController: boolean
+  readonly currentContainerNetworks: DockerNetworkIps
+  readonly initialControllerNetworks: DockerNetworkIps
+}
+
+const loadControllerBootstrapContext = (): Effect.Effect<
+  ControllerBootstrapContext,
+  ControllerBootstrapError,
+  ControllerRuntime
+> =>
+  Effect.gen(function*(_) {
+    const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
+    const localControllerRevision = yield* _(prepareLocalControllerRevision())
+    const currentControllerExists = yield* _(controllerExists())
+    const currentControllerRevision = yield* _(inspectControllerRevision())
+    const currentContainerNetworks = yield* _(resolveCurrentContainerNetworks())
+    const initialControllerNetworks = yield* _(inspectContainerNetworks(controllerContainerName))
+
+    return {
+      explicitApiBaseUrl,
+      localControllerRevision,
+      currentControllerRevision,
+      forceRecreateController: shouldForceRecreateController(
+        currentControllerExists,
+        localControllerRevision,
+        currentControllerRevision
+      ),
+      currentContainerNetworks,
+      initialControllerNetworks
+    }
+  })
+
+const buildBootstrapCandidateUrls = (
+  explicitApiBaseUrl: string | undefined,
+  currentContainerNetworks: DockerNetworkIps,
+  controllerNetworks: DockerNetworkIps
+): ReadonlyArray<string> =>
+  buildApiBaseUrlCandidates({
+    explicitApiBaseUrl,
+    cachedApiBaseUrl: selectedApiBaseUrl,
+    defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
+    currentContainerNetworks,
+    controllerNetworks,
+    port: resolveApiPort()
+  })
+
+const reuseReachableControllerIfPossible = (
+  context: ControllerBootstrapContext
+): Effect.Effect<boolean, ControllerBootstrapError> =>
+  findReachableApiBaseUrlOption(
+    buildBootstrapCandidateUrls(
+      context.explicitApiBaseUrl,
+      context.currentContainerNetworks,
+      context.initialControllerNetworks
+    )
+  ).pipe(
+    Effect.map((reachableApiBaseUrl) => {
+      if (reachableApiBaseUrl === undefined || context.forceRecreateController) {
+        return false
+      }
+      rememberSelectedApiBaseUrl(reachableApiBaseUrl)
+      return true
+    })
+  )
+
+const logControllerRecreate = (
+  localControllerRevision: string,
+  currentControllerRevision: string | null
+): Effect.Effect<void> =>
+  Effect.log(
+    `Rebuilding docker-git controller: local revision ${localControllerRevision}, container revision ${
+      currentControllerRevision ?? "unknown"
+    }`
+  )
+
+const startAndRememberController = (
+  context: ControllerBootstrapContext
+): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
+  Effect.gen(function*(_) {
+    if (context.forceRecreateController) {
+      yield* _(logControllerRecreate(context.localControllerRevision, context.currentControllerRevision))
+    }
+
+    yield* _(
+      runCompose(
+        context.forceRecreateController ? ["up", "-d", "--build", "--force-recreate"] : ["up", "-d", "--build"]
+      )
+    )
+    yield* _(ensureControllerReachabilityNetworks(context.currentContainerNetworks))
+
+    const controllerNetworks = yield* _(inspectContainerNetworks(controllerContainerName))
+    const candidateUrls = buildBootstrapCandidateUrls(
+      context.explicitApiBaseUrl,
+      context.currentContainerNetworks,
+      controllerNetworks
+    )
+    const reachableApiBaseUrl = yield* _(
+      waitForReachableApiBaseUrl(candidateUrls, context.currentContainerNetworks, controllerNetworks)
+    )
+    rememberSelectedApiBaseUrl(reachableApiBaseUrl)
+  })
+
 // CHANGE: bootstrap the API controller before issuing host-side API requests
 // WHY: host CLI must not fall back to local state; controller owns .docker-git and project runtime
 // QUOTE(ТЗ): "app(cli) инструмент общается только с API а API имеет свой .docker-git"
@@ -180,100 +324,18 @@ export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrap
   Effect.gen(function*(_) {
     yield* _(failIfRemoteDockerWithoutApiUrl())
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
-    const directCandidateUrls = buildApiBaseUrlCandidates({
-      explicitApiBaseUrl,
-      cachedApiBaseUrl: selectedApiBaseUrl,
-      defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
-      currentContainerNetworks: {},
-      controllerNetworks: {},
-      port: resolveApiPort()
-    })
-    const reachableBeforeDocker = yield* _(
-      findReachableApiBaseUrl(directCandidateUrls).pipe(
-        Effect.match({
-          onFailure: () => {},
-          onSuccess: (apiBaseUrl) => apiBaseUrl
-        })
-      )
-    )
+    const reachableBeforeDocker = yield* _(findReachableDirectApiBaseUrl(explicitApiBaseUrl))
 
     if (reachableBeforeDocker !== undefined) {
       rememberSelectedApiBaseUrl(reachableBeforeDocker)
       return
     }
 
-    if (explicitApiBaseUrl !== undefined) {
-      return yield* _(
-        Effect.fail(
-          controllerBootstrapError(
-            [
-              `docker-git controller is not reachable at ${explicitApiBaseUrl}.`,
-              "Set DOCKER_GIT_API_URL to a reachable backend or unset it to allow local Docker bootstrap."
-            ].join("\n")
-          )
-        )
-      )
-    }
-
-    const localControllerRevision = yield* _(prepareLocalControllerRevision())
-    const currentControllerExists = yield* _(controllerExists())
-    const currentControllerRevision = yield* _(inspectControllerRevision())
-    const forceRecreateController = shouldForceRecreateController(
-      currentControllerExists,
-      localControllerRevision,
-      currentControllerRevision
-    )
-
-    const currentContainerNetworks = yield* _(resolveCurrentContainerNetworks())
-    const initialControllerNetworks = yield* _(inspectContainerNetworks(controllerContainerName))
-    const initialCandidates = buildApiBaseUrlCandidates({
-      explicitApiBaseUrl,
-      cachedApiBaseUrl: selectedApiBaseUrl,
-      defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
-      currentContainerNetworks,
-      controllerNetworks: initialControllerNetworks,
-      port: resolveApiPort()
-    })
-
-    const reachableBeforeStart = yield* _(
-      findReachableApiBaseUrl(initialCandidates).pipe(
-        Effect.match({
-          onFailure: () => {},
-          onSuccess: (apiBaseUrl) => apiBaseUrl
-        })
-      )
-    )
-
-    if (reachableBeforeStart !== undefined && !forceRecreateController) {
-      rememberSelectedApiBaseUrl(reachableBeforeStart)
+    yield* _(failIfExplicitApiUrlIsUnreachable(explicitApiBaseUrl))
+    const bootstrapContext = yield* _(loadControllerBootstrapContext())
+    const reusedExistingController = yield* _(reuseReachableControllerIfPossible(bootstrapContext))
+    if (reusedExistingController) {
       return
     }
-
-    if (forceRecreateController) {
-      yield* _(
-        Effect.log(
-          `Rebuilding docker-git controller: local revision ${localControllerRevision}, container revision ${
-            currentControllerRevision ?? "unknown"
-          }`
-        )
-      )
-    }
-
-    yield* _(runCompose(forceRecreateController ? ["up", "-d", "--build", "--force-recreate"] : ["up", "-d", "--build"]))
-    yield* _(ensureControllerReachabilityNetworks(currentContainerNetworks))
-
-    const controllerNetworks = yield* _(inspectContainerNetworks(controllerContainerName))
-    const candidateUrls = buildApiBaseUrlCandidates({
-      explicitApiBaseUrl,
-      cachedApiBaseUrl: selectedApiBaseUrl,
-      defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
-      currentContainerNetworks,
-      controllerNetworks,
-      port: resolveApiPort()
-    })
-    const reachableApiBaseUrl = yield* _(
-      waitForReachableApiBaseUrl(candidateUrls, currentContainerNetworks, controllerNetworks)
-    )
-
-    rememberSelectedApiBaseUrl(reachableApiBaseUrl)
+    yield* _(startAndRememberController(bootstrapContext))
   })

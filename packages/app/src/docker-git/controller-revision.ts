@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto"
-
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
@@ -23,59 +21,71 @@ const controllerRevisionInputs: ReadonlyArray<string> = [
 const skippedDirectoryNames = new Set([".git", "node_modules", "dist", "dist-test", ".turbo"])
 const skippedFileNames = new Set([".DS_Store"])
 
-const hashMissingPath = (hash: ReturnType<typeof createHash>, relativePath: string): void => {
-  hash.update(`missing:${relativePath}\n`)
+const appendChunk = (chunks: Array<string>, value: string): void => {
+  chunks.push(value)
 }
 
-const hashDirectoryMarker = (hash: ReturnType<typeof createHash>, relativePath: string): void => {
-  hash.update(`dir:${relativePath}\n`)
+const hashMissingPath = (chunks: Array<string>, relativePath: string): void => {
+  appendChunk(chunks, `missing:${relativePath}\n`)
+}
+
+const hashDirectoryMarker = (chunks: Array<string>, relativePath: string): void => {
+  appendChunk(chunks, `dir:${relativePath}\n`)
 }
 
 const hashFileContents = (
-  hash: ReturnType<typeof createHash>,
+  chunks: Array<string>,
   relativePath: string,
   contents: string
 ): void => {
-  hash.update(`file:${relativePath}\n`)
-  hash.update(contents)
-  hash.update("\n")
+  appendChunk(chunks, `file:${relativePath}\n`)
+  appendChunk(chunks, contents)
+  appendChunk(chunks, "\n")
 }
+
+const bytesToHex = (bytes: Uint8Array): string =>
+  Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
+
+const digestRevision = (chunks: ReadonlyArray<string>): Effect.Effect<string> =>
+  Effect.promise(() => crypto.subtle.digest("SHA-256", new TextEncoder().encode(chunks.join("")))).pipe(
+    Effect.map((buffer) => bytesToHex(new Uint8Array(buffer)).slice(0, 16))
+  )
 
 const hashTree = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
   rootDir: string,
   relativePath: string,
-  hash: ReturnType<typeof createHash>
+  chunks: Array<string>
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
     const absolutePath = path.join(rootDir, relativePath)
     const exists = yield* _(fs.exists(absolutePath))
     if (!exists) {
-      hashMissingPath(hash, relativePath)
+      hashMissingPath(chunks, relativePath)
       return
     }
 
     const info = yield* _(fs.stat(absolutePath))
     if (info.type === "Directory") {
-      hashDirectoryMarker(hash, relativePath)
-      const entries = (yield* _(fs.readDirectory(absolutePath))).sort((left, right) => left.localeCompare(right))
+      hashDirectoryMarker(chunks, relativePath)
+      const entries = (yield* _(fs.readDirectory(absolutePath))).toSorted((left, right) => left.localeCompare(right))
       for (const entry of entries) {
         if (skippedDirectoryNames.has(entry) || skippedFileNames.has(entry)) {
           continue
         }
-        yield* _(hashTree(fs, path, rootDir, path.join(relativePath, entry), hash))
+        yield* _(hashTree(fs, path, rootDir, path.join(relativePath, entry), chunks))
       }
       return
     }
 
     if (info.type === "File") {
       const contents = yield* _(fs.readFileString(absolutePath))
-      hashFileContents(hash, relativePath, contents)
+      hashFileContents(chunks, relativePath, contents)
       return
     }
 
-    hash.update(`other:${relativePath}:${info.type}\n`)
+    appendChunk(chunks, `other:${relativePath}:${info.type}\n`)
   })
 
 export const parseControllerRevisionEnvOutput = (output: string): string | null => {
@@ -114,11 +124,11 @@ export const computeLocalControllerRevision = (
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const repoRoot = path.dirname(composePath)
-    const hash = createHash("sha256")
+    const chunks: Array<string> = []
 
     for (const relativePath of controllerRevisionInputs) {
-      yield* _(hashTree(fs, path, repoRoot, relativePath, hash))
+      yield* _(hashTree(fs, path, repoRoot, relativePath, chunks))
     }
 
-    return hash.digest("hex").slice(0, 16)
+    return yield* _(digestRevision(chunks))
   })
