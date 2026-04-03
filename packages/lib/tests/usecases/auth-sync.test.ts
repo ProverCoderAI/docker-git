@@ -1,3 +1,4 @@
+import * as nodeFs from "node:fs"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
@@ -26,6 +27,14 @@ const withTempDir = <A, E, R>(
       return yield* _(use(tempDir))
     })
   )
+
+const failOnCopyFile = (
+  fs: FileSystem.FileSystem,
+  label: string
+): FileSystem.FileSystem => ({
+  ...fs,
+  copyFile: () => Effect.dieMessage(`${label}: unexpected copyFile`)
+})
 
 describe("syncGithubAuthKeys", () => {
   it("updates github token keys from source and preserves non-auth target keys", () => {
@@ -169,6 +178,109 @@ describe("syncGithubAuthKeys", () => {
 
         const copiedAuthText = yield* _(fs.readFileString(path.join(targetCodexDir, "auth.json")))
         expect(copiedAuthText).toBe(sourceAuthText)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("replaces a dangling Codex auth symlink with a regular snapshot file", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const sourceBase = path.join(root, "source")
+        const targetBase = path.join(root, "target")
+        const sourceCodexDir = path.join(sourceBase, ".orch", "auth", "codex")
+        const targetCodexDir = path.join(targetBase, ".orch", "auth", "codex")
+        const targetAuthPath = path.join(targetBase, ".orch", "auth", "codex", "auth.json")
+        const missingSharedAuthPath = path.join(root, "missing-shared", "auth.json")
+        const authText = JSON.stringify({ tokens: { account_id: "retry-account" } }, null, 2)
+
+        yield* _(fs.makeDirectory(sourceCodexDir, { recursive: true }))
+        yield* _(fs.makeDirectory(targetCodexDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(sourceCodexDir, "auth.json"), authText))
+        yield* _(
+          Effect.sync(() => {
+            nodeFs.symlinkSync(missingSharedAuthPath, targetAuthPath)
+          })
+        )
+
+        yield* _(
+          syncAuthArtifacts({
+            sourceBase,
+            targetBase,
+            source: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            },
+            target: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            }
+          })
+        )
+
+        expect(yield* _(fs.readFileString(targetAuthPath))).toBe(authText)
+        yield* _(
+          Effect.sync(() => {
+            expect(nodeFs.lstatSync(targetAuthPath).isSymbolicLink()).toBe(false)
+          })
+        )
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("syncs env, Codex auth, and Claude auth without low-level copyFile", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const sourceBase = path.join(root, "source")
+        const targetBase = path.join(root, "target")
+        const sourceCodexDir = path.join(sourceBase, ".orch", "auth", "codex")
+        const sourceClaudeDefault = path.join(sourceBase, ".orch", "auth", "claude", "default")
+        const sourceEnvDir = path.join(sourceBase, ".orch", "env")
+
+        yield* _(fs.makeDirectory(sourceCodexDir, { recursive: true }))
+        yield* _(fs.makeDirectory(sourceClaudeDefault, { recursive: true }))
+        yield* _(fs.makeDirectory(sourceEnvDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(sourceEnvDir, "global.env"), "GITHUB_TOKEN=test-token\n"))
+        yield* _(fs.writeFileString(path.join(sourceEnvDir, "project.env"), "CODEX_SHARE_AUTH=1\n"))
+        yield* _(fs.writeFileString(path.join(sourceCodexDir, "auth.json"), "{\"account\":\"codex\"}\n"))
+        yield* _(fs.writeFileString(path.join(sourceClaudeDefault, ".oauth-token"), "claude-token\n"))
+
+        yield* _(
+          syncAuthArtifacts({
+            sourceBase,
+            targetBase,
+            source: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            },
+            target: {
+              envGlobalPath: ".orch/env/global.env",
+              envProjectPath: ".orch/env/project.env",
+              codexAuthPath: ".orch/auth/codex",
+              claudeAuthPath: ".orch/auth/claude"
+            }
+          }).pipe(Effect.provideService(FileSystem.FileSystem, failOnCopyFile(fs, "syncAuthArtifacts")))
+        )
+
+        expect(yield* _(fs.readFileString(path.join(targetBase, ".orch", "env", "global.env")))).toContain(
+          "GITHUB_TOKEN=test-token"
+        )
+        expect(yield* _(fs.readFileString(path.join(targetBase, ".orch", "env", "project.env")))).toContain(
+          "CODEX_SHARE_AUTH=1"
+        )
+        expect(yield* _(fs.readFileString(path.join(targetBase, ".orch", "auth", "codex", "auth.json")))).toBe(
+          "{\"account\":\"codex\"}\n"
+        )
+        expect(
+          yield* _(fs.readFileString(path.join(targetBase, ".orch", "auth", "claude", "default", ".oauth-token")))
+        ).toBe("claude-token\n")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -354,6 +466,81 @@ describe("syncGithubAuthKeys", () => {
         const seededCredentialsText = yield* _(fs.readFileString(seededCredentials))
         expect(seededJsonText).toContain("\"oauthAccount\"")
         expect(seededCredentialsText).toContain("\"claudeAiOauth\"")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("seeds Claude auth from host home without low-level copyFile", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const hostHome = path.join(root, "host-home")
+        const hostClaudeDir = path.join(hostHome, ".claude")
+        const hostClaudeJson = path.join(hostHome, ".claude.json")
+        const hostCredentialsJson = path.join(hostClaudeDir, ".credentials.json")
+
+        yield* _(fs.makeDirectory(hostClaudeDir, { recursive: true }))
+        yield* _(
+          fs.writeFileString(
+            hostClaudeJson,
+            JSON.stringify(
+              {
+                oauthAccount: { accountUuid: "acc-guard" },
+                userID: "user-guard"
+              },
+              null,
+              2
+            )
+          )
+        )
+        yield* _(
+          fs.writeFileString(
+            hostCredentialsJson,
+            JSON.stringify(
+              {
+                claudeAiOauth: { accessToken: "token-guard" }
+              },
+              null,
+              2
+            )
+          )
+        )
+
+        const previousHome = process.env["HOME"]
+        yield* _(
+          Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              if (previousHome === undefined) {
+                delete process.env["HOME"]
+              } else {
+                process.env["HOME"] = previousHome
+              }
+            })
+          )
+        )
+        yield* _(Effect.sync(() => {
+          process.env["HOME"] = hostHome
+        }))
+
+        yield* _(
+          ensureClaudeAuthSeedFromHome(root, ".docker-git/.orch/auth/claude").pipe(
+            Effect.provideService(FileSystem.FileSystem, failOnCopyFile(fs, "ensureClaudeAuthSeedFromHome"))
+          )
+        )
+
+        const targetClaudeJson = path.join(root, ".docker-git", ".orch", "auth", "claude", "default", ".claude.json")
+        const targetCredentials = path.join(
+          root,
+          ".docker-git",
+          ".orch",
+          "auth",
+          "claude",
+          "default",
+          ".credentials.json"
+        )
+
+        expect(yield* _(fs.readFileString(targetClaudeJson))).toContain("\"oauthAccount\"")
+        expect(yield* _(fs.readFileString(targetCredentials))).toContain("\"claudeAiOauth\"")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

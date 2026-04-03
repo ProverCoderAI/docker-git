@@ -12,28 +12,15 @@ import {
 } from "../core/domain.js"
 import { runDockerVolumeCreate, runDockerVolumeReplaceFromDirectory } from "../shell/docker-volume.js"
 import type { DockerCommandError } from "../shell/errors.js"
+import { readFileStringIfPresent, statIfPresent, writeFileStringEnsuringParent } from "./volatile-files.js"
 
 type SharedVolumeSeedEnvironment = CommandExecutor | FileSystem.FileSystem | Path.Path
-
-const isNotFoundSystemError = (error: PlatformError): boolean =>
-  error._tag === "SystemError" && error.reason === "NotFound"
 
 const resolvePathFromBase = (
   path: Path.Path,
   baseDir: string,
   targetPath: string
 ): string => (path.isAbsolute(targetPath) ? targetPath : path.resolve(baseDir, targetPath))
-
-const statIfPresent = (
-  fs: FileSystem.FileSystem,
-  targetPath: string
-): Effect.Effect<FileSystem.File.Info | null, PlatformError> =>
-  fs.stat(targetPath).pipe(
-    Effect.catchTag("SystemError", (error) =>
-      isNotFoundSystemError(error)
-        ? Effect.succeed(null)
-        : Effect.fail(error))
-  )
 
 const copyDirRecursive = (
   fs: FileSystem.FileSystem,
@@ -59,8 +46,11 @@ const copyDirRecursive = (
       if (entryInfo.type === "Directory") {
         yield* _(copyDirRecursive(fs, path, sourceEntry, targetEntry))
       } else if (entryInfo.type === "File") {
-        yield* _(fs.makeDirectory(path.dirname(targetEntry), { recursive: true }))
-        yield* _(fs.copyFile(sourceEntry, targetEntry))
+        const sourceText = yield* _(readFileStringIfPresent(fs, sourceEntry))
+        if (sourceText === null) {
+          continue
+        }
+        yield* _(writeFileStringEnsuringParent(fs, path, targetEntry, sourceText))
       }
     }
   })
@@ -76,8 +66,11 @@ const copyFileIfPresent = (
     if (info === null || info.type !== "File") {
       return
     }
-    yield* _(fs.makeDirectory(path.dirname(targetPath), { recursive: true }))
-    yield* _(fs.copyFile(sourcePath, targetPath))
+    const sourceText = yield* _(readFileStringIfPresent(fs, sourcePath))
+    if (sourceText === null) {
+      return
+    }
+    yield* _(writeFileStringEnsuringParent(fs, path, targetPath, sourceText))
   })
 
 const copyCodexAuthFileIfPresent = (

@@ -80,9 +80,22 @@ describe("renderEntrypointGitHooks", () => {
 })
 
 describe("renderDockerCompose", () => {
+  it("pins the compose project name to the managed service name", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        serviceName: "dg-docker-git",
+        containerName: "dg-docker-git"
+      })
+    )
+
+    expect(compose).toContain("name: dg-docker-git")
+    expect(compose.indexOf("name: dg-docker-git")).toBeLessThan(compose.indexOf("services:"))
+  })
+
   it("renders fallback DNS servers for the main container even without Playwright", () => {
     const compose = renderDockerCompose(makeTemplateConfig())
 
+    expect(compose).toContain("name: dg-test")
     expect(compose).toContain("container_name: dg-test")
     expect(compose).toContain("    env_file:\n      - /workspace/.orch/env/global.env\n      - /workspace/.orch/env/project.env\n")
     expect(compose).toContain("    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1\n    networks:")

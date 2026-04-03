@@ -21,6 +21,7 @@ import {
   resolveAuthorizedKeysPath
 } from "../path-helpers.js"
 import { withFsPathContext } from "../runtime.js"
+import { writeFileStringEnsuringParent } from "../volatile-files.js"
 import { resolvePathFromBase } from "./paths.js"
 
 type ExistingFileState = "exists" | "missing"
@@ -49,6 +50,7 @@ const ensureFileReady = (
 
 const appendKeyIfMissing = (
   fs: FileSystem.FileSystem,
+  path: Path.Path,
   resolved: string,
   source: string,
   desiredContents: string
@@ -69,7 +71,7 @@ const appendKeyIfMissing = (
       ? `${desiredContents}\n`
       : `${normalizedCurrent}\n${desiredContents}\n`
 
-    yield* _(fs.writeFileString(resolved, nextContents))
+    yield* _(writeFileStringEnsuringParent(fs, path, resolved, nextContents))
     yield* _(Effect.log(`Authorized keys appended from ${source} to ${resolved}`))
   })
 
@@ -111,8 +113,7 @@ const ensureMissingAuthorizedKeysPlaceholder = (
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
     if (state === "missing") {
-      yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
-      yield* _(fs.writeFileString(resolved, ""))
+      yield* _(writeFileStringEnsuringParent(fs, path, resolved, ""))
     }
 
     yield* _(
@@ -160,13 +161,12 @@ const syncAuthorizedKeysTarget = ({
   Effect.gen(function*(_) {
     if (state === "exists") {
       if (overwriteExisting || resolved === managedDefaultAuthorizedKeys) {
-        yield* _(appendKeyIfMissing(fs, resolved, source, desiredContents))
+        yield* _(appendKeyIfMissing(fs, path, resolved, source, desiredContents))
       }
       return
     }
 
-    yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
-    yield* _(fs.copyFile(source, resolved))
+    yield* _(writeFileStringEnsuringParent(fs, path, resolved, `${desiredContents}\n`))
     yield* _(Effect.log(`Authorized keys copied from ${source} to ${resolved}`))
   })
 
@@ -254,8 +254,7 @@ const ensureEnvFile = (
         return
       }
 
-      yield* _(fs.makeDirectory(path.dirname(resolved), { recursive: true }))
-      yield* _(fs.writeFileString(resolved, defaultContents))
+      yield* _(writeFileStringEnsuringParent(fs, path, resolved, defaultContents))
     })
   )
 

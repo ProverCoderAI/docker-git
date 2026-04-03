@@ -268,4 +268,19 @@ export const resolveComposeNetworkName = (
 export const resolveProjectBootstrapVolumeName = (
   config: Pick<TemplateConfig, "volumeName">
 ): string => `${config.volumeName}-bootstrap`
+
+// CHANGE: derive a stable docker compose project name from typed template config
+// WHY: managed project lifecycle must not depend on the output directory basename, otherwise "docker compose down -v"
+// can target an unrelated stack that happens to share the same folder name (for example the controller repo itself).
+// QUOTE(ТЗ): "Весь процесс должен быть высроен так что основной бекенд крутится в docker"
+// REF: user-request-2026-04-03-compose-project-isolation
+// SOURCE: n/a
+// FORMAT THEOREM: ∀cfg: resolveComposeProjectName(cfg) = p -> deterministic(p) ∧ isolated_compose_project(p)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: compose project identity is derived solely from serviceName, never cwd basename
+// COMPLEXITY: O(1)
+export const resolveComposeProjectName = (
+  config: Pick<TemplateConfig, "serviceName">
+): string => config.serviceName
 /* jscpd:ignore-end */

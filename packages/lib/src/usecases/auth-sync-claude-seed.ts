@@ -11,6 +11,7 @@ import {
   resolvePathFromBase
 } from "./auth-sync-helpers.js"
 import { withFsPathContext } from "./runtime.js"
+import { readFileStringIfPresent, statIfPresent, writeFileStringEnsuringParent } from "./volatile-files.js"
 
 type ClaudeJsonSyncSpec = {
   readonly sourcePath: string
@@ -27,32 +28,28 @@ const syncClaudeJsonFile = (
   spec: ClaudeJsonSyncSpec
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
-    const sourceExists = yield* _(fs.exists(spec.sourcePath))
-    if (!sourceExists) {
+    const sourceInfo = yield* _(statIfPresent(fs, spec.sourcePath))
+    if (sourceInfo === null || sourceInfo.type !== "File") {
       return
     }
 
-    const sourceInfo = yield* _(fs.stat(spec.sourcePath))
-    if (sourceInfo.type !== "File") {
+    const sourceText = yield* _(readFileStringIfPresent(fs, spec.sourcePath))
+    if (sourceText === null) {
       return
     }
-
-    const sourceText = yield* _(fs.readFileString(spec.sourcePath))
     const sourceJson = yield* _(parseJsonRecord(sourceText))
     if (!spec.hasRequiredData(sourceJson)) {
       return
     }
 
-    const targetExists = yield* _(fs.exists(spec.targetPath))
-    if (!targetExists) {
-      yield* _(fs.makeDirectory(path.dirname(spec.targetPath), { recursive: true }))
-      yield* _(fs.copyFile(spec.sourcePath, spec.targetPath))
+    const targetInfo = yield* _(statIfPresent(fs, spec.targetPath))
+    if (targetInfo === null) {
+      yield* _(writeFileStringEnsuringParent(fs, path, spec.targetPath, sourceText))
       yield* _(spec.onWrite(spec.targetPath))
       yield* _(Effect.log(`Seeded ${spec.seedLabel} from ${spec.sourcePath} to ${spec.targetPath}`))
       return
     }
 
-    const targetInfo = yield* _(fs.stat(spec.targetPath))
     if (targetInfo.type !== "File") {
       return
     }
@@ -60,7 +57,7 @@ const syncClaudeJsonFile = (
     const targetText = yield* _(fs.readFileString(spec.targetPath), Effect.orElseSucceed(() => ""))
     const targetJson = yield* _(parseJsonRecord(targetText))
     if (!spec.hasRequiredData(targetJson)) {
-      yield* _(fs.writeFileString(spec.targetPath, sourceText))
+      yield* _(writeFileStringEnsuringParent(fs, path, spec.targetPath, sourceText))
       yield* _(spec.onWrite(spec.targetPath))
       yield* _(Effect.log(`Updated ${spec.updateLabel} from ${spec.sourcePath} to ${spec.targetPath}`))
     }

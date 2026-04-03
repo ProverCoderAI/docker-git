@@ -16,6 +16,7 @@ import {
 } from "./auth-sync-helpers.js"
 import { parseEnvEntries, removeEnvKey, upsertEnvKey } from "./env-file.js"
 import { withFsPathContext } from "./runtime.js"
+import { readFileStringIfPresent, statIfPresent, writeFileStringEnsuringParent } from "./volatile-files.js"
 
 export { ensureClaudeAuthSeedFromHome } from "./auth-sync-claude-seed.js"
 
@@ -53,27 +54,28 @@ const syncGithubTokenKeysInFile = (
   sourcePath: string,
   targetPath: string
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
-  withFsPathContext(({ fs }) =>
+  withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
-      const sourceExists = yield* _(fs.exists(sourcePath))
-      if (!sourceExists) {
+      const sourceInfo = yield* _(statIfPresent(fs, sourcePath))
+      if (sourceInfo === null) {
         return
       }
-      const targetExists = yield* _(fs.exists(targetPath))
-      if (!targetExists) {
+      const targetInfo = yield* _(statIfPresent(fs, targetPath))
+      if (targetInfo === null) {
         return
       }
-      const sourceInfo = yield* _(fs.stat(sourcePath))
-      const targetInfo = yield* _(fs.stat(targetPath))
       if (sourceInfo.type !== "File" || targetInfo.type !== "File") {
         return
       }
 
-      const sourceText = yield* _(fs.readFileString(sourcePath))
+      const sourceText = yield* _(readFileStringIfPresent(fs, sourcePath))
+      if (sourceText === null) {
+        return
+      }
       const targetText = yield* _(fs.readFileString(targetPath))
       const mergedText = syncGithubAuthKeys(sourceText, targetText)
       if (mergedText !== targetText) {
-        yield* _(fs.writeFileString(targetPath, mergedText))
+        yield* _(writeFileStringEnsuringParent(fs, path, targetPath, mergedText))
         yield* _(Effect.log(`Synced GitHub auth keys from ${sourcePath} to ${targetPath}`))
       }
     })
@@ -85,25 +87,22 @@ const copyFileIfNeeded = (
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
-      const sourceExists = yield* _(fs.exists(sourcePath))
-      if (!sourceExists) {
+      const sourceInfo = yield* _(statIfPresent(fs, sourcePath))
+      if (sourceInfo === null || sourceInfo.type !== "File") {
         return
       }
-      const sourceInfo = yield* _(fs.stat(sourcePath))
-      if (sourceInfo.type !== "File") {
+      const sourceText = yield* _(readFileStringIfPresent(fs, sourcePath))
+      if (sourceText === null) {
         return
       }
-      yield* _(fs.makeDirectory(path.dirname(targetPath), { recursive: true }))
-      const targetExists = yield* _(fs.exists(targetPath))
-      if (!targetExists) {
-        yield* _(fs.copyFile(sourcePath, targetPath))
+      const targetText = yield* _(readFileStringIfPresent(fs, targetPath))
+      if (targetText === null) {
+        yield* _(writeFileStringEnsuringParent(fs, path, targetPath, sourceText))
         yield* _(Effect.log(`Copied env file from ${sourcePath} to ${targetPath}`))
         return
       }
-      const sourceText = yield* _(fs.readFileString(sourcePath))
-      const targetText = yield* _(fs.readFileString(targetPath))
       if (shouldCopyEnv(sourceText, targetText) === "copy") {
-        yield* _(fs.writeFileString(targetPath, sourceText))
+        yield* _(writeFileStringEnsuringParent(fs, path, targetPath, sourceText))
         yield* _(Effect.log(`Synced env file from ${sourcePath} to ${targetPath}`))
       }
     })
@@ -134,12 +133,11 @@ export const ensureCodexConfigFile = (
           if (!shouldRewriteDockerGitCodexConfig(current)) {
             return
           }
-          yield* __(fs.writeFileString(configPath, defaultCodexConfig))
+          yield* __(writeFileStringEnsuringParent(fs, path, configPath, defaultCodexConfig))
           yield* __(Effect.log(`Updated Codex config at ${configPath}`))
           return
         }
-        yield* __(fs.makeDirectory(resolved, { recursive: true }))
-        yield* __(fs.writeFileString(configPath, defaultCodexConfig))
+        yield* __(writeFileStringEnsuringParent(fs, path, configPath, defaultCodexConfig))
         yield* __(Effect.log(`Created Codex config at ${configPath}`))
       })
       yield* _(
@@ -170,7 +168,6 @@ export const syncAuthArtifacts = (
       yield* _(copyFileIfNeeded(sourceGlobal, targetGlobal))
       yield* _(syncGithubTokenKeysInFile(sourceGlobal, targetGlobal))
       yield* _(copyFileIfNeeded(sourceProject, targetProject))
-      yield* _(fs.makeDirectory(targetCodex, { recursive: true }))
       yield* _(copyCodexFile(fs, path, { sourceDir: sourceCodex, targetDir: targetCodex, fileName: "auth.json", label: "auth" }))
       if (sourceCodex !== targetCodex) {
         yield* _(

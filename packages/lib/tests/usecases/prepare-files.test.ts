@@ -53,6 +53,14 @@ const withPatchedEnv = <A, E, R>(
       })
   )
 
+const failOnCopyFile = (
+  fs: FileSystem.FileSystem,
+  label: string
+): FileSystem.FileSystem => ({
+  ...fs,
+  copyFile: () => Effect.dieMessage(`${label}: unexpected copyFile`)
+})
+
 const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   containerName: "dg-test",
   serviceName: "dg-test",
@@ -367,6 +375,30 @@ describe("prepareProjectFiles", () => {
         const synchronizedAuthorizedKeys = yield* _(fs.readFileString(projectAuthorizedKeysPath))
         expect(synchronizedAuthorizedKeys).toContain(staleKey.trim())
         expect(synchronizedAuthorizedKeys).toContain(currentKey.trim())
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("creates authorized_keys from the already-read snapshot without low-level copyFile", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const globalConfig = makeGlobalConfig(root, path)
+        const projectConfig = makeProjectConfig(outDir, false, path)
+        const sourceAuthorizedKeysPath = path.join(root, "authorized_keys")
+        const currentKey = "ssh-ed25519 AAAA-current current@example\n"
+
+        yield* _(fs.writeFileString(sourceAuthorizedKeysPath, currentKey))
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          }).pipe(Effect.provideService(FileSystem.FileSystem, failOnCopyFile(fs, "prepareProjectFiles")))
+        )
+
+        expect(yield* _(fs.readFileString(path.join(outDir, "authorized_keys")))).toBe(currentKey)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

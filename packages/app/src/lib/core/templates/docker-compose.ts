@@ -1,5 +1,6 @@
 /* jscpd:ignore-start */
 import {
+  resolveComposeProjectName,
   dockerGitSharedCacheVolumeName,
   dockerGitSharedCodexVolumeName,
   resolveComposeNetworkName,
@@ -213,6 +214,7 @@ export const renderDockerCompose = (
 ): string => {
   const fragments = buildComposeFragments(config, resourceLimits)
   return [
+    `name: ${resolveComposeProjectName(config)}`,
     renderComposeServices(config, fragments, resourceLimits),
     renderComposeNetworks(fragments.networkMode, fragments.networkName),
     renderComposeVolumes(config, fragments.maybeBrowserVolume)

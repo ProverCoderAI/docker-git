@@ -3,21 +3,9 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
+import { readFileStringIfPresent, statIfPresent, writeFileStringEnsuringParent } from "./volatile-files.js"
+
 const shouldSkipCopiedDir = (entry: string): boolean => entry === "tmp"
-
-const isNotFoundSystemError = (error: PlatformError): boolean =>
-  error._tag === "SystemError" && error.reason === "NotFound"
-
-const statIfPresent = (
-  fs: FileSystem.FileSystem,
-  targetPath: string
-) =>
-  fs.stat(targetPath).pipe(
-    Effect.catchTag("SystemError", (error) =>
-      isNotFoundSystemError(error)
-        ? Effect.succeed(null)
-        : Effect.fail(error))
-  )
 
 const copyDirRecursive = (
   fs: FileSystem.FileSystem,
@@ -48,7 +36,11 @@ const copyDirRecursive = (
       if (entryInfo.type === "Directory") {
         yield* _(copyDirRecursive(fs, path, sourceEntry, targetEntry))
       } else if (entryInfo.type === "File") {
-        yield* _(fs.copyFile(sourceEntry, targetEntry))
+        const sourceText = yield* _(readFileStringIfPresent(fs, sourceEntry))
+        if (sourceText === null) {
+          continue
+        }
+        yield* _(writeFileStringEnsuringParent(fs, path, targetEntry, sourceText))
       }
     }
   })
@@ -88,23 +80,21 @@ export const copyCodexFile = (
   Effect.gen(function*(_) {
     const sourceFile = path.join(spec.sourceDir, spec.fileName)
     const targetFile = path.join(spec.targetDir, spec.fileName)
-    const sourceExists = yield* _(fs.exists(sourceFile))
-    if (!sourceExists) {
+    const sourceText = yield* _(readFileStringIfPresent(fs, sourceFile))
+    if (sourceText === null) {
       return
     }
-    const sourceText = yield* _(fs.readFileString(sourceFile))
-    const targetExists = yield* _(fs.exists(targetFile))
-    if (targetExists) {
-      const targetText = yield* _(fs.readFileString(targetFile))
-      if (targetText === sourceText) {
-        return
-      }
-      yield* _(fs.writeFileString(targetFile, sourceText))
-      yield* _(Effect.log(`Synced Codex ${spec.label} from ${sourceFile} to ${targetFile}`))
+    yield* _(fs.makeDirectory(spec.targetDir, { recursive: true }))
+    const targetText = yield* _(readFileStringIfPresent(fs, targetFile))
+    if (targetText === sourceText) {
       return
     }
-    yield* _(fs.copyFile(sourceFile, targetFile))
-    yield* _(Effect.log(`Copied Codex ${spec.label} from ${sourceFile} to ${targetFile}`))
+    yield* _(writeFileStringEnsuringParent(fs, path, targetFile, sourceText))
+    yield* _(
+      Effect.log(
+        `${targetText === null ? "Copied" : "Synced"} Codex ${spec.label} from ${sourceFile} to ${targetFile}`
+      )
+    )
   })
 
 export const copyDirIfEmpty = (
@@ -152,13 +142,16 @@ const copyMissingRecursive = (
       return
     }
 
-    const targetExists = yield* _(fs.exists(targetPath))
-    if (targetExists) {
+    const targetInfo = yield* _(statIfPresent(fs, targetPath))
+    if (targetInfo !== null) {
       return
     }
 
-    yield* _(fs.makeDirectory(path.dirname(targetPath), { recursive: true }))
-    yield* _(fs.copyFile(sourcePath, targetPath))
+    const sourceText = yield* _(readFileStringIfPresent(fs, sourcePath))
+    if (sourceText === null) {
+      return
+    }
+    yield* _(writeFileStringEnsuringParent(fs, path, targetPath, sourceText))
   })
 
 export const copyDirMissingEntries = (

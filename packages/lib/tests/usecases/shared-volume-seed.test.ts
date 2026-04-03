@@ -23,6 +23,14 @@ const withTempDir = <A, E, R>(
     })
   )
 
+const failOnCopyFile = (
+  fileSystem: FileSystem.FileSystem,
+  label: string
+): FileSystem.FileSystem => ({
+  ...fileSystem,
+  copyFile: () => Effect.dieMessage(`${label}: unexpected copyFile`)
+})
+
 describe("stageBootstrapSnapshot", () => {
   it.effect("copies stable Codex auth files and skips transient broken tmp entries", () =>
     withTempDir((root) =>
@@ -80,7 +88,9 @@ describe("stageBootstrapSnapshot", () => {
             envProjectPath: path.join(projectDir, ".orch", "env", "project.env"),
             codexAuthPath: path.join(projectDir, ".orch", "auth", "codex"),
             codexSharedAuthPath: sharedCodexDir
-          })
+          }).pipe(
+            Effect.provideService(FileSystem.FileSystem, failOnCopyFile(fileSystem, "stageBootstrapSnapshot"))
+          )
         )
 
         expect(yield* _(fileSystem.readFileString(path.join(stagingDir, "project-auth", "codex", "auth.json")))).toBe(

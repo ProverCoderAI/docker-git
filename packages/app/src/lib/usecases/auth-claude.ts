@@ -17,6 +17,7 @@ import { ensureDockerImage } from "./docker-image.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 import { autoSyncState } from "./state-repo.js"
+import { readFileStringIfPresent, writeFileStringEnsuringParent } from "./volatile-files.js"
 
 type ClaudeRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 type ClaudeAuthMethod = "none" | "oauth-token" | "claude-ai-session"
@@ -26,6 +27,7 @@ type ClaudeAccountContext = {
   readonly accountPath: string
   readonly cwd: string
   readonly fs: FileSystem.FileSystem
+  readonly path: Path.Path
 }
 
 export const claudeAuthRoot = ".docker-git/.orch/auth/claude"
@@ -46,6 +48,7 @@ const claudeNestedCredentialsPath = (accountPath: string): string =>
 
 const syncClaudeCredentialsFile = (
   fs: FileSystem.FileSystem,
+  path: Path.Path,
   accountPath: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
@@ -53,16 +56,21 @@ const syncClaudeCredentialsFile = (
     const rootPath = claudeCredentialsPath(accountPath)
     const nestedExists = yield* _(isRegularFile(fs, nestedPath))
     if (nestedExists) {
-      yield* _(fs.copyFile(nestedPath, rootPath))
-      yield* _(fs.chmod(rootPath, 0o600), Effect.orElseSucceed(() => void 0))
+      const nestedText = yield* _(readFileStringIfPresent(fs, nestedPath))
+      if (nestedText !== null) {
+        yield* _(writeFileStringEnsuringParent(fs, path, rootPath, nestedText))
+        yield* _(fs.chmod(rootPath, 0o600), Effect.orElseSucceed(() => void 0))
+      }
       return
     }
 
     const rootExists = yield* _(isRegularFile(fs, rootPath))
     if (rootExists) {
-      const nestedDirPath = `${accountPath}/${claudeCredentialsDirName}`
-      yield* _(fs.makeDirectory(nestedDirPath, { recursive: true }))
-      yield* _(fs.copyFile(rootPath, nestedPath))
+      const rootText = yield* _(readFileStringIfPresent(fs, rootPath))
+      if (rootText === null) {
+        return
+      }
+      yield* _(writeFileStringEnsuringParent(fs, path, nestedPath, rootText))
       yield* _(fs.chmod(nestedPath, 0o600), Effect.orElseSucceed(() => void 0))
     }
   })
@@ -108,6 +116,7 @@ const readOauthToken = (
 
 const resolveClaudeAuthMethod = (
   fs: FileSystem.FileSystem,
+  path: Path.Path,
   accountPath: string
 ): Effect.Effect<ClaudeAuthMethod, PlatformError> =>
   Effect.gen(function*(_) {
@@ -117,7 +126,7 @@ const resolveClaudeAuthMethod = (
       return "oauth-token"
     }
 
-    yield* _(syncClaudeCredentialsFile(fs, accountPath))
+    yield* _(syncClaudeCredentialsFile(fs, path, accountPath))
     const hasCredentials = yield* _(isRegularFile(fs, claudeCredentialsPath(accountPath)))
     return hasCredentials ? "claude-ai-session" : "none"
   })
@@ -187,7 +196,7 @@ const withClaudeAuth = <A, E>(
           buildLabel: "claude auth"
         })
       )
-      return yield* _(run({ accountLabel, accountPath, cwd, fs }))
+      return yield* _(run({ accountLabel, accountPath, cwd, fs, path }))
     })
   )
 
@@ -249,7 +258,7 @@ export const authClaudeLogin = (
   command: AuthClaudeLoginCommand
 ): Effect.Effect<void, AuthError | CommandFailedError | PlatformError, ClaudeRuntime> => {
   const accountLabel = normalizeAccountLabel(command.label, "default")
-  return withClaudeAuth(command, ({ accountPath, cwd, fs }) =>
+  return withClaudeAuth(command, ({ accountPath, cwd, fs, path }) =>
     Effect.gen(function*(_) {
       const token = yield* _(
         runClaudeOauthLoginWithPrompt(cwd, accountPath, {
@@ -259,7 +268,7 @@ export const authClaudeLogin = (
       )
       yield* _(fs.writeFileString(claudeOauthTokenPath(accountPath), `${token}\n`))
       yield* _(fs.chmod(claudeOauthTokenPath(accountPath), 0o600), Effect.orElseSucceed(() => void 0))
-      yield* _(resolveClaudeAuthMethod(fs, accountPath))
+      yield* _(resolveClaudeAuthMethod(fs, path, accountPath))
       const probeExitCode = yield* _(runClaudePingProbeExitCode(cwd, accountPath, token))
       if (probeExitCode !== 0) {
         yield* _(
@@ -289,9 +298,9 @@ export const authClaudeLogin = (
 export const authClaudeStatus = (
   command: AuthClaudeStatusCommand
 ): Effect.Effect<void, CommandFailedError | PlatformError, ClaudeRuntime> =>
-  withClaudeAuth(command, ({ accountLabel, accountPath, cwd, fs }) =>
+  withClaudeAuth(command, ({ accountLabel, accountPath, cwd, fs, path }) =>
     Effect.gen(function*(_) {
-      const method = yield* _(resolveClaudeAuthMethod(fs, accountPath))
+      const method = yield* _(resolveClaudeAuthMethod(fs, path, accountPath))
       if (method === "none") {
         yield* _(Effect.log(`Claude not connected (${accountLabel}).`))
         return
