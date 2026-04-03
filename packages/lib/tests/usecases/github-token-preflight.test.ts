@@ -8,6 +8,7 @@ import { vi } from "vitest"
 import type { CreateCommand, TemplateConfig } from "../../src/core/domain.js"
 import { createProject } from "../../src/usecases/actions/create-project.js"
 import {
+  githubRepoAccessMessage,
   githubInvalidTokenMessage,
   resolveGithubCloneAuthToken,
   validateGithubCloneAuthTokenPreflight
@@ -44,6 +45,13 @@ const withPatchedFetch = <A, E, R>(
         globalThis.fetch = previous
       })
   )
+
+const resolveFetchUrl = (input: Parameters<typeof globalThis.fetch>[0]): string =>
+  typeof input === "string"
+    ? input
+    : input instanceof URL
+      ? input.toString()
+      : input.url
 
 const makeCommand = (root: string, outDir: string, path: Path.Path): CreateCommand => {
   const template: TemplateConfig = {
@@ -137,12 +145,65 @@ describe("github token preflight", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("fails before clone when the selected GitHub token cannot access the repository", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const command = makeCommand(root, path.join(root, "project"), path)
+        const fetchMock = vi.fn<typeof globalThis.fetch>((input) => {
+          const url = resolveFetchUrl(input)
+
+          if (url === "https://api.github.com/user") {
+            return Effect.runPromise(
+              Effect.succeed(
+                new Response(JSON.stringify({ login: "octocat" }), {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json"
+                  }
+                })
+              )
+            )
+          }
+
+          return Effect.runPromise(Effect.succeed(new Response(null, { status: 404 })))
+        })
+
+        yield* _(fs.makeDirectory(path.join(root, ".orch", "env"), { recursive: true }))
+        yield* _(
+          fs.writeFileString(
+            command.config.envGlobalPath,
+            [
+              "# docker-git env",
+              "GITHUB_TOKEN=live-token",
+              ""
+            ].join("\n")
+          )
+        )
+
+        const error = yield* _(
+          withPatchedFetch(
+            fetchMock,
+            validateGithubCloneAuthTokenPreflight(command.config).pipe(Effect.flip)
+          )
+        )
+
+        expect(error._tag).toBe("AuthError")
+        expect(error.message).toBe(githubRepoAccessMessage(command.config.repoUrl, true))
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("allows missing GitHub auth on the shared preflight layer", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const fs = yield* _(FileSystem.FileSystem)
         const path = yield* _(Path.Path)
         const command = makeCommand(root, path.join(root, "project"), path)
+        const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
+          Effect.runPromise(Effect.succeed(new Response(null, { status: 200 })))
+        )
 
         yield* _(fs.makeDirectory(path.join(root, ".orch", "env"), { recursive: true }))
         yield* _(
@@ -156,18 +217,25 @@ describe("github token preflight", () => {
           )
         )
 
-        yield* _(validateGithubCloneAuthTokenPreflight(command.config))
+        yield* _(
+          withPatchedFetch(
+            fetchMock,
+            validateGithubCloneAuthTokenPreflight(command.config)
+          )
+        )
+
+        expect(fetchMock).toHaveBeenCalledTimes(1)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("skips GitHub token validation when anonymous clone override is enabled", () =>
+  it.effect("skips token validation but still probes repo access when anonymous clone override is enabled", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const fs = yield* _(FileSystem.FileSystem)
         const path = yield* _(Path.Path)
         const command = makeCommand(root, path.join(root, "project"), path)
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Effect.runPromise(Effect.succeed(new Response(null, { status: 401 })))
+          Effect.runPromise(Effect.succeed(new Response(null, { status: 200 })))
         )
 
         yield* _(fs.makeDirectory(path.join(root, ".orch", "env"), { recursive: true }))
@@ -192,7 +260,8 @@ describe("github token preflight", () => {
           )
         )
 
-        expect(fetchMock).toHaveBeenCalledTimes(0)
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        expect(resolveFetchUrl(fetchMock.mock.calls[0]![0])).toContain("https://api.github.com/repos/")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

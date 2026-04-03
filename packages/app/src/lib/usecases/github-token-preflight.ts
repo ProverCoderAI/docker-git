@@ -1,4 +1,5 @@
 /* jscpd:ignore-start */
+import { FetchHttpClient, HttpClient } from "@effect/platform"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import { Effect, Match } from "effect"
@@ -16,13 +17,33 @@ import {
 
 export { githubInvalidTokenMessage } from "./github-token-validation.js"
 
-export const githubMissingTokenMessage = "GitHub auth is required. Register GitHub: docker-git auth github login --web"
+export const githubMissingTokenMessage = [
+  "GitHub auth is missing: no GitHub token/key was found for this repository.",
+  "If the repository requires access, run: docker-git auth github login --web"
+].join("\n")
+export const githubRepoAccessWarning =
+  "Unable to validate GitHub repository access before start; continuing."
+
+export type GithubRepoAccessStatus = "accessible" | "notAccessible" | "unknown"
 
 const defaultGithubTokenKeys: ReadonlyArray<string> = [
   "GIT_AUTH_TOKEN",
   "GITHUB_TOKEN",
   "GH_TOKEN"
 ]
+
+export const githubRepoAccessMessage = (repoUrl: string, hasToken: boolean): string =>
+  hasToken
+    ? [
+      `GitHub access denied for repository: ${repoUrl}`,
+      "Reason: the repository does not exist, is private, or the selected token has no rights.",
+      "If you need access, run: docker-git auth github login --web"
+    ].join("\n")
+    : [
+      `GitHub repository is not accessible without auth: ${repoUrl}`,
+      "Reason: the repository does not exist, is private, or a GitHub token/key is required.",
+      "If you need access, run: docker-git auth github login --web"
+    ].join("\n")
 
 const findFirstEnvValue = (input: string, keys: ReadonlyArray<string>): string | null => {
   for (const key of keys) {
@@ -79,6 +100,55 @@ export const resolveGithubCloneAuthToken = (
   return findFirstEnvValue(envText, defaultGithubTokenKeys)
 }
 
+const mapGithubRepoAccessStatus = (status: number): GithubRepoAccessStatus => {
+  if (status >= 200 && status < 300) {
+    return "accessible"
+  }
+  if (status === 401 || status === 404) {
+    return "notAccessible"
+  }
+  return "unknown"
+}
+
+// CHANGE: probe GitHub repository access the same way clone/auth selection will see it
+// WHY: missing/private repos otherwise fail much later inside the container with a generic clone error
+// QUOTE(ТЗ): "Всегда завершать верификацией инструментами"
+// REF: user-request-2026-04-03-clone-debug
+// SOURCE: n/a
+// FORMAT THEOREM: ∀repo,token: probe(repo, token) = accessible → repo_visible(repo, token)
+// PURITY: SHELL
+// EFFECT: Effect<GithubRepoAccessStatus, never, never>
+// INVARIANT: transport failures degrade to `unknown`; token is never logged
+// COMPLEXITY: O(1) network round-trip
+export const probeGithubRepoAccess = (
+  repoUrl: string,
+  token: string | null
+): Effect.Effect<GithubRepoAccessStatus> =>
+  Effect.gen(function*(_) {
+    const repo = parseGithubRepoUrl(repoUrl)
+    if (repo === null) {
+      return "unknown" satisfies GithubRepoAccessStatus
+    }
+
+    const client = yield* _(HttpClient.HttpClient)
+    const response = yield* _(
+      client.get(`https://api.github.com/repos/${repo.owner}/${repo.repo}`, {
+        headers: {
+          ...(token === null ? {} : { Authorization: `Bearer ${token}` }),
+          Accept: "application/vnd.github+json"
+        }
+      })
+    )
+
+    return mapGithubRepoAccessStatus(response.status)
+  }).pipe(
+    Effect.provide(FetchHttpClient.layer),
+    Effect.match({
+      onFailure: () => "unknown" satisfies GithubRepoAccessStatus,
+      onSuccess: (status) => status
+    })
+  )
+
 // CHANGE: validate GitHub auth token before clone/create starts mutating the project
 // WHY: dead tokens make git clone fail later with a misleading branch/auth error inside the container
 // QUOTE(ТЗ): "Если токен мёртв то пусть пишет что надо зарегистрировать github используй docker-git auth github login --web"
@@ -93,24 +163,40 @@ export const validateGithubCloneAuthTokenPreflight = (
   config: Pick<TemplateConfig, "repoUrl" | "gitTokenLabel" | "skipGithubAuth" | "envGlobalPath">
 ): Effect.Effect<void, AuthError | PlatformError, FileSystem.FileSystem> =>
   Effect.gen(function*(_) {
-    if (parseGithubRepoUrl(config.repoUrl) === null || config.skipGithubAuth) {
+    if (parseGithubRepoUrl(config.repoUrl) === null) {
       return
     }
 
-    const fs = yield* _(FileSystem.FileSystem)
-    const envText = yield* _(readEnvText(fs, config.envGlobalPath))
-    const token = resolveGithubCloneAuthToken(envText, config)
+    const token =
+      config.skipGithubAuth === true
+        ? null
+        : yield* _(
+            Effect.gen(function*(__) {
+              const fs = yield* __(FileSystem.FileSystem)
+              const envText = yield* __(readEnvText(fs, config.envGlobalPath))
+              return resolveGithubCloneAuthToken(envText, config)
+            })
+          )
 
-    if (token === null) {
-      return
+    if (token !== null) {
+      const validation = yield* _(validateGithubToken(token))
+      yield* _(
+        Match.value(validation.status).pipe(
+          Match.when("valid", () => Effect.void),
+          Match.when("invalid", () => Effect.fail(new AuthError({ message: githubInvalidTokenMessage }))),
+          Match.when("unknown", () => Effect.logWarning(githubTokenValidationWarning)),
+          Match.exhaustive
+        )
+      )
     }
 
-    const validation = yield* _(validateGithubToken(token))
+    const access = yield* _(probeGithubRepoAccess(config.repoUrl, token))
     yield* _(
-      Match.value(validation.status).pipe(
-        Match.when("valid", () => Effect.void),
-        Match.when("invalid", () => Effect.fail(new AuthError({ message: githubInvalidTokenMessage }))),
-        Match.when("unknown", () => Effect.logWarning(githubTokenValidationWarning)),
+      Match.value(access).pipe(
+        Match.when("accessible", () => Effect.void),
+        Match.when("notAccessible", () =>
+          Effect.fail(new AuthError({ message: githubRepoAccessMessage(config.repoUrl, token !== null) }))),
+        Match.when("unknown", () => Effect.logWarning(githubRepoAccessWarning)),
         Match.exhaustive
       )
     )

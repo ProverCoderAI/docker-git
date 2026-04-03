@@ -104,7 +104,7 @@ const makeCommand = (root: string, outDir: string, path: Path.Path): CreateComma
     serviceName: "dg-test",
     sshUser: "dev",
     sshPort: 2222,
-    repoUrl: "https://github.com/org/repo.git",
+    repoUrl: "https://example.com/org/repo.git",
     repoRef: "main",
     skipGithubAuth: false,
     targetDir: "/home/dev/org/repo",

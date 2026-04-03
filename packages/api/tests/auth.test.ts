@@ -5,6 +5,8 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { vi } from "vitest"
 
+import { githubRepoAccessMessage } from "@effect-template/lib/usecases/github-token-preflight"
+
 import { ApiAuthRequiredError } from "../src/api/errors.js"
 import {
   ensureGithubAuthForCreate,
@@ -46,6 +48,13 @@ const withWorkingDirectory = <A, E, R>(
         process.chdir(previous)
       })
   )
+
+const resolveFetchUrl = (input: Parameters<typeof globalThis.fetch>[0]): string =>
+  typeof input === "string"
+    ? input
+    : input instanceof URL
+      ? input.toString()
+      : input.url
 
 const withProjectsRoot = <A, E, R>(
   projectsRoot: string,
@@ -189,6 +198,63 @@ describe("api auth", () => {
             )
           )
         )
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("returns bad request when the selected GitHub token cannot access the repository", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const envDir = path.join(projectsRoot, ".orch", "env")
+        const envPath = path.join(envDir, "global.env")
+        const repoUrl = "https://github.com/TestOrganization123213/openclaw_autodeployer"
+        const fetchMock = vi.fn<typeof globalThis.fetch>((input) => {
+          const url = resolveFetchUrl(input)
+
+          if (url === "https://api.github.com/user") {
+            return Effect.runPromise(
+              Effect.succeed(
+                new Response(JSON.stringify({ login: "octocat" }), {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json"
+                  }
+                })
+              )
+            )
+          }
+
+          return Effect.runPromise(Effect.succeed(new Response(null, { status: 404 })))
+        })
+
+        yield* _(fs.makeDirectory(envDir, { recursive: true }))
+        yield* _(fs.writeFileString(envPath, "GITHUB_TOKEN=live-token\n"))
+
+        const failure = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              withPatchedFetch(
+                fetchMock,
+                ensureGithubAuthForCreate({
+                  repoUrl,
+                  gitTokenLabel: undefined,
+                  skipGithubAuth: false,
+                  envGlobalPath: ".docker-git/.orch/env/global.env"
+                }).pipe(Effect.flip)
+              )
+            )
+          )
+        )
+
+        expect(failure._tag).toBe("ApiBadRequestError")
+        if (failure._tag === "ApiBadRequestError") {
+          expect(failure.message).toBe(githubRepoAccessMessage(repoUrl, true))
+        }
+        expect(fetchMock).toHaveBeenCalledTimes(2)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

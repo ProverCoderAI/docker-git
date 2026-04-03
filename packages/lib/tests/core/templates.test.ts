@@ -84,6 +84,7 @@ describe("renderDockerCompose", () => {
     const compose = renderDockerCompose(makeTemplateConfig())
 
     expect(compose).toContain("container_name: dg-test")
+    expect(compose).toContain("    env_file:\n      - /workspace/.orch/env/global.env\n      - /workspace/.orch/env/project.env\n")
     expect(compose).toContain("    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1\n    networks:")
     expect(compose).not.toContain("dg-test-browser")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)

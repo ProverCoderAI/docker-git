@@ -1,6 +1,10 @@
 FROM ubuntu:24.04
 
+ARG DOCKER_GIT_CONTROLLER_REV=unknown
+LABEL io.prover-coder-ai.docker-git.controller-rev=$DOCKER_GIT_CONTROLLER_REV
+
 ENV DEBIAN_FRONTEND=noninteractive
+ENV DOCKER_GIT_CONTROLLER_REV=$DOCKER_GIT_CONTROLLER_REV
 WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -2,14 +2,18 @@ import { FetchHttpClient, HttpClient } from "@effect/platform"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
 import {
+  controllerExists,
   controllerContainerName,
   type ControllerRuntime,
   ensureControllerReachabilityNetworks,
   inspectContainerNetworks,
   inspectControllerPublishedPorts,
+  inspectControllerRevision,
+  prepareLocalControllerRevision,
   resolveCurrentContainerNetworks,
   runCompose
 } from "./controller-docker.js"
+import { shouldForceRecreateController } from "./controller-revision.js"
 import {
   buildApiBaseUrlCandidates,
   type DockerNetworkIps,
@@ -175,11 +179,55 @@ const failIfRemoteDockerWithoutApiUrl = (): Effect.Effect<void, ControllerBootst
 export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
     yield* _(failIfRemoteDockerWithoutApiUrl())
+    const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
+    const directCandidateUrls = buildApiBaseUrlCandidates({
+      explicitApiBaseUrl,
+      cachedApiBaseUrl: selectedApiBaseUrl,
+      defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
+      currentContainerNetworks: {},
+      controllerNetworks: {},
+      port: resolveApiPort()
+    })
+    const reachableBeforeDocker = yield* _(
+      findReachableApiBaseUrl(directCandidateUrls).pipe(
+        Effect.match({
+          onFailure: () => {},
+          onSuccess: (apiBaseUrl) => apiBaseUrl
+        })
+      )
+    )
+
+    if (reachableBeforeDocker !== undefined) {
+      rememberSelectedApiBaseUrl(reachableBeforeDocker)
+      return
+    }
+
+    if (explicitApiBaseUrl !== undefined) {
+      return yield* _(
+        Effect.fail(
+          controllerBootstrapError(
+            [
+              `docker-git controller is not reachable at ${explicitApiBaseUrl}.`,
+              "Set DOCKER_GIT_API_URL to a reachable backend or unset it to allow local Docker bootstrap."
+            ].join("\n")
+          )
+        )
+      )
+    }
+
+    const localControllerRevision = yield* _(prepareLocalControllerRevision())
+    const currentControllerExists = yield* _(controllerExists())
+    const currentControllerRevision = yield* _(inspectControllerRevision())
+    const forceRecreateController = shouldForceRecreateController(
+      currentControllerExists,
+      localControllerRevision,
+      currentControllerRevision
+    )
 
     const currentContainerNetworks = yield* _(resolveCurrentContainerNetworks())
     const initialControllerNetworks = yield* _(inspectContainerNetworks(controllerContainerName))
     const initialCandidates = buildApiBaseUrlCandidates({
-      explicitApiBaseUrl: resolveExplicitApiBaseUrl(),
+      explicitApiBaseUrl,
       cachedApiBaseUrl: selectedApiBaseUrl,
       defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
       currentContainerNetworks,
@@ -196,17 +244,27 @@ export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrap
       )
     )
 
-    if (reachableBeforeStart !== undefined) {
+    if (reachableBeforeStart !== undefined && !forceRecreateController) {
       rememberSelectedApiBaseUrl(reachableBeforeStart)
       return
     }
 
-    yield* _(runCompose(["up", "-d", "--build"]))
+    if (forceRecreateController) {
+      yield* _(
+        Effect.log(
+          `Rebuilding docker-git controller: local revision ${localControllerRevision}, container revision ${
+            currentControllerRevision ?? "unknown"
+          }`
+        )
+      )
+    }
+
+    yield* _(runCompose(forceRecreateController ? ["up", "-d", "--build", "--force-recreate"] : ["up", "-d", "--build"]))
     yield* _(ensureControllerReachabilityNetworks(currentContainerNetworks))
 
     const controllerNetworks = yield* _(inspectContainerNetworks(controllerContainerName))
     const candidateUrls = buildApiBaseUrlCandidates({
-      explicitApiBaseUrl: resolveExplicitApiBaseUrl(),
+      explicitApiBaseUrl,
       cachedApiBaseUrl: selectedApiBaseUrl,
       defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
       currentContainerNetworks,

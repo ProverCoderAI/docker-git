@@ -70,6 +70,9 @@ const renderResourceLimits = (resourceLimits: ResolvedComposeResourceLimits | un
 
 const renderBootstrapMounts = (): string => `      - ${bootstrapVolumeKey}:/opt/docker-git/bootstrap/source:ro`
 
+const renderEnvFiles = (config: TemplateConfig): string =>
+  `    env_file:\n      - ${config.envGlobalPath}\n      - ${config.envProjectPath}\n`
+
 const buildPlaywrightFragments = (
   config: TemplateConfig,
   networkName: string,
@@ -148,6 +151,7 @@ const renderComposeServices = (
     build: .
     container_name: ${config.containerName}
     restart: unless-stopped
+${renderEnvFiles(config)}    # runtime auth/env must be loaded into the container process, not only bootstrap scripts
     environment:
       REPO_URL: "${config.repoUrl}"
       REPO_REF: "${config.repoRef}"

@@ -7,7 +7,10 @@ const githubTokenValidationUrl = "https://api.github.com/user"
 
 export const githubTokenValidationWarning = "Unable to validate GitHub token before start; continuing."
 export const githubInvalidTokenMessage =
-  "GitHub token is invalid. Register GitHub again: docker-git auth github login --web"
+  [
+    "GitHub auth is invalid: the stored token is dead, revoked, expired, or malformed.",
+    "To restore access, run: docker-git auth github login --web"
+  ].join("\n")
 
 type GithubUser = {
   readonly login: string

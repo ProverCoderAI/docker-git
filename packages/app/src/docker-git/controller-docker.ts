@@ -7,6 +7,7 @@ import { Effect } from "effect"
 import { runCommandCapture, runCommandExitCode } from "@lib/shell/command-runner"
 
 import { type DockerNetworkIps, parseDockerNetworkIps, uniqueStrings } from "./controller-reachability.js"
+import { computeLocalControllerRevision, controllerRevisionEnvKey, parseControllerRevisionEnvOutput } from "./controller-revision.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
 export type ControllerRuntime =
@@ -18,6 +19,7 @@ export const controllerContainerName = "docker-git-api"
 
 const inspectNetworksTemplate = String
   .raw`{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s=%s\n" $k $v.IPAddress}}{{end}}`
+const inspectEnvTemplate = String.raw`{{range .Config.Env}}{{println .}}{{end}}`
 
 const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
   _tag: "ControllerBootstrapError",
@@ -48,6 +50,17 @@ const composeFilePath = (): Effect.Effect<string, PlatformError, FileSystem.File
 const mapComposePathError = (error: PlatformError): ControllerBootstrapError =>
   controllerBootstrapError(`Failed to resolve docker-compose.yml path.\nDetails: ${String(error)}`)
 
+const mapControllerRevisionError = (error: PlatformError): ControllerBootstrapError =>
+  controllerBootstrapError(`Failed to compute docker-git controller revision.\nDetails: ${String(error)}`)
+
+const renderDockerAccessDeniedMessage = (): string =>
+  [
+    "docker-git host CLI cannot access Docker from the client process.",
+    "Client-side sudo fallback is disabled.",
+    "Keep the docker-git backend container running and reach it via DOCKER_GIT_API_URL or the default local API port, or grant this user direct Docker access (docker group/rootless Docker).",
+    "Probe command: docker info"
+  ].join("\n")
+
 const runExitCode = (
   command: string,
   args: ReadonlyArray<string>
@@ -65,18 +78,16 @@ const runExitCode = (
 
 export const resolveDockerCommand = (): Effect.Effect<
   ReadonlyArray<string>,
-  never,
+  ControllerBootstrapError,
   CommandExecutor.CommandExecutor
 > =>
-  Effect.gen(function*(_) {
-    const dockerInfoExit = yield* _(runExitCode("docker", ["info"]))
-    if (dockerInfoExit === 0) {
-      return ["docker"]
-    }
-
-    const sudoDockerInfoExit = yield* _(runExitCode("sudo", ["-n", "docker", "info"]))
-    return sudoDockerInfoExit === 0 ? ["sudo", "docker"] : ["docker"]
-  })
+  runExitCode("docker", ["info"]).pipe(
+    Effect.flatMap((dockerInfoExit) =>
+      dockerInfoExit === 0
+        ? Effect.succeed<ReadonlyArray<string>>(["docker"])
+        : Effect.fail(controllerBootstrapError(renderDockerAccessDeniedMessage()))
+    )
+  )
 
 type DockerInvocation = {
   readonly command: string
@@ -104,7 +115,7 @@ const formatDockerInvocationFailure = (
 
 const runDockerExitCodeCommand = (
   args: ReadonlyArray<string>
-): Effect.Effect<number, never, ControllerRuntime> =>
+): Effect.Effect<number, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
     const dockerCommand = yield* _(resolveDockerCommand())
     const invocation = buildDockerInvocation(dockerCommand, args)
@@ -166,6 +177,37 @@ export const runCompose = (
     )
   })
 
+export const controllerExists = (): Effect.Effect<boolean, ControllerBootstrapError, ControllerRuntime> =>
+  runDockerExitCodeCommand(["inspect", controllerContainerName]).pipe(
+    Effect.map((exitCode) => exitCode === 0)
+  )
+
+export const inspectControllerRevision = (): Effect.Effect<string | null, ControllerBootstrapError, ControllerRuntime> =>
+  controllerExists().pipe(
+    Effect.flatMap((exists) =>
+      exists
+        ? runDockerCapture(
+            ["inspect", "-f", inspectEnvTemplate, controllerContainerName],
+            `Failed to inspect env for ${controllerContainerName}`
+          ).pipe(
+            Effect.map(parseControllerRevisionEnvOutput),
+            Effect.orElseSucceed((): string | null => null)
+          )
+        : Effect.succeed<string | null>(null))
+  )
+
+export const prepareLocalControllerRevision = (): Effect.Effect<string, ControllerBootstrapError, ControllerRuntime> =>
+  Effect.gen(function*(_) {
+    const composePath = yield* _(composeFilePath().pipe(Effect.mapError(mapComposePathError)))
+    const revision = yield* _(computeLocalControllerRevision(composePath).pipe(Effect.mapError(mapControllerRevisionError)))
+    yield* _(
+      Effect.sync(() => {
+        process.env[controllerRevisionEnvKey] = revision
+      })
+    )
+    return revision
+  })
+
 export const inspectContainerNetworks = (
   containerName: string
 ): Effect.Effect<DockerNetworkIps, never, ControllerRuntime> =>
@@ -197,7 +239,10 @@ const connectControllerToNetworkBestEffort = (
     return Effect.void
   }
 
-  return runDockerExitCodeCommand(["network", "connect", trimmed, controllerContainerName]).pipe(Effect.asVoid)
+  return runDockerExitCodeCommand(["network", "connect", trimmed, controllerContainerName]).pipe(
+    Effect.asVoid,
+    Effect.orElseSucceed(() => undefined)
+  )
 }
 
 export const ensureControllerReachabilityNetworks = (

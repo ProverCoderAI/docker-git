@@ -6,7 +6,10 @@ import { parseGithubRepoUrl } from "@effect-template/lib/core/repo"
 import { authGithubLogin as runGithubLogin, authGithubLogout as runGithubLogout } from "@effect-template/lib/usecases/auth-github"
 import { readEnvText } from "@effect-template/lib/usecases/env-file"
 import {
+  githubRepoAccessMessage,
+  githubRepoAccessWarning,
   githubInvalidTokenMessage,
+  probeGithubRepoAccess,
   resolveGithubCloneAuthToken
 } from "@effect-template/lib/usecases/github-token-preflight"
 import { validateGithubToken, type GithubTokenValidationResult } from "@effect-template/lib/usecases/github-token-validation"
@@ -26,7 +29,10 @@ import type {
 import { ApiAuthRequiredError, ApiBadRequestError } from "../api/errors.js"
 
 export const githubAuthRequiredCommand = "docker-git auth github login --web"
-export const githubAuthRequiredMessage = "GitHub authentication is required. Run: docker-git auth github login --web"
+export const githubAuthRequiredMessage = [
+  "GitHub auth is missing: no GitHub token/key was found for this repository.",
+  "If the repository requires access, run: docker-git auth github login --web"
+].join("\n")
 export const githubAuthEnvGlobalPath = defaultTemplateConfig.envGlobalPath
 export const codexAuthPath = defaultTemplateConfig.codexAuthPath
 
@@ -260,7 +266,7 @@ export const ensureGithubAuthForCreate = (config: {
   readonly gitTokenLabel?: string | undefined
   readonly skipGithubAuth?: boolean | undefined
   readonly envGlobalPath: string
-}): Effect.Effect<void, ApiAuthRequiredError | PlatformError, FileSystem.FileSystem | Path.Path> =>
+}): Effect.Effect<void, ApiAuthRequiredError | ApiBadRequestError | PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     if (parseGithubRepoUrl(config.repoUrl) === null) {
       return
@@ -284,11 +290,26 @@ export const ensureGithubAuthForCreate = (config: {
     }
 
     const validation: GithubTokenValidationResult = yield* _(validateGithubToken(token))
-    return yield* _(
+    yield* _(
       Match.value(validation.status).pipe(
         Match.when("valid", () => Effect.void),
         Match.when("invalid", () => Effect.fail(githubAuthError(githubInvalidTokenMessage))),
         Match.when("unknown", () => Effect.logWarning("Unable to validate GitHub token before create; continuing.")),
+        Match.exhaustive
+      )
+    )
+
+    const access = yield* _(probeGithubRepoAccess(config.repoUrl, token))
+    return yield* _(
+      Match.value(access).pipe(
+        Match.when("accessible", () => Effect.void),
+        Match.when("notAccessible", () =>
+          Effect.fail(
+            new ApiBadRequestError({
+              message: githubRepoAccessMessage(config.repoUrl, true)
+            })
+          )),
+        Match.when("unknown", () => Effect.logWarning(githubRepoAccessWarning)),
         Match.exhaustive
       )
     )
