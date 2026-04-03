@@ -31,6 +31,11 @@ export { buildApiBaseUrlCandidates, isRemoteDockerHost } from "./controller-reac
 
 let selectedApiBaseUrl: string | undefined
 
+type HealthProbeResult = {
+  readonly apiBaseUrl: string
+  readonly revision: string | null
+}
+
 const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
   _tag: "ControllerBootstrapError",
   message
@@ -43,13 +48,30 @@ const rememberSelectedApiBaseUrl = (value: string): void => {
 export const resolveApiBaseUrl = (): string =>
   resolveExplicitApiBaseUrl() ?? selectedApiBaseUrl ?? resolveConfiguredApiBaseUrl()
 
-const probeHealth = (apiBaseUrl: string): Effect.Effect<void, ControllerBootstrapError> =>
+const parseHealthRevision = (text: string): string | null => {
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return null
+    }
+    const revision = Reflect.get(parsed, "revision")
+    return typeof revision === "string" && revision.trim().length > 0 ? revision.trim() : null
+  } catch {
+    return null
+  }
+}
+
+const probeHealth = (apiBaseUrl: string): Effect.Effect<HealthProbeResult, ControllerBootstrapError> =>
   Effect.gen(function*(_) {
     const client = yield* _(HttpClient.HttpClient)
     const response = yield* _(client.get(`${apiBaseUrl}/health`, { headers: { accept: "application/json" } }))
+    const bodyText = yield* _(response.text)
 
     if (response.status >= 200 && response.status < 300) {
-      return
+      return {
+        apiBaseUrl,
+        revision: parseHealthRevision(bodyText)
+      }
     }
 
     return yield* _(
@@ -74,6 +96,11 @@ const probeHealth = (apiBaseUrl: string): Effect.Effect<void, ControllerBootstra
 const findReachableApiBaseUrl = (
   candidateUrls: ReadonlyArray<string>
 ): Effect.Effect<string, ControllerBootstrapError> =>
+  findReachableHealthProbe(candidateUrls).pipe(Effect.map(({ apiBaseUrl }) => apiBaseUrl))
+
+const findReachableHealthProbe = (
+  candidateUrls: ReadonlyArray<string>
+): Effect.Effect<HealthProbeResult, ControllerBootstrapError> =>
   Effect.gen(function*(_) {
     if (candidateUrls.length === 0) {
       return yield* _(
@@ -85,14 +112,14 @@ const findReachableApiBaseUrl = (
       const healthy = yield* _(
         probeHealth(candidateUrl).pipe(
           Effect.match({
-            onFailure: () => false,
-            onSuccess: () => true
+            onFailure: () => undefined,
+            onSuccess: (result) => result
           })
         )
       )
 
-      if (healthy) {
-        return candidateUrl
+      if (healthy !== undefined) {
+        return healthy
       }
     }
 
@@ -176,10 +203,20 @@ const findReachableApiBaseUrlOption = (
     })
   )
 
-const findReachableDirectApiBaseUrl = (
+const findReachableHealthProbeOption = (
+  candidateUrls: ReadonlyArray<string>
+): Effect.Effect<HealthProbeResult | undefined, ControllerBootstrapError> =>
+  findReachableHealthProbe(candidateUrls).pipe(
+    Effect.match({
+      onFailure: (): HealthProbeResult | undefined => undefined,
+      onSuccess: (probe) => probe
+    })
+  )
+
+const findReachableDirectHealthProbe = (
   explicitApiBaseUrl: string | undefined
-): Effect.Effect<string | undefined, ControllerBootstrapError> =>
-  findReachableApiBaseUrlOption(
+): Effect.Effect<HealthProbeResult | undefined, ControllerBootstrapError> =>
+  findReachableHealthProbeOption(
     buildApiBaseUrlCandidates({
       explicitApiBaseUrl,
       cachedApiBaseUrl: selectedApiBaseUrl,
@@ -324,14 +361,25 @@ export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrap
   Effect.gen(function*(_) {
     yield* _(failIfRemoteDockerWithoutApiUrl())
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
-    const reachableBeforeDocker = yield* _(findReachableDirectApiBaseUrl(explicitApiBaseUrl))
-
-    if (reachableBeforeDocker !== undefined) {
-      rememberSelectedApiBaseUrl(reachableBeforeDocker)
-      return
+    const localControllerRevision = yield* _(prepareLocalControllerRevision())
+    if (explicitApiBaseUrl !== undefined) {
+      const reachableBeforeDocker = yield* _(findReachableDirectHealthProbe(explicitApiBaseUrl))
+      if (reachableBeforeDocker !== undefined) {
+        rememberSelectedApiBaseUrl(reachableBeforeDocker.apiBaseUrl)
+        return
+      }
+      yield* _(failIfExplicitApiUrlIsUnreachable(explicitApiBaseUrl))
+    } else {
+      const reachableBeforeDocker = yield* _(findReachableDirectHealthProbe(undefined))
+      if (
+        reachableBeforeDocker !== undefined &&
+        reachableBeforeDocker.revision === localControllerRevision
+      ) {
+        rememberSelectedApiBaseUrl(reachableBeforeDocker.apiBaseUrl)
+        return
+      }
     }
 
-    yield* _(failIfExplicitApiUrlIsUnreachable(explicitApiBaseUrl))
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
     const reusedExistingController = yield* _(reuseReachableControllerIfPossible(bootstrapContext))
     if (reusedExistingController) {

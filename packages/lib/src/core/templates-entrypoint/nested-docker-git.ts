@@ -217,14 +217,6 @@ fi
 
 SOURCE_CODEX_CONFIG="__CODEX_HOME__/config.toml"
 copy_if_distinct_file "$SOURCE_CODEX_CONFIG" "$DOCKER_GIT_AUTH_DIR/config.toml" || true
-
-SOURCE_SHARED_AUTH="__CODEX_HOME__-shared/auth.json"
-SOURCE_LOCAL_AUTH="__CODEX_HOME__/auth.json"
-if [[ -f "$SOURCE_SHARED_AUTH" ]]; then
-  copy_if_distinct_file "$SOURCE_SHARED_AUTH" "$DOCKER_GIT_AUTH_DIR/auth.json" || true
-elif [[ -f "$SOURCE_LOCAL_AUTH" ]]; then
-  copy_if_distinct_file "$SOURCE_LOCAL_AUTH" "$DOCKER_GIT_AUTH_DIR/auth.json" || true
-fi
 if [[ -f "$DOCKER_GIT_AUTH_DIR/auth.json" ]]; then
   chmod 600 "$DOCKER_GIT_AUTH_DIR/auth.json" || true
 fi

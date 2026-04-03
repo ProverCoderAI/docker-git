@@ -124,10 +124,6 @@ if (!isRecord(codex)) process.exit(0)
 let opencode = readJson(opencodePath)
 if (!isRecord(opencode)) opencode = {}
 
-if (opencode.openai) {
-  process.exit(0)
-}
-
 const apiKey = codex.OPENAI_API_KEY
 if (typeof apiKey === "string" && apiKey.trim().length > 0) {
   opencode.openai = { type: "api", key: apiKey.trim() }

@@ -93,8 +93,15 @@ export const copyCodexFile = (
     if (!sourceExists) {
       return
     }
+    const sourceText = yield* _(fs.readFileString(sourceFile))
     const targetExists = yield* _(fs.exists(targetFile))
     if (targetExists) {
+      const targetText = yield* _(fs.readFileString(targetFile))
+      if (targetText === sourceText) {
+        return
+      }
+      yield* _(fs.writeFileString(targetFile, sourceText))
+      yield* _(Effect.log(`Synced Codex ${spec.label} from ${sourceFile} to ${targetFile}`))
       return
     }
     yield* _(fs.copyFile(sourceFile, targetFile))

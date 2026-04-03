@@ -19,7 +19,7 @@ export type ControllerRuntime =
   | FileSystem.FileSystem
   | Path.Path
 
-export const controllerContainerName = "docker-git-api"
+export const controllerContainerName = process.env["DOCKER_GIT_API_CONTAINER_NAME"]?.trim() || "docker-git-api"
 
 const inspectNetworksTemplate = String
   .raw`{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s=%s\n" $k $v.IPAddress}}{{end}}`

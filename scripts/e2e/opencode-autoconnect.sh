@@ -22,6 +22,10 @@ VOLUME_NAME="dg-e2e-opencode-$RUN_ID-home"
 SSH_PORT="$(( (RANDOM % 1000) + 20000 ))"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
+export DOCKER_GIT_PROJECTS_ROOT_VOLUME="docker-git-e2e-opencode-$RUN_ID-projects"
+export DOCKER_GIT_API_CONTAINER_NAME="docker-git-e2e-opencode-$RUN_ID-api"
+export DOCKER_GIT_API_PORT="$(( (RANDOM % 1000) + 34000 ))"
+export COMPOSE_PROJECT_NAME="docker-git-e2e-opencode-$RUN_ID"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
 
 REPO_URL="https://github.com/octocat/Hello-World/issues/1"
@@ -64,6 +68,7 @@ cleanup() {
     echo "e2e/opencode-autoconnect: out dir: $OUT_DIR" >&2
     return
   fi
+  (cd "$REPO_ROOT" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
   if [[ -d "$OUT_DIR" ]] && [[ -f "$OUT_DIR/docker-compose.yml" ]]; then
     (cd "$OUT_DIR" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
   fi

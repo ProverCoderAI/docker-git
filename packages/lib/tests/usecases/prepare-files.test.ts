@@ -179,7 +179,6 @@ describe("prepareProjectFiles", () => {
         expect(entrypoint).toContain('docker_git_load_env_file "$DOCKER_GIT_ENV_GLOBAL"')
         expect(entrypoint).toContain('docker_git_load_env_file "$DOCKER_GIT_ENV_PROJECT"')
         expect(entrypoint).not.toContain('export "$line"')
-        expect(entrypoint).toContain('SOURCE_SHARED_AUTH="/home/dev/.codex-shared/auth.json"')
         expect(entrypoint).toContain('CODEX_LABEL_RAW="$CODEX_AUTH_LABEL"')
         expect(entrypoint).toContain('OPENCODE_DATA_DIR="/home/dev/.local/share/opencode"')
         expect(entrypoint).toContain('OPENCODE_SHARED_HOME="/home/dev/.codex-shared/opencode"')
@@ -210,6 +209,11 @@ describe("prepareProjectFiles", () => {
         expect(entrypoint).not.toContain("\n  EOFMOVE\n")
         expect(entrypoint).toContain('sync_file_if_present "$BOOTSTRAP_AUTH_KEYS" "$DOCKER_GIT_AUTH_KEYS" || true')
         expect(entrypoint).toContain('sync_labeled_auth_files "$BOOTSTRAP_CODEX_SHARED_AUTH_DIR" "$DOCKER_GIT_AUTH_DIR"')
+        expect(entrypoint).not.toContain('SOURCE_SHARED_AUTH="/home/dev/.codex-shared/auth.json"')
+        expect(entrypoint).not.toContain('SOURCE_LOCAL_AUTH="/home/dev/.codex/auth.json"')
+        expect(entrypoint).not.toContain('copy_if_distinct_file "$SOURCE_SHARED_AUTH" "$DOCKER_GIT_AUTH_DIR/auth.json"')
+        expect(entrypoint).not.toContain('copy_if_distinct_file "$SOURCE_LOCAL_AUTH" "$DOCKER_GIT_AUTH_DIR/auth.json"')
+        expect(entrypoint).not.toContain("if (opencode.openai) {")
         expect(entrypoint).toContain('rm -f "$SHARED_AUTH_FILE" || true')
         expect(entrypoint).toContain(
           "if [[ \"$CLONE_OK\" -eq 1 ]]; then\n  docker_git_prepare_active_agent_project_rules\nfi"

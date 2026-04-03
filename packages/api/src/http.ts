@@ -191,6 +191,8 @@ const configuredFederationPublicOrigin =
 
 const configuredFederationActorUsername =
   process.env["DOCKER_GIT_FEDERATION_ACTOR"] ?? "docker-git"
+const controllerRevision =
+  process.env["DOCKER_GIT_CONTROLLER_REV"]?.trim() ?? null
 
 const readHeader = (
   request: HttpServerRequest.HttpServerRequest,
@@ -245,7 +247,7 @@ export const makeRouter = () => {
     ),
     HttpRouter.get("/ui/styles.css", textResponse(uiStyles, "text/css; charset=utf-8", 200)),
     HttpRouter.get("/ui/app.js", textResponse(uiScript, "application/javascript; charset=utf-8", 200)),
-    HttpRouter.get("/health", jsonResponse({ ok: true }, 200)),
+    HttpRouter.get("/health", jsonResponse({ ok: true, revision: controllerRevision }, 200)),
     HttpRouter.get(
       "/auth/github/status",
       Effect.gen(function*(_) {
