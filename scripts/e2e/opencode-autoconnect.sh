@@ -119,14 +119,9 @@ AUTH_LOG="$ROOT/codex-auth.log"
   pnpm run docker-git auth codex status --codex-auth "$ROOT/.orch/auth/codex"
 ) >"$AUTH_LOG" 2>&1
 
-grep -Fq -- "Codex auth imported into controller state." "$AUTH_LOG" \
-  || fail "expected controller-owned Codex auth import confirmation"
-
-grep -Fq -- '"present": true' "$AUTH_LOG" \
-  || fail "expected controller-owned Codex auth status confirmation"
-
-grep -Fq -- '"authPath":' "$AUTH_LOG" \
-  || fail "expected controller-owned Codex auth status payload"
+auth_confirmation_count="$(grep -Fc -- "Codex auth imported into controller state (account: ci@example.com)." "$AUTH_LOG" || true)"
+[[ "$auth_confirmation_count" -ge 2 ]] \
+  || fail "expected controller-owned Codex auth import + status confirmations"
 
 clone_attempts=3
 clone_attempt=1

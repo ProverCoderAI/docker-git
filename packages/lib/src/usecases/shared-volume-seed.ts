@@ -15,11 +15,25 @@ import type { DockerCommandError } from "../shell/errors.js"
 
 type SharedVolumeSeedEnvironment = CommandExecutor | FileSystem.FileSystem | Path.Path
 
+const isNotFoundSystemError = (error: PlatformError): boolean =>
+  error._tag === "SystemError" && error.reason === "NotFound"
+
 const resolvePathFromBase = (
   path: Path.Path,
   baseDir: string,
   targetPath: string
 ): string => (path.isAbsolute(targetPath) ? targetPath : path.resolve(baseDir, targetPath))
+
+const statIfPresent = (
+  fs: FileSystem.FileSystem,
+  targetPath: string
+): Effect.Effect<FileSystem.File.Info | null, PlatformError> =>
+  fs.stat(targetPath).pipe(
+    Effect.catchTag("SystemError", (error) =>
+      isNotFoundSystemError(error)
+        ? Effect.succeed(null)
+        : Effect.fail(error))
+  )
 
 const copyDirRecursive = (
   fs: FileSystem.FileSystem,
@@ -28,12 +42,8 @@ const copyDirRecursive = (
   targetDir: string
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(sourceDir))
-    if (!exists) {
-      return
-    }
-    const info = yield* _(fs.stat(sourceDir))
-    if (info.type !== "Directory") {
+    const info = yield* _(statIfPresent(fs, sourceDir))
+    if (info === null || info.type !== "Directory") {
       return
     }
 
@@ -42,7 +52,10 @@ const copyDirRecursive = (
     for (const entry of entries) {
       const sourceEntry = path.join(sourceDir, entry)
       const targetEntry = path.join(targetDir, entry)
-      const entryInfo = yield* _(fs.stat(sourceEntry))
+      const entryInfo = yield* _(statIfPresent(fs, sourceEntry))
+      if (entryInfo === null) {
+        continue
+      }
       if (entryInfo.type === "Directory") {
         yield* _(copyDirRecursive(fs, path, sourceEntry, targetEntry))
       } else if (entryInfo.type === "File") {
@@ -59,16 +72,46 @@ const copyFileIfPresent = (
   targetPath: string
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(sourcePath))
-    if (!exists) {
-      return
-    }
-    const info = yield* _(fs.stat(sourcePath))
-    if (info.type !== "File") {
+    const info = yield* _(statIfPresent(fs, sourcePath))
+    if (info === null || info.type !== "File") {
       return
     }
     yield* _(fs.makeDirectory(path.dirname(targetPath), { recursive: true }))
     yield* _(fs.copyFile(sourcePath, targetPath))
+  })
+
+const copyCodexAuthFileIfPresent = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sourceDir: string,
+  targetDir: string,
+  fileName: "auth.json" | "config.toml"
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  copyFileIfPresent(fs, path, path.join(sourceDir, fileName), path.join(targetDir, fileName))
+
+const copyLabeledCodexFiles = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sourceRoot: string,
+  targetRoot: string,
+  fileName: "auth.json" | "config.toml"
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const sourceInfo = yield* _(statIfPresent(fs, sourceRoot))
+    if (sourceInfo === null || sourceInfo.type !== "Directory") {
+      return
+    }
+
+    const entries = yield* _(fs.readDirectory(sourceRoot))
+    for (const entry of entries) {
+      const sourceEntry = path.join(sourceRoot, entry)
+      const entryInfo = yield* _(statIfPresent(fs, sourceEntry))
+      if (entryInfo === null || entryInfo.type !== "Directory") {
+        continue
+      }
+
+      yield* _(copyCodexAuthFileIfPresent(fs, path, sourceEntry, path.join(targetRoot, entry), fileName))
+    }
   })
 
 type BootstrapSeedConfig = Pick<
@@ -162,12 +205,16 @@ const copyBootstrapSnapshotAuthDirs = (
   targets: BootstrapSnapshotTargets
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
-    yield* _(copyDirRecursive(fs, path, sources.codexAuthSource, targets.projectCodexTarget))
+    yield* _(copyCodexAuthFileIfPresent(fs, path, sources.codexAuthSource, targets.projectCodexTarget, "auth.json"))
+    yield* _(copyCodexAuthFileIfPresent(fs, path, sources.codexAuthSource, targets.projectCodexTarget, "config.toml"))
+    yield* _(copyLabeledCodexFiles(fs, path, sources.codexAuthSource, targets.projectCodexTarget, "auth.json"))
+    yield* _(copyLabeledCodexFiles(fs, path, sources.codexAuthSource, targets.projectCodexTarget, "config.toml"))
     yield* _(copyDirRecursive(fs, path, sources.claudeAuthSource, targets.projectClaudeTarget))
-    yield* _(copyDirRecursive(fs, path, sources.codexSharedAuthSource, targets.sharedCodexTarget))
+    yield* _(copyCodexAuthFileIfPresent(fs, path, sources.codexSharedAuthSource, targets.sharedCodexTarget, "auth.json"))
+    yield* _(copyLabeledCodexFiles(fs, path, sources.codexSharedAuthSource, targets.sharedCodexTarget, "auth.json"))
   })
 
-const stageBootstrapSnapshot = (
+export const stageBootstrapSnapshot = (
   stagingDir: string,
   projectDir: string,
   config: BootstrapSeedConfig
