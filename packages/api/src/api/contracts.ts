@@ -55,15 +55,33 @@ export type CodexAuthImportRequest = {
   readonly authText: string
 }
 
+export type CodexAuthLoginRequest = {
+  readonly label?: string | null | undefined
+}
+
 export type CodexAuthStatus = {
   readonly label: string
   readonly message: string
   readonly present: boolean
   readonly authPath: string
+  readonly account: string | null
 }
 
 export type CodexAuthLogoutRequest = {
   readonly label?: string | null | undefined
+}
+
+export type StateInitRequest = {
+  readonly repoUrl: string
+  readonly repoRef?: string | undefined
+}
+
+export type StateCommitRequest = {
+  readonly message: string
+}
+
+export type StateSyncRequest = {
+  readonly message?: string | null | undefined
 }
 
 export type ApplyAllRequest = {

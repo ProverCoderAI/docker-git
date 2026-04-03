@@ -4,18 +4,23 @@ import { Effect } from "effect"
 
 import type {
   AuthCodexImportCommand,
+  AuthCodexLoginCommand,
   AuthCodexLogoutCommand,
   AuthCodexStatusCommand,
   AuthGithubLoginCommand,
   AuthGithubLogoutCommand,
   AuthGithubStatusCommand,
-  CreateCommand
+  CreateCommand,
+  StateCommitCommand,
+  StateInitCommand,
+  StateSyncCommand
 } from "@lib/core/domain"
 import { resolvePathFromCwd } from "@lib/usecases/path-helpers"
 
-import { request, requestVoid } from "./api-http.js"
+import { request, requestTextStream, requestVoid } from "./api-http.js"
 import { asArray, asObject, asString, type JsonRequest, type JsonValue } from "./api-json.js"
 import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
+import type { ApiRequestError } from "./host-errors.js"
 import { resolveHostSshMaterial, resolveManagedHostSshMaterial } from "./host-ssh-material.js"
 
 export { type JsonObject, type JsonRequest, type JsonValue, renderJsonPayload } from "./api-json.js"
@@ -28,6 +33,37 @@ export {
 } from "./api-project-codec.js"
 
 const projectPath = (projectId: string, suffix = ""): string => `/projects/${encodeURIComponent(projectId)}${suffix}`
+const codexLoginSuccessMarker = "__DOCKER_GIT_CODEX_LOGIN_STATUS__:ok"
+const codexLoginErrorMarkerPrefix = "__DOCKER_GIT_CODEX_LOGIN_STATUS__:error:"
+
+const codexLoginFailureMessage = (output: string, exitCode: string | null): string => {
+  if (output.includes("429 Too Many Requests")) {
+    return "Codex device auth is rate-limited by OpenAI (429 Too Many Requests). Wait a few minutes and retry."
+  }
+
+  const lines = output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) =>
+      line.length > 0 &&
+      !line.startsWith(codexLoginSuccessMarker) &&
+      !line.startsWith(codexLoginErrorMarkerPrefix)
+    )
+
+  const detailedLine = lines.findLast((line) => line.toLowerCase().includes("error"))
+  if (detailedLine !== undefined) {
+    return detailedLine
+  }
+
+  const lastLine = lines.at(-1)
+  if (lastLine !== undefined) {
+    return lastLine
+  }
+
+  return exitCode === null
+    ? "Codex login stream ended without a completion marker."
+    : `Codex login failed (${exitCode}).`
+}
 
 const readProjectOutput = (payload: JsonValue): string => {
   const object = asObject(payload)
@@ -122,6 +158,48 @@ export const applyAllProjects = (activeOnly: boolean) => requestVoid("POST", "/p
 
 export const downAllProjects = () => requestVoid("POST", "/projects/down-all")
 
+export const readStatePath = () =>
+  request("GET", "/state/path").pipe(
+    Effect.map((payload) => readProjectOutput(payload))
+  )
+
+export const initState = (command: StateInitCommand) =>
+  request("POST", "/state/init", {
+    repoUrl: command.repoUrl,
+    repoRef: command.repoRef
+  }).pipe(
+    Effect.map((payload) => readProjectOutput(payload))
+  )
+
+export const readStateStatus = () =>
+  request("GET", "/state/status").pipe(
+    Effect.map((payload) => readProjectOutput(payload))
+  )
+
+export const pullState = () =>
+  request("POST", "/state/pull").pipe(
+    Effect.map((payload) => readProjectOutput(payload))
+  )
+
+export const commitState = (command: StateCommitCommand) =>
+  request("POST", "/state/commit", {
+    message: command.message
+  }).pipe(
+    Effect.map((payload) => readProjectOutput(payload))
+  )
+
+export const syncState = (command: StateSyncCommand) =>
+  request("POST", "/state/sync", {
+    message: command.message
+  }).pipe(
+    Effect.map((payload) => readProjectOutput(payload))
+  )
+
+export const pushState = () =>
+  request("POST", "/state/push").pipe(
+    Effect.map((payload) => readProjectOutput(payload))
+  )
+
 export const githubLogin = (command: AuthGithubLoginCommand) =>
   request("POST", "/auth/github/login", {
     label: command.label,
@@ -134,6 +212,63 @@ export const githubStatus = (_command: AuthGithubStatusCommand) => request("GET"
 export const githubLogout = (command: AuthGithubLogoutCommand) =>
   requestVoid("POST", "/auth/github/logout", {
     label: command.label
+  })
+
+export const codexLogin = (command: AuthCodexLoginCommand) =>
+  Effect.gen(function*(_) {
+    let pending = ""
+    const writeVisibleChunk = (chunk: string) => {
+      pending += chunk
+      const lines = pending.split("\n")
+      pending = lines.pop() ?? ""
+
+      for (const line of lines) {
+        if (line.startsWith(codexLoginSuccessMarker) || line.startsWith(codexLoginErrorMarkerPrefix)) {
+          continue
+        }
+        process.stdout.write(`${line}\n`)
+      }
+    }
+
+    const output = yield* _(
+      requestTextStream(
+        "POST",
+        "/auth/codex/login",
+        { label: command.label },
+        writeVisibleChunk
+      )
+    )
+
+    if (
+      pending.length > 0 &&
+      !pending.startsWith(codexLoginSuccessMarker) &&
+      !pending.startsWith(codexLoginErrorMarkerPrefix)
+    ) {
+      process.stdout.write(pending)
+    }
+
+    if (output.includes(codexLoginSuccessMarker)) {
+      return
+    }
+
+    const failureLine = output
+      .split(/\r?\n/u)
+      .find((line) => line.startsWith(codexLoginErrorMarkerPrefix))
+
+    const exitCode = failureLine === undefined
+      ? null
+      : failureLine.slice(codexLoginErrorMarkerPrefix.length)
+    const failureMessage = codexLoginFailureMessage(output, exitCode)
+
+    return yield* _(
+      Effect.fail<ApiRequestError>({
+        _tag: "ApiRequestError",
+        method: "POST",
+        path: "/auth/codex/login",
+        message: failureMessage,
+        displayOnlyMessage: true
+      })
+    )
   })
 
 const readCodexAuthText = (command: AuthCodexImportCommand) =>

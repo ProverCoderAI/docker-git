@@ -13,6 +13,7 @@ export type ApiRequestError = {
   readonly method: string
   readonly path: string
   readonly message: string
+  readonly displayOnlyMessage?: boolean | undefined
 }
 
 export type ApiAuthRequiredError = {
@@ -50,6 +51,16 @@ const isParseError = (error: CliError): error is ParseError =>
   error._tag === "InvalidOption" ||
   error._tag === "UnexpectedArgument"
 
+const isApiRequestError = (error: CliError): error is ApiRequestError => "method" in error && "path" in error
+
+const renderApiRequestError = (error: ApiRequestError): string =>
+  error.displayOnlyMessage === true
+    ? error.message
+    : [
+      `${error.method} ${error.path} failed`,
+      error.message
+    ].join("\n")
+
 export const renderCliError = (error: CliError): string => {
   if (isParseError(error)) {
     return formatParseError(error)
@@ -71,11 +82,8 @@ export const renderCliError = (error: CliError): string => {
     return error.message
   }
 
-  if ("method" in error && "path" in error) {
-    return [
-      `${error.method} ${error.path} failed`,
-      error.message
-    ].join("\n")
+  if (isApiRequestError(error)) {
+    return renderApiRequestError(error)
   }
 
   return renderError(error)

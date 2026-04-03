@@ -1,8 +1,11 @@
 import * as FileSystem from "@effect/platform/FileSystem"
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as Path from "@effect/platform/Path"
 import { defaultTemplateConfig } from "@effect-template/lib/core/template-defaults"
 import { parseGithubRepoUrl } from "@effect-template/lib/core/repo"
+import { CommandFailedError } from "@effect-template/lib/shell/errors"
+import { authCodexLogin as runCodexLogin } from "@effect-template/lib/usecases/auth-codex"
 import { authGithubLogin as runGithubLogin, authGithubLogout as runGithubLogout } from "@effect-template/lib/usecases/auth-github"
 import { readEnvText } from "@effect-template/lib/usecases/env-file"
 import {
@@ -15,10 +18,11 @@ import {
 import { validateGithubToken, type GithubTokenValidationResult } from "@effect-template/lib/usecases/github-token-validation"
 import { normalizeAccountLabel } from "@effect-template/lib/usecases/auth-helpers"
 import { resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
-import { Effect, Match } from "effect"
+import { Effect, Logger, Match } from "effect"
 
 import type {
   CodexAuthImportRequest,
+  CodexAuthLoginRequest,
   CodexAuthLogoutRequest,
   CodexAuthStatus,
   GithubAuthLoginRequest,
@@ -26,7 +30,7 @@ import type {
   GithubAuthStatus,
   GithubAuthTokenStatus
 } from "../api/contracts.js"
-import { ApiAuthRequiredError, ApiBadRequestError } from "../api/errors.js"
+import { ApiAuthRequiredError, ApiBadRequestError, ApiInternalError } from "../api/errors.js"
 
 export const githubAuthRequiredCommand = "docker-git auth github login --web"
 export const githubAuthRequiredMessage = [
@@ -44,6 +48,10 @@ type GithubTokenEntry = {
   readonly label: string
   readonly token: string
 }
+
+type JsonRecord = Readonly<Record<string, unknown>>
+type CodexRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+type CodexCommandError = CommandFailedError | PlatformError
 
 const labelFromKey = (key: string): string =>
   key.startsWith(githubTokenPrefix) ? key.slice(githubTokenPrefix.length) : "default"
@@ -95,6 +103,30 @@ const githubAuthError = (message: string): ApiAuthRequiredError =>
     command: githubAuthRequiredCommand
   })
 
+const toCodexApiError = (error: CodexCommandError): ApiBadRequestError | ApiInternalError =>
+  error._tag === "CommandFailedError"
+    ? new ApiBadRequestError({
+      message: `${error.command} failed (exit ${error.exitCode}).`
+    })
+    : new ApiInternalError({
+      message: String(error),
+      cause: error
+    })
+
+const runWithCapturedLogs = <R>(
+  effect: Effect.Effect<void, CodexCommandError, R>,
+  fallbackOutput: string
+): Effect.Effect<string, CodexCommandError, R> =>
+  Effect.gen(function*(_) {
+    const lines: Array<string> = []
+    const logger = Logger.make(({ message }) => {
+      lines.push(String(message))
+    })
+
+    yield* _(effect.pipe(Effect.provide(Logger.replace(Logger.defaultLogger, logger))))
+    return lines.length === 0 ? fallbackOutput : lines.join("\n")
+  })
+
 const resolveControllerEnvPath = (
   path: Path.Path,
   envGlobalPath: string
@@ -123,6 +155,73 @@ const resolveCodexAuthFilePath = (
   label: string | null | undefined
 ): string =>
   path.join(resolveCodexAccountPath(path, authPath, label), "auth.json")
+
+const isRecord = (value: unknown): value is JsonRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+const readString = (record: JsonRecord, key: string): string | null => {
+  const value = record[key]
+  return typeof value === "string" && value.length > 0 ? value : null
+}
+
+const decodeJwtClaims = (jwt: string | null): JsonRecord | null => {
+  if (jwt === null) {
+    return null
+  }
+  const parts = jwt.split(".")
+  if (parts.length !== 3) {
+    return null
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(parts[1] ?? "", "base64url").toString("utf8"))
+    return isRecord(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+const readNestedAccountId = (claims: JsonRecord): string | null => {
+  const nested = claims["https://api.openai.com/auth"]
+  if (!isRecord(nested)) {
+    return null
+  }
+  return readString(nested, "chatgpt_account_id")
+}
+
+const extractCodexAccount = (parsed: JsonRecord): string | null => {
+  const tokens = parsed["tokens"]
+  const tokenRecord = isRecord(tokens) ? tokens : null
+  const claims = decodeJwtClaims(readString(tokenRecord ?? {}, "id_token"))
+  if (claims !== null) {
+    const email = readString(claims, "email")
+    if (email !== null) {
+      return email
+    }
+
+    const preferredUsername = readString(claims, "preferred_username")
+    if (preferredUsername !== null) {
+      return preferredUsername
+    }
+
+    const name = readString(claims, "name")
+    if (name !== null) {
+      return name
+    }
+
+    const directAccountId = readString(claims, "chatgpt_account_id")
+    if (directAccountId !== null) {
+      return directAccountId
+    }
+
+    const nestedAccountId = readNestedAccountId(claims)
+    if (nestedAccountId !== null) {
+      return nestedAccountId
+    }
+  }
+
+  return readString(tokenRecord ?? {}, "account_id")
+}
 
 const readGithubAuthTokens = (
   envGlobalPath: string
@@ -166,6 +265,25 @@ export const loginGithubAuth = (request: GithubAuthLoginRequest) =>
     return yield* _(readGithubAuthTokens(githubAuthEnvGlobalPath))
   })
 
+export const loginCodexAuth = (
+  request: CodexAuthLoginRequest
+): Effect.Effect<string, ApiBadRequestError | ApiInternalError, CodexRuntime> =>
+  runWithCapturedLogs(
+    runCodexLogin({
+      _tag: "AuthCodexLogin",
+      label: request.label ?? null,
+      codexAuthPath
+    }),
+    "Codex login completed."
+  ).pipe(
+    Effect.flatMap((output) =>
+      readCodexAuthStatus(request.label).pipe(
+        Effect.map((status) => `${output}\n${status.message}`.trim())
+      )
+    ),
+    Effect.mapError(toCodexApiError)
+  )
+
 export const logoutGithubAuth = (request: GithubAuthLogoutRequest) =>
   Effect.gen(function*(_) {
     yield* _(
@@ -181,14 +299,18 @@ export const logoutGithubAuth = (request: GithubAuthLogoutRequest) =>
 const codexAuthStatus = (
   present: boolean,
   label: string,
-  authPath: string
+  authPath: string,
+  account: string | null
 ): CodexAuthStatus => ({
   label,
   message: present
-    ? "Codex auth imported into controller state."
+    ? account === null
+      ? "Codex auth imported into controller state."
+      : `Codex auth imported into controller state (account: ${account}).`
     : "Codex auth not found in controller state.",
   present,
-  authPath
+  authPath,
+  account
 })
 
 export const readCodexAuthStatus = (
@@ -201,15 +323,28 @@ export const readCodexAuthStatus = (
     const resolvedAuthPath = resolveCodexAuthFilePath(path, codexAuthPath, label)
     const exists = yield* _(fs.exists(resolvedAuthPath))
     if (!exists) {
-      return codexAuthStatus(false, resolvedLabel, resolvedAuthPath)
+      return codexAuthStatus(false, resolvedLabel, resolvedAuthPath, null)
     }
 
     const info = yield* _(fs.stat(resolvedAuthPath))
     if (info.type !== "File") {
-      return codexAuthStatus(false, resolvedLabel, resolvedAuthPath)
+      return codexAuthStatus(false, resolvedLabel, resolvedAuthPath, null)
     }
 
-    return codexAuthStatus(true, resolvedLabel, resolvedAuthPath)
+    const authText = yield* _(fs.readFileString(resolvedAuthPath))
+    const parsed = yield* _(
+      Effect.sync(() => {
+        try {
+          const next: unknown = JSON.parse(authText)
+          return next
+        } catch {
+          return null
+        }
+      })
+    )
+    const account = isRecord(parsed) ? extractCodexAccount(parsed) : null
+
+    return codexAuthStatus(true, resolvedLabel, resolvedAuthPath, account)
   })
 
 export const importCodexAuth = (

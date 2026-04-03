@@ -6,7 +6,7 @@ import { Effect } from "effect"
 
 import type { AuthCodexLoginCommand, AuthCodexLogoutCommand, AuthCodexStatusCommand } from "../core/domain.js"
 import { defaultTemplateConfig } from "../core/domain.js"
-import { runDockerAuth, runDockerAuthExitCode } from "../shell/docker-auth.js"
+import { runDockerAuth, runDockerAuthCapture, runDockerAuthExitCode } from "../shell/docker-auth.js"
 import { CommandFailedError } from "../shell/errors.js"
 import { buildDockerAuthSpec, normalizeAccountLabel } from "./auth-helpers.js"
 import { ensureCodexConfigFile, migrateLegacyOrchLayout } from "./auth-sync.js"
@@ -133,8 +133,20 @@ const runCodexAuthCommand = (
 const runCodexLogin = (
   cwd: string,
   accountPath: string
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  runCodexAuthCommand(cwd, accountPath, ["codex", "login", "--device-auth"], "codex login --device-auth", false)
+): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runDockerAuthCapture(
+    buildDockerAuthSpec({
+      cwd,
+      image: codexImageName,
+      hostPath: accountPath,
+      containerPath: codexHome,
+      env: `CODEX_HOME=${codexHome}`,
+      args: ["codex", "login", "--device-auth"],
+      interactive: false
+    }),
+    [0],
+    (exitCode) => new CommandFailedError({ command: "codex login --device-auth", exitCode })
+  ).pipe(Effect.map((output) => output.trim()))
 
 const runCodexStatus = (
   cwd: string,
@@ -171,7 +183,10 @@ const runCodexLogout = (
 export const authCodexLogin = (
   command: AuthCodexLoginCommand
 ): Effect.Effect<void, CommandFailedError | PlatformError, CodexRuntime> =>
-  withCodexAuth(command, ({ accountPath, cwd }) => runCodexLogin(cwd, accountPath)).pipe(
+  withCodexAuth(command, ({ accountPath, cwd }) =>
+    runCodexLogin(cwd, accountPath).pipe(
+      Effect.flatMap((output) => (output.length === 0 ? Effect.void : Effect.log(output)))
+    )).pipe(
     Effect.zipRight(autoSyncState(`chore(state): auth codex ${normalizeAccountLabel(command.label, "default")}`))
   )
 

@@ -4,12 +4,16 @@ import { Effect, Either, ParseResult, Schema } from "effect"
 import {
   ApplyAllRequestSchema,
   CodexAuthImportRequestSchema,
+  CodexAuthLoginRequestSchema,
   CodexAuthLogoutRequestSchema,
   CreateAgentRequestSchema,
   CreateFollowRequestSchema,
   CreateProjectRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
+  StateCommitRequestSchema,
+  StateInitRequestSchema,
+  StateSyncRequestSchema,
   UpProjectRequestSchema
 } from "../src/api/schema.js"
 
@@ -114,6 +118,22 @@ describe("api schemas", () => {
       })
     }))
 
+  it.effect("decodes codex auth login payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(CodexAuthLoginRequestSchema)({
+        label: "team-a"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.label).toBe("team-a")
+        }
+      })
+    }))
+
   it.effect("decodes codex auth logout payload", () =>
     Effect.sync(() => {
       const result = Schema.decodeUnknownEither(CodexAuthLogoutRequestSchema)({
@@ -158,6 +178,56 @@ describe("api schemas", () => {
         },
         onRight: (value) => {
           expect(value.activeOnly).toBe(true)
+        }
+      })
+    }))
+
+  it.effect("decodes state init payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(StateInitRequestSchema)({
+        repoUrl: "https://github.com/org/.docker-git.git",
+        repoRef: "main"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.repoUrl).toBe("https://github.com/org/.docker-git.git")
+          expect(value.repoRef).toBe("main")
+        }
+      })
+    }))
+
+  it.effect("decodes state commit payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(StateCommitRequestSchema)({
+        message: "chore(state): sync"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.message).toBe("chore(state): sync")
+        }
+      })
+    }))
+
+  it.effect("decodes state sync payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(StateSyncRequestSchema)({
+        message: null
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.message).toBeNull()
         }
       })
     }))

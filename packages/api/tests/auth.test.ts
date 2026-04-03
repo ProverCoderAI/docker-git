@@ -265,7 +265,17 @@ describe("api auth", () => {
         const path = yield* _(Path.Path)
         const projectsRoot = path.join(root, ".docker-git")
         const authDir = path.join(projectsRoot, ".orch", "auth", "codex")
-        const authText = JSON.stringify({ openai: { type: "oauth", refresh: "refresh", access: "access" } }, null, 2)
+        const idTokenPayload = Buffer.from(JSON.stringify({ email: "ci@example.com", exp: 4_102_444_800 }), "utf8")
+          .toString("base64url")
+        const authText = JSON.stringify({
+          auth_mode: "oauth",
+          tokens: {
+            id_token: `header.${idTokenPayload}.signature`,
+            access_token: "access",
+            refresh_token: "refresh",
+            account_id: "acc-123"
+          }
+        }, null, 2)
 
         yield* _(fs.makeDirectory(projectsRoot, { recursive: true }))
 
@@ -280,11 +290,12 @@ describe("api auth", () => {
         )
 
         expect(status.present).toBe(true)
+        expect(status.account).toBe("ci@example.com")
         expect(status.authPath).toBe(path.join(authDir, "auth.json"))
-        expect(status.message).toBe("Codex auth imported into controller state.")
+        expect(status.message).toBe("Codex auth imported into controller state (account: ci@example.com).")
 
         const fileText = yield* _(fs.readFileString(path.join(authDir, "auth.json")))
-        expect(fileText).toContain('"refresh": "refresh"')
+        expect(fileText).toContain('"refresh_token": "refresh"')
 
         const readStatus = yield* _(
           withProjectsRoot(
@@ -294,6 +305,7 @@ describe("api auth", () => {
         )
 
         expect(readStatus.present).toBe(true)
+        expect(readStatus.account).toBe("ci@example.com")
         expect(readStatus.authPath).toBe(path.join(authDir, "auth.json"))
       })
     ).pipe(Effect.provide(NodeContext.layer)))
@@ -324,6 +336,7 @@ describe("api auth", () => {
         )
 
         expect(removed.present).toBe(false)
+        expect(removed.account).toBeNull()
         expect(removed.label).toBe("team-a")
         expect(removed.authPath).toBe(path.join(labeledAuthDir, "auth.json"))
       })

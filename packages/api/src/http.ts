@@ -13,12 +13,16 @@ import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternal
 import {
   ApplyAllRequestSchema,
   CodexAuthImportRequestSchema,
+  CodexAuthLoginRequestSchema,
   CodexAuthLogoutRequestSchema,
   CreateAgentRequestSchema,
   CreateFollowRequestSchema,
   CreateProjectRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
+  StateCommitRequestSchema,
+  StateInitRequestSchema,
+  StateSyncRequestSchema,
   UpProjectRequestSchema
 } from "./api/schema.js"
 import { uiHtml, uiScript, uiStyles } from "./ui.js"
@@ -30,6 +34,7 @@ import {
   readCodexAuthStatus,
   readGithubAuthStatus
 } from "./services/auth.js"
+import { streamCodexAuthLogin } from "./services/auth-codex-login-stream.js"
 import { getAgent, getAgentAttachInfo, listAgents, readAgentLogs, startAgent, stopAgent } from "./services/agents.js"
 import { latestProjectCursor, listProjectEventsSince } from "./services/events.js"
 import {
@@ -57,6 +62,15 @@ import {
   recreateProject,
   upProject
 } from "./services/projects.js"
+import {
+  commitStateFromRequest,
+  initStateFromRequest,
+  pullState,
+  pushState,
+  readStatePathOutput,
+  readStateStatusOutput,
+  syncStateFromRequest
+} from "./services/state.js"
 
 const ProjectParamsSchema = Schema.Struct({
   projectId: Schema.String
@@ -159,7 +173,11 @@ const readCreateFollowRequest = () => HttpServerRequest.schemaBodyJson(CreateFol
 const readGithubAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLoginRequestSchema)
 const readGithubAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLogoutRequestSchema)
 const readCodexAuthImportRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthImportRequestSchema)
+const readCodexAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLoginRequestSchema)
 const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLogoutRequestSchema)
+const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitRequestSchema)
+const readStateCommitRequest = () => HttpServerRequest.schemaBodyJson(StateCommitRequestSchema)
+const readStateSyncRequest = () => HttpServerRequest.schemaBodyJson(StateSyncRequestSchema)
 const readApplyAllRequest = () => HttpServerRequest.schemaBodyJson(ApplyAllRequestSchema)
 const readUpProjectRequest = () =>
   HttpServerRequest.schemaBodyJson(UpProjectRequestSchema).pipe(
@@ -261,6 +279,20 @@ export const makeRouter = () => {
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(
+      "/auth/codex/login",
+      Effect.gen(function*(_) {
+        const request = yield* _(readCodexAuthLoginRequest())
+        const outputStream = yield* _(streamCodexAuthLogin(request))
+        return HttpServerResponse.stream(outputStream, {
+          status: 200,
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "cache-control": "no-cache"
+          }
+        })
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
       "/auth/codex/import",
       Effect.gen(function*(_) {
         const request = yield* _(readCodexAuthImportRequest())
@@ -350,7 +382,62 @@ export const makeRouter = () => {
     )
   )
 
-  const withProjects = base.pipe(
+  const withState = base.pipe(
+    HttpRouter.get(
+      "/state/path",
+      readStatePathOutput().pipe(
+        Effect.flatMap((output) => jsonResponse({ output }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/state/init",
+      Effect.gen(function*(_) {
+        const request = yield* _(readStateInitRequest())
+        const output = yield* _(initStateFromRequest(request))
+        return yield* _(jsonResponse({ output }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/state/status",
+      readStateStatusOutput().pipe(
+        Effect.flatMap((output) => jsonResponse({ output }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/state/pull",
+      pullState().pipe(
+        Effect.flatMap((output) => jsonResponse({ output }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/state/commit",
+      Effect.gen(function*(_) {
+        const request = yield* _(readStateCommitRequest())
+        const output = yield* _(commitStateFromRequest(request))
+        return yield* _(jsonResponse({ output }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/state/sync",
+      Effect.gen(function*(_) {
+        const request = yield* _(readStateSyncRequest())
+        const output = yield* _(syncStateFromRequest(request))
+        return yield* _(jsonResponse({ output }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/state/push",
+      pushState().pipe(
+        Effect.flatMap((output) => jsonResponse({ output }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    )
+  )
+
+  const withProjects = withState.pipe(
     HttpRouter.get(
       "/projects",
       listProjects().pipe(

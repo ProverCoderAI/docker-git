@@ -1,6 +1,7 @@
-import { FetchHttpClient, HttpBody, HttpClient } from "@effect/platform"
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientResponse } from "@effect/platform"
 import type * as HttpClientError from "@effect/platform/HttpClientError"
 import { Effect } from "effect"
+import * as Stream from "effect/Stream"
 
 import { asObject, asString, type JsonRequest, type JsonValue, parseResponseBody } from "./api-json.js"
 import { type ControllerRuntime, ensureControllerReady, resolveApiBaseUrl } from "./controller.js"
@@ -131,27 +132,64 @@ const executeRequest = (
   })
 }
 
+const executeRequestWithControllerRetry = (
+  client: HttpClient.HttpClient,
+  method: ApiHttpMethod,
+  path: string,
+  body: JsonRequest | undefined
+) => {
+  const execute = () => executeRequest(client, resolveApiBaseUrl(), method, path, body)
+
+  return execute().pipe(
+    Effect.matchEffect({
+      onFailure: (error) =>
+        ensureControllerReady().pipe(
+          Effect.matchEffect({
+            onFailure: () => Effect.fail(error),
+            onSuccess: () => execute()
+          })
+        ),
+      onSuccess: (value) => Effect.succeed(value)
+    })
+  )
+}
+
+const mapTransportError = (
+  method: ApiHttpMethod,
+  path: string
+) =>
+  Effect.mapError((error: ApiTransportError | HttpClientError.HttpClientError): ApiTransportError =>
+    isApiTransportError(error)
+      ? error
+      : {
+        _tag: "ApiRequestError",
+        method,
+        path,
+        message: String(error)
+      }
+  )
+
+const requestResponse = (
+  method: ApiHttpMethod,
+  path: string,
+  body: JsonRequest | undefined
+): Effect.Effect<
+  HttpClientResponse.HttpClientResponse,
+  HttpClientError.HttpClientError,
+  HttpClient.HttpClient | ControllerRuntime
+> =>
+  Effect.gen(function*(_) {
+    const client = yield* _(HttpClient.HttpClient)
+    return yield* _(executeRequestWithControllerRetry(client, method, path, body))
+  })
+
 export const request = (
   method: ApiHttpMethod,
   path: string,
   body?: JsonRequest
 ): Effect.Effect<JsonValue, ApiTransportError, ControllerRuntime> =>
   Effect.gen(function*(_) {
-    const client = yield* _(HttpClient.HttpClient)
-    const response = yield* _(
-      executeRequest(client, resolveApiBaseUrl(), method, path, body).pipe(
-        Effect.matchEffect({
-          onFailure: (error) =>
-            ensureControllerReady().pipe(
-              Effect.matchEffect({
-                onFailure: () => Effect.fail(error),
-                onSuccess: () => executeRequest(client, resolveApiBaseUrl(), method, path, body)
-              })
-            ),
-          onSuccess: (value) => Effect.succeed(value)
-        })
-      )
-    )
+    const response = yield* _(requestResponse(method, path, body))
     const parsed = yield* _(response.text.pipe(Effect.flatMap((text) => parseResponseBody(text))))
 
     if (response.status >= 400) {
@@ -159,19 +197,38 @@ export const request = (
     }
 
     return parsed
-  }).pipe(
-    Effect.provide(FetchHttpClient.layer),
-    Effect.mapError((error): ApiTransportError =>
-      isApiTransportError(error)
-        ? error
-        : {
-          _tag: "ApiRequestError",
-          method,
-          path,
-          message: String(error)
-        }
-    )
-  )
+  }).pipe(Effect.provide(FetchHttpClient.layer), mapTransportError(method, path))
 
 export const requestVoid = (method: ApiHttpMethod, path: string, body?: JsonRequest) =>
   request(method, path, body).pipe(Effect.asVoid)
+
+const readResponseTextStream = (
+  response: HttpClientResponse.HttpClientResponse,
+  onChunk: (chunk: string) => void
+) =>
+  HttpClientResponse.stream(Effect.succeed(response)).pipe(
+    Stream.decodeText(),
+    Stream.runFoldEffect("", (output, chunk) =>
+      Effect.sync(() => {
+        onChunk(chunk)
+        return output + chunk
+      }))
+  )
+
+export const requestTextStream = (
+  method: ApiHttpMethod,
+  path: string,
+  body: JsonRequest | undefined,
+  onChunk: (chunk: string) => void
+): Effect.Effect<string, ApiTransportError, ControllerRuntime> =>
+  Effect.gen(function*(_) {
+    const response = yield* _(requestResponse(method, path, body))
+
+    if (response.status >= 400) {
+      const text = yield* _(response.text)
+      const parsed = yield* _(parseResponseBody(text))
+      return yield* _(Effect.fail(toRequestError(method, path, response.status, parsed)))
+    }
+
+    return yield* _(readResponseTextStream(response, onChunk))
+  }).pipe(Effect.provide(FetchHttpClient.layer), mapTransportError(method, path))

@@ -6,16 +6,24 @@ import {
   type ApiProjectSummary,
   applyAllProjects,
   codexImport,
+  codexLogin,
   codexLogout,
   codexStatus,
+  commitState,
   createProject,
   downAllProjects,
   githubLogin,
   githubLogout,
   githubStatus,
+  initState,
   listProjects,
+  pullState,
+  pushState,
+  readStatePath,
+  readStateStatus,
   renderJsonPayload,
-  renderProjectSummaryLine
+  renderProjectSummaryLine,
+  syncState
 } from "./api-client.js"
 import { readCommand } from "./cli/read-command.js"
 import { usageText } from "./cli/usage.js"
@@ -25,36 +33,9 @@ import { renderCliError } from "./host-errors.js"
 import { autoOpenProjectSsh } from "./host-ssh.js"
 import { runMenu } from "./menu.js"
 import { openExistingProjectSsh } from "./open-project.js"
+import { unsupportedOperationalCommands, type UnsupportedOperationalCommandTag } from "./program-unsupported.js"
 
 type OperationalCommand = Exclude<Command, { readonly _tag: "Help" }>
-type UnsupportedOperationalCommandTag =
-  | "Attach"
-  | "Panes"
-  | "SessionsList"
-  | "SessionsKill"
-  | "SessionsLogs"
-  | "ScrapExport"
-  | "ScrapImport"
-  | "McpPlaywrightUp"
-  | "Apply"
-  | "SessionGistBackup"
-  | "SessionGistList"
-  | "SessionGistView"
-  | "SessionGistDownload"
-  | "StatePath"
-  | "StateInit"
-  | "StateStatus"
-  | "StatePull"
-  | "StateCommit"
-  | "StatePush"
-  | "StateSync"
-  | "AuthCodexLogin"
-  | "AuthClaudeLogin"
-  | "AuthClaudeStatus"
-  | "AuthClaudeLogout"
-  | "AuthGeminiLogin"
-  | "AuthGeminiStatus"
-  | "AuthGeminiLogout"
 
 type UnsupportedOperationalCommand = Extract<
   OperationalCommand,
@@ -80,13 +61,8 @@ const unsupported = (command: string, message: string): Effect.Effect<void, Unsu
     message
   })
 
-const withControllerReady = <E, R>(
-  effect: Effect.Effect<void, E, R>
-) =>
-  pipe(
-    ensureControllerReady(),
-    Effect.zipRight(effect)
-  )
+const withControllerReady = <E, R>(effect: Effect.Effect<void, E, R>) =>
+  pipe(ensureControllerReady(), Effect.zipRight(effect))
 
 const renderProjectList = (projects: ReadonlyArray<ApiProjectSummary>) =>
   Effect.gen(function*(_) {
@@ -169,6 +145,10 @@ const handleGithubLogoutCommand = (
     )
   )
 
+const handleCodexLoginCommand = (
+  command: Extract<OperationalCommand, { readonly _tag: "AuthCodexLogin" }>
+) => withControllerReady(codexLogin(command))
+
 const handleCodexImportCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthCodexImport" }>
 ) =>
@@ -193,77 +173,28 @@ const handleCodexLogoutCommand = (
     )
   )
 
-const unsupportedOperationalCommands: Record<
-  UnsupportedOperationalCommandTag,
-  { readonly command: string; readonly message: string }
-> = {
-  Attach: { command: "attach", message: "Host-side SSH attach is disabled in API-only mode." },
-  Panes: { command: "panes", message: "Host-side pane inspection is disabled in API-only mode." },
-  SessionsList: { command: "sessions", message: "Terminal session inspection is disabled in API-only mode." },
-  SessionsKill: { command: "sessions kill", message: "Terminal session control is disabled in API-only mode." },
-  SessionsLogs: { command: "sessions logs", message: "Terminal session log access is disabled in API-only mode." },
-  ScrapExport: { command: "scrap export", message: "Scrap export is disabled in API-only host mode." },
-  ScrapImport: { command: "scrap import", message: "Scrap import is disabled in API-only host mode." },
-  McpPlaywrightUp: {
-    command: "mcp-playwright",
-    message: "Playwright sidecar management is disabled in API-only host mode."
-  },
-  Apply: {
-    command: "Apply",
-    message: "Command Apply is not available in API-only host mode."
-  },
-  SessionGistBackup: {
-    command: "session-gists backup",
-    message: "Session gist backup is disabled in API-only host mode."
-  },
-  SessionGistList: {
-    command: "session-gists list",
-    message: "Session gist list is disabled in API-only host mode."
-  },
-  SessionGistView: {
-    command: "session-gists view",
-    message: "Session gist view is disabled in API-only host mode."
-  },
-  SessionGistDownload: {
-    command: "session-gists download",
-    message: "Session gist download is disabled in API-only host mode."
-  },
-  StatePath: { command: "state path", message: "Host state commands are disabled in API-only mode." },
-  StateInit: { command: "state init", message: "Host state commands are disabled in API-only mode." },
-  StateStatus: { command: "state status", message: "Host state commands are disabled in API-only mode." },
-  StatePull: { command: "state pull", message: "Host state commands are disabled in API-only mode." },
-  StateCommit: { command: "state commit", message: "Host state commands are disabled in API-only mode." },
-  StatePush: { command: "state push", message: "Host state commands are disabled in API-only mode." },
-  StateSync: { command: "state sync", message: "Host state commands are disabled in API-only mode." },
-  AuthCodexLogin: {
-    command: "auth codex login",
-    message: "Only GitHub auth is routed through the controller in host API mode."
-  },
-  AuthClaudeLogin: {
-    command: "auth claude login",
-    message: "Only GitHub auth is routed through the controller in host API mode."
-  },
-  AuthClaudeStatus: {
-    command: "auth claude status",
-    message: "Only GitHub auth is routed through the controller in host API mode."
-  },
-  AuthClaudeLogout: {
-    command: "auth claude logout",
-    message: "Only GitHub auth is routed through the controller in host API mode."
-  },
-  AuthGeminiLogin: {
-    command: "auth gemini login",
-    message: "Only GitHub auth is routed through the controller in host API mode."
-  },
-  AuthGeminiStatus: {
-    command: "auth gemini status",
-    message: "Only GitHub auth is routed through the controller in host API mode."
-  },
-  AuthGeminiLogout: {
-    command: "auth gemini logout",
-    message: "Only GitHub auth is routed through the controller in host API mode."
-  }
-}
+const logOutput = (output: string) => Effect.log(output)
+
+const handleStatePathCommand = () =>
+  withControllerReady(pipe(readStatePath(), Effect.flatMap((output) => logOutput(output))))
+
+const handleStateInitCommand = (command: Extract<OperationalCommand, { readonly _tag: "StateInit" }>) =>
+  withControllerReady(pipe(initState(command), Effect.flatMap((output) => logOutput(output))))
+
+const handleStateStatusCommand = () =>
+  withControllerReady(pipe(readStateStatus(), Effect.flatMap((output) => logOutput(output))))
+
+const handleStatePullCommand = () =>
+  withControllerReady(pipe(pullState(), Effect.flatMap((output) => logOutput(output))))
+
+const handleStateCommitCommand = (command: Extract<OperationalCommand, { readonly _tag: "StateCommit" }>) =>
+  withControllerReady(pipe(commitState(command), Effect.flatMap((output) => logOutput(output))))
+
+const handleStatePushCommand = () =>
+  withControllerReady(pipe(pushState(), Effect.flatMap((output) => logOutput(output))))
+
+const handleStateSyncCommand = (command: Extract<OperationalCommand, { readonly _tag: "StateSync" }>) =>
+  withControllerReady(pipe(syncState(command), Effect.flatMap((output) => logOutput(output))))
 
 const unsupportedOperationalCommand = (
   command: UnsupportedOperationalCommand
@@ -271,6 +202,33 @@ const unsupportedOperationalCommand = (
   const spec = unsupportedOperationalCommands[command._tag]
   return unsupported(spec.command, spec.message)
 }
+
+type DirectOperationalCommand = Extract<
+  OperationalCommand,
+  { readonly _tag: "Menu" | "Create" | "Open" | "Status" | "DownAll" | "ApplyAll" }
+>
+type RoutedOperationalCommand = Exclude<OperationalCommand, DirectOperationalCommand>
+
+const dispatchRoutedOperationalCommand = (
+  command: RoutedOperationalCommand
+): Effect.Effect<void, CliError, ControllerRuntime> =>
+  Match.value(command).pipe(
+    Match.when({ _tag: "AuthGithubLogin" }, handleGithubLoginCommand),
+    Match.when({ _tag: "AuthGithubStatus" }, handleGithubStatusCommand),
+    Match.when({ _tag: "AuthGithubLogout" }, handleGithubLogoutCommand),
+    Match.when({ _tag: "AuthCodexLogin" }, handleCodexLoginCommand),
+    Match.when({ _tag: "AuthCodexImport" }, handleCodexImportCommand),
+    Match.when({ _tag: "AuthCodexStatus" }, handleCodexStatusCommand),
+    Match.when({ _tag: "AuthCodexLogout" }, handleCodexLogoutCommand),
+    Match.when({ _tag: "StatePath" }, handleStatePathCommand),
+    Match.when({ _tag: "StateInit" }, handleStateInitCommand),
+    Match.when({ _tag: "StateStatus" }, handleStateStatusCommand),
+    Match.when({ _tag: "StatePull" }, handleStatePullCommand),
+    Match.when({ _tag: "StateCommit" }, handleStateCommitCommand),
+    Match.when({ _tag: "StatePush" }, handleStatePushCommand),
+    Match.when({ _tag: "StateSync" }, handleStateSyncCommand),
+    Match.orElse((unsupported) => unsupportedOperationalCommand(unsupported))
+  )
 
 const dispatchOperationalCommand = (
   command: OperationalCommand
@@ -282,13 +240,7 @@ const dispatchOperationalCommand = (
     Match.when({ _tag: "Status" }, handleStatusCommand),
     Match.when({ _tag: "DownAll" }, handleDownAllCommand),
     Match.when({ _tag: "ApplyAll" }, handleApplyAllCommand),
-    Match.when({ _tag: "AuthGithubLogin" }, handleGithubLoginCommand),
-    Match.when({ _tag: "AuthGithubStatus" }, handleGithubStatusCommand),
-    Match.when({ _tag: "AuthGithubLogout" }, handleGithubLogoutCommand),
-    Match.when({ _tag: "AuthCodexImport" }, handleCodexImportCommand),
-    Match.when({ _tag: "AuthCodexStatus" }, handleCodexStatusCommand),
-    Match.when({ _tag: "AuthCodexLogout" }, handleCodexLogoutCommand),
-    Match.orElse((unsupported) => unsupportedOperationalCommand(unsupported))
+    Match.orElse((next) => dispatchRoutedOperationalCommand(next))
   )
 
 const runCommand: Effect.Effect<void, CliError, ControllerRuntime> = pipe(

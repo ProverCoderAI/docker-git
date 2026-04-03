@@ -53,8 +53,25 @@ export const CodexAuthImportRequestSchema = Schema.Struct({
   authText: Schema.String
 })
 
+export const CodexAuthLoginRequestSchema = Schema.Struct({
+  label: OptionalNullableString
+})
+
 export const CodexAuthLogoutRequestSchema = Schema.Struct({
   label: OptionalNullableString
+})
+
+export const StateInitRequestSchema = Schema.Struct({
+  repoUrl: Schema.String,
+  repoRef: OptionalString
+})
+
+export const StateCommitRequestSchema = Schema.Struct({
+  message: Schema.String
+})
+
+export const StateSyncRequestSchema = Schema.Struct({
+  message: OptionalNullableString
 })
 
 export const ApplyAllRequestSchema = Schema.Struct({
@@ -118,7 +135,11 @@ export type CreateProjectRequestInput = Schema.Schema.Type<typeof CreateProjectR
 export type GithubAuthLoginRequestInput = Schema.Schema.Type<typeof GithubAuthLoginRequestSchema>
 export type GithubAuthLogoutRequestInput = Schema.Schema.Type<typeof GithubAuthLogoutRequestSchema>
 export type CodexAuthImportRequestInput = Schema.Schema.Type<typeof CodexAuthImportRequestSchema>
+export type CodexAuthLoginRequestInput = Schema.Schema.Type<typeof CodexAuthLoginRequestSchema>
 export type CodexAuthLogoutRequestInput = Schema.Schema.Type<typeof CodexAuthLogoutRequestSchema>
+export type StateInitRequestInput = Schema.Schema.Type<typeof StateInitRequestSchema>
+export type StateCommitRequestInput = Schema.Schema.Type<typeof StateCommitRequestSchema>
+export type StateSyncRequestInput = Schema.Schema.Type<typeof StateSyncRequestSchema>
 export type ApplyAllRequestInput = Schema.Schema.Type<typeof ApplyAllRequestSchema>
 export type UpProjectRequestInput = Schema.Schema.Type<typeof UpProjectRequestSchema>
 export type CreateAgentRequestInput = Schema.Schema.Type<typeof CreateAgentRequestSchema>

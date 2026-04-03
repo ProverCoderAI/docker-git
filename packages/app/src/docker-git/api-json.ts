@@ -114,6 +114,11 @@ export const renderJsonPayload = (payload: JsonValue): string => {
     if (renderedNestedStatus !== null) {
       return renderedNestedStatus
     }
+
+    const nestedMessage = asString(nestedStatus["message"])
+    if (nestedMessage !== null) {
+      return nestedMessage
+    }
   }
 
   return JSON.stringify(payload, null, 2)
