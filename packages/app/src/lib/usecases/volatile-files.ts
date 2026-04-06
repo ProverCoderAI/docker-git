@@ -8,27 +8,22 @@ const volatileWriteRetryAttempts = 5
 export const isNotFoundSystemError = (error: PlatformError): boolean =>
   error._tag === "SystemError" && error.reason === "NotFound"
 
+const succeedNullOnNotFound = (error: PlatformError): Effect.Effect<null, PlatformError> =>
+  isNotFoundSystemError(error)
+    ? Effect.succeed(null)
+    : Effect.fail(error)
+
 export const statIfPresent = (
   fs: FileSystem.FileSystem,
   targetPath: string
 ): Effect.Effect<FileSystem.File.Info | null, PlatformError> =>
-  fs.stat(targetPath).pipe(
-    Effect.catchTag("SystemError", (error) =>
-      isNotFoundSystemError(error)
-        ? Effect.succeed(null)
-        : Effect.fail(error))
-  )
+  fs.stat(targetPath).pipe(Effect.catchTag("SystemError", succeedNullOnNotFound))
 
 export const readFileStringIfPresent = (
   fs: FileSystem.FileSystem,
   filePath: string
 ): Effect.Effect<string | null, PlatformError> =>
-  fs.readFileString(filePath).pipe(
-    Effect.catchTag("SystemError", (error) =>
-      isNotFoundSystemError(error)
-        ? Effect.succeed(null)
-        : Effect.fail(error))
-  )
+  fs.readFileString(filePath).pipe(Effect.catchTag("SystemError", succeedNullOnNotFound))
 
 const writeFileStringAttempt = (
   fs: FileSystem.FileSystem,
