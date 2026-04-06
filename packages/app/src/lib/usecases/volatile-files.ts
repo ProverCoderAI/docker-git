@@ -55,5 +55,4 @@ export const writeFileStringEnsuringParent = (
   path: Path.Path,
   targetPath: string,
   contents: string
-): Effect.Effect<void, PlatformError> =>
-  writeFileStringAttempt(fs, path, targetPath, contents, 0)
+): Effect.Effect<void, PlatformError> => writeFileStringAttempt(fs, path, targetPath, contents, 0)
