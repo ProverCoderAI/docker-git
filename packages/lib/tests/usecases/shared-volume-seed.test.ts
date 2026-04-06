@@ -1,5 +1,3 @@
-import * as fs from "node:fs"
-
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
@@ -64,21 +62,19 @@ describe("stageBootstrapSnapshot", () => {
         yield* _(fileSystem.writeFileString(path.join(sharedCodexDir, "auth.json"), "{\"shared\":true}\n"))
         yield* _(fileSystem.writeFileString(path.join(sharedCodexLabelDir, "auth.json"), "{\"shared\":\"team-a\"}\n"))
 
+        const brokenShimDir = path.join(sharedCodexDir, "tmp", "arg0", "codex-arg0broken")
+        yield* _(fileSystem.makeDirectory(brokenShimDir, { recursive: true }))
         yield* _(
-          Effect.sync(() => {
-            const brokenShimDir = path.join(sharedCodexDir, "tmp", "arg0", "codex-arg0broken")
-            fs.mkdirSync(brokenShimDir, { recursive: true })
-            fs.symlinkSync(
-              "/usr/local/bun/install/global/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex/codex",
-              path.join(brokenShimDir, "apply_patch")
-            )
-            fs.writeFileSync(path.join(brokenShimDir, ".lock"), "")
-            fs.mkdirSync(path.join(sharedCodexDir, "log"), { recursive: true })
-            fs.writeFileSync(path.join(sharedCodexDir, "log", "codex-login.log"), "transient log\n")
-            fs.mkdirSync(path.join(sharedCodexDir, ".image"), { recursive: true })
-            fs.writeFileSync(path.join(sharedCodexDir, ".image", "Dockerfile"), "FROM scratch\n")
-          })
+          fileSystem.symlink(
+            "/usr/local/bun/install/global/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex/codex",
+            path.join(brokenShimDir, "apply_patch")
+          )
         )
+        yield* _(fileSystem.writeFileString(path.join(brokenShimDir, ".lock"), ""))
+        yield* _(fileSystem.makeDirectory(path.join(sharedCodexDir, "log"), { recursive: true }))
+        yield* _(fileSystem.writeFileString(path.join(sharedCodexDir, "log", "codex-login.log"), "transient log\n"))
+        yield* _(fileSystem.makeDirectory(path.join(sharedCodexDir, ".image"), { recursive: true }))
+        yield* _(fileSystem.writeFileString(path.join(sharedCodexDir, ".image", "Dockerfile"), "FROM scratch\n"))
 
         yield* _(
           stageBootstrapSnapshot(stagingDir, projectDir, {

@@ -1,4 +1,3 @@
-import * as nodeFs from "node:fs"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
@@ -197,11 +196,7 @@ describe("syncGithubAuthKeys", () => {
         yield* _(fs.makeDirectory(sourceCodexDir, { recursive: true }))
         yield* _(fs.makeDirectory(targetCodexDir, { recursive: true }))
         yield* _(fs.writeFileString(path.join(sourceCodexDir, "auth.json"), authText))
-        yield* _(
-          Effect.sync(() => {
-            nodeFs.symlinkSync(missingSharedAuthPath, targetAuthPath)
-          })
-        )
+        yield* _(fs.symlink(missingSharedAuthPath, targetAuthPath))
 
         yield* _(
           syncAuthArtifacts({
@@ -223,11 +218,8 @@ describe("syncGithubAuthKeys", () => {
         )
 
         expect(yield* _(fs.readFileString(targetAuthPath))).toBe(authText)
-        yield* _(
-          Effect.sync(() => {
-            expect(nodeFs.lstatSync(targetAuthPath).isSymbolicLink()).toBe(false)
-          })
-        )
+        const targetInfo = yield* _(fs.stat(targetAuthPath))
+        expect(targetInfo.type).toBe("File")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
