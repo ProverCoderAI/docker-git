@@ -134,7 +134,7 @@ export const runCommandWithCapturedOutput = <E>(
           [
             collectStreamText(process.stdout),
             collectStreamText(process.stderr),
-            process.exitCode.pipe(Effect.map((value) => Number(value)))
+            Effect.map(process.exitCode, (value) => Number(value))
           ],
           { concurrency: "unbounded" }
         )
