@@ -187,8 +187,8 @@ export const authCodexLogin = (
     runCodexLogin(cwd, accountPath).pipe(
       Effect.flatMap((output) => (output.length === 0 ? Effect.void : Effect.log(output)))
     )).pipe(
-    Effect.zipRight(autoSyncState(`chore(state): auth codex ${normalizeAccountLabel(command.label, "default")}`))
-  )
+      Effect.zipRight(autoSyncState(`chore(state): auth codex ${normalizeAccountLabel(command.label, "default")}`))
+    )
 
 // CHANGE: show Codex auth status for a given label
 // WHY: make it obvious whether Codex is connected

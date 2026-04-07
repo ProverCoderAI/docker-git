@@ -275,7 +275,14 @@ export const prepareProjectFiles = (
     const rewriteManagedFiles = options.force || options.forceEnv
     const envOnlyRefresh = options.forceEnv && !options.force
     const createdFiles = yield* _(writeProjectFiles(resolvedOutDir, projectConfig, rewriteManagedFiles))
-    yield* _(ensureAuthorizedKeys(resolvedOutDir, projectConfig.authorizedKeysPath, globalConfig.authorizedKeysPath, options.force))
+    yield* _(
+      ensureAuthorizedKeys(
+        resolvedOutDir,
+        projectConfig.authorizedKeysPath,
+        globalConfig.authorizedKeysPath,
+        options.force
+      )
+    )
     yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envGlobalPath, defaultGlobalEnvContents))
     yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envProjectPath, defaultProjectEnvContents, envOnlyRefresh))
     yield* _(ensureCodexConfigFile(baseDir, globalConfig.codexAuthPath))

@@ -98,6 +98,26 @@ export const CreateAgentRequestSchema = Schema.Struct({
   label: OptionalString
 })
 
+// CHANGE: add account pool request schemas
+// WHY: validate API requests for multi-account pool management
+// REF: issue-213
+// PURITY: CORE
+// COMPLEXITY: O(1)
+export const AccountPoolProviderSchema = Schema.Literal("claude", "codex", "gemini")
+
+export const AddAccountRequestSchema = Schema.Struct({
+  provider: AccountPoolProviderSchema,
+  label: Schema.String
+})
+
+export const RemoveAccountRequestSchema = Schema.Struct({
+  provider: AccountPoolProviderSchema,
+  label: Schema.String
+})
+
+export type AddAccountRequestInput = Schema.Schema.Type<typeof AddAccountRequestSchema>
+export type RemoveAccountRequestInput = Schema.Schema.Type<typeof RemoveAccountRequestSchema>
+
 export const CreateFollowRequestSchema = Schema.Struct({
   actor: OptionalString,
   object: Schema.String,

@@ -4,7 +4,12 @@ import { ExitCode } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
-import { runCommandCapture, runCommandExitCode, runCommandWithCapturedOutput, runCommandWithExitCodes } from "./command-runner.js"
+import {
+  runCommandCapture,
+  runCommandExitCode,
+  runCommandWithCapturedOutput,
+  runCommandWithExitCodes
+} from "./command-runner.js"
 import { composeSpec, resolveDockerComposeEnv } from "./docker-compose-env.js"
 import { parseInspectNetworkEntry } from "./docker-inspect-parse.js"
 import { CommandFailedError, DockerCommandError } from "./errors.js"

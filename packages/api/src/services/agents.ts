@@ -8,12 +8,16 @@ import { join } from "node:path"
 import { spawn, type ChildProcess } from "node:child_process"
 
 import type {
+  AccountPoolProvider
+} from "@effect-template/lib/core/account-pool-domain"
+import type {
   AgentLogLine,
   AgentSession,
   CreateAgentRequest,
   ProjectDetails
 } from "../api/contracts.js"
 import { ApiBadRequestError, ApiConflictError, ApiNotFoundError } from "../api/errors.js"
+import { checkLineForRateLimit, selectNextPoolAccount } from "./account-pool.js"
 import { emitProjectEvent } from "./events.js"
 
 type AgentRecord = {
@@ -140,7 +144,8 @@ const updateSession = (
 const appendLog = (
   record: AgentRecord,
   stream: AgentLogLine["stream"],
-  line: string
+  line: string,
+  skipRateLimitCheck = false
 ): void => {
   const entry: AgentLogLine = {
     at: nowIso(),
@@ -154,6 +159,12 @@ const appendLog = (
     line,
     at: entry.at
   })
+
+  // Check for rate-limit signals (only on stderr where errors typically appear,
+  // and skip internal docker-git messages to avoid recursive detection)
+  if (!skipRateLimitCheck && stream === "stderr" && !line.startsWith("[docker-git]")) {
+    checkAndHandleRateLimit(record, line)
+  }
 }
 
 const flushRemainder = (record: AgentRecord, stream: AgentLogLine["stream"]): void => {
@@ -191,6 +202,108 @@ const consumeChunk = (
     record.stderrRemainder = tail
   }
 }
+
+// CHANGE: track rate-limit restarts to prevent infinite loops
+// WHY: an agent that keeps hitting rate limits on all accounts should eventually stop
+// REF: issue-213
+// PURITY: SHELL (mutable state)
+// INVARIANT: maxConsecutiveRestarts >= 1
+// COMPLEXITY: O(1) per check
+const maxConsecutiveRestarts = 10
+const restartCounts: Map<string, number> = new Map()
+const restartingAgents: Set<string> = new Set()
+
+const resolveProviderFromRequest = (
+  provider: CreateAgentRequest["provider"]
+): AccountPoolProvider | undefined => {
+  if (provider === "codex") {
+    return "codex"
+  }
+  if (provider === "claude") {
+    return "claude"
+  }
+  return undefined
+}
+
+// CHANGE: check agent output line for rate-limit signals and trigger account switching
+// WHY: detect rate-limit messages in real-time to switch to the next available account
+// QUOTE(ТЗ): "когда на одном лимиты закаончиваются он переходит на другой аккаунт"
+// REF: issue-213
+// PURITY: SHELL
+// EFFECT: may mutate pool state and trigger agent restart
+// INVARIANT: at most one restart per rate-limit event; bounded by maxConsecutiveRestarts
+// COMPLEXITY: O(p) where p = number of rate-limit patterns
+const checkAndHandleRateLimit = (
+  record: AgentRecord,
+  line: string
+): void => {
+  const poolProvider = resolveProviderFromRequest(record.session.provider)
+  if (poolProvider === undefined) {
+    return
+  }
+
+  const event = checkLineForRateLimit(poolProvider, record.session.label, line)
+  if (event === undefined) {
+    return
+  }
+
+  const agentKey = `${record.session.projectId}:${record.session.provider}`
+  const currentRestarts = restartCounts.get(agentKey) ?? 0
+
+  if (currentRestarts >= maxConsecutiveRestarts) {
+    appendLog(record, "stderr", `[docker-git] rate-limit failover exhausted after ${currentRestarts} restarts`, true)
+    emitProjectEvent(record.session.projectId, "agent.error", {
+      agentId: record.session.id,
+      message: `Rate-limit failover exhausted after ${currentRestarts} restarts: ${event.reason}`
+    })
+    return
+  }
+
+  if (restartingAgents.has(record.session.id)) {
+    return
+  }
+
+  const nextAccount = selectNextPoolAccount(poolProvider)
+  if (nextAccount === undefined) {
+    appendLog(record, "stderr", "[docker-git] rate-limit detected but no available accounts in pool", true)
+    emitProjectEvent(record.session.projectId, "agent.error", {
+      agentId: record.session.id,
+      message: `Rate-limit detected but no available accounts in pool for ${poolProvider}`
+    })
+    return
+  }
+
+  restartingAgents.add(record.session.id)
+  restartCounts.set(agentKey, currentRestarts + 1)
+
+  appendLog(record, "stderr", `[docker-git] rate-limit detected, switching to account "${nextAccount.label}"`, true)
+  emitProjectEvent(record.session.projectId, "agent.error", {
+    agentId: record.session.id,
+    message: `Rate-limit on "${record.session.label}", switching to "${nextAccount.label}"`
+  })
+
+  // Store pending restart info and kill current agent.
+  // The close handler will pick this up and restart with the new account.
+  pendingRestarts.set(record.session.id, {
+    nextLabel: nextAccount.label,
+    projectId: record.session.projectId,
+    provider: record.session.provider,
+    projectDir: record.projectDir
+  })
+
+  if (record.process && !record.process.killed) {
+    record.process.kill("SIGTERM")
+  }
+}
+
+type PendingRestart = {
+  readonly nextLabel: string
+  readonly projectId: string
+  readonly provider: CreateAgentRequest["provider"]
+  readonly projectDir: string
+}
+
+const pendingRestarts: Map<string, PendingRestart> = new Map()
 
 const getProjectAgentIds = (projectId: string): ReadonlyArray<string> => {
   const ids = projectIndex.get(projectId)
@@ -375,6 +488,10 @@ export const startAgent = (
         flushRemainder(record, "stdout")
         flushRemainder(record, "stderr")
 
+        const pendingRestart = pendingRestarts.get(sessionId)
+        pendingRestarts.delete(sessionId)
+        restartingAgents.delete(sessionId)
+
         const expectedStop = record.session.status === "stopping" || record.session.status === "stopped"
         const nextStatus: AgentSession["status"] = expectedStop
           ? "stopped"
@@ -394,6 +511,34 @@ export const startAgent = (
           signal,
           status: nextStatus
         })
+
+        // CHANGE: restart agent with next available account after rate-limit
+        // WHY: seamless failover to another account without manual intervention
+        // REF: issue-213
+        if (pendingRestart !== undefined) {
+          appendLog(record, "stderr", `[docker-git] restarting agent with account "${pendingRestart.nextLabel}"...`, true)
+
+          const restartRequest: CreateAgentRequest = {
+            provider: pendingRestart.provider,
+            label: pendingRestart.nextLabel,
+            cwd: request.cwd,
+            args: request.args,
+            env: request.env
+          }
+
+          // Use setTimeout to avoid deep recursion within close handler
+          setTimeout(() => {
+            const result = Effect.runSync(startAgent(project, restartRequest))
+            emitProjectEvent(project.id, "agent.started", {
+              agentId: result.id,
+              provider: restartRequest.provider,
+              label: pendingRestart.nextLabel,
+              command: result.command,
+              restartedFrom: sessionId,
+              reason: "rate-limit-failover"
+            })
+          }, 1000)
+        }
       })
 
       persistSnapshotBestEffort()

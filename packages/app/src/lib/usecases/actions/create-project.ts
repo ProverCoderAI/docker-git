@@ -5,18 +5,18 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import type { CreateCommand, ParseError, TemplateConfig } from "../../core/domain.js"
-import { deriveRepoPathParts, resolveComposeProjectName, resolveProjectBootstrapVolumeName } from "../../core/domain.js"
+import type { CreateCommand, ParseError } from "../../core/domain.js"
+import { deriveRepoPathParts } from "../../core/domain.js"
 import { runCommandWithExitCodes } from "../../shell/command-runner.js"
 import { ensureDockerDaemonAccess } from "../../shell/docker.js"
-import { CommandFailedError, DockerIdentityConflictError } from "../../shell/errors.js"
+import { CommandFailedError } from "../../shell/errors.js"
 import type {
   AgentFailedError,
   AuthError,
   CloneFailedError,
   DockerAccessError,
   DockerCommandError,
-  DockerIdentityConflict,
+  DockerIdentityConflictError,
   FileExistsError,
   PortProbeError
 } from "../../shell/errors.js"
@@ -27,16 +27,11 @@ import { applyGithubForkConfig } from "../github-fork.js"
 import { validateGithubCloneAuthTokenPreflight } from "../github-token-preflight.js"
 import { defaultProjectsRoot } from "../menu-helpers.js"
 import { findSshPrivateKey } from "../path-helpers.js"
-import {
-  buildSshCommand,
-  getContainerIpIfInsideContainer,
-  loadProjectIndex,
-  loadProjectStatus
-} from "../projects-core.js"
-import { deleteDockerGitProject } from "../projects-delete.js"
+import { buildSshCommand, getContainerIpIfInsideContainer } from "../projects-core.js"
 import { resolveTemplateResourceLimits } from "../resource-limits.js"
 import { autoSyncState } from "../state-repo.js"
 import { ensureTerminalCursorVisible } from "../terminal-cursor.js"
+import { deleteConflictingProjectsIfNeeded } from "./docker-identity.js"
 import { runDockerDownCleanup, runDockerUpIfNeeded } from "./docker-up.js"
 import { buildProjectConfigs, resolveDockerGitRootRelativePath } from "./paths.js"
 import { resolveSshPort } from "./ports.js"
@@ -253,97 +248,6 @@ const resolveRuntimeConfig = (
     return clonedOnHostname === undefined
       ? finalAgentConfig
       : { ...finalAgentConfig, clonedOnHostname }
-  })
-
-type DockerIdentityOwner = Pick<TemplateConfig, "containerName" | "serviceName" | "volumeName" | "enableMcpPlaywright">
-
-type DockerIdentityNamespace = "container" | "composeProject" | "volume"
-
-type DockerIdentityClaim = Omit<DockerIdentityConflict, "conflictingProjectDir"> & {
-  readonly namespace: DockerIdentityNamespace
-}
-
-const resolveDockerIdentityClaims = (
-  config: DockerIdentityOwner
-): ReadonlyArray<DockerIdentityClaim> => [
-  { namespace: "container", kind: "containerName", name: config.containerName },
-  ...(config.enableMcpPlaywright
-    ? [{ namespace: "container" as const, kind: "browserContainerName" as const, name: `${config.containerName}-browser` }]
-    : []),
-  { namespace: "composeProject", kind: "serviceName", name: resolveComposeProjectName(config) },
-  { namespace: "volume", kind: "volumeName", name: config.volumeName },
-  ...(config.enableMcpPlaywright
-    ? [{ namespace: "volume" as const, kind: "browserVolumeName" as const, name: `${config.volumeName}-browser` }]
-    : []),
-  { namespace: "volume", kind: "bootstrapVolumeName", name: resolveProjectBootstrapVolumeName(config) }
-]
-
-const deleteConflictingProjectsIfNeeded = (
-  resolvedOutDir: string,
-  config: DockerIdentityOwner,
-  force: boolean
-): Effect.Effect<void, DockerIdentityConflictError | PlatformError | DockerCommandError, CreateProjectRuntime> =>
-  Effect.gen(function*(_) {
-    const index = yield* _(loadProjectIndex())
-    if (index === null) {
-      return
-    }
-
-    const candidateClaims = resolveDockerIdentityClaims(config)
-    const conflicts: Array<DockerIdentityConflict> = []
-    const conflictingProjects = new Map<string, { readonly projectDir: string; readonly repoUrl: string; readonly containerName: string; readonly serviceName: string }>()
-
-    for (const configPath of index.configPaths) {
-      const status = yield* _(
-        loadProjectStatus(configPath).pipe(
-          Effect.match({
-            onFailure: () => null,
-            onSuccess: (value) => value
-          })
-        )
-      )
-      if (status === null || status.projectDir === resolvedOutDir) {
-        continue
-      }
-
-      const existingClaims = resolveDockerIdentityClaims(status.config.template)
-      const sharedClaims = candidateClaims.flatMap((candidate) =>
-        existingClaims.some(
-          (existing) => existing.namespace === candidate.namespace && existing.name === candidate.name
-        )
-          ? [{ conflictingProjectDir: status.projectDir, kind: candidate.kind, name: candidate.name }]
-          : []
-      )
-
-      if (sharedClaims.length === 0) {
-        continue
-      }
-
-      conflicts.push(...sharedClaims)
-      conflictingProjects.set(status.projectDir, {
-        projectDir: status.projectDir,
-        repoUrl: status.config.template.repoUrl,
-        containerName: status.config.template.containerName,
-        serviceName: status.config.template.serviceName
-      })
-    }
-
-    if (conflicts.length === 0) {
-      return
-    }
-
-    if (!force) {
-      return yield* _(Effect.fail(new DockerIdentityConflictError({ projectDir: resolvedOutDir, conflicts })))
-    }
-
-    for (const conflictingProject of conflictingProjects.values()) {
-      yield* _(
-        Effect.logWarning(
-          `Force enabled: replacing conflicting docker-git project ${conflictingProject.projectDir}`
-        )
-      )
-      yield* _(deleteDockerGitProject(conflictingProject))
-    }
   })
 
 const maybeCleanupAfterAgent = (
