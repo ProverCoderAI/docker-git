@@ -16,13 +16,11 @@ import {
 
 export { githubInvalidTokenMessage } from "./github-token-validation.js"
 
-export const githubMissingTokenMessage =
-  [
-    "GitHub auth is missing: no GitHub token/key was found for this repository.",
-    "If the repository requires access, run: docker-git auth github login --web"
-  ].join("\n")
-export const githubRepoAccessWarning =
-  "Unable to validate GitHub repository access before start; continuing."
+export const githubMissingTokenMessage = [
+  "GitHub auth is missing: no GitHub token/key was found for this repository.",
+  "If the repository requires access, run: docker-git auth github login --web"
+].join("\n")
+export const githubRepoAccessWarning = "Unable to validate GitHub repository access before start; continuing."
 
 export type GithubRepoAccessStatus = "accessible" | "notAccessible" | "unknown"
 
@@ -167,16 +165,15 @@ export const validateGithubCloneAuthTokenPreflight = (
       return
     }
 
-    const token =
-      config.skipGithubAuth === true
-        ? null
-        : yield* _(
-            Effect.gen(function*(__) {
-              const fs = yield* __(FileSystem.FileSystem)
-              const envText = yield* __(readEnvText(fs, config.envGlobalPath))
-              return resolveGithubCloneAuthToken(envText, config)
-            })
-          )
+    const token = config.skipGithubAuth
+      ? null
+      : yield* _(
+        Effect.gen(function*(__) {
+          const fs = yield* __(FileSystem.FileSystem)
+          const envText = yield* __(readEnvText(fs, config.envGlobalPath))
+          return resolveGithubCloneAuthToken(envText, config)
+        })
+      )
 
     if (token !== null) {
       const validation = yield* _(validateGithubToken(token))
@@ -196,7 +193,8 @@ export const validateGithubCloneAuthTokenPreflight = (
         Match.when("accessible", () => Effect.void),
         Match.when("notAccessible", () =>
           Effect.fail(new AuthError({ message: githubRepoAccessMessage(config.repoUrl, token !== null) }))),
-        Match.when("unknown", () => Effect.logWarning(githubRepoAccessWarning)),
+        Match.when("unknown", () =>
+          Effect.logWarning(githubRepoAccessWarning)),
         Match.exhaustive
       )
     )

@@ -216,11 +216,11 @@ const buildTemplateConfig = ({
   dockerSharedNetworkName,
   enableMcpPlaywright,
   gitTokenLabel,
-  skipGithubAuth,
   names,
   paths,
   ramLimit,
-  repo
+  repo,
+  skipGithubAuth
 }: BuildTemplateConfigInput): CreateCommand["config"] => ({
   containerName: names.containerName,
   serviceName: names.serviceName,
