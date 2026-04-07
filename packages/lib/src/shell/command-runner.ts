@@ -133,15 +133,14 @@ export const runCommandWithCapturedOutput = <E>(
           [
             collectStreamText(process.stdout),
             collectStreamText(process.stderr),
-            Effect.map(process.exitCode, (value) => Number(value))
+            pipe(process.exitCode, Effect.map(Number))
           ],
           { concurrency: "unbounded" }
         )
       )
       yield* _(
         ensureExitCode(exitCode, okExitCodes, (numericExitCode) =>
-          onFailure(numericExitCode, combineCommandOutput(stdout, stderr))
-        )
+          onFailure(numericExitCode, combineCommandOutput(stdout, stderr)))
       )
     })
   )
