@@ -50,10 +50,10 @@ const upsertProviderPool = (
 ): AccountPoolState => {
   const existing = state.pools.findIndex((p) => p.provider === pool.provider)
   const nextPools = [...state.pools]
-  if (existing >= 0) {
-    nextPools[existing] = pool
-  } else {
+  if (existing === -1) {
     nextPools.push(pool)
+  } else {
+    nextPools[existing] = pool
   }
   return { pools: nextPools, updatedAt: now }
 }
@@ -262,8 +262,7 @@ export const advanceActiveIndex = (
 export const listAccounts = (
   state: AccountPoolState,
   provider: AccountPoolProvider
-): ReadonlyArray<AccountEntry> =>
-  findProviderPool(state, provider).accounts
+): ReadonlyArray<AccountEntry> => findProviderPool(state, provider).accounts
 
 /**
  * List all accounts across all providers.
@@ -273,8 +272,7 @@ export const listAccounts = (
  */
 export const listAllAccounts = (
   state: AccountPoolState
-): ReadonlyArray<AccountEntry> =>
-  state.pools.flatMap((pool) => pool.accounts)
+): ReadonlyArray<AccountEntry> => state.pools.flatMap((pool) => pool.accounts)
 
 /**
  * Get pool summary for a provider.
