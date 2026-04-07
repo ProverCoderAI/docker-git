@@ -359,7 +359,7 @@ export const runDockerInspectContainerRuntimeInfo = (
         }))
       )
     }),
-    Effect.catchAll(() => Effect.succeed(null))
+    Effect.catchTags({ DockerCommandError: () => Effect.succeed(null), SystemError: () => Effect.succeed(null), BadArgument: () => Effect.succeed(null) })
   )
 
 // CHANGE: inspect the container IP address on the default `bridge` network

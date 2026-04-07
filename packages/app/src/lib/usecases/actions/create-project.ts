@@ -268,12 +268,12 @@ const resolveDockerIdentityClaims = (
 ): ReadonlyArray<DockerIdentityClaim> => [
   { namespace: "container", kind: "containerName", name: config.containerName },
   ...(config.enableMcpPlaywright
-    ? [{ namespace: "container" as const, kind: "browserContainerName" as const, name: `${config.containerName}-browser` }]
+    ? [{ namespace: "container", kind: "browserContainerName", name: `${config.containerName}-browser` } satisfies DockerIdentityClaim]
     : []),
   { namespace: "composeProject", kind: "serviceName", name: resolveComposeProjectName(config) },
   { namespace: "volume", kind: "volumeName", name: config.volumeName },
   ...(config.enableMcpPlaywright
-    ? [{ namespace: "volume" as const, kind: "browserVolumeName" as const, name: `${config.volumeName}-browser` }]
+    ? [{ namespace: "volume", kind: "browserVolumeName", name: `${config.volumeName}-browser` } satisfies DockerIdentityClaim]
     : []),
   { namespace: "volume", kind: "bootstrapVolumeName", name: resolveProjectBootstrapVolumeName(config) }
 ]
@@ -319,7 +319,7 @@ const deleteConflictingProjectsIfNeeded = (
         continue
       }
 
-      conflicts.push(...sharedClaims)
+      for (const claim of sharedClaims) { conflicts.push(claim) }
       conflictingProjects.set(status.projectDir, {
         projectDir: status.projectDir,
         repoUrl: status.config.template.repoUrl,
