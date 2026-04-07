@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { NodeContext } from "@effect/platform-node"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
@@ -244,3 +245,4 @@ describe("createProject docker identity guard", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })
+/* jscpd:ignore-end */

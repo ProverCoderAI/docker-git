@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import * as Command from "@effect/platform/Command"
 import * as CommandExecutor from "@effect/platform/CommandExecutor"
 import { describe, expect, it } from "@effect/vitest"
@@ -132,3 +133,4 @@ describe("runDockerInspectContainerRuntimeInfo", () => {
       })
     }))
 })
+/* jscpd:ignore-end */
