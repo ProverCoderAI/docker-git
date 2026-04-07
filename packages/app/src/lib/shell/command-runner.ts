@@ -80,6 +80,16 @@ const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
     return next
   })
 
+const decodeUint8Array = (bytes: Uint8Array): string => new TextDecoder("utf-8").decode(bytes)
+
+const collectStreamText = (
+  stream: Stream.Stream<Uint8Array, PlatformError>
+): Effect.Effect<string, PlatformError> =>
+  pipe(stream, Stream.runCollect, Effect.map((chunks) => decodeUint8Array(collectUint8Array(chunks))))
+
+const combineCommandOutput = (stdout: string, stderr: string): string =>
+  [stdout.trim(), stderr.trim()].filter((chunk) => chunk.length > 0).join("\n")
+
 // CHANGE: run a command and capture stdout, draining stderr to prevent buffer deadlock
 // WHY: if stderr fills the OS buffer (~64 KB) the child process hangs; drain it asynchronously
 // QUOTE(ТЗ): "система авторизации"
@@ -106,7 +116,34 @@ export const runCommandCapture = <E>(
       const exitCode = yield* _(process.exitCode)
       const numericExitCode = Number(exitCode)
       yield* _(ensureExitCode(numericExitCode, okExitCodes, onFailure))
-      return new TextDecoder("utf-8").decode(bytes)
+      return decodeUint8Array(bytes)
+    })
+  )
+
+export const runCommandWithCapturedOutput = <E>(
+  spec: RunCommandSpec,
+  okExitCodes: ReadonlyArray<number>,
+  onFailure: (exitCode: number, output: string) => E
+): Effect.Effect<void, E | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const executor = yield* _(CommandExecutor.CommandExecutor)
+      const process = yield* _(executor.start(buildCommand(spec, "pipe", "pipe", "pipe")))
+      const [stdout, stderr, exitCode] = yield* _(
+        Effect.all(
+          [
+            collectStreamText(process.stdout),
+            collectStreamText(process.stderr),
+            Effect.map(process.exitCode, (value) => Number(value))
+          ],
+          { concurrency: "unbounded" }
+        )
+      )
+      yield* _(
+        ensureExitCode(exitCode, okExitCodes, (numericExitCode) =>
+          onFailure(numericExitCode, combineCommandOutput(stdout, stderr))
+        )
+      )
     })
   )
 /* jscpd:ignore-end */

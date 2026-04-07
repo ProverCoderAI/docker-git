@@ -4,7 +4,8 @@ import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
-import { seedAuthorizedKeysForCreate } from "../src/services/projects.js"
+import { ApiConflictError } from "../src/api/errors.js"
+import { createProjectFromRequest, seedAuthorizedKeysForCreate } from "../src/services/projects.js"
 
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
@@ -84,6 +85,52 @@ describe("projects service", () => {
         const projectContents = yield* _(fs.readFileString(expectedProjectPath))
         expect(defaultContents).toBe(`${hostKey}\n`)
         expect(projectContents).toBe(`${hostKey}\n`)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("maps duplicate docker identities to API conflict for create", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+
+        yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              createProjectFromRequest({
+                repoUrl: "https://git.example.test/test-owner-a/openclaw_autodeployer.git",
+                repoRef: "main",
+                sshPort: "2237",
+                skipGithubAuth: true,
+                up: false
+              })
+            )
+          )
+        )
+
+        const error = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              createProjectFromRequest({
+                repoUrl: "https://git.example.test/test-owner-b/openclaw_autodeployer.git",
+                repoRef: "main",
+                sshPort: "2238",
+                skipGithubAuth: true,
+                up: false
+              }).pipe(Effect.flip)
+            )
+          )
+        )
+
+        expect(error).toBeInstanceOf(ApiConflictError)
+        if (error instanceof ApiConflictError) {
+          expect(error.message).toContain("Docker identities are already owned")
+          expect(error.message).toContain("dg-openclaw_autodeployer")
+        }
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

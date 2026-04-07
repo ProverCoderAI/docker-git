@@ -4,7 +4,7 @@ import { ExitCode } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
-import { runCommandCapture, runCommandExitCode, runCommandWithExitCodes } from "./command-runner.js"
+import { runCommandCapture, runCommandExitCode, runCommandWithCapturedOutput, runCommandWithExitCodes } from "./command-runner.js"
 import { composeSpec, resolveDockerComposeEnv } from "./docker-compose-env.js"
 import { parseInspectNetworkEntry } from "./docker-inspect-parse.js"
 import { CommandFailedError, DockerCommandError } from "./errors.js"
@@ -20,13 +20,13 @@ const runCompose = (
   Effect.gen(function*(_) {
     const env = yield* _(resolveDockerComposeEnv(cwd))
     yield* _(
-      runCommandWithExitCodes(
+      runCommandWithCapturedOutput(
         {
           ...composeSpec(cwd, args),
           ...(Object.keys(env).length > 0 ? { env } : {})
         },
         okExitCodes,
-        (exitCode) => new DockerCommandError({ exitCode })
+        (exitCode, output) => new DockerCommandError({ exitCode, ...(output.length > 0 ? { details: output } : {}) })
       )
     )
   })
