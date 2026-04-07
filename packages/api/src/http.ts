@@ -436,14 +436,13 @@ export const makeRouter = () => {
     ),
     HttpRouter.get(
       "/account-pool/:provider",
-      HttpRouter.schemaParams(Schema.Struct({ provider: Schema.String })).pipe(
-        Effect.flatMap(({ provider }) => {
-          const p = provider as "claude" | "codex" | "gemini"
-          return jsonResponse({
-            accounts: listPoolAccounts(p),
-            summary: getPoolSummary(p)
+      HttpRouter.schemaParams(Schema.Struct({ provider: Schema.Literal("claude", "codex", "gemini") })).pipe(
+        Effect.flatMap(({ provider }) =>
+          jsonResponse({
+            accounts: listPoolAccounts(provider),
+            summary: getPoolSummary(provider)
           }, 200)
-        }),
+        ),
         Effect.catchAll(errorResponse)
       )
     ),
