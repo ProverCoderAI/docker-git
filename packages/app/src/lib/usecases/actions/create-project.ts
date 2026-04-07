@@ -268,12 +268,24 @@ const resolveDockerIdentityClaims = (
 ): ReadonlyArray<DockerIdentityClaim> => [
   { namespace: "container", kind: "containerName", name: config.containerName },
   ...(config.enableMcpPlaywright
-    ? [{ namespace: "container" as const, kind: "browserContainerName" as const, name: `${config.containerName}-browser` }]
+    ? [
+      {
+        namespace: "container",
+        kind: "browserContainerName",
+        name: `${config.containerName}-browser`
+      } satisfies DockerIdentityClaim
+    ]
     : []),
   { namespace: "composeProject", kind: "serviceName", name: resolveComposeProjectName(config) },
   { namespace: "volume", kind: "volumeName", name: config.volumeName },
   ...(config.enableMcpPlaywright
-    ? [{ namespace: "volume" as const, kind: "browserVolumeName" as const, name: `${config.volumeName}-browser` }]
+    ? [
+      {
+        namespace: "volume",
+        kind: "browserVolumeName",
+        name: `${config.volumeName}-browser`
+      } satisfies DockerIdentityClaim
+    ]
     : []),
   { namespace: "volume", kind: "bootstrapVolumeName", name: resolveProjectBootstrapVolumeName(config) }
 ]
@@ -291,7 +303,15 @@ const deleteConflictingProjectsIfNeeded = (
 
     const candidateClaims = resolveDockerIdentityClaims(config)
     const conflicts: Array<DockerIdentityConflict> = []
-    const conflictingProjects = new Map<string, { readonly projectDir: string; readonly repoUrl: string; readonly containerName: string; readonly serviceName: string }>()
+    const conflictingProjects = new Map<
+      string,
+      {
+        readonly projectDir: string
+        readonly repoUrl: string
+        readonly containerName: string
+        readonly serviceName: string
+      }
+    >()
 
     for (const configPath of index.configPaths) {
       const status = yield* _(
@@ -309,8 +329,8 @@ const deleteConflictingProjectsIfNeeded = (
       const existingClaims = resolveDockerIdentityClaims(status.config.template)
       const sharedClaims = candidateClaims.flatMap((candidate) =>
         existingClaims.some(
-          (existing) => existing.namespace === candidate.namespace && existing.name === candidate.name
-        )
+            (existing) => existing.namespace === candidate.namespace && existing.name === candidate.name
+          )
           ? [{ conflictingProjectDir: status.projectDir, kind: candidate.kind, name: candidate.name }]
           : []
       )
@@ -319,7 +339,9 @@ const deleteConflictingProjectsIfNeeded = (
         continue
       }
 
-      conflicts.push(...sharedClaims)
+      for (const claim of sharedClaims) {
+        conflicts.push(claim)
+      }
       conflictingProjects.set(status.projectDir, {
         projectDir: status.projectDir,
         repoUrl: status.config.template.repoUrl,

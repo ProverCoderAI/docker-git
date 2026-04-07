@@ -1,12 +1,12 @@
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
 import type { PlatformError } from "@effect/platform/Error"
+import * as FileSystem from "@effect/platform/FileSystem"
+import * as Path from "@effect/platform/Path"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { beforeEach, vi } from "vitest"
 
-import { defaultTemplateConfig, type CreateCommand } from "@lib/core/domain"
+import { type CreateCommand, defaultTemplateConfig } from "@lib/core/domain"
 
 import { DockerIdentityConflictError } from "../../src/lib/shell/errors.js"
 import { createProject } from "../../src/lib/usecases/actions/create-project.js"
@@ -14,7 +14,10 @@ import type { ProjectStatus } from "../../src/lib/usecases/projects-core.js"
 
 const resolveSshPortMock = vi.hoisted(() => vi.fn((config: CreateCommand["config"]) => Effect.succeed(config)))
 const buildSshCommandMock = vi.hoisted(() => vi.fn(() => "ssh -p 2222 dev@localhost"))
-const getContainerIpIfInsideContainerMock = vi.hoisted(() => vi.fn(() => Effect.succeed(undefined)))
+const noIp: string | undefined = undefined
+const getContainerIpIfInsideContainerMock = vi.hoisted(() =>
+  vi.fn((_fs: FileSystem.FileSystem, _dir: string, _name: string) => Effect.succeed(noIp))
+)
 const loadProjectIndexMock = vi.hoisted(() => vi.fn())
 const loadProjectStatusMock = vi.hoisted(() => vi.fn())
 const migrateProjectOrchLayoutMock = vi.hoisted(() => vi.fn(() => Effect.void))

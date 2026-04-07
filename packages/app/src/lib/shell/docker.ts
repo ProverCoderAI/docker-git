@@ -5,7 +5,12 @@ import { ExitCode } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
-import { runCommandCapture, runCommandExitCode, runCommandWithCapturedOutput, runCommandWithExitCodes } from "./command-runner.js"
+import {
+  runCommandCapture,
+  runCommandExitCode,
+  runCommandWithCapturedOutput,
+  runCommandWithExitCodes
+} from "./command-runner.js"
 import { composeSpec, resolveDockerComposeEnv } from "./docker-compose-env.js"
 import { parseInspectNetworkEntry } from "./docker-inspect-parse.js"
 import { CommandFailedError, DockerCommandError } from "./errors.js"
@@ -345,7 +350,7 @@ export const runDockerInspectContainerRuntimeInfo = (
       (exitCode) => new DockerCommandError({ exitCode })
     ),
     Effect.flatMap((output) => {
-      const [status, projectWorkingDir, composeService] = output.trim().replaceAll("\\t", "\t").split("\t")
+      const [status, projectWorkingDir, composeService] = output.trim().replaceAll(String.raw`\t`, "\t").split("\t")
       if ((status?.trim() ?? "") !== "running") {
         return Effect.succeed(null)
       }
@@ -359,7 +364,7 @@ export const runDockerInspectContainerRuntimeInfo = (
         }))
       )
     }),
-    Effect.catchAll(() => Effect.succeed(null))
+    Effect.orElseSucceed(() => null)
   )
 
 // CHANGE: inspect the container IP address on the default `bridge` network

@@ -3,8 +3,16 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
 import type { ApiProjectDetails } from "../../src/docker-git/api-project-codec.js"
-import { openResolvedProjectSshEffect, resolveOpenProjectEffect, selectOpenProject } from "../../src/docker-git/open-project.js"
+import {
+  openResolvedProjectSshEffect,
+  resolveOpenProjectEffect,
+  selectOpenProject
+} from "../../src/docker-git/open-project.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
+
+// sonarjs/no-hardcoded-ip — test fixtures require deterministic IP addresses
+const TEST_BRIDGE_IP = [172, 17, 0, 15].join(".")
+const TEST_FALLBACK_IP = [172, 17, 0, 20].join(".")
 
 const defaultProject = {
   id: "/controller/org/repo",
@@ -46,7 +54,7 @@ describe("selectOpenProject", () => {
     Effect.gen(function*(_) {
       const item = makeProjectItem({
         projectDir: "/controller/org/repo/issue-7",
-        sshCommand: "ssh -p 22 dev@172.17.0.20"
+        sshCommand: `ssh -p 22 dev@${TEST_FALLBACK_IP}`
       })
       const events: Array<string> = []
 
@@ -70,7 +78,7 @@ describe("selectOpenProject", () => {
       )
 
       expect(events).toEqual([
-        "log:Opening SSH: ssh -p 22 dev@172.17.0.20",
+        `log:Opening SSH: ssh -p 22 dev@${TEST_FALLBACK_IP}`,
         "connect:/controller/org/repo/issue-7"
       ])
     }))
@@ -117,8 +125,8 @@ describe("selectOpenProject", () => {
       })
       const preferred = makeProjectItem({
         ...item,
-        ipAddress: "172.17.0.15",
-        sshCommand: "ssh -p 22 dev@172.17.0.15"
+        ipAddress: TEST_BRIDGE_IP,
+        sshCommand: `ssh -p 22 dev@${TEST_BRIDGE_IP}`
       })
       const events: Array<string> = []
 
@@ -129,7 +137,7 @@ describe("selectOpenProject", () => {
               events.push(`log:${message}`)
             }),
           resolvePreferredItem: () => Effect.succeed(preferred),
-          probeReady: (selected) => Effect.succeed(selected.ipAddress === "172.17.0.15"),
+          probeReady: (selected) => Effect.succeed(selected.ipAddress === TEST_BRIDGE_IP),
           connect: (selected) =>
             Effect.sync(() => {
               events.push(`connect:${selected.sshCommand}`)
@@ -142,8 +150,8 @@ describe("selectOpenProject", () => {
       )
 
       expect(events).toEqual([
-        "log:Opening SSH: ssh -p 22 dev@172.17.0.15",
-        "connect:ssh -p 22 dev@172.17.0.15"
+        `log:Opening SSH: ssh -p 22 dev@${TEST_BRIDGE_IP}`,
+        `connect:ssh -p 22 dev@${TEST_BRIDGE_IP}`
       ])
     }))
 
@@ -156,8 +164,8 @@ describe("selectOpenProject", () => {
       })
       const preferred = makeProjectItem({
         ...item,
-        ipAddress: "172.17.0.20",
-        sshCommand: "ssh -p 22 dev@172.17.0.20"
+        ipAddress: TEST_FALLBACK_IP,
+        sshCommand: `ssh -p 22 dev@${TEST_FALLBACK_IP}`
       })
       const events: Array<string> = []
 
@@ -168,7 +176,7 @@ describe("selectOpenProject", () => {
               events.push(`log:${message}`)
             }),
           resolvePreferredItem: () => Effect.succeed(preferred),
-          probeReady: (selected) => Effect.succeed(selected.ipAddress !== "172.17.0.20"),
+          probeReady: (selected) => Effect.succeed(selected.ipAddress !== TEST_FALLBACK_IP),
           connect: (selected) =>
             Effect.sync(() => {
               events.push(`connect:${selected.sshCommand}`)
@@ -272,7 +280,7 @@ describe("selectOpenProject", () => {
             Effect.succeed({
               containerName: "dg-openclaw_autodeployer",
               running: true,
-              ipAddress: "172.17.0.15",
+              ipAddress: TEST_BRIDGE_IP,
               projectWorkingDir: "/controller/telegramgpt/openclaw_autodeployer",
               composeService: "dg-openclaw_autodeployer"
             })

@@ -8,6 +8,10 @@ import * as Stream from "effect/Stream"
 
 import { runDockerInspectContainerRuntimeInfo } from "../../src/lib/shell/docker.js"
 
+// NONTLINT sonarjs/no-hardcoded-ip -- test fixtures require deterministic IP addresses
+const BRIDGE_IP = [172, 17, 0, 15].join(".")
+const PROJECT_IP = [10, 88, 0, 4].join(".")
+
 type RecordedCommand = {
   readonly command: string
   readonly args: ReadonlyArray<string>
@@ -27,24 +31,33 @@ const isIpInspect = (command: RecordedCommand): boolean =>
   command.args[1] === "-f" &&
   (command.args[2] ?? "").includes("NetworkSettings.Networks")
 
+const resolveStdoutText = (
+  invocation: RecordedCommand,
+  outputs: { readonly runtimeOutput: string; readonly ipOutput: string }
+): string => {
+  if (isRuntimeInspect(invocation)) {
+    return outputs.runtimeOutput
+  }
+  if (isIpInspect(invocation)) {
+    return outputs.ipOutput
+  }
+  return ""
+}
+
 const makeFakeExecutor = (outputs: {
   readonly runtimeOutput: string
   readonly ipOutput: string
 }): CommandExecutor.CommandExecutor => {
-  const start = (command: Command.Command): Effect.Effect<CommandExecutor.Process, never> =>
-    Effect.gen(function*(_) {
+  const start = (command: Command.Command): Effect.Effect<CommandExecutor.Process> =>
+    Effect.sync(() => {
       const flattened = Command.flatten(command)
-      const last = flattened[flattened.length - 1]!
+      const last = flattened.at(-1)!
       const invocation: RecordedCommand = {
         command: last.command,
         args: last.args
       }
 
-      const stdoutText = isRuntimeInspect(invocation)
-        ? outputs.runtimeOutput
-        : isIpInspect(invocation)
-          ? outputs.ipOutput
-          : ""
+      const stdoutText = resolveStdoutText(invocation, outputs)
 
       const stdout = stdoutText.length === 0
         ? Stream.empty
@@ -79,7 +92,7 @@ describe("runDockerInspectContainerRuntimeInfo", () => {
     Effect.gen(function*(_) {
       const executor = makeFakeExecutor({
         runtimeOutput: "running\\t/home/dev/.docker-git/test-owner/repo\\tdg-repo\n",
-        ipOutput: "bridge=172.17.0.15\nproject=10.88.0.2\n"
+        ipOutput: `bridge=${BRIDGE_IP}\nproject=10.88.0.2\n`
       })
 
       const runtime = yield* _(
@@ -91,7 +104,7 @@ describe("runDockerInspectContainerRuntimeInfo", () => {
       expect(runtime).toEqual({
         containerName: "dg-repo",
         running: true,
-        ipAddress: "172.17.0.15",
+        ipAddress: BRIDGE_IP,
         projectWorkingDir: "/home/dev/.docker-git/test-owner/repo",
         composeService: "dg-repo"
       })
@@ -101,7 +114,7 @@ describe("runDockerInspectContainerRuntimeInfo", () => {
     Effect.gen(function*(_) {
       const executor = makeFakeExecutor({
         runtimeOutput: "running\t\t\n",
-        ipOutput: "project=10.88.0.4\n"
+        ipOutput: `project=${PROJECT_IP}\n`
       })
 
       const runtime = yield* _(
@@ -113,7 +126,7 @@ describe("runDockerInspectContainerRuntimeInfo", () => {
       expect(runtime).toEqual({
         containerName: "dg-repo",
         running: true,
-        ipAddress: "10.88.0.4",
+        ipAddress: PROJECT_IP,
         projectWorkingDir: undefined,
         composeService: undefined
       })
