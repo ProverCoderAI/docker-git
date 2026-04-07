@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
 import type { ApiProjectDetails } from "../../src/docker-git/api-project-codec.js"
-import { openResolvedProjectSshEffect, selectOpenProject } from "../../src/docker-git/open-project.js"
+import { openResolvedProjectSshEffect, resolveOpenProjectEffect, selectOpenProject } from "../../src/docker-git/open-project.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
 
 const defaultProject = {
@@ -42,7 +42,7 @@ const expectSelectedProject = (
   })
 
 describe("selectOpenProject", () => {
-  it.effect("uses the shared SSH-open effect ordering", () =>
+  it.effect("connects directly when SSH is already reachable", () =>
     Effect.gen(function*(_) {
       const item = makeProjectItem({
         projectDir: "/controller/org/repo/issue-7",
@@ -56,9 +56,15 @@ describe("selectOpenProject", () => {
             Effect.sync(() => {
               events.push(`log:${message}`)
             }),
-          connectWithUp: (selected) =>
+          resolvePreferredItem: () => Effect.succeed(null),
+          probeReady: () => Effect.succeed(true),
+          connect: (selected) =>
             Effect.sync(() => {
               events.push(`connect:${selected.projectDir}`)
+            }),
+          connectWithUp: (selected) =>
+            Effect.sync(() => {
+              events.push(`up:${selected.projectDir}`)
             })
         })
       )
@@ -66,6 +72,117 @@ describe("selectOpenProject", () => {
       expect(events).toEqual([
         "log:Opening SSH: ssh -p 22 dev@172.17.0.20",
         "connect:/controller/org/repo/issue-7"
+      ])
+    }))
+
+  it.effect("falls back to docker up when SSH is not yet reachable", () =>
+    Effect.gen(function*(_) {
+      const item = makeProjectItem({
+        projectDir: "/controller/org/repo/issue-8",
+        sshCommand: "ssh -p 2222 dev@localhost"
+      })
+      const events: Array<string> = []
+
+      yield* _(
+        openResolvedProjectSshEffect(item, {
+          log: (message) =>
+            Effect.sync(() => {
+              events.push(`log:${message}`)
+            }),
+          resolvePreferredItem: () => Effect.succeed(null),
+          probeReady: () => Effect.succeed(false),
+          connect: (selected) =>
+            Effect.sync(() => {
+              events.push(`connect:${selected.projectDir}`)
+            }),
+          connectWithUp: (selected) =>
+            Effect.sync(() => {
+              events.push(`up:${selected.projectDir}`)
+            })
+        })
+      )
+
+      expect(events).toEqual([
+        "log:Opening SSH: ssh -p 2222 dev@localhost",
+        "up:/controller/org/repo/issue-8"
+      ])
+    }))
+
+  it.effect("prefers a live runtime SSH target before falling back to docker up", () =>
+    Effect.gen(function*(_) {
+      const item = makeProjectItem({
+        projectDir: "/controller/org/repo/issue-9",
+        sshCommand: "ssh -p 2253 dev@localhost",
+        sshPort: 2253
+      })
+      const preferred = makeProjectItem({
+        ...item,
+        ipAddress: "172.17.0.15",
+        sshCommand: "ssh -p 22 dev@172.17.0.15"
+      })
+      const events: Array<string> = []
+
+      yield* _(
+        openResolvedProjectSshEffect(item, {
+          log: (message) =>
+            Effect.sync(() => {
+              events.push(`log:${message}`)
+            }),
+          resolvePreferredItem: () => Effect.succeed(preferred),
+          probeReady: (selected) => Effect.succeed(selected.ipAddress === "172.17.0.15"),
+          connect: (selected) =>
+            Effect.sync(() => {
+              events.push(`connect:${selected.sshCommand}`)
+            }),
+          connectWithUp: (selected) =>
+            Effect.sync(() => {
+              events.push(`up:${selected.projectDir}`)
+            })
+        })
+      )
+
+      expect(events).toEqual([
+        "log:Opening SSH: ssh -p 22 dev@172.17.0.15",
+        "connect:ssh -p 22 dev@172.17.0.15"
+      ])
+    }))
+
+  it.effect("falls back to the original SSH target when live runtime probe fails", () =>
+    Effect.gen(function*(_) {
+      const item = makeProjectItem({
+        projectDir: "/controller/org/repo/issue-10",
+        sshCommand: "ssh -p 2237 dev@localhost",
+        sshPort: 2237
+      })
+      const preferred = makeProjectItem({
+        ...item,
+        ipAddress: "172.17.0.20",
+        sshCommand: "ssh -p 22 dev@172.17.0.20"
+      })
+      const events: Array<string> = []
+
+      yield* _(
+        openResolvedProjectSshEffect(item, {
+          log: (message) =>
+            Effect.sync(() => {
+              events.push(`log:${message}`)
+            }),
+          resolvePreferredItem: () => Effect.succeed(preferred),
+          probeReady: (selected) => Effect.succeed(selected.ipAddress !== "172.17.0.20"),
+          connect: (selected) =>
+            Effect.sync(() => {
+              events.push(`connect:${selected.sshCommand}`)
+            }),
+          connectWithUp: (selected) =>
+            Effect.sync(() => {
+              events.push(`up:${selected.projectDir}`)
+            })
+        })
+      )
+
+      expect(events).toEqual([
+        "log:Opening SSH: ssh -p 2237 dev@localhost",
+        "connect:ssh -p 2237 dev@localhost"
       ])
     }))
 
@@ -105,6 +222,92 @@ describe("selectOpenProject", () => {
           expect(resolved.projectDir).toBe("/controller/org/repo/issue-7")
         })
       )
+    }))
+
+  it.effect("accepts an exact container selector even when multiple projects reuse the same container name", () =>
+    Effect.gen(function*(_) {
+      const first = makeProject({
+        id: "/controller/testorganization123213/openclaw_autodeployer",
+        projectDir: "/controller/testorganization123213/openclaw_autodeployer",
+        displayName: "testorganization123213/openclaw_autodeployer",
+        repoUrl: "https://github.com/TestOrganization123213/openclaw_autodeployer",
+        containerName: "dg-openclaw_autodeployer",
+        serviceName: "dg-openclaw_autodeployer"
+      })
+      const second = makeProject({
+        id: "/controller/telegramgpt/openclaw_autodeployer",
+        projectDir: "/controller/telegramgpt/openclaw_autodeployer",
+        displayName: "telegramgpt/openclaw_autodeployer",
+        repoUrl: "https://github.com/TelegramGPT/openclaw_autodeployer",
+        containerName: "dg-openclaw_autodeployer",
+        serviceName: "dg-openclaw_autodeployer"
+      })
+
+      const resolved = yield* _(selectOpenProject([first, second], "dg-openclaw_autodeployer"))
+      expect(resolved.projectDir).toBe("/controller/testorganization123213/openclaw_autodeployer")
+    }))
+
+  it.effect("prefers the runtime owner for exact container selectors when API statuses are stale", () =>
+    Effect.gen(function*(_) {
+      const first = makeProject({
+        id: "/controller/testorganization123213/openclaw_autodeployer",
+        projectDir: "/controller/testorganization123213/openclaw_autodeployer",
+        displayName: "testorganization123213/openclaw_autodeployer",
+        repoUrl: "https://github.com/TestOrganization123213/openclaw_autodeployer",
+        containerName: "dg-openclaw_autodeployer",
+        serviceName: "dg-openclaw_autodeployer"
+      })
+      const second = makeProject({
+        id: "/controller/telegramgpt/openclaw_autodeployer",
+        projectDir: "/controller/telegramgpt/openclaw_autodeployer",
+        displayName: "telegramgpt/openclaw_autodeployer",
+        repoUrl: "https://github.com/TelegramGPT/openclaw_autodeployer",
+        containerName: "dg-openclaw_autodeployer",
+        serviceName: "dg-openclaw_autodeployer"
+      })
+
+      const resolved = yield* _(
+        resolveOpenProjectEffect([first, second], "dg-openclaw_autodeployer", {
+          inspectRuntime: () =>
+            Effect.succeed({
+              containerName: "dg-openclaw_autodeployer",
+              running: true,
+              ipAddress: "172.17.0.15",
+              projectWorkingDir: "/controller/telegramgpt/openclaw_autodeployer",
+              composeService: "dg-openclaw_autodeployer"
+            })
+        })
+      )
+
+      expect(resolved.projectDir).toBe("/controller/telegramgpt/openclaw_autodeployer")
+    }))
+
+  it.effect("falls back to selector matching when runtime ownership is unavailable", () =>
+    Effect.gen(function*(_) {
+      const first = makeProject({
+        id: "/controller/testorganization123213/openclaw_autodeployer",
+        projectDir: "/controller/testorganization123213/openclaw_autodeployer",
+        displayName: "testorganization123213/openclaw_autodeployer",
+        repoUrl: "https://github.com/TestOrganization123213/openclaw_autodeployer",
+        containerName: "dg-openclaw_autodeployer",
+        serviceName: "dg-openclaw_autodeployer"
+      })
+      const second = makeProject({
+        id: "/controller/telegramgpt/openclaw_autodeployer",
+        projectDir: "/controller/telegramgpt/openclaw_autodeployer",
+        displayName: "telegramgpt/openclaw_autodeployer",
+        repoUrl: "https://github.com/TelegramGPT/openclaw_autodeployer",
+        containerName: "dg-openclaw_autodeployer",
+        serviceName: "dg-openclaw_autodeployer"
+      })
+
+      const resolved = yield* _(
+        resolveOpenProjectEffect([first, second], "dg-openclaw_autodeployer", {
+          inspectRuntime: () => Effect.succeed(null)
+        })
+      )
+
+      expect(resolved.projectDir).toBe("/controller/testorganization123213/openclaw_autodeployer")
     }))
 
   it.effect("matches a project by GitHub issue URL", () =>

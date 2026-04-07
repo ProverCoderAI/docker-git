@@ -11,5 +11,11 @@ export {
 export { deleteDockerGitProject } from "./projects-delete.js"
 export { downAllDockerGitProjects } from "./projects-down.js"
 export { listProjectItems, listProjects, listProjectSummaries, listRunningProjectItems } from "./projects-list.js"
-export { connectProjectSsh, connectProjectSshWithUp, listProjectStatus } from "./projects-ssh.js"
+export {
+  connectProjectSsh,
+  connectProjectSshWithUp,
+  listProjectStatus,
+  probeProjectSshReady,
+  waitForProjectSshReady
+} from "./projects-ssh.js"
 export { runDockerComposeUpWithPortCheck } from "./projects-up.js"

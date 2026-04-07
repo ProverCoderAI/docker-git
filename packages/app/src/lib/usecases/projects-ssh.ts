@@ -82,21 +82,24 @@ const buildSshProbeArgs = (item: ProjectItem): ReadonlyArray<string> => {
   return args
 }
 
+export const probeProjectSshReady = (
+  item: ProjectItem
+): Effect.Effect<boolean, PlatformError, CommandExecutor.CommandExecutor> =>
+  runCommandExitCode({
+    cwd: process.cwd(),
+    command: "ssh",
+    args: buildSshProbeArgs(item)
+  }).pipe(Effect.map((exitCode) => exitCode === 0))
+
 export const waitForProjectSshReady = (
   item: ProjectItem
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
   const host = item.ipAddress ?? "localhost"
   const port = item.ipAddress ? 22 : item.sshPort
   const probe = Effect.gen(function*(_) {
-    const exitCode = yield* _(
-      runCommandExitCode({
-        cwd: process.cwd(),
-        command: "ssh",
-        args: buildSshProbeArgs(item)
-      })
-    )
-    if (exitCode !== 0) {
-      return yield* _(Effect.fail(new CommandFailedError({ command: "ssh wait", exitCode })))
+    const ready = yield* _(probeProjectSshReady(item))
+    if (!ready) {
+      return yield* _(Effect.fail(new CommandFailedError({ command: "ssh wait", exitCode: 1 })))
     }
   })
 
