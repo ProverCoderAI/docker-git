@@ -4,6 +4,7 @@ import { Console, Effect, Layer, Option } from "effect"
 import { createServer } from "node:http"
 
 import { makeRouter } from "./http.js"
+import { initializeAccountPool } from "./services/account-pool.js"
 import { initializeAgentState } from "./services/agents.js"
 import { startOutboxPolling } from "./services/federation.js"
 
@@ -49,6 +50,11 @@ export const program = (() => {
   return Effect.scoped(
     Console.log(`docker-git api boot port=${port}`).pipe(
       Effect.zipRight(initializeAgentState()),
+      Effect.zipRight(
+        Effect.tryPromise({ try: () => initializeAccountPool(), catch: () => new Error("account pool init failed") }).pipe(
+          Effect.catchAll(() => Effect.void)
+        )
+      ),
       Effect.zipRight(
         Console.log(`docker-git outbox polling interval=${pollingInterval}ms`)
       ),

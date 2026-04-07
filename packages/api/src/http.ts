@@ -12,6 +12,7 @@ import { renderError, type AppError } from "@effect-template/lib/usecases/errors
 
 import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
 import {
+  AddAccountRequestSchema,
   ApplyAllRequestSchema,
   CodexAuthImportRequestSchema,
   CodexAuthLoginRequestSchema,
@@ -21,6 +22,7 @@ import {
   CreateProjectRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
+  RemoveAccountRequestSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
@@ -36,6 +38,15 @@ import {
   readGithubAuthStatus
 } from "./services/auth.js"
 import { streamCodexAuthLogin } from "./services/auth-codex-login-stream.js"
+import {
+  addPoolAccount,
+  clearAccountCooldown,
+  getPoolSummary,
+  listAllPoolAccounts,
+  listPoolAccounts,
+  removePoolAccount,
+  selectNextPoolAccount
+} from "./services/account-pool.js"
 import { getAgent, getAgentAttachInfo, listAgents, readAgentLogs, startAgent, stopAgent } from "./services/agents.js"
 import { latestProjectCursor, listProjectEventsSince } from "./services/events.js"
 import {
@@ -415,7 +426,64 @@ export const makeRouter = () => {
     )
   )
 
-  const withState = base.pipe(
+  const withAccountPool = base.pipe(
+    HttpRouter.get(
+      "/account-pool",
+      Effect.sync(() => ({ accounts: listAllPoolAccounts() })).pipe(
+        Effect.flatMap((payload) => jsonResponse(payload, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/account-pool/:provider",
+      HttpRouter.schemaParams(Schema.Struct({ provider: Schema.String })).pipe(
+        Effect.flatMap(({ provider }) => {
+          const p = provider as "claude" | "codex" | "gemini"
+          return jsonResponse({
+            accounts: listPoolAccounts(p),
+            summary: getPoolSummary(p)
+          }, 200)
+        }),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/account-pool/add",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.schemaBodyJson(AddAccountRequestSchema))
+        const state = addPoolAccount(request.provider, request.label)
+        return yield* _(jsonResponse({ ok: true, state }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/account-pool/remove",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.schemaBodyJson(RemoveAccountRequestSchema))
+        const state = removePoolAccount(request.provider, request.label)
+        return yield* _(jsonResponse({ ok: true, state }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/account-pool/next",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.schemaBodyJson(
+          Schema.Struct({ provider: Schema.Literal("claude", "codex", "gemini") })
+        ))
+        const account = selectNextPoolAccount(request.provider)
+        return yield* _(jsonResponse({ account: account ?? null }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/account-pool/clear-cooldown",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.schemaBodyJson(RemoveAccountRequestSchema))
+        const state = clearAccountCooldown(request.provider, request.label)
+        return yield* _(jsonResponse({ ok: true, state }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    )
+  )
+
+  const withState = withAccountPool.pipe(
     HttpRouter.get(
       "/state/path",
       readStatePathOutput().pipe(

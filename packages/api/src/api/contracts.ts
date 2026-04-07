@@ -282,6 +282,32 @@ export type FederationInboxResult =
     readonly subscription: FollowSubscription
   }
 
+// CHANGE: add account pool API types for multi-account management
+// WHY: expose account pool CRUD and status via the API
+// QUOTE(ТЗ): "Сделать возможность регистрировать много аккаунтов"
+// REF: issue-213
+// PURITY: CORE
+// COMPLEXITY: O(1)
+export type AccountPoolProvider = "claude" | "codex" | "gemini"
+
+export type AddAccountRequest = {
+  readonly provider: AccountPoolProvider
+  readonly label: string
+}
+
+export type RemoveAccountRequest = {
+  readonly provider: AccountPoolProvider
+  readonly label: string
+}
+
+export type AccountPoolSummary = {
+  readonly provider: AccountPoolProvider
+  readonly total: number
+  readonly available: number
+  readonly coolingDown: number
+  readonly activeLabel: string | undefined
+}
+
 export type ApiEventType =
   | "snapshot"
   | "project.created"
