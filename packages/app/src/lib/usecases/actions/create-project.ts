@@ -263,18 +263,28 @@ type DockerIdentityClaim = Omit<DockerIdentityConflict, "conflictingProjectDir">
   readonly namespace: DockerIdentityNamespace
 }
 
+const resolveBrowserContainerClaims = (
+  config: DockerIdentityOwner
+): ReadonlyArray<DockerIdentityClaim> =>
+  config.enableMcpPlaywright
+    ? [{ namespace: "container", kind: "browserContainerName", name: `${config.containerName}-browser` }]
+    : []
+
+const resolveBrowserVolumeClaims = (
+  config: DockerIdentityOwner
+): ReadonlyArray<DockerIdentityClaim> =>
+  config.enableMcpPlaywright
+    ? [{ namespace: "volume", kind: "browserVolumeName", name: `${config.volumeName}-browser` }]
+    : []
+
 const resolveDockerIdentityClaims = (
   config: DockerIdentityOwner
 ): ReadonlyArray<DockerIdentityClaim> => [
   { namespace: "container", kind: "containerName", name: config.containerName },
-  ...(config.enableMcpPlaywright
-    ? [{ namespace: "container" as const, kind: "browserContainerName" as const, name: `${config.containerName}-browser` }]
-    : []),
+  ...resolveBrowserContainerClaims(config),
   { namespace: "composeProject", kind: "serviceName", name: resolveComposeProjectName(config) },
   { namespace: "volume", kind: "volumeName", name: config.volumeName },
-  ...(config.enableMcpPlaywright
-    ? [{ namespace: "volume" as const, kind: "browserVolumeName" as const, name: `${config.volumeName}-browser` }]
-    : []),
+  ...resolveBrowserVolumeClaims(config),
   { namespace: "volume", kind: "bootstrapVolumeName", name: resolveProjectBootstrapVolumeName(config) }
 ]
 
