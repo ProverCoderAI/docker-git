@@ -1,15 +1,17 @@
 import * as FileSystem from "@effect/platform/FileSystem"
+import type { PlatformError } from "@effect/platform/Error"
 import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import * as Scope from "effect/Scope"
 
-import { ApiInternalError } from "../src/api/errors.js"
+import { ApiConflictError, ApiInternalError } from "../src/api/errors.js"
 import { createProjectFromRequest, seedAuthorizedKeysForCreate } from "../src/services/projects.js"
 
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
-) =>
+): Effect.Effect<A, E | PlatformError, FileSystem.FileSystem | Exclude<R, Scope.Scope>> =>
   Effect.scoped(
     Effect.gen(function*(_) {
       const fs = yield* _(FileSystem.FileSystem)
@@ -25,65 +27,68 @@ const withTempDir = <A, E, R>(
 const withWorkingDirectory = <A, E, R>(
   cwd: string,
   effect: Effect.Effect<A, E, R>
-) =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => {
-      const previous = process.cwd()
-      process.chdir(cwd)
-      return previous
-    }),
-    () => effect,
-    (previous) =>
+): Effect.Effect<A, E, R> =>
+  Effect.scoped(
+    Effect.acquireRelease(
       Effect.sync(() => {
-        process.chdir(previous)
-      })
+        const previous = process.cwd()
+        process.chdir(cwd)
+        return previous
+      }),
+      (previous) =>
+        Effect.sync(() => {
+          process.chdir(previous)
+        })
+    ).pipe(Effect.flatMap(() => effect))
   )
 
 const withProjectsRoot = <A, E, R>(
   projectsRoot: string,
   effect: Effect.Effect<A, E, R>
-) =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => {
-      const previous = process.env["DOCKER_GIT_PROJECTS_ROOT"]
-      process.env["DOCKER_GIT_PROJECTS_ROOT"] = projectsRoot
-      return previous
-    }),
-    () => effect,
-    (previous) =>
+): Effect.Effect<A, E, R> =>
+  Effect.scoped(
+    Effect.acquireRelease(
       Effect.sync(() => {
-        if (previous === undefined) {
-          delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
-        } else {
-          process.env["DOCKER_GIT_PROJECTS_ROOT"] = previous
-        }
-      })
+        const previous = process.env["DOCKER_GIT_PROJECTS_ROOT"]
+        process.env["DOCKER_GIT_PROJECTS_ROOT"] = projectsRoot
+        return previous
+      }),
+      (previous) =>
+        Effect.sync(() => {
+          if (previous === undefined) {
+            delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
+          } else {
+            process.env["DOCKER_GIT_PROJECTS_ROOT"] = previous
+          }
+        })
+    ).pipe(Effect.flatMap(() => effect))
   )
 
 const withEnvVar = <A, E, R>(
   key: string,
   value: string | undefined,
   effect: Effect.Effect<A, E, R>
-) =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => {
-      const previous = process.env[key]
-      if (value === undefined) {
-        delete process.env[key]
-      } else {
-        process.env[key] = value
-      }
-      return previous
-    }),
-    () => effect,
-    (previous) =>
+): Effect.Effect<A, E, R> =>
+  Effect.scoped(
+    Effect.acquireRelease(
       Effect.sync(() => {
-        if (previous === undefined) {
+        const previous = process.env[key]
+        if (value === undefined) {
           delete process.env[key]
         } else {
-          process.env[key] = previous
+          process.env[key] = value
         }
-      })
+        return previous
+      }),
+      (previous) =>
+        Effect.sync(() => {
+          if (previous === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = previous
+          }
+        })
+    ).pipe(Effect.flatMap(() => effect))
   )
 
 describe("projects service", () => {
@@ -141,6 +146,52 @@ describe("projects service", () => {
         if (failure instanceof ApiInternalError) {
           expect(failure.message).toContain("Cannot connect to Docker daemon.")
           expect(failure.message).not.toContain("docker-daemon-access.js")
+        }
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("maps duplicate docker identities to API conflict for create", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+
+        yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              createProjectFromRequest({
+                repoUrl: "https://git.example.test/test-owner-a/openclaw_autodeployer.git",
+                repoRef: "main",
+                sshPort: "2237",
+                skipGithubAuth: true,
+                up: false
+              })
+            )
+          )
+        )
+
+        const error = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              createProjectFromRequest({
+                repoUrl: "https://git.example.test/test-owner-b/openclaw_autodeployer.git",
+                repoRef: "main",
+                sshPort: "2238",
+                skipGithubAuth: true,
+                up: false
+              }).pipe(Effect.flip)
+            )
+          )
+        )
+
+        expect(error).toBeInstanceOf(ApiConflictError)
+        if (error instanceof ApiConflictError) {
+          expect(error.message).toContain("Docker identities are already owned")
+          expect(error.message).toContain("dg-openclaw_autodeployer")
         }
       })
     ).pipe(Effect.provide(NodeContext.layer)))

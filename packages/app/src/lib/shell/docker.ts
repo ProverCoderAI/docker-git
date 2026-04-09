@@ -5,13 +5,26 @@ import { ExitCode } from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
-import { runCommandCapture, runCommandExitCode, runCommandWithExitCodes } from "./command-runner.js"
+import { runCommandCapture, runCommandExitCode, runCommandWithCapturedOutput, runCommandWithExitCodes } from "./command-runner.js"
 import { composeSpec, resolveDockerComposeEnv } from "./docker-compose-env.js"
 import { parseInspectNetworkEntry } from "./docker-inspect-parse.js"
 import { CommandFailedError, DockerCommandError } from "./errors.js"
 
 export { classifyDockerAccessIssue, ensureDockerDaemonAccess } from "./docker-daemon-access.js"
 export { parseDockerPublishedHostPorts, runDockerPsPublishedHostPorts } from "./docker-published-ports.js"
+
+export type DockerContainerRuntimeInfo = {
+  readonly containerName: string
+  readonly running: boolean
+  readonly ipAddress: string
+  readonly projectWorkingDir?: string | undefined
+  readonly composeService?: string | undefined
+}
+
+const parseOptionalInspectField = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim() ?? ""
+  return trimmed.length > 0 ? trimmed : undefined
+}
 
 const runCompose = (
   cwd: string,
@@ -21,13 +34,13 @@ const runCompose = (
   Effect.gen(function*(_) {
     const env = yield* _(resolveDockerComposeEnv(cwd))
     yield* _(
-      runCommandWithExitCodes(
+      runCommandWithCapturedOutput(
         {
           ...composeSpec(cwd, args),
           ...(Object.keys(env).length > 0 ? { env } : {})
         },
         okExitCodes,
-        (exitCode) => new DockerCommandError({ exitCode })
+        (exitCode, output) => new DockerCommandError({ exitCode, ...(output.length > 0 ? { details: output } : {}) })
       )
     )
   })
@@ -300,6 +313,53 @@ export const runDockerInspectContainerIp = (
       const map = new Map(entries)
       return map.get("bridge") ?? entries[0]![1]
     })
+  )
+
+// CHANGE: inspect live Docker runtime ownership and preferred IP for a container
+// WHY: allow SSH-open flows to reuse an already running container even when indexed compose state is stale
+// QUOTE(ТЗ): "если такой контейнер уже есть то он его и должен был открыть"
+// REF: user-request-2026-04-07-open-existing-runtime
+// SOURCE: n/a
+// FORMAT THEOREM: ∀c: running(c) → inspect_runtime(c) = owner(c), ip(c)
+// PURITY: SHELL
+// EFFECT: Effect<DockerContainerRuntimeInfo | null, PlatformError, CommandExecutor>
+// INVARIANT: returns null when the container is missing or not running
+// COMPLEXITY: O(command)
+export const runDockerInspectContainerRuntimeInfo = (
+  cwd: string,
+  containerName: string
+): Effect.Effect<DockerContainerRuntimeInfo | null, PlatformError, CommandExecutor.CommandExecutor> =>
+  pipe(
+    runCommandCapture(
+      {
+        cwd,
+        command: "docker",
+        args: [
+          "inspect",
+          "-f",
+          `{{.State.Status}}\t{{with index .Config.Labels "com.docker.compose.project.working_dir"}}{{.}}{{end}}\t{{with index .Config.Labels "com.docker.compose.service"}}{{.}}{{end}}`,
+          containerName
+        ]
+      },
+      [Number(ExitCode(0))],
+      (exitCode) => new DockerCommandError({ exitCode })
+    ),
+    Effect.flatMap((output) => {
+      const [status, projectWorkingDir, composeService] = output.trim().replaceAll("\\t", "\t").split("\t")
+      if ((status?.trim() ?? "") !== "running") {
+        return Effect.succeed(null)
+      }
+      return runDockerInspectContainerIp(cwd, containerName).pipe(
+        Effect.map((ipAddress) => ({
+          containerName,
+          running: true,
+          ipAddress,
+          projectWorkingDir: parseOptionalInspectField(projectWorkingDir),
+          composeService: parseOptionalInspectField(composeService)
+        }))
+      )
+    }),
+    Effect.catchAll(() => Effect.succeed(null))
   )
 
 // CHANGE: inspect the container IP address on the default `bridge` network

@@ -11,6 +11,7 @@ import type {
   ConfigNotFoundError,
   DockerAccessError,
   DockerCommandError,
+  DockerIdentityConflictError,
   FileExistsError,
   InputCancelledError,
   InputReadError,
@@ -28,6 +29,7 @@ export type AppError =
   | AgentFailedError
   | DockerAccessError
   | DockerCommandError
+  | DockerIdentityConflictError
   | ConfigNotFoundError
   | ConfigDecodeError
   | ScrapArchiveInvalidError
@@ -76,13 +78,36 @@ const renderDockerAccessActionPlan = (issue: DockerAccessError["issue"]): string
   return issue === "PermissionDenied" ? permissionDeniedPlan.join("\n") : daemonUnavailablePlan.join("\n")
 }
 
-const renderDockerCommandError = ({ exitCode }: DockerCommandError): string =>
+const renderDockerCommandError = ({ details, exitCode }: DockerCommandError): string =>
   [
     `docker compose failed with exit code ${exitCode}`,
+    ...(details?.trim().length ? ["Docker output:", details.trim()] : []),
     "Hint: ensure Docker daemon is running and current user can access /var/run/docker.sock (for example via the docker group).",
     "Hint: if output above contains 'port is already allocated', retry with a free SSH port via --ssh-port <port> (for example --ssh-port 2235), or stop the conflicting project/container.",
     "Hint: if output above contains 'all predefined address pools have been fully subnetted', run `docker network prune -f`, configure Docker `default-address-pools`, or use shared network mode (`--network-mode shared`).",
     "Hint: if output above contains 'lookup auth.docker.io' or 'read udp ... [::1]:53 ... connection refused', fix Docker DNS resolver (set working DNS in host/daemon config) and retry."
+  ].join("\n")
+
+const formatDockerIdentityConflictKind = (
+  kind: DockerIdentityConflictError["conflicts"][number]["kind"]
+): string =>
+  ({
+    containerName: "container name",
+    browserContainerName: "browser container name",
+    serviceName: "compose project name",
+    volumeName: "volume name",
+    browserVolumeName: "browser volume name",
+    bootstrapVolumeName: "bootstrap volume name"
+  })[kind]
+
+const renderDockerIdentityConflictError = ({ conflicts, projectDir }: DockerIdentityConflictError): string =>
+  [
+    `Refusing to create ${projectDir}: Docker identities are already owned by other docker-git projects.`,
+    ...conflicts.map(
+      ({ conflictingProjectDir, kind, name }) =>
+        `${formatDockerIdentityConflictKind(kind)} "${name}" already exists in ${conflictingProjectDir}`
+    ),
+    "Hint: re-run with --force to replace the conflicting docker-git project, or choose unique --container-name/--service-name/--volume-name."
   ].join("\n")
 
 const renderDockerAccessError = ({ details, issue }: DockerAccessError): string =>
@@ -99,6 +124,7 @@ const renderPrimaryError = (error: NonParseError): string | null =>
     Match.when({ _tag: "FileExistsError" }, ({ path }) => `File already exists: ${path} (use --force to overwrite)`),
     Match.when({ _tag: "DockerCommandError" }, renderDockerCommandError),
     Match.when({ _tag: "DockerAccessError" }, renderDockerAccessError),
+    Match.when({ _tag: "DockerIdentityConflictError" }, renderDockerIdentityConflictError),
     Match.when({ _tag: "CloneFailedError" }, ({ repoRef, repoUrl, targetDir }) =>
       `Clone failed for ${repoUrl} (${repoRef}) into ${targetDir}`),
     Match.when({ _tag: "AgentFailedError" }, ({ agentMode, targetDir }) =>

@@ -8,6 +8,7 @@ import * as HttpServerResponse from "@effect/platform/HttpServerResponse"
 import * as HttpServerError from "@effect/platform/HttpServerError"
 import * as ParseResult from "effect/ParseResult"
 import * as Schema from "effect/Schema"
+import { renderError, type AppError } from "@effect-template/lib/usecases/errors"
 
 import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
 import {
@@ -116,6 +117,32 @@ const noStoreHeaders = {
   pragma: "no-cache"
 }
 
+const appErrorTags = new Set<string>([
+  "FileExistsError",
+  "CloneFailedError",
+  "AgentFailedError",
+  "DockerAccessError",
+  "DockerCommandError",
+  "ConfigNotFoundError",
+  "ConfigDecodeError",
+  "ScrapArchiveInvalidError",
+  "ScrapArchiveNotFoundError",
+  "ScrapTargetDirUnsupportedError",
+  "ScrapWipeRefusedError",
+  "InputCancelledError",
+  "InputReadError",
+  "PortProbeError",
+  "AuthError",
+  "CommandFailedError"
+])
+
+const isAppError = (error: unknown): error is AppError =>
+  typeof error === "object" &&
+  error !== null &&
+  "_tag" in error &&
+  typeof error["_tag"] === "string" &&
+  appErrorTags.has(error["_tag"])
+
 const jsonResponse = (data: unknown, status: number) =>
   Effect.map(
     HttpServerResponse.json(data, { headers: noStoreHeaders }),
@@ -182,6 +209,10 @@ const errorResponse = (error: ApiError | unknown) => {
 
   if (error instanceof ApiInternalError) {
     return jsonResponse({ error: { type: error._tag, message: error.message } }, 500)
+  }
+
+  if (isAppError(error)) {
+    return jsonResponse({ error: { type: error._tag, message: renderError(error) } }, 400)
   }
 
   return jsonResponse(

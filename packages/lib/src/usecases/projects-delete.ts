@@ -10,8 +10,14 @@ import { CommandFailedError, type DockerCommandError } from "../shell/errors.js"
 import { gcProjectNetworkByServiceName } from "./docker-network-gc.js"
 import { renderError } from "./errors.js"
 import { defaultProjectsRoot } from "./menu-helpers.js"
-import type { ProjectItem } from "./projects-core.js"
 import { autoSyncState } from "./state-repo.js"
+
+export type DeleteDockerGitProjectTarget = {
+  readonly projectDir: string
+  readonly repoUrl: string
+  readonly containerName: string
+  readonly serviceName: string
+}
 
 const isWithinProjectsRoot = (path: Path.Path, root: string, target: string): boolean => {
   const relative = path.relative(root, target)
@@ -49,7 +55,7 @@ const removeContainerByName = (
   )
 
 const removeContainersFallback = (
-  item: ProjectItem
+  item: DeleteDockerGitProjectTarget
 ): Effect.Effect<void, never, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
     yield* _(removeContainerByName(item.projectDir, item.containerName))
@@ -67,7 +73,7 @@ const removeContainersFallback = (
 // INVARIANT: never deletes paths outside the projects root
 // COMPLEXITY: O(docker + fs)
 export const deleteDockerGitProject = (
-  item: ProjectItem
+  item: DeleteDockerGitProjectTarget
 ): Effect.Effect<
   void,
   PlatformError | DockerCommandError,

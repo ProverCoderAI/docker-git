@@ -21,7 +21,7 @@ import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import { Effect, Either } from "effect"
 
 import type { CreateProjectRequest, ProjectDetails, ProjectStatus, ProjectSummary } from "../api/contracts.js"
-import { ApiAuthRequiredError, ApiInternalError, ApiNotFoundError, ApiBadRequestError } from "../api/errors.js"
+import { ApiAuthRequiredError, ApiConflictError, ApiInternalError, ApiNotFoundError, ApiBadRequestError } from "../api/errors.js"
 import { ensureGithubAuthForCreate } from "./auth.js"
 import { emitProjectEvent } from "./events.js"
 import { resolveCreateAuthorizedKeysContents, resolveManagedAuthorizedKeysContents } from "./project-authorized-keys.js"
@@ -186,14 +186,16 @@ type ProjectApiError =
   | AppError
   | ApiAuthRequiredError
   | ApiBadRequestError
+  | ApiConflictError
   | ApiInternalError
   | ApiNotFoundError
 
 const toProjectApiError = (
   error: ProjectApiError
-): ApiAuthRequiredError | ApiBadRequestError | ApiInternalError | ApiNotFoundError =>
+): ApiAuthRequiredError | ApiBadRequestError | ApiConflictError | ApiInternalError | ApiNotFoundError =>
   error instanceof ApiAuthRequiredError ||
   error instanceof ApiBadRequestError ||
+  error instanceof ApiConflictError ||
   error instanceof ApiInternalError ||
   error instanceof ApiNotFoundError
     ? error
@@ -359,7 +361,13 @@ export const createProjectFromRequest = (
       })
     )
 
-    yield* _(createProject(command))
+    yield* _(
+      createProject(command).pipe(
+        Effect.catchTag("DockerIdentityConflictError", (error) =>
+          Effect.fail(new ApiConflictError({ message: renderError(error) }))
+        )
+      )
+    )
 
     const project = yield* _(
       resolveCreatedProject(

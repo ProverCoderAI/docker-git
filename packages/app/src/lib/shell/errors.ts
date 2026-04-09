@@ -24,6 +24,26 @@ export class InputReadError extends Data.TaggedError("InputReadError")<{
 
 export class DockerCommandError extends Data.TaggedError("DockerCommandError")<{
   readonly exitCode: number
+  readonly details?: string
+}> {}
+
+export type DockerIdentityConflictKind =
+  | "containerName"
+  | "browserContainerName"
+  | "serviceName"
+  | "volumeName"
+  | "browserVolumeName"
+  | "bootstrapVolumeName"
+
+export type DockerIdentityConflict = {
+  readonly conflictingProjectDir: string
+  readonly kind: DockerIdentityConflictKind
+  readonly name: string
+}
+
+export class DockerIdentityConflictError extends Data.TaggedError("DockerIdentityConflictError")<{
+  readonly projectDir: string
+  readonly conflicts: ReadonlyArray<DockerIdentityConflict>
 }> {}
 
 export type DockerAccessIssue = "PermissionDenied" | "DaemonUnavailable"
