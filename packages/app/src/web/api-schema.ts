@@ -1,20 +1,8 @@
 import * as Schema from "@effect/schema/Schema"
 
-type JsonPrimitive = boolean | number | string | null
-type JsonValue = JsonPrimitive | JsonObject | ReadonlyArray<JsonValue>
-type JsonObject = Readonly<{ [key: string]: JsonValue }>
+import { JsonValueSchema } from "../shared/json-schema.js"
 
 const NullableString = Schema.NullOr(Schema.String)
-const JsonValueSchema: Schema.Schema<JsonValue> = Schema.suspend(() =>
-  Schema.Union(
-    Schema.Null,
-    Schema.Boolean,
-    Schema.Number,
-    Schema.String,
-    Schema.Array(JsonValueSchema),
-    Schema.Record({ key: Schema.String, value: JsonValueSchema })
-  )
-)
 
 export const ProjectStatusSchema = Schema.Union(
   Schema.Literal("running"),

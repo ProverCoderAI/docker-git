@@ -14,35 +14,31 @@ type EventStreamHandlers = {
   readonly onRateLimit: () => void
 }
 
-const formatStatusLine = (payload: JsonValue | undefined): string | null => {
+const readPayloadString = (
+  payload: JsonValue | undefined,
+  key: string
+): string | null => {
   const object = asObject(payload)
   if (object === null) {
     return null
   }
-  const phase = asString(object["phase"])
-  const message = asString(object["message"])
+  return asString(object[key])
+}
+
+const formatStatusLine = (payload: JsonValue | undefined): string | null => {
+  const phase = readPayloadString(payload, "phase")
+  const message = readPayloadString(payload, "message")
   if (message === null) {
     return null
   }
   return phase === null ? message : `[${phase}] ${message}`
 }
 
-const formatLogLine = (payload: JsonValue | undefined): string | null => {
-  const object = asObject(payload)
-  if (object === null) {
-    return null
-  }
-  const line = asString(object["line"])
-  return line
-}
+const formatLogLine = (payload: JsonValue | undefined): string | null => readPayloadString(payload, "line")
 
 const formatSshLine = (payload: JsonValue | undefined): string | null => {
-  const object = asObject(payload)
-  if (object === null) {
-    return null
-  }
-  const phase = asString(object["phase"])
-  const sessionId = asString(object["sessionId"])
+  const phase = readPayloadString(payload, "phase")
+  const sessionId = readPayloadString(payload, "sessionId")
   if (phase === null) {
     return null
   }

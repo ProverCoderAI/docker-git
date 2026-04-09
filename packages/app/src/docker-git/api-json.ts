@@ -2,26 +2,19 @@ import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
 import { Effect, Either } from "effect"
 
-type JsonPrimitive = boolean | number | string | null
-export type JsonValue = JsonPrimitive | JsonObject | ReadonlyArray<JsonValue>
-export type JsonObject = Readonly<{ [key: string]: JsonValue }>
+import { type JsonObject, type JsonValue, JsonValueSchema } from "../shared/json-schema.js"
+
+export type { JsonObject, JsonValue } from "../shared/json-schema.js"
+
 export type JsonRequest =
-  | JsonPrimitive
+  | boolean
+  | number
+  | string
+  | null
   | { readonly [key: string]: JsonRequest | undefined }
   | ReadonlyArray<JsonRequest>
 
-const JsonValueSchema: Schema.Schema<JsonValue> = Schema.suspend(() =>
-  Schema.Union(
-    Schema.Null,
-    Schema.Boolean,
-    Schema.Number,
-    Schema.String,
-    Schema.Array(JsonValueSchema),
-    Schema.Record({ key: Schema.String, value: JsonValueSchema })
-  )
-)
-
-const JsonValueFromStringSchema = Schema.parseJson(JsonValueSchema)
+const JsonValueFromStringSchema: Schema.Schema<JsonValue, string> = Schema.parseJson(JsonValueSchema)
 
 const decodeJsonText = (input: string): Effect.Effect<JsonValue> =>
   Either.match(ParseResult.decodeUnknownEither(JsonValueFromStringSchema)(input), {

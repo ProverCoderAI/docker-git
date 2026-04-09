@@ -6,6 +6,7 @@ import { Effect } from "effect"
 import type { CreateCommand } from "../../core/domain.js"
 import { runCommandWithExitCodes } from "../../shell/command-runner.js"
 import { CommandFailedError } from "../../shell/errors.js"
+import { shouldAutoOpenSsh } from "../auto-open-ssh.js"
 import { renderError } from "../errors.js"
 import { findSshPrivateKey } from "../path-helpers.js"
 import { buildSshCommand, getContainerIpIfInsideContainer } from "../projects-core.js"
@@ -15,8 +16,6 @@ type CreateProjectOpenSshRuntime =
   | FileSystem.FileSystem
   | Path.Path
   | CommandExecutor.CommandExecutor
-
-const isInteractiveTty = (): boolean => process.stdin.isTTY && process.stdout.isTTY
 
 const buildSshArgs = (
   config: CreateCommand["config"],
@@ -102,15 +101,13 @@ export const maybeOpenSsh = (
 ): Effect.Effect<void, never, CreateProjectOpenSshRuntime> =>
   Effect.gen(function*(_) {
     const interactiveAgent = hasAgent && !waitForAgent
-    if (!command.openSsh || (hasAgent && !interactiveAgent)) {
-      return
-    }
-    if (!command.runUp) {
-      yield* _(Effect.logWarning("Skipping SSH auto-open: docker compose up disabled (--no-up)."))
-      return
-    }
-    if (!isInteractiveTty()) {
-      yield* _(Effect.logWarning("Skipping SSH auto-open: not running in an interactive TTY."))
+    const autoOpenSsh = yield* _(
+      shouldAutoOpenSsh({
+        shouldOpen: command.openSsh && (!hasAgent || interactiveAgent),
+        runUp: command.runUp
+      })
+    )
+    if (!autoOpenSsh) {
       return
     }
 
