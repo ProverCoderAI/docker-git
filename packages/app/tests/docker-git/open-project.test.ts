@@ -2,51 +2,20 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
-import type { ApiProjectDetails } from "../../src/docker-git/api-project-codec.js"
-import { openResolvedProjectSshEffect, resolveOpenProjectEffect, selectOpenProject } from "../../src/docker-git/open-project.js"
+import {
+  openResolvedProjectSshEffect,
+  resolveOpenProjectEffect,
+  selectOpenProject
+} from "../../src/docker-git/open-project.js"
+import { expectSelectedProject, liveFallbackIp, liveRuntimeIp, makeProject } from "./fixtures/open-project-helpers.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
-
-const defaultProject = {
-  id: "/controller/org/repo",
-  displayName: "org/repo",
-  repoUrl: "https://github.com/org/repo.git",
-  repoRef: "main",
-  status: "stopped",
-  statusLabel: "stopped",
-  containerName: "dg-repo",
-  serviceName: "dg-repo",
-  sshUser: "dev",
-  sshPort: 2222,
-  targetDir: "/home/dev/workspaces/org/repo",
-  projectDir: "/controller/org/repo",
-  sshCommand: "ssh dev@127.0.0.1 -p 2222",
-  envGlobalPath: "/controller/.orch/env/global.env",
-  envProjectPath: "/controller/org/repo/.orch/env/project.env",
-  codexAuthPath: "/controller/.orch/auth/codex",
-  codexHome: "/home/dev/.codex"
-} satisfies Omit<ApiProjectDetails, "clonedOnHostname">
-
-const makeProject = (overrides: Partial<ApiProjectDetails> = {}): ApiProjectDetails => ({
-  ...defaultProject,
-  ...overrides
-})
-
-const expectSelectedProject = (
-  project: ApiProjectDetails,
-  selector: string | undefined,
-  assert: (resolved: ApiProjectDetails) => void
-) =>
-  Effect.gen(function*(_) {
-    const resolved = yield* _(selectOpenProject([project], selector))
-    assert(resolved)
-  })
 
 describe("selectOpenProject", () => {
   it.effect("connects directly when SSH is already reachable", () =>
     Effect.gen(function*(_) {
       const item = makeProjectItem({
         projectDir: "/controller/org/repo/issue-7",
-        sshCommand: "ssh -p 22 dev@172.17.0.20"
+        sshCommand: `ssh -p 22 dev@${liveFallbackIp}`
       })
       const events: Array<string> = []
 
@@ -70,7 +39,7 @@ describe("selectOpenProject", () => {
       )
 
       expect(events).toEqual([
-        "log:Opening SSH: ssh -p 22 dev@172.17.0.20",
+        `log:Opening SSH: ssh -p 22 dev@${liveFallbackIp}`,
         "connect:/controller/org/repo/issue-7"
       ])
     }))
@@ -117,8 +86,8 @@ describe("selectOpenProject", () => {
       })
       const preferred = makeProjectItem({
         ...item,
-        ipAddress: "172.17.0.15",
-        sshCommand: "ssh -p 22 dev@172.17.0.15"
+        ipAddress: liveRuntimeIp,
+        sshCommand: `ssh -p 22 dev@${liveRuntimeIp}`
       })
       const events: Array<string> = []
 
@@ -129,7 +98,7 @@ describe("selectOpenProject", () => {
               events.push(`log:${message}`)
             }),
           resolvePreferredItem: () => Effect.succeed(preferred),
-          probeReady: (selected) => Effect.succeed(selected.ipAddress === "172.17.0.15"),
+          probeReady: (selected) => Effect.succeed(selected.ipAddress === liveRuntimeIp),
           connect: (selected) =>
             Effect.sync(() => {
               events.push(`connect:${selected.sshCommand}`)
@@ -142,8 +111,8 @@ describe("selectOpenProject", () => {
       )
 
       expect(events).toEqual([
-        "log:Opening SSH: ssh -p 22 dev@172.17.0.15",
-        "connect:ssh -p 22 dev@172.17.0.15"
+        `log:Opening SSH: ssh -p 22 dev@${liveRuntimeIp}`,
+        `connect:ssh -p 22 dev@${liveRuntimeIp}`
       ])
     }))
 
@@ -156,8 +125,8 @@ describe("selectOpenProject", () => {
       })
       const preferred = makeProjectItem({
         ...item,
-        ipAddress: "172.17.0.20",
-        sshCommand: "ssh -p 22 dev@172.17.0.20"
+        ipAddress: liveFallbackIp,
+        sshCommand: `ssh -p 22 dev@${liveFallbackIp}`
       })
       const events: Array<string> = []
 
@@ -168,7 +137,7 @@ describe("selectOpenProject", () => {
               events.push(`log:${message}`)
             }),
           resolvePreferredItem: () => Effect.succeed(preferred),
-          probeReady: (selected) => Effect.succeed(selected.ipAddress !== "172.17.0.20"),
+          probeReady: (selected) => Effect.succeed(selected.ipAddress !== liveFallbackIp),
           connect: (selected) =>
             Effect.sync(() => {
               events.push(`connect:${selected.sshCommand}`)
@@ -272,7 +241,7 @@ describe("selectOpenProject", () => {
             Effect.succeed({
               containerName: "dg-openclaw_autodeployer",
               running: true,
-              ipAddress: "172.17.0.15",
+              ipAddress: liveRuntimeIp,
               projectWorkingDir: "/controller/telegramgpt/openclaw_autodeployer",
               composeService: "dg-openclaw_autodeployer"
             })

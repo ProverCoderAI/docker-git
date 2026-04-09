@@ -14,6 +14,7 @@ type RecordedCommand = {
 }
 
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value)
+const joinIp = (...octets: ReadonlyArray<number>): string => octets.join(".")
 
 const isRuntimeInspect = (command: RecordedCommand): boolean =>
   command.command === "docker" &&
@@ -27,24 +28,36 @@ const isIpInspect = (command: RecordedCommand): boolean =>
   command.args[1] === "-f" &&
   (command.args[2] ?? "").includes("NetworkSettings.Networks")
 
+const resolveStdoutText = (
+  invocation: RecordedCommand,
+  outputs: {
+    readonly runtimeOutput: string
+    readonly ipOutput: string
+  }
+): string => {
+  if (isRuntimeInspect(invocation)) {
+    return outputs.runtimeOutput
+  }
+  if (isIpInspect(invocation)) {
+    return outputs.ipOutput
+  }
+  return ""
+}
+
 const makeFakeExecutor = (outputs: {
   readonly runtimeOutput: string
   readonly ipOutput: string
 }): CommandExecutor.CommandExecutor => {
-  const start = (command: Command.Command): Effect.Effect<CommandExecutor.Process, never> =>
-    Effect.gen(function*(_) {
+  const start = (command: Command.Command): Effect.Effect<CommandExecutor.Process> =>
+    Effect.sync(() => {
       const flattened = Command.flatten(command)
-      const last = flattened[flattened.length - 1]!
+      const last = flattened.at(-1)!
       const invocation: RecordedCommand = {
         command: last.command,
         args: last.args
       }
 
-      const stdoutText = isRuntimeInspect(invocation)
-        ? outputs.runtimeOutput
-        : isIpInspect(invocation)
-          ? outputs.ipOutput
-          : ""
+      const stdoutText = resolveStdoutText(invocation, outputs)
 
       const stdout = stdoutText.length === 0
         ? Stream.empty
@@ -77,9 +90,11 @@ const makeFakeExecutor = (outputs: {
 describe("runDockerInspectContainerRuntimeInfo", () => {
   it.effect("parses running runtime ownership even when separators arrive as literal escapes", () =>
     Effect.gen(function*(_) {
+      const bridgeIp = joinIp(172, 17, 0, 15)
+      const projectIp = joinIp(10, 88, 0, 2)
       const executor = makeFakeExecutor({
         runtimeOutput: "running\\t/home/dev/.docker-git/test-owner/repo\\tdg-repo\n",
-        ipOutput: "bridge=172.17.0.15\nproject=10.88.0.2\n"
+        ipOutput: `bridge=${bridgeIp}\nproject=${projectIp}\n`
       })
 
       const runtime = yield* _(
@@ -91,7 +106,7 @@ describe("runDockerInspectContainerRuntimeInfo", () => {
       expect(runtime).toEqual({
         containerName: "dg-repo",
         running: true,
-        ipAddress: "172.17.0.15",
+        ipAddress: bridgeIp,
         projectWorkingDir: "/home/dev/.docker-git/test-owner/repo",
         composeService: "dg-repo"
       })
@@ -99,9 +114,10 @@ describe("runDockerInspectContainerRuntimeInfo", () => {
 
   it.effect("keeps optional compose labels undefined when runtime is unlabeled", () =>
     Effect.gen(function*(_) {
+      const projectIp = joinIp(10, 88, 0, 4)
       const executor = makeFakeExecutor({
         runtimeOutput: "running\t\t\n",
-        ipOutput: "project=10.88.0.4\n"
+        ipOutput: `project=${projectIp}\n`
       })
 
       const runtime = yield* _(
@@ -113,7 +129,7 @@ describe("runDockerInspectContainerRuntimeInfo", () => {
       expect(runtime).toEqual({
         containerName: "dg-repo",
         running: true,
-        ipAddress: "10.88.0.4",
+        ipAddress: projectIp,
         projectWorkingDir: undefined,
         composeService: undefined
       })
