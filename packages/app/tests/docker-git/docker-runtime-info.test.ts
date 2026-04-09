@@ -87,21 +87,25 @@ const makeFakeExecutor = (outputs: {
   return CommandExecutor.makeExecutor(start)
 }
 
+const loadRuntimeInfo = (
+  outputs: {
+    readonly runtimeOutput: string
+    readonly ipOutput: string
+  }
+) =>
+  runDockerInspectContainerRuntimeInfo("/tmp", "dg-repo").pipe(
+    Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(outputs))
+  )
+
 describe("runDockerInspectContainerRuntimeInfo", () => {
   it.effect("parses running runtime ownership even when separators arrive as literal escapes", () =>
     Effect.gen(function*(_) {
       const bridgeIp = joinIp(172, 17, 0, 15)
       const projectIp = joinIp(10, 88, 0, 2)
-      const executor = makeFakeExecutor({
+      const runtime = yield* _(loadRuntimeInfo({
         runtimeOutput: "running\\t/home/dev/.docker-git/test-owner/repo\\tdg-repo\n",
         ipOutput: `bridge=${bridgeIp}\nproject=${projectIp}\n`
-      })
-
-      const runtime = yield* _(
-        runDockerInspectContainerRuntimeInfo("/tmp", "dg-repo").pipe(
-          Effect.provideService(CommandExecutor.CommandExecutor, executor)
-        )
-      )
+      }))
 
       expect(runtime).toEqual({
         containerName: "dg-repo",
@@ -115,16 +119,10 @@ describe("runDockerInspectContainerRuntimeInfo", () => {
   it.effect("keeps optional compose labels undefined when runtime is unlabeled", () =>
     Effect.gen(function*(_) {
       const projectIp = joinIp(10, 88, 0, 4)
-      const executor = makeFakeExecutor({
+      const runtime = yield* _(loadRuntimeInfo({
         runtimeOutput: "running\t\t\n",
         ipOutput: `project=${projectIp}\n`
-      })
-
-      const runtime = yield* _(
-        runDockerInspectContainerRuntimeInfo("/tmp", "dg-repo").pipe(
-          Effect.provideService(CommandExecutor.CommandExecutor, executor)
-        )
-      )
+      }))
 
       expect(runtime).toEqual({
         containerName: "dg-repo",
