@@ -3,6 +3,7 @@ import { Effect } from "effect"
 import type { ProjectItem } from "@lib/usecases/projects"
 
 import { openResolvedProjectSshEffect } from "../../../src/docker-git/open-project.js"
+import { recordEvent } from "./event-recorder.js"
 
 type OpenResolvedProjectSshDeps = {
   readonly log: (message: string) => Effect.Effect<void>
@@ -21,22 +22,17 @@ type OpenResolvedProjectSshOptions =
     readonly upEntry?: (selected: ProjectItem) => string
   }
 
-const record = (events: Array<string>, entry: string): Effect.Effect<void> =>
-  Effect.sync(() => {
-    events.push(entry)
-  })
-
 export const makeOpenResolvedProjectSshDeps = (
   events: Array<string>,
   options: OpenResolvedProjectSshOptions = {}
 ): OpenResolvedProjectSshDeps => {
   const { connectEntry, upEntry, ...overrides } = options
   return {
-    log: (message) => record(events, `log:${message}`),
+    log: (message) => recordEvent(events, `log:${message}`),
     resolvePreferredItem: () => Effect.succeed(null),
     probeReady: () => Effect.succeed(true),
-    connect: (selected) => record(events, connectEntry?.(selected) ?? `connect:${selected.projectDir}`),
-    connectWithUp: (selected) => record(events, upEntry?.(selected) ?? `up:${selected.projectDir}`),
+    connect: (selected) => recordEvent(events, connectEntry?.(selected) ?? `connect:${selected.projectDir}`),
+    connectWithUp: (selected) => recordEvent(events, upEntry?.(selected) ?? `up:${selected.projectDir}`),
     ...overrides
   }
 }

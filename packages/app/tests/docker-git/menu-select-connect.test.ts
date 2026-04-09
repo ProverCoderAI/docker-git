@@ -5,16 +5,12 @@ import type { ProjectItem } from "@lib/usecases/projects"
 
 import { selectHint } from "../../src/docker-git/menu-render-select.js"
 import { buildConnectEffect, isConnectMcpToggleInput } from "../../src/docker-git/menu-select-connect.js"
+import { recordEvent } from "./fixtures/event-recorder.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
 
-const record = (events: Array<string>, entry: string): Effect.Effect<void> =>
-  Effect.sync(() => {
-    events.push(entry)
-  })
-
 const makeConnectDeps = (events: Array<string>) => ({
-  connectWithUp: (selected: ProjectItem) => record(events, `connect:${selected.projectDir}`),
-  enableMcpPlaywright: (projectDir: string) => record(events, `enable:${projectDir}`)
+  connectWithUp: (selected: ProjectItem) => recordEvent(events, `connect:${selected.projectDir}`),
+  enableMcpPlaywright: (projectDir: string) => recordEvent(events, `enable:${projectDir}`)
 })
 
 const workspaceProject = () =>
