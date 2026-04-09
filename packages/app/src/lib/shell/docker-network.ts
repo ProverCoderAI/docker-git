@@ -6,18 +6,27 @@ import { Effect } from "effect"
 import { runCommandCapture, runCommandExitCode, runCommandWithExitCodes } from "./command-runner.js"
 import { DockerCommandError } from "./errors.js"
 
+const dockerSuccessExitCodes = [Number(ExitCode(0))]
+
+const createDockerNetworkError = (exitCode: number): DockerCommandError => new DockerCommandError({ exitCode })
+
+const buildDockerNetworkCommand = (
+  cwd: string,
+  args: ReadonlyArray<string>
+): { readonly cwd: string; readonly command: string; readonly args: ReadonlyArray<string> } => ({
+  cwd,
+  command: "docker",
+  args
+})
+
 const runDockerNetworkCommand = (
   cwd: string,
   args: ReadonlyArray<string>
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCommandWithExitCodes(
-    {
-      cwd,
-      command: "docker",
-      args
-    },
-    [Number(ExitCode(0))],
-    (exitCode) => new DockerCommandError({ exitCode })
+    buildDockerNetworkCommand(cwd, args),
+    dockerSuccessExitCodes,
+    createDockerNetworkError
   )
 
 const runDockerNetworkCapture = (
@@ -25,13 +34,9 @@ const runDockerNetworkCapture = (
   args: ReadonlyArray<string>
 ): Effect.Effect<string, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCommandCapture(
-    {
-      cwd,
-      command: "docker",
-      args
-    },
-    [Number(ExitCode(0))],
-    (exitCode) => new DockerCommandError({ exitCode })
+    buildDockerNetworkCommand(cwd, args),
+    dockerSuccessExitCodes,
+    createDockerNetworkError
   )
 
 export const runDockerNetworkConnectBridge = (
