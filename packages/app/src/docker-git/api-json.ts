@@ -116,6 +116,15 @@ const renderNestedStatusPayload = (
   return readNestedMessage(object, "status") ?? JSON.stringify(payload, null, 2)
 }
 
+const renderDirectObjectPayload = (object: JsonObject): string | null => {
+  const directStatus = renderGithubStatusLike(object)
+  if (directStatus !== null) {
+    return directStatus
+  }
+
+  return asString(object["message"])
+}
+
 export const renderJsonPayload = (payload: JsonValue): string => {
   if (typeof payload === "string") {
     return payload
@@ -126,14 +135,9 @@ export const renderJsonPayload = (payload: JsonValue): string => {
     return JSON.stringify(payload, null, 2)
   }
 
-  const directStatus = renderGithubStatusLike(object)
-  if (directStatus !== null) {
-    return directStatus
-  }
-
-  const message = asString(object["message"])
-  if (message !== null) {
-    return message
+  const directPayload = renderDirectObjectPayload(object)
+  if (directPayload !== null) {
+    return directPayload
   }
 
   const nestedStatus = renderNestedStatusPayload(payload, object)
