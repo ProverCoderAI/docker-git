@@ -92,7 +92,7 @@ dg_write_docker_host_file "$ROOT/authorized_keys" 644 < "$SSH_PUB_KEY"
 
 # Seed a structurally valid auth.json so the shared Codex volume must be created
 # and wired into the container runtime.
-bun <<'BUN' | dg_write_docker_host_file "$ROOT/.orch/auth/codex/auth.json" 600
+bun - <<'BUN' | dg_write_docker_host_file "$ROOT/.orch/auth/codex/auth.json" 600
 const now = Math.floor(Date.now() / 1000)
 const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url")
 const jwt = (payload) => `${b64({ alg: "none", typ: "JWT" })}.${b64(payload)}.sig`
@@ -151,7 +151,7 @@ docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" \
   || fail "expected cloned repo at: $TARGET_DIR"
 
 MOUNTS_JSON="$(docker inspect --format '{{json .Mounts}}' "$CONTAINER_NAME")"
-MOUNTS_JSON="$MOUNTS_JSON" HOME_VOLUME_NAME="$VOLUME_NAME" bun <<'BUN'
+MOUNTS_JSON="$MOUNTS_JSON" HOME_VOLUME_NAME="$VOLUME_NAME" bun - <<'BUN'
 const mounts = JSON.parse(process.env.MOUNTS_JSON)
 const byDestination = new Map(mounts.map((mount) => [mount.Destination, mount]))
 

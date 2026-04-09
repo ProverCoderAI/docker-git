@@ -85,7 +85,7 @@ mkdir -p "$ROOT/.orch/auth/codex"
 
 # Seed a fake (but structurally valid) Codex auth.json so the entrypoint can
 # auto-connect OpenCode without manual /connect.
-bun <<'BUN' > "$ROOT/.orch/auth/codex/auth.json"
+bun - <<'BUN' > "$ROOT/.orch/auth/codex/auth.json"
 const now = Math.floor(Date.now() / 1000)
 const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url")
 const jwt = (payload) => `${b64({ alg: "none", typ: "JWT" })}.${b64(payload)}.sig`

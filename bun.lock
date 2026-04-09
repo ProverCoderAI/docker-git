@@ -7,6 +7,7 @@
       "devDependencies": {
         "@changesets/changelog-github": "^0.6.0",
         "@changesets/cli": "^2.30.0",
+        "@prover-coder-ai/dist-deps-prune": "^1.0.17",
       },
     },
     "packages/api": {
@@ -482,6 +483,8 @@
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
 
     "@pnpm/deps.graph-sequencer": ["@pnpm/deps.graph-sequencer@1.0.0", "", {}, "sha512-vWWVbYYBBN/kweokmURicokyg7crzcDZo9/naziv8B8RSWrLWFpq5Xl0ro6QCQKgRmb6O78Qy9uQT+Fp79RxsA=="],
+
+    "@prover-coder-ai/dist-deps-prune": ["@prover-coder-ai/dist-deps-prune@1.0.17", "", { "dependencies": { "@effect/platform": "^0.94.5", "@effect/platform-node": "^0.104.1", "@effect/schema": "^0.75.5", "effect": "^3.19.17", "typescript": "^5.9.3" }, "bin": { "dist-deps-prune": "dist/main.js" } }, "sha512-bLSCtn7txAMDiFijYOY+xiXd0CEqLmM6Ti29auqxVaOKGG0+xHAu17MqF8lOr5Xgz4/My9ZrEp9OlyDdQtHS6g=="],
 
     "@prover-coder-ai/docker-git": ["@prover-coder-ai/docker-git@workspace:packages/app"],
 
@@ -1729,6 +1732,10 @@
 
     "@parcel/watcher/detect-libc": ["detect-libc@1.0.3", "", { "bin": { "detect-libc": "./bin/detect-libc.js" } }, "sha512-pGjwhsmsp4kL2RTz08wcOlGN83otlqHeD/Z5T8GXZB+/YcpQ/dgo+lbU8ZsGxV0HIvqqxo9l7mqYwyYMD9bKDg=="],
 
+    "@prover-coder-ai/dist-deps-prune/@effect/platform": ["@effect/platform@0.94.5", "", { "dependencies": { "find-my-way-ts": "0.1.6", "msgpackr": "1.11.5", "multipasta": "0.2.7" }, "peerDependencies": { "effect": "3.21.0" } }, "sha512-z05APUiDDPbodhTkH/RJqOLoCU11bU2IZLfcwLFrld03+ob1VeqRnELQlmueLIYm6NZifHAtjl32V+GRt34y4A=="],
+
+    "@prover-coder-ai/dist-deps-prune/@effect/platform-node": ["@effect/platform-node@0.104.1", "", { "dependencies": { "@effect/platform-node-shared": "0.57.1", "mime": "3.0.0", "undici": "7.16.0", "ws": "8.18.3" }, "peerDependencies": { "@effect/cluster": "0.58.0", "@effect/platform": "0.94.5", "@effect/rpc": "0.75.0", "@effect/sql": "0.51.0", "effect": "3.21.0" } }, "sha512-jT1a/z98niK6fnEU8pWHPPCdJMVDRCIdB65lolcOjse5rsTwVbczMjvKkhVQpF63mNWoOnol7OTRNkw5L54llg=="],
+
     "@prover-coder-ai/eslint-plugin-suggest-members/@effect/platform": ["@effect/platform@0.94.5", "", { "dependencies": { "find-my-way-ts": "0.1.6", "msgpackr": "1.11.5", "multipasta": "0.2.7" }, "peerDependencies": { "effect": "3.21.0" } }, "sha512-z05APUiDDPbodhTkH/RJqOLoCU11bU2IZLfcwLFrld03+ob1VeqRnELQlmueLIYm6NZifHAtjl32V+GRt34y4A=="],
 
     "@prover-coder-ai/eslint-plugin-suggest-members/@effect/platform-node": ["@effect/platform-node@0.104.1", "", { "dependencies": { "@effect/platform-node-shared": "0.57.1", "mime": "3.0.0", "undici": "7.16.0", "ws": "8.18.3" }, "peerDependencies": { "@effect/cluster": "0.58.0", "@effect/platform": "0.94.5", "@effect/rpc": "0.75.0", "@effect/sql": "0.51.0", "effect": "3.21.0" } }, "sha512-jT1a/z98niK6fnEU8pWHPPCdJMVDRCIdB65lolcOjse5rsTwVbczMjvKkhVQpF63mNWoOnol7OTRNkw5L54llg=="],
@@ -1850,6 +1857,8 @@
     "@jscpd/html-reporter/fs-extra/universalify": ["universalify@2.0.1", "", {}, "sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw=="],
 
     "@manypkg/find-root/find-up/locate-path": ["locate-path@5.0.0", "", { "dependencies": { "p-locate": "4.1.0" } }, "sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g=="],
+
+    "@prover-coder-ai/dist-deps-prune/@effect/platform-node/@effect/platform-node-shared": ["@effect/platform-node-shared@0.57.1", "", { "dependencies": { "@parcel/watcher": "2.5.1", "multipasta": "0.2.7", "ws": "8.18.3" }, "peerDependencies": { "@effect/cluster": "0.58.0", "@effect/platform": "0.94.5", "@effect/rpc": "0.75.0", "@effect/sql": "0.51.0", "effect": "3.21.0" } }, "sha512-oX/bApMdoKsyrDiNdJxo7U9Rz1RXsjRv+ecfAPp1qGlSdGIo32wVRvJ2XCHqYj0sqaYJS0pU0/GCulRfVGuJag=="],
 
     "@prover-coder-ai/eslint-plugin-suggest-members/@effect/platform-node/@effect/platform-node-shared": ["@effect/platform-node-shared@0.57.1", "", { "dependencies": { "@parcel/watcher": "2.5.1", "multipasta": "0.2.7", "ws": "8.18.3" }, "peerDependencies": { "@effect/cluster": "0.58.0", "@effect/platform": "0.94.5", "@effect/rpc": "0.75.0", "@effect/sql": "0.51.0", "effect": "3.21.0" } }, "sha512-oX/bApMdoKsyrDiNdJxo7U9Rz1RXsjRv+ecfAPp1qGlSdGIo32wVRvJ2XCHqYj0sqaYJS0pU0/GCulRfVGuJag=="],
 
