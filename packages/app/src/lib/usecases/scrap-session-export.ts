@@ -126,7 +126,8 @@ const detectRebuildCommands = (
     const script = [
       "set -e",
       `cd ${targetDir}`,
-      // Priority: pnpm > npm > yarn. Keep commands deterministic and rebuildable.
+      // Priority: bun > pnpm > npm > yarn. Keep commands deterministic and rebuildable.
+      "if [ -f bun.lock ]; then echo 'bun install --frozen-lockfile'; exit 0; fi",
       "if [ -f pnpm-lock.yaml ]; then echo 'pnpm install --frozen-lockfile'; exit 0; fi",
       "if [ -f package-lock.json ]; then echo 'npm ci'; exit 0; fi",
       "if [ -f yarn.lock ]; then echo 'yarn install --frozen-lockfile'; exit 0; fi",

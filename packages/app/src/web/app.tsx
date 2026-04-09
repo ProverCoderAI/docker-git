@@ -1,0 +1,169 @@
+import { Effect, Match } from "effect"
+import { type JSX, startTransition, useEffect, useEffectEvent, useState } from "react"
+
+import { webPrimitives } from "../ui/primitives-web.js"
+import { UiProvider } from "../ui/primitives.js"
+import { type DashboardData, loadDashboard, resolveApiBaseUrl } from "./api.js"
+import { AppReady } from "./app-ready.js"
+import { ErrorScreen, LoadingScreen } from "./panels.js"
+
+type DashboardState =
+  | { readonly _tag: "Loading"; readonly apiBaseUrl: string }
+  | { readonly _tag: "Error"; readonly apiBaseUrl: string; readonly message: string }
+  | { readonly _tag: "Ready"; readonly dashboard: DashboardData; readonly refreshedAtMs: number }
+
+const refreshIntervalMs = 15_000
+const compactViewportWidth = 960
+
+const resolveViewportWidth = (): number => typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1280
+
+const resolveFontSize = (viewportWidth: number): number => {
+  if (viewportWidth < 480) {
+    return 11
+  }
+  if (viewportWidth < compactViewportWidth) {
+    return 12
+  }
+  if (viewportWidth < 1280) {
+    return 13
+  }
+  return 15
+}
+
+const initialDashboardState = (): DashboardState => ({
+  _tag: "Loading",
+  apiBaseUrl: resolveApiBaseUrl()
+})
+
+const loadDashboardState = () =>
+  loadDashboard().pipe(
+    Effect.match({
+      onFailure: (message) => ({
+        _tag: "Error" as const,
+        apiBaseUrl: resolveApiBaseUrl(),
+        message
+      }),
+      onSuccess: (dashboard) => ({
+        _tag: "Ready" as const,
+        dashboard,
+        refreshedAtMs: Date.now()
+      })
+    })
+  )
+
+const isDocumentVisible = (): boolean => document.visibilityState === "visible"
+
+const useDashboardRefreshTriggers = (refresh: () => void) => {
+  const refreshWhenVisible = useEffectEvent(() => {
+    if (isDocumentVisible()) {
+      refresh()
+    }
+  })
+
+  useEffect(() => {
+    const onRefreshTrigger = () => {
+      refreshWhenVisible()
+    }
+    globalThis.addEventListener("focus", onRefreshTrigger)
+    globalThis.addEventListener("online", onRefreshTrigger)
+    globalThis.addEventListener("pageshow", onRefreshTrigger)
+    document.addEventListener("visibilitychange", onRefreshTrigger)
+    return () => {
+      globalThis.removeEventListener("focus", onRefreshTrigger)
+      globalThis.removeEventListener("online", onRefreshTrigger)
+      globalThis.removeEventListener("pageshow", onRefreshTrigger)
+      document.removeEventListener("visibilitychange", onRefreshTrigger)
+    }
+  }, [refreshWhenVisible])
+}
+
+const useDashboardController = () => {
+  const [state, setState] = useState<DashboardState>(initialDashboardState)
+
+  const refresh = () => {
+    void Effect.runPromise(loadDashboardState()).then((nextState) => {
+      startTransition(() => {
+        setState(nextState)
+      })
+    })
+  }
+
+  useEffect(() => {
+    refresh()
+    const interval = setInterval(refresh, refreshIntervalMs)
+    return () => {
+      clearInterval(interval)
+    }
+  }, [])
+
+  useDashboardRefreshTriggers(refresh)
+
+  return { refresh, state } as const
+}
+
+const useViewportMode = () => {
+  const [viewportWidth, setViewportWidth] = useState(resolveViewportWidth)
+
+  useEffect(() => {
+    const onResize = () => {
+      setViewportWidth(resolveViewportWidth())
+    }
+    globalThis.addEventListener("resize", onResize)
+    return () => {
+      globalThis.removeEventListener("resize", onResize)
+    }
+  }, [])
+
+  return {
+    compact: viewportWidth < compactViewportWidth,
+    fontSize: resolveFontSize(viewportWidth)
+  } as const
+}
+
+const renderDashboardState = (
+  state: DashboardState,
+  refreshDashboard: () => void,
+  compact: boolean
+): JSX.Element =>
+  Match.value(state).pipe(
+    Match.when({ _tag: "Loading" }, ({ apiBaseUrl }) => <LoadingScreen apiBaseUrl={apiBaseUrl} />),
+    Match.when(
+      { _tag: "Error" },
+      ({ apiBaseUrl, message }) => <ErrorScreen apiBaseUrl={apiBaseUrl} message={message} />
+    ),
+    Match.when(
+      { _tag: "Ready" },
+      ({ dashboard, refreshedAtMs }) => (
+        <AppReady
+          compact={compact}
+          dashboard={dashboard}
+          dashboardRefreshTick={refreshedAtMs}
+          refreshDashboard={refreshDashboard}
+        />
+      )
+    ),
+    Match.exhaustive
+  )
+
+export const App = (): JSX.Element => {
+  const { refresh, state } = useDashboardController()
+  const viewport = useViewportMode()
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#08111f",
+        color: "#d6e5f7",
+        fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
+        fontSize: viewport.fontSize,
+        minHeight: "100vh",
+        overflow: "auto",
+        width: "100%"
+      }}
+    >
+      <UiProvider primitives={webPrimitives}>
+        {renderDashboardState(state, refresh, viewport.compact)}
+      </UiProvider>
+    </div>
+  )
+}

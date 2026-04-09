@@ -53,6 +53,23 @@ const withPatchedEnv = <A, E, R>(
       })
   )
 
+const withWorkingDirectory = <A, E, R>(
+  cwd: string,
+  effect: Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R> =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const previous = process.cwd()
+      process.chdir(cwd)
+      return previous
+    }),
+    () => effect,
+    (previous) =>
+      Effect.sync(() => {
+        process.chdir(previous)
+      })
+  )
+
 const failOnCopyFile = (
   fs: FileSystem.FileSystem,
   label: string
@@ -82,7 +99,7 @@ const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   dockerNetworkMode: "shared",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: false,
-  pnpmVersion: "10.27.0"
+  bunVersion: "1.3.11"
 })
 
 const makeProjectConfig = (
@@ -115,7 +132,7 @@ const makeProjectConfig = (
   dockerNetworkMode: "shared",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright,
-  pnpmVersion: "10.27.0"
+  bunVersion: "1.3.11"
 })
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -299,6 +316,36 @@ describe("prepareProjectFiles", () => {
         expect(compose).toContain("dg-test-net")
         expect(compose).toContain("driver: bridge")
         expect(compose).not.toContain("dg-test-net:\n    external: true")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("copies docker-git scripts from the workspace root when cwd is a nested package", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const packageDir = path.join(root, "packages", "api")
+        const scriptsDir = path.join(root, "scripts")
+        const outDir = path.join(root, "project-with-scripts")
+        const globalConfig = makeGlobalConfig(root, path)
+        const projectConfig = makeProjectConfig(outDir, false, path)
+
+        yield* _(fs.makeDirectory(packageDir, { recursive: true }))
+        yield* _(fs.makeDirectory(scriptsDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(root, "bunfig.toml"), "[install]\nlinkWorkspacePackages = true\n"))
+        yield* _(fs.writeFileString(path.join(scriptsDir, "session-backup-gist.js"), "#!/usr/bin/env bun\n"))
+
+        yield* _(
+          withWorkingDirectory(
+            packageDir,
+            prepareProjectFiles(outDir, packageDir, globalConfig, projectConfig, {
+              force: false,
+              forceEnv: false
+            })
+          )
+        )
+
+        expect(yield* _(fs.exists(path.join(outDir, "scripts", "session-backup-gist.js")))).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

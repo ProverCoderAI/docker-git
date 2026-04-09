@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 // CHANGE: Prevent pushing commits that contain oversized blobs or secret-like data under any .knowledge/.knowlenge path.
 // WHY: keep repository history safe (size + credentials) before refs leave local machine.
@@ -227,9 +227,9 @@ console.error("");
 console.error("Fix options:");
 console.error(" - For new changes: commit again (pre-commit will split + redact knowledge files).");
 console.error(" - For already committed changes in upstream..HEAD:");
-console.error("   1) node scripts/split-knowledge-large-files.js");
+console.error("   1) bun scripts/split-knowledge-large-files.js");
 console.error("   2) bash scripts/pre-commit-secret-guard.sh");
-console.error("   3) node scripts/repair-knowledge-history.js");
+console.error("   3) bun scripts/repair-knowledge-history.js");
 console.error("   4) git push");
 console.error("");
 console.error("To bypass this guard (not recommended): set DOCKER_GIT_SKIP_KNOWLEDGE_GUARD=1");

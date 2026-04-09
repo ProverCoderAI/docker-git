@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * Session Backup to a private GitHub repository
@@ -8,7 +8,7 @@
  * associated PR with direct links to the uploaded files.
  *
  * Usage:
- *   node scripts/session-backup-gist.js [options]
+ *   bun scripts/session-backup-gist.js [options]
  *
  * Options:
  *   --session-dir <path>    Path to session directory under $HOME (default: auto-detect ~/.codex, ~/.claude, ~/.qwen, or ~/.gemini)

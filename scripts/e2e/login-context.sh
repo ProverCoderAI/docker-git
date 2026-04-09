@@ -17,6 +17,7 @@ chmod 0777 "$ROOT/e2e"
 KEEP="${KEEP:-0}"
 
 dg_ensure_docker "$ROOT/.e2e-bin"
+dg_prepare_docker_git_cli "$REPO_ROOT" "$ROOT/.e2e-bin"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
@@ -99,7 +100,7 @@ EOF_ENV
 
   (
     cd "$REPO_ROOT"
-    pnpm run docker-git clone "$repo_url" \
+    dg_run_docker_git "$REPO_ROOT" clone "$repo_url" \
       --force \
       --gh-skip \
       --no-ssh \

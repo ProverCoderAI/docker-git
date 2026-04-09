@@ -81,7 +81,7 @@ export interface TemplateConfig {
   readonly dockerNetworkMode: DockerNetworkMode
   readonly dockerSharedNetworkName: string
   readonly enableMcpPlaywright: boolean
-  readonly pnpmVersion: string
+  readonly bunVersion: string
   readonly agentMode?: AgentMode | undefined
   readonly agentAuto?: boolean | undefined
   readonly clonedOnHostname?: string | undefined

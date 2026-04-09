@@ -11,6 +11,8 @@ import * as Schema from "effect/Schema"
 
 import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
 import {
+  AuthMenuRequestSchema,
+  AuthTerminalSessionRequestSchema,
   ApplyAllRequestSchema,
   CodexAuthImportRequestSchema,
   CodexAuthLoginRequestSchema,
@@ -20,20 +22,26 @@ import {
   CreateProjectRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
+  ProjectAuthRequestSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
   UpProjectRequestSchema
 } from "./api/schema.js"
+import type { UpProjectRequestInput } from "./api/schema.js"
 import { uiHtml, uiScript, uiStyles } from "./ui.js"
+import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
+import { resolveWorkspaceRoot } from "@effect-template/lib/shell/workspace-root"
 import {
   importCodexAuth,
   loginGithubAuth,
   logoutCodexAuth,
   logoutGithubAuth,
   readCodexAuthStatus,
-  readGithubAuthStatus
+  readGithubAuthStatus,
 } from "./services/auth.js"
+import { readAuthMenuSnapshot, runAuthMenuFlow } from "./services/auth-menu.js"
+import { createAuthTerminalSession, deleteAuthTerminalSession } from "./services/auth-terminal-sessions.js"
 import { streamCodexAuthLogin } from "./services/auth-codex-login-stream.js"
 import { getAgent, getAgentAttachInfo, listAgents, readAgentLogs, startAgent, stopAgent } from "./services/agents.js"
 import { latestProjectCursor, listProjectEventsSince } from "./services/events.js"
@@ -62,6 +70,8 @@ import {
   recreateProject,
   upProject
 } from "./services/projects.js"
+import { readProjectAuthSnapshot, runProjectAuthFlow } from "./services/project-auth.js"
+import { createTerminalSession, deleteTerminalSession } from "./services/terminal-sessions.js"
 import {
   commitStateFromRequest,
   initStateFromRequest,
@@ -81,6 +91,15 @@ const AgentParamsSchema = Schema.Struct({
   agentId: Schema.String
 })
 
+const TerminalSessionParamsSchema = Schema.Struct({
+  projectId: Schema.String,
+  sessionId: Schema.String
+})
+
+const AuthTerminalSessionParamsSchema = Schema.Struct({
+  sessionId: Schema.String
+})
+
 type ApiError =
   | ApiAuthRequiredError
   | ApiBadRequestError
@@ -92,13 +111,21 @@ type ApiError =
   | HttpServerError.RequestError
   | PlatformError
 
+const noStoreHeaders = {
+  "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
+  pragma: "no-cache"
+}
+
 const jsonResponse = (data: unknown, status: number) =>
-  Effect.map(HttpServerResponse.json(data), (response) => HttpServerResponse.setStatus(response, status))
+  Effect.map(
+    HttpServerResponse.json(data, { headers: noStoreHeaders }),
+    (response) => HttpServerResponse.setStatus(response, status)
+  )
 
 const textResponse = (data: string, contentType: string, status = 200) =>
   Effect.succeed(
     HttpServerResponse.setStatus(
-      HttpServerResponse.text(data, { contentType }),
+      HttpServerResponse.text(data, { contentType, headers: noStoreHeaders }),
       status
     )
   )
@@ -167,21 +194,27 @@ const errorResponse = (error: ApiError | unknown) => {
 
 const projectParams = HttpRouter.schemaParams(ProjectParamsSchema)
 const agentParams = HttpRouter.schemaParams(AgentParamsSchema)
+const terminalSessionParams = HttpRouter.schemaParams(TerminalSessionParamsSchema)
+const authTerminalSessionParams = HttpRouter.schemaParams(AuthTerminalSessionParamsSchema)
 
 const readCreateProjectRequest = () => HttpServerRequest.schemaBodyJson(CreateProjectRequestSchema)
 const readCreateFollowRequest = () => HttpServerRequest.schemaBodyJson(CreateFollowRequestSchema)
 const readGithubAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLoginRequestSchema)
 const readGithubAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLogoutRequestSchema)
+const readAuthMenuRequest = () => HttpServerRequest.schemaBodyJson(AuthMenuRequestSchema)
+const readAuthTerminalSessionRequest = () => HttpServerRequest.schemaBodyJson(AuthTerminalSessionRequestSchema)
 const readCodexAuthImportRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthImportRequestSchema)
 const readCodexAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLoginRequestSchema)
 const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLogoutRequestSchema)
+const readProjectAuthRequest = () => HttpServerRequest.schemaBodyJson(ProjectAuthRequestSchema)
 const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitRequestSchema)
 const readStateCommitRequest = () => HttpServerRequest.schemaBodyJson(StateCommitRequestSchema)
 const readStateSyncRequest = () => HttpServerRequest.schemaBodyJson(StateSyncRequestSchema)
 const readApplyAllRequest = () => HttpServerRequest.schemaBodyJson(ApplyAllRequestSchema)
+const emptyUpProjectRequest: UpProjectRequestInput = {}
 const readUpProjectRequest = () =>
   HttpServerRequest.schemaBodyJson(UpProjectRequestSchema).pipe(
-    Effect.catchAll(() => Effect.succeed({ authorizedKeysContents: undefined }))
+    Effect.catchAll(() => Effect.succeed(emptyUpProjectRequest))
   )
 const readInboxPayload = () => HttpServerRequest.schemaBodyJson(Schema.Unknown)
 
@@ -236,8 +269,27 @@ const resolveFederationContext = (
   })
 }
 
+const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
+  const request = yield* _(HttpServerRequest.HttpServerRequest)
+  const upgrade = readHeader(request, "upgrade")?.toLowerCase()
+  if (upgrade === "websocket") {
+    return yield* _(Effect.never)
+  }
+  return yield* _(
+    jsonResponse(
+      {
+        error: {
+          type: "UpgradeRequired",
+          message: "Use a websocket upgrade request for terminal sessions."
+        }
+      },
+      426
+    )
+  )
+})
+
 export const makeRouter = () => {
-  const base = HttpRouter.empty.pipe(
+  const withUi = HttpRouter.empty.pipe(
     HttpRouter.get("/", 
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
@@ -247,12 +299,29 @@ export const makeRouter = () => {
     ),
     HttpRouter.get("/ui/styles.css", textResponse(uiStyles, "text/css; charset=utf-8", 200)),
     HttpRouter.get("/ui/app.js", textResponse(uiScript, "application/javascript; charset=utf-8", 200)),
-    HttpRouter.get("/health", jsonResponse({ ok: true, revision: controllerRevision }, 200)),
+    HttpRouter.get(
+      "/health",
+      Effect.gen(function*(_) {
+        const cwd = yield* _(resolveWorkspaceRoot(process.cwd()).pipe(Effect.orElseSucceed(() => process.cwd())))
+        const projectsRoot = defaultProjectsRoot(cwd)
+        return yield* _(jsonResponse({ ok: true, revision: controllerRevision, cwd, projectsRoot }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    )
+  )
+
+  const withAuth = withUi.pipe(
     HttpRouter.get(
       "/auth/github/status",
       Effect.gen(function*(_) {
         const status = yield* _(readGithubAuthStatus())
         return yield* _(jsonResponse({ status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/auth/menu",
+      Effect.gen(function*(_) {
+        const snapshot = yield* _(readAuthMenuSnapshot())
+        return yield* _(jsonResponse({ snapshot }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(
@@ -261,6 +330,34 @@ export const makeRouter = () => {
         const request = yield* _(readGithubAuthLoginRequest())
         const status = yield* _(loginGithubAuth(request))
         return yield* _(jsonResponse({ ok: true, status }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/menu",
+      Effect.gen(function*(_) {
+        const request = yield* _(readAuthMenuRequest())
+        const snapshot = yield* _(runAuthMenuFlow(request))
+        return yield* _(jsonResponse({ ok: true, snapshot }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/terminal-sessions",
+      Effect.gen(function*(_) {
+        const request = yield* _(readAuthTerminalSessionRequest())
+        const created = yield* _(createAuthTerminalSession(request))
+        return yield* _(jsonResponse(created, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/auth/terminal-sessions/:sessionId/ws",
+      terminalWebSocketUpgradeResponse.pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.del(
+      "/auth/terminal-sessions/:sessionId",
+      Effect.gen(function*(_) {
+        const params = yield* _(authTerminalSessionParams)
+        yield* _(deleteAuthTerminalSession(params.sessionId))
+        return yield* _(jsonResponse({ ok: true }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(
@@ -309,7 +406,10 @@ export const makeRouter = () => {
         const status = yield* _(logoutCodexAuth(request))
         return yield* _(jsonResponse({ ok: true, status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
-    ),
+    )
+  )
+
+  const base = withAuth.pipe(
     HttpRouter.get(
       "/federation/issues",
       Effect.sync(() => ({ issues: listFederationIssues() })).pipe(
@@ -478,6 +578,30 @@ export const makeRouter = () => {
         Effect.catchAll(errorResponse)
       )
     ),
+    HttpRouter.get(
+      "/projects/:projectId/auth/menu",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) =>
+          Effect.gen(function*(_) {
+            const project = yield* _(getProject(projectId))
+            const snapshot = yield* _(readProjectAuthSnapshot(project))
+            return { snapshot }
+          })
+        ),
+        Effect.flatMap((payload) => jsonResponse(payload, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/auth/menu",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(readProjectAuthRequest())
+        const project = yield* _(getProject(projectId))
+        const snapshot = yield* _(runProjectAuthFlow(project, request))
+        return yield* _(jsonResponse({ ok: true, snapshot }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
     HttpRouter.del(
       "/projects/:projectId",
       projectParams.pipe(
@@ -491,8 +615,10 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const { projectId } = yield* _(projectParams)
         const request = yield* _(readUpProjectRequest())
-        yield* _(upProject(projectId, request.authorizedKeysContents))
-        return yield* _(jsonResponse({ ok: true }, 200))
+        const project = yield* _(
+          upProject(projectId, request.authorizedKeysContents, request.useManagedAuthorizedKeys)
+        )
+        return yield* _(jsonResponse({ ok: true, project }, 200))
       }).pipe(
         Effect.catchAll(errorResponse)
       )
@@ -501,6 +627,26 @@ export const makeRouter = () => {
       "/projects/:projectId/down",
       projectParams.pipe(
         Effect.flatMap(({ projectId }) => downProject(projectId)),
+        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/terminal-sessions",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => createTerminalSession(projectId)),
+        Effect.flatMap(({ project, session }) => jsonResponse({ ok: true, project, session }, 201)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/projects/:projectId/terminal-sessions/:sessionId/ws",
+      terminalWebSocketUpgradeResponse.pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.del(
+      "/projects/:projectId/terminal-sessions/:sessionId",
+      terminalSessionParams.pipe(
+        Effect.flatMap(({ projectId, sessionId }) => deleteTerminalSession(projectId, sessionId)),
         Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
         Effect.catchAll(errorResponse)
       )

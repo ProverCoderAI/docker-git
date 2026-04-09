@@ -7,7 +7,7 @@
 # FORMAT THEOREM: forall cmd: valid(cmd) -> controller_action(cmd) terminates
 # PURITY: SHELL
 # EFFECT: Effect<IO, Error, Env>
-# INVARIANT: every API request is executed from inside the controller container; host does not need curl/node/pnpm
+# INVARIANT: every API request is executed from inside the controller container; host does not need curl or a package manager
 # COMPLEXITY: O(1) + network/docker
 set -euo pipefail
 
@@ -68,7 +68,7 @@ normalize_api_path() {
   fi
 
   local normalized
-  normalized="$("${DOCKER_CMD[@]}" exec -i "$CONTAINER_NAME" node - "$raw_path" <<'NODE'
+  normalized="$("${DOCKER_CMD[@]}" exec -i "$CONTAINER_NAME" bun - "$raw_path" <<'NODE'
 const raw = process.argv[2] ?? ""
 const [pathname, query = ""] = raw.split(/\?(.*)/s, 2)
 const prefix = "/projects/"

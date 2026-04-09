@@ -18,6 +18,7 @@ chmod 0777 "$ROOT"
 KEEP="${KEEP:-0}"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
+dg_prepare_docker_git_cli "$REPO_ROOT" "$ROOT/.e2e-bin"
 
 # Keep the bare origin remote outside the state repo root so auto-sync commits
 # don't accidentally include its objects/refs.
@@ -75,11 +76,11 @@ git_token="git_token_$RUN_ID"
 # 1) Store multiple GitHub tokens by label (non-interactive / CI path).
 (
   cd "$REPO_ROOT"
-  pnpm run docker-git auth gh login --token "$default_token"
+  dg_run_docker_git "$REPO_ROOT" auth gh login --token "$default_token"
 )
 (
   cd "$REPO_ROOT"
-  pnpm run docker-git auth gh login --token "$agiens_token" --label agiens
+  dg_run_docker_git "$REPO_ROOT" auth gh login --token "$agiens_token" --label agiens
 )
 
 grep -Fq -- "GITHUB_TOKEN=$default_token" "$ROOT/.orch/env/global.env" \

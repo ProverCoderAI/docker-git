@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>docker-git browser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-0: #07111f;
+        --bg-1: #0d1b31;
+        --bg-2: #162947;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body,
+      #root {
+        min-height: 100%;
+        width: 100%;
+      }
+
+      body {
+        background:
+          radial-gradient(circle at top left, rgba(42, 175, 201, 0.18), transparent 36%),
+          radial-gradient(circle at top right, rgba(255, 184, 77, 0.14), transparent 28%),
+          linear-gradient(180deg, var(--bg-0), var(--bg-1) 52%, var(--bg-2));
+        color: #edf4ff;
+        font-family: "Space Grotesk", sans-serif;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/web/main.tsx"></script>
+  </body>
+</html>

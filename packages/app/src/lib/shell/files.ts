@@ -10,6 +10,7 @@ import { resolveComposeResourceLimits, withDefaultResourceLimitIntent } from "..
 import { type FileSpec, planFiles } from "../core/templates.js"
 import { FileExistsError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
+import { resolveWorkspaceRoot } from "./workspace-root.js"
 
 const ensureParentDir = (path: Path.Path, fs: FileSystem.FileSystem, filePath: string) =>
   fs.makeDirectory(path.dirname(filePath), { recursive: true })
@@ -115,9 +116,9 @@ const provisionDockerGitScripts = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
   baseDir: string
-): Effect.Effect<void, PlatformError> =>
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
-    const workspaceRoot = process.cwd()
+    const workspaceRoot = yield* _(resolveWorkspaceRoot(process.cwd()))
     const sourceScriptsDir = path.join(workspaceRoot, "scripts")
     const targetScriptsDir = path.join(baseDir, "scripts")
 
@@ -133,7 +134,8 @@ const provisionDockerGitScripts = (
       const targetPath = path.join(targetScriptsDir, scriptName)
       const exists = yield* _(fs.exists(sourcePath))
       if (exists) {
-        yield* _(fs.copyFile(sourcePath, targetPath))
+        const contents = yield* _(fs.readFileString(sourcePath))
+        yield* _(fs.writeFileString(targetPath, contents))
       }
     }
   })

@@ -1,18 +1,20 @@
-import { Match } from "effect"
-import { Box, Text } from "ink"
 import React from "react"
 
 import type { ProjectItem } from "@lib/usecases/projects"
+import { Box, Text } from "../ui/primitives.js"
+import { renderCreateStepLabel } from "./menu-create-shared.js"
 import { renderLayout } from "./menu-render-layout.js"
 import {
   buildSelectLabels,
   buildSelectListWindow,
+  computeListWidth,
+  computeSelectListMaxRows,
   renderSelectDetails,
   selectHint,
   type SelectPurpose,
   selectTitle
 } from "./menu-render-select.js"
-import type { CreateInputs, CreateStep, SelectProjectRuntime } from "./menu-types.js"
+import type { CreateInputs, SelectProjectRuntime } from "./menu-types.js"
 import { createSteps, menuItems } from "./menu-types.js"
 
 // CHANGE: render menu views with Ink without JSX
@@ -26,25 +28,6 @@ import { createSteps, menuItems } from "./menu-types.js"
 // INVARIANT: menu renders all items once
 // COMPLEXITY: O(n)
 
-export const renderStepLabel = (step: CreateStep, defaults: CreateInputs): string =>
-  Match.value(step).pipe(
-    Match.when("repoUrl", () => "Repo URL (optional for empty workspace)"),
-    Match.when("repoRef", () => `Repo ref [${defaults.repoRef}]`),
-    Match.when("outDir", () => `Output dir [${defaults.outDir}]`),
-    Match.when("cpuLimit", () => `CPU limit [${defaults.cpuLimit || "30%"}]`),
-    Match.when("ramLimit", () => `RAM limit [${defaults.ramLimit || "30%"}]`),
-    Match.when("runUp", () => `Run docker compose up now? [${defaults.runUp ? "Y" : "n"}]`),
-    Match.when(
-      "mcpPlaywright",
-      () => `Enable Playwright MCP (Chromium sidecar)? [${defaults.enableMcpPlaywright ? "y" : "N"}]`
-    ),
-    Match.when(
-      "force",
-      () => `Force recreate (overwrite files + wipe volumes)? [${defaults.force ? "y" : "N"}]`
-    ),
-    Match.exhaustive
-  )
-
 const compactElements = (
   items: ReadonlyArray<React.ReactElement | null>
 ): ReadonlyArray<React.ReactElement> => items.filter((item): item is React.ReactElement => item !== null)
@@ -53,14 +36,14 @@ const renderMenuHints = (el: typeof React.createElement): React.ReactElement =>
   el(
     Box,
     { marginTop: 1, flexDirection: "column" },
-    el(Text, { color: "gray" }, "Hints:"),
-    el(Text, { color: "gray" }, "  - Paste repo URL to create directly."),
+    el(Text, { fg: "gray" }, "Hints:"),
+    el(Text, { fg: "gray" }, "  - Paste repo URL to create directly."),
     el(
       Text,
-      { color: "gray" },
+      { fg: "gray" },
       "  - Aliases: create/c, select/s, auth/a, project-auth/pa, info/i, status/ps, logs/l, down/d, down-all/da, delete/del, quit/q"
     ),
-    el(Text, { color: "gray" }, "  - Use arrows and Enter to run.")
+    el(Text, { fg: "gray" }, "  - Use arrows and Enter to run.")
   )
 
 const renderMenuMessage = (
@@ -75,7 +58,7 @@ const renderMenuMessage = (
     { marginTop: 1, flexDirection: "column" },
     ...message
       .split("\n")
-      .map((line, index) => el(Text, { key: `${index}-${line}`, color: "magenta" }, line))
+      .map((line, index) => el(Text, { key: `${index}-${line}`, fg: "magenta" }, line))
   )
 }
 
@@ -99,13 +82,13 @@ export const renderMenu = (input: MenuRenderInput): React.ReactElement => {
     const prefix = index === selected ? ">" : " "
     return el(
       Text,
-      { key: item.label, color: index === selected ? "green" : "white" },
+      { key: item.label, fg: index === selected ? "green" : "white" },
       `${prefix} ${indexLabel} ${item.label}`
     )
   })
 
   const busyView = busy
-    ? el(Box, { marginTop: 1 }, el(Text, { color: "yellow" }, "Running..."))
+    ? el(Box, { marginTop: 1 }, el(Text, { fg: "yellow" }, "Running..."))
     : null
 
   const messageView = renderMenuMessage(el, message)
@@ -134,11 +117,14 @@ export const renderCreate = (
   defaults: CreateInputs
 ): React.ReactElement => {
   const el = React.createElement
+  const hint = stepIndex === 0
+    ? "Enter = create with defaults, Shift+Enter = advanced, Esc = cancel."
+    : "Enter = next, Esc = cancel."
   const steps = createSteps.map((step, index) =>
     el(
       Text,
-      { key: step, color: index === stepIndex ? "green" : "gray" },
-      `${index === stepIndex ? ">" : " "} ${renderStepLabel(step, defaults)}`
+      { key: step, fg: index === stepIndex ? "green" : "gray" },
+      `${index === stepIndex ? ">" : " "} ${renderCreateStepLabel(step, defaults)}`
     )
   )
   return renderLayout(
@@ -149,9 +135,9 @@ export const renderCreate = (
         Box,
         { marginTop: 1 },
         el(Text, null, `${label}: `),
-        el(Text, { color: "green" }, buffer)
+        el(Text, { fg: "green" }, buffer)
       ),
-      el(Box, { marginTop: 1 }, el(Text, { color: "gray" }, "Enter = next, Esc = cancel."))
+      el(Box, { marginTop: 1 }, el(Text, { fg: "gray" }, hint))
     ],
     message
   )
@@ -159,27 +145,6 @@ export const renderCreate = (
 
 export { renderAuthMenu, renderAuthPrompt } from "./menu-render-auth.js"
 export { renderProjectAuthMenu, renderProjectAuthPrompt } from "./menu-render-project-auth.js"
-
-const computeListWidth = (labels: ReadonlyArray<string>): number => {
-  const maxLabelWidth = labels.length > 0 ? Math.max(...labels.map((label) => label.length)) : 24
-  return Math.min(Math.max(maxLabelWidth + 2, 28), 54)
-}
-
-const readStdoutRows = (): number | null => {
-  const rows = process.stdout.rows
-  if (typeof rows !== "number" || !Number.isFinite(rows) || rows <= 0) {
-    return null
-  }
-  return rows
-}
-
-const computeSelectListMaxRows = (): number => {
-  const rows = readStdoutRows()
-  if (rows === null) {
-    return 12
-  }
-  return Math.max(6, rows - 14)
-}
 
 const renderSelectListBox = (
   el: typeof React.createElement,
@@ -198,7 +163,7 @@ const renderSelectListBox = (
       Text,
       {
         key: items[index]?.projectDir ?? String(index),
-        color: index === selected ? "green" : "white",
+        fg: index === selected ? "green" : "white",
         wrap: "truncate"
       },
       label
@@ -206,12 +171,12 @@ const renderSelectListBox = (
   })
 
   const before = hiddenAbove > 0
-    ? [el(Text, { color: "gray", wrap: "truncate" }, `[scroll] ${hiddenAbove} more above`)]
+    ? [el(Text, { fg: "gray", wrap: "truncate" }, `[scroll] ${hiddenAbove} more above`)]
     : []
   const after = hiddenBelow > 0
-    ? [el(Text, { color: "gray", wrap: "truncate" }, `[scroll] ${hiddenBelow} more below`)]
+    ? [el(Text, { fg: "gray", wrap: "truncate" }, `[scroll] ${hiddenBelow} more below`)]
     : []
-  const listBody = list.length > 0 ? list : [el(Text, { color: "gray" }, "No projects found.")]
+  const listBody = list.length > 0 ? list : [el(Text, { fg: "gray" }, "No projects found.")]
 
   return el(
     Box,
@@ -281,7 +246,7 @@ export const renderSelect = (
     }
     return baseHint
   })()
-  const hints = el(Box, { marginTop: 1 }, el(Text, { color: "gray" }, confirmHint))
+  const hints = el(Box, { marginTop: 1 }, el(Text, { fg: "gray" }, confirmHint))
 
   return renderLayout(
     selectTitle(purpose),
@@ -292,3 +257,5 @@ export const renderSelect = (
     message
   )
 }
+
+export { renderCreateStepLabel as renderStepLabel } from "./menu-create-shared.js"

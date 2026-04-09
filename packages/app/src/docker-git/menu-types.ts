@@ -40,6 +40,7 @@ export type MenuKeyInput = {
   readonly downArrow?: boolean
   readonly return?: boolean
   readonly escape?: boolean
+  readonly shift?: boolean
   readonly backspace?: boolean
   readonly delete?: boolean
 }

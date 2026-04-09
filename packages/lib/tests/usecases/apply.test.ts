@@ -49,7 +49,7 @@ const makeTemplateConfig = (
   dockerNetworkMode: "shared",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: false,
-  pnpmVersion: "10.27.0"
+  bunVersion: "1.3.11"
 })
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -65,6 +65,32 @@ const rewriteTargetDirInConfig = (source: string, targetDir: string): string => 
     throw new Error("invalid docker-git.json template")
   }
   const next = { ...parsed, template: { ...template, targetDir } }
+  return `${JSON.stringify(next, null, 2)}\n`
+}
+
+const rewriteLegacyVersionKeyInConfig = (source: string): string => {
+  const parsed: unknown = JSON.parse(source)
+  if (!isRecord(parsed)) {
+    throw new Error("invalid docker-git.json root")
+  }
+  const template = parsed["template"]
+  if (!isRecord(template)) {
+    throw new Error("invalid docker-git.json template")
+  }
+
+  const bunVersion = template["bunVersion"]
+  if (typeof bunVersion !== "string") {
+    throw new Error("invalid docker-git.json bunVersion")
+  }
+
+  const { bunVersion: _removed, ...legacyTemplate } = template
+  const next = {
+    ...parsed,
+    template: {
+      ...legacyTemplate,
+      pnpmVersion: bunVersion
+    }
+  }
   return `${JSON.stringify(next, null, 2)}\n`
 }
 
@@ -222,6 +248,36 @@ describe("applyProjectFiles", () => {
         const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         expect(configAfter).toContain('"cpuLimit": "2"')
         expect(configAfter).toContain('"ramLimit": "4g"')
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("reads legacy docker-git.json with pnpmVersion and rewrites it to bunVersion", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const targetDir = "/home/dev/workspaces/org/repo"
+        const globalConfig = makeTemplateConfig(root, outDir, path, targetDir)
+        const projectConfig = makeTemplateConfig(root, outDir, path, targetDir)
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          })
+        )
+
+        const configPath = path.join(outDir, "docker-git.json")
+        const configBefore = yield* _(fs.readFileString(configPath))
+        yield* _(fs.writeFileString(configPath, rewriteLegacyVersionKeyInConfig(configBefore)))
+
+        const appliedTemplate = yield* _(applyProjectFiles(outDir))
+        expect(appliedTemplate.bunVersion).toBe("1.3.11")
+
+        const configAfter = yield* _(fs.readFileString(configPath))
+        expect(configAfter).toContain('"bunVersion": "1.3.11"')
+        expect(configAfter).not.toContain('"pnpmVersion"')
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

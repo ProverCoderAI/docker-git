@@ -32,6 +32,7 @@ REPO_URL="https://github.com/octocat/Hello-World/issues/1"
 TARGET_DIR="/home/dev/workspaces/octocat/hello-world/issue-1"
 E2E_BIN="$ROOT/.e2e-bin"
 dg_ensure_docker "$E2E_BIN"
+dg_prepare_docker_git_cli "$REPO_ROOT" "$E2E_BIN"
 
 fail() {
   echo "e2e/opencode-autoconnect: $*" >&2
@@ -84,7 +85,7 @@ mkdir -p "$ROOT/.orch/auth/codex"
 
 # Seed a fake (but structurally valid) Codex auth.json so the entrypoint can
 # auto-connect OpenCode without manual /connect.
-node <<'NODE' > "$ROOT/.orch/auth/codex/auth.json"
+bun <<'BUN' > "$ROOT/.orch/auth/codex/auth.json"
 const now = Math.floor(Date.now() / 1000)
 const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url")
 const jwt = (payload) => `${b64({ alg: "none", typ: "JWT" })}.${b64(payload)}.sig`
@@ -105,7 +106,7 @@ const auth = {
 }
 
 process.stdout.write(JSON.stringify(auth, null, 2))
-NODE
+BUN
 
 # Keep the container startup deterministic and fast for CI.
 mkdir -p "$OUT_DIR/.orch/env"
@@ -120,8 +121,8 @@ EOF_ENV
 AUTH_LOG="$ROOT/codex-auth.log"
 (
   cd "$REPO_ROOT"
-  pnpm run docker-git auth codex import --codex-auth "$ROOT/.orch/auth/codex"
-  pnpm run docker-git auth codex status --codex-auth "$ROOT/.orch/auth/codex"
+  dg_run_docker_git "$REPO_ROOT" auth codex import --codex-auth "$ROOT/.orch/auth/codex"
+  dg_run_docker_git "$REPO_ROOT" auth codex status --codex-auth "$ROOT/.orch/auth/codex"
 ) >"$AUTH_LOG" 2>&1
 
 auth_confirmation_count="$(grep -Fc -- "Codex auth imported into controller state (account: ci@example.com)." "$AUTH_LOG" || true)"
@@ -135,16 +136,16 @@ while [[ "$clone_attempt" -le "$clone_attempts" ]]; do
   set +e
   (
     cd "$REPO_ROOT"
-	    pnpm run docker-git clone "$REPO_URL" \
-	      --force \
-	      --gh-skip \
-	      --no-ssh \
-	      --repo-ref master \
-	      --env-project "$OUT_DIR/.orch/env/project.env" \
-	      --authorized-keys "$ROOT/authorized_keys" \
-	      --ssh-port "$SSH_PORT" \
-	      --out-dir "$OUT_DIR_REL" \
-	      --container-name "$CONTAINER_NAME" \
+    dg_run_docker_git "$REPO_ROOT" clone "$REPO_URL" \
+      --force \
+      --gh-skip \
+      --no-ssh \
+      --repo-ref master \
+      --env-project "$OUT_DIR/.orch/env/project.env" \
+      --authorized-keys "$ROOT/authorized_keys" \
+      --ssh-port "$SSH_PORT" \
+      --out-dir "$OUT_DIR_REL" \
+      --container-name "$CONTAINER_NAME" \
       --service-name "$SERVICE_NAME" \
       --volume-name "$VOLUME_NAME"
   )
@@ -176,11 +177,11 @@ docker exec -u dev "$CONTAINER_NAME" bash -lc \
 docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.codex-shared/auth.json'
 
 docker exec -u dev "$CONTAINER_NAME" bash -lc \
-  'node - <<'\''NODE'\''
-const fs = require("fs")
+  'bun - <<'\''BUN'\''
+import { readFileSync } from "node:fs"
 
 const p = process.env.HOME + "/.local/share/opencode/auth.json"
-const auth = JSON.parse(fs.readFileSync(p, "utf8"))
+const auth = JSON.parse(readFileSync(p, "utf8"))
 const openai = auth && auth.openai
 if (!openai) process.exit(1)
 if (openai.type === "oauth") {
@@ -194,7 +195,7 @@ if (openai.type === "api") {
   process.exit(0)
 }
 process.exit(1)
-NODE'
+BUN'
 
 # Exercises Bun-based plugin install path (regression test for BUN_INSTALL env).
 docker exec -u dev "$CONTAINER_NAME" bash -lc \

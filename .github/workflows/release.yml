@@ -17,16 +17,265 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: ProverCoderAI/action-release@v1.0.17
+      - uses: actions/checkout@v6
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          npm_token: ${{ secrets.NPM_TOKEN }}
+          fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
-          branch: ${{ github.event.workflow_run.head_branch }}
-          package_json_path: packages/app/package.json
-          pnpm_filter: ./packages/app
-          bump_type: patch
-          publish_npm: true
-          publish_github_packages: true
-          skip_if_unchanged: true
-          cancel_on_no_changes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Compare with npm package
+        id: compare_npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKG_PATH="packages/app/package.json"
+          PKG_DIR="$(dirname "$PKG_PATH")"
+          PKG_NAME="$(bun -e "console.log(JSON.parse(await Bun.file('./${PKG_PATH}').text()).name)")"
+          TMP_DIR="$(mktemp -d)"
+          LOCAL_PACK_DIR="${TMP_DIR}/local-pack"
+          REMOTE_PACK_DIR="${TMP_DIR}/remote-pack"
+          README_DEST="packages/app/README.md"
+          README_BACKUP=""
+          README_CREATED="false"
+          BACKUP_PKG="${PKG_DIR}/.package.json.release.bak"
+
+          cleanup() {
+            if [ -f "$BACKUP_PKG" ]; then
+              cp "$BACKUP_PKG" "$PKG_PATH" || true
+              rm -f "$BACKUP_PKG" || true
+            fi
+            if [ -f "$README_BACKUP" ]; then
+              cp "$README_BACKUP" "$README_DEST" || true
+              rm -f "$README_BACKUP" || true
+            elif [ "$README_CREATED" = "true" ] && [ -f "$README_DEST" ]; then
+              rm -f "$README_DEST" || true
+            fi
+            rm -rf "$TMP_DIR"
+          }
+          trap cleanup EXIT
+
+          mkdir -p "$LOCAL_PACK_DIR" "$REMOTE_PACK_DIR"
+
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            printf '%s\n' "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+          fi
+
+          if ! LATEST_VERSION="$(npm view "${PKG_NAME}" version 2>/dev/null)"; then
+            echo "Package ${PKG_NAME} not found on npm; proceeding with release."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          REMOTE_TARBALL="$(npm pack "${PKG_NAME}@${LATEST_VERSION}" --silent --pack-destination "$REMOTE_PACK_DIR" | tail -n 1)"
+          REMOTE_TAR_PATH="$REMOTE_PACK_DIR/$REMOTE_TARBALL"
+          if [ ! -f "$REMOTE_TAR_PATH" ]; then
+            echo "Unable to download ${PKG_NAME}@${LATEST_VERSION}; proceeding with release."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          bun run --cwd packages/app build
+
+          if [ -f "$README_DEST" ]; then
+            README_BACKUP="${TMP_DIR}/README.backup"
+            cp "$README_DEST" "$README_BACKUP"
+          else
+            README_CREATED="true"
+          fi
+          mkdir -p "$(dirname "$README_DEST")"
+          cp README.md "$README_DEST"
+
+          cp "$PKG_PATH" "$BACKUP_PKG"
+          bun x @prover-coder-ai/dist-deps-prune apply \
+            --package "$PKG_PATH" \
+            --prune-dev true \
+            --write \
+            --silent
+
+          LOCAL_TAR_PATH="$(cd "$PKG_DIR" && bun pm pack --quiet --ignore-scripts --destination "$LOCAL_PACK_DIR" | tail -n 1 | tr -d '\r')"
+          if [ ! -f "$LOCAL_TAR_PATH" ]; then
+            echo "Unable to pack local ${PKG_NAME}; proceeding with release."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LOCAL_DIR="${TMP_DIR}/local"
+          REMOTE_DIR="${TMP_DIR}/remote"
+          mkdir -p "$LOCAL_DIR" "$REMOTE_DIR"
+
+          tar -xzf "$LOCAL_TAR_PATH" -C "$LOCAL_DIR"
+          tar -xzf "$REMOTE_TAR_PATH" -C "$REMOTE_DIR"
+
+          LOCAL_PKG="${LOCAL_DIR}/package/package.json"
+          REMOTE_PKG="${REMOTE_DIR}/package/package.json"
+
+          if [ ! -f "$LOCAL_PKG" ] || [ ! -f "$REMOTE_PKG" ]; then
+            echo "package.json missing in tarball; proceeding with release."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          bun -e "const p=process.argv[1];const sort=(v)=>Array.isArray(v)?v.map(sort):v&&typeof v==='object'?Object.keys(v).sort().reduce((acc,k)=>{acc[k]=sort(v[k]);return acc;},{}):v;const pkg=JSON.parse(await Bun.file(p).text());delete pkg.gitHead;pkg.version='0.0.0';const norm=sort(pkg);await Bun.write(p, JSON.stringify(norm, null, 2)+'\n');" "$LOCAL_PKG"
+          bun -e "const p=process.argv[1];const sort=(v)=>Array.isArray(v)?v.map(sort):v&&typeof v==='object'?Object.keys(v).sort().reduce((acc,k)=>{acc[k]=sort(v[k]);return acc;},{}):v;const pkg=JSON.parse(await Bun.file(p).text());delete pkg.gitHead;pkg.version='0.0.0';const norm=sort(pkg);await Bun.write(p, JSON.stringify(norm, null, 2)+'\n');" "$REMOTE_PKG"
+
+          if diff -qr "$LOCAL_DIR/package" "$REMOTE_DIR/package" >/dev/null 2>&1; then
+            echo "::notice::No changes compared to ${PKG_NAME}@${LATEST_VERSION}. Skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Package differs from ${PKG_NAME}@${LATEST_VERSION}; proceeding with release."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Auto changeset (patch if no changeset exists)
+        if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .changeset
+          if ! ls .changeset/*.md >/dev/null 2>&1; then
+            printf '%s\n' \
+              '---' \
+              '"@prover-coder-ai/docker-git": patch' \
+              '---' \
+              '' \
+              'chore: automated version bump' \
+              > ".changeset/auto-${GITHUB_SHA}.md"
+          fi
+      - name: Version packages
+        if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun run changeset-version
+      - name: Read version
+        id: release_version
+        if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(bun -e "console.log(JSON.parse(await Bun.file('./packages/app/package.json').text()).version)")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Commit version changes
+        if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git status --porcelain | grep -q .; then
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "chore(release): version packages"
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          git fetch origin "${BRANCH}"
+          git rebase "origin/${BRANCH}"
+          if ! git push origin "HEAD:${BRANCH}"; then
+            git fetch origin "${BRANCH}"
+            git rebase "origin/${BRANCH}"
+            git push origin "HEAD:${BRANCH}"
+          fi
+      - name: Tag release
+        if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release_version.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists"
+            exit 0
+          fi
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+      - name: Prepare package README
+        if: steps.compare_npm.outputs.should_release != 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p packages/app
+          cp README.md packages/app/README.md
+      - name: Build dist
+        if: steps.compare_npm.outputs.should_release != 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun run --cwd packages/app build
+      - name: Configure npm auth
+        if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then
+            echo "NPM_TOKEN is not set"
+            exit 1
+          fi
+          printf '%s\n' "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > "$HOME/.npmrc"
+      - name: Publish to npm
+        if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKG_PATH="packages/app/package.json"
+          PKG_NAME="$(bun -e "console.log(JSON.parse(await Bun.file('./${PKG_PATH}').text()).name)")"
+          VERSION="$(bun -e "console.log(JSON.parse(await Bun.file('./${PKG_PATH}').text()).version)")"
+
+          if npm view "${PKG_NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "Version ${VERSION} already published; skipping npm publish."
+            exit 0
+          fi
+
+          bun x @prover-coder-ai/dist-deps-prune release \
+            --package "${PKG_PATH}" \
+            --command "bash -lc 'cd packages/app && bun publish --ignore-scripts --access public'" \
+            --silent
+      - name: Publish to GitHub Packages
+        if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OWNER="${{ github.repository_owner }}"
+          OWNER_LOWER="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+
+          PKG_NAME="$(bun -e "console.log(JSON.parse(await Bun.file('./packages/app/package.json').text()).name)")"
+          ORIGINAL_PKG_NAME="$PKG_NAME"
+          PKG_SUFFIX="${PKG_NAME#*/}"
+          if [ "$PKG_SUFFIX" = "$PKG_NAME" ]; then
+            GH_PKG="@${OWNER_LOWER}/${PKG_NAME}"
+          else
+            GH_PKG="@${OWNER_LOWER}/${PKG_SUFFIX}"
+          fi
+
+          printf '%s\n' "@${OWNER_LOWER}:registry=https://npm.pkg.github.com" >> "$HOME/.npmrc"
+          printf '%s\n' "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> "$HOME/.npmrc"
+
+          bun -e "const p='packages/app/package.json';const pkg=JSON.parse(await Bun.file(p).text());pkg.name='${GH_PKG}';await Bun.write(p, JSON.stringify(pkg, null, 2)+'\n');"
+          bun x @prover-coder-ai/dist-deps-prune release \
+            --package "packages/app/package.json" \
+            --command "bash -lc 'cd packages/app && bun publish --ignore-scripts --registry https://npm.pkg.github.com'" \
+            --silent
+          bun -e "const p='packages/app/package.json';const pkg=JSON.parse(await Bun.file(p).text());pkg.name='${ORIGINAL_PKG_NAME}';await Bun.write(p, JSON.stringify(pkg, null, 2)+'\n');"
+      - name: Create GitHub Release
+        if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_version.outputs.tag }}
+          generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Print npm package link
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKG_NAME="$(bun -e "console.log(JSON.parse(await Bun.file('./packages/app/package.json').text()).name)")"
+          if [ -n "${{ secrets.NPM_TOKEN }}" ]; then
+            printf '%s\n' "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > "$HOME/.npmrc"
+          fi
+          if LATEST_VERSION="$(npm view "${PKG_NAME}" version 2>/dev/null)"; then
+            echo "::notice::npm package: https://www.npmjs.com/package/${PKG_NAME}/v/${LATEST_VERSION}"
+          else
+            echo "::notice::npm package: https://www.npmjs.com/package/${PKG_NAME}"
+          fi

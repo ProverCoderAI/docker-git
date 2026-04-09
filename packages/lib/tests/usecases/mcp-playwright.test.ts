@@ -43,7 +43,7 @@ const makeGlobalConfig = (root: string, path: Path.Path): TemplateConfig => ({
   dockerNetworkMode: "shared",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: false,
-  pnpmVersion: "10.27.0"
+  bunVersion: "1.3.11"
 })
 
 const makeProjectConfig = (
@@ -70,7 +70,7 @@ const makeProjectConfig = (
   dockerNetworkMode: "shared",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright,
-  pnpmVersion: "10.27.0"
+  bunVersion: "1.3.11"
 })
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

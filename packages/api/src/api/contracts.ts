@@ -11,6 +11,10 @@ export type ProjectSummary = {
   readonly repoRef: string
   readonly status: ProjectStatus
   readonly statusLabel: string
+  readonly sshSessions: number
+  readonly startedAtIso: string | null
+  readonly startedAtEpochMs: number | null
+  readonly clonedOnHostname?: string | undefined
 }
 
 export type ProjectDetails = ProjectSummary & {
@@ -21,11 +25,12 @@ export type ProjectDetails = ProjectSummary & {
   readonly targetDir: string
   readonly projectDir: string
   readonly sshCommand: string
+  readonly authorizedKeysPath: string
+  readonly authorizedKeysExists: boolean
   readonly envGlobalPath: string
   readonly envProjectPath: string
   readonly codexAuthPath: string
   readonly codexHome: string
-  readonly clonedOnHostname?: string | undefined
 }
 
 export type GithubAuthTokenStatus = {
@@ -44,6 +49,41 @@ export type GithubAuthLoginRequest = {
   readonly label?: string | null | undefined
   readonly token?: string | null | undefined
   readonly scopes?: string | null | undefined
+}
+
+export type AuthMenuFlow =
+  | "GithubRemove"
+  | "GitSet"
+  | "GitRemove"
+  | "ClaudeLogout"
+  | "GeminiApiKey"
+  | "GeminiLogout"
+
+export type AuthTerminalFlow = "ClaudeOauth" | "GeminiOauth"
+
+export type AuthSnapshot = {
+  readonly globalEnvPath: string
+  readonly claudeAuthPath: string
+  readonly geminiAuthPath: string
+  readonly totalEntries: number
+  readonly githubTokenEntries: number
+  readonly gitTokenEntries: number
+  readonly gitUserEntries: number
+  readonly claudeAuthEntries: number
+  readonly geminiAuthEntries: number
+}
+
+export type AuthMenuRequest = {
+  readonly flow: AuthMenuFlow
+  readonly label?: string | null | undefined
+  readonly token?: string | null | undefined
+  readonly user?: string | null | undefined
+  readonly apiKey?: string | null | undefined
+}
+
+export type AuthTerminalSessionRequest = {
+  readonly flow: AuthTerminalFlow
+  readonly label?: string | null | undefined
 }
 
 export type GithubAuthLogoutRequest = {
@@ -71,6 +111,38 @@ export type CodexAuthLogoutRequest = {
   readonly label?: string | null | undefined
 }
 
+export type ProjectAuthFlow =
+  | "ProjectGithubConnect"
+  | "ProjectGithubDisconnect"
+  | "ProjectGitConnect"
+  | "ProjectGitDisconnect"
+  | "ProjectClaudeConnect"
+  | "ProjectClaudeDisconnect"
+  | "ProjectGeminiConnect"
+  | "ProjectGeminiDisconnect"
+
+export type ProjectAuthSnapshot = {
+  readonly projectDir: string
+  readonly projectName: string
+  readonly envGlobalPath: string
+  readonly envProjectPath: string
+  readonly claudeAuthPath: string
+  readonly geminiAuthPath: string
+  readonly githubTokenEntries: number
+  readonly gitTokenEntries: number
+  readonly claudeAuthEntries: number
+  readonly geminiAuthEntries: number
+  readonly activeGithubLabel: string | null
+  readonly activeGitLabel: string | null
+  readonly activeClaudeLabel: string | null
+  readonly activeGeminiLabel: string | null
+}
+
+export type ProjectAuthRequest = {
+  readonly flow: ProjectAuthFlow
+  readonly label?: string | null | undefined
+}
+
 export type StateInitRequest = {
   readonly repoUrl: string
   readonly repoRef?: string | undefined
@@ -90,6 +162,7 @@ export type ApplyAllRequest = {
 
 export type UpProjectRequest = {
   readonly authorizedKeysContents?: string | undefined
+  readonly useManagedAuthorizedKeys?: boolean | undefined
 }
 
 export type ApiAuthRequired = {
@@ -110,6 +183,7 @@ export type CreateProjectRequest = {
   readonly secretsRoot?: string | undefined
   readonly authorizedKeysPath?: string | undefined
   readonly authorizedKeysContents?: string | undefined
+  readonly useManagedAuthorizedKeys?: boolean | undefined
   readonly envGlobalPath?: string | undefined
   readonly envProjectPath?: string | undefined
   readonly codexAuthPath?: string | undefined
@@ -177,6 +251,20 @@ export type AgentAttachInfo = {
   readonly pidFile: string
   readonly inspectCommand: string
   readonly shellCommand: string
+}
+
+export type TerminalSessionStatus = "ready" | "attached" | "exited" | "failed"
+
+export type TerminalSession = {
+  readonly id: string
+  readonly projectId: string
+  readonly sshCommand: string
+  readonly status: TerminalSessionStatus
+  readonly createdAt: string
+  readonly startedAt?: string | undefined
+  readonly closedAt?: string | undefined
+  readonly exitCode?: number | undefined
+  readonly signal?: number | undefined
 }
 
 export type ForgeFedTicket = {
@@ -288,6 +376,7 @@ export type ApiEventType =
   | "project.deleted"
   | "project.deployment.status"
   | "project.deployment.log"
+  | "project.ssh.session"
   | "agent.started"
   | "agent.output"
   | "agent.exited"

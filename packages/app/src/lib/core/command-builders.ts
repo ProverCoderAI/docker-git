@@ -248,7 +248,7 @@ const buildTemplateConfig = ({
   dockerNetworkMode,
   dockerSharedNetworkName,
   enableMcpPlaywright,
-  pnpmVersion: defaultTemplateConfig.pnpmVersion,
+  bunVersion: defaultTemplateConfig.bunVersion,
   agentMode,
   agentAuto,
   clonedOnHostname

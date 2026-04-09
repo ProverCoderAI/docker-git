@@ -25,7 +25,7 @@ type DefaultTemplateConfig = Pick<
   | "dockerNetworkMode"
   | "dockerSharedNetworkName"
   | "enableMcpPlaywright"
-  | "pnpmVersion"
+  | "bunVersion"
 >
 
 export const defaultDockerNetworkMode: TemplateConfig["dockerNetworkMode"] = "shared"
@@ -61,6 +61,6 @@ export const defaultTemplateConfig = {
   dockerNetworkMode: defaultDockerNetworkMode,
   dockerSharedNetworkName: defaultDockerSharedNetworkName,
   enableMcpPlaywright: false,
-  pnpmVersion: "10.27.0"
+  bunVersion: "1.3.11"
 } satisfies DefaultTemplateConfig
 /* jscpd:ignore-end */

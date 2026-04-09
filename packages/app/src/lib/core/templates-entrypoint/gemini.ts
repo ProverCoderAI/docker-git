@@ -267,7 +267,7 @@ fi
 
 cat <<EOF > "$GEMINI_MD_PATH"
 <!-- docker-git-managed:gemini-md -->
-Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, codex, gemini, claude, opencode, oh-my-opencode, sshpass, git, node, pnpm и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
+Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, bun, codex, gemini, claude, opencode, oh-my-opencode, sshpass, git, node и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
 Рабочая папка проекта (git clone): __TARGET_DIR__
 Доступные workspace пути: __TARGET_DIR__
 $GEMINI_WORKSPACE_CONTEXT

@@ -1,4 +1,5 @@
 import {
+  type AppError,
   buildCreateCommand,
   createProject,
   formatParseError,
@@ -6,6 +7,7 @@ import {
   downAllDockerGitProjects,
   listProjectItems,
   readProjectConfig,
+  renderError,
   runDockerComposeUpWithPortCheck
 } from "@effect-template/lib"
 import * as FileSystem from "@effect/platform/FileSystem"
@@ -19,9 +21,11 @@ import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import { Effect, Either } from "effect"
 
 import type { CreateProjectRequest, ProjectDetails, ProjectStatus, ProjectSummary } from "../api/contracts.js"
-import { ApiInternalError, ApiNotFoundError, ApiBadRequestError } from "../api/errors.js"
+import { ApiAuthRequiredError, ApiInternalError, ApiNotFoundError, ApiBadRequestError } from "../api/errors.js"
 import { ensureGithubAuthForCreate } from "./auth.js"
 import { emitProjectEvent } from "./events.js"
+import { resolveCreateAuthorizedKeysContents, resolveManagedAuthorizedKeysContents } from "./project-authorized-keys.js"
+import { loadProjectRuntimeByProject, runtimeForProject } from "./project-runtime.js"
 
 const readComposePsFormatted = (cwd: string) =>
   runCommandCapture(
@@ -99,7 +103,10 @@ const statusLabelFromPs = (raw: string): string => {
   return statuses.length > 0 ? statuses.join(", ") : "unknown"
 }
 
-const withProjectRuntime = (project: ProjectItem) =>
+const withProjectRuntime = (
+  project: ProjectItem,
+  runtime: ReturnType<typeof runtimeForProject>
+) =>
   readComposePsFormatted(project.projectDir).pipe(
     Effect.catchAll(() => Effect.succeed("")),
     Effect.map((rawStatus) => ({
@@ -108,7 +115,11 @@ const withProjectRuntime = (project: ProjectItem) =>
       repoUrl: project.repoUrl,
       repoRef: project.repoRef,
       status: toProjectStatus(rawStatus),
-      statusLabel: statusLabelFromPs(rawStatus)
+      statusLabel: statusLabelFromPs(rawStatus),
+      sshSessions: runtime.sshSessions,
+      startedAtIso: runtime.startedAtIso,
+      startedAtEpochMs: runtime.startedAtEpochMs,
+      clonedOnHostname: project.clonedOnHostname
     }))
   )
 
@@ -124,11 +135,12 @@ const toProjectDetails = (
   targetDir: project.targetDir,
   projectDir: project.projectDir,
   sshCommand: project.sshCommand,
+  authorizedKeysPath: project.authorizedKeysPath,
+  authorizedKeysExists: project.authorizedKeysExists,
   envGlobalPath: project.envGlobalPath,
   envProjectPath: project.envProjectPath,
   codexAuthPath: project.codexAuthPath,
-  codexHome: project.codexHome,
-  clonedOnHostname: project.clonedOnHostname
+  codexHome: project.codexHome
 })
 
 const findProjectById = (projectId: string) =>
@@ -140,6 +152,8 @@ const findProjectById = (projectId: string) =>
         : Effect.fail(new ApiNotFoundError({ message: `Project not found: ${projectId}` }))
     })
   )
+
+export const getProjectItemById = (projectId: string) => findProjectById(projectId)
 
 const resolveCreatedProject = (
   containerName: string,
@@ -167,6 +181,26 @@ const normalizeAuthorizedKeys = (value: string): ReadonlyArray<string> =>
     .split(/\r?\n/u)
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
+
+type ProjectApiError =
+  | AppError
+  | ApiAuthRequiredError
+  | ApiBadRequestError
+  | ApiInternalError
+  | ApiNotFoundError
+
+const toProjectApiError = (
+  error: ProjectApiError
+): ApiAuthRequiredError | ApiBadRequestError | ApiInternalError | ApiNotFoundError =>
+  error instanceof ApiAuthRequiredError ||
+  error instanceof ApiBadRequestError ||
+  error instanceof ApiInternalError ||
+  error instanceof ApiNotFoundError
+    ? error
+    : new ApiInternalError({
+      message: renderError(error),
+      cause: error
+    })
 
 const mergeAuthorizedKeys = (
   current: ReadonlyArray<string>,
@@ -210,7 +244,17 @@ export const seedAuthorizedKeysForCreate = (
 
 export const listProjects = () =>
   listProjectItems.pipe(
-    Effect.flatMap((projects) => Effect.forEach(projects, withProjectRuntime, { concurrency: "unbounded" })),
+    Effect.flatMap((projects) =>
+      loadProjectRuntimeByProject(projects).pipe(
+        Effect.flatMap((runtimeByProject) =>
+          Effect.forEach(
+            projects,
+            (project) => withProjectRuntime(project, runtimeForProject(runtimeByProject, project)),
+            { concurrency: "unbounded" }
+          )
+        )
+      )
+    ),
     Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<ProjectSummary>))
   )
 
@@ -227,7 +271,8 @@ export const getProject = (
 ) =>
   Effect.gen(function*(_) {
     const project = yield* _(findProjectById(projectId))
-    const summary = yield* _(withProjectRuntime(project))
+    const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
+    const summary = yield* _(withProjectRuntime(project, runtimeForProject(runtimeByProject, project)))
     return toProjectDetails(project, summary)
   })
 
@@ -295,7 +340,13 @@ export const createProjectFromRequest = (
       waitForClone: request.waitForClone ?? parsed.right.waitForClone
     }
 
-    yield* _(seedAuthorizedKeysForCreate(command.outDir, request.authorizedKeysContents))
+    const resolvedAuthorizedKeysContents = request.authorizedKeysContents ?? (
+      request.useManagedAuthorizedKeys === true
+        ? yield* _(resolveCreateAuthorizedKeysContents(command.outDir, command.config.authorizedKeysPath))
+        : undefined
+    )
+
+    yield* _(seedAuthorizedKeysForCreate(command.outDir, resolvedAuthorizedKeysContents))
 
     yield* _(ensureGithubAuthForCreate(command.config))
 
@@ -317,7 +368,8 @@ export const createProjectFromRequest = (
         command.config.repoRef
       )
     )
-    const summary = yield* _(withProjectRuntime(project))
+    const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
+    const summary = yield* _(withProjectRuntime(project, runtimeForProject(runtimeByProject, project)))
 
     yield* _(
       Effect.sync(() => {
@@ -329,7 +381,7 @@ export const createProjectFromRequest = (
     )
 
     return toProjectDetails(project, summary)
-  })
+  }).pipe(Effect.mapError(toProjectApiError))
 
 export const deleteProjectById = (
   projectId: string
@@ -342,7 +394,7 @@ export const deleteProjectById = (
         emitProjectEvent(projectId, "project.deleted", { projectId })
       })
     )
-  })
+  }).pipe(Effect.mapError(toProjectApiError))
 
 const markDeployment = (projectId: string, phase: string, message: string) =>
   Effect.sync(() => {
@@ -422,18 +474,27 @@ const syncContainerAuthorizedKeys = (
 
 export const upProject = (
   projectId: string,
-  authorizedKeysContents?: string
+  authorizedKeysContents?: string,
+  useManagedAuthorizedKeys?: boolean
 ) =>
   Effect.gen(function*(_) {
     const project = yield* _(findProjectById(projectId))
-    yield* _(seedAuthorizedKeysForCreate(project.projectDir, authorizedKeysContents))
+    const resolvedAuthorizedKeysContents = authorizedKeysContents ?? (
+      useManagedAuthorizedKeys === true
+        ? yield* _(resolveManagedAuthorizedKeysContents())
+        : undefined
+    )
+    yield* _(seedAuthorizedKeysForCreate(project.projectDir, resolvedAuthorizedKeysContents))
     yield* _(markDeployment(projectId, "build", "docker compose up -d --build"))
     yield* _(runDockerComposeUpWithPortCheck(project.projectDir))
-    if ((authorizedKeysContents ?? "").trim().length > 0) {
+    if ((resolvedAuthorizedKeysContents ?? "").trim().length > 0) {
       yield* _(syncContainerAuthorizedKeys(project))
     }
     yield* _(markDeployment(projectId, "running", "Container running"))
-  })
+    const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
+    const summary = yield* _(withProjectRuntime(project, runtimeForProject(runtimeByProject, project)))
+    return toProjectDetails(project, summary)
+  }).pipe(Effect.mapError(toProjectApiError))
 
 export const downProject = (
   projectId: string
@@ -443,7 +504,7 @@ export const downProject = (
     yield* _(markDeployment(projectId, "down", "docker compose down"))
     yield* _(runComposeCapture(projectId, project.projectDir, ["down"], [0, 1]))
     yield* _(markDeployment(projectId, "idle", "Container stopped"))
-  })
+  }).pipe(Effect.mapError(toProjectApiError))
 
 export const recreateProject = (
   projectId: string
@@ -470,7 +531,7 @@ export const recreateProject = (
     yield* _(runComposeCapture(projectId, project.projectDir, ["down"], [0, 1]))
     yield* _(runDockerComposeUpWithPortCheck(project.projectDir))
     yield* _(markDeployment(projectId, "running", "Recreate completed"))
-  })
+  }).pipe(Effect.mapError(toProjectApiError))
 
 export const readProjectPs = (
   projectId: string
@@ -478,7 +539,7 @@ export const readProjectPs = (
   Effect.gen(function*(_) {
     const project = yield* _(findProjectById(projectId))
     return yield* _(runComposeCapture(projectId, project.projectDir, ["ps"], [0]))
-  })
+  }).pipe(Effect.mapError(toProjectApiError))
 
 export const readProjectLogs = (
   projectId: string
@@ -486,6 +547,6 @@ export const readProjectLogs = (
   Effect.gen(function*(_) {
     const project = yield* _(findProjectById(projectId))
     return yield* _(runComposeCapture(projectId, project.projectDir, ["logs", "--tail", "200"], [0, 1]))
-  })
+  }).pipe(Effect.mapError(toProjectApiError))
 
 export const resolveProjectById = findProjectById

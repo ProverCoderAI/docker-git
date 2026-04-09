@@ -32,13 +32,12 @@ RUN printf "export NVM_DIR=/usr/local/nvm\\n[ -s /usr/local/nvm/nvm.sh ] && . /u
   > /etc/profile.d/nvm.sh && chmod 0644 /etc/profile.d/nvm.sh`
 
 const renderDockerfileBunPrelude = (config: TemplateConfig): string =>
-  `# Tooling: pnpm + Codex CLI (bun) + oh-my-opencode (npm + platform binary) + Claude Code CLI (npm)
-RUN corepack enable && corepack prepare pnpm@${config.pnpmVersion} --activate
+  `# Tooling: Bun + Codex CLI (bun) + oh-my-opencode (npm + platform binary) + Claude Code CLI (npm)
 ENV TERM=xterm-256color
 RUN set -eu; \
   for attempt in 1 2 3 4 5; do \
     if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://bun.sh/install -o /tmp/bun-install.sh \
-      && BUN_INSTALL=/usr/local/bun bash /tmp/bun-install.sh; then \
+      && BUN_INSTALL=/usr/local/bun BUN_VERSION=${config.bunVersion} bash /tmp/bun-install.sh; then \
       rm -f /tmp/bun-install.sh; \
       exit 0; \
     fi; \

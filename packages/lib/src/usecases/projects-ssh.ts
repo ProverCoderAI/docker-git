@@ -29,6 +29,15 @@ import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
 import { buildEditorSshAccess, formatEditorSshAccessSummary } from "./ssh-access.js"
 import { ensureTerminalCursorVisible } from "./terminal-cursor.js"
 
+export type PreparedProjectSsh = {
+  readonly item: ProjectItem
+  readonly cwd: string
+  readonly command: "ssh"
+  readonly args: ReadonlyArray<string>
+}
+
+type ProjectSshUpRequirements = CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
+
 const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
   const host = item.ipAddress ?? "localhost"
   const port = item.ipAddress ? 22 : item.sshPort
@@ -81,7 +90,7 @@ const buildSshProbeArgs = (item: ProjectItem): ReadonlyArray<string> => {
   return args
 }
 
-const waitForSshReady = (
+export const waitForProjectSshReady = (
   item: ProjectItem
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
   const host = item.ipAddress ?? "localhost"
@@ -114,6 +123,32 @@ const waitForSshReady = (
   )
 }
 
+export const prepareProjectSsh = (item: ProjectItem): PreparedProjectSsh => ({
+  item,
+  cwd: process.cwd(),
+  command: "ssh",
+  args: buildSshArgs(item)
+})
+
+const connectPreparedProjectSsh = (
+  prepared: PreparedProjectSsh
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  pipe(
+    ensureTerminalCursorVisible(),
+    Effect.zipRight(
+      runCommandWithExitCodes(
+        {
+          cwd: prepared.cwd,
+          command: prepared.command,
+          args: prepared.args
+        },
+        [0, 130],
+        (exitCode) => new CommandFailedError({ command: prepared.command, exitCode })
+      )
+    ),
+    Effect.ensuring(ensureTerminalCursorVisible())
+  )
+
 // CHANGE: connect to a project via SSH using its resolved settings
 // WHY: allow TUI to open a shell immediately after selection
 // QUOTE(ТЗ): "выбор проекта сразу подключает по SSH"
@@ -127,21 +162,7 @@ const waitForSshReady = (
 export const connectProjectSsh = (
   item: ProjectItem
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  pipe(
-    ensureTerminalCursorVisible(),
-    Effect.zipRight(
-      runCommandWithExitCodes(
-        {
-          cwd: process.cwd(),
-          command: "ssh",
-          args: buildSshArgs(item)
-        },
-        [0, 130],
-        (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
-      )
-    ),
-    Effect.ensuring(ensureTerminalCursorVisible())
-  )
+  connectPreparedProjectSsh(prepareProjectSsh(item))
 
 // CHANGE: ensure docker compose is up before SSH connection
 // WHY: selected project should auto-start when not running
@@ -162,7 +183,24 @@ export const connectProjectSshWithUp = (
   | PortProbeError
   | DockerCommandError
   | PlatformError,
-  CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
+  ProjectSshUpRequirements
+> =>
+  prepareProjectSshWithUp(item).pipe(
+    Effect.flatMap((prepared) => connectPreparedProjectSsh(prepared))
+  )
+
+export const prepareProjectSshWithUp = (
+  item: ProjectItem
+): Effect.Effect<
+  PreparedProjectSsh,
+  | CommandFailedError
+  | ConfigNotFoundError
+  | ConfigDecodeError
+  | FileExistsError
+  | PortProbeError
+  | DockerCommandError
+  | PlatformError,
+  ProjectSshUpRequirements
 > =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
@@ -188,8 +226,8 @@ export const connectProjectSshWithUp = (
       ipAddress
     }
 
-    yield* _(waitForSshReady(updated))
-    yield* _(connectProjectSsh(updated))
+    yield* _(waitForProjectSshReady(updated))
+    return prepareProjectSsh(updated)
   })
 
 // CHANGE: show docker compose status for all known docker-git projects

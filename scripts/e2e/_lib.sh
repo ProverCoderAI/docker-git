@@ -82,3 +82,70 @@ dg_ensure_docker() {
   echo "e2e: docker is not accessible (docker ps failed; sudo -n docker ps also failed)" >&2
   return 1
 }
+
+dg_ensure_bun() {
+  if command -v bun >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "e2e: bun is not installed or not in PATH" >&2
+  return 1
+}
+
+dg_ensure_node_gyp() {
+  local bin_dir="$1"
+
+  if command -v node-gyp >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local prefix="$bin_dir/node-gyp"
+  local node_gyp_bin="$prefix/node_modules/.bin"
+
+  if [[ ! -x "$node_gyp_bin/node-gyp" ]]; then
+    mkdir -p "$prefix"
+    npm install --prefix "$prefix" node-gyp >/dev/null
+  fi
+
+  export PATH="$node_gyp_bin:$PATH"
+}
+
+dg_prepare_bun_workspace() {
+  local repo_root="$1"
+  local bin_dir="$2"
+
+  dg_ensure_bun
+  dg_ensure_node_gyp "$bin_dir"
+
+  (
+    cd "$repo_root"
+    bun install --no-save --silent
+  )
+}
+
+dg_build_docker_git_cli() {
+  local repo_root="$1"
+
+  (
+    cd "$repo_root"
+    bun run --cwd packages/app build:docker-git
+  )
+}
+
+dg_prepare_docker_git_cli() {
+  local repo_root="$1"
+  local bin_dir="$2"
+
+  dg_prepare_bun_workspace "$repo_root" "$bin_dir"
+  dg_build_docker_git_cli "$repo_root"
+}
+
+dg_run_docker_git() {
+  local repo_root="$1"
+  shift
+
+  (
+    cd "$repo_root"
+    bun packages/app/dist/src/docker-git/main.js "$@"
+  )
+}

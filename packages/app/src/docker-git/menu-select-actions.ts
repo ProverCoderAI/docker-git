@@ -3,6 +3,7 @@ import { Effect, pipe } from "effect"
 
 import { deleteMenuProject, downMenuProject, listMenuRunningProjectItems } from "./menu-api.js"
 import { renderMenuError } from "./menu-errors.js"
+import { openProjectAuthSelection } from "./menu-project-auth.js"
 import { buildConnectEffect } from "./menu-select-connect.js"
 import { loadRuntimeByProject } from "./menu-select-runtime.js"
 import { startSelectView } from "./menu-select-view.js"
@@ -97,8 +98,8 @@ export const runInfoSelection = (selected: ProjectItem, context: SelectContext) 
   context.setMessage(`Details for ${selected.displayName} are shown on the right. Press Esc to return to the menu.`)
 }
 
-export const runAuthSelection = (_selected: ProjectItem, context: SelectContext) => {
-  context.setMessage("Project auth binding is not routed through the controller yet.")
+export const runAuthSelection = (selected: ProjectItem, context: SelectContext) => {
+  openProjectAuthSelection(selected, context)
 }
 
 export const runDeleteSelection = (selected: ProjectItem, context: SelectContext) => {

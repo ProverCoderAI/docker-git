@@ -26,8 +26,8 @@ const resolveLifecycleArgs = (
   return first === command ? rest : argv
 }
 
-// CHANGE: resolve clone/open shortcut requests from argv + npm lifecycle metadata
-// WHY: support pnpm run clone/open <url> without requiring "--"
+// CHANGE: resolve clone/open shortcut requests from argv + package lifecycle metadata
+// WHY: support bun run clone/open <url> without requiring "--"
 // QUOTE(ТЗ): "Добавить команду open. ... Просто открывает существующий по ссылке"
 // REF: user-request-2026-01-27
 // SOURCE: n/a

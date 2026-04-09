@@ -9,14 +9,12 @@
 
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import tsconfigPaths from "vite-tsconfig-paths"
 import { defineConfig } from "vitest/config"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 export default defineConfig({
-  plugins: [tsconfigPaths()], // Resolves @/* paths from tsconfig
   test: {
     // CHANGE: Native ESM support without experimental flags
     // WHY: Vitest designed for ESM, no need for --experimental-vm-modules
@@ -78,8 +76,23 @@ export default defineConfig({
     // NOTE: Tests must import { describe, it, expect } from "vitest"
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "src")
-    }
+    alias: [
+      {
+        find: /^@lib\/(.*)$/u,
+        replacement: path.resolve(__dirname, "src/lib") + "/$1.ts"
+      },
+      {
+        find: "@lib",
+        replacement: path.resolve(__dirname, "src/lib/index.ts")
+      },
+      {
+        find: /^@\/(.*)$/u,
+        replacement: path.resolve(__dirname, "src") + "/$1"
+      },
+      {
+        find: "@",
+        replacement: path.resolve(__dirname, "src")
+      }
+    ]
   }
 })

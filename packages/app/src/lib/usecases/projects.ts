@@ -17,6 +17,9 @@ export {
   connectProjectSsh,
   connectProjectSshWithUp,
   listProjectStatus,
+  type PreparedProjectSsh,
+  prepareProjectSsh,
+  prepareProjectSshWithUp,
   waitForProjectSshReady
 } from "./projects-ssh.js"
 export { runDockerComposeUpWithPortCheck } from "./projects-up.js"

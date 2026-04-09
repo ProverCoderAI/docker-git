@@ -1,31 +1,19 @@
-import { Box, Text } from "ink"
 import React from "react"
 
-import { renderLayout } from "./menu-render-layout.js"
+import { HelpLines, PromptScreen, SelectableList } from "../ui/shared.js"
 
 export const renderSelectableMenuList = (
   labels: ReadonlyArray<string>,
   selected: number
 ): ReadonlyArray<React.ReactElement> => {
-  const el = React.createElement
-  return labels.map((label, index) =>
-    el(
-      Text,
-      { key: `${index}-${label}`, color: index === selected ? "green" : "white" },
-      `${index === selected ? ">" : " "} ${index + 1}) ${label}`
-    )
-  )
+  return SelectableList({
+    labels: labels.map((label, index) => `${index + 1}) ${label}`),
+    selectedIndex: selected
+  })
 }
 
-export const renderMenuHelp = (primaryLine: string): React.ReactElement => {
-  const el = React.createElement
-  return el(
-    Box,
-    { marginTop: 1, flexDirection: "column" },
-    el(Text, { color: "gray" }, primaryLine),
-    el(Text, { color: "gray" }, "Esc returns to the main menu.")
-  )
-}
+export const renderMenuHelp = (primaryLine: string): React.ReactElement =>
+  HelpLines({ lines: [primaryLine, "Esc returns to the main menu."] })
 
 type PromptStepLike = {
   readonly label: string
@@ -54,14 +42,12 @@ type RenderPromptArgs = {
 }
 
 export const renderPromptLayout = (args: RenderPromptArgs): React.ReactElement => {
-  const el = React.createElement
-  return renderLayout(
-    args.title,
-    [
-      ...args.header,
-      el(Box, { marginTop: 1 }, el(Text, null, `${args.prompt}: `), el(Text, { color: "green" }, args.visibleBuffer)),
-      el(Box, { marginTop: 1, flexDirection: "column" }, el(Text, { color: "gray" }, args.helpLine))
-    ],
-    args.message
-  )
+  return React.createElement(PromptScreen, {
+    header: [...args.header],
+    helpLines: [args.helpLine],
+    message: args.message,
+    prompt: args.prompt,
+    title: args.title,
+    value: args.visibleBuffer
+  })
 }

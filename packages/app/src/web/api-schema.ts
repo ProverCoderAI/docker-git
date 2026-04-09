@@ -1,0 +1,192 @@
+import * as Schema from "@effect/schema/Schema"
+
+const NullableString = Schema.NullOr(Schema.String)
+
+export const ProjectStatusSchema = Schema.Union(
+  Schema.Literal("running"),
+  Schema.Literal("stopped"),
+  Schema.Literal("unknown")
+)
+
+const projectSummaryFields = {
+  id: Schema.String,
+  displayName: Schema.String,
+  repoUrl: Schema.String,
+  repoRef: Schema.String,
+  status: ProjectStatusSchema,
+  statusLabel: Schema.String,
+  sshSessions: Schema.Number,
+  startedAtIso: NullableString,
+  startedAtEpochMs: Schema.NullOr(Schema.Number),
+  clonedOnHostname: Schema.optional(Schema.String)
+}
+
+export const ProjectSummarySchema = Schema.Struct(projectSummaryFields)
+
+export const ProjectDetailsSchema = Schema.Struct({
+  ...projectSummaryFields,
+  containerName: Schema.String,
+  serviceName: Schema.String,
+  sshUser: Schema.String,
+  sshPort: Schema.Number,
+  targetDir: Schema.String,
+  projectDir: Schema.String,
+  sshCommand: Schema.String,
+  authorizedKeysPath: Schema.String,
+  authorizedKeysExists: Schema.Boolean,
+  envGlobalPath: Schema.String,
+  envProjectPath: Schema.String,
+  codexAuthPath: Schema.String,
+  codexHome: Schema.String
+})
+
+export const HealthResponseSchema = Schema.Struct({
+  ok: Schema.Boolean,
+  revision: NullableString,
+  cwd: Schema.String,
+  projectsRoot: Schema.String
+})
+
+export const ProjectsResponseSchema = Schema.Struct({
+  projects: Schema.Array(ProjectSummarySchema)
+})
+
+export const ProjectResponseSchema = Schema.Struct({
+  ok: Schema.optional(Schema.Boolean),
+  project: ProjectDetailsSchema
+})
+
+export const OutputResponseSchema = Schema.Struct({
+  output: Schema.String
+})
+
+export const GithubTokenStatusSchema = Schema.Struct({
+  key: Schema.String,
+  label: Schema.String,
+  status: Schema.Union(
+    Schema.Literal("valid"),
+    Schema.Literal("invalid"),
+    Schema.Literal("unknown")
+  ),
+  login: NullableString
+})
+
+export const GithubAuthStatusSchema = Schema.Struct({
+  summary: Schema.String,
+  tokens: Schema.Array(GithubTokenStatusSchema)
+})
+
+export const GithubStatusResponseSchema = Schema.Struct({
+  ok: Schema.optional(Schema.Boolean),
+  status: GithubAuthStatusSchema
+})
+
+export const AuthSnapshotSchema = Schema.Struct({
+  globalEnvPath: Schema.String,
+  claudeAuthPath: Schema.String,
+  geminiAuthPath: Schema.String,
+  totalEntries: Schema.Number,
+  githubTokenEntries: Schema.Number,
+  gitTokenEntries: Schema.Number,
+  gitUserEntries: Schema.Number,
+  claudeAuthEntries: Schema.Number,
+  geminiAuthEntries: Schema.Number
+})
+
+export const AuthSnapshotResponseSchema = Schema.Struct({
+  ok: Schema.optional(Schema.Boolean),
+  snapshot: AuthSnapshotSchema
+})
+
+export const ProjectAuthSnapshotSchema = Schema.Struct({
+  projectDir: Schema.String,
+  projectName: Schema.String,
+  envGlobalPath: Schema.String,
+  envProjectPath: Schema.String,
+  claudeAuthPath: Schema.String,
+  geminiAuthPath: Schema.String,
+  githubTokenEntries: Schema.Number,
+  gitTokenEntries: Schema.Number,
+  claudeAuthEntries: Schema.Number,
+  geminiAuthEntries: Schema.Number,
+  activeGithubLabel: NullableString,
+  activeGitLabel: NullableString,
+  activeClaudeLabel: NullableString,
+  activeGeminiLabel: NullableString
+})
+
+export const ProjectAuthSnapshotResponseSchema = Schema.Struct({
+  ok: Schema.optional(Schema.Boolean),
+  snapshot: ProjectAuthSnapshotSchema
+})
+
+export const TerminalSessionSchema = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  sshCommand: Schema.String,
+  status: Schema.Union(
+    Schema.Literal("ready"),
+    Schema.Literal("attached"),
+    Schema.Literal("exited"),
+    Schema.Literal("failed")
+  ),
+  createdAt: Schema.String,
+  startedAt: Schema.optional(Schema.String),
+  closedAt: Schema.optional(Schema.String),
+  exitCode: Schema.optional(Schema.Number),
+  signal: Schema.optional(Schema.Number)
+})
+
+export const TerminalSessionResponseSchema = Schema.Struct({
+  ok: Schema.optional(Schema.Boolean),
+  project: ProjectDetailsSchema,
+  session: TerminalSessionSchema
+})
+
+export const AuthTerminalSessionResponseSchema = Schema.Struct({
+  ok: Schema.optional(Schema.Boolean),
+  session: TerminalSessionSchema
+})
+
+export type ProjectSummary = Schema.Schema.Type<typeof ProjectSummarySchema>
+export type ProjectDetails = Schema.Schema.Type<typeof ProjectDetailsSchema>
+export type GithubAuthStatus = Schema.Schema.Type<typeof GithubAuthStatusSchema>
+export type AuthSnapshot = Schema.Schema.Type<typeof AuthSnapshotSchema>
+export type ProjectAuthSnapshot = Schema.Schema.Type<typeof ProjectAuthSnapshotSchema>
+export type TerminalSession = Schema.Schema.Type<typeof TerminalSessionSchema>
+
+export type DashboardData = {
+  readonly apiBaseUrl: string
+  readonly health: Schema.Schema.Type<typeof HealthResponseSchema>
+  readonly projects: ReadonlyArray<ProjectSummary>
+}
+
+export type CreateProjectDraft = {
+  readonly repoUrl: string
+  readonly repoRef: string
+  readonly outDir: string
+  readonly cpuLimit: string
+  readonly ramLimit: string
+  readonly enableMcpPlaywright: boolean
+  readonly force: boolean
+  readonly forceEnv: boolean
+  readonly up: boolean
+}
+
+export type AuthMenuFlow =
+  | "GithubRemove"
+  | "GitSet"
+  | "GitRemove"
+  | "ClaudeLogout"
+  | "GeminiApiKey"
+  | "GeminiLogout"
+
+export type ProjectAuthFlow =
+  | "ProjectGithubConnect"
+  | "ProjectGithubDisconnect"
+  | "ProjectGitConnect"
+  | "ProjectGitDisconnect"
+  | "ProjectClaudeConnect"
+  | "ProjectClaudeDisconnect"
+  | "ProjectGeminiConnect"
+  | "ProjectGeminiDisconnect"

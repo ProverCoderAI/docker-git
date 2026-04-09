@@ -1,10 +1,10 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * List AI Session Backups from the private session backup repository
  *
  * Usage:
- *   node scripts/session-list-gists.js [command] [options]
+ *   bun scripts/session-list-gists.js [command] [options]
  *
  * Commands:
  *   list                        List session snapshots (default)
