@@ -7,6 +7,15 @@ import { runCommandCapture, runCommandWithCapturedOutput } from "./command-runne
 import { composeSpec, resolveDockerComposeEnv } from "./docker-compose-env.js"
 import { DockerCommandError } from "./errors.js"
 
+const buildComposeCommand = (
+  cwd: string,
+  args: ReadonlyArray<string>,
+  env: Record<string, string>
+) => ({
+  ...composeSpec(cwd, args),
+  ...(Object.keys(env).length > 0 ? { env } : {})
+})
+
 const runCompose = (
   cwd: string,
   args: ReadonlyArray<string>,
@@ -16,10 +25,7 @@ const runCompose = (
     const env = yield* _(resolveDockerComposeEnv(cwd))
     yield* _(
       runCommandWithCapturedOutput(
-        {
-          ...composeSpec(cwd, args),
-          ...(Object.keys(env).length > 0 ? { env } : {})
-        },
+        buildComposeCommand(cwd, args, env),
         okExitCodes,
         (exitCode, output) => new DockerCommandError({ exitCode, ...(output.length > 0 ? { details: output } : {}) })
       )
@@ -35,10 +41,7 @@ const runComposeCapture = (
     const env = yield* _(resolveDockerComposeEnv(cwd))
     return yield* _(
       runCommandCapture(
-        {
-          ...composeSpec(cwd, args),
-          ...(Object.keys(env).length > 0 ? { env } : {})
-        },
+        buildComposeCommand(cwd, args, env),
         okExitCodes,
         (exitCode) => new DockerCommandError({ exitCode })
       )

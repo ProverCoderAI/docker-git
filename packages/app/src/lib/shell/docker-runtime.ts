@@ -4,6 +4,7 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Effect, pipe } from "effect"
 
+import { trimToUndefined } from "../../shared/trimmed-text.js"
 import { runCommandCapture } from "./command-runner.js"
 import { parseInspectNetworkEntry } from "./docker-inspect-parse.js"
 import { CommandFailedError, DockerCommandError } from "./errors.js"
@@ -16,10 +17,20 @@ export type DockerContainerRuntimeInfo = {
   readonly composeService?: string | undefined
 }
 
-const parseOptionalInspectField = (value: string | undefined): string | undefined => {
-  const trimmed = value?.trim() ?? ""
-  return trimmed.length > 0 ? trimmed : undefined
-}
+const runDockerInspectValue = (
+  cwd: string,
+  containerName: string,
+  format: string
+): Effect.Effect<string, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runCommandCapture(
+    {
+      cwd,
+      command: "docker",
+      args: ["inspect", "-f", format, containerName]
+    },
+    [Number(ExitCode(0))],
+    (exitCode) => new DockerCommandError({ exitCode })
+  )
 
 export const runDockerExecExitCode = (
   cwd: string,
@@ -42,19 +53,10 @@ export const runDockerInspectContainerIp = (
   containerName: string
 ): Effect.Effect<string, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   pipe(
-    runCommandCapture(
-      {
-        cwd,
-        command: "docker",
-        args: [
-          "inspect",
-          "-f",
-          String.raw`{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s=%s\n" $k $v.IPAddress}}{{end}}`,
-          containerName
-        ]
-      },
-      [Number(ExitCode(0))],
-      (exitCode) => new DockerCommandError({ exitCode })
+    runDockerInspectValue(
+      cwd,
+      containerName,
+      String.raw`{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s=%s\n" $k $v.IPAddress}}{{end}}`
     ),
     Effect.map((output) => {
       const lines = output
@@ -78,19 +80,10 @@ export const runDockerInspectContainerRuntimeInfo = (
   containerName: string
 ): Effect.Effect<DockerContainerRuntimeInfo | null, PlatformError, CommandExecutor.CommandExecutor> =>
   pipe(
-    runCommandCapture(
-      {
-        cwd,
-        command: "docker",
-        args: [
-          "inspect",
-          "-f",
-          `{{.State.Status}}\t{{with index .Config.Labels "com.docker.compose.project.working_dir"}}{{.}}{{end}}\t{{with index .Config.Labels "com.docker.compose.service"}}{{.}}{{end}}`,
-          containerName
-        ]
-      },
-      [Number(ExitCode(0))],
-      (exitCode) => new DockerCommandError({ exitCode })
+    runDockerInspectValue(
+      cwd,
+      containerName,
+      `{{.State.Status}}\t{{with index .Config.Labels "com.docker.compose.project.working_dir"}}{{.}}{{end}}\t{{with index .Config.Labels "com.docker.compose.service"}}{{.}}{{end}}`
     ),
     Effect.flatMap((output) => {
       const [status, projectWorkingDir, composeService] = output.trim().replaceAll(String.raw`\t`, "\t").split("\t")
@@ -103,8 +96,8 @@ export const runDockerInspectContainerRuntimeInfo = (
           containerName,
           running: true,
           ipAddress,
-          projectWorkingDir: parseOptionalInspectField(projectWorkingDir),
-          composeService: parseOptionalInspectField(composeService)
+          projectWorkingDir: trimToUndefined(projectWorkingDir),
+          composeService: trimToUndefined(composeService)
         }))
       )
     }),
@@ -116,19 +109,10 @@ export const runDockerInspectContainerBridgeIp = (
   containerName: string
 ): Effect.Effect<string, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   pipe(
-    runCommandCapture(
-      {
-        cwd,
-        command: "docker",
-        args: [
-          "inspect",
-          "-f",
-          "{{with (index .NetworkSettings.Networks \"bridge\")}}{{.IPAddress}}{{end}}",
-          containerName
-        ]
-      },
-      [Number(ExitCode(0))],
-      (exitCode) => new DockerCommandError({ exitCode })
+    runDockerInspectValue(
+      cwd,
+      containerName,
+      "{{with (index .NetworkSettings.Networks \"bridge\")}}{{.IPAddress}}{{end}}"
     ),
     Effect.map((output) => output.trim())
   )
