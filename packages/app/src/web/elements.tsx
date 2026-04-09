@@ -82,7 +82,12 @@ const textStyle = (props: GridElementProps): CSSProperties => ({
 export const Box = ({ children, onClick, ...props }: GridElementProps): JSX.Element =>
   createElement(onClick === undefined ? "div" : "button", {
     children,
-    onClick,
+    onClick: onClick === undefined
+      ? undefined
+      : ((event: Parameters<MouseEventHandler<HTMLElement>>[0]) => {
+        onClick(event)
+        event.currentTarget.blur()
+      }) satisfies MouseEventHandler<HTMLElement>,
     style: {
       ...baseStyle(props),
       ...interactiveStyle(onClick, props.width)

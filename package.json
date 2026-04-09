@@ -35,6 +35,7 @@
     "web:dev": "bun run --filter @prover-coder-ai/docker-git dev:web",
     "web:build": "bun run --filter @prover-coder-ai/docker-git build:web",
     "web:preview": "bun run --filter @prover-coder-ai/docker-git preview:web",
+    "web:serve": "bun run --filter @prover-coder-ai/docker-git serve:web",
     "lint": "bun run --filter @prover-coder-ai/docker-git lint && bun run --filter @effect-template/lib lint",
     "lint:tests": "bun run --filter @prover-coder-ai/docker-git lint:tests",
     "lint:effect": "bun run --filter @prover-coder-ai/docker-git lint:effect && bun run --filter @effect-template/lib lint:effect",

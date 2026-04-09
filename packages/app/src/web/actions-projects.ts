@@ -18,6 +18,22 @@ import {
   loadProjectPs
 } from "./api.js"
 import type { BrowserMenuTag } from "./menu.js"
+import { openProjectEventStream } from "./project-events.js"
+
+const appendOutputLine = (
+  context: BrowserActionContext,
+  line: string
+) => {
+  context.setOutput((current) => {
+    const trimmed = line.trim()
+    if (trimmed.length === 0) {
+      return current
+    }
+    const next = current.trim().length === 0 ? trimmed : `${current}\n${trimmed}`
+    const lines = next.split("\n")
+    return lines.length <= 120 ? next : lines.slice(-120).join("\n")
+  })
+}
 
 export const loadSelectedProjectInfo = (
   context: BrowserActionContext,
@@ -68,14 +84,30 @@ export const connectSelectedProject = (context: BrowserActionContext) => {
   if (projectId === null) {
     return
   }
+  context.setOutput("")
+  appendOutputLine(context, "[ssh.prepare] Preparing SSH session")
+  const stream = openProjectEventStream(projectId, {
+    onLine: (line) => {
+      appendOutputLine(context, line)
+    },
+    onRateLimit: () => {
+      context.setMessage("HTTP 429: tunnel or proxy rate limited the live stream. Retry or request a fresh tunnel URL.")
+    }
+  })
   withBusy({
     context,
     effect: createProjectTerminalSession(projectId),
     label: "Opening SSH terminal",
+    onFailure: (error) => {
+      appendOutputLine(context, `[error] ${error}`)
+    },
+    onFinally: () => {
+      stream.close()
+    },
     onSuccess: ({ project, session }) => {
       context.reloadDashboard()
       context.setSelectedProject(project)
-      context.setOutput(session.sshCommand)
+      appendOutputLine(context, `SSH command: ${session.sshCommand}`)
       const encodedProjectId = encodeURIComponent(project.id)
       const encodedSessionId = encodeURIComponent(session.id)
       context.setTerminalSession({

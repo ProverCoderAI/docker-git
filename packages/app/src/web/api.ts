@@ -8,6 +8,7 @@ import {
   HealthResponseSchema,
   OutputResponseSchema,
   ProjectAuthSnapshotResponseSchema,
+  ProjectEventsPollResponseSchema,
   ProjectResponseSchema,
   ProjectsResponseSchema,
   TerminalSessionResponseSchema
@@ -15,6 +16,7 @@ import {
 import type { AuthMenuFlow, CreateProjectDraft, DashboardData, ProjectAuthFlow } from "./api-schema.js"
 
 export type {
+  ApiEvent,
   AuthMenuFlow,
   AuthSnapshot,
   CreateProjectDraft,
@@ -126,6 +128,18 @@ export const loadGithubStatus = () =>
 export const loginGithub = (label: string | null) =>
   requestJson("POST", "/auth/github/login", GithubStatusResponseSchema, { label }).pipe(
     Effect.map((response) => response.status)
+  )
+
+export const loadProjectEvents = (
+  projectId: string,
+  cursor?: number
+) =>
+  requestJson(
+    "GET",
+    cursor === undefined
+      ? `/projects/${encodeURIComponent(projectId)}/events-poll`
+      : `/projects/${encodeURIComponent(projectId)}/events-poll?cursor=${cursor}`,
+    ProjectEventsPollResponseSchema
   )
 
 export const loadAuthSnapshot = () =>

@@ -48,6 +48,7 @@ const useReadySideEffects = (
   useProjectDetailsReset(args.state.selectedProjectId, args.state.setSelectedProject)
   usePanelAutoload({
     authSnapshot: args.state.authSnapshot,
+    busyLabel: args.state.busyLabel,
     context: args.actionContext,
     currentMenu: args.currentMenu,
     dashboardRefreshTick: args.dashboardRefreshTick,

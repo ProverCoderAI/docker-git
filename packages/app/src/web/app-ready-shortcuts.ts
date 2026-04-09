@@ -185,10 +185,14 @@ export const handleProjectNavigationKey = (
 export const handleActionKey = (
   event: ShortcutKeyboardEvent,
   currentMenu: BrowserMenuTag,
+  projectNavigationArmed: boolean,
   context: BrowserActionContext
 ): boolean => {
   if (event.key === "Enter") {
-    if (isNativeActionTarget(event.target)) {
+    if (
+      isNativeActionTarget(event.target) &&
+      !(usesProjectPrimaryNavigation(currentMenu) && projectNavigationArmed)
+    ) {
       return false
     }
     event.preventDefault()

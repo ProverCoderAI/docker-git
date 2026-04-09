@@ -216,9 +216,33 @@ export const createTerminalSession = (
   projectId: string
 ) =>
   Effect.gen(function*(_) {
+    yield* _(
+      Effect.sync(() => {
+        emitProjectEvent(projectId, "project.deployment.status", {
+          phase: "ssh.prepare",
+          message: "Preparing SSH session"
+        })
+      })
+    )
     const project = yield* _(upProject(projectId, undefined, true))
     const projectItem = yield* _(getProjectItemById(projectId))
+    yield* _(
+      Effect.sync(() => {
+        emitProjectEvent(projectId, "project.deployment.status", {
+          phase: "ssh.wait",
+          message: "Waiting for SSH"
+        })
+      })
+    )
     yield* _(waitForProjectSshReady(projectItem).pipe(Effect.mapError(toApiInternalError)))
+    yield* _(
+      Effect.sync(() => {
+        emitProjectEvent(projectId, "project.deployment.status", {
+          phase: "ssh.ready",
+          message: "SSH is ready"
+        })
+      })
+    )
     const prepared = prepareProjectSsh(projectItem)
     const session = registerRecord(projectId, prepared)
     yield* _(

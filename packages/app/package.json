@@ -20,6 +20,7 @@
     "prepack": "bun run build:docker-git",
     "dev": "vite build --watch --ssr src/app/main.ts",
     "dev:web": "vite --config vite.web.config.ts",
+    "serve:web": "bun scripts/serve-dist-web.ts",
     "prelint": "bun run --cwd ../lib build",
     "lint": "NODE_OPTIONS=--max-old-space-size=4096 PATH=../../scripts:$PATH vibecode-linter src/",
     "lint:tests": "NODE_OPTIONS=--max-old-space-size=4096 PATH=../../scripts:$PATH vibecode-linter tests/",

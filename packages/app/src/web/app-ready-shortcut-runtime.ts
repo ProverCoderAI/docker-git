@@ -132,7 +132,12 @@ const handleReadyShortcut = (
   ) {
     return true
   }
-  return handleActionKey(event, args.currentMenu, args.context)
+  return handleActionKey(
+    event,
+    args.currentMenu,
+    args.projectNavigationArmed,
+    args.context
+  )
 }
 
 export const dispatchBrowserShortcut = (

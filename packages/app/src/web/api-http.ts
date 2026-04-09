@@ -58,9 +58,11 @@ const decodeSchema = <A, I>(schema: Schema.Schema<A, I>, value: string): Effect.
   })
 
 const readErrorMessage = (status: number, text: string): Effect.Effect<never, string> =>
-  parseResponseBody(text).pipe(
-    Effect.flatMap((payload) => Effect.fail(payload === null ? `HTTP ${status}` : renderJsonPayload(payload)))
-  )
+  status === 429
+    ? Effect.fail("HTTP 429: tunnel or proxy rate limited the request. Retry or request a fresh tunnel URL.")
+    : parseResponseBody(text).pipe(
+      Effect.flatMap((payload) => Effect.fail(payload === null ? `HTTP ${status}` : renderJsonPayload(payload)))
+    )
 
 const toRequestBody = (body: JsonRequest | undefined) => body === undefined ? HttpBody.empty : HttpBody.unsafeJson(body)
 

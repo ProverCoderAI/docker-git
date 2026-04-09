@@ -11,6 +11,8 @@ type BusyAction<A> = {
   readonly context: BrowserActionContext
   readonly effect: Effect.Effect<A, string>
   readonly label: string
+  readonly onFailure?: (error: string) => void
+  readonly onFinally?: () => void
   readonly onSuccess: (value: A) => void
 }
 
@@ -46,19 +48,21 @@ export const nullableValue = (value: string | undefined): string | null => {
   return trimmed.length === 0 ? null : trimmed
 }
 
-export const withBusy = <A>({ context, effect, label, onSuccess }: BusyAction<A>) => {
+export const withBusy = <A>({ context, effect, label, onFailure, onFinally, onSuccess }: BusyAction<A>) => {
   context.setBusyLabel(label)
   void Effect.runPromise(
     effect.pipe(
       Effect.match({
         onFailure: (error) => {
           context.setMessage(error)
+          onFailure?.(error)
         },
         onSuccess
       })
     )
   ).finally(() => {
     context.setBusyLabel(null)
+    onFinally?.()
   })
 }
 

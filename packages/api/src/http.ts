@@ -138,6 +138,9 @@ const parseQueryInt = (url: string, key: string, fallback: number): number => {
   return Math.floor(parsed)
 }
 
+const hasQueryParam = (url: string, key: string): boolean =>
+  new URL(url, "http://localhost").searchParams.has(key)
+
 const errorResponse = (error: ApiError | unknown) => {
   if (ParseResult.isParseError(error)) {
     return jsonResponse(
@@ -743,6 +746,31 @@ export const makeRouter = () => {
 
   return withAgents.pipe(
     HttpRouter.get(
+      "/projects/:projectId/events-poll",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) =>
+          Effect.gen(function*(_) {
+            const request = yield* _(HttpServerRequest.HttpServerRequest)
+            const hasCursor = hasQueryParam(request.url, "cursor")
+            if (!hasCursor) {
+              return {
+                cursor: latestProjectCursor(projectId),
+                events: []
+              }
+            }
+            const currentCursor = parseQueryInt(request.url, "cursor", 0)
+            const events = listProjectEventsSince(projectId, currentCursor)
+            return {
+              cursor: events[events.length - 1]?.seq ?? currentCursor,
+              events
+            }
+          })
+        ),
+        Effect.flatMap((payload) => jsonResponse(payload, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
       "/projects/:projectId/events",
       projectParams.pipe(
         Effect.flatMap(({ projectId }) =>
@@ -757,6 +785,8 @@ export const makeRouter = () => {
               const idLine = id === undefined ? "" : `id: ${id}\n`
               return encoder.encode(`${idLine}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
             }
+            const encodeComment = (comment: string): Uint8Array =>
+              encoder.encode(`: ${comment}\n\n`)
 
             const poll = Effect.gen(function* (_) {
               const snapshotSent = yield* _(Ref.get(snapshotRef))
@@ -765,20 +795,22 @@ export const makeRouter = () => {
                 yield* _(Ref.set(snapshotRef, true))
                 const cursor = latestProjectCursor(projectId)
                 yield* _(Ref.set(cursorRef, cursor))
-                return Chunk.of(
+                return Chunk.fromIterable([
+                  encodeComment(" ".repeat(2048)),
                   encodeSse("snapshot", {
                     projectId,
                     cursor,
                     agents: listAgents(projectId)
-                  }, cursor)
-                )
+                  }, cursor),
+                  encodeComment("connected")
+                ])
               }
 
               const currentCursor = yield* _(Ref.get(cursorRef))
               const events = listProjectEventsSince(projectId, currentCursor)
               if (events.length === 0) {
                 yield* _(Effect.sleep(Duration.millis(500)))
-                return Chunk.empty<Uint8Array>()
+                return Chunk.of(encodeComment("keep-alive"))
               }
 
               const nextCursor = events[events.length - 1]?.seq ?? currentCursor
@@ -789,9 +821,10 @@ export const makeRouter = () => {
 
             return HttpServerResponse.stream(Stream.repeatEffectChunk(poll), {
               headers: {
-                "content-type": "text/event-stream",
-                "cache-control": "no-cache",
-                "connection": "keep-alive"
+                "content-type": "text/event-stream; charset=utf-8",
+                "cache-control": "no-cache, no-transform",
+                "connection": "keep-alive",
+                "x-accel-buffering": "no"
               }
             })
           })

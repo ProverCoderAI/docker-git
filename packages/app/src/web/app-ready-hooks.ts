@@ -32,6 +32,7 @@ type SelectionSyncArgs = {
 
 type PanelAutoloadArgs = {
   readonly authSnapshot: AuthSnapshot | null
+  readonly busyLabel: string | null
   readonly context: BrowserActionContext
   readonly currentMenu: BrowserMenuTag
   readonly dashboardRefreshTick: number
@@ -183,6 +184,7 @@ export const useProjectNavigationReset = (
 
 export const usePanelAutoload = ({
   authSnapshot,
+  busyLabel,
   context,
   currentMenu,
   dashboardRefreshTick,
@@ -192,6 +194,9 @@ export const usePanelAutoload = ({
   selectedProjectId
 }: PanelAutoloadArgs) => {
   const loadCurrentPanel = useEffectEvent(() => {
+    if (busyLabel !== null) {
+      return
+    }
     if (shouldRefreshAuthPanel(currentMenu, authSnapshot)) {
       refreshAuthPanel(context)
     }
@@ -207,6 +212,7 @@ export const usePanelAutoload = ({
     loadCurrentPanel()
   }, [
     authSnapshot,
+    busyLabel,
     currentMenu,
     dashboardRefreshTick,
     project?.id,

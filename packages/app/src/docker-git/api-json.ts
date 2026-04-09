@@ -88,6 +88,17 @@ const renderGithubStatusLike = (value: JsonObject): string | null => {
   return lines.length === 0 ? summary : [summary, ...lines].join("\n")
 }
 
+const readNestedMessage = (
+  object: JsonObject,
+  key: string
+): string | null => {
+  const nested = asObject(object[key])
+  if (nested === null) {
+    return null
+  }
+  return asString(nested["message"])
+}
+
 export const renderJsonPayload = (payload: JsonValue): string => {
   if (typeof payload === "string") {
     return payload
@@ -114,11 +125,12 @@ export const renderJsonPayload = (payload: JsonValue): string => {
     if (renderedNestedStatus !== null) {
       return renderedNestedStatus
     }
+    return readNestedMessage(object, "status") ?? JSON.stringify(payload, null, 2)
+  }
 
-    const nestedMessage = asString(nestedStatus["message"])
-    if (nestedMessage !== null) {
-      return nestedMessage
-    }
+  const nestedErrorMessage = readNestedMessage(object, "error")
+  if (nestedErrorMessage !== null) {
+    return nestedErrorMessage
   }
 
   return JSON.stringify(payload, null, 2)
