@@ -121,6 +121,34 @@ const makeCommand = (
   waitForClone: false
 })
 
+const makeConflictContext = (
+  root: string,
+  path: Path.Path,
+  force: boolean
+) => {
+  const outDir = path.join(root, "candidate")
+  const existingDir = path.join(root, "existing")
+  return {
+    outDir,
+    existingDir,
+    existingConfigPath: path.join(existingDir, "docker-git.json"),
+    command: makeCommand(root, outDir, force)
+  }
+}
+
+const mockProjectIndex = (
+  root: string,
+  path: Path.Path,
+  configPaths: ReadonlyArray<string>
+): void => {
+  loadProjectIndexMock.mockReturnValue(
+    Effect.succeed({
+      projectsRoot: path.join(root, ".docker-git"),
+      configPaths
+    })
+  )
+}
+
 describe("createProject docker identity guard", () => {
   beforeEach(() => {
     loadProjectIndexMock.mockReset()
@@ -138,17 +166,9 @@ describe("createProject docker identity guard", () => {
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const path = yield* _(Path.Path)
-        const outDir = path.join(root, "candidate")
-        const existingDir = path.join(root, "existing")
-        const existingConfigPath = path.join(existingDir, "docker-git.json")
-        const command = makeCommand(root, outDir, false)
+        const { command, existingConfigPath, existingDir, outDir } = makeConflictContext(root, path, false)
 
-        loadProjectIndexMock.mockReturnValue(
-          Effect.succeed({
-            projectsRoot: path.join(root, ".docker-git"),
-            configPaths: [existingConfigPath]
-          })
-        )
+        mockProjectIndex(root, path, [existingConfigPath])
         loadProjectStatusMock.mockImplementation((configPath: string) =>
           Effect.succeed(
             makeStatus(
@@ -187,17 +207,9 @@ describe("createProject docker identity guard", () => {
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const path = yield* _(Path.Path)
-        const outDir = path.join(root, "candidate")
-        const existingDir = path.join(root, "existing")
-        const existingConfigPath = path.join(existingDir, "docker-git.json")
-        const command = makeCommand(root, outDir, true)
+        const { command, existingConfigPath, existingDir } = makeConflictContext(root, path, true)
 
-        loadProjectIndexMock.mockReturnValue(
-          Effect.succeed({
-            projectsRoot: path.join(root, ".docker-git"),
-            configPaths: [existingConfigPath]
-          })
-        )
+        mockProjectIndex(root, path, [existingConfigPath])
         loadProjectStatusMock.mockReturnValue(
           Effect.succeed(makeStatus(existingDir, root))
         )
@@ -224,12 +236,7 @@ describe("createProject docker identity guard", () => {
         const configPath = path.join(outDir, "docker-git.json")
         const command = makeCommand(root, outDir, true)
 
-        loadProjectIndexMock.mockReturnValue(
-          Effect.succeed({
-            projectsRoot: path.join(root, ".docker-git"),
-            configPaths: [configPath]
-          })
-        )
+        mockProjectIndex(root, path, [configPath])
         loadProjectStatusMock.mockReturnValue(
           Effect.succeed(makeStatus(outDir, root))
         )
