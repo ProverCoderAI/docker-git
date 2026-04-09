@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
-import { openResolvedProjectSshEffect } from "../../src/docker-git/open-project.js"
 import { liveFallbackIp, liveRuntimeIp } from "./fixtures/open-project-helpers.js"
+import { captureOpenResolvedProjectSshEvents } from "./fixtures/open-project-ssh-helpers.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
 
 describe("openResolvedProjectSshEffect", () => {
@@ -12,27 +12,7 @@ describe("openResolvedProjectSshEffect", () => {
         projectDir: "/controller/org/repo/issue-7",
         sshCommand: `ssh -p 22 dev@${liveFallbackIp}`
       })
-      const events: Array<string> = []
-
-      yield* _(
-        openResolvedProjectSshEffect(item, {
-          log: (message) =>
-            Effect.sync(() => {
-              events.push(`log:${message}`)
-            }),
-          resolvePreferredItem: () => Effect.succeed(null),
-          probeReady: () => Effect.succeed(true),
-          connect: (selected) =>
-            Effect.sync(() => {
-              events.push(`connect:${selected.projectDir}`)
-            }),
-          connectWithUp: (selected) =>
-            Effect.sync(() => {
-              events.push(`up:${selected.projectDir}`)
-            })
-        })
-      )
-
+      const events = yield* _(captureOpenResolvedProjectSshEvents(item))
       expect(events).toEqual([
         `log:Opening SSH: ssh -p 22 dev@${liveFallbackIp}`,
         "connect:/controller/org/repo/issue-7"
@@ -45,27 +25,11 @@ describe("openResolvedProjectSshEffect", () => {
         projectDir: "/controller/org/repo/issue-8",
         sshCommand: "ssh -p 2222 dev@localhost"
       })
-      const events: Array<string> = []
-
-      yield* _(
-        openResolvedProjectSshEffect(item, {
-          log: (message) =>
-            Effect.sync(() => {
-              events.push(`log:${message}`)
-            }),
-          resolvePreferredItem: () => Effect.succeed(null),
-          probeReady: () => Effect.succeed(false),
-          connect: (selected) =>
-            Effect.sync(() => {
-              events.push(`connect:${selected.projectDir}`)
-            }),
-          connectWithUp: (selected) =>
-            Effect.sync(() => {
-              events.push(`up:${selected.projectDir}`)
-            })
+      const events = yield* _(
+        captureOpenResolvedProjectSshEvents(item, {
+          probeReady: () => Effect.succeed(false)
         })
       )
-
       expect(events).toEqual([
         "log:Opening SSH: ssh -p 2222 dev@localhost",
         "up:/controller/org/repo/issue-8"
@@ -84,27 +48,13 @@ describe("openResolvedProjectSshEffect", () => {
         ipAddress: liveRuntimeIp,
         sshCommand: `ssh -p 22 dev@${liveRuntimeIp}`
       })
-      const events: Array<string> = []
-
-      yield* _(
-        openResolvedProjectSshEffect(item, {
-          log: (message) =>
-            Effect.sync(() => {
-              events.push(`log:${message}`)
-            }),
+      const events = yield* _(
+        captureOpenResolvedProjectSshEvents(item, {
           resolvePreferredItem: () => Effect.succeed(preferred),
           probeReady: (selected) => Effect.succeed(selected.ipAddress === liveRuntimeIp),
-          connect: (selected) =>
-            Effect.sync(() => {
-              events.push(`connect:${selected.sshCommand}`)
-            }),
-          connectWithUp: (selected) =>
-            Effect.sync(() => {
-              events.push(`up:${selected.projectDir}`)
-            })
+          connectEntry: (selected) => `connect:${selected.sshCommand}`
         })
       )
-
       expect(events).toEqual([
         `log:Opening SSH: ssh -p 22 dev@${liveRuntimeIp}`,
         `connect:ssh -p 22 dev@${liveRuntimeIp}`
@@ -123,27 +73,13 @@ describe("openResolvedProjectSshEffect", () => {
         ipAddress: liveFallbackIp,
         sshCommand: `ssh -p 22 dev@${liveFallbackIp}`
       })
-      const events: Array<string> = []
-
-      yield* _(
-        openResolvedProjectSshEffect(item, {
-          log: (message) =>
-            Effect.sync(() => {
-              events.push(`log:${message}`)
-            }),
+      const events = yield* _(
+        captureOpenResolvedProjectSshEvents(item, {
           resolvePreferredItem: () => Effect.succeed(preferred),
           probeReady: (selected) => Effect.succeed(selected.ipAddress !== liveFallbackIp),
-          connect: (selected) =>
-            Effect.sync(() => {
-              events.push(`connect:${selected.sshCommand}`)
-            }),
-          connectWithUp: (selected) =>
-            Effect.sync(() => {
-              events.push(`up:${selected.projectDir}`)
-            })
+          connectEntry: (selected) => `connect:${selected.sshCommand}`
         })
       )
-
       expect(events).toEqual([
         "log:Opening SSH: ssh -p 2237 dev@localhost",
         "connect:ssh -p 2237 dev@localhost"

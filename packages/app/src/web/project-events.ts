@@ -122,7 +122,12 @@ const handlePollSuccess = (
       onLine(line)
     }
   }
-  const delayMs = isInitialPoll ? 100 : response.events.length === 0 ? 500 : 150
+  let delayMs = 150
+  if (isInitialPoll) {
+    delayMs = 100
+  } else if (response.events.length === 0) {
+    delayMs = 500
+  }
   schedulePoll(state, runPoll, delayMs)
 }
 

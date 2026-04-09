@@ -1,42 +1,32 @@
 /* jscpd:ignore-start */
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
-import * as FileSystem from "@effect/platform/FileSystem"
+import type * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import type { CreateCommand, ParseError, TemplateConfig } from "../../core/domain.js"
-import { deriveRepoPathParts, resolveComposeProjectName, resolveProjectBootstrapVolumeName } from "../../core/domain.js"
-import { runCommandWithExitCodes } from "../../shell/command-runner.js"
+import type { CreateCommand, ParseError } from "../../core/domain.js"
+import { deriveRepoPathParts } from "../../core/domain.js"
 import { ensureDockerDaemonAccess } from "../../shell/docker.js"
-import { CommandFailedError, DockerIdentityConflictError } from "../../shell/errors.js"
 import type {
   AgentFailedError,
   AuthError,
   CloneFailedError,
   DockerAccessError,
   DockerCommandError,
-  DockerIdentityConflict,
+  DockerIdentityConflictError,
   FileExistsError,
   PortProbeError
 } from "../../shell/errors.js"
 import { logDockerAccessInfo } from "../access-log.js"
 import { resolveAutoAgentMode } from "../agent-auto-select.js"
-import { renderError } from "../errors.js"
 import { applyGithubForkConfig } from "../github-fork.js"
 import { validateGithubCloneAuthTokenPreflight } from "../github-token-preflight.js"
 import { defaultProjectsRoot } from "../menu-helpers.js"
-import { findSshPrivateKey } from "../path-helpers.js"
-import {
-  buildSshCommand,
-  getContainerIpIfInsideContainer,
-  loadProjectIndex,
-  loadProjectStatus
-} from "../projects-core.js"
-import { deleteDockerGitProject } from "../projects-delete.js"
 import { resolveTemplateResourceLimits } from "../resource-limits.js"
 import { autoSyncState } from "../state-repo.js"
-import { ensureTerminalCursorVisible } from "../terminal-cursor.js"
+import { deleteConflictingProjectsIfNeeded } from "./create-project-conflicts.js"
+import { maybeOpenSsh } from "./create-project-open-ssh.js"
 import { runDockerDownCleanup, runDockerUpIfNeeded } from "./docker-up.js"
 import { buildProjectConfigs, resolveDockerGitRootRelativePath } from "./paths.js"
 import { resolveSshPort } from "./ports.js"
@@ -59,6 +49,14 @@ type CreateProjectError =
 type CreateContext = {
   readonly baseDir: string
   readonly resolveRootPath: (value: string) => string
+}
+
+type BuiltProjectConfigs = ReturnType<typeof buildProjectConfigs>
+type PreparedProject = {
+  readonly resolvedOutDir: string
+  readonly finalConfig: CreateCommand["config"]
+  readonly globalConfig: BuiltProjectConfigs["globalConfig"]
+  readonly projectConfig: BuiltProjectConfigs["projectConfig"]
 }
 
 const resolveClonedOnHostname = (): Effect.Effect<string | undefined> =>
@@ -114,123 +112,6 @@ const formatStateSyncLabel = (repoUrl: string): string => {
   return repoPath.length > 0 ? repoPath : repoUrl
 }
 
-const isInteractiveTty = (): boolean => process.stdin.isTTY && process.stdout.isTTY
-
-const buildSshArgs = (
-  config: CreateCommand["config"],
-  sshKeyPath: string | null,
-  remoteCommand?: string,
-  ipAddress?: string
-): ReadonlyArray<string> => {
-  const host = ipAddress ?? "localhost"
-  const port = ipAddress ? 22 : config.sshPort
-  const args: Array<string> = []
-  if (sshKeyPath !== null) {
-    args.push("-i", sshKeyPath)
-  }
-  args.push(
-    "-tt",
-    "-Y",
-    "-o",
-    "LogLevel=ERROR",
-    "-o",
-    "StrictHostKeyChecking=no",
-    "-o",
-    "UserKnownHostsFile=/dev/null",
-    "-p",
-    String(port),
-    `${config.sshUser}@${host}`
-  )
-  if (remoteCommand !== undefined) {
-    args.push(remoteCommand)
-  }
-  return args
-}
-
-// CHANGE: auto-open SSH after environment is created (best-effort)
-// WHY: clone flow should drop the user into the container without manual copy/paste
-// QUOTE(ТЗ): "Мне надо что бы он сразу открыл SSH"
-// REF: issue-39
-// SOURCE: n/a
-// FORMAT THEOREM: forall c: openSsh(c) -> ssh_session_started(c) || warning_logged(c)
-// PURITY: SHELL
-// EFFECT: Effect<void, never, FileSystem | Path | CommandExecutor>
-// INVARIANT: SSH failures do not fail the create/clone command
-// COMPLEXITY: O(1) + ssh
-const openSshBestEffort = (
-  template: CreateCommand["config"],
-  remoteCommand?: string
-): Effect.Effect<void, never, CreateProjectRuntime> =>
-  Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
-
-    const ipAddress = yield* _(
-      getContainerIpIfInsideContainer(fs, process.cwd(), template.containerName).pipe(
-        Effect.orElse(() => Effect.succeed<string | undefined>(""))
-      )
-    )
-
-    const sshKey = yield* _(findSshPrivateKey(fs, path, process.cwd()))
-    const sshCommand = buildSshCommand(template, sshKey, ipAddress)
-
-    const remoteCommandLabel = remoteCommand === undefined ? "" : ` (${remoteCommand})`
-
-    yield* _(Effect.log(`Opening SSH: ${sshCommand}${remoteCommandLabel}`))
-    yield* _(ensureTerminalCursorVisible())
-    yield* _(
-      runCommandWithExitCodes(
-        {
-          cwd: process.cwd(),
-          command: "ssh",
-          args: buildSshArgs(template, sshKey, remoteCommand, ipAddress)
-        },
-        [0, 130],
-        (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
-      ).pipe(Effect.ensuring(ensureTerminalCursorVisible()))
-    )
-  }).pipe(
-    Effect.asVoid,
-    Effect.matchEffect({
-      onFailure: (error) => Effect.logWarning(`SSH auto-open failed: ${renderError(error)}`),
-      onSuccess: () => Effect.void
-    })
-  )
-
-const resolveInteractiveRemoteCommand = (
-  projectConfig: CreateCommand["config"],
-  interactiveAgent: boolean
-): string | undefined =>
-  interactiveAgent && projectConfig.agentMode !== undefined
-    ? `cd '${projectConfig.targetDir}' && ${projectConfig.agentMode}`
-    : undefined
-
-const maybeOpenSsh = (
-  command: CreateCommand,
-  hasAgent: boolean,
-  waitForAgent: boolean,
-  projectConfig: CreateCommand["config"]
-): Effect.Effect<void, never, CreateProjectRuntime> =>
-  Effect.gen(function*(_) {
-    const interactiveAgent = hasAgent && !waitForAgent
-    if (!command.openSsh || (hasAgent && !interactiveAgent)) {
-      return
-    }
-
-    if (!command.runUp) {
-      yield* _(Effect.logWarning("Skipping SSH auto-open: docker compose up disabled (--no-up)."))
-      return
-    }
-
-    if (!isInteractiveTty()) {
-      yield* _(Effect.logWarning("Skipping SSH auto-open: not running in an interactive TTY."))
-      return
-    }
-
-    const remoteCommand = resolveInteractiveRemoteCommand(projectConfig, interactiveAgent)
-    yield* _(openSshBestEffort(projectConfig, remoteCommand))
-  }).pipe(Effect.asVoid)
-
 const resolveFinalAgentConfig = (
   resolvedConfig: CreateCommand["config"]
 ): Effect.Effect<CreateCommand["config"], ParseError | PlatformError, FileSystem.FileSystem | Path.Path> =>
@@ -255,107 +136,6 @@ const resolveRuntimeConfig = (
       : { ...finalAgentConfig, clonedOnHostname }
   })
 
-type DockerIdentityOwner = Pick<TemplateConfig, "containerName" | "serviceName" | "volumeName" | "enableMcpPlaywright">
-
-type DockerIdentityNamespace = "container" | "composeProject" | "volume"
-
-type DockerIdentityClaim = Omit<DockerIdentityConflict, "conflictingProjectDir"> & {
-  readonly namespace: DockerIdentityNamespace
-}
-
-const resolveBrowserContainerClaims = (
-  config: DockerIdentityOwner
-): ReadonlyArray<DockerIdentityClaim> =>
-  config.enableMcpPlaywright
-    ? [{ namespace: "container", kind: "browserContainerName", name: `${config.containerName}-browser` }]
-    : []
-
-const resolveBrowserVolumeClaims = (
-  config: DockerIdentityOwner
-): ReadonlyArray<DockerIdentityClaim> =>
-  config.enableMcpPlaywright
-    ? [{ namespace: "volume", kind: "browserVolumeName", name: `${config.volumeName}-browser` }]
-    : []
-
-const resolveDockerIdentityClaims = (
-  config: DockerIdentityOwner
-): ReadonlyArray<DockerIdentityClaim> => [
-  { namespace: "container", kind: "containerName", name: config.containerName },
-  ...resolveBrowserContainerClaims(config),
-  { namespace: "composeProject", kind: "serviceName", name: resolveComposeProjectName(config) },
-  { namespace: "volume", kind: "volumeName", name: config.volumeName },
-  ...resolveBrowserVolumeClaims(config),
-  { namespace: "volume", kind: "bootstrapVolumeName", name: resolveProjectBootstrapVolumeName(config) }
-]
-
-const deleteConflictingProjectsIfNeeded = (
-  resolvedOutDir: string,
-  config: DockerIdentityOwner,
-  force: boolean
-): Effect.Effect<void, DockerIdentityConflictError | PlatformError | DockerCommandError, CreateProjectRuntime> =>
-  Effect.gen(function*(_) {
-    const index = yield* _(loadProjectIndex())
-    if (index === null) {
-      return
-    }
-
-    const candidateClaims = resolveDockerIdentityClaims(config)
-    const conflicts: Array<DockerIdentityConflict> = []
-    const conflictingProjects = new Map<string, { readonly projectDir: string; readonly repoUrl: string; readonly containerName: string; readonly serviceName: string }>()
-
-    for (const configPath of index.configPaths) {
-      const status = yield* _(
-        loadProjectStatus(configPath).pipe(
-          Effect.match({
-            onFailure: () => null,
-            onSuccess: (value) => value
-          })
-        )
-      )
-      if (status === null || status.projectDir === resolvedOutDir) {
-        continue
-      }
-
-      const existingClaims = resolveDockerIdentityClaims(status.config.template)
-      const sharedClaims = candidateClaims.flatMap((candidate) =>
-        existingClaims.some(
-          (existing) => existing.namespace === candidate.namespace && existing.name === candidate.name
-        )
-          ? [{ conflictingProjectDir: status.projectDir, kind: candidate.kind, name: candidate.name }]
-          : []
-      )
-
-      if (sharedClaims.length === 0) {
-        continue
-      }
-
-      conflicts.push(...sharedClaims)
-      conflictingProjects.set(status.projectDir, {
-        projectDir: status.projectDir,
-        repoUrl: status.config.template.repoUrl,
-        containerName: status.config.template.containerName,
-        serviceName: status.config.template.serviceName
-      })
-    }
-
-    if (conflicts.length === 0) {
-      return
-    }
-
-    if (!force) {
-      return yield* _(Effect.fail(new DockerIdentityConflictError({ projectDir: resolvedOutDir, conflicts })))
-    }
-
-    for (const conflictingProject of conflictingProjects.values()) {
-      yield* _(
-        Effect.logWarning(
-          `Force enabled: replacing conflicting docker-git project ${conflictingProject.projectDir}`
-        )
-      )
-      yield* _(deleteDockerGitProject(conflictingProject))
-    }
-  })
-
 const maybeCleanupAfterAgent = (
   waitForAgent: boolean,
   resolvedOutDir: string
@@ -368,10 +148,10 @@ const maybeCleanupAfterAgent = (
     yield* _(runDockerDownCleanup(resolvedOutDir))
   })
 
-const runCreateProject = (
+export const prepareProject = (
   path: Path.Path,
   command: CreateCommand
-): Effect.Effect<void, CreateProjectError, CreateProjectRuntime> =>
+): Effect.Effect<PreparedProject, CreateProjectError, CreateProjectRuntime> =>
   Effect.gen(function*(_) {
     if (command.runUp) {
       yield* _(ensureDockerDaemonAccess(process.cwd()))
@@ -384,7 +164,6 @@ const runCreateProject = (
     yield* _(
       deleteConflictingProjectsIfNeeded(resolvedOutDir, rootedConfig, command.force)
     )
-
     yield* _(validateGithubCloneAuthTokenPreflight(rootedConfig))
 
     const resolvedConfig = yield* _(resolveCreateConfig(rootedConfig, resolvedOutDir))
@@ -392,7 +171,6 @@ const runCreateProject = (
     const { globalConfig, projectConfig } = buildProjectConfigs(path, ctx.baseDir, resolvedOutDir, finalConfig)
 
     yield* _(migrateProjectOrchLayout(ctx.baseDir, globalConfig, ctx.resolveRootPath))
-
     const createdFiles = yield* _(
       prepareProjectFiles(resolvedOutDir, ctx.baseDir, globalConfig, projectConfig, {
         force: command.force,
@@ -400,25 +178,20 @@ const runCreateProject = (
       })
     )
     yield* _(logCreatedProject(resolvedOutDir, createdFiles))
+    return { resolvedOutDir, finalConfig, globalConfig, projectConfig }
+  })
 
-    const hasAgent = finalConfig.agentMode !== undefined
-    const waitForAgent = hasAgent && (finalConfig.agentAuto ?? false)
+export const runPreparedProject = (
+  command: CreateCommand,
+  prepared: PreparedProject
+): Effect.Effect<void, CreateProjectError, CreateProjectRuntime> =>
+  Effect.gen(function*(_) {
+    const hasAgent = prepared.finalConfig.agentMode !== undefined
+    const waitForAgent = hasAgent && (prepared.finalConfig.agentAuto ?? false)
 
-    // CHANGE: run autoSyncState before docker compose up to prevent bind-mount inode invalidation
-    // WHY: git reset --hard in autoSyncState deletes and recreates .orch/auth/codex; if docker is
-    //      already running with a bind-mount on that directory, the old inode becomes unreachable
-    //      inside the container — codex fails with "No such file or directory"
-    // QUOTE(ТЗ): n/a
-    // REF: issue-158
-    // SOURCE: n/a
-    // FORMAT THEOREM: ∀p: synced(p) ∧ stable_inode(.orch/auth/codex, p) → valid_mount(docker_up(p))
-    // PURITY: SHELL
-    // EFFECT: Effect<void, never, StateRepoEnv>
-    // INVARIANT: .orch/auth/codex inode is stable when docker compose up runs
-    // COMPLEXITY: O(git_sync) before O(docker_up)
-    yield* _(autoSyncState(`chore(state): update ${formatStateSyncLabel(projectConfig.repoUrl)}`))
+    yield* _(autoSyncState(`chore(state): update ${formatStateSyncLabel(prepared.projectConfig.repoUrl)}`))
     yield* _(
-      runDockerUpIfNeeded(resolvedOutDir, projectConfig, {
+      runDockerUpIfNeeded(prepared.resolvedOutDir, prepared.projectConfig, {
         runUp: command.runUp,
         waitForClone: command.waitForClone,
         waitForAgent,
@@ -427,12 +200,20 @@ const runCreateProject = (
       })
     )
     if (command.runUp) {
-      yield* _(logDockerAccessInfo(resolvedOutDir, projectConfig))
+      yield* _(logDockerAccessInfo(prepared.resolvedOutDir, prepared.projectConfig))
     }
 
-    yield* _(maybeCleanupAfterAgent(waitForAgent, resolvedOutDir))
+    yield* _(maybeCleanupAfterAgent(waitForAgent, prepared.resolvedOutDir))
+    yield* _(maybeOpenSsh(command, hasAgent, waitForAgent, prepared.projectConfig))
+  }).pipe(Effect.asVoid)
 
-    yield* _(maybeOpenSsh(command, hasAgent, waitForAgent, projectConfig))
+const runCreateProject = (
+  path: Path.Path,
+  command: CreateCommand
+): Effect.Effect<void, CreateProjectError, CreateProjectRuntime> =>
+  Effect.gen(function*(_) {
+    const prepared = yield* _(prepareProject(path, command))
+    yield* _(runPreparedProject(command, prepared))
   }).pipe(Effect.asVoid)
 
 export const createProject = (command: CreateCommand): Effect.Effect<void, CreateProjectError, CreateProjectRuntime> =>

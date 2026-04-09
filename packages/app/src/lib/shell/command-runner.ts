@@ -44,8 +44,7 @@ export const runCommandWithExitCodes = <E>(
 ): Effect.Effect<void, E | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
     const exitCode = yield* _(Command.exitCode(buildCommand(spec, "inherit", "inherit", "inherit")))
-    const numericExitCode = Number(exitCode)
-    yield* _(ensureExitCode(numericExitCode, okExitCodes, onFailure))
+    yield* _(ensureExitCode(exitCode, okExitCodes, onFailure))
   })
 
 // CHANGE: run a command and return the exit code, draining stdout/stderr to prevent buffer deadlock
@@ -68,7 +67,7 @@ export const runCommandExitCode = (
       yield* _(Effect.forkDaemon(Stream.runDrain(process.stdout)))
       yield* _(Effect.forkDaemon(Stream.runDrain(process.stderr)))
       const exitCode = yield* _(process.exitCode)
-      return Number(exitCode)
+      return exitCode
     })
   )
 
@@ -114,8 +113,7 @@ export const runCommandCapture = <E>(
         pipe(process.stdout, Stream.runCollect, Effect.map((chunks) => collectUint8Array(chunks)))
       )
       const exitCode = yield* _(process.exitCode)
-      const numericExitCode = Number(exitCode)
-      yield* _(ensureExitCode(numericExitCode, okExitCodes, onFailure))
+      yield* _(ensureExitCode(exitCode, okExitCodes, onFailure))
       return decodeUint8Array(bytes)
     })
   )
@@ -129,20 +127,19 @@ export const runCommandWithCapturedOutput = <E>(
     Effect.gen(function*(_) {
       const executor = yield* _(CommandExecutor.CommandExecutor)
       const process = yield* _(executor.start(buildCommand(spec, "pipe", "pipe", "pipe")))
-      const [stdout, stderr, exitCode] = yield* _(
+      const [stdout, stderr] = yield* _(
         Effect.all(
           [
             collectStreamText(process.stdout),
-            collectStreamText(process.stderr),
-            Effect.map(process.exitCode, (value) => Number(value))
+            collectStreamText(process.stderr)
           ],
           { concurrency: "unbounded" }
         )
       )
+      const exitCode = yield* _(process.exitCode)
+      const output = combineCommandOutput(stdout, stderr)
       yield* _(
-        ensureExitCode(exitCode, okExitCodes, (numericExitCode) =>
-          onFailure(numericExitCode, combineCommandOutput(stdout, stderr))
-        )
+        ensureExitCode(exitCode, okExitCodes, (numericExitCode) => onFailure(numericExitCode, output))
       )
     })
   )
