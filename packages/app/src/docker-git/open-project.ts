@@ -1,14 +1,18 @@
-import { type DockerContainerRuntimeInfo, runDockerInspectContainerRuntimeInfo } from "@lib/shell/docker"
 import { Effect } from "effect"
 
-import type { OpenCommand } from "@lib/core/domain"
-import { parseGithubRepoUrl, resolveRepoInput } from "@lib/core/repo"
+import type { OpenCommand } from "./frontend-lib/core/domain.js"
+import { parseGithubRepoUrl, resolveRepoInput } from "./frontend-lib/core/repo.js"
 
 import { getProject, listProjects } from "./api-client.js"
 import type { ApiProjectDetails } from "./api-project-codec.js"
 import type { ProjectResolutionError } from "./host-errors.js"
 import { openResolvedProjectSsh } from "./open-project-ssh.js"
 import { resolveApiProjectItem } from "./project-item.js"
+
+export type DockerContainerRuntimeInfo = {
+  readonly ipAddress: string
+  readonly projectWorkingDir?: string | undefined
+}
 
 export {
   openResolvedProjectSsh,
@@ -278,11 +282,7 @@ export const openExistingProjectSsh = (
   Effect.gen(function*(_) {
     const projects = yield* _(listProjectDetails())
     const selector = command.projectDir ?? command.projectRef
-    const project = yield* _(
-      resolveOpenProjectEffect(projects, selector, {
-        inspectRuntime: (containerName) => runDockerInspectContainerRuntimeInfo(process.cwd(), containerName)
-      })
-    )
-    const item = yield* _(resolveApiProjectItem(project))
+    const project = yield* _(selectOpenProject(projects, selector))
+    const item = resolveApiProjectItem(project)
     yield* _(openResolvedProjectSsh(item))
   })

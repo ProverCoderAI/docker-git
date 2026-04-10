@@ -1,7 +1,7 @@
 import { Either } from "effect"
 
-import { type ApplyCommand, type ParseError } from "@lib/core/domain"
-import { normalizeCpuLimit, normalizeRamLimit } from "@lib/core/resource-limits"
+import { type ApplyCommand, type ParseError } from "../frontend-lib/core/domain.js"
+import { normalizeCpuLimit, normalizeRamLimit } from "../frontend-lib/core/resource-limits.js"
 
 import { parseProjectDirWithOptions } from "./parser-shared.js"
 

@@ -3,9 +3,8 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import type * as Effect from "effect/Effect"
 
-import type { MenuAction } from "@lib/core/domain"
-import type { ProjectItem } from "@lib/usecases/projects"
 import type { MenuError } from "./menu-errors.js"
+import type { ProjectItem } from "./project-item.js"
 
 // CHANGE: isolate TUI types/constants into a shared module
 // WHY: keep menu rendering and input handling small and focused
@@ -172,12 +171,27 @@ export type SelectProjectRuntime = {
   readonly startedAtEpochMs: number | null
 }
 
+export type MenuAction =
+  | { readonly _tag: "Create" }
+  | { readonly _tag: "Select" }
+  | { readonly _tag: "Auth" }
+  | { readonly _tag: "ProjectAuth" }
+  | { readonly _tag: "Info" }
+  | { readonly _tag: "Up" }
+  | { readonly _tag: "Status" }
+  | { readonly _tag: "Logs" }
+  | { readonly _tag: "Down" }
+  | { readonly _tag: "DownAll" }
+  | { readonly _tag: "Delete" }
+  | { readonly _tag: "Quit" }
+
 export const menuItems: ReadonlyArray<{ readonly id: MenuAction; readonly label: string }> = [
   { id: { _tag: "Create" }, label: "Create project" },
   { id: { _tag: "Select" }, label: "Select project" },
   { id: { _tag: "Auth" }, label: "Auth profiles (keys)" },
   { id: { _tag: "ProjectAuth" }, label: "Project auth (bind labels)" },
   { id: { _tag: "Info" }, label: "Show connection info" },
+  { id: { _tag: "Up" }, label: "docker compose up" },
   { id: { _tag: "Status" }, label: "docker compose ps" },
   { id: { _tag: "Logs" }, label: "docker compose logs --tail=200" },
   { id: { _tag: "Down" }, label: "docker compose down" },

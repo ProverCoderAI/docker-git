@@ -1,4 +1,4 @@
-import type { ProjectItem } from "@lib/usecases/projects"
+import type { ProjectItem } from "./project-item.js"
 
 import { sortItemsByLaunchTime } from "./menu-select-order.js"
 import type { MenuViewContext, SelectProjectRuntime } from "./menu-types.js"

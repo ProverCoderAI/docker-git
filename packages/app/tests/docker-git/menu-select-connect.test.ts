@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 
-import type { ProjectItem } from "@lib/usecases/projects"
+import type { ProjectItem } from "../../src/docker-git/project-item.js"
 
 import { selectHint } from "../../src/docker-git/menu-render-select.js"
 import { buildConnectEffect, isConnectMcpToggleInput } from "../../src/docker-git/menu-select-connect.js"

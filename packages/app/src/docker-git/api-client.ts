@@ -2,6 +2,11 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
+import { decodeAuthSnapshot, decodeProjectAuthSnapshot } from "./api-auth-codec.js"
+import { request, requestTextStream, requestVoid } from "./api-http.js"
+import { asArray, asObject, asString, type JsonRequest, type JsonValue } from "./api-json.js"
+import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
+import { decodeTerminalSession } from "./api-terminal-codec.js"
 import type {
   AuthCodexImportCommand,
   AuthCodexLoginCommand,
@@ -14,14 +19,9 @@ import type {
   StateCommitCommand,
   StateInitCommand,
   StateSyncCommand
-} from "@lib/core/domain"
-import { resolvePathFromCwd } from "@lib/usecases/path-helpers"
-
-import { request, requestTextStream, requestVoid } from "./api-http.js"
-import { asArray, asObject, asString, type JsonRequest, type JsonValue } from "./api-json.js"
-import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
+} from "./frontend-lib/core/domain.js"
+import { resolvePathFromCwd } from "./frontend-lib/usecases/path-helpers.js"
 import type { ApiRequestError } from "./host-errors.js"
-import { resolveHostSshMaterial, resolveManagedHostSshMaterial } from "./host-ssh-material.js"
 
 export { type JsonObject, type JsonRequest, type JsonValue, renderJsonPayload } from "./api-json.js"
 export {
@@ -31,6 +31,7 @@ export {
   decodeProjectSummary,
   renderProjectSummaryLine
 } from "./api-project-codec.js"
+export { type ApiTerminalSession } from "./api-terminal-codec.js"
 
 const projectPath = (projectId: string, suffix = ""): string => `/projects/${encodeURIComponent(projectId)}${suffix}`
 const codexLoginSuccessMarker = "__DOCKER_GIT_CODEX_LOGIN_STATUS__:ok"
@@ -92,7 +93,6 @@ export const getProject = (projectId: string) =>
 export const createProject = (command: CreateCommand) =>
   Effect.gen(function*(_) {
     const config = command.config
-    const sshMaterial = yield* _(resolveHostSshMaterial(command))
     const body = {
       repoUrl: config.repoUrl,
       repoRef: config.repoRef,
@@ -110,9 +110,7 @@ export const createProject = (command: CreateCommand) =>
       outDir: command.outDir,
       gitTokenLabel: config.gitTokenLabel,
       skipGithubAuth: config.skipGithubAuth,
-      authorizedKeysContents: sshMaterial.authorizedKeysContents.length > 0
-        ? sshMaterial.authorizedKeysContents
-        : undefined,
+      useManagedAuthorizedKeys: true,
       codexTokenLabel: config.codexAuthLabel,
       claudeTokenLabel: config.claudeAuthLabel,
       agentAutoMode: config.agentAuto ? (config.agentMode ?? "auto") : undefined,
@@ -131,16 +129,7 @@ export const createProject = (command: CreateCommand) =>
 export const deleteProject = (projectId: string) => requestVoid("DELETE", projectPath(projectId))
 
 export const upProject = (projectId: string) =>
-  Effect.gen(function*(_) {
-    const sshMaterial = yield* _(resolveManagedHostSshMaterial())
-    return yield* _(
-      requestVoid("POST", projectPath(projectId, "/up"), {
-        authorizedKeysContents: sshMaterial.authorizedKeysContents.length > 0
-          ? sshMaterial.authorizedKeysContents
-          : undefined
-      })
-    )
-  })
+  requestVoid("POST", projectPath(projectId, "/up"), { useManagedAuthorizedKeys: true })
 
 export const downProject = (projectId: string) => requestVoid("POST", projectPath(projectId, "/down"))
 
@@ -152,6 +141,67 @@ export const readProjectPs = (projectId: string) =>
 export const readProjectLogs = (projectId: string) =>
   request("GET", projectPath(projectId, "/logs")).pipe(
     Effect.map((payload) => readProjectOutput(payload))
+  )
+
+export const createProjectTerminalSession = (projectId: string) =>
+  request("POST", projectPath(projectId, "/terminal-sessions")).pipe(
+    Effect.map((payload) => {
+      const object = asObject(payload)
+      const project = decodeProjectDetails(object?.["project"] ?? payload)
+      const session = decodeTerminalSession(object?.["session"] ?? payload)
+      return project === null || session === null ? null : { project, session }
+    })
+  )
+
+export const createAuthTerminalSession = (
+  flow: "ClaudeOauth" | "GeminiOauth",
+  label: string | null
+) =>
+  request("POST", "/auth/terminal-sessions", { flow, label: label ?? undefined }).pipe(
+    Effect.map((payload) => {
+      const object = asObject(payload)
+      return decodeTerminalSession(object?.["session"] ?? payload)
+    })
+  )
+
+export const deleteTerminalSessionByPath = (path: string) => requestVoid("DELETE", path)
+
+export const loadAuthSnapshot = () =>
+  request("GET", "/auth/menu").pipe(
+    Effect.map((payload) => decodeAuthSnapshot(payload))
+  )
+
+export const runAuthMenuFlow = (requestBody: {
+  readonly flow: string
+  readonly label?: string | null
+  readonly token?: string | null
+  readonly user?: string | null
+  readonly apiKey?: string | null
+}) =>
+  request("POST", "/auth/menu", {
+    flow: requestBody.flow,
+    label: requestBody.label ?? undefined,
+    token: requestBody.token ?? undefined,
+    user: requestBody.user ?? undefined,
+    apiKey: requestBody.apiKey ?? undefined
+  }).pipe(
+    Effect.map((payload) => decodeAuthSnapshot(payload))
+  )
+
+export const loadProjectAuthSnapshot = (projectId: string) =>
+  request("GET", projectPath(projectId, "/auth/menu")).pipe(
+    Effect.map((payload) => decodeProjectAuthSnapshot(payload))
+  )
+
+export const runProjectAuthFlow = (
+  projectId: string,
+  requestBody: { readonly flow: string; readonly label?: string | null }
+) =>
+  request("POST", projectPath(projectId, "/auth/menu"), {
+    flow: requestBody.flow,
+    label: requestBody.label ?? undefined
+  }).pipe(
+    Effect.map((payload) => decodeProjectAuthSnapshot(payload))
   )
 
 export const applyAllProjects = (activeOnly: boolean) => requestVoid("POST", "/projects/apply-all", { activeOnly })

@@ -1,14 +1,13 @@
+import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
-
-import type { AppError } from "@lib/usecases/errors"
 
 export const countAuthAccountDirectories = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
   root: string
-): Effect.Effect<number, AppError> =>
+): Effect.Effect<number, PlatformError> =>
   Effect.gen(function*(_) {
     const exists = yield* _(fs.exists(root))
     if (!exists) {

@@ -1,7 +1,10 @@
-import type { ParseError } from "@lib/core/domain"
-import type { AppError } from "@lib/usecases/errors"
-import { renderError } from "@lib/usecases/errors"
+import type { PlatformError } from "@effect/platform/Error"
+import { Match } from "effect"
+
 import { formatParseError } from "./cli/usage.js"
+import type { ParseError } from "./frontend-lib/core/domain.js"
+import type { CommandFailedError, InputReadError } from "./frontend-lib/shell/errors.js"
+import type { TerminalSessionClientError } from "./terminal-session-client.js"
 
 export type ControllerBootstrapError = {
   readonly _tag: "ControllerBootstrapError"
@@ -39,9 +42,13 @@ export type HostError =
   | ApiRequestError
   | ApiAuthRequiredError
   | ProjectResolutionError
+  | PlatformError
+  | CommandFailedError
+  | InputReadError
+  | TerminalSessionClientError
   | UnsupportedCommandError
 
-export type CliError = AppError | HostError
+export type CliError = ParseError | HostError
 
 const isParseError = (error: CliError): error is ParseError =>
   error._tag === "UnknownCommand" ||
@@ -51,8 +58,6 @@ const isParseError = (error: CliError): error is ParseError =>
   error._tag === "InvalidOption" ||
   error._tag === "UnexpectedArgument"
 
-const isApiRequestError = (error: CliError): error is ApiRequestError => "method" in error && "path" in error
-
 const renderApiRequestError = (error: ApiRequestError): string =>
   error.displayOnlyMessage === true
     ? error.message
@@ -61,30 +66,20 @@ const renderApiRequestError = (error: ApiRequestError): string =>
       error.message
     ].join("\n")
 
+const renderHostCliError = (error: HostError): string =>
+  Match.value(error).pipe(
+    Match.when({ _tag: "ControllerBootstrapError" }, ({ message }) => message),
+    Match.when({ _tag: "UnsupportedCommandError" }, ({ message }) => message),
+    Match.when({ _tag: "ProjectResolutionError" }, ({ message }) => message),
+    Match.when({ _tag: "TerminalSessionClientError" }, ({ message }) => message),
+    Match.when({ _tag: "ApiAuthRequiredError" }, ({ command, message }) => [message, `Run: ${command}`].join("\n")),
+    Match.when({ _tag: "ApiRequestError" }, renderApiRequestError),
+    Match.orElse((unknownError) => "message" in unknownError ? unknownError.message : String(unknownError))
+  )
+
 export const renderCliError = (error: CliError): string => {
   if (isParseError(error)) {
     return formatParseError(error)
   }
-
-  if (error._tag === "ControllerBootstrapError") {
-    return error.message
-  }
-
-  if (error._tag === "ApiAuthRequiredError") {
-    return [error.message, `Run: ${error.command}`].join("\n")
-  }
-
-  if (error._tag === "UnsupportedCommandError") {
-    return error.message
-  }
-
-  if (error._tag === "ProjectResolutionError") {
-    return error.message
-  }
-
-  if (isApiRequestError(error)) {
-    return renderApiRequestError(error)
-  }
-
-  return renderError(error)
+  return renderHostCliError(error)
 }

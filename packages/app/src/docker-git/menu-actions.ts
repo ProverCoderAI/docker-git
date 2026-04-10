@@ -1,4 +1,3 @@
-import type { MenuAction } from "@lib/core/domain"
 import { Effect, Match, pipe } from "effect"
 
 import { downAllProjects, downProject, upProject } from "./api-client.js"
@@ -16,7 +15,7 @@ import { renderMenuError } from "./menu-errors.js"
 import { openProjectAuthSelection } from "./menu-project-auth.js"
 import { loadSelectView } from "./menu-select-load.js"
 import { withSuspendedTui, writeErrorAndPause } from "./menu-shared.js"
-import { type MenuEnv, type MenuRunner, type MenuState, type MenuViewContext } from "./menu-types.js"
+import { type MenuAction, type MenuEnv, type MenuRunner, type MenuState, type MenuViewContext } from "./menu-types.js"
 
 // CHANGE: keep menu actions and input parsing in a dedicated module
 // WHY: reduce cognitive complexity in the TUI entry

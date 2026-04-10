@@ -1,9 +1,7 @@
 import { Effect, pipe } from "effect"
 
-import type { AppError } from "@lib/usecases/errors"
-import type { ProjectItem } from "@lib/usecases/projects"
-
 import { nextBufferValue } from "./menu-buffer-input.js"
+import type { MenuError } from "./menu-errors.js"
 import { handleMenuNumberInput, submitPromptStep } from "./menu-input-utils.js"
 import {
   type ProjectAuthMenuAction,
@@ -24,6 +22,7 @@ import type {
   ProjectAuthSnapshot,
   ViewState
 } from "./menu-types.js"
+import type { ProjectItem } from "./project-item.js"
 
 type ProjectAuthContext = Pick<MenuViewContext, "setView" | "setMessage" | "setActiveDir"> & {
   readonly runner: MenuRunner
@@ -63,7 +62,7 @@ const startProjectAuthPrompt = (
 const loadProjectAuthMenuView = (
   project: ProjectItem,
   context: Pick<MenuViewContext, "setView" | "setMessage">
-): Effect.Effect<void, AppError, MenuEnv> =>
+): Effect.Effect<void, MenuError, MenuEnv> =>
   pipe(
     readProjectAuthSnapshot(project),
     Effect.tap((snapshot) =>

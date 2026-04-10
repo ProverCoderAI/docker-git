@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint"
 
 import { noLibImportsRule } from "../../eslint/no-lib-imports.mjs"
 
-const defaultFilePath = "src/new-client.ts"
+const defaultFilePath = "src/docker-git/new-client.ts"
 
 const verify = (source: string, filePath: string) => {
   const linter = new Linter({ configType: "flat" })
@@ -69,6 +69,11 @@ describe("noLibImportsRule", () => {
       [["@effect-template/lib/core/domain"]]
     ],
     [
+      "rejects direct imports from @lib aliases",
+      line("import type { Command } from \"@lib/core/domain\""),
+      [["@lib/core/domain"]]
+    ],
+    [
       "rejects type import expressions from lib",
       line("type Template = import(\"@effect-template/lib/core/domain\").TemplateConfig"),
       [["@effect-template/lib/core/domain"]]
@@ -97,6 +102,17 @@ describe("noLibImportsRule", () => {
       ]),
       [["@effect-template/lib"], ["@effect-template/lib/core/domain"]]
     ],
+    [
+      "rejects relative frontend imports into local src/lib",
+      line("import { resolveRepoInput } from \"../lib/core/domain.js\""),
+      [["../lib/core/domain.js"]]
+    ],
+    [
+      "rejects relative app test imports into local src/lib",
+      line("import { renderEntrypoint } from \"../../src/lib/core/templates-entrypoint.js\""),
+      [["../../src/lib/core/templates-entrypoint.js"]],
+      "tests/docker-git/legacy-import.test.ts"
+    ],
     ["rejects migrated legacy paths too", line("import { listProjects } from \"@effect-template/lib\""), [[
       "Direct import"
     ]], "src/docker-git/program.ts"]
@@ -112,9 +128,18 @@ describe("noLibImportsRule", () => {
     const messages = verify(
       lines([
         "import { request } from \"./api-client.js\"",
-        "import type { Command } from \"@lib/core/domain\""
+        "import type { Command } from \"./frontend-lib/core/domain.js\""
       ]),
       defaultFilePath
+    )
+
+    expect(messages).toHaveLength(0)
+  })
+
+  it("allows app test imports that stay within frontend-owned surfaces", () => {
+    const messages = verify(
+      line("import { parse } from \"../../src/docker-git/cli/parser.js\""),
+      "tests/docker-git/parser.test.ts"
     )
 
     expect(messages).toHaveLength(0)

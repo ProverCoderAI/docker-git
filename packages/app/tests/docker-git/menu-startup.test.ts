@@ -5,7 +5,7 @@ import { makeProjectItem } from "./fixtures/project-item.js"
 
 describe("menu-startup", () => {
   it("returns empty snapshot when no docker-git containers are running", () => {
-    const snapshot = resolveMenuStartupSnapshot([makeProjectItem({})], ["postgres", "redis"])
+    const snapshot = resolveMenuStartupSnapshot([makeProjectItem({ status: "stopped" })])
 
     expect(snapshot).toEqual({
       activeDir: null,
@@ -15,8 +15,8 @@ describe("menu-startup", () => {
   })
 
   it("auto-selects active project when exactly one known docker-git container is running", () => {
-    const item = makeProjectItem({})
-    const snapshot = resolveMenuStartupSnapshot([item], [item.containerName])
+    const item = makeProjectItem({ status: "running", statusLabel: "Up 1 minute" })
+    const snapshot = resolveMenuStartupSnapshot([item])
 
     expect(snapshot.activeDir).toBe(item.projectDir)
     expect(snapshot.runningDockerGitContainers).toBe(1)
@@ -32,20 +32,27 @@ describe("menu-startup", () => {
     const second = makeProjectItem({
       containerName: "dg-two",
       displayName: "org/two",
-      projectDir: "/home/dev/.docker-git/org-two"
+      projectDir: "/home/dev/.docker-git/org-two",
+      status: "running",
+      statusLabel: "Up 2 minutes"
     })
-    const snapshot = resolveMenuStartupSnapshot([first, second], [first.containerName, second.containerName])
+    const snapshot = resolveMenuStartupSnapshot([
+      { ...first, status: "running", statusLabel: "Up 1 minute" },
+      second
+    ])
 
     expect(snapshot.activeDir).toBeNull()
     expect(snapshot.runningDockerGitContainers).toBe(2)
     expect(snapshot.message).toContain("Use Select project")
   })
 
-  it("shows warning when running docker-git containers have no matching configs", () => {
-    const snapshot = resolveMenuStartupSnapshot([], ["dg-unknown", "dg-another"])
+  it("keeps an empty snapshot when API reports no running projects", () => {
+    const snapshot = resolveMenuStartupSnapshot([])
 
-    expect(snapshot.activeDir).toBeNull()
-    expect(snapshot.runningDockerGitContainers).toBe(2)
-    expect(snapshot.message).toContain("No matching project config found")
+    expect(snapshot).toEqual({
+      activeDir: null,
+      runningDockerGitContainers: 0,
+      message: null
+    })
   })
 })

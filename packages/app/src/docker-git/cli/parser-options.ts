@@ -1,7 +1,7 @@
 import { Either } from "effect"
 
-import type { RawOptions } from "@lib/core/command-options"
-import type { ParseError } from "@lib/core/domain"
+import type { RawOptions } from "../frontend-lib/core/command-options.js"
+import type { ParseError } from "../frontend-lib/core/domain.js"
 
 interface ValueOptionSpec {
   readonly flag: string
@@ -281,4 +281,4 @@ export const parseRawOptions = (args: ReadonlyArray<string>): Either.Either<RawO
   return Either.right(raw)
 }
 
-export { type RawOptions } from "@lib/core/command-options"
+export { type RawOptions } from "../frontend-lib/core/command-options.js"

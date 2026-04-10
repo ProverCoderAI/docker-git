@@ -1,4 +1,3 @@
-import { InputReadError } from "@lib/shell/errors"
 import { Effect } from "effect"
 import React, { useMemo } from "react"
 
@@ -7,6 +6,11 @@ import type { GridlandKeyEvent, GridlandModule, GridlandRenderer } from "@gridla
 import { createGridlandPrimitives } from "../ui/primitives-gridland.js"
 import { UiProvider } from "../ui/primitives.js"
 import { handleUserInput, type MenuInputContext } from "./menu-input-handler.js"
+
+type InputReadError = {
+  readonly _tag: "InputReadError"
+  readonly message: string
+}
 
 const blockedInputNames = new Set([
   "backspace",
@@ -58,8 +62,10 @@ const toMenuKeyInput = (event: GridlandKeyEvent) => {
   } as const
 }
 
-const toInputReadError = (error: Error | string): InputReadError =>
-  new InputReadError({ message: error instanceof Error ? error.message : error })
+const toInputReadError = (error: Error | string): InputReadError => ({
+  _tag: "InputReadError",
+  message: error instanceof Error ? error.message : error
+})
 
 const waitForRendererDestroy = (renderer: GridlandRenderer): Effect.Effect<void> =>
   Effect.async((resume) => {

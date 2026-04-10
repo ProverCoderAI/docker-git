@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { beforeEach, vi } from "vitest"
 
-import type { Command } from "../../src/lib/core/domain.js"
+import type { Command } from "../../src/docker-git/frontend-lib/core/domain.js"
 
 const ensureControllerReadyMock = vi.hoisted(() => vi.fn(() => Effect.void))
 const runMenuCallMock = vi.hoisted(() => vi.fn(() => {}))

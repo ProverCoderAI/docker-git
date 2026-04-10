@@ -17,10 +17,15 @@ const defaultProject = {
   targetDir: "/home/dev/workspaces/org/repo",
   projectDir: "/controller/org/repo",
   sshCommand: "ssh dev@127.0.0.1 -p 2222",
+  authorizedKeysPath: "/controller/org/repo/authorized_keys",
+  authorizedKeysExists: true,
   envGlobalPath: "/controller/.orch/env/global.env",
   envProjectPath: "/controller/org/repo/.orch/env/project.env",
   codexAuthPath: "/controller/.orch/auth/codex",
-  codexHome: "/home/dev/.codex"
+  codexHome: "/home/dev/.codex",
+  sshSessions: 0,
+  startedAtIso: null,
+  startedAtEpochMs: null
 } satisfies Omit<ApiProjectDetails, "clonedOnHostname">
 
 export const makeProject = (overrides: Partial<ApiProjectDetails> = {}): ApiProjectDetails => ({

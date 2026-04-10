@@ -1,4 +1,3 @@
-import type { ProjectItem } from "@lib/usecases/projects"
 import { Effect, pipe } from "effect"
 
 import { deleteMenuProject, downMenuProject, listMenuRunningProjectItems } from "./menu-api.js"
@@ -16,6 +15,7 @@ import {
 } from "./menu-shared.js"
 import type { MenuRunner, MenuViewContext } from "./menu-types.js"
 import { openResolvedProjectSsh } from "./open-project.js"
+import type { ProjectItem } from "./project-item.js"
 
 export type SelectContext = MenuViewContext & {
   readonly activeDir: string | null

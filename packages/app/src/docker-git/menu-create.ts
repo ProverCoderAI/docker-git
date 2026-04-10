@@ -1,5 +1,5 @@
-import { type CreateCommand } from "@lib/core/domain"
 import { Effect, Either, pipe } from "effect"
+import { type CreateCommand } from "./frontend-lib/core/domain.js"
 
 import { createProject as createProjectViaApi } from "./api-client.js"
 import { parseArgs } from "./cli/parser.js"

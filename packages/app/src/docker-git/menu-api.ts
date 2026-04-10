@@ -1,8 +1,5 @@
 import { Effect, pipe } from "effect"
 
-import type { AuthGithubStatusCommand } from "@lib/core/domain"
-import { connectProjectSsh, type ProjectItem, waitForProjectSshReady } from "@lib/usecases/projects"
-
 import {
   deleteProject,
   downProject,
@@ -11,18 +8,17 @@ import {
   listProjects,
   readProjectLogs,
   readProjectPs,
-  renderProjectSummaryLine,
-  upProject
+  renderProjectSummaryLine
 } from "./api-client.js"
 import { asObject, asString, type JsonValue } from "./api-json.js"
 import type { MenuError } from "./menu-errors.js"
 import type { MenuEnv } from "./menu-types.js"
-import { resolveApiProjectItem } from "./project-item.js"
+import { type ProjectItem, resolveApiProjectItem } from "./project-item.js"
 
 const menuGithubStatusCommand = {
   _tag: "AuthGithubStatus",
   envGlobalPath: ""
-} satisfies AuthGithubStatusCommand
+} as const
 
 const compact = <A>(values: ReadonlyArray<A | null>): ReadonlyArray<A> =>
   values.filter((value): value is A => value !== null)
@@ -41,7 +37,7 @@ const listProjectDetails = (
     (item) =>
       pipe(
         getProject(item.id),
-        Effect.flatMap((project) => (project === null ? Effect.succeed(null) : resolveApiProjectItem(project))),
+        Effect.map((project) => (project === null ? null : resolveApiProjectItem(project))),
         Effect.match({
           onFailure: () => null,
           onSuccess: (project) => project
@@ -86,26 +82,6 @@ export const renderMenuProjectSummaries = () =>
       return Effect.forEach(projects, (project) => Effect.log(renderProjectSummaryLine(project)), {
         discard: true
       })
-    })
-  )
-
-export const connectMenuProjectSshWithUp = (
-  item: ProjectItem
-) =>
-  pipe(
-    upProject(item.projectDir),
-    Effect.zipRight(getProject(item.projectDir)),
-    Effect.flatMap((project) => {
-      const resolved = project === null ? Effect.succeed(item) : resolveApiProjectItem(project)
-      return pipe(
-        resolved,
-        Effect.flatMap((resolvedItem) =>
-          pipe(
-            waitForProjectSshReady(resolvedItem),
-            Effect.zipRight(connectProjectSsh(resolvedItem))
-          )
-        )
-      )
     })
   )
 

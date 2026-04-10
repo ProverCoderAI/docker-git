@@ -1,6 +1,6 @@
 import { Either } from "effect"
 
-import { type OpenCommand, type ParseError } from "@lib/core/domain"
+import { type OpenCommand, type ParseError } from "../frontend-lib/core/domain.js"
 
 import { trimToUndefined } from "../../shared/trimmed-text.js"
 import { parseRawOptions } from "./parser-options.js"

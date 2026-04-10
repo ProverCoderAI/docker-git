@@ -7,7 +7,7 @@ import {
   type SessionGistDownloadCommand,
   type SessionGistListCommand,
   type SessionGistViewCommand
-} from "@lib/core/domain"
+} from "../frontend-lib/core/domain.js"
 
 import { parsePositiveInt, parseProjectDirWithOptions, splitSubcommand } from "./parser-shared.js"
 

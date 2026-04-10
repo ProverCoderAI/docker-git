@@ -1,4 +1,4 @@
-import type { ProjectItem } from "@lib/usecases/projects"
+import type { ProjectItem } from "./project-item.js"
 
 import type { SelectProjectRuntime } from "./menu-types.js"
 

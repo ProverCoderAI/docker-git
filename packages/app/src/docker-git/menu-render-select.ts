@@ -1,9 +1,9 @@
 import type React from "react"
 
-import type { ProjectItem } from "@lib/usecases/projects"
 import { Text } from "../ui/primitives.js"
 import { buildSelectDetailsModel, type SelectPurpose } from "./menu-select-presenter.js"
 import type { SelectProjectRuntime } from "./menu-types.js"
+import type { ProjectItem } from "./project-item.js"
 
 const computeListWidth = (labels: ReadonlyArray<string>): number => {
   const maxLabelWidth = labels.length > 0 ? Math.max(...labels.map((label) => label.length)) : 24

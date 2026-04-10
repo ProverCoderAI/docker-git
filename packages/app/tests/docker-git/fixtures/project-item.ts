@@ -1,4 +1,4 @@
-import type { ProjectItem } from "@lib/usecases/projects"
+import type { ProjectItem } from "../../../src/docker-git/project-item.js"
 
 export const makeProjectItem = (
   overrides: Partial<ProjectItem> = {}
@@ -13,12 +13,16 @@ export const makeProjectItem = (
   sshPort: 2222,
   targetDir: "/home/dev/org/repo",
   sshCommand: "ssh -p 2222 dev@localhost",
-  sshKeyPath: null,
   authorizedKeysPath: "/home/dev/.docker-git/org-repo/authorized_keys",
   authorizedKeysExists: true,
   envGlobalPath: "/home/dev/.docker-git/org-repo/.orch/env/global.env",
   envProjectPath: "/home/dev/.docker-git/org-repo/.orch/env/project.env",
   codexAuthPath: "/home/dev/.docker-git/org-repo/.orch/auth/codex",
   codexHome: "/home/dev/.codex",
+  status: "stopped",
+  statusLabel: "Stopped",
+  sshSessions: 0,
+  startedAtIso: null,
+  startedAtEpochMs: null,
   ...overrides
 })

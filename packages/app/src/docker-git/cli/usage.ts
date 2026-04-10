@@ -1,4 +1,4 @@
-export { formatParseError } from "@lib/core/parse-errors"
+export { formatParseError } from "../frontend-lib/core/parse-errors.js"
 
 export const usageText = `docker-git menu
 docker-git create [--repo-url <url>] [options]

@@ -4,18 +4,9 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Effect, pipe } from "effect"
 
-import { trimToUndefined } from "../../shared/trimmed-text.js"
 import { runCommandCapture } from "./command-runner.js"
 import { parseInspectNetworkEntry } from "./docker-inspect-parse.js"
 import { CommandFailedError, DockerCommandError } from "./errors.js"
-
-export type DockerContainerRuntimeInfo = {
-  readonly containerName: string
-  readonly running: boolean
-  readonly ipAddress: string
-  readonly projectWorkingDir?: string | undefined
-  readonly composeService?: string | undefined
-}
 
 type DockerInspectReader<A> = (
   cwd: string,
@@ -81,35 +72,6 @@ export const runDockerInspectContainerIp = createDockerInspectReader(
     return entryMap.get("bridge") ?? entries[0]![1]
   }
 )
-
-export const runDockerInspectContainerRuntimeInfo = (
-  cwd: string,
-  containerName: string
-): Effect.Effect<DockerContainerRuntimeInfo | null, PlatformError, CommandExecutor.CommandExecutor> =>
-  pipe(
-    runDockerInspectValue(
-      cwd,
-      containerName,
-      `{{.State.Status}}\t{{with index .Config.Labels "com.docker.compose.project.working_dir"}}{{.}}{{end}}\t{{with index .Config.Labels "com.docker.compose.service"}}{{.}}{{end}}`
-    ),
-    Effect.flatMap((output) => {
-      const [status, projectWorkingDir, composeService] = output.trim().replaceAll(String.raw`\t`, "\t").split("\t")
-      if ((status?.trim() ?? "") !== "running") {
-        return Effect.succeed(null)
-      }
-
-      return runDockerInspectContainerIp(cwd, containerName).pipe(
-        Effect.map((ipAddress) => ({
-          containerName,
-          running: true,
-          ipAddress,
-          projectWorkingDir: trimToUndefined(projectWorkingDir),
-          composeService: trimToUndefined(composeService)
-        }))
-      )
-    }),
-    Effect.catchTag("DockerCommandError", () => Effect.succeed(null))
-  )
 
 export const runDockerInspectContainerBridgeIp = createDockerInspectReader(
   "{{with (index .NetworkSettings.Networks \"bridge\")}}{{.IPAddress}}{{end}}",

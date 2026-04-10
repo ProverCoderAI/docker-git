@@ -4,7 +4,7 @@ import type { AuthFlow } from "./menu-types.js"
 
 export type AuthMenuAction = AuthFlow | "Refresh" | "Back"
 
-export type AuthEnvFlow = Extract<AuthFlow, "GithubRemove" | "GitSet" | "GitRemove">
+export type AuthEnvFlow = Exclude<AuthFlow, "GithubOauth" | "ClaudeOauth" | "GeminiOauth">
 
 export type AuthPromptStep = {
   readonly key: "label" | "token" | "user" | "apiKey"

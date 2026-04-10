@@ -1,5 +1,4 @@
 import { NodeContext } from "@effect/platform-node"
-import { runDockerPsNames } from "@lib/shell/docker"
 import { Effect, pipe } from "effect"
 import React, { useEffect, useMemo, useState } from "react"
 
@@ -23,6 +22,11 @@ import {
 import { leaveTui } from "./menu-shared.js"
 import { defaultMenuStartupSnapshot, resolveMenuStartupSnapshot } from "./menu-startup.js"
 import { createSteps, type MenuEnv, type MenuState, type ViewState } from "./menu-types.js"
+
+const gridlandBootstrapError = (message: string): MenuError => ({
+  _tag: "TerminalSessionClientError",
+  message
+})
 
 // CHANGE: keep menu state in the TUI layer
 // WHY: provide a dynamic interface with live selection and inputs
@@ -180,8 +184,8 @@ const useStartupSnapshot = (
     let cancelled = false
 
     const startup = pipe(
-      Effect.all([listMenuProjectItems, runDockerPsNames(process.cwd())]),
-      Effect.map(([items, runningNames]) => resolveMenuStartupSnapshot(items, runningNames)),
+      listMenuProjectItems,
+      Effect.map((items) => resolveMenuStartupSnapshot(items)),
       Effect.match({
         onFailure: (error: MenuError) => ({
           ...defaultMenuStartupSnapshot(),
@@ -271,6 +275,7 @@ const GridlandTuiApp = ({ exit, gridland }: { readonly exit: () => void; readonl
 const runInteractiveMenu = (): Effect.Effect<void, MenuError, MenuEnv> =>
   pipe(
     runGridlandMenu((args) => React.createElement(GridlandTuiApp, args)),
+    Effect.mapError((error) => gridlandBootstrapError(error.message)),
     Effect.ensuring(
       Effect.sync(() => {
         leaveTui()

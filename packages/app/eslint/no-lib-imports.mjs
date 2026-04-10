@@ -1,6 +1,27 @@
 // @ts-check
 
 const bannedPackageName = "@effect-template/lib"
+const bannedLocalAlias = "@lib"
+
+/** @param {string} value */
+const isDirectLocalAliasImport = (value) =>
+  value === bannedLocalAlias || value.startsWith(`${bannedLocalAlias}/`)
+
+/** @param {string} value */
+const isRelativeLocalLibImport = (value) => /^(?:\.\.\/|\.\/)+(?:src\/)?lib(?:\/|$)/u.test(value)
+
+/** @param {string | undefined} filePath */
+const isFrontendSurfaceFile = (filePath) => {
+  const normalized = (filePath ?? "").replaceAll("\\", "/")
+  return normalized.startsWith("src/app/") ||
+    normalized.startsWith("src/docker-git/") ||
+    normalized.startsWith("src/web/") ||
+    normalized.startsWith("tests/") ||
+    normalized.includes("/src/app/") ||
+    normalized.includes("/src/docker-git/") ||
+    normalized.includes("/src/web/") ||
+    normalized.includes("/tests/")
+}
 
 /**
  * @typedef {{ readonly type: "Literal", readonly value: unknown }} LiteralSourceNode
@@ -76,9 +97,25 @@ const readSourceText = (source) => {
 
 /**
  * @param {import("eslint").Rule.RuleContext} context
+ * @returns {string}
+ */
+const readFilename = (context) => {
+  const candidate = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (context))["getFilename"]
+  if (typeof candidate === "function") {
+    const filename = candidate.call(context)
+    return typeof filename === "string" ? filename : ""
+  }
+
+  return "filename" in context && typeof context.filename === "string" ? context.filename : ""
+}
+
+/**
+ * @param {import("eslint").Rule.RuleContext} context
  * @returns {import("eslint").Rule.RuleListener}
  */
 const createRuleListener = (context) => {
+  const filePath = readFilename(context)
+
   /** @param {unknown} source */
   const checkSource = (source) => {
     if (source == null) {
@@ -86,7 +123,20 @@ const createRuleListener = (context) => {
     }
 
     const sourceText = readSourceText(source)
-    if (sourceText === null || !isDirectLibImport(sourceText)) {
+    if (sourceText === null) {
+      return
+    }
+
+    if (isDirectLibImport(sourceText) || isDirectLocalAliasImport(sourceText)) {
+      context.report({
+        node: /** @type {import("eslint").JSSyntaxElement} */ (source),
+        messageId: "noLibImport",
+        data: { source: sourceText }
+      })
+      return
+    }
+
+    if (!isFrontendSurfaceFile(filePath) || !isRelativeLocalLibImport(sourceText)) {
       return
     }
 
@@ -148,12 +198,12 @@ export const noLibImportsRule = {
     type: "problem",
     docs: {
       description:
-        "forbid direct imports, re-exports, and require calls from @effect-template/lib inside package/app"
+        "forbid direct imports, re-exports, and require calls from legacy lib surfaces inside package/app frontend surfaces and tests"
     },
     schema: [],
     messages: {
       noLibImport:
-        "Direct import or require '{{source}}' from @effect-template/lib is forbidden in package/app. Use the API client or a local app adapter instead."
+        "Direct import or require '{{source}}' from legacy lib surfaces is forbidden in package/app frontend surfaces and tests. Use the API client or a local app adapter instead."
     }
   },
   create: createRuleListener

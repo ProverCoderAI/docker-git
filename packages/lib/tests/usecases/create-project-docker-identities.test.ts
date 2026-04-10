@@ -21,6 +21,7 @@ vi.mock("../../src/usecases/actions/ports.js", () => ({
 type RecordedCommand = {
   readonly command: string
   readonly args: ReadonlyArray<string>
+  readonly cwd?: string | undefined
 }
 
 const withTempDir = <A, E, R>(
@@ -81,7 +82,11 @@ const makeFakeExecutor = (recorded: Array<RecordedCommand>): CommandExecutor.Com
     Effect.gen(function*(_) {
       const flattened = Command.flatten(command)
       for (const entry of flattened) {
-        recorded.push({ command: entry.command, args: entry.args })
+        recorded.push({
+          command: entry.command,
+          args: entry.args,
+          cwd: entry.cwd._tag === "Some" ? entry.cwd.value : undefined
+        })
       }
 
       const invocation = flattened[flattened.length - 1]!
@@ -117,7 +122,8 @@ const makeFakeExecutor = (recorded: Array<RecordedCommand>): CommandExecutor.Com
 const makeTemplate = (
   root: string,
   repoUrl: string,
-  path: Path.Path
+  path: Path.Path,
+  overrides: Partial<TemplateConfig> = {}
 ): TemplateConfig => ({
   containerName: "dg-openclaw_autodeployer",
   serviceName: "dg-openclaw_autodeployer",
@@ -140,7 +146,8 @@ const makeTemplate = (
   dockerNetworkMode: "shared",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: true,
-  pnpmVersion: "10.27.0"
+  pnpmVersion: "10.27.0",
+  ...overrides
 })
 
 const makeCommand = (
@@ -148,10 +155,11 @@ const makeCommand = (
   outDir: string,
   repoUrl: string,
   path: Path.Path,
-  force: boolean
+  force: boolean,
+  overrides: Partial<TemplateConfig> = {}
 ): CreateCommand => ({
   _tag: "Create",
-  config: makeTemplate(root, repoUrl, path),
+  config: makeTemplate(root, repoUrl, path, overrides),
   outDir,
   runUp: false,
   openSsh: false,
@@ -159,6 +167,20 @@ const makeCommand = (
   forceEnv: false,
   waitForClone: false
 })
+
+const expectedConflicts = (projectDir: string): ReadonlyArray<{ readonly conflictingProjectDir: string, readonly kind: string, readonly name: string }> => [{ conflictingProjectDir: projectDir, kind: "containerName", name: "dg-openclaw_autodeployer" }, { conflictingProjectDir: projectDir, kind: "serviceName", name: "dg-openclaw_autodeployer" }, { conflictingProjectDir: projectDir, kind: "volumeName", name: "dg-openclaw_autodeployer-home" }, { conflictingProjectDir: projectDir, kind: "bootstrapVolumeName", name: "dg-openclaw_autodeployer-home-bootstrap" }]
+
+const isComposeDownVolumes = (invocation: RecordedCommand, cwd: string): boolean =>
+  invocation.command === "docker" &&
+  invocation.cwd === cwd &&
+  invocation.args[0] === "compose" &&
+  invocation.args[1] === "--ansi" &&
+  invocation.args[2] === "never" &&
+  invocation.args[3] === "--progress" &&
+  invocation.args[4] === "plain" &&
+  invocation.args[5] === "down" &&
+  invocation.args[6] === "-v" &&
+  invocation.args[7] === "--remove-orphans"
 
 const runCreate = (
   cwd: string,
@@ -192,7 +214,14 @@ describe("createProject docker identity invariants", () => {
           runCreate(
             root,
             projectsRoot,
-            makeCommand(root, firstOutDir, "https://git.example.test/test-owner-a/openclaw_autodeployer.git", path, false),
+            makeCommand(
+              root,
+              firstOutDir,
+              "https://git.example.test/test-owner-a/openclaw_autodeployer.git",
+              path,
+              false,
+              { enableMcpPlaywright: false }
+            ),
             executor
           )
         )
@@ -206,7 +235,8 @@ describe("createProject docker identity invariants", () => {
               secondOutDir,
               "https://git.example.test/test-owner-b/openclaw_autodeployer.git",
               path,
-              false
+              false,
+              { enableMcpPlaywright: false }
             ),
             executor
           ).pipe(Effect.flip)
@@ -214,8 +244,8 @@ describe("createProject docker identity invariants", () => {
 
         expect(error).toBeInstanceOf(DockerIdentityConflictError)
         if (error instanceof DockerIdentityConflictError) {
-          expect(error.conflicts.map((conflict) => conflict.name)).toContain("dg-openclaw_autodeployer")
-          expect(error.conflicts.map((conflict) => conflict.conflictingProjectDir)).toContain(firstOutDir)
+          expect(error.projectDir).toBe(secondOutDir)
+          expect(error.conflicts).toEqual(expectedConflicts(firstOutDir))
         }
 
         expect(yield* _(fs.exists(secondOutDir))).toBe(false)
@@ -237,7 +267,14 @@ describe("createProject docker identity invariants", () => {
           runCreate(
             root,
             projectsRoot,
-            makeCommand(root, firstOutDir, "https://git.example.test/test-owner-a/openclaw_autodeployer.git", path, false),
+            makeCommand(
+              root,
+              firstOutDir,
+              "https://git.example.test/test-owner-a/openclaw_autodeployer.git",
+              path,
+              false,
+              { enableMcpPlaywright: false }
+            ),
             executor
           )
         )
@@ -251,12 +288,14 @@ describe("createProject docker identity invariants", () => {
               secondOutDir,
               "https://git.example.test/test-owner-b/openclaw_autodeployer.git",
               path,
-              true
+              true,
+              { enableMcpPlaywright: false }
             ),
             executor
           )
         )
 
+        expect(recorded.some((invocation) => isComposeDownVolumes(invocation, firstOutDir))).toBe(true)
         expect(yield* _(fs.exists(firstOutDir))).toBe(false)
         expect(yield* _(fs.exists(secondOutDir))).toBe(true)
       })
@@ -276,7 +315,14 @@ describe("createProject docker identity invariants", () => {
           runCreate(
             root,
             projectsRoot,
-            makeCommand(root, outDir, "https://git.example.test/test-owner-a/openclaw_autodeployer.git", path, false),
+            makeCommand(
+              root,
+              outDir,
+              "https://git.example.test/test-owner-a/openclaw_autodeployer.git",
+              path,
+              false,
+              { enableMcpPlaywright: false }
+            ),
             executor
           )
         )
@@ -285,11 +331,19 @@ describe("createProject docker identity invariants", () => {
           runCreate(
             root,
             projectsRoot,
-            makeCommand(root, outDir, "https://git.example.test/test-owner-a/openclaw_autodeployer.git", path, true),
+            makeCommand(
+              root,
+              outDir,
+              "https://git.example.test/test-owner-a/openclaw_autodeployer.git",
+              path,
+              true,
+              { enableMcpPlaywright: false }
+            ),
             executor
           )
         )
 
+        expect(recorded.some((invocation) => isComposeDownVolumes(invocation, outDir))).toBe(false)
         expect(yield* _(fs.exists(path.join(outDir, "docker-git.json")))).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))

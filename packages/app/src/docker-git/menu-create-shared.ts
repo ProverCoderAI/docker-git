@@ -1,6 +1,6 @@
-import { deriveRepoPathParts, resolveRepoInput } from "@lib/core/domain"
-import { defaultProjectsRoot, isRepoUrlInput } from "@lib/usecases/menu-helpers"
 import { Match } from "effect"
+import { deriveRepoPathParts, resolveRepoInput } from "./frontend-lib/core/domain.js"
+import { defaultProjectsRoot, isRepoUrlInput } from "./frontend-lib/usecases/menu-helpers.js"
 
 import { type CreateInputs, type CreateStep, createSteps } from "./menu-types.js"
 

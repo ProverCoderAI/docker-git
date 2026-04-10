@@ -1,19 +1,31 @@
-import * as FileSystem from "@effect/platform/FileSystem"
-import { Effect } from "effect"
-
-import { defaultTemplateConfig } from "@lib/core/domain"
-import { buildSshCommand, getContainerIpIfInsideContainer, type ProjectItem } from "@lib/usecases/projects"
-
 import type { ApiProjectDetails } from "./api-project-codec.js"
-import { resolveHostPrivateKeyPath } from "./host-ssh-material.js"
 
-const controllerManagedAuthorizedKeysPath = (projectDir: string): string => `${projectDir}/authorized_keys`
+export type ProjectItem = {
+  readonly projectDir: string
+  readonly displayName: string
+  readonly repoUrl: string
+  readonly repoRef: string
+  readonly containerName: string
+  readonly serviceName: string
+  readonly sshUser: string
+  readonly sshPort: number
+  readonly targetDir: string
+  readonly sshCommand: string
+  readonly authorizedKeysPath: string
+  readonly authorizedKeysExists: boolean
+  readonly envGlobalPath: string
+  readonly envProjectPath: string
+  readonly codexAuthPath: string
+  readonly codexHome: string
+  readonly status: "running" | "stopped" | "unknown"
+  readonly statusLabel: string
+  readonly sshSessions: number
+  readonly startedAtIso: string | null
+  readonly startedAtEpochMs: number | null
+  readonly clonedOnHostname?: string | undefined
+}
 
-export const projectItemFromApiDetails = (
-  project: ApiProjectDetails,
-  sshKeyPath: string | null,
-  ipAddress?: string
-): ProjectItem => ({
+export const projectItemFromApiDetails = (project: ApiProjectDetails): ProjectItem => ({
   projectDir: project.projectDir,
   displayName: project.displayName,
   repoUrl: project.repoUrl,
@@ -23,60 +35,19 @@ export const projectItemFromApiDetails = (
   sshUser: project.sshUser,
   sshPort: project.sshPort,
   targetDir: project.targetDir,
-  sshCommand: buildSshCommand(
-    {
-      ...defaultTemplateConfig,
-      containerName: project.containerName,
-      serviceName: project.serviceName,
-      sshUser: project.sshUser,
-      sshPort: project.sshPort,
-      repoUrl: project.repoUrl,
-      repoRef: project.repoRef,
-      targetDir: project.targetDir,
-      envGlobalPath: project.envGlobalPath,
-      envProjectPath: project.envProjectPath,
-      codexAuthPath: project.codexAuthPath,
-      codexSharedAuthPath: project.codexAuthPath,
-      codexHome: project.codexHome,
-      clonedOnHostname: project.clonedOnHostname
-    },
-    sshKeyPath,
-    ipAddress
-  ),
-  ipAddress,
-  sshKeyPath,
-  authorizedKeysPath: controllerManagedAuthorizedKeysPath(project.projectDir),
-  authorizedKeysExists: true,
+  sshCommand: project.sshCommand,
+  authorizedKeysPath: project.authorizedKeysPath,
+  authorizedKeysExists: project.authorizedKeysExists,
   envGlobalPath: project.envGlobalPath,
   envProjectPath: project.envProjectPath,
   codexAuthPath: project.codexAuthPath,
   codexHome: project.codexHome,
+  status: project.status,
+  statusLabel: project.statusLabel,
+  sshSessions: project.sshSessions,
+  startedAtIso: project.startedAtIso,
+  startedAtEpochMs: project.startedAtEpochMs,
   clonedOnHostname: project.clonedOnHostname
 })
 
-export const resolveApiProjectItem = (
-  project: ApiProjectDetails
-) =>
-  Effect.gen(function*(_) {
-    const sshKeyPath = yield* _(resolveHostPrivateKeyPath())
-    return yield* _(resolveApiProjectItemWithSshKeyPath(project, sshKeyPath))
-  })
-
-const resolveProjectItemIpAddress = (containerName: string) =>
-  Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    return yield* _(
-      getContainerIpIfInsideContainer(fs, process.cwd(), containerName).pipe(
-        Effect.orElse(() => Effect.succeed<string | undefined>(""))
-      )
-    )
-  })
-
-export const resolveApiProjectItemWithSshKeyPath = (
-  project: ApiProjectDetails,
-  sshKeyPath: string | null
-) =>
-  Effect.gen(function*(_) {
-    const ipAddress = yield* _(resolveProjectItemIpAddress(project.containerName))
-    return projectItemFromApiDetails(project, sshKeyPath, ipAddress)
-  })
+export const resolveApiProjectItem = (project: ApiProjectDetails): ProjectItem => projectItemFromApiDetails(project)

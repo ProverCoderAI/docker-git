@@ -1,5 +1,6 @@
-import { listProjects, readCloneRequest, runDockerGitClone, runDockerGitOpen } from "@lib"
 import { Console, Effect, Match, pipe } from "effect"
+import { listProjects, renderProjectSummaryLine } from "../docker-git/api-client.js"
+import { readCloneRequest, runDockerGitClone, runDockerGitOpen } from "../docker-git/frontend-lib/shell/clone.js"
 
 /**
  * Compose the CLI program as a single effect.
@@ -71,7 +72,14 @@ const readListFlag = Effect.sync(() => {
 export const program = Effect.gen(function*(_) {
   const isList = yield* _(readListFlag)
   if (isList) {
-    yield* _(listProjects)
+    const projects = yield* _(listProjects())
+    if (projects.length === 0) {
+      yield* _(Console.log("No docker-git projects found."))
+      return
+    }
+    for (const project of projects) {
+      yield* _(Console.log(renderProjectSummaryLine(project)))
+    }
     return
   }
   yield* _(runDockerGit)

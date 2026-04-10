@@ -1,6 +1,5 @@
 import React from "react"
 
-import type { ProjectItem } from "@lib/usecases/projects"
 import { Box, Text } from "../ui/primitives.js"
 import { renderCreateStepLabel } from "./menu-create-shared.js"
 import { renderLayout } from "./menu-render-layout.js"
@@ -16,6 +15,7 @@ import {
 } from "./menu-render-select.js"
 import type { CreateInputs, SelectProjectRuntime } from "./menu-types.js"
 import { createSteps, menuItems } from "./menu-types.js"
+import type { ProjectItem } from "./project-item.js"
 
 // CHANGE: render menu views with Ink without JSX
 // WHY: keep UI logic separate from input/state reducers
