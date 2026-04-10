@@ -12,6 +12,18 @@ export type ApiTerminalSession = {
   readonly signal?: number | undefined
 }
 
+type RawTerminalSession = {
+  readonly id: string | null
+  readonly projectId: string | null
+  readonly sshCommand: string | null
+  readonly status: string | null
+  readonly createdAt: string | null
+  readonly startedAt: string | undefined
+  readonly closedAt: string | undefined
+  readonly exitCode: number | undefined
+  readonly signal: number | undefined
+}
+
 const isTerminalSessionStatus = (
   value: string
 ): value is ApiTerminalSession["status"] =>
@@ -20,13 +32,13 @@ const isTerminalSessionStatus = (
 const readOptionalNumber = (value: JsonValue | undefined): number | undefined =>
   typeof value === "number" ? value : undefined
 
-export const decodeTerminalSession = (payload: JsonValue): ApiTerminalSession | null => {
+const readTerminalSession = (payload: JsonValue): RawTerminalSession | null => {
   const object = asObject(payload)
   if (object === null) {
     return null
   }
 
-  const session = {
+  return {
     id: asString(object["id"]),
     projectId: asString(object["projectId"]),
     sshCommand: asString(object["sshCommand"]),
@@ -36,6 +48,13 @@ export const decodeTerminalSession = (payload: JsonValue): ApiTerminalSession | 
     closedAt: asString(object["closedAt"]) ?? undefined,
     exitCode: readOptionalNumber(object["exitCode"]),
     signal: readOptionalNumber(object["signal"])
+  }
+}
+
+export const decodeTerminalSession = (payload: JsonValue): ApiTerminalSession | null => {
+  const session = readTerminalSession(payload)
+  if (session === null) {
+    return null
   }
 
   if (
