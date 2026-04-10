@@ -1,7 +1,7 @@
 import * as ParseResult from "@effect/schema/ParseResult"
-import * as Schema from "@effect/schema/Schema"
 import { Effect, Either } from "effect"
 
+import { type TerminalServerMessage, TerminalServerMessageSchema } from "../shared/terminal-session-schema.js"
 import type { ApiTerminalSession } from "./api-client.js"
 import { resolveApiBaseUrl } from "./controller.js"
 import { writeToTerminal } from "./menu-shared.js"
@@ -15,12 +15,6 @@ type TerminalClientMessage =
   | { readonly type: "input"; readonly data: string }
   | { readonly type: "resize"; readonly cols: number; readonly rows: number }
   | { readonly type: "close" }
-
-type TerminalServerMessage =
-  | { readonly type: "ready"; readonly session: ApiTerminalSession }
-  | { readonly type: "output"; readonly data: string }
-  | { readonly type: "exit"; readonly exitCode: number | null; readonly signal: number | null }
-  | { readonly type: "error"; readonly message: string }
 
 type TerminalAttachment = {
   readonly header: string
@@ -36,45 +30,6 @@ type TerminalHandlers = {
   readonly inputHandler: (chunk: Buffer) => void
   readonly resizeHandler: () => void
 }
-
-const TerminalSessionSchema = Schema.Struct({
-  id: Schema.String,
-  projectId: Schema.String,
-  sshCommand: Schema.String,
-  status: Schema.Union(
-    Schema.Literal("ready"),
-    Schema.Literal("attached"),
-    Schema.Literal("exited"),
-    Schema.Literal("failed")
-  ),
-  createdAt: Schema.String,
-  startedAt: Schema.optional(Schema.String),
-  closedAt: Schema.optional(Schema.String),
-  exitCode: Schema.optional(Schema.Number),
-  signal: Schema.optional(Schema.Number)
-})
-
-const TerminalServerMessageSchema = Schema.parseJson(
-  Schema.Union(
-    Schema.Struct({
-      type: Schema.Literal("ready"),
-      session: TerminalSessionSchema
-    }),
-    Schema.Struct({
-      type: Schema.Literal("output"),
-      data: Schema.String
-    }),
-    Schema.Struct({
-      type: Schema.Literal("exit"),
-      exitCode: Schema.NullOr(Schema.Number),
-      signal: Schema.NullOr(Schema.Number)
-    }),
-    Schema.Struct({
-      type: Schema.Literal("error"),
-      message: Schema.String
-    })
-  )
-)
 
 const terminalSessionError = (message: string): TerminalSessionClientError => ({
   _tag: "TerminalSessionClientError",

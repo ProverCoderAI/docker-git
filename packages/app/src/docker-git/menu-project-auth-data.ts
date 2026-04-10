@@ -1,6 +1,7 @@
 import { Effect } from "effect"
 
-import { loadProjectAuthSnapshot, runProjectAuthFlow as submitProjectAuthFlow } from "./api-client.js"
+import { normalizeOptionalText } from "../shared/optional-text.js"
+import { loadProjectAuthSnapshot, runProjectAuthFlow as submitProjectAuthFlow } from "./api-auth-menu-client.js"
 import type { MenuError } from "./menu-errors.js"
 import type { MenuEnv, ProjectAuthFlow, ProjectAuthSnapshot } from "./menu-types.js"
 import type { ProjectItem } from "./project-item.js"
@@ -13,11 +14,6 @@ export {
   projectAuthViewSteps
 } from "./menu-project-auth-shared.js"
 export type { ProjectAuthMenuAction, ProjectAuthPromptStep } from "./menu-project-auth-shared.js"
-
-const defaultValue = (value: string | undefined): string | null => {
-  const trimmed = value?.trim() ?? ""
-  return trimmed.length === 0 ? null : trimmed
-}
 
 const decodeSnapshot = (
   projectId: string,
@@ -46,7 +42,7 @@ export const writeProjectAuthFlow = (
 ): Effect.Effect<void, MenuError, MenuEnv> =>
   submitProjectAuthFlow(project.projectDir, {
     flow,
-    label: defaultValue(values["label"])
+    label: normalizeOptionalText(values["label"])
   }).pipe(
     Effect.flatMap((snapshot) => decodeSnapshot(project.projectDir, snapshot)),
     Effect.asVoid

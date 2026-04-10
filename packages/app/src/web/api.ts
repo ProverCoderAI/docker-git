@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 
+import type { AuthMenuRequestBody, ProjectAuthMenuRequestBody } from "../shared/auth-menu-request.js"
 import { requestJson, requestText, resolveApiBaseUrl } from "./api-http.js"
 import {
   AuthSnapshotResponseSchema,
@@ -147,15 +148,7 @@ export const loadAuthSnapshot = () =>
     Effect.map((response) => response.snapshot)
   )
 
-export const runAuthMenuFlow = (
-  request: {
-    readonly flow: AuthMenuFlow
-    readonly label?: string | null
-    readonly token?: string | null
-    readonly user?: string | null
-    readonly apiKey?: string | null
-  }
-) =>
+export const runAuthMenuFlow = (request: AuthMenuRequestBody & { readonly flow: AuthMenuFlow }) =>
   requestJson("POST", "/auth/menu", AuthSnapshotResponseSchema, request).pipe(
     Effect.map((response) => response.snapshot)
   )
@@ -171,10 +164,7 @@ export const loadProjectAuthSnapshot = (projectId: string) =>
 
 export const runProjectAuthFlow = (
   projectId: string,
-  request: {
-    readonly flow: ProjectAuthFlow
-    readonly label?: string | null
-  }
+  request: ProjectAuthMenuRequestBody & { readonly flow: ProjectAuthFlow }
 ) =>
   requestJson(
     "POST",

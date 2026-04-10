@@ -1,6 +1,7 @@
 import { Effect } from "effect"
 
-import { loadAuthSnapshot, runAuthMenuFlow as submitAuthMenuFlow } from "./api-client.js"
+import { normalizeOptionalText } from "../shared/optional-text.js"
+import { loadAuthSnapshot, runAuthMenuFlow as submitAuthMenuFlow } from "./api-auth-menu-client.js"
 import type { AuthEnvFlow } from "./menu-auth-shared.js"
 import type { MenuError } from "./menu-errors.js"
 import type { AuthSnapshot, MenuEnv } from "./menu-types.js"
@@ -14,11 +15,6 @@ export {
   successMessage
 } from "./menu-auth-shared.js"
 export type { AuthEnvFlow, AuthMenuAction, AuthPromptStep } from "./menu-auth-shared.js"
-
-const defaultValue = (value: string | undefined): string | null => {
-  const trimmed = value?.trim() ?? ""
-  return trimmed.length === 0 ? null : trimmed
-}
 
 const decodeSnapshot = (snapshot: AuthSnapshot | null): Effect.Effect<AuthSnapshot, MenuError, MenuEnv> =>
   snapshot === null
@@ -42,10 +38,10 @@ export const writeAuthFlow = (
 ): Effect.Effect<void, MenuError, MenuEnv> =>
   submitAuthMenuFlow({
     flow,
-    label: defaultValue(values["label"]),
-    token: defaultValue(values["token"]),
-    user: defaultValue(values["user"]),
-    apiKey: defaultValue(values["apiKey"])
+    label: normalizeOptionalText(values["label"]),
+    token: normalizeOptionalText(values["token"]),
+    user: normalizeOptionalText(values["user"]),
+    apiKey: normalizeOptionalText(values["apiKey"])
   }).pipe(
     Effect.flatMap((snapshot) => decodeSnapshot(snapshot)),
     Effect.asVoid

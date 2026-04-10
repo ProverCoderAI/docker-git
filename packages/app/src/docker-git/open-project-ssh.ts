@@ -1,6 +1,7 @@
 import { Effect } from "effect"
 
 import { createProjectTerminalSession } from "./api-client.js"
+import type { ApiTerminalSession } from "./api-terminal-codec.js"
 import type { ControllerRuntime } from "./controller.js"
 import type { HostError } from "./host-errors.js"
 import type { ProjectItem } from "./project-item.js"
@@ -12,34 +13,14 @@ export type OpenResolvedProjectSshDeps = {
   ) => Effect.Effect<
     {
       readonly project: Readonly<Record<string, string | number | boolean | null | undefined>>
-      readonly session: {
-        readonly id: string
-        readonly projectId: string
-        readonly sshCommand: string
-        readonly status: "ready" | "attached" | "exited" | "failed"
-        readonly createdAt: string
-        readonly startedAt?: string | undefined
-        readonly closedAt?: string | undefined
-        readonly exitCode?: number | undefined
-        readonly signal?: number | undefined
-      }
+      readonly session: ApiTerminalSession
     } | null,
     HostError,
     ControllerRuntime
   >
   readonly attach: (
     project: ProjectItem,
-    session: {
-      readonly id: string
-      readonly projectId: string
-      readonly sshCommand: string
-      readonly status: "ready" | "attached" | "exited" | "failed"
-      readonly createdAt: string
-      readonly startedAt?: string | undefined
-      readonly closedAt?: string | undefined
-      readonly exitCode?: number | undefined
-      readonly signal?: number | undefined
-    }
+    session: ApiTerminalSession
   ) => Effect.Effect<void, HostError>
 }
 

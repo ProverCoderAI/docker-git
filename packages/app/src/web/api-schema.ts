@@ -1,6 +1,7 @@
 import * as Schema from "@effect/schema/Schema"
 
 import { JsonValueSchema } from "../shared/json-schema.js"
+import { TerminalSessionSchema } from "../shared/terminal-session-schema.js"
 
 const NullableString = Schema.NullOr(Schema.String)
 
@@ -122,23 +123,6 @@ export const ProjectAuthSnapshotResponseSchema = Schema.Struct({
   snapshot: ProjectAuthSnapshotSchema
 })
 
-export const TerminalSessionSchema = Schema.Struct({
-  id: Schema.String,
-  projectId: Schema.String,
-  sshCommand: Schema.String,
-  status: Schema.Union(
-    Schema.Literal("ready"),
-    Schema.Literal("attached"),
-    Schema.Literal("exited"),
-    Schema.Literal("failed")
-  ),
-  createdAt: Schema.String,
-  startedAt: Schema.optional(Schema.String),
-  closedAt: Schema.optional(Schema.String),
-  exitCode: Schema.optional(Schema.Number),
-  signal: Schema.optional(Schema.Number)
-})
-
 export const TerminalSessionResponseSchema = Schema.Struct({
   ok: Schema.optional(Schema.Boolean),
   project: ProjectDetailsSchema,
@@ -180,7 +164,6 @@ export type ProjectDetails = Schema.Schema.Type<typeof ProjectDetailsSchema>
 export type GithubAuthStatus = Schema.Schema.Type<typeof GithubAuthStatusSchema>
 export type AuthSnapshot = Schema.Schema.Type<typeof AuthSnapshotSchema>
 export type ProjectAuthSnapshot = Schema.Schema.Type<typeof ProjectAuthSnapshotSchema>
-export type TerminalSession = Schema.Schema.Type<typeof TerminalSessionSchema>
 export type ApiEvent = Schema.Schema.Type<typeof ApiEventSchema>
 
 export type DashboardData = {
@@ -218,3 +201,9 @@ export type ProjectAuthFlow =
   | "ProjectClaudeDisconnect"
   | "ProjectGeminiConnect"
   | "ProjectGeminiDisconnect"
+
+export {
+  type TerminalServerMessage,
+  TerminalServerMessageSchema,
+  type TerminalSession
+} from "../shared/terminal-session-schema.js"

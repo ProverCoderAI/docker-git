@@ -1,16 +1,7 @@
+import type { TerminalSession } from "../shared/terminal-session-schema.js"
 import { asObject, asString, type JsonValue } from "./api-json.js"
 
-export type ApiTerminalSession = {
-  readonly id: string
-  readonly projectId: string
-  readonly sshCommand: string
-  readonly status: "ready" | "attached" | "exited" | "failed"
-  readonly createdAt: string
-  readonly startedAt?: string | undefined
-  readonly closedAt?: string | undefined
-  readonly exitCode?: number | undefined
-  readonly signal?: number | undefined
-}
+export type ApiTerminalSession = TerminalSession
 
 type RawTerminalSession = {
   readonly id: string | null

@@ -57,6 +57,11 @@ const mapComposePathError = (error: PlatformError): ControllerBootstrapError =>
 const mapControllerRevisionError = (error: PlatformError): ControllerBootstrapError =>
   controllerBootstrapError(`Failed to compute docker-git controller revision.\nDetails: ${String(error)}`)
 
+const currentProcessEnv = (): Readonly<Record<string, string>> =>
+  Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
+  )
+
 const renderDockerAccessDeniedMessage = (): string =>
   [
     "docker-git host CLI cannot access Docker from the client process.",
@@ -166,7 +171,18 @@ export const runCompose = (
       composePath,
       ...args
     ])
-    const exitCode = yield* _(runExitCode(invocation.command, invocation.args))
+    const exitCode = yield* _(
+      runCommandExitCode({
+        cwd: process.cwd(),
+        command: invocation.command,
+        args: invocation.args,
+        env: currentProcessEnv()
+      }).pipe(
+        Effect.mapError((error) =>
+          controllerBootstrapError(`Failed to start docker-git controller.\nDetails: ${String(error)}`)
+        )
+      )
+    )
 
     if (exitCode === 0) {
       return

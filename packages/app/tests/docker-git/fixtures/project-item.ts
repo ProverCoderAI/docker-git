@@ -3,6 +3,7 @@ import type { ProjectItem } from "../../../src/docker-git/project-item.js"
 export const makeProjectItem = (
   overrides: Partial<ProjectItem> = {}
 ): ProjectItem => ({
+  id: "/home/dev/.docker-git/org-repo",
   projectDir: "/home/dev/.docker-git/org-repo",
   displayName: "org/repo",
   repoUrl: "https://github.com/org/repo.git",

@@ -1,5 +1,6 @@
 import { Either, Match } from "effect"
 
+import { normalizeOptionalText } from "../../shared/optional-text.js"
 import type { RawOptions } from "../frontend-lib/core/command-options.js"
 import { type AuthCommand, type Command, type ParseError } from "../frontend-lib/core/domain.js"
 
@@ -27,11 +28,6 @@ const invalidArgument = (name: string, reason: string): ParseError => ({
   reason
 })
 
-const normalizeLabel = (value: string | undefined): string | null => {
-  const trimmed = value?.trim() ?? ""
-  return trimmed.length === 0 ? null : trimmed
-}
-
 const defaultEnvGlobalPath = ".docker-git/.orch/env/global.env"
 const defaultCodexAuthPath = ".docker-git/.orch/auth/codex"
 const defaultClaudeAuthPath = ".docker-git/.orch/auth/claude"
@@ -42,9 +38,9 @@ const resolveAuthOptions = (raw: RawOptions): AuthOptions => ({
   codexAuthPath: raw.codexAuthPath ?? defaultCodexAuthPath,
   claudeAuthPath: defaultClaudeAuthPath,
   geminiAuthPath: defaultGeminiAuthPath,
-  label: normalizeLabel(raw.label),
-  token: normalizeLabel(raw.token),
-  scopes: normalizeLabel(raw.scopes),
+  label: normalizeOptionalText(raw.label),
+  token: normalizeOptionalText(raw.token),
+  scopes: normalizeOptionalText(raw.scopes),
   authWeb: raw.authWeb === true
 })
 

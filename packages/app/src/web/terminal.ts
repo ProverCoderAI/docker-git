@@ -1,9 +1,10 @@
 import * as ParseResult from "@effect/schema/ParseResult"
-import * as Schema from "@effect/schema/Schema"
 import { Either } from "effect"
 
+import { TerminalServerMessageSchema } from "../shared/terminal-session-schema.js"
+import type { TerminalServerMessage as ParsedTerminalServerMessage } from "../shared/terminal-session-schema.js"
 import { resolveApiBaseUrl, trimTrailingSlash } from "./api-http.js"
-import { type TerminalSession, TerminalSessionSchema } from "./api-schema.js"
+import type { TerminalSession } from "./api-schema.js"
 
 export type ActiveTerminalSession = {
   readonly closePath: string
@@ -17,34 +18,6 @@ export type ActiveTerminalSession = {
   readonly subtitle: string
   readonly websocketPath: string
 }
-
-export type TerminalServerMessage =
-  | { readonly type: "ready"; readonly session: TerminalSession }
-  | { readonly type: "output"; readonly data: string }
-  | { readonly type: "exit"; readonly exitCode: number | null; readonly signal: number | null }
-  | { readonly type: "error"; readonly message: string }
-
-const TerminalServerMessageSchema = Schema.parseJson(
-  Schema.Union(
-    Schema.Struct({
-      type: Schema.Literal("ready"),
-      session: TerminalSessionSchema
-    }),
-    Schema.Struct({
-      type: Schema.Literal("output"),
-      data: Schema.String
-    }),
-    Schema.Struct({
-      type: Schema.Literal("exit"),
-      exitCode: Schema.NullOr(Schema.Number),
-      signal: Schema.NullOr(Schema.Number)
-    }),
-    Schema.Struct({
-      type: Schema.Literal("error"),
-      message: Schema.String
-    })
-  )
-)
 
 const resolveTerminalApiBaseUrl = (): string => {
   const configured = import.meta.env.VITE_DOCKER_GIT_TERMINAL_API_BASE_URL
@@ -82,5 +55,7 @@ export const resolveTerminalWebSocketUrl = (websocketPath: string, cols: number,
   return apiUrl.toString()
 }
 
-export const parseTerminalServerMessage = (value: string): TerminalServerMessage | null =>
+export const parseTerminalServerMessage = (value: string): ParsedTerminalServerMessage | null =>
   Either.getOrNull(ParseResult.decodeUnknownEither(TerminalServerMessageSchema)(value))
+
+export { type TerminalServerMessage } from "../shared/terminal-session-schema.js"

@@ -2,9 +2,9 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import { decodeAuthSnapshot, decodeProjectAuthSnapshot } from "./api-auth-codec.js"
+import { readProjectOutput, resolveCreateRequestPaths } from "./api-client-helpers.js"
 import { request, requestTextStream, requestVoid } from "./api-http.js"
-import { asArray, asObject, asString, type JsonRequest, type JsonValue } from "./api-json.js"
+import { asArray, asObject, type JsonRequest } from "./api-json.js"
 import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
 import { decodeTerminalSession } from "./api-terminal-codec.js"
 import type {
@@ -66,11 +66,6 @@ const codexLoginFailureMessage = (output: string, exitCode: string | null): stri
     : `Codex login failed (${exitCode}).`
 }
 
-const readProjectOutput = (payload: JsonValue): string => {
-  const object = asObject(payload)
-  return asString(object?.["output"]) ?? ""
-}
-
 export const listProjects = () =>
   request("GET", "/projects").pipe(
     Effect.map((payload) => {
@@ -93,6 +88,7 @@ export const getProject = (projectId: string) =>
 export const createProject = (command: CreateCommand) =>
   Effect.gen(function*(_) {
     const config = command.config
+    const resolvedPaths = yield* _(resolveCreateRequestPaths(command))
     const body = {
       repoUrl: config.repoUrl,
       repoRef: config.repoRef,
@@ -102,6 +98,11 @@ export const createProject = (command: CreateCommand) =>
       containerName: config.containerName,
       serviceName: config.serviceName,
       volumeName: config.volumeName,
+      authorizedKeysPath: resolvedPaths.authorizedKeysPath,
+      envGlobalPath: config.envGlobalPath,
+      envProjectPath: config.envProjectPath,
+      codexAuthPath: config.codexAuthPath,
+      codexHome: config.codexHome,
       cpuLimit: config.cpuLimit,
       ramLimit: config.ramLimit,
       dockerNetworkMode: config.dockerNetworkMode,
@@ -165,44 +166,6 @@ export const createAuthTerminalSession = (
   )
 
 export const deleteTerminalSessionByPath = (path: string) => requestVoid("DELETE", path)
-
-export const loadAuthSnapshot = () =>
-  request("GET", "/auth/menu").pipe(
-    Effect.map((payload) => decodeAuthSnapshot(payload))
-  )
-
-export const runAuthMenuFlow = (requestBody: {
-  readonly flow: string
-  readonly label?: string | null
-  readonly token?: string | null
-  readonly user?: string | null
-  readonly apiKey?: string | null
-}) =>
-  request("POST", "/auth/menu", {
-    flow: requestBody.flow,
-    label: requestBody.label ?? undefined,
-    token: requestBody.token ?? undefined,
-    user: requestBody.user ?? undefined,
-    apiKey: requestBody.apiKey ?? undefined
-  }).pipe(
-    Effect.map((payload) => decodeAuthSnapshot(payload))
-  )
-
-export const loadProjectAuthSnapshot = (projectId: string) =>
-  request("GET", projectPath(projectId, "/auth/menu")).pipe(
-    Effect.map((payload) => decodeProjectAuthSnapshot(payload))
-  )
-
-export const runProjectAuthFlow = (
-  projectId: string,
-  requestBody: { readonly flow: string; readonly label?: string | null }
-) =>
-  request("POST", projectPath(projectId, "/auth/menu"), {
-    flow: requestBody.flow,
-    label: requestBody.label ?? undefined
-  }).pipe(
-    Effect.map((payload) => decodeProjectAuthSnapshot(payload))
-  )
 
 export const applyAllProjects = (activeOnly: boolean) => requestVoid("POST", "/projects/apply-all", { activeOnly })
 
