@@ -86,10 +86,7 @@ export const listProjects = () =>
 
 export const getProject = (projectId: string) =>
   request("GET", projectPath(projectId)).pipe(
-    Effect.map((payload) => {
-      const object = asObject(payload)
-      return object === null ? decodeProjectDetails(payload) : decodeProjectDetails(object["project"] ?? payload)
-    })
+    Effect.map((payload) => decodeProjectResponse(payload))
   )
 
 const createProjectWithResolvedPaths = (
@@ -116,7 +113,7 @@ const createProjectWithResolvedPaths = (
     }
 
     return yield* _(
-      upCreatedProjectWithAuthorizedKeys(createdProject.projectDir, resolvedPaths.authorizedKeysContents)
+      upCreatedProjectWithAuthorizedKeys(createdProject.id, resolvedPaths.authorizedKeysContents)
     )
   })
 
