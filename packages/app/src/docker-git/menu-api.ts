@@ -11,14 +11,15 @@ import {
   renderProjectSummaryLine
 } from "./api-client.js"
 import { asObject, asString, type JsonValue } from "./api-json.js"
+import type { AuthGithubStatusCommand } from "./frontend-lib/core/auth-domain.js"
 import type { MenuError } from "./menu-errors.js"
 import type { MenuEnv } from "./menu-types.js"
 import { type ProjectItem, resolveApiProjectItem } from "./project-item.js"
 
-const menuGithubStatusCommand = {
+const menuGithubStatusCommand: AuthGithubStatusCommand = {
   _tag: "AuthGithubStatus",
   envGlobalPath: ""
-} as const
+}
 
 const compact = <A>(values: ReadonlyArray<A | null>): ReadonlyArray<A> =>
   values.filter((value): value is A => value !== null)

@@ -2,15 +2,16 @@ import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
+import type { ApiTerminalSession } from "../../src/docker-git/api-terminal-codec.js"
 import type { HostError } from "../../src/docker-git/host-errors.js"
 import { openResolvedProjectSshEffect } from "../../src/docker-git/open-project.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
 
-const makeSession = () => ({
+const makeSession = (): ApiTerminalSession => ({
   id: "session-1",
   projectId: "/controller/org/repo",
   sshCommand: "ssh -p 22 dev@127.0.0.1",
-  status: "ready" as const,
+  status: "ready",
   createdAt: "2026-04-10T00:00:00Z"
 })
 
