@@ -1,21 +1,55 @@
 import { asObject, asString, type JsonValue } from "./api-json.js"
 import type { AuthSnapshot, ProjectAuthSnapshot } from "./menu-types.js"
 
-const readNumber = (value: JsonValue | undefined): number | null =>
-  typeof value === "number" ? value : null
+type RawAuthSnapshot = {
+  readonly globalEnvPath: string | null
+  readonly claudeAuthPath: string | null
+  readonly geminiAuthPath: string | null
+  readonly totalEntries: number | null
+  readonly githubTokenEntries: number | null
+  readonly gitTokenEntries: number | null
+  readonly gitUserEntries: number | null
+  readonly claudeAuthEntries: number | null
+  readonly geminiAuthEntries: number | null
+}
+
+type RawProjectAuthSnapshot = {
+  readonly projectDir: string | null
+  readonly projectName: string | null
+  readonly envGlobalPath: string | null
+  readonly envProjectPath: string | null
+  readonly claudeAuthPath: string | null
+  readonly geminiAuthPath: string | null
+  readonly githubTokenEntries: number | null
+  readonly gitTokenEntries: number | null
+  readonly claudeAuthEntries: number | null
+  readonly geminiAuthEntries: number | null
+  readonly activeGithubLabel: string | null
+  readonly activeGitLabel: string | null
+  readonly activeClaudeLabel: string | null
+  readonly activeGeminiLabel: string | null
+}
+
+const readNumber = (value: JsonValue | undefined): number | null => typeof value === "number" ? value : null
+const stringOrEmpty = (value: string | null): string => value ?? ""
+const numberOrZero = (value: number | null): number => value ?? 0
+const hasNullValue = (
+  values: ReadonlyArray<string | number | null>
+): boolean => values.includes(null)
 
 const resolveSnapshotObject = (payload: JsonValue) => {
   const object = asObject(payload)
   return asObject(object?.["snapshot"] ?? payload)
 }
 
-export const decodeAuthSnapshot = (payload: JsonValue): AuthSnapshot | null => {
-  const snapshot = resolveSnapshotObject(payload)
+const readAuthSnapshot = (
+  snapshot: ReturnType<typeof resolveSnapshotObject>
+): RawAuthSnapshot | null => {
   if (snapshot === null) {
     return null
   }
 
-  const decoded = {
+  return {
     globalEnvPath: asString(snapshot["globalEnvPath"]),
     claudeAuthPath: asString(snapshot["claudeAuthPath"]),
     geminiAuthPath: asString(snapshot["geminiAuthPath"]),
@@ -26,29 +60,34 @@ export const decodeAuthSnapshot = (payload: JsonValue): AuthSnapshot | null => {
     claudeAuthEntries: readNumber(snapshot["claudeAuthEntries"]),
     geminiAuthEntries: readNumber(snapshot["geminiAuthEntries"])
   }
-
-  return Object.values(decoded).includes(null)
-    ? null
-    : {
-      globalEnvPath: decoded.globalEnvPath ?? "",
-      claudeAuthPath: decoded.claudeAuthPath ?? "",
-      geminiAuthPath: decoded.geminiAuthPath ?? "",
-      totalEntries: decoded.totalEntries ?? 0,
-      githubTokenEntries: decoded.githubTokenEntries ?? 0,
-      gitTokenEntries: decoded.gitTokenEntries ?? 0,
-      gitUserEntries: decoded.gitUserEntries ?? 0,
-      claudeAuthEntries: decoded.claudeAuthEntries ?? 0,
-      geminiAuthEntries: decoded.geminiAuthEntries ?? 0
-    }
 }
 
-export const decodeProjectAuthSnapshot = (payload: JsonValue): ProjectAuthSnapshot | null => {
-  const snapshot = resolveSnapshotObject(payload)
+const decodeRequiredAuthSnapshot = (snapshot: RawAuthSnapshot): AuthSnapshot | null => {
+  if (hasNullValue(Object.values(snapshot))) {
+    return null
+  }
+
+  return {
+    globalEnvPath: stringOrEmpty(snapshot.globalEnvPath),
+    claudeAuthPath: stringOrEmpty(snapshot.claudeAuthPath),
+    geminiAuthPath: stringOrEmpty(snapshot.geminiAuthPath),
+    totalEntries: numberOrZero(snapshot.totalEntries),
+    githubTokenEntries: numberOrZero(snapshot.githubTokenEntries),
+    gitTokenEntries: numberOrZero(snapshot.gitTokenEntries),
+    gitUserEntries: numberOrZero(snapshot.gitUserEntries),
+    claudeAuthEntries: numberOrZero(snapshot.claudeAuthEntries),
+    geminiAuthEntries: numberOrZero(snapshot.geminiAuthEntries)
+  }
+}
+
+const readProjectAuthSnapshot = (
+  snapshot: ReturnType<typeof resolveSnapshotObject>
+): RawProjectAuthSnapshot | null => {
   if (snapshot === null) {
     return null
   }
 
-  const decoded = {
+  return {
     projectDir: asString(snapshot["projectDir"]),
     projectName: asString(snapshot["projectName"]),
     envGlobalPath: asString(snapshot["envGlobalPath"]),
@@ -64,37 +103,54 @@ export const decodeProjectAuthSnapshot = (payload: JsonValue): ProjectAuthSnapsh
     activeClaudeLabel: asString(snapshot["activeClaudeLabel"]),
     activeGeminiLabel: asString(snapshot["activeGeminiLabel"])
   }
+}
 
+const decodeRequiredProjectAuthSnapshot = (
+  snapshot: RawProjectAuthSnapshot
+): ProjectAuthSnapshot | null => {
   const requiredValues = [
-    decoded.projectDir,
-    decoded.projectName,
-    decoded.envGlobalPath,
-    decoded.envProjectPath,
-    decoded.claudeAuthPath,
-    decoded.geminiAuthPath,
-    decoded.githubTokenEntries,
-    decoded.gitTokenEntries,
-    decoded.claudeAuthEntries,
-    decoded.geminiAuthEntries
+    snapshot.projectDir,
+    snapshot.projectName,
+    snapshot.envGlobalPath,
+    snapshot.envProjectPath,
+    snapshot.claudeAuthPath,
+    snapshot.geminiAuthPath,
+    snapshot.githubTokenEntries,
+    snapshot.gitTokenEntries,
+    snapshot.claudeAuthEntries,
+    snapshot.geminiAuthEntries
   ]
-  if (requiredValues.includes(null)) {
+
+  if (hasNullValue(requiredValues)) {
     return null
   }
 
   return {
-    projectDir: decoded.projectDir ?? "",
-    projectName: decoded.projectName ?? "",
-    envGlobalPath: decoded.envGlobalPath ?? "",
-    envProjectPath: decoded.envProjectPath ?? "",
-    claudeAuthPath: decoded.claudeAuthPath ?? "",
-    geminiAuthPath: decoded.geminiAuthPath ?? "",
-    githubTokenEntries: decoded.githubTokenEntries ?? 0,
-    gitTokenEntries: decoded.gitTokenEntries ?? 0,
-    claudeAuthEntries: decoded.claudeAuthEntries ?? 0,
-    geminiAuthEntries: decoded.geminiAuthEntries ?? 0,
-    activeGithubLabel: decoded.activeGithubLabel,
-    activeGitLabel: decoded.activeGitLabel,
-    activeClaudeLabel: decoded.activeClaudeLabel,
-    activeGeminiLabel: decoded.activeGeminiLabel
+    projectDir: stringOrEmpty(snapshot.projectDir),
+    projectName: stringOrEmpty(snapshot.projectName),
+    envGlobalPath: stringOrEmpty(snapshot.envGlobalPath),
+    envProjectPath: stringOrEmpty(snapshot.envProjectPath),
+    claudeAuthPath: stringOrEmpty(snapshot.claudeAuthPath),
+    geminiAuthPath: stringOrEmpty(snapshot.geminiAuthPath),
+    githubTokenEntries: numberOrZero(snapshot.githubTokenEntries),
+    gitTokenEntries: numberOrZero(snapshot.gitTokenEntries),
+    claudeAuthEntries: numberOrZero(snapshot.claudeAuthEntries),
+    geminiAuthEntries: numberOrZero(snapshot.geminiAuthEntries),
+    activeGithubLabel: snapshot.activeGithubLabel,
+    activeGitLabel: snapshot.activeGitLabel,
+    activeClaudeLabel: snapshot.activeClaudeLabel,
+    activeGeminiLabel: snapshot.activeGeminiLabel
   }
+}
+
+export const decodeAuthSnapshot = (payload: JsonValue): AuthSnapshot | null => {
+  const snapshot = readAuthSnapshot(resolveSnapshotObject(payload))
+  return snapshot === null ? null : decodeRequiredAuthSnapshot(snapshot)
+}
+
+export const decodeProjectAuthSnapshot = (
+  payload: JsonValue
+): ProjectAuthSnapshot | null => {
+  const snapshot = readProjectAuthSnapshot(resolveSnapshotObject(payload))
+  return snapshot === null ? null : decodeRequiredProjectAuthSnapshot(snapshot)
 }
