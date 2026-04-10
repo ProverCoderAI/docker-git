@@ -28,6 +28,15 @@ type TerminalAttachment = {
   readonly websocketPath: string
 }
 
+type TerminalHandlers = {
+  readonly handleClose: () => void
+  readonly handleError: () => void
+  readonly handleMessage: (event: MessageEvent) => void
+  readonly handleOpen: () => void
+  readonly inputHandler: (chunk: Buffer) => void
+  readonly resizeHandler: () => void
+}
+
 const TerminalSessionSchema = Schema.Struct({
   id: Schema.String,
   projectId: Schema.String,
@@ -77,20 +86,25 @@ const encodeClientMessage = (message: TerminalClientMessage): string => JSON.str
 const parseServerMessage = (value: string): TerminalServerMessage | null =>
   Either.getOrNull(ParseResult.decodeUnknownEither(TerminalServerMessageSchema)(value))
 
+const resolveTerminalSize = (): { readonly cols: number; readonly rows: number } =>
+  process.stdout.isTTY ? { cols: process.stdout.columns, rows: process.stdout.rows } : { cols: 120, rows: 32 }
+
 const resolveTerminalWebSocketUrl = (websocketPath: string): string => {
   const apiBaseUrl = new URL(resolveApiBaseUrl())
+  const { cols, rows } = resolveTerminalSize()
   apiBaseUrl.protocol = apiBaseUrl.protocol === "https:" ? "wss:" : "ws:"
   apiBaseUrl.pathname = `${apiBaseUrl.pathname.replace(/\/$/u, "")}${websocketPath}`
-  apiBaseUrl.searchParams.set("cols", String(process.stdout.columns ?? 120))
-  apiBaseUrl.searchParams.set("rows", String(process.stdout.rows ?? 32))
+  apiBaseUrl.searchParams.set("cols", String(cols))
+  apiBaseUrl.searchParams.set("rows", String(rows))
   return apiBaseUrl.toString()
 }
 
 const sendResize = (socket: WebSocket): void => {
+  const { cols, rows } = resolveTerminalSize()
   socket.send(encodeClientMessage({
     type: "resize",
-    cols: process.stdout.columns ?? 120,
-    rows: process.stdout.rows ?? 32
+    cols,
+    rows
   }))
 }
 
@@ -118,6 +132,111 @@ const writeHeader = (attachment: TerminalAttachment): void => {
   writeToTerminal(`[docker-git] ${attachment.session.sshCommand}\n\n`)
 }
 
+const handleTerminalServerMessage = (
+  message: TerminalServerMessage,
+  finish: (effect: Effect.Effect<void, TerminalSessionClientError>) => void,
+  markExit: () => void
+): void => {
+  if (message.type === "ready") {
+    return
+  }
+
+  if (message.type === "output") {
+    writeToTerminal(message.data)
+    return
+  }
+
+  if (message.type === "error") {
+    finish(Effect.fail(terminalSessionError(message.message)))
+    return
+  }
+
+  markExit()
+  const suffix = message.exitCode === null ? "" : ` (exit ${message.exitCode})`
+  writeToTerminal(`\n[docker-git] terminal finished${suffix}\n`)
+  finish(Effect.void)
+}
+
+const createTerminalInputHandler = (socket: WebSocket) => (chunk: Buffer): void => {
+  if (socket.readyState !== WebSocket.OPEN) {
+    return
+  }
+  socket.send(encodeClientMessage({ type: "input", data: chunk.toString("utf8") }))
+}
+
+const createTerminalResizeHandler = (socket: WebSocket) => (): void => {
+  if (socket.readyState !== WebSocket.OPEN) {
+    return
+  }
+  sendResize(socket)
+}
+
+const createTerminalOpenHandler = (
+  attachment: TerminalAttachment,
+  socket: WebSocket,
+  inputHandler: (chunk: Buffer) => void,
+  resizeHandler: () => void
+) =>
+(): void => {
+  writeHeader(attachment)
+  process.stdin.resume()
+  setRawMode(true)
+  process.stdin.on("data", inputHandler)
+  process.stdout.on("resize", resizeHandler)
+  sendResize(socket)
+}
+
+const createTerminalMessageHandler = (
+  finish: (effect: Effect.Effect<void, TerminalSessionClientError>) => void,
+  markExit: () => void
+) =>
+(event: MessageEvent): void => {
+  const payload = typeof event.data === "string" ? event.data : String(event.data)
+  const message = parseServerMessage(payload)
+  if (message === null) {
+    finish(Effect.fail(terminalSessionError("Invalid terminal protocol message.")))
+    return
+  }
+  handleTerminalServerMessage(message, finish, markExit)
+}
+
+const createTerminalErrorHandler = (
+  finish: (effect: Effect.Effect<void, TerminalSessionClientError>) => void
+) =>
+(): void => {
+  finish(Effect.fail(terminalSessionError("Terminal websocket error.")))
+}
+
+const createTerminalCloseHandler = (
+  socket: WebSocket,
+  inputHandler: (chunk: Buffer) => void,
+  resizeHandler: () => void,
+  finish: (effect: Effect.Effect<void, TerminalSessionClientError>) => void,
+  hasSeenExit: () => boolean
+) =>
+(): void => {
+  cleanupTerminalHandlers(socket, inputHandler, resizeHandler)
+  if (!hasSeenExit()) {
+    finish(Effect.fail(terminalSessionError("Terminal websocket closed before exit.")))
+  }
+}
+
+const createTerminalHandlers = (
+  attachment: TerminalAttachment,
+  socket: WebSocket,
+  finish: (effect: Effect.Effect<void, TerminalSessionClientError>) => void,
+  hasSeenExit: () => boolean,
+  markExit: () => void
+): TerminalHandlers => {
+  const inputHandler = createTerminalInputHandler(socket)
+  const resizeHandler = createTerminalResizeHandler(socket)
+  const handleOpen = createTerminalOpenHandler(attachment, socket, inputHandler, resizeHandler)
+  const handleMessage = createTerminalMessageHandler(finish, markExit)
+  const handleError = createTerminalErrorHandler(finish)
+  const handleClose = createTerminalCloseHandler(socket, inputHandler, resizeHandler, finish, hasSeenExit)
+  return { handleClose, handleError, handleMessage, handleOpen, inputHandler, resizeHandler }
+}
+
 export const attachTerminalSession = (
   attachment: TerminalAttachment
 ): Effect.Effect<void, TerminalSessionClientError> =>
@@ -134,70 +253,23 @@ export const attachTerminalSession = (
       resume(effect)
     }
 
-    const inputHandler = (chunk: Buffer): void => {
-      if (socket.readyState !== WebSocket.OPEN) {
-        return
+    const handlers = createTerminalHandlers(
+      attachment,
+      socket,
+      finish,
+      () => sawExit,
+      () => {
+        sawExit = true
       }
-      socket.send(encodeClientMessage({ type: "input", data: chunk.toString("utf8") }))
-    }
+    )
 
-    const resizeHandler = (): void => {
-      if (socket.readyState !== WebSocket.OPEN) {
-        return
-      }
-      sendResize(socket)
-    }
-
-    socket.onopen = () => {
-      writeHeader(attachment)
-      process.stdin.resume()
-      setRawMode(true)
-      process.stdin.on("data", inputHandler)
-      process.stdout.on("resize", resizeHandler)
-      sendResize(socket)
-    }
-
-    socket.onmessage = (event) => {
-      const payload = typeof event.data === "string" ? event.data : String(event.data)
-      const message = parseServerMessage(payload)
-      if (message === null) {
-        finish(Effect.fail(terminalSessionError("Invalid terminal protocol message.")))
-        return
-      }
-
-      if (message.type === "ready") {
-        return
-      }
-
-      if (message.type === "output") {
-        writeToTerminal(message.data)
-        return
-      }
-
-      if (message.type === "error") {
-        finish(Effect.fail(terminalSessionError(message.message)))
-        return
-      }
-
-      sawExit = true
-      const suffix = message.exitCode === null ? "" : ` (exit ${message.exitCode})`
-      writeToTerminal(`\n[docker-git] terminal finished${suffix}\n`)
-      finish(Effect.void)
-    }
-
-    socket.onerror = () => {
-      finish(Effect.fail(terminalSessionError("Terminal websocket error.")))
-    }
-
-    socket.onclose = () => {
-      cleanupTerminalHandlers(socket, inputHandler, resizeHandler)
-      if (!sawExit) {
-        finish(Effect.fail(terminalSessionError("Terminal websocket closed before exit.")))
-      }
-    }
+    socket.addEventListener("open", handlers.handleOpen)
+    socket.addEventListener("message", handlers.handleMessage)
+    socket.addEventListener("error", handlers.handleError)
+    socket.addEventListener("close", handlers.handleClose)
 
     return Effect.sync(() => {
-      cleanupTerminalHandlers(socket, inputHandler, resizeHandler)
+      cleanupTerminalHandlers(socket, handlers.inputHandler, handlers.resizeHandler)
       if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
         socket.close()
       }

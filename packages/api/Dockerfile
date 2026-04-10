@@ -10,7 +10,7 @@ ENV PATH=/opt/bun/bin:$PATH
 WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl git docker.io docker-compose-v2 sshpass python3 make g++ unzip \
+    ca-certificates curl git docker.io docker-compose-v2 openssh-client sshpass python3 make g++ unzip \
  && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \

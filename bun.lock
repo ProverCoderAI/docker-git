@@ -37,7 +37,7 @@
     },
     "packages/app": {
       "name": "@prover-coder-ai/docker-git",
-      "version": "1.0.76",
+      "version": "1.0.77",
       "bin": {
         "docker-git": "dist/src/docker-git/main.js",
       },
@@ -54,8 +54,8 @@
         "@effect/sql": "^0.51.0",
         "@effect/typeclass": "^0.40.0",
         "@effect/workflow": "^0.18.0",
-        "@gridland/bun": "^0.2.53",
-        "@gridland/web": "^0.2.53",
+        "@gridland/bun": "0.2.53",
+        "@gridland/web": "0.2.53",
         "effect": "^3.21.0",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
@@ -270,7 +270,7 @@
 
     "@effect/experimental": ["@effect/experimental@0.60.0", "", { "dependencies": { "uuid": "11.1.0" }, "peerDependencies": { "@effect/platform": "0.96.0", "effect": "3.21.0" } }, "sha512-i5zIg7Xup2KgHyqHlYtkgqSE1bNzCL0GbbTQxrpIzKF0q/ebknOk/ox8B/gIq2vImjoEE81h/oxU+6i1NH210g=="],
 
-    "@effect/language-service": ["@effect/language-service@0.85.0", "", { "bin": { "effect-language-service": "cli.js" } }, "sha512-crQwaeLmpmUfKaH2K42STNFMD5cywR6kBGKZI0FkvCbDyG3xM7CikJKucMIXOBvnUviO8loq0afT1ZSCtZiaaw=="],
+    "@effect/language-service": ["@effect/language-service@0.85.1", "", { "bin": { "effect-language-service": "cli.js" } }, "sha512-EXnJjIy6zQ3nUO/MZ+ynWUb8B895KZPotd1++oTs9JjDkplwM7cb6zo8Zq2zU6piwq+KflO7amXbEfj1UMpHkw=="],
 
     "@effect/platform": ["@effect/platform@0.96.0", "", { "dependencies": { "find-my-way-ts": "0.1.6", "msgpackr": "1.11.5", "multipasta": "0.2.7" }, "peerDependencies": { "effect": "3.21.0" } }, "sha512-U7PLhkVzg7zzrgFvyWATOzD6reL87KG/fcdOxgLWBQ/J5CCU6qdPAVG+0o6o+IxcsLoqGwxs+rFxaFzrdtDV1A=="],
 

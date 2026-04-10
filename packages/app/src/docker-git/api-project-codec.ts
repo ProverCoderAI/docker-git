@@ -30,6 +30,21 @@ export type ApiProjectDetails = ApiProjectSummary & {
 }
 
 type ProjectDetailFields = Omit<ApiProjectDetails, keyof ApiProjectSummary>
+type RawProjectDetailFields = {
+  readonly containerName: string | null
+  readonly serviceName: string | null
+  readonly sshUser: string | null
+  readonly sshPort: number | null
+  readonly targetDir: string | null
+  readonly projectDir: string | null
+  readonly sshCommand: string | null
+  readonly authorizedKeysPath: string | null
+  readonly authorizedKeysExists: boolean | null
+  readonly envGlobalPath: string | null
+  readonly envProjectPath: string | null
+  readonly codexAuthPath: string | null
+  readonly codexHome: string | null
+}
 
 const isProjectStatus = (
   value: string
@@ -38,8 +53,7 @@ const isProjectStatus = (
 const stringOrEmpty = (value: string | null): string => value ?? ""
 
 const numberOrZero = (value: number | null): number => value ?? 0
-const readNullableNumber = (value: JsonValue | undefined): number | null =>
-  typeof value === "number" ? value : value === null ? null : null
+const readNullableNumber = (value: JsonValue | undefined): number | null => typeof value === "number" ? value : null
 
 const readSummaryBaseFields = (
   object: ReturnType<typeof asObject>
@@ -78,46 +92,53 @@ const readSummaryBaseFields = (
 
 const readRequiredProjectDetails = (
   object: ReturnType<typeof asObject>
-): ProjectDetailFields | null => {
+): RawProjectDetailFields | null => {
   if (object === null) {
     return null
   }
 
-  const containerName = asString(object["containerName"])
-  const serviceName = asString(object["serviceName"])
-  const sshUser = asString(object["sshUser"])
-  const sshPort = typeof object["sshPort"] === "number" ? object["sshPort"] : null
-  const targetDir = asString(object["targetDir"])
-  const projectDir = asString(object["projectDir"])
-  const sshCommand = asString(object["sshCommand"])
-  const authorizedKeysPath = asString(object["authorizedKeysPath"])
-  const authorizedKeysExists = typeof object["authorizedKeysExists"] === "boolean"
-    ? object["authorizedKeysExists"]
-    : null
-  const envGlobalPath = asString(object["envGlobalPath"])
-  const envProjectPath = asString(object["envProjectPath"])
-  const codexAuthPath = asString(object["codexAuthPath"])
-  const codexHome = asString(object["codexHome"])
-  const values = [containerName, serviceName, sshUser, sshPort, targetDir, projectDir, sshCommand, authorizedKeysPath, authorizedKeysExists, envGlobalPath, envProjectPath, codexAuthPath, codexHome]
+  return {
+    containerName: asString(object["containerName"]),
+    serviceName: asString(object["serviceName"]),
+    sshUser: asString(object["sshUser"]),
+    sshPort: typeof object["sshPort"] === "number" ? object["sshPort"] : null,
+    targetDir: asString(object["targetDir"]),
+    projectDir: asString(object["projectDir"]),
+    sshCommand: asString(object["sshCommand"]),
+    authorizedKeysPath: asString(object["authorizedKeysPath"]),
+    authorizedKeysExists: typeof object["authorizedKeysExists"] === "boolean"
+      ? object["authorizedKeysExists"]
+      : null,
+    envGlobalPath: asString(object["envGlobalPath"]),
+    envProjectPath: asString(object["envProjectPath"]),
+    codexAuthPath: asString(object["codexAuthPath"]),
+    codexHome: asString(object["codexHome"])
+  }
+}
 
-  if (values.includes(null)) {
+const decodeRequiredProjectDetails = (
+  object: ReturnType<typeof asObject>
+): ProjectDetailFields | null => {
+  const rawFields = readRequiredProjectDetails(object)
+
+  if (rawFields === null || Object.values(rawFields).includes(null)) {
     return null
   }
 
   return {
-    containerName: stringOrEmpty(containerName),
-    serviceName: stringOrEmpty(serviceName),
-    sshUser: stringOrEmpty(sshUser),
-    sshPort: numberOrZero(sshPort),
-    targetDir: stringOrEmpty(targetDir),
-    projectDir: stringOrEmpty(projectDir),
-    sshCommand: stringOrEmpty(sshCommand),
-    authorizedKeysPath: stringOrEmpty(authorizedKeysPath),
-    authorizedKeysExists: authorizedKeysExists === true,
-    envGlobalPath: stringOrEmpty(envGlobalPath),
-    envProjectPath: stringOrEmpty(envProjectPath),
-    codexAuthPath: stringOrEmpty(codexAuthPath),
-    codexHome: stringOrEmpty(codexHome)
+    containerName: stringOrEmpty(rawFields.containerName),
+    serviceName: stringOrEmpty(rawFields.serviceName),
+    sshUser: stringOrEmpty(rawFields.sshUser),
+    sshPort: numberOrZero(rawFields.sshPort),
+    targetDir: stringOrEmpty(rawFields.targetDir),
+    projectDir: stringOrEmpty(rawFields.projectDir),
+    sshCommand: stringOrEmpty(rawFields.sshCommand),
+    authorizedKeysPath: stringOrEmpty(rawFields.authorizedKeysPath),
+    authorizedKeysExists: rawFields.authorizedKeysExists === true,
+    envGlobalPath: stringOrEmpty(rawFields.envGlobalPath),
+    envProjectPath: stringOrEmpty(rawFields.envProjectPath),
+    codexAuthPath: stringOrEmpty(rawFields.codexAuthPath),
+    codexHome: stringOrEmpty(rawFields.codexHome)
   }
 }
 
@@ -134,7 +155,7 @@ const readProjectSummaryFields = (value: JsonValue): ApiProjectSummary | null =>
 }
 
 const readProjectDetailFields = (value: JsonValue): ProjectDetailFields | null =>
-  readRequiredProjectDetails(asObject(value))
+  decodeRequiredProjectDetails(asObject(value))
 
 export const decodeProjectSummary = (value: JsonValue): ApiProjectSummary | null => readProjectSummaryFields(value)
 
