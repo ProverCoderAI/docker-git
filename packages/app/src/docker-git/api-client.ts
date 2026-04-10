@@ -1,10 +1,17 @@
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
+import * as FsPlatform from "@effect/platform/FileSystem"
+import * as PathPlatform from "@effect/platform/Path"
 import { Effect } from "effect"
 
+import {
+  buildCreateProjectRequest,
+  createProjectRequestAllowsImmediateUp,
+  createProjectRequestNeedsFollowUpUp,
+  decodeProjectResponse,
+  upCreatedProjectWithAuthorizedKeys
+} from "./api-client-create.js"
 import { readProjectOutput, resolveCreateRequestPaths } from "./api-client-helpers.js"
 import { request, requestTextStream, requestVoid } from "./api-http.js"
-import { asArray, asObject, type JsonRequest } from "./api-json.js"
+import { asArray, asObject } from "./api-json.js"
 import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
 import { decodeTerminalSession } from "./api-terminal-codec.js"
 import type {
@@ -85,46 +92,38 @@ export const getProject = (projectId: string) =>
     })
   )
 
+const createProjectWithResolvedPaths = (
+  command: CreateCommand,
+  resolvedPaths: {
+    readonly authorizedKeysPath: string
+    readonly authorizedKeysContents?: string | undefined
+  }
+) =>
+  Effect.gen(function*(_) {
+    const createRequest = buildCreateProjectRequest(
+      command,
+      resolvedPaths,
+      createProjectRequestAllowsImmediateUp(command, resolvedPaths)
+    )
+    const payload = yield* _(request("POST", "/projects", createRequest))
+    const createdProject = decodeProjectResponse(payload)
+    if (
+      createdProject === null ||
+      resolvedPaths.authorizedKeysContents === undefined ||
+      !createProjectRequestNeedsFollowUpUp(command, resolvedPaths)
+    ) {
+      return createdProject
+    }
+
+    return yield* _(
+      upCreatedProjectWithAuthorizedKeys(createdProject.projectDir, resolvedPaths.authorizedKeysContents)
+    )
+  })
+
 export const createProject = (command: CreateCommand) =>
   Effect.gen(function*(_) {
-    const config = command.config
     const resolvedPaths = yield* _(resolveCreateRequestPaths(command))
-    const body = {
-      repoUrl: config.repoUrl,
-      repoRef: config.repoRef,
-      targetDir: config.targetDir,
-      sshPort: String(config.sshPort),
-      sshUser: config.sshUser,
-      containerName: config.containerName,
-      serviceName: config.serviceName,
-      volumeName: config.volumeName,
-      authorizedKeysPath: resolvedPaths.authorizedKeysPath,
-      envGlobalPath: config.envGlobalPath,
-      envProjectPath: config.envProjectPath,
-      codexAuthPath: config.codexAuthPath,
-      codexHome: config.codexHome,
-      cpuLimit: config.cpuLimit,
-      ramLimit: config.ramLimit,
-      dockerNetworkMode: config.dockerNetworkMode,
-      dockerSharedNetworkName: config.dockerSharedNetworkName,
-      enableMcpPlaywright: config.enableMcpPlaywright,
-      outDir: command.outDir,
-      gitTokenLabel: config.gitTokenLabel,
-      skipGithubAuth: config.skipGithubAuth,
-      useManagedAuthorizedKeys: true,
-      codexTokenLabel: config.codexAuthLabel,
-      claudeTokenLabel: config.claudeAuthLabel,
-      agentAutoMode: config.agentAuto ? (config.agentMode ?? "auto") : undefined,
-      up: command.runUp,
-      openSsh: false,
-      force: command.force,
-      forceEnv: command.forceEnv,
-      waitForClone: command.waitForClone
-    } satisfies JsonRequest
-
-    const payload = yield* _(request("POST", "/projects", body))
-    const object = asObject(payload)
-    return object === null ? decodeProjectDetails(payload) : decodeProjectDetails(object["project"] ?? payload)
+    return yield* _(createProjectWithResolvedPaths(command, resolvedPaths))
   })
 
 export const deleteProject = (projectId: string) => requestVoid("DELETE", projectPath(projectId))
@@ -286,8 +285,8 @@ export const codexLogin = (command: AuthCodexLoginCommand) =>
 
 const readCodexAuthText = (command: AuthCodexImportCommand) =>
   Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
+    const fs = yield* _(FsPlatform.FileSystem)
+    const path = yield* _(PathPlatform.Path)
     const resolvedCodexAuthDir = resolvePathFromCwd(path, process.cwd(), command.codexAuthPath)
     const authFilePath = path.join(resolvedCodexAuthDir, "auth.json")
     return yield* _(fs.readFileString(authFilePath))
