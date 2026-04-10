@@ -2,16 +2,10 @@ import * as FsPlatform from "@effect/platform/FileSystem"
 import * as PathPlatform from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import {
-  buildCreateProjectRequest,
-  createProjectRequestAllowsImmediateUp,
-  createProjectRequestNeedsFollowUpUp,
-  decodeProjectResponse,
-  upCreatedProjectWithAuthorizedKeys
-} from "./api-client-create.js"
+import { buildCreateProjectRequest } from "./api-client-create.js"
 import { readProjectOutput, resolveCreateRequestPaths } from "./api-client-helpers.js"
 import { request, requestTextStream, requestVoid } from "./api-http.js"
-import { asArray, asObject } from "./api-json.js"
+import { asArray, asObject, type JsonValue } from "./api-json.js"
 import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
 import { decodeTerminalSession } from "./api-terminal-codec.js"
 import type {
@@ -43,6 +37,13 @@ export { type ApiTerminalSession } from "./api-terminal-codec.js"
 const projectPath = (projectId: string, suffix = ""): string => `/projects/${encodeURIComponent(projectId)}${suffix}`
 const codexLoginSuccessMarker = "__DOCKER_GIT_CODEX_LOGIN_STATUS__:ok"
 const codexLoginErrorMarkerPrefix = "__DOCKER_GIT_CODEX_LOGIN_STATUS__:error:"
+
+const decodeProjectResponse = (payload: JsonValue) => {
+  const object = asObject(payload)
+  return object === null
+    ? decodeProjectDetails(payload)
+    : decodeProjectDetails(object["project"] ?? payload)
+}
 
 const codexLoginFailureMessage = (output: string, exitCode: string | null): string => {
   if (output.includes("429 Too Many Requests")) {
@@ -97,24 +98,9 @@ const createProjectWithResolvedPaths = (
   }
 ) =>
   Effect.gen(function*(_) {
-    const createRequest = buildCreateProjectRequest(
-      command,
-      resolvedPaths,
-      createProjectRequestAllowsImmediateUp(command, resolvedPaths)
-    )
+    const createRequest = buildCreateProjectRequest(command, resolvedPaths)
     const payload = yield* _(request("POST", "/projects", createRequest))
-    const createdProject = decodeProjectResponse(payload)
-    if (
-      createdProject === null ||
-      resolvedPaths.authorizedKeysContents === undefined ||
-      !createProjectRequestNeedsFollowUpUp(command, resolvedPaths)
-    ) {
-      return createdProject
-    }
-
-    return yield* _(
-      upCreatedProjectWithAuthorizedKeys(createdProject.id, resolvedPaths.authorizedKeysContents)
-    )
+    return decodeProjectResponse(payload)
   })
 
 export const createProject = (command: CreateCommand) =>

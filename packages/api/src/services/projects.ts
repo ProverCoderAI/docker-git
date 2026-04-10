@@ -1,6 +1,7 @@
 import {
   type AppError,
   buildCreateCommand,
+  defaultTemplateConfig,
   createProject,
   formatParseError,
   applyAllDockerGitProjects,
@@ -17,6 +18,7 @@ import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { defaultProjectsRoot, resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
 import { deleteDockerGitProject } from "@effect-template/lib/usecases/projects"
 import type { RawOptions } from "@effect-template/lib/core/command-options"
+import type { CreateCommand as LibCreateCommand } from "@effect-template/lib/core/domain"
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import { Effect, Either } from "effect"
 
@@ -217,6 +219,20 @@ const mergeAuthorizedKeys = (
   return merged.length === 0 ? "" : `${merged.join("\n")}\n`
 }
 
+const withManagedAuthorizedKeysForCreate = (
+  command: LibCreateCommand,
+  authorizedKeysContents: string | undefined
+) =>
+  authorizedKeysContents === undefined
+    ? command
+    : {
+      ...command,
+      config: {
+        ...command.config,
+        authorizedKeysPath: defaultTemplateConfig.authorizedKeysPath
+      }
+    }
+
 export const seedAuthorizedKeysForCreate = (
   outDir: string,
   authorizedKeysContents: string | undefined
@@ -336,7 +352,7 @@ export const createProjectFromRequest = (
       )
     }
 
-    const command = {
+    const parsedCommand = {
       ...parsed.right,
       openSsh: false,
       waitForClone: request.waitForClone ?? parsed.right.waitForClone
@@ -344,9 +360,11 @@ export const createProjectFromRequest = (
 
     const resolvedAuthorizedKeysContents = request.authorizedKeysContents ?? (
       request.useManagedAuthorizedKeys === true
-        ? yield* _(resolveCreateAuthorizedKeysContents(command.outDir, command.config.authorizedKeysPath))
+        ? yield* _(resolveCreateAuthorizedKeysContents(parsedCommand.outDir, parsedCommand.config.authorizedKeysPath))
         : undefined
     )
+
+    const command = withManagedAuthorizedKeysForCreate(parsedCommand, resolvedAuthorizedKeysContents)
 
     yield* _(seedAuthorizedKeysForCreate(command.outDir, resolvedAuthorizedKeysContents))
 

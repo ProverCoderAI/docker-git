@@ -1,38 +1,14 @@
-import { Effect } from "effect"
-
-import { request } from "./api-http.js"
-import { asObject, type JsonRequest, type JsonValue } from "./api-json.js"
-import { decodeProjectDetails } from "./api-project-codec.js"
-import type { CreateCommand } from "./frontend-lib/core/domain.js"
+import type { JsonRequest } from "./api-json.js"
+import { type CreateCommand, defaultTemplateConfig } from "./frontend-lib/core/domain.js"
 
 type ResolvedCreateRequestPaths = {
   readonly authorizedKeysPath: string
   readonly authorizedKeysContents?: string | undefined
 }
 
-const projectPath = (projectId: string, suffix = ""): string => `/projects/${encodeURIComponent(projectId)}${suffix}`
-
-export const decodeProjectResponse = (payload: JsonValue) => {
-  const object = asObject(payload)
-  return object === null
-    ? decodeProjectDetails(payload)
-    : decodeProjectDetails(object["project"] ?? payload)
-}
-
-export const createProjectRequestNeedsFollowUpUp = (
-  command: CreateCommand,
-  resolvedPaths: ResolvedCreateRequestPaths
-): boolean => command.runUp && resolvedPaths.authorizedKeysContents !== undefined
-
-export const createProjectRequestAllowsImmediateUp = (
-  command: CreateCommand,
-  resolvedPaths: ResolvedCreateRequestPaths
-): boolean => command.runUp && resolvedPaths.authorizedKeysContents === undefined
-
 export const buildCreateProjectRequest = (
   command: CreateCommand,
-  resolvedPaths: ResolvedCreateRequestPaths,
-  shouldRunUpInCreateRequest: boolean
+  resolvedPaths: ResolvedCreateRequestPaths
 ) => {
   const config = command.config
   return {
@@ -44,7 +20,9 @@ export const buildCreateProjectRequest = (
     containerName: config.containerName,
     serviceName: config.serviceName,
     volumeName: config.volumeName,
-    authorizedKeysPath: resolvedPaths.authorizedKeysPath,
+    authorizedKeysPath: resolvedPaths.authorizedKeysContents === undefined
+      ? resolvedPaths.authorizedKeysPath
+      : defaultTemplateConfig.authorizedKeysPath,
     authorizedKeysContents: resolvedPaths.authorizedKeysContents,
     envGlobalPath: config.envGlobalPath,
     envProjectPath: config.envProjectPath,
@@ -62,21 +40,10 @@ export const buildCreateProjectRequest = (
     codexTokenLabel: config.codexAuthLabel,
     claudeTokenLabel: config.claudeAuthLabel,
     agentAutoMode: config.agentAuto ? (config.agentMode ?? "auto") : undefined,
-    up: shouldRunUpInCreateRequest,
+    up: command.runUp,
     openSsh: false,
     force: command.force,
     forceEnv: command.forceEnv,
     waitForClone: command.waitForClone
   } satisfies JsonRequest
 }
-
-export const upCreatedProjectWithAuthorizedKeys = (
-  projectId: string,
-  authorizedKeysContents: string
-) =>
-  request("POST", projectPath(projectId, "/up"), {
-    authorizedKeysContents,
-    useManagedAuthorizedKeys: true
-  }).pipe(
-    Effect.map((payload) => decodeProjectResponse(payload))
-  )
