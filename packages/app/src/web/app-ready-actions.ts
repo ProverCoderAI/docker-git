@@ -6,6 +6,7 @@ import type { BrowserMenuTag } from "./menu.js"
 import { browserMenuItems } from "./menu.js"
 
 type ActionContextArgs = {
+  readonly githubStatus: BrowserActionContext["githubStatus"]
   readonly refreshDashboard: () => void
   readonly selectedProjectId: string | null
   readonly selectedProjectName: string | null
@@ -26,6 +27,7 @@ export const resolveCurrentMenu = (selectedMenuIndex: number): BrowserMenuTag =>
   browserMenuItems[selectedMenuIndex]?.tag ?? "Select"
 
 export const createActionContext = (args: ActionContextArgs): BrowserActionContext => ({
+  githubStatus: args.githubStatus,
   reloadDashboard: args.refreshDashboard,
   selectedProjectId: args.selectedProjectId,
   selectedProjectName: args.selectedProjectName,

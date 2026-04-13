@@ -2,7 +2,10 @@ import { Effect } from "effect"
 import type { Dispatch, SetStateAction } from "react"
 
 import type { ActionPromptState } from "./action-prompt.js"
+import { createAuthActionPrompt } from "./action-prompt.js"
 import type { AuthSnapshot, GithubAuthStatus, ProjectAuthSnapshot, ProjectDetails } from "./api.js"
+import { githubAuthGateMessage, shouldRequireGithubAuth } from "./github-auth-gate.js"
+import { browserMenuIndex } from "./menu.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 
 type Setter<A> = Dispatch<SetStateAction<A>>
@@ -17,6 +20,7 @@ type BusyAction<A> = {
 }
 
 export type BrowserActionContext = {
+  readonly githubStatus: GithubAuthStatus | null
   readonly reloadDashboard: () => void
   readonly selectedProjectId: string | null
   readonly selectedProjectName: string | null
@@ -74,6 +78,21 @@ export const requireSelectedProjectId = (
   }
   context.setMessage("No project selected.")
   return null
+}
+
+export const requireGithubAuthConfigured = (context: BrowserActionContext): boolean => {
+  if (context.githubStatus === null) {
+    context.setSelectedMenuIndex(browserMenuIndex("Auth"))
+    context.setMessage("Проверяю подключение GitHub перед продолжением.")
+    return false
+  }
+  if (!shouldRequireGithubAuth(context.githubStatus)) {
+    return true
+  }
+  context.setSelectedMenuIndex(browserMenuIndex("Auth"))
+  context.setActionPrompt(createAuthActionPrompt("GithubOauth"))
+  context.setMessage(githubAuthGateMessage(context.githubStatus))
+  return false
 }
 
 export const projectActionLabel = (context: BrowserActionContext): string =>

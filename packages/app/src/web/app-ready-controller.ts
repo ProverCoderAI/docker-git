@@ -11,6 +11,7 @@ import { cancelCreate, setCreateBuffer, submitCreateView, useCreateMenuReset } f
 import {
   useActionPromptReset,
   useBrowserShortcuts,
+  useGithubAuthGate,
   usePanelAutoload,
   useProjectAuthReset,
   useProjectDetailsReset,
@@ -25,15 +26,15 @@ type ReadyControllerArgs = {
   readonly refreshDashboard: () => void
 }
 
-const useReadySideEffects = (
-  args: {
-    readonly actionContext: ReturnType<typeof createActionContext>
-    readonly currentMenu: ReturnType<typeof resolveCurrentMenu>
-    readonly dashboard: DashboardData
-    readonly dashboardRefreshTick: number
-    readonly state: ReturnType<typeof useReadyState>
-  }
-) => {
+type ReadySideEffectsArgs = {
+  readonly actionContext: ReturnType<typeof createActionContext>
+  readonly currentMenu: ReturnType<typeof resolveCurrentMenu>
+  readonly dashboard: DashboardData
+  readonly dashboardRefreshTick: number
+  readonly state: ReturnType<typeof useReadyState>
+}
+
+const useProjectSyncEffects = (args: ReadySideEffectsArgs) => {
   useProjectSelectionSync({
     dashboard: args.dashboard,
     selectedProjectId: args.state.selectedProjectId,
@@ -41,22 +42,40 @@ const useReadySideEffects = (
     setSelectedProject: args.state.setSelectedProject,
     setSelectedProjectId: args.state.setSelectedProjectId
   })
+}
+
+const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
   useCreateMenuReset(args.currentMenu, args.state.setCreateView)
   useActionPromptReset(args.state.actionPrompt, args.currentMenu, args.state.setActionPrompt)
+  useGithubAuthGate({
+    actionPrompt: args.state.actionPrompt,
+    githubStatus: args.state.githubStatus,
+    selectedMenuIndex: args.state.selectedMenuIndex,
+    setActionPrompt: args.state.setActionPrompt,
+    setMessage: args.state.setMessage,
+    setSelectedMenuIndex: args.state.setSelectedMenuIndex
+  })
   useProjectNavigationReset(args.currentMenu, args.state.setProjectNavigationArmed)
   useProjectAuthReset(args.state.selectedProjectId, args.state.setProjectAuthSnapshot)
   useProjectDetailsReset(args.state.selectedProjectId, args.state.setSelectedProject)
+}
+
+const useReadyAutoloadEffects = (args: ReadySideEffectsArgs) => {
   usePanelAutoload({
     authSnapshot: args.state.authSnapshot,
     busyLabel: args.state.busyLabel,
     context: args.actionContext,
     currentMenu: args.currentMenu,
     dashboardRefreshTick: args.dashboardRefreshTick,
+    githubStatus: args.state.githubStatus,
     project: args.state.project,
     projectNavigationArmed: args.state.projectNavigationArmed,
     selectedProjectId: args.state.selectedProjectId,
     projectAuthSnapshot: args.state.projectAuthSnapshot
   })
+}
+
+const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
   useBrowserShortcuts({
     actionPrompt: args.state.actionPrompt,
     context: args.actionContext,
@@ -73,6 +92,13 @@ const useReadySideEffects = (
     setSelectedProjectId: args.state.setSelectedProjectId,
     terminalSession: args.state.terminalSession
   })
+}
+
+const useReadySideEffects = (args: ReadySideEffectsArgs) => {
+  useProjectSyncEffects(args)
+  useReadyResetEffects(args)
+  useReadyAutoloadEffects(args)
+  useReadyShortcutEffects(args)
 }
 
 const bindMenuActions = (actionContext: ReturnType<typeof createActionContext>) => ({
@@ -131,6 +157,7 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
   const currentMenu = resolveCurrentMenu(state.selectedMenuIndex)
   const selectedProjectSummary = dashboard.projects.find((project) => project.id === state.selectedProjectId)
   const actionContext = createActionContext({
+    githubStatus: state.githubStatus,
     refreshDashboard,
     selectedProjectId: state.selectedProjectId,
     selectedProjectName: selectedProjectSummary?.displayName ?? null,
