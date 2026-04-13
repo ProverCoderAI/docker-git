@@ -1,4 +1,9 @@
-import { prepareProjectSsh, waitForProjectSshReady } from "@effect-template/lib"
+import { type AppError, prepareProjectSsh, renderError, waitForProjectSshReady } from "@effect-template/lib"
+import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
+import { parseInspectNetworkEntry } from "@effect-template/lib/shell/docker-inspect-parse"
+import { CommandFailedError } from "@effect-template/lib/shell/errors"
+import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import * as FileSystem from "@effect/platform/FileSystem"
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
 import { Effect, Either } from "effect"
@@ -56,6 +61,9 @@ const TerminalClientMessageSchema = Schema.parseJson(
 
 const nowIso = (): string => new Date().toISOString()
 
+const isAppError = (value: unknown): value is AppError =>
+  typeof value === "object" && value !== null && "_tag" in value
+
 const updateSession = (
   record: TerminalRecord,
   patch: Partial<TerminalSession>
@@ -71,11 +79,99 @@ const toApiInternalError = (error: unknown): ApiInternalError =>
   error instanceof ApiInternalError
     ? error
     : new ApiInternalError({
-      message: describeUnknown(error),
+      message: isAppError(error) ? renderError(error) : describeUnknown(error),
       cause: error
     })
 
+const normalizeSshKeyPermissions = (sshKeyPath: string | null) =>
+  sshKeyPath === null
+    ? Effect.void
+    : FileSystem.FileSystem.pipe(
+      Effect.flatMap((fs) => fs.chmod(sshKeyPath, 0o600).pipe(Effect.orElseSucceed(() => void 0)))
+    )
+
+type ContainerNetworkEntry = {
+  readonly ipAddress: string
+  readonly name: string
+}
+
+const dockerGitApiContainerName = (): string => process.env["DOCKER_GIT_API_CONTAINER_NAME"]?.trim() || "docker-git-api"
+
+const parseContainerNetworkEntries = (output: string): ReadonlyArray<ContainerNetworkEntry> =>
+  output
+    .trim()
+    .split(/\r?\n/u)
+    .flatMap((line) => parseInspectNetworkEntry(line))
+    .map(([name, ipAddress]) => ({ name, ipAddress }))
+
+const selectReachableProjectNetwork = (
+  entries: ReadonlyArray<ContainerNetworkEntry>
+): ContainerNetworkEntry | null =>
+  entries.find((entry) => entry.name !== "bridge") ?? entries[0] ?? null
+
+const inspectContainerNetworks = (
+  containerName: string
+) =>
+  runCommandCapture(
+    {
+      cwd: process.cwd(),
+      command: "docker",
+      args: [
+        "inspect",
+        "-f",
+        String.raw`{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s=%s\n" $k $v.IPAddress}}{{end}}`,
+        containerName
+      ]
+    },
+    [0],
+    (exitCode) => new CommandFailedError({ command: "docker inspect networks", exitCode })
+  ).pipe(Effect.map(parseContainerNetworkEntries))
+
+const connectContainerToNetwork = (
+  networkName: string,
+  containerName: string
+) =>
+  networkName === "bridge"
+    ? Effect.void
+    : runCommandCapture(
+      {
+        cwd: process.cwd(),
+        command: "docker",
+        args: ["network", "connect", networkName, containerName]
+      },
+      [0],
+      (exitCode) => new CommandFailedError({ command: `docker network connect ${networkName}`, exitCode })
+    ).pipe(
+      Effect.asVoid,
+      Effect.orElseSucceed(() => void 0)
+    )
+
+const resolveControllerReachableProject = (
+  projectItem: ProjectItem
+) =>
+  Effect.gen(function*(_) {
+    const networkEntries = yield* _(inspectContainerNetworks(projectItem.containerName).pipe(Effect.orElseSucceed(() => [])))
+    yield* _(
+      Effect.forEach(
+        networkEntries.filter((entry) => entry.name !== "bridge"),
+        (entry) => connectContainerToNetwork(entry.name, dockerGitApiContainerName()),
+        { discard: true }
+      )
+    )
+    const preferredNetwork = selectReachableProjectNetwork(networkEntries)
+    if (preferredNetwork === null) {
+      return projectItem
+    }
+    return {
+      ...projectItem,
+      ipAddress: preferredNetwork.ipAddress
+    }
+  })
+
 const encodeServerMessage = (message: TerminalServerMessage): string => JSON.stringify(message)
+
+const renderPreparedSshCommand = (prepared: ReturnType<typeof prepareProjectSsh>): string =>
+  [prepared.command, ...prepared.args].join(" ")
 
 const sendServerMessage = (socket: WebSocket | null, message: TerminalServerMessage): void => {
   if (socket === null || socket.readyState !== WebSocket.OPEN) {
@@ -196,7 +292,7 @@ const registerRecord = (
     createdAt: nowIso(),
     id: randomUUID(),
     projectId,
-    sshCommand: prepared.item.sshCommand,
+    sshCommand: renderPreparedSshCommand(prepared),
     status: "ready"
   }
   const record: TerminalRecord = {
@@ -225,7 +321,9 @@ export const createTerminalSession = (
       })
     )
     const project = yield* _(upProject(projectId, undefined, true))
-    const projectItem = yield* _(getProjectItemById(projectId))
+    const loadedProjectItem = yield* _(getProjectItemById(projectId))
+    const projectItem = yield* _(resolveControllerReachableProject(loadedProjectItem))
+    yield* _(normalizeSshKeyPermissions(projectItem.sshKeyPath))
     yield* _(
       Effect.sync(() => {
         emitProjectEvent(projectId, "project.deployment.status", {

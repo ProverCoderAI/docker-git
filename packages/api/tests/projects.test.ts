@@ -7,6 +7,7 @@ import { Effect } from "effect"
 import * as Scope from "effect/Scope"
 
 import { ApiConflictError, ApiInternalError } from "../src/api/errors.js"
+import { resolveManagedAuthorizedKeysContents } from "../src/services/project-authorized-keys.js"
 import { createProjectFromRequest, seedAuthorizedKeysForCreate } from "../src/services/projects.js"
 
 const withTempDir = <A, E, R>(
@@ -116,6 +117,39 @@ describe("projects service", () => {
         const projectContents = yield* _(fs.readFileString(expectedProjectPath))
         expect(defaultContents).toBe(`${hostKey}\n`)
         expect(projectContents).toBe(`${hostKey}\n`)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("normalizes managed dev ssh private key permissions to 0600", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const privateKeyPath = path.join(projectsRoot, "dev_ssh_key")
+        const publicKeyPath = `${privateKeyPath}.pub`
+
+        yield* _(fs.makeDirectory(projectsRoot, { recursive: true }))
+        yield* _(fs.writeFileString(privateKeyPath, "PRIVATE KEY"))
+        yield* _(fs.writeFileString(publicKeyPath, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest docker-git@test\n"))
+        yield* _(fs.chmod(privateKeyPath, 0o644))
+
+        yield* _(
+          withEnvVar(
+            "DOCKER_GIT_SSH_KEY",
+            undefined,
+            withProjectsRoot(
+              projectsRoot,
+              withWorkingDirectory(
+                root,
+                resolveManagedAuthorizedKeysContents()
+              )
+            )
+          )
+        )
+
+        const info = yield* _(fs.stat(privateKeyPath))
+        expect(Number(info.mode ?? 0) & 0o777).toBe(0o600)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

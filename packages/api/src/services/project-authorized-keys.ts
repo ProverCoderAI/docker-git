@@ -47,11 +47,17 @@ const resolvePublicKeyFromPrivate = (privateKeyPath: string) =>
     })
   )
 
+const ensurePrivateKeyPermissions = (privateKeyPath: string) =>
+  withFsPathContext(({ fs }) =>
+    fs.chmod(privateKeyPath, 0o600).pipe(Effect.orElseSucceed(() => void 0))
+  )
+
 const resolveHostPrivateKeyPath = () =>
   withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
       const existing = yield* _(findSshPrivateKey(fs, path, process.cwd()))
       if (existing !== null) {
+        yield* _(ensurePrivateKeyPermissions(existing))
         return existing
       }
 
@@ -78,6 +84,7 @@ const resolveHostPrivateKeyPath = () =>
         )
       )
 
+      yield* _(ensurePrivateKeyPermissions(managedKeyPath))
       return managedKeyPath
     })
   )
