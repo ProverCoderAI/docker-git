@@ -19,6 +19,14 @@ type BusyAction<A> = {
   readonly onSuccess: (value: A) => void
 }
 
+type AuthSuccessState = {
+  readonly githubStatus: GithubAuthStatus
+  readonly message: string
+  readonly snapshot: AuthSnapshot
+}
+
+const outputLineLimit = 120
+
 export type BrowserActionContext = {
   readonly githubStatus: GithubAuthStatus | null
   readonly reloadDashboard: () => void
@@ -68,6 +76,24 @@ export const withBusy = <A>({ context, effect, label, onFailure, onFinally, onSu
     context.setBusyLabel(null)
     onFinally?.()
   })
+}
+
+export const appendOutputChunk = (context: BrowserActionContext, chunk: string) => {
+  if (chunk.length === 0) {
+    return
+  }
+  context.setOutput((current) => {
+    const next = current.length === 0 ? chunk : `${current}${chunk}`
+    const lines = next.split("\n")
+    return lines.length <= outputLineLimit ? next : lines.slice(-outputLineLimit).join("\n")
+  })
+}
+
+export const applyAuthSuccessState = (context: BrowserActionContext, state: AuthSuccessState) => {
+  context.setActionPrompt(null)
+  context.setAuthSnapshot(state.snapshot)
+  context.setGithubStatus(state.githubStatus)
+  context.setMessage(state.message)
 }
 
 export const requireSelectedProjectId = (

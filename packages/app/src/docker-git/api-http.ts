@@ -1,8 +1,9 @@
-import { FetchHttpClient, HttpBody, HttpClient, HttpClientResponse } from "@effect/platform"
+import type { HttpClientResponse } from "@effect/platform"
+import { FetchHttpClient, HttpBody, HttpClient } from "@effect/platform"
 import type * as HttpClientError from "@effect/platform/HttpClientError"
 import { Effect } from "effect"
-import * as Stream from "effect/Stream"
 
+import { readHttpResponseTextStream } from "../shared/http-response-stream.js"
 import { asObject, asString, type JsonRequest, type JsonValue, parseResponseBody } from "./api-json.js"
 import { type ControllerRuntime, ensureControllerReady, resolveApiBaseUrl } from "./controller.js"
 import type { ApiAuthRequiredError, ApiRequestError } from "./host-errors.js"
@@ -202,19 +203,6 @@ export const request = (
 export const requestVoid = (method: ApiHttpMethod, path: string, body?: JsonRequest) =>
   request(method, path, body).pipe(Effect.asVoid)
 
-const readResponseTextStream = (
-  response: HttpClientResponse.HttpClientResponse,
-  onChunk: (chunk: string) => void
-) =>
-  HttpClientResponse.stream(Effect.succeed(response)).pipe(
-    Stream.decodeText(),
-    Stream.runFoldEffect("", (output, chunk) =>
-      Effect.sync(() => {
-        onChunk(chunk)
-        return output + chunk
-      }))
-  )
-
 export const requestTextStream = (
   method: ApiHttpMethod,
   path: string,
@@ -230,5 +218,5 @@ export const requestTextStream = (
       return yield* _(Effect.fail(toRequestError(method, path, response.status, parsed)))
     }
 
-    return yield* _(readResponseTextStream(response, onChunk))
+    return yield* _(readHttpResponseTextStream(response, onChunk))
   }).pipe(Effect.provide(FetchHttpClient.layer), mapTransportError(method, path))

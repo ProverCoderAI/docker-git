@@ -49,6 +49,7 @@ const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
   useActionPromptReset(args.state.actionPrompt, args.currentMenu, args.state.setActionPrompt)
   useGithubAuthGate({
     actionPrompt: args.state.actionPrompt,
+    busyLabel: args.state.busyLabel,
     githubStatus: args.state.githubStatus,
     selectedMenuIndex: args.state.selectedMenuIndex,
     setActionPrompt: args.state.setActionPrompt,

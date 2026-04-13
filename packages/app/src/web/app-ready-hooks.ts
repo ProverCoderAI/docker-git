@@ -48,6 +48,7 @@ type PanelAutoloadArgs = {
 
 type GithubAuthGateArgs = {
   readonly actionPrompt: ActionPromptState | null
+  readonly busyLabel: string | null
   readonly githubStatus: GithubAuthStatus | null
   readonly selectedMenuIndex: number
   readonly setActionPrompt: Setter<ActionPromptState | null>
@@ -188,6 +189,7 @@ export const useActionPromptReset = (
 
 export const useGithubAuthGate = ({
   actionPrompt,
+  busyLabel,
   githubStatus,
   selectedMenuIndex,
   setActionPrompt,
@@ -195,6 +197,9 @@ export const useGithubAuthGate = ({
   setSelectedMenuIndex
 }: GithubAuthGateArgs) => {
   useEffect(() => {
+    if (busyLabel !== null) {
+      return
+    }
     if (!shouldRequireGithubAuth(githubStatus)) {
       return
     }
@@ -207,7 +212,7 @@ export const useGithubAuthGate = ({
       setActionPrompt(createAuthActionPrompt("GithubOauth"))
     }
     setMessage(githubAuthGateMessage(githubStatus))
-  }, [actionPrompt, githubStatus, selectedMenuIndex, setActionPrompt, setMessage, setSelectedMenuIndex])
+  }, [actionPrompt, busyLabel, githubStatus, selectedMenuIndex, setActionPrompt, setMessage, setSelectedMenuIndex])
 }
 
 export const useProjectNavigationReset = (

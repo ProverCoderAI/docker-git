@@ -17,7 +17,9 @@ import {
   createProjectAuthActionPrompt,
   validateActionPrompt
 } from "./action-prompt.js"
+import { runGithubOauthMutation } from "./actions-github-oauth.js"
 import {
+  applyAuthSuccessState,
   type BrowserActionContext,
   defaultLabel,
   nullableValue,
@@ -29,7 +31,6 @@ import {
   loadAuthSnapshot,
   loadGithubStatus,
   loadProjectAuthSnapshot,
-  loginGithub,
   runAuthMenuFlow,
   runProjectAuthFlow
 } from "./api.js"
@@ -89,36 +90,34 @@ const runSupportedAuthMutation = (
   values: Readonly<Record<string, string>>,
   context: BrowserActionContext
 ) => {
+  if (action === "GithubOauth") {
+    runGithubOauthMutation(values, context)
+    return
+  }
+
   const label = defaultLabel(values["label"])
   withBusy({
     context,
-    effect: (
-      action === "GithubOauth"
-        ? loginGithub(nullableValue(values["label"])).pipe(
-          Effect.flatMap((githubStatus) =>
-            loadAuthSnapshot().pipe(Effect.map((snapshot) => ({ githubStatus, snapshot })))
-          )
+    effect: runAuthMenuFlow({
+      flow: action,
+      label: nullableValue(values["label"]),
+      token: nullableValue(values["token"]),
+      user: nullableValue(values["user"]),
+      apiKey: nullableValue(values["apiKey"])
+    }).pipe(
+      Effect.flatMap((snapshot) =>
+        loadGithubStatus().pipe(
+          Effect.map((githubStatus) => ({ githubStatus, snapshot }))
         )
-        : runAuthMenuFlow({
-          flow: action,
-          label: nullableValue(values["label"]),
-          token: nullableValue(values["token"]),
-          user: nullableValue(values["user"]),
-          apiKey: nullableValue(values["apiKey"])
-        }).pipe(
-          Effect.flatMap((snapshot) =>
-            loadGithubStatus().pipe(Effect.map((githubStatus) => ({ githubStatus, snapshot })))
-          )
-        )
-    ),
-    label: action === "GithubOauth" ? "Running GitHub OAuth" : action,
-    onSuccess: ({ githubStatus, snapshot }) => {
-      context.setActionPrompt(null)
-      context.setAuthSnapshot(snapshot)
-      context.setGithubStatus(githubStatus)
-      context.setMessage(
-        action === "GithubOauth" ? `Saved GitHub token (${label}).` : authSuccessMessage(action, label)
       )
+    ),
+    label: action,
+    onSuccess: ({ githubStatus, snapshot }) => {
+      applyAuthSuccessState(context, {
+        githubStatus,
+        message: authSuccessMessage(action, label),
+        snapshot
+      })
     }
   })
 }
