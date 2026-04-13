@@ -96,7 +96,8 @@ const writeStreamText = (
     Stream.runForEach((chunk) =>
       Effect.sync(() => {
         write(chunk)
-      }))
+      })
+    )
   )
 
 const combineCommandOutput = (stdout: string, stderr: string): string =>

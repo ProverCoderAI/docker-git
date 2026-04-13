@@ -4,10 +4,7 @@ import { Effect } from "effect"
 
 import type { ApiTerminalSession } from "../../src/docker-git/api-terminal-codec.js"
 import type { HostError } from "../../src/docker-git/host-errors.js"
-import {
-  openHostProjectSshEffect,
-  openResolvedProjectSshEffect
-} from "../../src/docker-git/open-project.js"
+import { openHostProjectSshEffect, openResolvedProjectSshEffect } from "../../src/docker-git/open-project.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
 
 const makeSession = (): ApiTerminalSession => ({
@@ -85,7 +82,7 @@ const captureOpenResolvedProjectSshEvents = (
 
 const captureOpenHostProjectSshEvents = (
   item: ReturnType<typeof makeProjectItem>
-): Effect.Effect<ReadonlyArray<string>, never> =>
+): Effect.Effect<ReadonlyArray<string>> =>
   Effect.gen(function*(_) {
     const events: Array<string> = []
     yield* _(

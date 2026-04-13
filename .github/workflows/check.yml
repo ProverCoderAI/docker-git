@@ -25,6 +25,8 @@ jobs:
         uses: ./.github/actions/setup
       - name: Build (docker-git package)
         run: bun run --cwd packages/app build
+      - name: Build (api)
+        run: bun run --cwd packages/api build
 
   types:
     name: Types
@@ -38,6 +40,8 @@ jobs:
         run: bun run --cwd packages/app check
       - name: Typecheck (lib)
         run: bun run --cwd packages/lib typecheck
+      - name: Typecheck (api)
+        run: bun run --cwd packages/api typecheck
 
   lint:
     name: Lint
@@ -51,6 +55,8 @@ jobs:
         run: bun run --cwd packages/app lint
       - name: Lint (lib)
         run: bun run --cwd packages/lib lint
+      - name: Lint (api)
+        run: bun run --cwd packages/api lint
 
   test:
     name: Test
@@ -64,6 +70,8 @@ jobs:
         run: bun run --cwd packages/app test
       - name: Test (lib)
         run: bun run --cwd packages/lib test
+      - name: Test (api)
+        run: bun run --cwd packages/api test
 
   lint-effect:
     name: Lint Effect-TS
@@ -140,3 +148,16 @@ jobs:
         run: docker version && docker compose version
       - name: Runtime volumes + host SSH CLI
         run: bash scripts/e2e/runtime-volumes-ssh.sh
+
+  e2e-clone-auto-open-ssh:
+    name: E2E (Clone auto-open SSH)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Docker info
+        run: docker version && docker compose version
+      - name: Clone auto-open SSH
+        run: bash scripts/e2e/clone-auto-open-ssh.sh

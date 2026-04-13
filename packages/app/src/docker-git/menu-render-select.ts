@@ -39,6 +39,14 @@ export type SelectColumnWidths = {
   readonly listWidth: number
 }
 
+type RenderSelectDetailsInput = {
+  readonly connectEnableMcpPlaywright: boolean
+  readonly detailsWidth: number | null
+  readonly item: ProjectItem | undefined
+  readonly purpose: SelectPurpose
+  readonly runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
+}
+
 export const computeSelectColumnWidths = (labels: ReadonlyArray<string>): SelectColumnWidths => {
   const preferredListWidth = computeListWidth(labels)
   const columns = readStdoutColumns()
@@ -61,25 +69,23 @@ export const computeSelectColumnWidths = (labels: ReadonlyArray<string>): Select
 
 export const renderSelectDetails = (
   el: typeof React.createElement,
-  purpose: SelectPurpose,
-  item: ProjectItem | undefined,
-  runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>,
-  connectEnableMcpPlaywright: boolean,
-  detailsWidth: number | null
+  input: RenderSelectDetailsInput
 ): ReadonlyArray<React.ReactElement> => {
-  const runtime = item === undefined
+  const runtime = input.item === undefined
     ? { running: false, sshSessions: 0, startedAtIso: null, startedAtEpochMs: null }
-    : (runtimeByProject[item.projectDir] ?? {
+    : (input.runtimeByProject[input.item.projectDir] ?? {
       running: false,
       sshSessions: 0,
       startedAtIso: null,
       startedAtEpochMs: null
     })
-  const details = buildSelectDetailsModel(purpose, item, runtime, connectEnableMcpPlaywright)
-  const widthProps = detailsWidth === null ? {} : { width: detailsWidth }
+  const details = buildSelectDetailsModel(input.purpose, input.item, runtime, input.connectEnableMcpPlaywright)
+  const widthProps = input.detailsWidth === null ? {} : { width: input.detailsWidth }
   return [
     el(Text, { fg: "cyan", bold: true, wrap: "truncate", ...widthProps }, details.title),
-    ...details.lines.map((line, index) => el(Text, { key: `${details.title}-${index}`, wrap: "wrap", ...widthProps }, line))
+    ...details.lines.map((line, index) =>
+      el(Text, { key: `${details.title}-${index}`, wrap: "wrap", ...widthProps }, line)
+    )
   ]
 }
 

@@ -41,6 +41,19 @@ jobs:
           README_BACKUP=""
           README_CREATED="false"
           BACKUP_PKG="${PKG_DIR}/.package.json.release.bak"
+          GROUP_COUNT=0
+
+          open_group() {
+            echo "::group::$1"
+            GROUP_COUNT=$((GROUP_COUNT + 1))
+          }
+
+          close_group() {
+            if [ "$GROUP_COUNT" -gt 0 ]; then
+              echo "::endgroup::"
+              GROUP_COUNT=$((GROUP_COUNT - 1))
+            fi
+          }
 
           cleanup() {
             if [ -f "$BACKUP_PKG" ]; then
@@ -53,32 +66,47 @@ jobs:
             elif [ "$README_CREATED" = "true" ] && [ -f "$README_DEST" ]; then
               rm -f "$README_DEST" || true
             fi
+            while [ "$GROUP_COUNT" -gt 0 ]; do
+              close_group
+            done
             rm -rf "$TMP_DIR"
           }
           trap cleanup EXIT
 
           mkdir -p "$LOCAL_PACK_DIR" "$REMOTE_PACK_DIR"
 
+          open_group "Resolve package metadata"
           if [ -n "${NPM_TOKEN:-}" ]; then
             printf '%s\n' "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
           fi
 
           if ! LATEST_VERSION="$(npm view "${PKG_NAME}" version 2>/dev/null)"; then
+            close_group
             echo "Package ${PKG_NAME} not found on npm; proceeding with release."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "Package: ${PKG_NAME}"
+          echo "Latest npm version: ${LATEST_VERSION}"
+          close_group
 
-          REMOTE_TARBALL="$(npm pack "${PKG_NAME}@${LATEST_VERSION}" --silent --pack-destination "$REMOTE_PACK_DIR" | tail -n 1)"
+          open_group "Download remote package"
+          REMOTE_TARBALL="$(npm pack "${PKG_NAME}@${LATEST_VERSION}" --pack-destination "$REMOTE_PACK_DIR" | tail -n 1)"
           REMOTE_TAR_PATH="$REMOTE_PACK_DIR/$REMOTE_TARBALL"
+          echo "Remote tarball: ${REMOTE_TAR_PATH}"
           if [ ! -f "$REMOTE_TAR_PATH" ]; then
+            close_group
             echo "Unable to download ${PKG_NAME}@${LATEST_VERSION}; proceeding with release."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          close_group
 
+          open_group "Build current package"
           bun run --cwd packages/app build
+          close_group
 
+          open_group "Prepare package README"
           if [ -f "$README_DEST" ]; then
             README_BACKUP="${TMP_DIR}/README.backup"
             cp "$README_DEST" "$README_BACKUP"
@@ -87,32 +115,42 @@ jobs:
           fi
           mkdir -p "$(dirname "$README_DEST")"
           cp README.md "$README_DEST"
+          close_group
 
+          open_group "Prune package manifest"
           cp "$PKG_PATH" "$BACKUP_PKG"
           bun x @prover-coder-ai/dist-deps-prune apply \
             --package "$PKG_PATH" \
             --prune-dev true \
-            --write \
-            --silent
+            --write
+          close_group
 
+          open_group "Pack current package"
           LOCAL_TAR_PATH="$(cd "$PKG_DIR" && bun pm pack --quiet --ignore-scripts --destination "$LOCAL_PACK_DIR" | tail -n 1 | tr -d '\r')"
+          echo "Local tarball: ${LOCAL_TAR_PATH}"
           if [ ! -f "$LOCAL_TAR_PATH" ]; then
+            close_group
             echo "Unable to pack local ${PKG_NAME}; proceeding with release."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          close_group
 
           LOCAL_DIR="${TMP_DIR}/local"
           REMOTE_DIR="${TMP_DIR}/remote"
           mkdir -p "$LOCAL_DIR" "$REMOTE_DIR"
 
+          open_group "Extract tarballs"
           tar -xzf "$LOCAL_TAR_PATH" -C "$LOCAL_DIR"
           tar -xzf "$REMOTE_TAR_PATH" -C "$REMOTE_DIR"
+          close_group
 
           LOCAL_PKG="${LOCAL_DIR}/package/package.json"
           REMOTE_PKG="${REMOTE_DIR}/package/package.json"
 
+          open_group "Normalize package metadata"
           if [ ! -f "$LOCAL_PKG" ] || [ ! -f "$REMOTE_PKG" ]; then
+            close_group
             echo "package.json missing in tarball; proceeding with release."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -120,7 +158,9 @@ jobs:
 
           bun -e "const p=process.argv[1];const sort=(v)=>Array.isArray(v)?v.map(sort):v&&typeof v==='object'?Object.keys(v).sort().reduce((acc,k)=>{acc[k]=sort(v[k]);return acc;},{}):v;const pkg=JSON.parse(await Bun.file(p).text());delete pkg.gitHead;pkg.version='0.0.0';const norm=sort(pkg);await Bun.write(p, JSON.stringify(norm, null, 2)+'\n');" "$LOCAL_PKG"
           bun -e "const p=process.argv[1];const sort=(v)=>Array.isArray(v)?v.map(sort):v&&typeof v==='object'?Object.keys(v).sort().reduce((acc,k)=>{acc[k]=sort(v[k]);return acc;},{}):v;const pkg=JSON.parse(await Bun.file(p).text());delete pkg.gitHead;pkg.version='0.0.0';const norm=sort(pkg);await Bun.write(p, JSON.stringify(norm, null, 2)+'\n');" "$REMOTE_PKG"
+          close_group
 
+          open_group "Compare package contents"
           if diff -qr "$LOCAL_DIR/package" "$REMOTE_DIR/package" >/dev/null 2>&1; then
             echo "::notice::No changes compared to ${PKG_NAME}@${LATEST_VERSION}. Skipping release."
             echo "should_release=false" >> "$GITHUB_OUTPUT"
@@ -128,6 +168,7 @@ jobs:
             echo "Package differs from ${PKG_NAME}@${LATEST_VERSION}; proceeding with release."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
           fi
+          close_group
       - name: Auto changeset (patch if no changeset exists)
         if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
         shell: bash

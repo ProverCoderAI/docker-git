@@ -15,12 +15,12 @@ export type DockerContainerRuntimeInfo = {
 }
 
 export {
-  openResolvedProjectSsh,
-  openResolvedProjectSshViaController,
-  openHostProjectSshEffect,
-  type OpenResolvedProjectSshDeps,
   type OpenHostProjectSshDeps,
-  openResolvedProjectSshEffect
+  openHostProjectSshEffect,
+  openResolvedProjectSsh,
+  type OpenResolvedProjectSshDeps,
+  openResolvedProjectSshEffect,
+  openResolvedProjectSshViaController
 } from "./open-project-ssh.js"
 
 type ResolveOpenProjectDeps<E, R> = {

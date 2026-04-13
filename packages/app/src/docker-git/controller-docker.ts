@@ -4,7 +4,11 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import { runCommandCapture, runCommandExitCode, runCommandExitCodeStreaming } from "./frontend-lib/shell/command-runner.js"
+import {
+  runCommandCapture,
+  runCommandExitCode,
+  runCommandExitCodeStreaming
+} from "./frontend-lib/shell/command-runner.js"
 
 import { type DockerNetworkIps, parseDockerNetworkIps, uniqueStrings } from "./controller-reachability.js"
 import {
