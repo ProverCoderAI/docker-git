@@ -1,6 +1,6 @@
 import { Either } from "effect"
 
-import { type PanesCommand, type ParseError } from "@lib/core/domain"
+import { type PanesCommand, type ParseError } from "../frontend-lib/core/domain.js"
 
 import { parseProjectDirArgs } from "./parser-shared.js"
 

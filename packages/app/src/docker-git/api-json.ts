@@ -2,26 +2,19 @@ import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
 import { Effect, Either } from "effect"
 
-type JsonPrimitive = boolean | number | string | null
-export type JsonValue = JsonPrimitive | JsonObject | ReadonlyArray<JsonValue>
-export type JsonObject = Readonly<{ [key: string]: JsonValue }>
+import { type JsonObject, type JsonValue, JsonValueSchema } from "../shared/json-schema.js"
+
+export type { JsonObject, JsonValue } from "../shared/json-schema.js"
+
 export type JsonRequest =
-  | JsonPrimitive
+  | boolean
+  | number
+  | string
+  | null
   | { readonly [key: string]: JsonRequest | undefined }
   | ReadonlyArray<JsonRequest>
 
-const JsonValueSchema: Schema.Schema<JsonValue> = Schema.suspend(() =>
-  Schema.Union(
-    Schema.Null,
-    Schema.Boolean,
-    Schema.Number,
-    Schema.String,
-    Schema.Array(JsonValueSchema),
-    Schema.Record({ key: Schema.String, value: JsonValueSchema })
-  )
-)
-
-const JsonValueFromStringSchema = Schema.parseJson(JsonValueSchema)
+const JsonValueFromStringSchema: Schema.Schema<JsonValue, string> = Schema.parseJson(JsonValueSchema)
 
 const decodeJsonText = (input: string): Effect.Effect<JsonValue> =>
   Either.match(ParseResult.decodeUnknownEither(JsonValueFromStringSchema)(input), {
@@ -88,6 +81,43 @@ const renderGithubStatusLike = (value: JsonObject): string | null => {
   return lines.length === 0 ? summary : [summary, ...lines].join("\n")
 }
 
+const readNestedMessage = (
+  object: JsonObject,
+  key: string
+): string | null => {
+  const nested = asObject(object[key])
+  if (nested === null) {
+    return null
+  }
+  return asString(nested["message"])
+}
+
+const renderNestedStatusPayload = (
+  payload: JsonValue,
+  object: JsonObject
+): string | null => {
+  const nestedStatus = asObject(object["status"])
+  if (nestedStatus === null) {
+    return null
+  }
+
+  const renderedNestedStatus = renderGithubStatusLike(nestedStatus)
+  if (renderedNestedStatus !== null) {
+    return renderedNestedStatus
+  }
+
+  return readNestedMessage(object, "status") ?? JSON.stringify(payload, null, 2)
+}
+
+const renderDirectObjectPayload = (object: JsonObject): string | null => {
+  const directStatus = renderGithubStatusLike(object)
+  if (directStatus !== null) {
+    return directStatus
+  }
+
+  return asString(object["message"])
+}
+
 export const renderJsonPayload = (payload: JsonValue): string => {
   if (typeof payload === "string") {
     return payload
@@ -98,27 +128,19 @@ export const renderJsonPayload = (payload: JsonValue): string => {
     return JSON.stringify(payload, null, 2)
   }
 
-  const directStatus = renderGithubStatusLike(object)
-  if (directStatus !== null) {
-    return directStatus
+  const directPayload = renderDirectObjectPayload(object)
+  if (directPayload !== null) {
+    return directPayload
   }
 
-  const message = asString(object["message"])
-  if (message !== null) {
-    return message
-  }
-
-  const nestedStatus = asObject(object["status"])
+  const nestedStatus = renderNestedStatusPayload(payload, object)
   if (nestedStatus !== null) {
-    const renderedNestedStatus = renderGithubStatusLike(nestedStatus)
-    if (renderedNestedStatus !== null) {
-      return renderedNestedStatus
-    }
+    return nestedStatus
+  }
 
-    const nestedMessage = asString(nestedStatus["message"])
-    if (nestedMessage !== null) {
-      return nestedMessage
-    }
+  const nestedErrorMessage = readNestedMessage(object, "error")
+  if (nestedErrorMessage !== null) {
+    return nestedErrorMessage
   }
 
   return JSON.stringify(payload, null, 2)

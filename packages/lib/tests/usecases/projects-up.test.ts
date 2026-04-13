@@ -145,7 +145,7 @@ const makeTemplateConfig = (
   dockerNetworkMode: "project",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: false,
-  pnpmVersion: "10.27.0"
+  bunVersion: "1.3.11"
 })
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

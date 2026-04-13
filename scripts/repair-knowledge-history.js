@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 // CHANGE: Rewrite unpushed commits so oversized .knowledge/.knowlenge files are split inside history.
 // WHY: Splitting in the working tree is not enough once a >100MB blob is committed; the blob must become unreachable.
@@ -53,7 +53,7 @@ if (!Number.isFinite(count) || count <= 0) {
 
 // Run splitter + secret redaction after each commit is replayed, then amend if needed.
 const execCmd = [
-  `node scripts/split-knowledge-large-files.js`,
+  `bun scripts/split-knowledge-large-files.js`,
   `while IFS= read -r -d '' knowledge_dir; do git add -A -- "$knowledge_dir"; done < <(find . \\( -name ".git" -o -name "tmp" \\) -type d -prune -o \\( -type d \\( -name ".knowledge" -o -name ".knowlenge" \\) -print0 \\))`,
   `bash scripts/pre-commit-secret-guard.sh`,
   `if ! git diff --cached --quiet; then git commit --amend --no-edit --no-verify; fi`,

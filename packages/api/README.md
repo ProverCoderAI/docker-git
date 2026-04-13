@@ -1,4 +1,4 @@
-# @effect-template/api
+# docker-git API
 
 HTTP API for docker-git orchestration (projects, agents, logs/events, federation).
 
@@ -19,8 +19,8 @@ This page is a built-in UI shell for manual API checks without CLI.
 ## Run (local)
 
 ```bash
-pnpm --filter ./packages/api build
-pnpm --filter ./packages/api start
+bun run --cwd packages/api build
+bun run --cwd packages/api start
 ```
 
 ## Run (dedicated Docker for API)

@@ -1,16 +1,9 @@
+import { defaultTemplateConfig } from "@effect-template/lib/core/domain"
+import { runCommandCapture, runCommandWithExitCodes } from "@effect-template/lib/shell/command-runner"
+import { CommandFailedError } from "@effect-template/lib/shell/errors"
+import { defaultProjectsRoot, findSshPrivateKey, resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
+import { withFsPathContext } from "@effect-template/lib/usecases/runtime"
 import { Effect } from "effect"
-
-import type { CreateCommand } from "@lib/core/domain"
-import { defaultTemplateConfig } from "@lib/core/domain"
-import { runCommandCapture, runCommandWithExitCodes } from "@lib/shell/command-runner"
-import { CommandFailedError } from "@lib/shell/errors"
-import { defaultProjectsRoot, findSshPrivateKey, resolvePathFromCwd } from "@lib/usecases/path-helpers"
-import { withFsPathContext } from "@lib/usecases/runtime"
-
-export type HostSshMaterial = {
-  readonly privateKeyPath: string
-  readonly authorizedKeysContents: string
-}
 
 const normalizeAuthorizedKeys = (value: string): ReadonlyArray<string> =>
   value
@@ -31,9 +24,7 @@ const mergeAuthorizedKeys = (
   return merged.length === 0 ? "" : `${merged.join("\n")}\n`
 }
 
-const resolvePublicKeyFromPrivate = (
-  privateKeyPath: string
-) =>
+const resolvePublicKeyFromPrivate = (privateKeyPath: string) =>
   withFsPathContext(({ fs }) =>
     Effect.gen(function*(_) {
       const publicKeyPath = `${privateKeyPath}.pub`
@@ -56,7 +47,7 @@ const resolvePublicKeyFromPrivate = (
     })
   )
 
-export const resolveHostPrivateKeyPath = () =>
+const resolveHostPrivateKeyPath = () =>
   withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
       const existing = yield* _(findSshPrivateKey(fs, path, process.cwd()))
@@ -91,25 +82,6 @@ export const resolveHostPrivateKeyPath = () =>
     })
   )
 
-const readLocalAuthorizedKeysOverride = (
-  command: CreateCommand
-) =>
-  withFsPathContext(({ fs, path }) =>
-    Effect.gen(function*(_) {
-      if (command.config.authorizedKeysPath === defaultTemplateConfig.authorizedKeysPath) {
-        return ""
-      }
-
-      const resolved = resolvePathFromCwd(path, process.cwd(), command.config.authorizedKeysPath)
-      const exists = yield* _(fs.exists(resolved))
-      if (!exists) {
-        return ""
-      }
-
-      return yield* _(fs.readFileString(resolved))
-    })
-  )
-
 const resolveManagedHostPublicKey = () =>
   Effect.gen(function*(_) {
     const privateKeyPath = yield* _(resolveHostPrivateKeyPath())
@@ -121,31 +93,41 @@ const resolveManagedHostPublicKey = () =>
     }
   })
 
-export const resolveHostSshMaterial = (
-  command: CreateCommand
+const readLocalAuthorizedKeysOverride = (
+  projectDir: string,
+  authorizedKeysPath: string
 ) =>
-  Effect.gen(function*(_) {
-    const { privateKeyPath, publicKey } = yield* _(resolveManagedHostPublicKey())
-    const authorizedKeysOverride = yield* _(readLocalAuthorizedKeysOverride(command))
+  withFsPathContext(({ fs, path }) =>
+    Effect.gen(function*(_) {
+      if (authorizedKeysPath === defaultTemplateConfig.authorizedKeysPath) {
+        return ""
+      }
 
-    return {
-      privateKeyPath,
-      authorizedKeysContents: mergeAuthorizedKeys(
-        normalizeAuthorizedKeys(authorizedKeysOverride),
-        normalizeAuthorizedKeys(publicKey)
-      )
-    }
+      const resolved = resolvePathFromCwd(path, projectDir, authorizedKeysPath)
+      const exists = yield* _(fs.exists(resolved))
+      if (!exists) {
+        return ""
+      }
+
+      return yield* _(fs.readFileString(resolved))
+    })
+  )
+
+export const resolveManagedAuthorizedKeysContents = () =>
+  Effect.gen(function*(_) {
+    const { publicKey } = yield* _(resolveManagedHostPublicKey())
+    return mergeAuthorizedKeys([], normalizeAuthorizedKeys(publicKey))
   })
 
-export const resolveManagedHostSshMaterial = () =>
+export const resolveCreateAuthorizedKeysContents = (
+  projectDir: string,
+  authorizedKeysPath: string
+) =>
   Effect.gen(function*(_) {
-    const { privateKeyPath, publicKey } = yield* _(resolveManagedHostPublicKey())
-
-    return {
-      privateKeyPath,
-      authorizedKeysContents: mergeAuthorizedKeys(
-        [],
-        normalizeAuthorizedKeys(publicKey)
-      )
-    }
+    const { publicKey } = yield* _(resolveManagedHostPublicKey())
+    const authorizedKeysOverride = yield* _(readLocalAuthorizedKeysOverride(projectDir, authorizedKeysPath))
+    return mergeAuthorizedKeys(
+      normalizeAuthorizedKeys(authorizedKeysOverride),
+      normalizeAuthorizedKeys(publicKey)
+    )
   })

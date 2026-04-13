@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 // CHANGE: Add repeatable pre-commit hook setup for secret auto-redaction and AI session directory staging
 // WHY: Keep secret scanning on every commit without one-time manual hook wiring,
@@ -25,7 +25,7 @@ HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HOOK_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-node scripts/split-knowledge-large-files.js
+bun scripts/split-knowledge-large-files.js
 while IFS= read -r -d '' knowledge_dir; do
   git add -A -- "$knowledge_dir"
 done < <(

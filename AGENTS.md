@@ -340,7 +340,7 @@ describe("Message invariants", () => {
 
 - **Линт**: `npm run lint` (с функциональными правилами)
 - **Тесты**: `npm test` (unit + property-based + integration)
-- **ts-morph скрипты**: `npx ts-node scripts/<script-name>.ts`
+- **ts-morph скрипты**: `bun scripts/<script-name>.ts`
 
 ПРОВЕРКИ КАЧЕСТВА:
 ═══════════════════

@@ -1,7 +1,8 @@
 import { Either } from "effect"
 
-import { type OpenCommand, type ParseError } from "@lib/core/domain"
+import { type OpenCommand, type ParseError } from "../frontend-lib/core/domain.js"
 
+import { trimToUndefined } from "../../shared/trimmed-text.js"
 import { parseRawOptions } from "./parser-options.js"
 
 type OpenParts = {
@@ -26,11 +27,6 @@ const buildOpenCommand = (parts: OpenParts): OpenCommand => ({
   ...(parts.projectDir === undefined ? {} : { projectDir: parts.projectDir })
 })
 
-const normalizeSelector = (value: string | undefined): string | undefined => {
-  const trimmed = value?.trim() ?? ""
-  return trimmed.length > 0 ? trimmed : undefined
-}
-
 // CHANGE: parse open as a distinct selector-based command
 // WHY: open must resolve existing projects by raw selector without tmux semantics
 // QUOTE(ТЗ): "open should parse to a distinct _tag: \"Open\" command"
@@ -46,12 +42,12 @@ export const parseOpen = (args: ReadonlyArray<string>): Either.Either<OpenComman
   return Either.flatMap(parseRawOptions(rest), (raw) =>
     Either.right(
       buildOpenCommand({
-        ...(normalizeSelector(raw.projectDir) === undefined
+        ...(trimToUndefined(raw.projectDir) === undefined
           ? {}
-          : { projectDir: normalizeSelector(raw.projectDir) }),
-        ...(normalizeSelector(raw.containerName ?? raw.repoUrl ?? positionalRef) === undefined
+          : { projectDir: trimToUndefined(raw.projectDir) }),
+        ...(trimToUndefined(raw.containerName ?? raw.repoUrl ?? positionalRef) === undefined
           ? {}
-          : { projectRef: normalizeSelector(raw.containerName ?? raw.repoUrl ?? positionalRef) })
+          : { projectRef: trimToUndefined(raw.containerName ?? raw.repoUrl ?? positionalRef) })
       })
     ))
 }

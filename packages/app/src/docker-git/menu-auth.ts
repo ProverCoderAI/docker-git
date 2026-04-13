@@ -1,7 +1,5 @@
 import { Effect, pipe } from "effect"
 
-import type { AppError } from "@lib/usecases/errors"
-
 import {
   type AuthMenuAction,
   authMenuActionByIndex,
@@ -11,6 +9,7 @@ import {
 } from "./menu-auth-data.js"
 import { resolveAuthPromptEffect, runAuthPromptEffect, startAuthMenuWithSnapshot } from "./menu-auth-effects.js"
 import { nextBufferValue } from "./menu-buffer-input.js"
+import type { MenuError } from "./menu-errors.js"
 import { handleMenuNumberInput, submitPromptStep } from "./menu-input-utils.js"
 import { resetToMenu } from "./menu-shared.js"
 import type {
@@ -60,7 +59,7 @@ const startAuthPrompt = (
 const loadAuthMenuView = (
   cwd: string,
   context: Pick<MenuViewContext, "setView" | "setMessage">
-): Effect.Effect<void, AppError, MenuEnv> =>
+): Effect.Effect<void, MenuError, MenuEnv> =>
   pipe(
     readAuthSnapshot(cwd),
     Effect.tap((snapshot) =>

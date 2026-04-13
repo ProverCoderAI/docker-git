@@ -19,36 +19,17 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/setup
         with:
-          node-version: 22.12.0
+          bun-version: 1.3.11
       - name: Build package
-        run: pnpm build
-      - name: Create snapshot
-        id: snapshot
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        working-directory: packages/app
-        run: |
-          set +e
-          pnpx pkg-pr-new@0.0.24 publish --pnpm --comment=off
-          STATUS=$?
-          if [ $STATUS -eq 0 ]; then
-            echo "success=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "success=false" >> "$GITHUB_OUTPUT"
-            echo "pkg-pr-new failed (likely app not installed); falling back to artifacts."
-          fi
-          exit 0
-      - name: Fallback snapshot artifacts
-        if: steps.snapshot.outputs.success != 'true'
+        run: bun run --cwd packages/app build
+      - name: Create snapshot artifacts
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts
           cd packages/app
-          npm pack --silent --pack-destination ../../artifacts
+          bun pm pack --quiet --ignore-scripts --destination ../../artifacts
       - name: Upload snapshot artifacts
-        if: steps.snapshot.outputs.success != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: context-doc-snapshot

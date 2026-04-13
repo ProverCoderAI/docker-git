@@ -1,24 +1,24 @@
-import { defaultTemplateConfig } from "@lib/core/domain"
-import { runDockerInspectContainerRuntimeInfo, type DockerContainerRuntimeInfo } from "@lib/shell/docker"
-import { buildSshCommand, connectProjectSsh, probeProjectSshReady, type ProjectItem } from "@lib/usecases/projects"
-import { Effect, pipe } from "effect"
+import { Effect } from "effect"
 
-import type { OpenCommand } from "@lib/core/domain"
-import { parseGithubRepoUrl, resolveRepoInput } from "@lib/core/repo"
+import type { OpenCommand } from "./frontend-lib/core/domain.js"
+import { parseGithubRepoUrl, resolveRepoInput } from "./frontend-lib/core/repo.js"
 
 import { getProject, listProjects } from "./api-client.js"
 import type { ApiProjectDetails } from "./api-project-codec.js"
 import type { ProjectResolutionError } from "./host-errors.js"
-import { connectMenuProjectSshWithUp } from "./menu-api.js"
+import { openResolvedProjectSsh } from "./open-project-ssh.js"
 import { resolveApiProjectItem } from "./project-item.js"
 
-type OpenResolvedProjectSshDeps<E, R> = {
-  readonly log: (message: string) => Effect.Effect<void, E, R>
-  readonly resolvePreferredItem: (item: ProjectItem) => Effect.Effect<ProjectItem | null, E, R>
-  readonly probeReady: (item: ProjectItem) => Effect.Effect<boolean, E, R>
-  readonly connect: (item: ProjectItem) => Effect.Effect<void, E, R>
-  readonly connectWithUp: (item: ProjectItem) => Effect.Effect<void, E, R>
+export type DockerContainerRuntimeInfo = {
+  readonly ipAddress: string
+  readonly projectWorkingDir?: string | undefined
 }
+
+export {
+  openResolvedProjectSsh,
+  type OpenResolvedProjectSshDeps,
+  openResolvedProjectSshEffect
+} from "./open-project-ssh.js"
 
 type ResolveOpenProjectDeps<E, R> = {
   readonly inspectRuntime: (containerName: string) => Effect.Effect<DockerContainerRuntimeInfo | null, E, R>
@@ -221,8 +221,9 @@ export const selectOpenProject = (
   )
 }
 
-const uniqueContainerNames = (projects: ReadonlyArray<ApiProjectDetails>): ReadonlyArray<string> =>
-  Array.from(new Set(projects.map((project) => project.containerName)))
+const uniqueContainerNames = (
+  projects: ReadonlyArray<ApiProjectDetails>
+): ReadonlyArray<string> => [...new Set(projects.map((project) => project.containerName))]
 
 export const resolveRuntimeOwnedProject = <E, R>(
   projects: ReadonlyArray<ApiProjectDetails>,
@@ -257,7 +258,9 @@ export const resolveOpenProjectEffect = <E, R>(
   deps: ResolveOpenProjectDeps<E, R>
 ): Effect.Effect<ApiProjectDetails, ProjectResolutionError | E, R> =>
   resolveRuntimeOwnedProject(projects, selector, deps).pipe(
-    Effect.flatMap((ownedProject) => ownedProject === null ? selectOpenProject(projects, selector) : Effect.succeed(ownedProject))
+    Effect.flatMap((ownedProject) =>
+      ownedProject === null ? selectOpenProject(projects, selector) : Effect.succeed(ownedProject)
+    )
   )
 
 const listProjectDetails = () =>
@@ -273,110 +276,13 @@ const listProjectDetails = () =>
     return details.filter((project): project is ApiProjectDetails => project !== null)
   })
 
-const withProjectItemIpAddress = (
-  item: ProjectItem,
-  ipAddress: string
-): ProjectItem => ({
-  ...item,
-  ipAddress,
-  sshCommand: buildSshCommand(
-    {
-      ...defaultTemplateConfig,
-      containerName: item.containerName,
-      serviceName: item.serviceName,
-      sshUser: item.sshUser,
-      sshPort: item.sshPort,
-      repoUrl: item.repoUrl,
-      repoRef: item.repoRef,
-      targetDir: item.targetDir,
-      envGlobalPath: item.envGlobalPath,
-      envProjectPath: item.envProjectPath,
-      codexAuthPath: item.codexAuthPath,
-      codexSharedAuthPath: item.codexAuthPath,
-      codexHome: item.codexHome,
-      clonedOnHostname: item.clonedOnHostname
-    },
-    item.sshKeyPath,
-    ipAddress
-  )
-})
-
-const sameConnectionTarget = (left: ProjectItem, right: ProjectItem): boolean =>
-  left.ipAddress === right.ipAddress &&
-  left.sshPort === right.sshPort &&
-  left.sshKeyPath === right.sshKeyPath &&
-  left.sshUser === right.sshUser
-
-const attemptDirectConnect = <E, R>(
-  item: ProjectItem,
-  deps: Pick<OpenResolvedProjectSshDeps<E, R>, "connect" | "log" | "probeReady">
-): Effect.Effect<boolean, E, R> =>
-  deps.probeReady(item).pipe(
-    Effect.flatMap((ready) =>
-      ready
-        ? pipe(
-            deps.log(`Opening SSH: ${item.sshCommand}`),
-            Effect.zipRight(deps.connect(item)),
-            Effect.as(true)
-          )
-        : Effect.succeed(false)
-    )
-  )
-
-export const openResolvedProjectSshEffect = <E, R>(
-  item: ProjectItem,
-  deps: OpenResolvedProjectSshDeps<E, R>
-) =>
-  Effect.gen(function*(_) {
-    const preferredItem = yield* _(deps.resolvePreferredItem(item))
-    if (preferredItem !== null) {
-      const connected = yield* _(attemptDirectConnect(preferredItem, deps))
-      if (connected) {
-        return
-      }
-    }
-
-    const shouldRetryOriginal = preferredItem === null || !sameConnectionTarget(preferredItem, item)
-    if (shouldRetryOriginal) {
-      const connected = yield* _(attemptDirectConnect(item, deps))
-      if (connected) {
-        return
-      }
-    }
-
-    yield* _(deps.log(`Opening SSH: ${item.sshCommand}`))
-    yield* _(deps.connectWithUp(item))
-  })
-
-export const openResolvedProjectSsh = (
-  item: ProjectItem
-) =>
-  openResolvedProjectSshEffect(item, {
-    log: (message) => Effect.log(message),
-    resolvePreferredItem: (selected) =>
-      runDockerInspectContainerRuntimeInfo(process.cwd(), selected.containerName).pipe(
-        Effect.map((runtime) =>
-          runtime !== null && runtime.ipAddress.length > 0
-            ? withProjectItemIpAddress(selected, runtime.ipAddress)
-            : null
-        )
-      ),
-    probeReady: (selected) => probeProjectSshReady(selected),
-    connect: (selected) => connectProjectSsh(selected),
-    connectWithUp: (selected) => connectMenuProjectSshWithUp(selected)
-  })
-
 export const openExistingProjectSsh = (
   command: OpenCommand
 ) =>
   Effect.gen(function*(_) {
     const projects = yield* _(listProjectDetails())
     const selector = command.projectDir ?? command.projectRef
-    const project = yield* _(
-      resolveOpenProjectEffect(projects, selector, {
-        inspectRuntime: (containerName) => runDockerInspectContainerRuntimeInfo(process.cwd(), containerName)
-      })
-    )
-    const item = yield* _(resolveApiProjectItem(project))
+    const project = yield* _(selectOpenProject(projects, selector))
+    const item = resolveApiProjectItem(project)
     yield* _(openResolvedProjectSsh(item))
   })

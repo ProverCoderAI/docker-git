@@ -1,5 +1,5 @@
-import type { Command } from "@lib/core/domain"
 import { Effect, Match, pipe } from "effect"
+import type { Command } from "./frontend-lib/core/domain.js"
 
 import {
   type ApiProjectDetails,

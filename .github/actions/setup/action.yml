@@ -1,21 +1,34 @@
 name: Setup
-description: Perform standard setup and install dependencies using pnpm.
+description: Perform standard setup and install dependencies using Bun.
 inputs:
+  bun-version:
+    description: The version of Bun to install
+    required: true
+    default: 1.3.11
   node-version:
-    description: The version of Node.js to install
+    description: The version of Node.js to install for compatibility/native builds
     required: true
     default: 24
 
 runs:
   using: composite
   steps:
-    - name: Install pnpm
-      uses: pnpm/action-setup@v5
-    - name: Install node
+    - name: Install Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+    - name: Install Node
       uses: actions/setup-node@v6
       with:
-        cache: pnpm
         node-version: ${{ inputs.node-version }}
+    - name: Install OpenSSH client
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y openssh-client
+    - name: Install node-gyp
+      shell: bash
+      run: npm install -g node-gyp
     - name: Install dependencies
       shell: bash
-      run: pnpm install --frozen-lockfile
+      run: bun install --frozen-lockfile

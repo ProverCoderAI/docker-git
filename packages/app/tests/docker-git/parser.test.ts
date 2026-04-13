@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
-import { defaultTemplateConfig } from "@lib/core/domain"
-import { expandContainerHome } from "@lib/usecases/scrap-path"
+import { defaultTemplateConfig } from "../../src/docker-git/frontend-lib/core/domain.js"
+import { expandContainerHome } from "../../src/docker-git/frontend-lib/usecases/scrap-path.js"
 import {
   type CreateCommand,
   expectAttachProjectDirCommand,

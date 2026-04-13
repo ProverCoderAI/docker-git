@@ -1,14 +1,13 @@
-import { Effect, Match, pipe } from "effect"
-
-import type { AppError } from "@lib/usecases/errors"
-import type { ProjectItem } from "@lib/usecases/projects"
+import { Effect, pipe } from "effect"
 
 import { nextBufferValue } from "./menu-buffer-input.js"
+import type { MenuError } from "./menu-errors.js"
 import { handleMenuNumberInput, submitPromptStep } from "./menu-input-utils.js"
 import {
   type ProjectAuthMenuAction,
   projectAuthMenuActionByIndex,
   projectAuthMenuSize,
+  projectAuthSuccessMessage,
   projectAuthViewSteps,
   readProjectAuthSnapshot,
   writeProjectAuthFlow
@@ -23,6 +22,7 @@ import type {
   ProjectAuthSnapshot,
   ViewState
 } from "./menu-types.js"
+import type { ProjectItem } from "./project-item.js"
 
 type ProjectAuthContext = Pick<MenuViewContext, "setView" | "setMessage" | "setActiveDir"> & {
   readonly runner: MenuRunner
@@ -62,7 +62,7 @@ const startProjectAuthPrompt = (
 const loadProjectAuthMenuView = (
   project: ProjectItem,
   context: Pick<MenuViewContext, "setView" | "setMessage">
-): Effect.Effect<void, AppError, MenuEnv> =>
+): Effect.Effect<void, MenuError, MenuEnv> =>
   pipe(
     readProjectAuthSnapshot(project),
     Effect.tap((snapshot) =>
@@ -71,19 +71,6 @@ const loadProjectAuthMenuView = (
       })
     ),
     Effect.asVoid
-  )
-
-const successMessage = (flow: ProjectAuthFlow, label: string): string =>
-  Match.value(flow).pipe(
-    Match.when("ProjectGithubConnect", () => `Connected GitHub label (${label}) to project.`),
-    Match.when("ProjectGithubDisconnect", () => "Disconnected GitHub from project."),
-    Match.when("ProjectGitConnect", () => `Connected Git label (${label}) to project.`),
-    Match.when("ProjectGitDisconnect", () => "Disconnected Git from project."),
-    Match.when("ProjectClaudeConnect", () => `Connected Claude label (${label}) to project.`),
-    Match.when("ProjectClaudeDisconnect", () => "Disconnected Claude from project."),
-    Match.when("ProjectGeminiConnect", () => `Connected Gemini label (${label}) to project.`),
-    Match.when("ProjectGeminiDisconnect", () => "Disconnected Gemini from project."),
-    Match.exhaustive
   )
 
 const runProjectAuthEffect = (
@@ -100,7 +87,7 @@ const runProjectAuthEffect = (
       Effect.tap((snapshot) =>
         Effect.sync(() => {
           startProjectAuthMenu(project, snapshot, context)
-          context.setMessage(successMessage(flow, label))
+          context.setMessage(projectAuthSuccessMessage(flow, label))
         })
       ),
       Effect.asVoid
@@ -260,6 +247,13 @@ const handleProjectAuthPromptInput = (
 export const openProjectAuthMenu = (context: ProjectAuthContextWithProject): void => {
   context.setMessage(`Loading project auth (${context.project.displayName})...`)
   context.runner.runEffect(loadProjectAuthMenuView(context.project, context))
+}
+
+export const openProjectAuthSelection = (
+  project: ProjectItem,
+  context: ProjectAuthContext
+): void => {
+  openProjectAuthMenu({ project, ...context })
 }
 
 export const handleProjectAuthInput = (

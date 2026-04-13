@@ -5,7 +5,9 @@ import { createServer } from "node:http"
 
 import { makeRouter } from "./http.js"
 import { initializeAgentState } from "./services/agents.js"
+import { attachAuthTerminalWebSocketServer } from "./services/auth-terminal-sessions.js"
 import { startOutboxPolling } from "./services/federation.js"
+import { attachTerminalWebSocketServer } from "./services/terminal-sessions.js"
 
 const resolvePort = (env: Record<string, string | undefined>): number => {
   const raw = env["DOCKER_GIT_API_PORT"] ?? env["PORT"]
@@ -42,6 +44,8 @@ export const program = (() => {
   const router = makeRouter()
   const app = router.pipe(HttpServer.serve(requestLogger), HttpServer.withLogAddress)
   const server = createServer()
+  attachAuthTerminalWebSocketServer(server)
+  attachTerminalWebSocketServer(server)
   const serverLayer = NodeHttpServer.layer(() => server, { port })
   
   const pollingInterval = parseInt(process.env["DOCKER_GIT_OUTBOX_POLLING_INTERVAL_MS"] ?? "5000", 10)

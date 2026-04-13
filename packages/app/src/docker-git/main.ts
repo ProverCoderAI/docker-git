@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
 import { Effect, pipe } from "effect"

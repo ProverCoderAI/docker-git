@@ -1,8 +1,8 @@
 import { expect } from "@effect/vitest"
 import { Effect, Either } from "effect"
 
-import type { Command } from "@lib/core/domain"
 import { parseArgs } from "../../src/docker-git/cli/parser.js"
+import type { Command } from "../../src/docker-git/frontend-lib/core/domain.js"
 
 export type CreateCommand = Extract<Command, { _tag: "Create" }>
 export type OpenCommand = Extract<Command, { _tag: "Open" }>

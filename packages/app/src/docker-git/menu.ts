@@ -1,15 +1,15 @@
 import { NodeContext } from "@effect/platform-node"
-import { runDockerPsNames } from "@lib/shell/docker"
-import { InputReadError } from "@lib/shell/errors"
 import { Effect, pipe } from "effect"
-import { render, useApp, useInput } from "ink"
 import React, { useEffect, useMemo, useState } from "react"
 
+import type { GridlandModule } from "@gridland/bun"
+
 import { listMenuProjectItems, renderMenuProjectSummaries } from "./menu-api.js"
-import { resolveCreateInputs } from "./menu-create.js"
+import { renderCreateStepLabel, resolveCreateInputs } from "./menu-create-shared.js"
 import type { MenuError } from "./menu-errors.js"
 import { renderMenuError } from "./menu-errors.js"
-import { handleUserInput, type InputStage } from "./menu-input-handler.js"
+import { GridlandMenuProvider, runGridlandMenu, useGridlandMenuInput } from "./menu-gridland-runtime.js"
+import type { InputStage } from "./menu-input-handler.js"
 import {
   renderAuthMenu,
   renderAuthPrompt,
@@ -17,12 +17,16 @@ import {
   renderMenu,
   renderProjectAuthMenu,
   renderProjectAuthPrompt,
-  renderSelect,
-  renderStepLabel
+  renderSelect
 } from "./menu-render.js"
-import { leaveTui, resumeTui } from "./menu-shared.js"
+import { leaveTui } from "./menu-shared.js"
 import { defaultMenuStartupSnapshot, resolveMenuStartupSnapshot } from "./menu-startup.js"
 import { createSteps, type MenuEnv, type MenuState, type ViewState } from "./menu-types.js"
+
+const gridlandBootstrapError = (message: string): MenuError => ({
+  _tag: "TerminalSessionClientError",
+  message
+})
 
 // CHANGE: keep menu state in the TUI layer
 // WHY: provide a dynamic interface with live selection and inputs
@@ -87,7 +91,7 @@ const renderView = (context: RenderContext) => {
   if (context.view._tag === "Create") {
     const currentDefaults = resolveCreateInputs(context.state.cwd, context.view.values)
     const step = createSteps[context.view.step] ?? "repoUrl"
-    const label = renderStepLabel(step, currentDefaults)
+    const label = renderCreateStepLabel(step, currentDefaults)
 
     return renderCreate(label, context.view.buffer, context.message, context.view.step, currentDefaults)
   }
@@ -180,8 +184,8 @@ const useStartupSnapshot = (
     let cancelled = false
 
     const startup = pipe(
-      Effect.all([listMenuProjectItems, runDockerPsNames(process.cwd())]),
-      Effect.map(([items, runningNames]) => resolveMenuStartupSnapshot(items, runningNames)),
+      listMenuProjectItems,
+      Effect.map((items) => resolveMenuStartupSnapshot(items)),
       Effect.match({
         onFailure: (error: MenuError) => ({
           ...defaultMenuStartupSnapshot(),
@@ -224,56 +228,29 @@ const useSigintGuard = (exit: () => void, sshActive: boolean) => {
   }, [exit, sshActive])
 }
 
-const TuiApp = () => {
-  const { exit } = useApp()
+const GridlandTuiApp = ({ exit, gridland }: { readonly exit: () => void; readonly gridland: GridlandModule }) => {
   const menu = useMenuState()
 
   useReadyGate(menu.setReady)
   useStartupSnapshot(menu.setActiveDir, menu.setRunningDockerGitContainers, menu.setMessage)
   useSigintGuard(exit, menu.sshActive)
+  useGridlandMenuInput(gridland, { ...menu, exit })
 
-  useInput(
-    (input, key) => {
-      if (!menu.ready) {
-        return
-      }
-      if (Date.now() < menu.ignoreUntil) {
-        return
-      }
-      if (menu.skipInputs > 0) {
-        menu.setSkipInputs((value) => (value > 0 ? value - 1 : 0))
-        return
-      }
-      handleUserInput(input, key, {
-        busy: menu.busy,
-        view: menu.view,
-        inputStage: menu.inputStage,
-        setInputStage: menu.setInputStage,
-        selected: menu.selected,
-        setSelected: menu.setSelected,
-        setSkipInputs: menu.setSkipInputs,
-        sshActive: menu.sshActive,
-        setSshActive: menu.setSshActive,
+  return React.createElement(
+    GridlandMenuProvider,
+    {
+      children: renderView({
         state: menu.state,
-        runner: menu.runner,
-        exit,
-        setView: menu.setView,
-        setMessage: menu.setMessage,
-        setActiveDir: menu.setActiveDir
-      })
-    },
-    { isActive: !menu.sshActive }
+        view: menu.view,
+        activeDir: menu.activeDir,
+        runningDockerGitContainers: menu.runningDockerGitContainers,
+        selected: menu.selected,
+        busy: menu.busy,
+        message: menu.message
+      }),
+      gridland
+    }
   )
-
-  return renderView({
-    state: menu.state,
-    view: menu.view,
-    activeDir: menu.activeDir,
-    runningDockerGitContainers: menu.runningDockerGitContainers,
-    selected: menu.selected,
-    busy: menu.busy,
-    message: menu.message
-  })
 }
 
 // CHANGE: provide an interactive TUI menu for docker-git
@@ -288,25 +265,17 @@ const TuiApp = () => {
 // COMPLEXITY: O(1) per input
 //
 // CHANGE: guard against non-TTY environments (Docker without -t)
-// WHY: Ink calls setRawMode(true) on mount — without a TTY stdin does not support
-//      raw mode, causing an unhandled error and a hang in waitUntilExit().
-//      Fall back to listProjectStatus in non-interactive environments.
+// WHY: interactive Gridland host still requires a real TTY; without one
+//      fall back to the project summary renderer.
 // QUOTE(ТЗ): "вечный цикл зависания на TUI из за ошибки Raw mode is not supported"
 // REF: issue-100
-// SOURCE: https://github.com/vadimdemedes/ink/#israwmodesupported
+// SOURCE: n/a
 // FORMAT THEOREM: ∀ env: isTTY(env) → renderTui ∧ ¬isTTY(env) → listProjects(api)
-// INVARIANT: render() is only called when stdin.isTTY ∧ setRawMode ∈ stdin
+// INVARIANT: Gridland host only starts when stdin.isTTY ∧ stdout.isTTY
 const runInteractiveMenu = (): Effect.Effect<void, MenuError, MenuEnv> =>
   pipe(
-    Effect.sync(() => {
-      resumeTui()
-    }),
-    Effect.zipRight(
-      Effect.tryPromise({
-        try: () => render(React.createElement(TuiApp)).waitUntilExit(),
-        catch: (error) => new InputReadError({ message: error instanceof Error ? error.message : String(error) })
-      })
-    ),
+    runGridlandMenu((args) => React.createElement(GridlandTuiApp, args)),
+    Effect.mapError((error) => gridlandBootstrapError(error.message)),
     Effect.ensuring(
       Effect.sync(() => {
         leaveTui()
@@ -316,7 +285,7 @@ const runInteractiveMenu = (): Effect.Effect<void, MenuError, MenuEnv> =>
   )
 
 export const runMenu: Effect.Effect<void, MenuError, MenuEnv> = pipe(
-  Effect.sync(() => process.stdin.isTTY && typeof process.stdin.setRawMode === "function"),
+  Effect.sync(() => process.stdin.isTTY && process.stdout.isTTY),
   Effect.flatMap((hasTty) => (hasTty ? runInteractiveMenu() : renderMenuProjectSummaries()))
 )
 

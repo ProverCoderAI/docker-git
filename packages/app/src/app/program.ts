@@ -1,5 +1,6 @@
-import { listProjects, readCloneRequest, runDockerGitClone, runDockerGitOpen } from "@lib"
 import { Console, Effect, Match, pipe } from "effect"
+import { listProjects, renderProjectSummaryLine } from "../docker-git/api-client.js"
+import { readCloneRequest, runDockerGitClone, runDockerGitOpen } from "../docker-git/frontend-lib/shell/clone.js"
 
 /**
  * Compose the CLI program as a single effect.
@@ -26,10 +27,10 @@ import { Console, Effect, Match, pipe } from "effect"
 // COMPLEXITY: O(1)
 const usageText = [
   "Usage:",
-  "  pnpm docker-git",
-  "  pnpm clone <repo-url> [ref]",
-  "  pnpm open <repo-url>",
-  "  pnpm list",
+  "  bun run docker-git",
+  "  bun run clone <repo-url> [ref]",
+  "  bun run open <repo-url>",
+  "  bun run list",
   "",
   "Notes:",
   "  - docker-git is the interactive TUI.",
@@ -42,7 +43,7 @@ const usageText = [
 const runHelp = Console.log(usageText)
 
 // CHANGE: route between shortcut runners and help based on CLI context
-// WHY: allow pnpm run clone/open <url> while keeping a single entrypoint
+// WHY: allow bun run clone/open <url> while keeping a single entrypoint
 // QUOTE(ТЗ): "Добавить команду open."
 // REF: user-request-2026-01-27
 // SOURCE: n/a
@@ -71,7 +72,14 @@ const readListFlag = Effect.sync(() => {
 export const program = Effect.gen(function*(_) {
   const isList = yield* _(readListFlag)
   if (isList) {
-    yield* _(listProjects)
+    const projects = yield* _(listProjects())
+    if (projects.length === 0) {
+      yield* _(Console.log("No docker-git projects found."))
+      return
+    }
+    for (const project of projects) {
+      yield* _(Console.log(renderProjectSummaryLine(project)))
+    }
     return
   }
   yield* _(runDockerGit)

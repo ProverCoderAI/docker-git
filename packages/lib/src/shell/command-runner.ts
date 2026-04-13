@@ -128,20 +128,19 @@ export const runCommandWithCapturedOutput = <E>(
     Effect.gen(function*(_) {
       const executor = yield* _(CommandExecutor.CommandExecutor)
       const process = yield* _(executor.start(buildCommand(spec, "pipe", "pipe", "pipe")))
-      const [stdout, stderr, exitCode] = yield* _(
+      const [stdout, stderr] = yield* _(
         Effect.all(
           [
             collectStreamText(process.stdout),
-            collectStreamText(process.stderr),
-            Effect.map(process.exitCode, (value) => Number(value))
+            collectStreamText(process.stderr)
           ],
           { concurrency: "unbounded" }
         )
       )
+      const exitCode = yield* _(process.exitCode)
       yield* _(
         ensureExitCode(exitCode, okExitCodes, (numericExitCode) =>
-          onFailure(numericExitCode, combineCommandOutput(stdout, stderr))
-        )
+          onFailure(numericExitCode, combineCommandOutput(stdout, stderr)))
       )
     })
   )

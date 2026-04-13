@@ -1,9 +1,9 @@
-import type { ProjectItem } from "@lib/usecases/projects"
 import { Effect, pipe } from "effect"
 
 import { loadRuntimeByProject } from "./menu-select-runtime.js"
 import { startSelectView } from "./menu-select.js"
 import type { MenuEnv, MenuViewContext } from "./menu-types.js"
+import type { ProjectItem } from "./project-item.js"
 
 export const loadSelectView = <E>(
   effect: Effect.Effect<ReadonlyArray<ProjectItem>, E, MenuEnv>,

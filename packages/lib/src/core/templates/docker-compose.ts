@@ -1,8 +1,8 @@
 import {
-  resolveComposeProjectName,
   dockerGitSharedCacheVolumeName,
   dockerGitSharedCodexVolumeName,
   resolveComposeNetworkName,
+  resolveComposeProjectName,
   resolveProjectBootstrapVolumeName,
   type TemplateConfig
 } from "../domain.js"

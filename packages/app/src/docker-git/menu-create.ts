@@ -1,6 +1,5 @@
-import { type CreateCommand, deriveRepoPathParts, resolveRepoInput } from "@lib/core/domain"
-import { defaultProjectsRoot } from "@lib/usecases/menu-helpers"
-import { Effect, Either, Match, pipe } from "effect"
+import { Effect, Either, pipe } from "effect"
+import { type CreateCommand } from "./frontend-lib/core/domain.js"
 
 import { createProject as createProjectViaApi } from "./api-client.js"
 import { parseArgs } from "./cli/parser.js"
@@ -8,15 +7,9 @@ import { formatParseError, usageText } from "./cli/usage.js"
 import type { MenuError } from "./menu-errors.js"
 
 import { nextBufferValue } from "./menu-buffer-input.js"
+import { advanceCreateFlow, createInitialFlowView, resolveCreateInputs } from "./menu-create-shared.js"
 import { resetToMenu } from "./menu-shared.js"
-import {
-  type CreateInputs,
-  type CreateStep,
-  createSteps,
-  type MenuEnv,
-  type MenuState,
-  type ViewState
-} from "./menu-types.js"
+import { type CreateInputs, type MenuEnv, type MenuState, type ViewState } from "./menu-types.js"
 
 // CHANGE: move create-flow handling into a dedicated module
 // WHY: keep TUI entry slim and satisfy lint constraints
@@ -28,8 +21,6 @@ import {
 // EFFECT: Effect<void, MenuError, FileSystem | Path | CommandExecutor>
 // INVARIANT: outDir resolves to a stable repo path
 // COMPLEXITY: O(1) per keypress
-
-type Mutable<T> = { -readonly [K in keyof T]: T[K] }
 
 type CreateRunner = { readonly runEffect: <E extends MenuError>(effect: Effect.Effect<void, E, MenuEnv>) => void }
 
@@ -81,73 +72,6 @@ export const buildCreateArgs = (input: CreateInputs): ReadonlyArray<string> => {
   return args
 }
 
-const trimLeftSlash = (value: string): string => {
-  let start = 0
-  while (start < value.length && value[start] === "/") {
-    start += 1
-  }
-  return value.slice(start)
-}
-
-const trimRightSlash = (value: string): string => {
-  let end = value.length
-  while (end > 0 && value[end - 1] === "/") {
-    end -= 1
-  }
-  return value.slice(0, end)
-}
-
-const joinPath = (...parts: ReadonlyArray<string>): string => {
-  const cleaned = parts
-    .filter((part) => part.length > 0)
-    .map((part, index) => {
-      if (index === 0) {
-        return trimRightSlash(part)
-      }
-      return trimRightSlash(trimLeftSlash(part))
-    })
-  return cleaned.join("/")
-}
-
-const resolveDefaultOutDir = (cwd: string, repoUrl: string): string => {
-  const resolvedRepo = resolveRepoInput(repoUrl)
-  const baseParts = deriveRepoPathParts(resolvedRepo.repoUrl).pathParts
-  const projectParts = resolvedRepo.workspaceSuffix ? [...baseParts, resolvedRepo.workspaceSuffix] : baseParts
-  return joinPath(defaultProjectsRoot(cwd), ...projectParts)
-}
-
-export const resolveCreateInputs = (
-  cwd: string,
-  values: Partial<CreateInputs>
-): CreateInputs => {
-  const repoUrl = values.repoUrl ?? ""
-  const resolvedRepoRef = resolveRepoInput(repoUrl).repoRef
-  const outDir = values.outDir ?? resolveDefaultOutDir(cwd, repoUrl)
-
-  return {
-    repoUrl,
-    repoRef: values.repoRef ?? resolvedRepoRef ?? "main",
-    outDir,
-    cpuLimit: values.cpuLimit ?? "",
-    ramLimit: values.ramLimit ?? "",
-    runUp: values.runUp !== false,
-    enableMcpPlaywright: values.enableMcpPlaywright === true,
-    force: values.force === true,
-    forceEnv: values.forceEnv === true
-  }
-}
-
-const parseYesDefault = (input: string, fallback: boolean): boolean => {
-  const normalized = input.trim().toLowerCase()
-  if (normalized === "y" || normalized === "yes") {
-    return true
-  }
-  if (normalized === "n" || normalized === "no") {
-    return false
-  }
-  return fallback
-}
-
 const applyCreateCommand = (
   state: MenuState,
   create: CreateCommand
@@ -187,54 +111,6 @@ const buildCreateEffect = (
   return Effect.void
 }
 
-const applyCreateStep = (input: {
-  readonly step: CreateStep
-  readonly buffer: string
-  readonly currentDefaults: CreateInputs
-  readonly nextValues: Partial<Mutable<CreateInputs>>
-  readonly cwd: string
-  readonly setMessage: (message: string | null) => void
-}): boolean =>
-  Match.value(input.step).pipe(
-    Match.when("repoUrl", () => {
-      input.nextValues.repoUrl = input.buffer
-      input.nextValues.outDir = resolveDefaultOutDir(input.cwd, input.buffer)
-      return true
-    }),
-    Match.when("repoRef", () => {
-      input.nextValues.repoRef = input.buffer.length > 0 ? input.buffer : input.currentDefaults.repoRef
-      return true
-    }),
-    Match.when("outDir", () => {
-      input.nextValues.outDir = input.buffer.length > 0 ? input.buffer : input.currentDefaults.outDir
-      return true
-    }),
-    Match.when("cpuLimit", () => {
-      input.nextValues.cpuLimit = input.buffer.length > 0 ? input.buffer : input.currentDefaults.cpuLimit
-      return true
-    }),
-    Match.when("ramLimit", () => {
-      input.nextValues.ramLimit = input.buffer.length > 0 ? input.buffer : input.currentDefaults.ramLimit
-      return true
-    }),
-    Match.when("runUp", () => {
-      input.nextValues.runUp = parseYesDefault(input.buffer, input.currentDefaults.runUp)
-      return true
-    }),
-    Match.when("mcpPlaywright", () => {
-      input.nextValues.enableMcpPlaywright = parseYesDefault(
-        input.buffer,
-        input.currentDefaults.enableMcpPlaywright
-      )
-      return true
-    }),
-    Match.when("force", () => {
-      input.nextValues.force = parseYesDefault(input.buffer, input.currentDefaults.force)
-      return true
-    }),
-    Match.exhaustive
-  )
-
 const finalizeCreateFlow = (input: {
   readonly state: MenuState
   readonly nextValues: Partial<CreateInputs>
@@ -257,38 +133,22 @@ const finalizeCreateFlow = (input: {
   input.setMessage(null)
 }
 
-const handleCreateReturn = (context: CreateReturnContext) => {
-  const step = createSteps[context.view.step]
-  if (!step) {
-    context.setView({ _tag: "Menu" })
+const handleCreateReturn = (
+  context: CreateReturnContext,
+  forceWizard = false
+) => {
+  const next = advanceCreateFlow(context.state.cwd, context.view, { forceWizard })
+  if (next === null) {
     return
   }
-
-  const buffer = context.view.buffer.trim()
-  const currentDefaults = resolveCreateInputs(context.state.cwd, context.view.values)
-  const nextValues: Partial<Mutable<CreateInputs>> = { ...context.view.values }
-  const updated = applyCreateStep({
-    step,
-    buffer,
-    currentDefaults,
-    nextValues,
-    cwd: context.state.cwd,
-    setMessage: context.setMessage
-  })
-  if (!updated) {
-    return
-  }
-
-  const nextStep = context.view.step + 1
-  if (nextStep < createSteps.length) {
-    context.setView({ _tag: "Create", step: nextStep, buffer: "", values: nextValues })
+  if (next._tag === "Continue") {
+    context.setView({ _tag: "Create", ...next.view })
     context.setMessage(null)
     return
   }
-
   finalizeCreateFlow({
     state: context.state,
-    nextValues,
+    nextValues: next.inputs,
     setView: context.setView,
     setMessage: context.setMessage,
     runner: context.runner,
@@ -301,7 +161,7 @@ export const startCreateView = (
   setMessage: (message: string | null) => void,
   buffer = ""
 ) => {
-  setView({ _tag: "Create", step: 0, buffer, values: {} })
+  setView({ _tag: "Create", ...createInitialFlowView(buffer) })
   setMessage(null)
 }
 
@@ -310,6 +170,7 @@ export const handleCreateInput = (
   key: {
     readonly escape?: boolean
     readonly return?: boolean
+    readonly shift?: boolean
     readonly backspace?: boolean
     readonly delete?: boolean
   },
@@ -321,7 +182,7 @@ export const handleCreateInput = (
     return
   }
   if (key.return) {
-    handleCreateReturn({ ...context, view })
+    handleCreateReturn({ ...context, view }, key.shift === true)
     return
   }
   const nextBuffer = nextBufferValue(input, key, view.buffer)
@@ -329,3 +190,5 @@ export const handleCreateInput = (
     context.setView({ ...view, buffer: nextBuffer })
   }
 }
+
+export { resolveCreateInputs } from "./menu-create-shared.js"

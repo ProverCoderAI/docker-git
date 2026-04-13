@@ -1,6 +1,6 @@
 import { Either } from "effect"
 
-import { type McpPlaywrightUpCommand, type ParseError } from "@lib/core/domain"
+import { type McpPlaywrightUpCommand, type ParseError } from "../frontend-lib/core/domain.js"
 
 import { parseProjectDirWithOptions } from "./parser-shared.js"
 

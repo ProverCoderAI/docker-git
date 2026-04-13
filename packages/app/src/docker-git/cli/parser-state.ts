@@ -1,6 +1,6 @@
 import { Either, Match } from "effect"
 
-import type { Command, ParseError } from "@lib/core/domain"
+import type { Command, ParseError } from "../frontend-lib/core/domain.js"
 
 import { parseRawOptions } from "./parser-options.js"
 

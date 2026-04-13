@@ -16,6 +16,7 @@ chmod 0777 "$ROOT/e2e"
 KEEP="${KEEP:-0}"
 
 dg_ensure_docker "$ROOT/.e2e-bin"
+dg_prepare_docker_git_cli "$REPO_ROOT" "$ROOT/.e2e-bin"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
@@ -91,7 +92,7 @@ dg_write_docker_host_file "$ROOT/authorized_keys" 644 < "$SSH_PUB_KEY"
 
 # Seed a structurally valid auth.json so the shared Codex volume must be created
 # and wired into the container runtime.
-node <<'NODE' | dg_write_docker_host_file "$ROOT/.orch/auth/codex/auth.json" 600
+bun - <<'BUN' | dg_write_docker_host_file "$ROOT/.orch/auth/codex/auth.json" 600
 const now = Math.floor(Date.now() / 1000)
 const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64url")
 const jwt = (payload) => `${b64({ alg: "none", typ: "JWT" })}.${b64(payload)}.sig`
@@ -112,7 +113,7 @@ const auth = {
 }
 
 process.stdout.write(JSON.stringify(auth, null, 2))
-NODE
+BUN
 
 mkdir -p "$OUT_DIR/.orch/env"
 chmod 0777 "$OUT_DIR" "$OUT_DIR/.orch" "$OUT_DIR/.orch/env"
@@ -125,7 +126,7 @@ EOF_ENV
 
 (
   cd "$REPO_ROOT"
-  pnpm run docker-git clone "$REPO_URL" \
+  dg_run_docker_git "$REPO_ROOT" clone "$REPO_URL" \
     --force \
     --gh-skip \
     --no-ssh \
@@ -150,7 +151,7 @@ docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" \
   || fail "expected cloned repo at: $TARGET_DIR"
 
 MOUNTS_JSON="$(docker inspect --format '{{json .Mounts}}' "$CONTAINER_NAME")"
-MOUNTS_JSON="$MOUNTS_JSON" HOME_VOLUME_NAME="$VOLUME_NAME" node <<'NODE'
+MOUNTS_JSON="$MOUNTS_JSON" HOME_VOLUME_NAME="$VOLUME_NAME" bun - <<'BUN'
 const mounts = JSON.parse(process.env.MOUNTS_JSON)
 const byDestination = new Map(mounts.map((mount) => [mount.Destination, mount]))
 
@@ -180,7 +181,7 @@ expect(codexSharedMount.Name === "docker-git-shared-codex", `unexpected Codex sh
 expect(!byDestination.has("/home/dev/.docker-git"), "did not expect a direct bind mount for /home/dev/.docker-git")
 expect(!byDestination.has("/home/dev/.codex"), "did not expect a direct bind mount for /home/dev/.codex")
 expect(!byDestination.has("/home/dev/.ssh/authorized_keys"), "did not expect a direct bind mount for authorized_keys")
-NODE
+BUN
 
 docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/authorized_keys' \
   || fail "expected authorized_keys to be mirrored into the home volume"

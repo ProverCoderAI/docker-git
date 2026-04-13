@@ -11,7 +11,7 @@ import { CommandFailedError } from "./errors.js"
 const successExitCode = Number(ExitCode(0))
 
 // CHANGE: read shortcut requests from process argv and npm lifecycle metadata
-// WHY: allow pnpm run clone/open <url> to work without "--"
+// WHY: allow bun run clone/open <url> to work without "--"
 // QUOTE(ТЗ): "Добавить команду open. ... Просто открывает существующий по ссылке"
 // REF: user-request-2026-01-27
 // SOURCE: n/a
@@ -37,19 +37,19 @@ const runDockerGitCommand = (
     const workspaceRoot = process.cwd()
     const appRoot = path.join(workspaceRoot, "packages", "app")
     const dockerGitCli = path.join(appRoot, "dist", "src", "docker-git", "main.js")
-    const buildLabel = `pnpm -C ${appRoot} build:docker-git`
-    const runLabel = `node ${dockerGitCli} ${commandName}`
+    const buildLabel = `bun run --cwd ${appRoot} build:docker-git`
+    const runLabel = `bun ${dockerGitCli} ${commandName}`
 
     yield* _(
       runCommandWithExitCodes(
-        { cwd: workspaceRoot, command: "pnpm", args: ["-C", appRoot, "build:docker-git"] },
+        { cwd: workspaceRoot, command: "bun", args: ["run", "--cwd", appRoot, "build:docker-git"] },
         [successExitCode],
         (exitCode) => new CommandFailedError({ command: buildLabel, exitCode })
       )
     )
     yield* _(
       runCommandWithExitCodes(
-        { cwd: workspaceRoot, command: "node", args: [dockerGitCli, commandName, ...args] },
+        { cwd: workspaceRoot, command: "bun", args: [dockerGitCli, commandName, ...args] },
         [successExitCode],
         (exitCode) => new CommandFailedError({ command: runLabel, exitCode })
       )

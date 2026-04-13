@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 const fs = require("node:fs");
 const path = require("node:path");

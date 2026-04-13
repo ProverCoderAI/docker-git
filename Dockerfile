@@ -1,13 +1,18 @@
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV BUN_INSTALL=/opt/bun
+ENV PATH=/opt/bun/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssh-server git ca-certificates nodejs npm sshpass \
+    openssh-server git ca-certificates curl unzip sshpass gnupg \
  && rm -rf /var/lib/apt/lists/*
 
-# Tooling: pnpm + Codex CLI
-RUN npm i -g pnpm@10.27.0 @openai/codex
+# Tooling: Bun + Codex CLI
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && curl -fsSL https://bun.sh/install | bash \
+ && npm i -g node-gyp @openai/codex
 
 # Create non-root user for SSH
 RUN useradd -m -s /bin/bash dev

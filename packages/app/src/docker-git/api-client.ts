@@ -1,7 +1,13 @@
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
+import * as FsPlatform from "@effect/platform/FileSystem"
+import * as PathPlatform from "@effect/platform/Path"
 import { Effect } from "effect"
 
+import { buildCreateProjectRequest } from "./api-client-create.js"
+import { readProjectOutput, resolveCreateRequestPaths } from "./api-client-helpers.js"
+import { request, requestTextStream, requestVoid } from "./api-http.js"
+import { asArray, asObject, type JsonValue } from "./api-json.js"
+import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
+import { decodeTerminalSession } from "./api-terminal-codec.js"
 import type {
   AuthCodexImportCommand,
   AuthCodexLoginCommand,
@@ -14,14 +20,9 @@ import type {
   StateCommitCommand,
   StateInitCommand,
   StateSyncCommand
-} from "@lib/core/domain"
-import { resolvePathFromCwd } from "@lib/usecases/path-helpers"
-
-import { request, requestTextStream, requestVoid } from "./api-http.js"
-import { asArray, asObject, asString, type JsonRequest, type JsonValue } from "./api-json.js"
-import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
+} from "./frontend-lib/core/domain.js"
+import { resolvePathFromCwd } from "./frontend-lib/usecases/path-helpers.js"
 import type { ApiRequestError } from "./host-errors.js"
-import { resolveHostSshMaterial, resolveManagedHostSshMaterial } from "./host-ssh-material.js"
 
 export { type JsonObject, type JsonRequest, type JsonValue, renderJsonPayload } from "./api-json.js"
 export {
@@ -31,10 +32,18 @@ export {
   decodeProjectSummary,
   renderProjectSummaryLine
 } from "./api-project-codec.js"
+export { type ApiTerminalSession } from "./api-terminal-codec.js"
 
 const projectPath = (projectId: string, suffix = ""): string => `/projects/${encodeURIComponent(projectId)}${suffix}`
 const codexLoginSuccessMarker = "__DOCKER_GIT_CODEX_LOGIN_STATUS__:ok"
 const codexLoginErrorMarkerPrefix = "__DOCKER_GIT_CODEX_LOGIN_STATUS__:error:"
+
+const decodeProjectResponse = (payload: JsonValue) => {
+  const object = asObject(payload)
+  return object === null
+    ? decodeProjectDetails(payload)
+    : decodeProjectDetails(object["project"] ?? payload)
+}
 
 const codexLoginFailureMessage = (output: string, exitCode: string | null): string => {
   if (output.includes("429 Too Many Requests")) {
@@ -65,11 +74,6 @@ const codexLoginFailureMessage = (output: string, exitCode: string | null): stri
     : `Codex login failed (${exitCode}).`
 }
 
-const readProjectOutput = (payload: JsonValue): string => {
-  const object = asObject(payload)
-  return asString(object?.["output"]) ?? ""
-}
-
 export const listProjects = () =>
   request("GET", "/projects").pipe(
     Effect.map((payload) => {
@@ -83,64 +87,32 @@ export const listProjects = () =>
 
 export const getProject = (projectId: string) =>
   request("GET", projectPath(projectId)).pipe(
-    Effect.map((payload) => {
-      const object = asObject(payload)
-      return object === null ? decodeProjectDetails(payload) : decodeProjectDetails(object["project"] ?? payload)
-    })
+    Effect.map((payload) => decodeProjectResponse(payload))
   )
+
+const createProjectWithResolvedPaths = (
+  command: CreateCommand,
+  resolvedPaths: {
+    readonly authorizedKeysPath: string
+    readonly authorizedKeysContents?: string | undefined
+  }
+) =>
+  Effect.gen(function*(_) {
+    const createRequest = buildCreateProjectRequest(command, resolvedPaths)
+    const payload = yield* _(request("POST", "/projects", createRequest))
+    return decodeProjectResponse(payload)
+  })
 
 export const createProject = (command: CreateCommand) =>
   Effect.gen(function*(_) {
-    const config = command.config
-    const sshMaterial = yield* _(resolveHostSshMaterial(command))
-    const body = {
-      repoUrl: config.repoUrl,
-      repoRef: config.repoRef,
-      targetDir: config.targetDir,
-      sshPort: String(config.sshPort),
-      sshUser: config.sshUser,
-      containerName: config.containerName,
-      serviceName: config.serviceName,
-      volumeName: config.volumeName,
-      cpuLimit: config.cpuLimit,
-      ramLimit: config.ramLimit,
-      dockerNetworkMode: config.dockerNetworkMode,
-      dockerSharedNetworkName: config.dockerSharedNetworkName,
-      enableMcpPlaywright: config.enableMcpPlaywright,
-      outDir: command.outDir,
-      gitTokenLabel: config.gitTokenLabel,
-      skipGithubAuth: config.skipGithubAuth,
-      authorizedKeysContents: sshMaterial.authorizedKeysContents.length > 0
-        ? sshMaterial.authorizedKeysContents
-        : undefined,
-      codexTokenLabel: config.codexAuthLabel,
-      claudeTokenLabel: config.claudeAuthLabel,
-      agentAutoMode: config.agentAuto ? (config.agentMode ?? "auto") : undefined,
-      up: command.runUp,
-      openSsh: false,
-      force: command.force,
-      forceEnv: command.forceEnv,
-      waitForClone: command.waitForClone
-    } satisfies JsonRequest
-
-    const payload = yield* _(request("POST", "/projects", body))
-    const object = asObject(payload)
-    return object === null ? decodeProjectDetails(payload) : decodeProjectDetails(object["project"] ?? payload)
+    const resolvedPaths = yield* _(resolveCreateRequestPaths(command))
+    return yield* _(createProjectWithResolvedPaths(command, resolvedPaths))
   })
 
 export const deleteProject = (projectId: string) => requestVoid("DELETE", projectPath(projectId))
 
 export const upProject = (projectId: string) =>
-  Effect.gen(function*(_) {
-    const sshMaterial = yield* _(resolveManagedHostSshMaterial())
-    return yield* _(
-      requestVoid("POST", projectPath(projectId, "/up"), {
-        authorizedKeysContents: sshMaterial.authorizedKeysContents.length > 0
-          ? sshMaterial.authorizedKeysContents
-          : undefined
-      })
-    )
-  })
+  requestVoid("POST", projectPath(projectId, "/up"), { useManagedAuthorizedKeys: true })
 
 export const downProject = (projectId: string) => requestVoid("POST", projectPath(projectId, "/down"))
 
@@ -153,6 +125,29 @@ export const readProjectLogs = (projectId: string) =>
   request("GET", projectPath(projectId, "/logs")).pipe(
     Effect.map((payload) => readProjectOutput(payload))
   )
+
+export const createProjectTerminalSession = (projectId: string) =>
+  request("POST", projectPath(projectId, "/terminal-sessions")).pipe(
+    Effect.map((payload) => {
+      const object = asObject(payload)
+      const project = decodeProjectDetails(object?.["project"] ?? payload)
+      const session = decodeTerminalSession(object?.["session"] ?? payload)
+      return project === null || session === null ? null : { project, session }
+    })
+  )
+
+export const createAuthTerminalSession = (
+  flow: "ClaudeOauth" | "GeminiOauth",
+  label: string | null
+) =>
+  request("POST", "/auth/terminal-sessions", { flow, label: label ?? undefined }).pipe(
+    Effect.map((payload) => {
+      const object = asObject(payload)
+      return decodeTerminalSession(object?.["session"] ?? payload)
+    })
+  )
+
+export const deleteTerminalSessionByPath = (path: string) => requestVoid("DELETE", path)
 
 export const applyAllProjects = (activeOnly: boolean) => requestVoid("POST", "/projects/apply-all", { activeOnly })
 
@@ -273,8 +268,8 @@ export const codexLogin = (command: AuthCodexLoginCommand) =>
 
 const readCodexAuthText = (command: AuthCodexImportCommand) =>
   Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
+    const fs = yield* _(FsPlatform.FileSystem)
+    const path = yield* _(PathPlatform.Path)
     const resolvedCodexAuthDir = resolvePathFromCwd(path, process.cwd(), command.codexAuthPath)
     const authFilePath = path.join(resolvedCodexAuthDir, "auth.json")
     return yield* _(fs.readFileString(authFilePath))

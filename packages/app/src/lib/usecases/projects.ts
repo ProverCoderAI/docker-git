@@ -17,6 +17,9 @@ export {
   connectProjectSsh,
   connectProjectSshWithUp,
   listProjectStatus,
+  type PreparedProjectSsh,
+  prepareProjectSsh,
+  prepareProjectSshWithUp,
   probeProjectSshReady,
   waitForProjectSshReady
 } from "./projects-ssh.js"

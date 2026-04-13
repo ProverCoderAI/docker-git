@@ -203,7 +203,9 @@ const copyBootstrapSnapshotAuthDirs = (
     yield* _(copyLabeledCodexFiles(fs, path, sources.codexAuthSource, targets.projectCodexTarget, "auth.json"))
     yield* _(copyLabeledCodexFiles(fs, path, sources.codexAuthSource, targets.projectCodexTarget, "config.toml"))
     yield* _(copyDirRecursive(fs, path, sources.claudeAuthSource, targets.projectClaudeTarget))
-    yield* _(copyCodexAuthFileIfPresent(fs, path, sources.codexSharedAuthSource, targets.sharedCodexTarget, "auth.json"))
+    yield* _(
+      copyCodexAuthFileIfPresent(fs, path, sources.codexSharedAuthSource, targets.sharedCodexTarget, "auth.json")
+    )
     yield* _(copyLabeledCodexFiles(fs, path, sources.codexSharedAuthSource, targets.sharedCodexTarget, "auth.json"))
   })
 

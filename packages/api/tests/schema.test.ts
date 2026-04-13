@@ -14,6 +14,7 @@ import {
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
+  TerminalSessionSchema,
   UpProjectRequestSchema
 } from "../src/api/schema.js"
 
@@ -244,6 +245,32 @@ describe("api schemas", () => {
         },
         onRight: (value) => {
           expect(value.authorizedKeysContents).toContain("ssh-ed25519")
+        }
+      })
+    }))
+
+  it.effect("decodes terminal session payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(TerminalSessionSchema)({
+        id: "session-1",
+        projectId: "project-1",
+        sshCommand: "ssh dev@127.0.0.1",
+        status: "attached",
+        createdAt: "2026-04-08T10:00:00.000Z",
+        startedAt: "2026-04-08T10:00:01.000Z",
+        exitCode: 0
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.id).toBe("session-1")
+          expect(value.projectId).toBe("project-1")
+          expect(value.status).toBe("attached")
+          expect(value.exitCode).toBe(0)
+          expect(value.signal).toBeUndefined()
         }
       })
     }))

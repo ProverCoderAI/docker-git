@@ -1,4 +1,4 @@
-import type { ProjectItem } from "@lib/usecases/projects"
+import type { ProjectItem } from "./project-item.js"
 
 export type MenuStartupSnapshot = {
   readonly activeDir: string | null
@@ -44,10 +44,13 @@ const renderRunningHint = (runningCount: number): string =>
 // INVARIANT: activeDir is set only when exactly one known project is running
 // COMPLEXITY: O(|containers| + |projects|)
 export const resolveMenuStartupSnapshot = (
-  items: ReadonlyArray<ProjectItem>,
-  runningContainerNames: ReadonlyArray<string>
+  items: ReadonlyArray<ProjectItem>
 ): MenuStartupSnapshot => {
-  const runningDockerGitNames = uniqueDockerGitContainerNames(runningContainerNames)
+  const runningDockerGitNames = uniqueDockerGitContainerNames(
+    items
+      .filter((item) => item.status === "running")
+      .map((item) => item.containerName)
+  )
   if (runningDockerGitNames.length === 0) {
     return emptySnapshot()
   }

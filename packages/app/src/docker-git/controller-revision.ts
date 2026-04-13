@@ -8,8 +8,8 @@ export const controllerRevisionEnvKey = "DOCKER_GIT_CONTROLLER_REV"
 const controllerRevisionInputs: ReadonlyArray<string> = [
   "docker-compose.yml",
   "package.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
+  "bun.lock",
+  "bunfig.toml",
   "tsconfig.base.json",
   "tsconfig.json",
   "patches",

@@ -1,65 +1,66 @@
 {
-  "name": "effect-template-workspace",
+  "name": "docker-git-workspace",
   "version": "1.0.0",
   "private": true,
-  "description": "Monorepo workspace for effect-template",
-  "packageManager": "pnpm@10.32.1",
+  "description": "Monorepo workspace for docker-git",
+  "packageManager": "bun@1.3.11",
   "workspaces": [
     "packages/api",
     "packages/app",
     "packages/lib"
   ],
   "scripts": {
-    "setup:pre-commit-hook": "node scripts/setup-pre-commit-hook.js",
-    "build": "pnpm --filter ./packages/app build",
-    "api:build": "pnpm --filter ./packages/api build",
-    "api:start": "pnpm --filter ./packages/api start",
-    "api:dev": "pnpm --filter ./packages/api dev",
-    "api:test": "pnpm --filter ./packages/api test",
-    "api:typecheck": "pnpm --filter ./packages/api typecheck",
-    "check": "pnpm --filter ./packages/app check && pnpm --filter ./packages/lib typecheck",
+    "setup:pre-commit-hook": "bun scripts/setup-pre-commit-hook.js",
+    "build": "bun run --filter @prover-coder-ai/docker-git build",
+    "api:build": "bun run --filter @effect-template/api build",
+    "api:start": "bun run --filter @effect-template/api start",
+    "api:dev": "bun run --filter @effect-template/api dev",
+    "api:test": "bun run --filter @effect-template/api test",
+    "api:typecheck": "bun run --filter @effect-template/api typecheck",
+    "check": "bun run --filter @prover-coder-ai/docker-git check && bun run --filter @effect-template/lib typecheck",
+    "check:dist-deps-prune": "bun node_modules/@prover-coder-ai/dist-deps-prune/dist/main.js scan --package ./packages/app/package.json --prune-dev true --silent",
     "changeset": "changeset",
-    "changeset-publish": "node -e \"if (!process.env.NPM_TOKEN) { console.log('Skipping publish: NPM_TOKEN is not set'); process.exit(0); }\" && changeset publish",
+    "changeset-publish": "bun -e \"if (!process.env.NPM_TOKEN) { console.log('Skipping publish: NPM_TOKEN is not set'); process.exit(0); }\" && changeset publish",
     "changeset-version": "changeset version",
-    "clone": "pnpm --filter ./packages/app build && node packages/app/dist/main.js clone",
-    "open": "pnpm --filter ./packages/app build && node packages/app/dist/main.js open",
-    "docker-git": "pnpm --filter ./packages/app build:docker-git && node packages/app/dist/src/docker-git/main.js",
+    "clone": "bun run --filter @prover-coder-ai/docker-git clone",
+    "open": "bun run --filter @prover-coder-ai/docker-git open",
+    "docker-git": "bun run --filter @prover-coder-ai/docker-git docker-git",
     "e2e": "bash scripts/e2e/run-all.sh",
     "e2e:clone-cache": "bash scripts/e2e/clone-cache.sh",
     "e2e:login-context": "bash scripts/e2e/login-context.sh",
     "e2e:runtime-volumes-ssh": "bash scripts/e2e/runtime-volumes-ssh.sh",
     "e2e:opencode-autoconnect": "bash scripts/e2e/opencode-autoconnect.sh",
-    "list": "pnpm --filter ./packages/app build && node packages/app/dist/main.js list",
-    "dev": "pnpm --filter ./packages/app dev",
-    "lint": "pnpm --filter ./packages/app lint && pnpm --filter ./packages/lib lint",
-    "lint:tests": "pnpm --filter ./packages/app lint:tests",
-    "lint:effect": "pnpm --filter ./packages/app lint:effect && pnpm --filter ./packages/lib lint:effect",
-    "test": "pnpm --filter ./packages/app test && pnpm --filter ./packages/lib test",
-    "typecheck": "pnpm --filter ./packages/app typecheck && pnpm --filter ./packages/lib typecheck",
-    "start": "pnpm --filter ./packages/app start"
+    "list": "bun run --filter @prover-coder-ai/docker-git list",
+    "dev": "bun run --filter @prover-coder-ai/docker-git dev",
+    "web:dev": "bun run --filter @prover-coder-ai/docker-git dev:web",
+    "web:build": "bun run --filter @prover-coder-ai/docker-git build:web",
+    "web:preview": "bun run --filter @prover-coder-ai/docker-git preview:web",
+    "web:serve": "bun run --filter @prover-coder-ai/docker-git serve:web",
+    "lint": "bun run --filter @prover-coder-ai/docker-git lint && bun run --filter @effect-template/lib lint",
+    "lint:tests": "bun run --filter @prover-coder-ai/docker-git lint:tests",
+    "lint:effect": "bun run --filter @prover-coder-ai/docker-git lint:effect && bun run --filter @effect-template/lib lint:effect",
+    "test": "bun run --filter @prover-coder-ai/docker-git test && bun run --filter @effect-template/lib test",
+    "typecheck": "bun run --filter @prover-coder-ai/docker-git typecheck && bun run --filter @effect-template/lib typecheck",
+    "start": "bun run --filter @prover-coder-ai/docker-git start"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.6.0",
-    "@changesets/cli": "^2.30.0"
+    "@changesets/cli": "^2.30.0",
+    "@prover-coder-ai/dist-deps-prune": "^1.0.17"
   },
+  "trustedDependencies": [
+    "@parcel/watcher",
+    "msgpackr-extract",
+    "node-pty",
+    "unrs-resolver"
+  ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ProverCoderAI/effect-template.git"
+    "url": "git+https://github.com/ProverCoderAI/docker-git.git"
   },
   "bugs": {
-    "url": "https://github.com/ProverCoderAI/effect-template/issues"
+    "url": "https://github.com/ProverCoderAI/docker-git/issues"
   },
-  "homepage": "https://github.com/ProverCoderAI/effect-template#readme",
-  "license": "ISC",
-  "pnpm": {
-    "ignoredBuiltDependencies": [
-      "esbuild",
-      "node-pty"
-    ],
-    "onlyBuiltDependencies": [
-      "@parcel/watcher",
-      "msgpackr-extract",
-      "unrs-resolver"
-    ]
-  }
+  "homepage": "https://github.com/ProverCoderAI/docker-git#readme",
+  "license": "ISC"
 }

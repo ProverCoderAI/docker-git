@@ -8,7 +8,7 @@ import type { CreateCommand } from "../../core/domain.js"
 import type { PortProbeError } from "../../shell/errors.js"
 import { loadReservedPorts, selectAvailablePort } from "../ports-reserve.js"
 
-const maxPortAttempts = 25
+const maxPortAttempts = 1024
 
 export const resolveSshPort = (
   config: CreateCommand["config"],

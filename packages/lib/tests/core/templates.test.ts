@@ -24,6 +24,12 @@ const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateCo
   ...overrides
 })
 
+const expectContainsAll = (value: string, snippets: ReadonlyArray<string>): void => {
+  for (const snippet of snippets) {
+    expect(value).toContain(snippet)
+  }
+}
+
 describe("renderEntrypointDnsRepair", () => {
   it("renders the fallback nameserver repair block", () => {
     const dnsRepair = renderEntrypointDnsRepair()
@@ -76,6 +82,121 @@ describe("renderEntrypointGitHooks", () => {
       hooks.indexOf("/opt/docker-git/scripts/session-backup-gist.js")
     )
     expect(hooks).toContain("[session-backup] Warning: gh CLI not found")
+  })
+})
+
+describe("renderEntrypoint auth bridge", () => {
+  const renderAuthEntrypoint = (): string =>
+    renderEntrypoint(
+      makeTemplateConfig({
+        enableMcpPlaywright: false
+      })
+    )
+
+  it("renders GitHub auth bridge and credential helper wiring", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      "GIT_AUTH_TOKEN=\"${GIT_AUTH_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}\"",
+      "GITHUB_TOKEN=\"${GITHUB_TOKEN:-${GH_TOKEN:-}}\"",
+      "GITHUB_AUTH_SKIP=\"${GITHUB_AUTH_SKIP:-0}\"",
+      "AUTH_LABEL_RAW=\"${GIT_AUTH_LABEL:-${GITHUB_AUTH_LABEL:-}}\"",
+      "LABELED_GITHUB_TOKEN_KEY=\"GITHUB_TOKEN__$RESOLVED_AUTH_LABEL\"",
+      "LABELED_GIT_TOKEN_KEY=\"GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL\"",
+      "if [[ -n \"$EFFECTIVE_GH_TOKEN\" ]]; then",
+      String.raw`printf "export GITHUB_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN"`,
+      String.raw`printf "export GH_TOKEN=%q\n" "$EFFECTIVE_GH_TOKEN"`,
+      String.raw`printf "export GIT_AUTH_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN"`,
+      "docker_git_upsert_ssh_env \"GITHUB_TOKEN\" \"$EFFECTIVE_GITHUB_TOKEN\"",
+      "docker_git_upsert_ssh_env \"GH_TOKEN\" \"$EFFECTIVE_GH_TOKEN\"",
+      "docker_git_upsert_ssh_env \"GIT_AUTH_TOKEN\" \"$EFFECTIVE_GITHUB_TOKEN\"",
+      "GIT_CREDENTIAL_HELPER_PATH=\"/usr/local/bin/docker-git-credential-helper\"",
+      "token=\"${GITHUB_TOKEN:-}\"",
+      "token=\"${GH_TOKEN:-}\"",
+      String.raw`printf "%s\n" "password=$token"`,
+      "git config --global credential.helper"
+    ])
+  })
+
+  it("renders Claude auth and wrapper bootstrap wiring", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      "CLAUDE_REAL_DIR=\"$(dirname \"$CURRENT_CLAUDE_BIN\")\"",
+      "CLAUDE_REAL_BIN=\"$CLAUDE_REAL_DIR/.docker-git-claude-real\"",
+      "CLAUDE_WRAPPER_BIN=\"/usr/local/bin/claude\"",
+      "cat <<'EOF' > \"$CLAUDE_WRAPPER_BIN\"",
+      "CLAUDE_REAL_BIN=\"__CLAUDE_REAL_BIN__\"",
+      "sed -i \"s#__CLAUDE_REAL_BIN__#$CLAUDE_REAL_BIN#g\" \"$CLAUDE_WRAPPER_BIN\" || true",
+      "CLAUDE_CONFIG_DIR=\"${CLAUDE_CONFIG_DIR:-$HOME/.claude}\"",
+      "docker_git_ensure_claude_cli()",
+      "claude cli.js not found under npm global root; skip shim restore",
+      "CLAUDE_PERMISSION_SETTINGS_FILE=\"$CLAUDE_CONFIG_DIR/settings.json\"",
+      "docker_git_sync_claude_permissions()",
+      "const currentPermissions = isRecord(settings.permissions) ? settings.permissions : {}",
+      "defaultMode: \"bypassPermissions\"",
+      "CLAUDE_TOKEN_FILE=\"$CLAUDE_CONFIG_DIR/.oauth-token\"",
+      "CLAUDE_CREDENTIALS_FILE=\"$CLAUDE_CONFIG_DIR/.credentials.json\"",
+      "CLAUDE_NESTED_CREDENTIALS_FILE=\"$CLAUDE_CONFIG_DIR/.claude/.credentials.json\"",
+      "docker_git_prepare_claude_auth_mode()",
+      "if [[ ! -s \"$CLAUDE_TOKEN_FILE\" ]]; then",
+      "CLAUDE_SETTINGS_FILE=\"${CLAUDE_HOME_JSON:-$CLAUDE_CONFIG_DIR/.claude.json}\"",
+      "CLAUDE_ROOT_TOKEN_FILE=\"$CLAUDE_AUTH_ROOT/.oauth-token\"",
+      "CLAUDE_ROOT_CONFIG_FILE=\"$CLAUDE_AUTH_ROOT/.config.json\"",
+      "CLAUDE_HOME_DIR=\"/home/dev/.claude\"",
+      "CLAUDE_HOME_JSON=\"/home/dev/.claude.json\"",
+      "docker_git_link_claude_home_file()",
+      "docker_git_link_claude_home_file \".oauth-token\"",
+      "docker_git_link_claude_home_file \".config.json\"",
+      "docker_git_link_claude_home_file \".claude.json\"",
+      "docker_git_link_claude_home_file \".credentials.json\""
+    ])
+  })
+
+  it("renders Codex and Gemini project rules wiring", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      "nextServers.playwright = {",
+      "command: \"docker-git-playwright-mcp\"",
+      "docker_git_sync_project_codex_skills()",
+      "project_skills_root=\"$codex_home/skills/.docker-git-project\"",
+      "docker_git_prepare_active_agent_project_rules()",
+      "docker_git_detect_claude_project_rules()",
+      "docker_git_detect_gemini_project_rules()",
+      "\"codex\")",
+      "\"claude\")",
+      "\"gemini\")",
+      "\"20-agents-skills::.agents/skills\"",
+      "\"30-agents-dot-skills::.agents/.skills\"",
+      "\"80-codex-skills::.codex/skills\"",
+      "\"90-codex-dot-skills::.codex/.skills\"",
+      "$project_dir/.claude/settings.json",
+      "$project_dir/.claude/agents",
+      "$project_dir/.gemini/settings.json",
+      "$project_dir/.gemini/commands",
+      "$project_dir/.gemini/skills",
+      "codex exec"
+    ])
+    expect(entrypoint).not.toContain("codex --approval-mode full-auto")
+    expect(entrypoint).not.toContain("\"40-claude-skills::.claude/skills\"")
+  })
+
+  it("renders agent prompt glue and repeated subagent notice", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      "su - dev -s /bin/bash -c \"bash -lc",
+      ". /etc/profile 2>/dev/null || true;",
+      String.raw`. \"$AGENT_ENV_FILE\" 2>/dev/null || true;`,
+      "AGENT_PROMPT_FILE=\"/run/docker-git/agent-prompt.txt\"",
+      "claude --dangerously-skip-permissions -p",
+      "CLAUDE_GLOBAL_PROMPT_FILE=\"/home/dev/.claude/CLAUDE.md\"",
+      "CLAUDE_AUTO_SYSTEM_PROMPT=\"${CLAUDE_AUTO_SYSTEM_PROMPT:-1}\"",
+      "docker-git-managed:claude-md",
+      "SUBAGENTS_LINE=\"Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.\""
+    ])
+    expect(entrypoint.split("Для решения задач обязательно используй subagents.").length - 1).toBeGreaterThanOrEqual(2)
   })
 })
 

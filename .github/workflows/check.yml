@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Build (docker-git package)
-        run: pnpm --filter ./packages/app build
+        run: bun run --cwd packages/app build
 
   types:
     name: Types
@@ -35,9 +35,9 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Typecheck (app)
-        run: pnpm --filter ./packages/app check
+        run: bun run --cwd packages/app check
       - name: Typecheck (lib)
-        run: pnpm --filter ./packages/lib typecheck
+        run: bun run --cwd packages/lib typecheck
 
   lint:
     name: Lint
@@ -47,16 +47,10 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
-      # vibecode-linter uses npx internally for dependency checks
-      # In pnpm workspaces, npx doesn't find local packages correctly
-      # Install TypeScript and Biome globally as a workaround
-      # See: https://github.com/ton-ai-core/vibecode-linter/issues (pending issue)
-      - name: Install global linter dependencies
-        run: npm install -g typescript @biomejs/biome
       - name: Lint (app)
-        run: pnpm --filter ./packages/app lint
+        run: bun run --cwd packages/app lint
       - name: Lint (lib)
-        run: pnpm --filter ./packages/lib lint
+        run: bun run --cwd packages/lib lint
 
   test:
     name: Test
@@ -66,13 +60,10 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
-      # vibecode-linter uses npx internally for dependency checks (lint:tests runs first)
-      - name: Install global linter dependencies
-        run: npm install -g typescript @biomejs/biome
       - name: Test (app)
-        run: pnpm --filter ./packages/app test
+        run: bun run --cwd packages/app test
       - name: Test (lib)
-        run: pnpm --filter ./packages/lib test
+        run: bun run --cwd packages/lib test
 
   lint-effect:
     name: Lint Effect-TS
@@ -83,9 +74,9 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Lint Effect-TS (app)
-        run: pnpm --filter ./packages/app lint:effect
+        run: bun run --cwd packages/app lint:effect
       - name: Lint Effect-TS (lib)
-        run: pnpm --filter ./packages/lib lint:effect
+        run: bun run --cwd packages/lib lint:effect
 
   e2e-local-package:
     name: E2E (Local package CLI)
@@ -95,7 +86,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
-      - name: Pack and run local package via pnpm
+      - name: Pack and run local package via Bun
         run: bash scripts/e2e/local-package-cli.sh
 
   e2e-opencode:

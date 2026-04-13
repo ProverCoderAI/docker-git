@@ -74,7 +74,7 @@ const makeCommand = (root: string, outDir: string, path: Path.Path): CreateComma
     dockerNetworkMode: "shared",
     dockerSharedNetworkName: "docker-git-shared",
     enableMcpPlaywright: false,
-    pnpmVersion: "10.27.0"
+    bunVersion: "1.3.11"
   }
 
   return {

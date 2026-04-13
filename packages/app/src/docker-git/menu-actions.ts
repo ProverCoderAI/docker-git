@@ -1,21 +1,21 @@
-import type { MenuAction } from "@lib/core/domain"
 import { Effect, Match, pipe } from "effect"
 
 import { downAllProjects, downProject, upProject } from "./api-client.js"
 import {
   listMenuProjectItems,
   listMenuRunningProjectItems,
-  renderGithubAuthStatusSummary,
   renderMenuProjectLogs,
   renderMenuProjectPs,
   renderMenuProjectSummaries
 } from "./menu-api.js"
+import { openAuthMenu } from "./menu-auth.js"
 import { startCreateView } from "./menu-create.js"
 import type { MenuError } from "./menu-errors.js"
 import { renderMenuError } from "./menu-errors.js"
+import { openProjectAuthSelection } from "./menu-project-auth.js"
 import { loadSelectView } from "./menu-select-load.js"
 import { withSuspendedTui, writeErrorAndPause } from "./menu-shared.js"
-import { type MenuEnv, type MenuRunner, type MenuState, type MenuViewContext } from "./menu-types.js"
+import { type MenuAction, type MenuEnv, type MenuRunner, type MenuState, type MenuViewContext } from "./menu-types.js"
 
 // CHANGE: keep menu actions and input parsing in a dedicated module
 // WHY: reduce cognitive complexity in the TUI entry
@@ -98,23 +98,40 @@ const runSelectAction = (context: MenuContext) => {
 }
 
 const runAuthProfilesAction = (context: MenuContext) => {
-  context.runner.runEffect(
-    pipe(
-      renderGithubAuthStatusSummary(),
-      Effect.tap((summary) =>
-        Effect.sync(() => {
-          context.setMessage(
-            `${summary} Use \`docker-git auth github login --web\` or \`docker-git auth github logout\`.`
-          )
-        })
-      ),
-      Effect.asVoid
-    )
-  )
+  openAuthMenu({
+    state: context.state,
+    runner: context.runner,
+    setView: context.setView,
+    setMessage: context.setMessage,
+    setActiveDir: context.setActiveDir
+  })
 }
 
 const runProjectAuthAction = (context: MenuContext) => {
-  context.setMessage("Project auth binding is not routed through the controller yet.")
+  if (context.state.activeDir !== null) {
+    context.runner.runEffect(
+      pipe(
+        listMenuProjectItems,
+        Effect.flatMap((items) => {
+          const selected = items.find((item) => item.projectDir === context.state.activeDir)
+          if (selected === undefined) {
+            return Effect.sync(() => {
+              context.setActiveDir(null)
+              context.setMessage("Active project is no longer available. Select a project again.")
+              context.runner.runEffect(loadSelectView(listMenuProjectItems, "Auth", context))
+            })
+          }
+          return Effect.sync(() => {
+            openProjectAuthSelection(selected, context)
+          })
+        })
+      )
+    )
+    return
+  }
+
+  context.setMessage(null)
+  context.runner.runEffect(loadSelectView(listMenuProjectItems, "Auth", context))
 }
 
 const runDownAllAction = (context: MenuContext) => {

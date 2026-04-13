@@ -1,4 +1,29 @@
-import { parseEnvEntries } from "@lib/usecases/env-file"
+type EnvEntry = {
+  readonly key: string
+  readonly value: string
+}
+
+const parseEnvEntries = (input: string): ReadonlyArray<EnvEntry> => {
+  const entries: Array<EnvEntry> = []
+  for (const rawLine of input.replaceAll("\r\n", "\n").replaceAll("\r", "\n").split("\n")) {
+    const line = rawLine.trim()
+    if (line.length === 0 || line.startsWith("#")) {
+      continue
+    }
+    const normalized = line.startsWith("export ") ? line.slice("export ".length).trimStart() : line
+    const equalsIndex = normalized.indexOf("=")
+    if (equalsIndex <= 0) {
+      continue
+    }
+    const key = normalized.slice(0, equalsIndex).trim()
+    const value = normalized.slice(equalsIndex + 1).trim()
+    if (key.length === 0) {
+      continue
+    }
+    entries.push({ key, value })
+  }
+  return entries
+}
 
 export const normalizeLabel = (value: string): string => {
   const trimmed = value.trim()

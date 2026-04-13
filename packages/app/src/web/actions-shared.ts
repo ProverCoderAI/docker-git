@@ -1,0 +1,80 @@
+import { Effect } from "effect"
+import type { Dispatch, SetStateAction } from "react"
+
+import type { ActionPromptState } from "./action-prompt.js"
+import type { AuthSnapshot, GithubAuthStatus, ProjectAuthSnapshot, ProjectDetails } from "./api.js"
+import type { ActiveTerminalSession } from "./terminal.js"
+
+type Setter<A> = Dispatch<SetStateAction<A>>
+
+type BusyAction<A> = {
+  readonly context: BrowserActionContext
+  readonly effect: Effect.Effect<A, string>
+  readonly label: string
+  readonly onFailure?: (error: string) => void
+  readonly onFinally?: () => void
+  readonly onSuccess: (value: A) => void
+}
+
+export type BrowserActionContext = {
+  readonly reloadDashboard: () => void
+  readonly selectedProjectId: string | null
+  readonly selectedProjectName: string | null
+  readonly setActionPrompt: Setter<ActionPromptState | null>
+  readonly setAuthSnapshot: Setter<AuthSnapshot | null>
+  readonly setBusyLabel: Setter<string | null>
+  readonly setGithubStatus: Setter<GithubAuthStatus | null>
+  readonly setMessage: Setter<string | null>
+  readonly setOutput: Setter<string>
+  readonly setProjectAuthSnapshot: Setter<ProjectAuthSnapshot | null>
+  readonly setSelectedMenuIndex: Setter<number>
+  readonly setSelectedProject: Setter<ProjectDetails | null>
+  readonly setSelectedProjectId: Setter<string | null>
+  readonly setTerminalSession: Setter<ActiveTerminalSession | null>
+}
+
+export const confirmAction = (label: string): boolean => {
+  const dialog = globalThis.confirm
+  return typeof dialog === "function" && dialog(label)
+}
+
+export const defaultLabel = (value: string | null | undefined): string => {
+  const trimmed = (value ?? "").trim()
+  return trimmed.length === 0 ? "default" : trimmed
+}
+
+export const nullableValue = (value: string | undefined): string | null => {
+  const trimmed = (value ?? "").trim()
+  return trimmed.length === 0 ? null : trimmed
+}
+
+export const withBusy = <A>({ context, effect, label, onFailure, onFinally, onSuccess }: BusyAction<A>) => {
+  context.setBusyLabel(label)
+  void Effect.runPromise(
+    effect.pipe(
+      Effect.match({
+        onFailure: (error) => {
+          context.setMessage(error)
+          onFailure?.(error)
+        },
+        onSuccess
+      })
+    )
+  ).finally(() => {
+    context.setBusyLabel(null)
+    onFinally?.()
+  })
+}
+
+export const requireSelectedProjectId = (
+  context: BrowserActionContext
+): string | null => {
+  if (context.selectedProjectId !== null) {
+    return context.selectedProjectId
+  }
+  context.setMessage("No project selected.")
+  return null
+}
+
+export const projectActionLabel = (context: BrowserActionContext): string =>
+  context.selectedProjectName ?? context.selectedProjectId ?? "selected project"

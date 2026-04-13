@@ -16,6 +16,7 @@ export const CreateProjectRequestSchema = Schema.Struct({
   secretsRoot: OptionalString,
   authorizedKeysPath: OptionalString,
   authorizedKeysContents: OptionalString,
+  useManagedAuthorizedKeys: OptionalBoolean,
   envGlobalPath: OptionalString,
   envProjectPath: OptionalString,
   codexAuthPath: OptionalString,
@@ -44,6 +45,30 @@ export const GithubAuthLoginRequestSchema = Schema.Struct({
   scopes: OptionalNullableString
 })
 
+export const AuthMenuFlowSchema = Schema.Literal(
+  "GithubRemove",
+  "GitSet",
+  "GitRemove",
+  "ClaudeLogout",
+  "GeminiApiKey",
+  "GeminiLogout"
+)
+
+export const AuthTerminalFlowSchema = Schema.Literal("ClaudeOauth", "GeminiOauth")
+
+export const AuthMenuRequestSchema = Schema.Struct({
+  flow: AuthMenuFlowSchema,
+  label: OptionalNullableString,
+  token: OptionalNullableString,
+  user: OptionalNullableString,
+  apiKey: OptionalNullableString
+})
+
+export const AuthTerminalSessionRequestSchema = Schema.Struct({
+  flow: AuthTerminalFlowSchema,
+  label: OptionalNullableString
+})
+
 export const GithubAuthLogoutRequestSchema = Schema.Struct({
   label: OptionalNullableString
 })
@@ -58,6 +83,22 @@ export const CodexAuthLoginRequestSchema = Schema.Struct({
 })
 
 export const CodexAuthLogoutRequestSchema = Schema.Struct({
+  label: OptionalNullableString
+})
+
+export const ProjectAuthFlowSchema = Schema.Literal(
+  "ProjectGithubConnect",
+  "ProjectGithubDisconnect",
+  "ProjectGitConnect",
+  "ProjectGitDisconnect",
+  "ProjectClaudeConnect",
+  "ProjectClaudeDisconnect",
+  "ProjectGeminiConnect",
+  "ProjectGeminiDisconnect"
+)
+
+export const ProjectAuthRequestSchema = Schema.Struct({
+  flow: ProjectAuthFlowSchema,
   label: OptionalNullableString
 })
 
@@ -79,7 +120,8 @@ export const ApplyAllRequestSchema = Schema.Struct({
 })
 
 export const UpProjectRequestSchema = Schema.Struct({
-  authorizedKeysContents: OptionalString
+  authorizedKeysContents: OptionalString,
+  useManagedAuthorizedKeys: OptionalBoolean
 })
 
 export const AgentProviderSchema = Schema.Literal("codex", "opencode", "claude", "custom")
@@ -131,12 +173,29 @@ export const AgentLogLineSchema = Schema.Struct({
   line: Schema.String
 })
 
+export const TerminalSessionStatusSchema = Schema.Literal("ready", "attached", "exited", "failed")
+
+export const TerminalSessionSchema = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  sshCommand: Schema.String,
+  status: TerminalSessionStatusSchema,
+  createdAt: Schema.String,
+  startedAt: OptionalString,
+  closedAt: OptionalString,
+  exitCode: Schema.optional(Schema.Number),
+  signal: Schema.optional(Schema.Number)
+})
+
 export type CreateProjectRequestInput = Schema.Schema.Type<typeof CreateProjectRequestSchema>
 export type GithubAuthLoginRequestInput = Schema.Schema.Type<typeof GithubAuthLoginRequestSchema>
+export type AuthMenuRequestInput = Schema.Schema.Type<typeof AuthMenuRequestSchema>
+export type AuthTerminalSessionRequestInput = Schema.Schema.Type<typeof AuthTerminalSessionRequestSchema>
 export type GithubAuthLogoutRequestInput = Schema.Schema.Type<typeof GithubAuthLogoutRequestSchema>
 export type CodexAuthImportRequestInput = Schema.Schema.Type<typeof CodexAuthImportRequestSchema>
 export type CodexAuthLoginRequestInput = Schema.Schema.Type<typeof CodexAuthLoginRequestSchema>
 export type CodexAuthLogoutRequestInput = Schema.Schema.Type<typeof CodexAuthLogoutRequestSchema>
+export type ProjectAuthRequestInput = Schema.Schema.Type<typeof ProjectAuthRequestSchema>
 export type StateInitRequestInput = Schema.Schema.Type<typeof StateInitRequestSchema>
 export type StateCommitRequestInput = Schema.Schema.Type<typeof StateCommitRequestSchema>
 export type StateSyncRequestInput = Schema.Schema.Type<typeof StateSyncRequestSchema>

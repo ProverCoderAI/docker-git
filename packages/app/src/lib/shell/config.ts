@@ -11,7 +11,7 @@ import { defaultTemplateConfig, type ProjectConfig } from "../core/domain.js"
 import { ConfigDecodeError, ConfigNotFoundError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
 
-const TemplateConfigSchema = Schema.Struct({
+const TemplateConfigInputSchema = Schema.Struct({
   containerName: Schema.String,
   serviceName: Schema.String,
   sshUser: Schema.String,
@@ -63,16 +63,32 @@ const TemplateConfigSchema = Schema.Struct({
   enableMcpPlaywright: Schema.optionalWith(Schema.Boolean, {
     default: () => defaultTemplateConfig.enableMcpPlaywright
   }),
-  pnpmVersion: Schema.String,
+  bunVersion: Schema.optional(Schema.String),
+  pnpmVersion: Schema.optional(Schema.String),
   clonedOnHostname: Schema.optional(Schema.String)
 })
 
-const ProjectConfigSchema = Schema.Struct({
+type DecodedProjectConfigInput = Schema.Schema.Type<typeof ProjectConfigInputSchema>
+
+const normalizeLegacyProjectConfig = (
+  config: DecodedProjectConfigInput
+): ProjectConfig => {
+  const { bunVersion, pnpmVersion, ...template } = config.template
+  return {
+    schemaVersion: config.schemaVersion,
+    template: {
+      ...template,
+      bunVersion: bunVersion ?? pnpmVersion ?? defaultTemplateConfig.bunVersion
+    }
+  }
+}
+
+const ProjectConfigInputSchema = Schema.Struct({
   schemaVersion: Schema.Literal(1),
-  template: TemplateConfigSchema
+  template: TemplateConfigInputSchema
 })
 
-const ProjectConfigJsonSchema = Schema.parseJson(ProjectConfigSchema)
+const ProjectConfigJsonSchema = Schema.parseJson(ProjectConfigInputSchema)
 
 const decodeProjectConfig = (
   path: string,
@@ -86,7 +102,7 @@ const decodeProjectConfig = (
           message: TreeFormatter.formatIssueSync(issue)
         })
       ),
-    onRight: (value) => Effect.succeed(value)
+    onRight: (value) => Effect.succeed(normalizeLegacyProjectConfig(value))
   })
 
 // CHANGE: read and decode docker-git.json from disk
