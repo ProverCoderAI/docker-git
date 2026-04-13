@@ -6,7 +6,7 @@ import { renderLayout } from "./menu-render-layout.js"
 import {
   buildSelectLabels,
   buildSelectListWindow,
-  computeListWidth,
+  computeSelectColumnWidths,
   computeSelectListMaxRows,
   renderSelectDetails,
   selectHint,
@@ -164,6 +164,7 @@ const renderSelectListBox = (
       {
         key: items[index]?.projectDir ?? String(index),
         fg: index === selected ? "green" : "white",
+        width,
         wrap: "truncate"
       },
       label
@@ -171,12 +172,12 @@ const renderSelectListBox = (
   })
 
   const before = hiddenAbove > 0
-    ? [el(Text, { fg: "gray", wrap: "truncate" }, `[scroll] ${hiddenAbove} more above`)]
+    ? [el(Text, { fg: "gray", width, wrap: "truncate" }, `[scroll] ${hiddenAbove} more above`)]
     : []
   const after = hiddenBelow > 0
-    ? [el(Text, { fg: "gray", wrap: "truncate" }, `[scroll] ${hiddenBelow} more below`)]
+    ? [el(Text, { fg: "gray", width, wrap: "truncate" }, `[scroll] ${hiddenBelow} more below`)]
     : []
-  const listBody = list.length > 0 ? list : [el(Text, { fg: "gray" }, "No projects found.")]
+  const listBody = list.length > 0 ? list : [el(Text, { fg: "gray", width, wrap: "truncate" }, "No projects found.")]
 
   return el(
     Box,
@@ -188,6 +189,7 @@ const renderSelectListBox = (
 }
 
 type SelectDetailsBoxInput = {
+  readonly detailsWidth: number | null
   readonly purpose: SelectPurpose
   readonly items: ReadonlyArray<ProjectItem>
   readonly selected: number
@@ -204,11 +206,16 @@ const renderSelectDetailsBox = (
     input.purpose,
     input.items[input.selected],
     input.runtimeByProject,
-    input.connectEnableMcpPlaywright
+    input.connectEnableMcpPlaywright,
+    input.detailsWidth
   )
   return el(
     Box,
-    { flexDirection: "column", marginLeft: 2, flexGrow: 1 },
+    {
+      flexDirection: "column",
+      marginLeft: 2,
+      ...(input.detailsWidth === null ? { flexGrow: 1 } : { width: input.detailsWidth })
+    },
     ...details
   )
 }
@@ -227,9 +234,10 @@ export const renderSelect = (
   const { confirmDelete, connectEnableMcpPlaywright, items, message, purpose, runtimeByProject, selected } = input
   const el = React.createElement
   const listLabels = buildSelectLabels(items, selected, purpose, runtimeByProject)
-  const listWidth = computeListWidth(listLabels)
+  const { detailsWidth, listWidth } = computeSelectColumnWidths(listLabels)
   const listBox = renderSelectListBox(el, items, selected, listLabels, listWidth)
   const detailsBox = renderSelectDetailsBox(el, {
+    detailsWidth,
     purpose,
     items,
     selected,

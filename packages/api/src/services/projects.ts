@@ -20,7 +20,7 @@ import { deleteDockerGitProject } from "@effect-template/lib/usecases/projects"
 import type { RawOptions } from "@effect-template/lib/core/command-options"
 import type { CreateCommand as LibCreateCommand } from "@effect-template/lib/core/domain"
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
-import { Effect, Either } from "effect"
+import { Effect, Either, Logger } from "effect"
 
 import type { CreateProjectRequest, ProjectDetails, ProjectStatus, ProjectSummary } from "../api/contracts.js"
 import { ApiAuthRequiredError, ApiConflictError, ApiInternalError, ApiNotFoundError, ApiBadRequestError } from "../api/errors.js"
@@ -76,6 +76,23 @@ const runComposeCapture = (
       })
     )
   )
+
+const runWithProjectEventLogs = <A, E, R>(
+  projectId: string,
+  effect: Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R> =>
+  Effect.gen(function*(_) {
+    const logger = Logger.make(({ message }) => {
+      for (const line of String(message).split(/\r?\n/u)) {
+        const trimmed = line.trimEnd()
+        if (trimmed.length > 0) {
+          emitProjectEvent(projectId, "project.deployment.log", { line: trimmed })
+        }
+      }
+    })
+
+    return yield* _(effect.pipe(Effect.provide(Logger.replace(Logger.defaultLogger, logger))))
+  })
 
 const toProjectStatus = (raw: string): ProjectStatus => {
   const normalized = raw.toLowerCase()
@@ -380,10 +397,13 @@ export const createProjectFromRequest = (
     )
 
     yield* _(
-      createProject(command).pipe(
+      runWithProjectEventLogs(
+        command.outDir,
+        createProject(command).pipe(
         Effect.catchTag("DockerIdentityConflictError", (error) =>
           Effect.fail(new ApiConflictError({ message: renderError(error) }))
         )
+      )
       )
     )
 

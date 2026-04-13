@@ -42,6 +42,7 @@ import {
   readGithubAuthStatus,
 } from "./services/auth.js"
 import { readAuthMenuSnapshot, runAuthMenuFlow } from "./services/auth-menu.js"
+import { streamGithubAuthLogin } from "./services/auth-github-login-stream.js"
 import { createAuthTerminalSession, deleteAuthTerminalSession } from "./services/auth-terminal-sessions.js"
 import { streamCodexAuthLogin } from "./services/auth-codex-login-stream.js"
 import { getAgent, getAgentAttachInfo, listAgents, readAgentLogs, startAgent, stopAgent } from "./services/agents.js"
@@ -356,6 +357,20 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const snapshot = yield* _(readAuthMenuSnapshot())
         return yield* _(jsonResponse({ snapshot }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/github/login/stream",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGithubAuthLoginRequest())
+        const outputStream = yield* _(streamGithubAuthLogin(request))
+        return HttpServerResponse.stream(outputStream, {
+          status: 200,
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "cache-control": "no-cache"
+          }
+        })
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(

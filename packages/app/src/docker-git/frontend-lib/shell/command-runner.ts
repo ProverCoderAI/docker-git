@@ -86,6 +86,19 @@ const collectStreamText = (
 ): Effect.Effect<string, PlatformError> =>
   pipe(stream, Stream.runCollect, Effect.map((chunks) => decodeUint8Array(collectUint8Array(chunks))))
 
+const writeStreamText = (
+  stream: Stream.Stream<Uint8Array, PlatformError>,
+  write: (chunk: string) => void
+): Effect.Effect<void, PlatformError> =>
+  pipe(
+    stream,
+    Stream.decodeText(),
+    Stream.runForEach((chunk) =>
+      Effect.sync(() => {
+        write(chunk)
+      }))
+  )
+
 const combineCommandOutput = (stdout: string, stderr: string): string =>
   [stdout.trim(), stderr.trim()].filter((chunk) => chunk.length > 0).join("\n")
 
@@ -115,6 +128,31 @@ export const runCommandCapture = <E>(
       const exitCode = yield* _(process.exitCode)
       yield* _(ensureExitCode(exitCode, okExitCodes, onFailure))
       return decodeUint8Array(bytes)
+    })
+  )
+
+export const runCommandExitCodeStreaming = (
+  spec: RunCommandSpec
+): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const executor = yield* _(CommandExecutor.CommandExecutor)
+      const runningProcess = yield* _(executor.start(buildCommand(spec, "pipe", "pipe", "pipe")))
+      yield* _(
+        Effect.forkDaemon(
+          writeStreamText(runningProcess.stdout, (chunk) => {
+            process.stdout.write(chunk)
+          })
+        )
+      )
+      yield* _(
+        Effect.forkDaemon(
+          writeStreamText(runningProcess.stderr, (chunk) => {
+            process.stderr.write(chunk)
+          })
+        )
+      )
+      return yield* _(runningProcess.exitCode)
     })
   )
 

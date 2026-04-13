@@ -4,7 +4,7 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import { runCommandCapture, runCommandExitCode } from "./frontend-lib/shell/command-runner.js"
+import { runCommandCapture, runCommandExitCode, runCommandExitCodeStreaming } from "./frontend-lib/shell/command-runner.js"
 
 import { type DockerNetworkIps, parseDockerNetworkIps, uniqueStrings } from "./controller-reachability.js"
 import {
@@ -172,7 +172,7 @@ export const runCompose = (
       ...args
     ])
     const exitCode = yield* _(
-      runCommandExitCode({
+      runCommandExitCodeStreaming({
         cwd: process.cwd(),
         command: invocation.command,
         args: invocation.args,

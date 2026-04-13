@@ -1,11 +1,12 @@
 import * as FsPlatform from "@effect/platform/FileSystem"
 import * as PathPlatform from "@effect/platform/Path"
-import { Effect } from "effect"
+import { Duration, Effect, Ref } from "effect"
+import * as Fiber from "effect/Fiber"
 
 import { buildCreateProjectRequest } from "./api-client-create.js"
 import { readProjectOutput, resolveCreateRequestPaths } from "./api-client-helpers.js"
 import { request, requestTextStream, requestVoid } from "./api-http.js"
-import { asArray, asObject, type JsonValue } from "./api-json.js"
+import { asArray, asObject, asString, type JsonValue } from "./api-json.js"
 import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
 import { decodeTerminalSession } from "./api-terminal-codec.js"
 import type {
@@ -21,8 +22,9 @@ import type {
   StateInitCommand,
   StateSyncCommand
 } from "./frontend-lib/core/domain.js"
+import type { ControllerRuntime } from "./controller.js"
 import { resolvePathFromCwd } from "./frontend-lib/usecases/path-helpers.js"
-import type { ApiRequestError } from "./host-errors.js"
+import type { ApiAuthRequiredError, ApiRequestError } from "./host-errors.js"
 
 export { type JsonObject, type JsonRequest, type JsonValue, renderJsonPayload } from "./api-json.js"
 export {
@@ -37,6 +39,144 @@ export { type ApiTerminalSession } from "./api-terminal-codec.js"
 const projectPath = (projectId: string, suffix = ""): string => `/projects/${encodeURIComponent(projectId)}${suffix}`
 const codexLoginSuccessMarker = "__DOCKER_GIT_CODEX_LOGIN_STATUS__:ok"
 const codexLoginErrorMarkerPrefix = "__DOCKER_GIT_CODEX_LOGIN_STATUS__:error:"
+const githubLoginSuccessMarker = "__DOCKER_GIT_GITHUB_LOGIN_STATUS__:ok"
+const githubLoginErrorMarkerPrefix = "__DOCKER_GIT_GITHUB_LOGIN_STATUS__:error:"
+
+type ProjectEvent = {
+  readonly seq: number
+  readonly type: string
+  readonly payload: JsonValue | undefined
+}
+
+type ProjectEventPollResponse = {
+  readonly cursor: number
+  readonly events: ReadonlyArray<ProjectEvent>
+}
+
+const asNumber = (value: JsonValue | undefined): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null
+
+const readProjectEventPayloadField = (
+  payload: JsonValue | undefined,
+  key: string
+): string | null => {
+  const object = asObject(payload)
+  return object === null ? null : asString(object[key])
+}
+
+const formatProjectEventLine = (event: ProjectEvent): string | null => {
+  if (event.type === "project.deployment.status") {
+    const phase = readProjectEventPayloadField(event.payload, "phase")
+    const message = readProjectEventPayloadField(event.payload, "message")
+    if (message === null) {
+      return null
+    }
+    return phase === null ? message : `[${phase}] ${message}`
+  }
+
+  if (event.type === "project.deployment.log") {
+    return readProjectEventPayloadField(event.payload, "line")
+  }
+
+  if (event.type === "project.ssh.session") {
+    const phase = readProjectEventPayloadField(event.payload, "phase")
+    const sessionId = readProjectEventPayloadField(event.payload, "sessionId")
+    if (phase === null) {
+      return null
+    }
+    return sessionId === null ? `[ssh] ${phase}` : `[ssh] ${phase} (${sessionId})`
+  }
+
+  return null
+}
+
+const decodeProjectEvent = (payload: JsonValue): ProjectEvent | null => {
+  const object = asObject(payload)
+  if (object === null) {
+    return null
+  }
+
+  const seq = asNumber(object["seq"])
+  const type = asString(object["type"])
+  if (seq === null || type === null) {
+    return null
+  }
+
+  return {
+    seq,
+    type,
+    payload: object["payload"]
+  }
+}
+
+const decodeProjectEventPollResponse = (payload: JsonValue): ProjectEventPollResponse | null => {
+  const object = asObject(payload)
+  if (object === null) {
+    return null
+  }
+
+  const cursor = asNumber(object["cursor"])
+  if (cursor === null) {
+    return null
+  }
+
+  return {
+    cursor,
+    events: asArray(object["events"])
+      .map((event) => decodeProjectEvent(event))
+      .filter((event): event is ProjectEvent => event !== null)
+  }
+}
+
+const writeProjectEventLines = (events: ReadonlyArray<ProjectEvent>) =>
+  Effect.sync(() => {
+    for (const event of events) {
+      const line = formatProjectEventLine(event)
+      if (line !== null) {
+        process.stdout.write(`${line}\n`)
+      }
+    }
+  })
+
+const readProjectEventCursor = (projectId: string) =>
+  request("GET", projectPath(projectId, "/events-poll")).pipe(
+    Effect.map((payload) => decodeProjectEventPollResponse(payload)?.cursor ?? 0)
+  )
+
+const pollProjectEventsOnce = (
+  projectId: string,
+  cursorRef: Ref.Ref<number>
+) =>
+  Effect.gen(function*(_) {
+    const cursor = yield* _(Ref.get(cursorRef))
+    const payload = yield* _(request("GET", projectPath(projectId, `/events-poll?cursor=${cursor}`)))
+    const response = decodeProjectEventPollResponse(payload)
+    if (response === null) {
+      return
+    }
+
+    yield* _(Ref.set(cursorRef, response.cursor))
+    yield* _(writeProjectEventLines(response.events))
+  })
+
+const startProjectEventPolling = (projectId: string, initialCursor: number) =>
+  Effect.gen(function*(_) {
+    const cursorRef = yield* _(Ref.make(initialCursor))
+    const fiber = yield* _(
+      Effect.gen(function*(_) {
+        while (true) {
+          yield* _(
+            pollProjectEventsOnce(projectId, cursorRef).pipe(
+              Effect.catchAll(() => Effect.void)
+            )
+          )
+          yield* _(Effect.sleep(Duration.millis(250)))
+        }
+      }).pipe(Effect.fork)
+    )
+
+    return { cursorRef, fiber, projectId }
+  })
 
 const decodeProjectResponse = (payload: JsonValue) => {
   const object = asObject(payload)
@@ -74,6 +214,31 @@ const codexLoginFailureMessage = (output: string, exitCode: string | null): stri
     : `Codex login failed (${exitCode}).`
 }
 
+const githubLoginFailureMessage = (output: string, exitCode: string | null): string => {
+  const lines = output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) =>
+      line.length > 0 &&
+      !line.startsWith(githubLoginSuccessMarker) &&
+      !line.startsWith(githubLoginErrorMarkerPrefix)
+    )
+
+  const detailedLine = lines.findLast((line) => line.toLowerCase().includes("failed") || line.toLowerCase().includes("error"))
+  if (detailedLine !== undefined) {
+    return detailedLine
+  }
+
+  const lastLine = lines.at(-1)
+  if (lastLine !== undefined) {
+    return lastLine
+  }
+
+  return exitCode === null
+    ? "GitHub login stream ended without a completion marker."
+    : `GitHub login failed (${exitCode}).`
+}
+
 export const listProjects = () =>
   request("GET", "/projects").pipe(
     Effect.map((payload) => {
@@ -99,7 +264,32 @@ const createProjectWithResolvedPaths = (
 ) =>
   Effect.gen(function*(_) {
     const createRequest = buildCreateProjectRequest(command, resolvedPaths)
-    const payload = yield* _(request("POST", "/projects", createRequest))
+    const projectId = asString(createRequest.outDir)
+    const initialCursor = projectId === null
+      ? null
+      : yield* _(
+        readProjectEventCursor(projectId).pipe(
+          Effect.catchAll(() => Effect.succeed(0))
+        )
+      )
+    const eventPolling = projectId === null || initialCursor === null
+      ? null
+      : yield* _(startProjectEventPolling(projectId, initialCursor))
+    const payload = yield* _(
+      request("POST", "/projects", createRequest).pipe(
+        Effect.ensuring(
+          eventPolling === null
+            ? Effect.void
+            : Fiber.interrupt(eventPolling.fiber).pipe(
+              Effect.zipRight(
+                pollProjectEventsOnce(eventPolling.projectId, eventPolling.cursorRef).pipe(
+                  Effect.catchAll(() => Effect.void)
+                )
+              )
+            )
+        )
+      )
+    )
     return decodeProjectResponse(payload)
   })
 
@@ -195,12 +385,79 @@ export const pushState = () =>
     Effect.map((payload) => readProjectOutput(payload))
   )
 
-export const githubLogin = (command: AuthGithubLoginCommand) =>
-  request("POST", "/auth/github/login", {
-    label: command.label,
-    token: command.token,
-    scopes: command.scopes
-  })
+export const githubLogin = (
+  command: AuthGithubLoginCommand
+): Effect.Effect<JsonValue, ApiRequestError | ApiAuthRequiredError, ControllerRuntime> =>
+  command.token !== null && command.token.trim().length > 0
+    ? request("POST", "/auth/github/login", {
+      label: command.label,
+      token: command.token,
+      scopes: command.scopes
+    })
+    : Effect.gen(function*(_) {
+      let pending = ""
+      const writeVisibleChunk = (chunk: string) => {
+        pending += chunk
+        const lines = pending.split("\n")
+        pending = lines.pop() ?? ""
+
+        for (const line of lines) {
+          if (line.startsWith(githubLoginSuccessMarker) || line.startsWith(githubLoginErrorMarkerPrefix)) {
+            continue
+          }
+          process.stdout.write(`${line}\n`)
+        }
+      }
+
+      const output = yield* _(
+        requestTextStream(
+          "POST",
+          "/auth/github/login/stream",
+          {
+            label: command.label,
+            token: null,
+            scopes: command.scopes
+          },
+          writeVisibleChunk
+        )
+      )
+
+      if (
+        pending.length > 0 &&
+        !pending.startsWith(githubLoginSuccessMarker) &&
+        !pending.startsWith(githubLoginErrorMarkerPrefix)
+      ) {
+        process.stdout.write(pending)
+      }
+
+      if (!output.includes(githubLoginSuccessMarker)) {
+        const failureLine = output
+          .split(/\r?\n/u)
+          .find((line) => line.startsWith(githubLoginErrorMarkerPrefix))
+
+        const exitCode = failureLine === undefined
+          ? null
+          : failureLine.slice(githubLoginErrorMarkerPrefix.length)
+        const failureMessage = githubLoginFailureMessage(output, exitCode)
+
+        return yield* _(
+          Effect.fail<ApiRequestError>({
+            _tag: "ApiRequestError",
+            method: "POST",
+            path: "/auth/github/login/stream",
+            message: failureMessage,
+            displayOnlyMessage: true
+          })
+        )
+      }
+
+      const statusPayload = yield* _(request("GET", "/auth/github/status"))
+      const object = asObject(statusPayload)
+      return {
+        ok: true,
+        status: object === null ? statusPayload : (object["status"] ?? statusPayload)
+      } satisfies JsonValue
+    })
 
 export const githubStatus = (_command: AuthGithubStatusCommand) => request("GET", "/auth/github/status")
 
