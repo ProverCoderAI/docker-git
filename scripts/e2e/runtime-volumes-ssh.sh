@@ -72,6 +72,13 @@ cleanup() {
   if [[ -d "$OUT_DIR" ]] && [[ -f "$OUT_DIR/docker-compose.yml" ]]; then
     (cd "$OUT_DIR" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
   fi
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  docker volume rm \
+    "$VOLUME_NAME" \
+    "${VOLUME_NAME}-bootstrap" \
+    "${SERVICE_NAME}_${VOLUME_NAME}" \
+    "${SERVICE_NAME}_${VOLUME_NAME}-bootstrap" \
+    >/dev/null 2>&1 || true
   rm -rf "$ROOT" >/dev/null 2>&1 || true
 }
 

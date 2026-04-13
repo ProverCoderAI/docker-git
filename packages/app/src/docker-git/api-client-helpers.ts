@@ -12,6 +12,12 @@ import {
   resolvePathFromCwd
 } from "./frontend-lib/usecases/path-helpers.js"
 
+type ClientPathContext = {
+  readonly cwd: string
+  readonly fs: FileSystem.FileSystem
+  readonly path: Path.Path
+}
+
 export const readProjectOutput = (payload: JsonValue): string => {
   const object = asObject(payload)
   return asString(object?.["output"]) ?? ""
@@ -47,40 +53,49 @@ const normalizeAuthorizedKeysContents = (value: string): string | undefined => {
   return trimmed.length === 0 ? undefined : `${trimmed}\n`
 }
 
-const resolveManagedAuthorizedKeysContents = () =>
+const readClientPathContext = (): Effect.Effect<ClientPathContext, never, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
-    const cwd = process.cwd()
-    const sshPrivateKey = yield* _(findSshPrivateKey(fs, path, cwd))
-    const matchingPublicKey = sshPrivateKey === null ? null : yield* _(findExistingPath(fs, `${sshPrivateKey}.pub`))
+    return {
+      cwd: process.cwd(),
+      fs,
+      path
+    }
+  })
+
+const resolveManagedAuthorizedKeysContents = () =>
+  Effect.gen(function*(_) {
+    const context = yield* _(readClientPathContext())
+    const sshPrivateKey = yield* _(findSshPrivateKey(context.fs, context.path, context.cwd))
+    const matchingPublicKey = sshPrivateKey === null
+      ? null
+      : yield* _(findExistingPath(context.fs, `${sshPrivateKey}.pub`))
     const source = matchingPublicKey === null
-      ? yield* _(findAuthorizedKeysSource(fs, path, cwd))
+      ? yield* _(findAuthorizedKeysSource(context.fs, context.path, context.cwd))
       : matchingPublicKey
 
     if (source === null) {
       return missingAuthorizedKeysContents()
     }
 
-    const contents = yield* _(fs.readFileString(source))
+    const contents = yield* _(context.fs.readFileString(source))
     return normalizeAuthorizedKeysContents(contents)
   })
 
 export const resolveCreateRequestPaths = (command: CreateCommand) =>
   Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
-    const cwd = process.cwd()
+    const context = yield* _(readClientPathContext())
     const authorizedKeysPath = command.config.authorizedKeysPath === defaultTemplateConfig.authorizedKeysPath
       ? command.config.authorizedKeysPath
-      : resolveClientCreatePath(path, cwd, command.config.authorizedKeysPath)
+      : resolveClientCreatePath(context.path, context.cwd, command.config.authorizedKeysPath)
     const authorizedKeysContents = authorizedKeysPath === defaultTemplateConfig.authorizedKeysPath
       ? yield* _(resolveManagedAuthorizedKeysContents())
       : yield* _(
-        fs.exists(authorizedKeysPath).pipe(
+        context.fs.exists(authorizedKeysPath).pipe(
           Effect.flatMap((exists) =>
             exists
-              ? fs.readFileString(authorizedKeysPath).pipe(
+              ? context.fs.readFileString(authorizedKeysPath).pipe(
                 Effect.map((contents) => normalizeAuthorizedKeysContents(contents))
               )
               : Effect.sync(missingAuthorizedKeysContents)

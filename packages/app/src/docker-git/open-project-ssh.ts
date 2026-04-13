@@ -1,11 +1,11 @@
-import * as FileSystem from "@effect/platform/FileSystem"
 import type { PlatformError } from "@effect/platform/Error"
+import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Duration, Effect } from "effect"
 
 import { createProjectTerminalSession } from "./api-client.js"
 import type { ApiTerminalSession } from "./api-terminal-codec.js"
-import { isRemoteDockerHost, type ControllerRuntime } from "./controller.js"
+import { type ControllerRuntime, isRemoteDockerHost } from "./controller.js"
 import { runCommandWithExitCodes } from "./frontend-lib/shell/command-runner.js"
 import { CommandFailedError } from "./frontend-lib/shell/errors.js"
 import { findSshPrivateKey } from "./frontend-lib/usecases/path-helpers.js"
@@ -50,7 +50,7 @@ export const openResolvedProjectSshEffect = (
   })
 
 export type OpenHostProjectSshDeps<E, R> = {
-  readonly writeHeader: (item: ProjectItem) => Effect.Effect<void, never>
+  readonly writeHeader: (item: ProjectItem) => Effect.Effect<void>
   readonly runCommand: (item: ProjectItem) => Effect.Effect<void, E, R>
 }
 
@@ -75,11 +75,11 @@ const resolveSshHost = (sshCommand: string): string | null => {
   }
 
   const atIndex = target.lastIndexOf("@")
-  return atIndex >= 0 ? target.slice(atIndex + 1) : null
+  return atIndex === -1 ? null : target.slice(atIndex + 1)
 }
 
 const resolveSshPort = (sshCommand: string, fallback: number): number => {
-  const match = sshCommand.match(sshPortPattern)
+  const match = sshPortPattern.exec(sshCommand)
   if (match === null) {
     return fallback
   }
@@ -171,8 +171,7 @@ const runProjectSshCommand = (
         ? Effect.sleep(Duration.seconds(1)).pipe(
           Effect.zipRight(runProjectSshCommand(launch, attempt + 1))
         )
-        : Effect.fail(error)
-    )
+        : Effect.fail(error))
   )
 
 export const openHostProjectSshEffect = <E, R>(

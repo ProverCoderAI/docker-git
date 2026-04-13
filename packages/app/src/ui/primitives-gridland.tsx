@@ -50,7 +50,7 @@ const boxProps = ({ children, ...props }: UiBoxProps): GridlandBoxHostProps => (
   children
 })
 
-const textProps = ({ children, backgroundColor, wrap, ...props }: UiTextProps): GridlandTextHostProps => ({
+const textProps = ({ backgroundColor, children, wrap, ...props }: UiTextProps): GridlandTextHostProps => ({
   ...props,
   ...(backgroundColor === undefined ? {} : { bg: backgroundColor }),
   ...(wrap === "truncate" ? { truncate: true } : {}),
@@ -68,28 +68,29 @@ const textProps = ({ children, backgroundColor, wrap, ...props }: UiTextProps): 
 // EFFECT: n/a
 // INVARIANT: Gridland TUI primitives always return React elements with supported host tags
 // COMPLEXITY: O(1)
-export const createGridlandPrimitives = (_gridland: GridlandModule) => ({
-  Box: ({ children, ...props }: UiBoxProps): JSX.Element =>
-    React.createElement("box", {
-      ...boxProps({ ...props, children })
-    }),
-  Button: ({ label, onPress }: UiButtonProps): JSX.Element =>
-    React.createElement("text", {
-      children: `[${label}]`,
-      fg: "cyan",
-      onClick: onPress
-    }),
-  Text: ({ children, ...props }: UiTextProps): JSX.Element =>
-    React.createElement("text", {
-      ...textProps({ ...props, children })
-    }),
-  TextInput: (props: UiTextInputProps): JSX.Element =>
-    React.createElement("input", {
-      ...inputProps(props),
-      focused: props.autoFocus,
-      onChange: props.onChange,
-      onSubmit: () => {
-        props.onEnter?.(false)
-      }
-    })
-}) as const
+export const createGridlandPrimitives = (_gridland: GridlandModule) =>
+  ({
+    Box: ({ children, ...props }: UiBoxProps): JSX.Element =>
+      React.createElement("box", {
+        ...boxProps({ ...props, children })
+      }),
+    Button: ({ label, onPress }: UiButtonProps): JSX.Element =>
+      React.createElement("text", {
+        children: `[${label}]`,
+        fg: "cyan",
+        onClick: onPress
+      }),
+    Text: ({ children, ...props }: UiTextProps): JSX.Element =>
+      React.createElement("text", {
+        ...textProps({ ...props, children })
+      }),
+    TextInput: (props: UiTextInputProps): JSX.Element =>
+      React.createElement("input", {
+        ...inputProps(props),
+        focused: props.autoFocus,
+        onChange: props.onChange,
+        onSubmit: () => {
+          props.onEnter?.(false)
+        }
+      })
+  }) as const

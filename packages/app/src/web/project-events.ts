@@ -1,7 +1,6 @@
 import { Effect } from "effect"
 
-import { asObject, asString } from "../docker-git/api-json.js"
-import type { JsonValue } from "../docker-git/api-json.js"
+import { formatProjectEventLine } from "../docker-git/project-event-lines.js"
 import type { ApiEvent } from "./api.js"
 import { loadProjectEvents } from "./api.js"
 
@@ -12,53 +11,6 @@ type EventStreamControls = {
 type EventStreamHandlers = {
   readonly onLine: (line: string) => void
   readonly onRateLimit: () => void
-}
-
-const readPayloadString = (
-  payload: JsonValue | undefined,
-  key: string
-): string | null => {
-  const object = asObject(payload)
-  if (object === null) {
-    return null
-  }
-  return asString(object[key])
-}
-
-const formatStatusLine = (payload: JsonValue | undefined): string | null => {
-  const phase = readPayloadString(payload, "phase")
-  const message = readPayloadString(payload, "message")
-  if (message === null) {
-    return null
-  }
-  return phase === null ? message : `[${phase}] ${message}`
-}
-
-const formatLogLine = (payload: JsonValue | undefined): string | null => readPayloadString(payload, "line")
-
-const formatSshLine = (payload: JsonValue | undefined): string | null => {
-  const phase = readPayloadString(payload, "phase")
-  const sessionId = readPayloadString(payload, "sessionId")
-  if (phase === null) {
-    return null
-  }
-  if (sessionId === null) {
-    return `[ssh] ${phase}`
-  }
-  return `[ssh] ${phase} (${sessionId})`
-}
-
-const formatEventLine = (event: ApiEvent): string | null => {
-  if (event.type === "project.deployment.status") {
-    return formatStatusLine(event.payload)
-  }
-  if (event.type === "project.deployment.log") {
-    return formatLogLine(event.payload)
-  }
-  if (event.type === "project.ssh.session") {
-    return formatSshLine(event.payload)
-  }
-  return null
 }
 
 type PollState = {
@@ -113,7 +65,7 @@ const handlePollSuccess = (
   }
   state.cursor = response.cursor
   for (const event of response.events) {
-    const line = formatEventLine(event)
+    const line = formatProjectEventLine(event)
     if (line !== null) {
       onLine(line)
     }

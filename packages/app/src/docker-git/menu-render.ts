@@ -203,11 +203,13 @@ const renderSelectDetailsBox = (
 ): React.ReactElement => {
   const details = renderSelectDetails(
     el,
-    input.purpose,
-    input.items[input.selected],
-    input.runtimeByProject,
-    input.connectEnableMcpPlaywright,
-    input.detailsWidth
+    {
+      connectEnableMcpPlaywright: input.connectEnableMcpPlaywright,
+      detailsWidth: input.detailsWidth,
+      item: input.items[input.selected],
+      purpose: input.purpose,
+      runtimeByProject: input.runtimeByProject
+    }
   )
   return el(
     Box,
