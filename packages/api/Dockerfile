@@ -24,7 +24,17 @@ COPY patches ./patches
 COPY scripts ./scripts
 COPY packages ./packages
 
-RUN bun install --frozen-lockfile --silent
+RUN set -eu; \
+    for attempt in 1 2 3 4 5; do \
+      if bun install --frozen-lockfile --silent; then \
+        exit 0; \
+      fi; \
+      echo "bun install attempt ${attempt} failed; retrying..." >&2; \
+      rm -rf /root/.bun/install/cache; \
+      sleep $((attempt * 2)); \
+    done; \
+    echo "bun install failed after retries" >&2; \
+    exit 1
 RUN bun run --cwd packages/lib build
 RUN bun run --cwd packages/api build
 

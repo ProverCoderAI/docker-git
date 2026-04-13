@@ -1,4 +1,4 @@
-import type { JSX } from "react"
+import React, { type JSX } from "react"
 
 import type { GridlandInputProps, GridlandModule } from "@gridland/bun"
 
@@ -12,57 +12,45 @@ const renderInputValue = (props: UiTextInputProps): string => {
 }
 
 const inputProps = (props: UiTextInputProps): GridlandInputProps => ({
-  ariaLabel: props.ariaLabel,
-  autoFocus: props.autoFocus,
   placeholder: props.placeholder,
   value: renderInputValue(props)
 })
 
-export const createGridlandPrimitives = (gridland: GridlandModule) => {
-  const GridlandBox = gridland.Box
-  const GridlandInput = gridland.Input
-  const GridlandText = gridland.Text
-
-  return {
-    Box: ({ children, ...props }: UiBoxProps): JSX.Element => (
-      <GridlandBox
-        alignItems={props.alignItems}
-        backgroundColor={props.backgroundColor}
-        border={props.border}
-        borderColor={props.borderColor}
-        borderStyle={props.borderStyle}
-        color={props.fg}
-        flexDirection={props.flexDirection}
-        flexGrow={props.flexGrow}
-        flexWrap={props.flexWrap}
-        gap={props.gap}
-        height={props.height}
-        justifyContent={props.justifyContent}
-        marginBottom={props.marginBottom}
-        marginLeft={props.marginLeft}
-        marginRight={props.marginRight}
-        marginTop={props.marginTop}
-        padding={props.padding}
-        width={props.width}
-      >
-        {children}
-      </GridlandBox>
-    ),
-    Button: ({ label }: UiButtonProps): JSX.Element => <GridlandText color="cyan">[{label}]</GridlandText>,
-    Text: ({ children, ...props }: UiTextProps): JSX.Element => (
-      <GridlandText
-        bold={props.bold}
-        color={props.fg}
-        marginBottom={props.marginBottom}
-        marginLeft={props.marginLeft}
-        marginRight={props.marginRight}
-        marginTop={props.marginTop}
-        truncate={props.wrap === "truncate"}
-        width={props.width}
-      >
-        {children}
-      </GridlandText>
-    ),
-    TextInput: (props: UiTextInputProps): JSX.Element => <GridlandInput {...inputProps(props)} />
-  } as const
-}
+// CHANGE: render Gridland primitives through host component tags instead of helper functions
+// WHY: @gridland/bun helper functions return Gridland vnode objects, not React elements; using them as JSX
+//      children causes React reconciliation to reject the returned object tree in the TTY menu runtime
+// QUOTE(ТЗ): "ЧТо бы я мог меню открыть"
+// REF: user-request-2026-04-13-gridland-menu-fix
+// SOURCE: n/a
+// FORMAT THEOREM: ∀p: hostTag(p) → reactElement(p) ∧ renderable(p)
+// PURITY: SHELL
+// EFFECT: n/a
+// INVARIANT: Gridland TUI primitives always return React elements with supported host tags
+// COMPLEXITY: O(1)
+export const createGridlandPrimitives = (_gridland: GridlandModule) => ({
+  Box: ({ children, ...props }: UiBoxProps): JSX.Element =>
+    React.createElement("box", {
+      ...props,
+      children
+    }),
+  Button: ({ label, onPress }: UiButtonProps): JSX.Element =>
+    React.createElement("text", {
+      children: `[${label}]`,
+      fg: "cyan",
+      onClick: onPress
+    }),
+  Text: ({ children, ...props }: UiTextProps): JSX.Element =>
+    React.createElement("text", {
+      ...props,
+      children
+    }),
+  TextInput: (props: UiTextInputProps): JSX.Element =>
+    React.createElement("input", {
+      ...inputProps(props),
+      focused: props.autoFocus,
+      onChange: props.onChange,
+      onSubmit: () => {
+        props.onEnter?.(false)
+      }
+    })
+}) as const
