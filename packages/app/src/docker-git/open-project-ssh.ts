@@ -1,9 +1,16 @@
-import { Effect } from "effect"
+import * as FileSystem from "@effect/platform/FileSystem"
+import type { PlatformError } from "@effect/platform/Error"
+import * as Path from "@effect/platform/Path"
+import { Duration, Effect } from "effect"
 
 import { createProjectTerminalSession } from "./api-client.js"
 import type { ApiTerminalSession } from "./api-terminal-codec.js"
-import type { ControllerRuntime } from "./controller.js"
+import { isRemoteDockerHost, type ControllerRuntime } from "./controller.js"
+import { runCommandWithExitCodes } from "./frontend-lib/shell/command-runner.js"
+import { CommandFailedError } from "./frontend-lib/shell/errors.js"
+import { findSshPrivateKey } from "./frontend-lib/usecases/path-helpers.js"
 import type { HostError } from "./host-errors.js"
+import { writeToTerminal } from "./menu-shared.js"
 import type { ProjectItem } from "./project-item.js"
 import { attachTerminalSession } from "./terminal-session-client.js"
 
@@ -42,7 +49,158 @@ export const openResolvedProjectSshEffect = (
     yield* _(deps.attach(item, prepared.session))
   })
 
+export type OpenHostProjectSshDeps<E, R> = {
+  readonly writeHeader: (item: ProjectItem) => Effect.Effect<void, never>
+  readonly runCommand: (item: ProjectItem) => Effect.Effect<void, E, R>
+}
+
+type HostSshLaunchSpec = {
+  readonly command: string
+  readonly args: ReadonlyArray<string>
+  readonly label: string
+}
+
+const sshPortPattern = /(?:^|\s)-p\s+(\d+)(?:\s|$)/u
+
+const resolveSshTarget = (sshCommand: string): string | null => {
+  const tokens = sshCommand.trim().split(/\s+/u)
+  const target = tokens.at(-1)?.trim() ?? ""
+  return target.includes("@") ? target : null
+}
+
+const resolveSshHost = (sshCommand: string): string | null => {
+  const target = resolveSshTarget(sshCommand)
+  if (target === null) {
+    return null
+  }
+
+  const atIndex = target.lastIndexOf("@")
+  return atIndex >= 0 ? target.slice(atIndex + 1) : null
+}
+
+const resolveSshPort = (sshCommand: string, fallback: number): number => {
+  const match = sshCommand.match(sshPortPattern)
+  if (match === null) {
+    return fallback
+  }
+
+  const parsed = Number.parseInt(match[1] ?? "", 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const resolveHostSshEndpoint = (
+  item: ProjectItem
+): {
+  readonly host: string
+  readonly port: number
+} =>
+  isRemoteDockerHost()
+    ? {
+      host: resolveSshHost(item.sshCommand) ?? "127.0.0.1",
+      port: resolveSshPort(item.sshCommand, item.sshPort)
+    }
+    : {
+      host: "127.0.0.1",
+      port: item.sshPort
+    }
+
+const buildHostSshArgs = (
+  item: ProjectItem,
+  sshKeyPath: string | null,
+  host: string,
+  port: number
+): ReadonlyArray<string> => [
+  ...(sshKeyPath === null ? [] : ["-i", sshKeyPath]),
+  "-tt",
+  "-Y",
+  "-o",
+  "LogLevel=ERROR",
+  "-o",
+  "StrictHostKeyChecking=no",
+  "-o",
+  "UserKnownHostsFile=/dev/null",
+  "-p",
+  String(port),
+  `${item.sshUser}@${host}`
+]
+
+const renderHostSshCommand = (spec: HostSshLaunchSpec): string => [spec.command, ...spec.args].join(" ")
+
+const resolveHostSshLaunchSpec = (
+  item: ProjectItem
+): Effect.Effect<HostSshLaunchSpec, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const sshKeyPath = yield* _(findSshPrivateKey(fs, path, process.cwd()))
+    const endpoint = resolveHostSshEndpoint(item)
+    const args = buildHostSshArgs(item, sshKeyPath, endpoint.host, endpoint.port)
+    const spec = {
+      command: "ssh",
+      args,
+      label: ""
+    }
+
+    return {
+      ...spec,
+      label: renderHostSshCommand(spec)
+    }
+  })
+
+const writeProjectSshHeader = (item: ProjectItem): Effect.Effect<void> =>
+  Effect.sync(() => {
+    writeToTerminal(`\n[docker-git] SSH terminal: ${item.displayName}\n`)
+    writeToTerminal(`[docker-git] ${item.sshCommand}\n\n`)
+  })
+
+const runProjectSshCommand = (
+  launch: HostSshLaunchSpec,
+  attempt = 0
+): Effect.Effect<void, CommandFailedError | PlatformError, ControllerRuntime> =>
+  runCommandWithExitCodes(
+    {
+      cwd: process.cwd(),
+      command: launch.command,
+      args: launch.args
+    },
+    [0, 130],
+    (exitCode) => new CommandFailedError({ command: launch.label, exitCode })
+  ).pipe(
+    Effect.catchTag("CommandFailedError", (error) =>
+      error.exitCode === 255 && attempt < 5
+        ? Effect.sleep(Duration.seconds(1)).pipe(
+          Effect.zipRight(runProjectSshCommand(launch, attempt + 1))
+        )
+        : Effect.fail(error)
+    )
+  )
+
+export const openHostProjectSshEffect = <E, R>(
+  item: ProjectItem,
+  deps: OpenHostProjectSshDeps<E, R>
+) =>
+  Effect.gen(function*(_) {
+    yield* _(deps.writeHeader(item))
+    yield* _(deps.runCommand(item))
+  })
+
 export const openResolvedProjectSsh = (item: ProjectItem) =>
+  Effect.gen(function*(_) {
+    const launch = yield* _(resolveHostSshLaunchSpec(item))
+    const renderableItem = {
+      ...item,
+      sshCommand: launch.label
+    }
+
+    yield* _(
+      openHostProjectSshEffect(renderableItem, {
+        writeHeader: writeProjectSshHeader,
+        runCommand: () => runProjectSshCommand(launch)
+      })
+    )
+  })
+
+export const openResolvedProjectSshViaController = (item: ProjectItem) =>
   openResolvedProjectSshEffect(item, {
     createSession: (projectId) => createProjectTerminalSession(projectId),
     attach: (project, session) =>

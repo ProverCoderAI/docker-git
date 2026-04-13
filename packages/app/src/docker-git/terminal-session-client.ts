@@ -128,7 +128,6 @@ const createTerminalResizeHandler = (socket: WebSocket) => (): void => {
 
 const createTerminalOpenHandler = (
   attachment: TerminalAttachment,
-  socket: WebSocket,
   inputHandler: (chunk: Buffer) => void,
   resizeHandler: () => void
 ) =>
@@ -138,7 +137,6 @@ const createTerminalOpenHandler = (
   setRawMode(true)
   process.stdin.on("data", inputHandler)
   process.stdout.on("resize", resizeHandler)
-  sendResize(socket)
 }
 
 const createTerminalMessageHandler = (
@@ -185,7 +183,7 @@ const createTerminalHandlers = (
 ): TerminalHandlers => {
   const inputHandler = createTerminalInputHandler(socket)
   const resizeHandler = createTerminalResizeHandler(socket)
-  const handleOpen = createTerminalOpenHandler(attachment, socket, inputHandler, resizeHandler)
+  const handleOpen = createTerminalOpenHandler(attachment, inputHandler, resizeHandler)
   const handleMessage = createTerminalMessageHandler(finish, markExit)
   const handleError = createTerminalErrorHandler(finish)
   const handleClose = createTerminalCloseHandler(socket, inputHandler, resizeHandler, finish, hasSeenExit)

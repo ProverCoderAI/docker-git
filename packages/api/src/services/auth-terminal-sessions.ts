@@ -148,6 +148,28 @@ const decodeClientMessage = (raw: RawData): TerminalClientMessage | null =>
 const clampTerminalSize = (value: number, fallback: number): number =>
   Number.isFinite(value) && value > 0 ? Math.max(1, Math.floor(value)) : fallback
 
+const writePtyInput = (pty: IPty | null, data: string): void => {
+  if (pty === null) {
+    return
+  }
+  try {
+    pty.write(data)
+  } catch {
+    return
+  }
+}
+
+const resizePty = (pty: IPty | null, cols: number, rows: number): void => {
+  if (pty === null) {
+    return
+  }
+  try {
+    pty.resize(cols, rows)
+  } catch {
+    return
+  }
+}
+
 const startTerminalPty = (record: AuthTerminalRecord, cols: number, rows: number): void => {
   const pty = spawn(process.execPath, [...record.args], {
     cols: clampTerminalSize(cols, 120),
@@ -213,11 +235,11 @@ const handleSocketMessage = (record: AuthTerminalRecord, raw: RawData): void => 
     return
   }
   if (message.type === "input") {
-    record.pty?.write(message.data)
+    writePtyInput(record.pty, message.data)
     return
   }
   if (message.type === "resize") {
-    record.pty?.resize(clampTerminalSize(message.cols, 120), clampTerminalSize(message.rows, 32))
+    resizePty(record.pty, clampTerminalSize(message.cols, 120), clampTerminalSize(message.rows, 32))
     return
   }
   cleanupRecord(record)

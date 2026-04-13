@@ -1,10 +1,10 @@
 import { Effect } from "effect"
 
 import { shouldAutoOpenSsh } from "../shared/auto-open-ssh.js"
-import { createProjectTerminalSession } from "./api-client.js"
+import { getProject } from "./api-client.js"
 import type { ApiProjectDetails } from "./api-project-codec.js"
+import { openResolvedProjectSsh } from "./open-project-ssh.js"
 import { projectItemFromApiDetails } from "./project-item.js"
-import { attachTerminalSession } from "./terminal-session-client.js"
 
 type AutoOpenSshCommand = {
   readonly openSsh: boolean
@@ -37,21 +37,11 @@ export const autoOpenProjectSsh = (
       return
     }
 
-    const item = projectItemFromApiDetails(project)
-    const terminal = yield* _(createProjectTerminalSession(item.projectDir))
-    if (terminal === null) {
-      yield* _(Effect.logWarning(`Skipping SSH auto-open: terminal session was not created for ${item.displayName}.`))
-      return
-    }
-    yield* _(
-      attachTerminalSession({
-        header: `SSH terminal: ${item.displayName}`,
-        session: terminal.session,
-        websocketPath: `/projects/${encodeURIComponent(item.projectDir)}/terminal-sessions/${
-          encodeURIComponent(terminal.session.id)
-        }/ws`
-      })
+    const refreshedProject = yield* _(
+      getProject(project.id).pipe(Effect.orElseSucceed(() => null))
     )
+    const item = projectItemFromApiDetails(refreshedProject ?? project)
+    yield* _(openResolvedProjectSsh(item))
   }).pipe(
     Effect.matchEffect({
       onFailure: (error) => Effect.logWarning(`SSH auto-open failed: ${renderKnownError(error)}`),

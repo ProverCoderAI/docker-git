@@ -236,6 +236,22 @@ const mergeAuthorizedKeys = (
   return merged.length === 0 ? "" : `${merged.join("\n")}\n`
 }
 
+const resolveRequestedAuthorizedKeysContents = (
+  authorizedKeysContents: string | undefined,
+  useManagedAuthorizedKeys: boolean
+) =>
+  Effect.gen(function*(_) {
+    const managedAuthorizedKeysContents = useManagedAuthorizedKeys
+      ? yield* _(resolveManagedAuthorizedKeysContents())
+      : undefined
+    const merged = mergeAuthorizedKeys(
+      normalizeAuthorizedKeys(managedAuthorizedKeysContents ?? ""),
+      normalizeAuthorizedKeys(authorizedKeysContents ?? "")
+    )
+
+    return merged.length === 0 ? undefined : merged
+  })
+
 const withManagedAuthorizedKeysForCreate = (
   command: LibCreateCommand,
   authorizedKeysContents: string | undefined
@@ -375,10 +391,13 @@ export const createProjectFromRequest = (
       waitForClone: request.waitForClone ?? parsed.right.waitForClone
     }
 
-    const resolvedAuthorizedKeysContents = request.authorizedKeysContents ?? (
+    const requestAuthorizedKeysContents = request.authorizedKeysContents ?? (
       request.useManagedAuthorizedKeys === true
         ? yield* _(resolveCreateAuthorizedKeysContents(parsedCommand.outDir, parsedCommand.config.authorizedKeysPath))
         : undefined
+    )
+    const resolvedAuthorizedKeysContents = yield* _(
+      resolveRequestedAuthorizedKeysContents(requestAuthorizedKeysContents, request.useManagedAuthorizedKeys === true)
     )
 
     const command = withManagedAuthorizedKeysForCreate(parsedCommand, resolvedAuthorizedKeysContents)
@@ -525,10 +544,8 @@ export const upProject = (
 ) =>
   Effect.gen(function*(_) {
     const project = yield* _(findProjectById(projectId))
-    const resolvedAuthorizedKeysContents = authorizedKeysContents ?? (
-      useManagedAuthorizedKeys === true
-        ? yield* _(resolveManagedAuthorizedKeysContents())
-        : undefined
+    const resolvedAuthorizedKeysContents = yield* _(
+      resolveRequestedAuthorizedKeysContents(authorizedKeysContents, useManagedAuthorizedKeys === true)
     )
     yield* _(seedAuthorizedKeysForCreate(project.projectDir, resolvedAuthorizedKeysContents))
     yield* _(markDeployment(projectId, "build", "docker compose up -d --build"))

@@ -4,7 +4,10 @@ import { Effect } from "effect"
 
 import type { ApiTerminalSession } from "../../src/docker-git/api-terminal-codec.js"
 import type { HostError } from "../../src/docker-git/host-errors.js"
-import { openResolvedProjectSshEffect } from "../../src/docker-git/open-project.js"
+import {
+  openHostProjectSshEffect,
+  openResolvedProjectSshEffect
+} from "../../src/docker-git/open-project.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
 
 const makeSession = (): ApiTerminalSession => ({
@@ -41,6 +44,21 @@ describe("openResolvedProjectSshEffect", () => {
     }))
 })
 
+describe("openHostProjectSshEffect", () => {
+  it.effect("writes the header before running ssh", () =>
+    Effect.gen(function*(_) {
+      const item = makeProjectItem({
+        displayName: "org/repo",
+        sshCommand: "ssh -p 2222 dev@localhost"
+      })
+      const events = yield* _(captureOpenHostProjectSshEvents(item))
+      expect(events).toEqual([
+        "header:org/repo:ssh -p 2222 dev@localhost",
+        "run:ssh -p 2222 dev@localhost"
+      ])
+    }))
+})
+
 const captureOpenResolvedProjectSshEvents = (
   item: ReturnType<typeof makeProjectItem>
 ): Effect.Effect<ReadonlyArray<string>, HostError> =>
@@ -59,6 +77,26 @@ const captureOpenResolvedProjectSshEvents = (
         attach: (_project, session) =>
           Effect.sync(() => {
             events.push(`attach:${session.id}`)
+          })
+      })
+    )
+    return events
+  }).pipe(Effect.provide(NodeContext.layer))
+
+const captureOpenHostProjectSshEvents = (
+  item: ReturnType<typeof makeProjectItem>
+): Effect.Effect<ReadonlyArray<string>, never> =>
+  Effect.gen(function*(_) {
+    const events: Array<string> = []
+    yield* _(
+      openHostProjectSshEffect(item, {
+        writeHeader: (project) =>
+          Effect.sync(() => {
+            events.push(`header:${project.displayName}:${project.sshCommand}`)
+          }),
+        runCommand: (project) =>
+          Effect.sync(() => {
+            events.push(`run:${project.sshCommand}`)
           })
       })
     )
