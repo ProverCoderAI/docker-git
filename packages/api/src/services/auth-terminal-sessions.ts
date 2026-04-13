@@ -5,11 +5,11 @@ import { randomUUID } from "node:crypto"
 import { fileURLToPath } from "node:url"
 import type { IncomingMessage, Server as HttpServer } from "node:http"
 import type { Duplex } from "node:stream"
-import { spawn, type IPty } from "node-pty"
 import { WebSocket, WebSocketServer, type RawData } from "ws"
 
 import type { AuthTerminalFlow, AuthTerminalSessionRequest, TerminalSession, TerminalSessionStatus } from "../api/contracts.js"
 import { ApiConflictError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
+import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
 
 type TerminalClientMessage =
   | { readonly type: "input"; readonly data: string }
@@ -26,7 +26,7 @@ type AuthTerminalRecord = {
   attachTimeout: ReturnType<typeof setTimeout> | null
   args: ReadonlyArray<string>
   cwd: string
-  pty: IPty | null
+  pty: PtyBridge | null
   session: TerminalSession
   socket: WebSocket | null
 }
@@ -35,6 +35,7 @@ const attachTimeoutMs = 30_000
 const authTerminalProjectId = "__controller__"
 const authTerminalWsPathPattern = /^(?:\/api)?\/auth\/terminal-sessions\/([^/]+)\/ws$/u
 const authRunnerPath = fileURLToPath(new URL("../auth-terminal-runner.js", import.meta.url))
+const nodeCommand = process.env["DOCKER_GIT_NODE_BINARY"]?.trim() || "node"
 const records = new Map<string, AuthTerminalRecord>()
 
 const TerminalClientMessageSchema = Schema.parseJson(
@@ -148,7 +149,7 @@ const decodeClientMessage = (raw: RawData): TerminalClientMessage | null =>
 const clampTerminalSize = (value: number, fallback: number): number =>
   Number.isFinite(value) && value > 0 ? Math.max(1, Math.floor(value)) : fallback
 
-const writePtyInput = (pty: IPty | null, data: string): void => {
+const writePtyInput = (pty: PtyBridge | null, data: string): void => {
   if (pty === null) {
     return
   }
@@ -159,7 +160,7 @@ const writePtyInput = (pty: IPty | null, data: string): void => {
   }
 }
 
-const resizePty = (pty: IPty | null, cols: number, rows: number): void => {
+const resizePty = (pty: PtyBridge | null, cols: number, rows: number): void => {
   if (pty === null) {
     return
   }
@@ -171,14 +172,11 @@ const resizePty = (pty: IPty | null, cols: number, rows: number): void => {
 }
 
 const startTerminalPty = (record: AuthTerminalRecord, cols: number, rows: number): void => {
-  const pty = spawn(process.execPath, [...record.args], {
+  const pty = spawnPtyBridge({
+    args: record.args,
     cols: clampTerminalSize(cols, 120),
+    command: nodeCommand,
     cwd: record.cwd,
-    env: {
-      ...process.env,
-      TERM: "xterm-256color"
-    },
-    name: "xterm-256color",
     rows: clampTerminalSize(rows, 32)
   })
   record.pty = pty
