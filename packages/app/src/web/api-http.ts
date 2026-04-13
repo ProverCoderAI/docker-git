@@ -5,10 +5,18 @@ import * as TreeFormatter from "@effect/schema/TreeFormatter"
 import { Effect, Either } from "effect"
 
 import { type JsonRequest, parseResponseBody, renderJsonPayload } from "../docker-git/api-json.js"
+import { readHttpResponseTextStream } from "../shared/http-response-stream.js"
 
 const defaultApiBaseUrl = "/api"
 
 type ApiHttpMethod = "GET" | "POST" | "DELETE"
+
+type TextStreamRequest = {
+  readonly body: JsonRequest | undefined
+  readonly method: ApiHttpMethod
+  readonly onChunk: (chunk: string) => void
+  readonly path: string
+}
 
 const noCacheHeaders: Readonly<Record<string, string>> = {
   "cache-control": "no-cache, no-store, max-age=0",
@@ -86,6 +94,22 @@ export const requestText = (
       return yield* _(readErrorMessage(response.status, text))
     }
     return text
+  }).pipe(
+    Effect.provide(FetchHttpClient.layer),
+    Effect.mapError(String)
+  )
+
+export const requestTextStream = (
+  { body, method, onChunk, path }: TextStreamRequest
+): Effect.Effect<string, string> =>
+  Effect.gen(function*(_) {
+    const client = yield* _(HttpClient.HttpClient)
+    const response = yield* _(executeRequest(client, method, `${resolveApiBaseUrl()}${path}`, body))
+    if (response.status >= 400) {
+      const text = yield* _(response.text)
+      return yield* _(readErrorMessage(response.status, text))
+    }
+    return yield* _(readHttpResponseTextStream(response, onChunk))
   }).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.mapError(String)

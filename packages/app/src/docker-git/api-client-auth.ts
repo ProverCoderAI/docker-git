@@ -2,6 +2,16 @@ import * as FsPlatform from "@effect/platform/FileSystem"
 import * as PathPlatform from "@effect/platform/Path"
 import { Effect } from "effect"
 
+import {
+  authStreamMarkerExitCode,
+  type AuthStreamMarkers,
+  authStreamSucceeded,
+  authStreamVisibleLines,
+  codexLoginStreamMarkers,
+  githubLoginFailureMessage,
+  githubLoginStreamMarkers,
+  makeVisibleAuthStreamWriter
+} from "../shared/auth-stream-markers.js"
 import { request, requestTextStream, requestVoid } from "./api-http.js"
 import { asObject, type JsonRequest, type JsonValue } from "./api-json.js"
 import type { ControllerRuntime } from "./controller.js"
@@ -17,75 +27,18 @@ import type {
 import { resolvePathFromCwd } from "./frontend-lib/usecases/path-helpers.js"
 import type { ApiAuthRequiredError, ApiRequestError } from "./host-errors.js"
 
-type StreamMarkers = {
-  readonly success: string
-  readonly errorPrefix: string
-}
-
-const codexLoginMarkers: StreamMarkers = {
-  success: "__DOCKER_GIT_CODEX_LOGIN_STATUS__:ok",
-  errorPrefix: "__DOCKER_GIT_CODEX_LOGIN_STATUS__:error:"
-}
-
-const githubLoginMarkers: StreamMarkers = {
-  success: "__DOCKER_GIT_GITHUB_LOGIN_STATUS__:ok",
-  errorPrefix: "__DOCKER_GIT_GITHUB_LOGIN_STATUS__:error:"
-}
-
-const isMarkerLine = (line: string, markers: StreamMarkers): boolean =>
-  line.startsWith(markers.success) || line.startsWith(markers.errorPrefix)
-
-const visibleLines = (output: string, markers: StreamMarkers): ReadonlyArray<string> =>
-  output
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !isMarkerLine(line, markers))
-
-const markerExitCode = (output: string, markers: StreamMarkers): string | null => {
-  const failureLine = output
-    .split(/\r?\n/u)
-    .find((line) => line.startsWith(markers.errorPrefix))
-
-  return failureLine === undefined
-    ? null
-    : failureLine.slice(markers.errorPrefix.length)
-}
-
-const makeVisibleChunkWriter = (markers: StreamMarkers) => {
-  let pending = ""
-  const flushVisiblePending = () => {
-    if (pending.length > 0 && !isMarkerLine(pending, markers)) {
-      process.stdout.write(pending)
-    }
-  }
-
-  const writeVisibleChunk = (chunk: string) => {
-    pending += chunk
-    const lines = pending.split("\n")
-    pending = lines.pop() ?? ""
-
-    for (const line of lines) {
-      if (!isMarkerLine(line, markers)) {
-        process.stdout.write(`${line}\n`)
-      }
-    }
-  }
-
-  return { flushVisiblePending, writeVisibleChunk }
-}
-
 const codexLoginFailureMessage = (output: string, exitCode: string | null): string => {
   if (output.includes("429 Too Many Requests")) {
     return "Codex device auth is rate-limited by OpenAI (429 Too Many Requests). Wait a few minutes and retry."
   }
 
-  const detailedLine = visibleLines(output, codexLoginMarkers)
+  const detailedLine = authStreamVisibleLines(output, codexLoginStreamMarkers)
     .findLast((line) => line.toLowerCase().includes("error"))
   if (detailedLine !== undefined) {
     return detailedLine
   }
 
-  const lastLine = visibleLines(output, codexLoginMarkers).at(-1)
+  const lastLine = authStreamVisibleLines(output, codexLoginStreamMarkers).at(-1)
   if (lastLine !== undefined) {
     return lastLine
   }
@@ -93,23 +46,6 @@ const codexLoginFailureMessage = (output: string, exitCode: string | null): stri
   return exitCode === null
     ? "Codex login stream ended without a completion marker."
     : `Codex login failed (${exitCode}).`
-}
-
-const githubLoginFailureMessage = (output: string, exitCode: string | null): string => {
-  const detailedLine = visibleLines(output, githubLoginMarkers)
-    .findLast((line) => line.toLowerCase().includes("failed") || line.toLowerCase().includes("error"))
-  if (detailedLine !== undefined) {
-    return detailedLine
-  }
-
-  const lastLine = visibleLines(output, githubLoginMarkers).at(-1)
-  if (lastLine !== undefined) {
-    return lastLine
-  }
-
-  return exitCode === null
-    ? "GitHub login stream ended without a completion marker."
-    : `GitHub login failed (${exitCode}).`
 }
 
 const streamFailure = (
@@ -127,21 +63,23 @@ const streamFailure = (
 const requestMarkedAuthStream = (
   path: string,
   body: JsonRequest,
-  markers: StreamMarkers,
+  markers: AuthStreamMarkers,
   failureMessage: (output: string, exitCode: string | null) => string
 ) =>
   Effect.gen(function*(_) {
-    const writer = makeVisibleChunkWriter(markers)
-    const output = yield* _(requestTextStream("POST", path, body, writer.writeVisibleChunk))
+    const writer = makeVisibleAuthStreamWriter(markers, (chunk) => {
+      process.stdout.write(chunk)
+    })
+    const output = yield* _(requestTextStream("POST", path, body, writer.writeChunk))
     writer.flushVisiblePending()
 
-    if (output.includes(markers.success)) {
+    if (authStreamSucceeded(output, markers)) {
       return output
     }
 
     return yield* _(
       Effect.fail<ApiRequestError>(
-        streamFailure("POST", path, failureMessage(output, markerExitCode(output, markers)))
+        streamFailure("POST", path, failureMessage(output, authStreamMarkerExitCode(output, markers)))
       )
     )
   })
@@ -164,7 +102,7 @@ const githubWebLogin = (
       token: null,
       scopes: command.scopes
     },
-    githubLoginMarkers,
+    githubLoginStreamMarkers,
     githubLoginFailureMessage
   ).pipe(
     Effect.flatMap(() => request("GET", "/auth/github/status")),
@@ -193,7 +131,7 @@ export const codexLogin = (command: AuthCodexLoginCommand) =>
   requestMarkedAuthStream(
     "/auth/codex/login",
     { label: command.label },
-    codexLoginMarkers,
+    codexLoginStreamMarkers,
     codexLoginFailureMessage
   ).pipe(Effect.asVoid)
 

@@ -2,6 +2,7 @@ import { type Dispatch, type SetStateAction, useEffect, useEffectEvent, useState
 
 import type { CreateFlowView } from "../docker-git/menu-create-shared.js"
 import type { ActionPromptState } from "./action-prompt.js"
+import { createAuthActionPrompt } from "./action-prompt.js"
 import {
   type BrowserActionContext,
   loadSelectedProjectInfo,
@@ -17,7 +18,9 @@ import {
   shouldRefreshProjectAuthPanel,
   shouldRefreshProjectDetails
 } from "./app-ready-shortcuts.js"
+import { githubAuthGateMessage, isGithubOauthPrompt, shouldRequireGithubAuth } from "./github-auth-gate.js"
 import type { BrowserMenuTag } from "./menu.js"
+import { browserMenuIndex } from "./menu.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 
 type Setter<A> = Dispatch<SetStateAction<A>>
@@ -36,10 +39,21 @@ type PanelAutoloadArgs = {
   readonly context: BrowserActionContext
   readonly currentMenu: BrowserMenuTag
   readonly dashboardRefreshTick: number
+  readonly githubStatus: GithubAuthStatus | null
   readonly project: ProjectDetails | null
   readonly projectNavigationArmed: boolean
   readonly projectAuthSnapshot: ProjectAuthSnapshot | null
   readonly selectedProjectId: string | null
+}
+
+type GithubAuthGateArgs = {
+  readonly actionPrompt: ActionPromptState | null
+  readonly busyLabel: string | null
+  readonly githubStatus: GithubAuthStatus | null
+  readonly selectedMenuIndex: number
+  readonly setActionPrompt: Setter<ActionPromptState | null>
+  readonly setMessage: Setter<string | null>
+  readonly setSelectedMenuIndex: Setter<number>
 }
 
 type ReadyStateSetters = Pick<
@@ -173,6 +187,34 @@ export const useActionPromptReset = (
   }, [actionPrompt, currentMenu, setActionPrompt])
 }
 
+export const useGithubAuthGate = ({
+  actionPrompt,
+  busyLabel,
+  githubStatus,
+  selectedMenuIndex,
+  setActionPrompt,
+  setMessage,
+  setSelectedMenuIndex
+}: GithubAuthGateArgs) => {
+  useEffect(() => {
+    if (busyLabel !== null) {
+      return
+    }
+    if (!shouldRequireGithubAuth(githubStatus)) {
+      return
+    }
+
+    const authIndex = browserMenuIndex("Auth")
+    if (selectedMenuIndex !== authIndex) {
+      setSelectedMenuIndex(authIndex)
+    }
+    if (!isGithubOauthPrompt(actionPrompt)) {
+      setActionPrompt(createAuthActionPrompt("GithubOauth"))
+    }
+    setMessage(githubAuthGateMessage(githubStatus))
+  }, [actionPrompt, busyLabel, githubStatus, selectedMenuIndex, setActionPrompt, setMessage, setSelectedMenuIndex])
+}
+
 export const useProjectNavigationReset = (
   currentMenu: BrowserMenuTag,
   setProjectNavigationArmed: Setter<boolean>
@@ -188,6 +230,7 @@ export const usePanelAutoload = ({
   context,
   currentMenu,
   dashboardRefreshTick,
+  githubStatus,
   project,
   projectAuthSnapshot,
   projectNavigationArmed,
@@ -195,6 +238,10 @@ export const usePanelAutoload = ({
 }: PanelAutoloadArgs) => {
   const loadCurrentPanel = useEffectEvent(() => {
     if (busyLabel !== null) {
+      return
+    }
+    if (githubStatus === null) {
+      refreshAuthPanel(context)
       return
     }
     if (shouldRefreshAuthPanel(currentMenu, authSnapshot)) {
@@ -215,6 +262,7 @@ export const usePanelAutoload = ({
     busyLabel,
     currentMenu,
     dashboardRefreshTick,
+    githubStatus,
     project?.id,
     projectAuthSnapshot,
     projectNavigationArmed,

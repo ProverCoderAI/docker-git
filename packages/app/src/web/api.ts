@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 
 import type { AuthMenuRequestBody, ProjectAuthMenuRequestBody } from "../shared/auth-menu-request.js"
-import { requestJson, requestText, resolveApiBaseUrl } from "./api-http.js"
+import { requestJson, requestText, requestTextStream, resolveApiBaseUrl } from "./api-http.js"
 import {
   AuthSnapshotResponseSchema,
   AuthTerminalSessionResponseSchema,
@@ -130,6 +130,14 @@ export const loginGithub = (label: string | null) =>
   requestJson("POST", "/auth/github/login", GithubStatusResponseSchema, { label }).pipe(
     Effect.map((response) => response.status)
   )
+
+export const loginGithubStream = (label: string | null, onChunk: (chunk: string) => void) =>
+  requestTextStream({
+    body: { label, token: null },
+    method: "POST",
+    onChunk,
+    path: "/auth/github/login/stream"
+  })
 
 export const loadProjectEvents = (
   projectId: string,

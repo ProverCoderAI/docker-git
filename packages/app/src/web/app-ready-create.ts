@@ -3,6 +3,7 @@ import { type Dispatch, type SetStateAction, useEffect } from "react"
 import { nextBufferValue } from "../docker-git/menu-buffer-input.js"
 import { advanceCreateFlow, type CreateFlowView, createInitialFlowView } from "../docker-git/menu-create-shared.js"
 import { submitCreateInputs } from "./actions-projects.js"
+import { requireGithubAuthConfigured } from "./actions-shared.js"
 import type { BrowserActionContext } from "./actions.js"
 import type { BrowserMenuTag } from "./menu.js"
 
@@ -50,6 +51,10 @@ export const submitCreateView = (
     setCreateView
   }: CreateSubmitArgs
 ): void => {
+  if (!requireGithubAuthConfigured(context)) {
+    return
+  }
+
   const createContext = { cwd: controllerCwd, projectsRoot }
   const next = forceWizard === true
     ? advanceCreateFlow(createContext, createView, { forceWizard: true })

@@ -201,8 +201,7 @@ export const OutputPanel = ({ output }: { readonly output: string }): JSX.Elemen
     <Box flexDirection="column" marginTop={1}>
       {output.trim().length === 0
         ? <Text fg="#8fa6c4">Нет вывода. Выполни action через Enter или клик.</Text>
-        : output.split("\n").slice(0, 18).map((line, index) => <Text key={`${index}-${line}`} fg="#d6e5f7">{line}
-        </Text>)}
+        : output.split("\n").slice(-18).map((line, index) => <Text key={`${index}-${line}`} fg="#d6e5f7">{line}</Text>)}
     </Box>
   </Box>
 )

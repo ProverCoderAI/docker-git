@@ -12,7 +12,7 @@ import { resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
 import { autoSyncState } from "@effect-template/lib/usecases/state-repo"
 import { ensureStateDotDockerGitRepo } from "@effect-template/lib/usecases/state-repo-github"
 import { migrateLegacyOrchLayout } from "@effect-template/lib/usecases/auth-sync"
-import { Effect, Runtime } from "effect"
+import { Effect, Logger, Runtime } from "effect"
 import * as Stream from "effect/Stream"
 import { spawn, type ChildProcess } from "node:child_process"
 
@@ -188,6 +188,20 @@ const finalizeMessage = (status: string): string =>
     ? `\nGitHub login completed.\n${githubLoginStreamSuccessMarker}\n`
     : `\n${githubLoginStreamErrorMarkerPrefix}${status}\n`
 
+const normalizeCapturedLogLines = (lines: ReadonlyArray<string>): ReadonlyArray<string> =>
+  lines
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+
+export const renderGithubPostLoginOutput = (
+  lines: ReadonlyArray<string>,
+  status: string
+): string => {
+  const output = normalizeCapturedLogLines(lines).join("\n")
+  const logBlock = output.length === 0 ? "" : `\n${output}\n`
+  return `${logBlock}${finalizeMessage(status)}`
+}
+
 const toStreamError = (error: unknown): ApiInternalError | ApiBadRequestError =>
   error instanceof ApiBadRequestError || error instanceof ApiInternalError
     ? error
@@ -252,17 +266,25 @@ export const streamGithubAuthLogin = (
             return
           }
 
+          const postLoginLogs: Array<string> = []
+          const logger = Logger.make(({ message }) => {
+            postLoginLogs.push(String(message))
+          })
+
           void runPromiseExit(
             finalizeGithubLogin(prepared).pipe(
+              Effect.provide(Logger.replace(Logger.defaultLogger, logger)),
               Effect.matchEffect({
                 onFailure: (error) =>
                   Effect.sync(() => {
-                    enqueue(`\nGitHub login finished in browser, but post-login sync failed: ${error.message}\n`)
-                    enqueue(finalizeMessage("post-login"))
+                    enqueue(renderGithubPostLoginOutput([
+                      ...postLoginLogs,
+                      `GitHub login finished in browser, but post-login sync failed: ${error.message}`
+                    ], "post-login"))
                   }),
                 onSuccess: () =>
                   Effect.sync(() => {
-                    enqueue(finalizeMessage("ok"))
+                    enqueue(renderGithubPostLoginOutput(postLoginLogs, "ok"))
                   })
               })
             )
