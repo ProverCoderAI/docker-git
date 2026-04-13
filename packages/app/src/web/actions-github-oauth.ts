@@ -50,6 +50,7 @@ export const runGithubOauthMutation = (
         message: `Saved GitHub token (${label}).`,
         snapshot
       })
+      context.reloadDashboard()
     }
   })
 }
