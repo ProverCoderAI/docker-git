@@ -48,6 +48,11 @@ const compactMenuLabels: Readonly<Record<BrowserMenuTag, string>> = {
   Status: "Status"
 }
 
+const menuPanelMaxHeight = (compact: boolean): string => compact ? "154px" : "100%"
+const menuListDirection = (compact: boolean): "column" | "row" => compact ? "row" : "column"
+const menuListTopMargin = (compact: boolean): number | string => compact ? "6px" : 1
+const projectPanelMaxHeight = (compact: boolean): string => compact ? "30%" : "100%"
+
 const runtimeByProject = (dashboard: DashboardData): Readonly<
   Record<string, {
     readonly running: boolean
@@ -99,6 +104,68 @@ const buildProjectListLabels = (
     )
   ).map((label) => selectedIndex === -1 ? stripSelectionPrefix(label) : label)
 
+const MenuHeader = ({ compact }: Pick<MenuSidebarProps, "compact">): JSX.Element => (
+  <Box flexWrap="wrap" gap={1} justifyContent="space-between">
+    <Text bold={true} fg="#8be9fd">{compact ? "docker-git menu" : "bun run docker-git"}</Text>
+    {compact ? null : <Text fg="#7ba6cc">browser inheritance shell</Text>}
+  </Box>
+)
+
+const SelectedProjectLine = (
+  { selectedProjectLabel }: Pick<MenuSidebarProps, "selectedProjectLabel">
+): JSX.Element => (
+  <Text fg="#5bd1ff" marginTop="4px" wrap="truncate" width="100%">
+    selected project: {selectedProjectLabel}
+  </Text>
+)
+
+const MenuItemsList = (
+  { compact, onSelectMenu, selectedMenuIndex }: Pick<
+    MenuSidebarProps,
+    "compact" | "onSelectMenu" | "selectedMenuIndex"
+  >
+): JSX.Element => (
+  <Box
+    flexDirection={menuListDirection(compact)}
+    flexWrap={compact ? "wrap" : "nowrap"}
+    gap="4px"
+    marginTop={menuListTopMargin(compact)}
+  >
+    {browserMenuItems.map((item, index) => (
+      <Box
+        key={item.tag}
+        onClick={() => {
+          onSelectMenu(index)
+        }}
+        width={compact ? "auto" : "100%"}
+      >
+        <Text bold={index === selectedMenuIndex} fg={index === selectedMenuIndex ? "#56f39a" : "#d6e5f7"}>
+          {index === selectedMenuIndex ? "> " : "  "}
+          {index + 1}. {compactMenuLabels[item.tag]}
+        </Text>
+      </Box>
+    ))}
+  </Box>
+)
+
+const MenuHints = (
+  { compact, currentMenu, projectNavigationArmed }: Pick<
+    MenuSidebarProps,
+    "compact" | "currentMenu" | "projectNavigationArmed"
+  >
+): JSX.Element => (
+  <Box
+    flexDirection={compact ? "row" : "column"}
+    flexWrap="wrap"
+    gap={compact ? 1 : 0}
+    marginTop={compact ? "6px" : 1}
+  >
+    {compact ? null : <Text fg="#8fa6c4">keys:</Text>}
+    <Text fg="#8fa6c4">{shortcutHintText(currentMenu, projectNavigationArmed)}</Text>
+    {compact ? null : <Text fg="#8fa6c4">Enter run, R refresh, Esc cancel create</Text>}
+  </Box>
+)
+
 export const MenuSidebar = (
   {
     compact,
@@ -113,33 +180,18 @@ export const MenuSidebar = (
     border={true}
     borderColor="#24537d"
     borderStyle="single"
+    flexShrink={0}
     flexDirection="column"
+    maxHeight={menuPanelMaxHeight(compact)}
+    minHeight={0}
+    overflowY="auto"
     padding={1}
-    width={compact ? "100%" : "30%"}
+    width={compact ? "100%" : "240px"}
   >
-    <Text bold={true} fg="#8be9fd">{compact ? "docker-git menu" : "bun run docker-git"}</Text>
-    <Text fg="#7ba6cc">browser inheritance shell</Text>
-    <Text fg="#5bd1ff" marginTop={1}>selected project: {selectedProjectLabel}</Text>
-    <Box flexDirection="column" marginTop={1}>
-      {browserMenuItems.map((item, index) => (
-        <Box
-          key={item.tag}
-          onClick={() => {
-            onSelectMenu(index)
-          }}
-        >
-          <Text bold={index === selectedMenuIndex} fg={index === selectedMenuIndex ? "#56f39a" : "#d6e5f7"}>
-            {index === selectedMenuIndex ? "> " : "  "}
-            {index + 1}. {compactMenuLabels[item.tag]}
-          </Text>
-        </Box>
-      ))}
-    </Box>
-    <Box flexDirection="column" marginTop={1}>
-      <Text fg="#8fa6c4">keys:</Text>
-      <Text fg="#8fa6c4">{shortcutHintText(currentMenu, projectNavigationArmed)}</Text>
-      <Text fg="#8fa6c4">Enter run, R refresh, Esc cancel create</Text>
-    </Box>
+    <MenuHeader compact={compact} />
+    <SelectedProjectLine selectedProjectLabel={selectedProjectLabel} />
+    <MenuItemsList compact={compact} onSelectMenu={onSelectMenu} selectedMenuIndex={selectedMenuIndex} />
+    <MenuHints compact={compact} currentMenu={currentMenu} projectNavigationArmed={projectNavigationArmed} />
   </Box>
 )
 
@@ -160,11 +212,15 @@ export const ProjectListPanel = (
       borderColor="#24537d"
       borderStyle="single"
       flexDirection="column"
+      flexShrink={compact ? 1 : 0}
+      maxHeight={projectPanelMaxHeight(compact)}
+      minHeight={0}
+      overflowY="auto"
       padding={1}
-      width={compact ? "100%" : "28%"}
+      width={compact ? "100%" : "320px"}
     >
       <Text bold={true} fg="#8be9fd">Projects</Text>
-      <Box flexDirection="column" marginTop={1}>
+      <Box flexDirection="column" marginTop={1} minHeight={0}>
         {dashboard.projects.length === 0
           ? <Text fg="#9fb8d5">Проекты не найдены.</Text>
           : dashboard.projects.map((project, index) => (
@@ -194,7 +250,10 @@ export const OutputPanel = ({ output }: { readonly output: string }): JSX.Elemen
     borderColor="#21486d"
     borderStyle="single"
     flexDirection="column"
+    flexGrow={1}
     marginTop={1}
+    minHeight={0}
+    overflowY="auto"
     padding={1}
   >
     <Text bold={true} fg="#8be9fd">Output</Text>

@@ -3,12 +3,13 @@ import { type JSX } from "react"
 import type { DashboardData } from "./api.js"
 import { useReadyController } from "./app-ready-controller.js"
 import { ReadyLayout } from "./app-ready-layout.js"
+import type { ViewportLayout } from "./viewport-layout.js"
 
 type AppReadyProps = {
-  readonly compact: boolean
   readonly dashboard: DashboardData
   readonly dashboardRefreshTick: number
   readonly refreshDashboard: () => void
+  readonly viewportLayout: ViewportLayout
 }
 
 type ReadyLayoutRenderArgs = {
@@ -22,26 +23,25 @@ type ReadyLayoutRenderArgs = {
     readonly onRunAuthAction: (index: number) => void
     readonly onRunProjectAuthAction: (index: number) => void
   }
-  readonly compact: boolean
   readonly currentMenu: ReturnType<typeof useReadyController>["currentMenu"]
   readonly dashboard: DashboardData
   readonly selectedProjectSummary: ReturnType<typeof useReadyController>["selectedProjectSummary"]
   readonly state: ReturnType<typeof useReadyController>["state"]
+  readonly viewportLayout: ViewportLayout
 }
 
 const renderReadyLayout = ({
   actions,
-  compact,
   currentMenu,
   dashboard,
   selectedProjectSummary,
-  state
+  state,
+  viewportLayout
 }: ReadyLayoutRenderArgs): JSX.Element => (
   <ReadyLayout
     actionPrompt={state.actionPrompt}
     authSnapshot={state.authSnapshot}
     busyLabel={state.busyLabel}
-    compact={compact}
     controllerCwd={dashboard.health.cwd}
     projectsRoot={dashboard.health.projectsRoot}
     createView={state.createView}
@@ -71,14 +71,15 @@ const renderReadyLayout = ({
     selectedProjectId={state.selectedProjectId}
     selectedProjectSummary={selectedProjectSummary}
     terminalSession={state.terminalSession}
+    viewportLayout={viewportLayout}
   />
 )
 
 export const AppReady = ({
-  compact,
   dashboard,
   dashboardRefreshTick,
-  refreshDashboard
+  refreshDashboard,
+  viewportLayout
 }: AppReadyProps): JSX.Element => {
   const {
     currentMenu,
@@ -105,10 +106,10 @@ export const AppReady = ({
       onRunAuthAction,
       onRunProjectAuthAction
     },
-    compact,
     currentMenu,
     dashboard,
     selectedProjectSummary,
-    state
+    state,
+    viewportLayout
   })
 }

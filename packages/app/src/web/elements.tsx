@@ -10,16 +10,26 @@ type GridElementProps = {
   readonly children?: ReactNode
   readonly fg?: string
   readonly flexDirection?: CSSProperties["flexDirection"]
+  readonly flexBasis?: CSSProperties["flexBasis"]
   readonly flexGrow?: number
+  readonly flexShrink?: number
   readonly flexWrap?: CSSProperties["flexWrap"]
   readonly gap?: number | string
   readonly height?: number | string
   readonly justifyContent?: CSSProperties["justifyContent"]
   readonly marginBottom?: number | string
   readonly marginTop?: number | string
+  readonly maxHeight?: number | string
+  readonly maxWidth?: number | string
+  readonly minHeight?: number | string
+  readonly minWidth?: number | string
   readonly onClick?: MouseEventHandler<HTMLElement>
+  readonly overflow?: CSSProperties["overflow"]
+  readonly overflowX?: CSSProperties["overflowX"]
+  readonly overflowY?: CSSProperties["overflowY"]
   readonly padding?: number | string
   readonly width?: number | string
+  readonly wrap?: "truncate" | "wrap"
 }
 
 const unit = (value: number | string | undefined): string | number | undefined => {
@@ -29,7 +39,7 @@ const unit = (value: number | string | undefined): string | number | undefined =
   return typeof value === "number" ? `${value * 8}px` : value
 }
 
-const borderRadius = (borderStyle: GridElementProps["borderStyle"]): string => borderStyle === "rounded" ? "12px" : "0"
+const borderRadius = (borderStyle: GridElementProps["borderStyle"]): string => borderStyle === "rounded" ? "8px" : "0"
 
 const borderValue = (
   enabled: boolean | undefined,
@@ -44,14 +54,23 @@ const baseStyle = (props: GridElementProps): CSSProperties => ({
   boxSizing: "border-box",
   color: props.fg,
   display: "flex",
+  flexBasis: props.flexBasis,
   flexDirection: props.flexDirection ?? "row",
   flexGrow: props.flexGrow,
+  flexShrink: props.flexShrink,
   flexWrap: props.flexWrap,
   gap: unit(props.gap),
   height: unit(props.height),
   justifyContent: props.justifyContent,
   marginBottom: unit(props.marginBottom),
   marginTop: unit(props.marginTop),
+  maxHeight: unit(props.maxHeight),
+  maxWidth: unit(props.maxWidth),
+  minHeight: unit(props.minHeight),
+  minWidth: unit(props.minWidth),
+  overflow: props.overflow,
+  overflowX: props.overflowX,
+  overflowY: props.overflowY,
   padding: unit(props.padding),
   width: unit(props.width)
 })
@@ -75,7 +94,9 @@ const textStyle = (props: GridElementProps): CSSProperties => ({
   display: "block",
   fontWeight: props.bold ? 700 : 400,
   lineHeight: 1.45,
-  whiteSpace: "pre-wrap",
+  overflow: props.wrap === "truncate" ? "hidden" : props.overflow,
+  textOverflow: props.wrap === "truncate" ? "ellipsis" : undefined,
+  whiteSpace: props.wrap === "truncate" ? "nowrap" : "pre-wrap",
   width: unit(props.width) ?? "auto"
 })
 

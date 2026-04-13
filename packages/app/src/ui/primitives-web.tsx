@@ -9,7 +9,7 @@ const unit = (value: number | string | undefined): string | number | undefined =
   return typeof value === "number" ? `${value * 8}px` : value
 }
 
-const borderRadius = (borderStyle: UiBoxProps["borderStyle"]): string => borderStyle === "rounded" ? "12px" : "0"
+const borderRadius = (borderStyle: UiBoxProps["borderStyle"]): string => borderStyle === "rounded" ? "8px" : "0"
 
 const borderValue = (
   enabled: boolean | undefined,
@@ -24,8 +24,10 @@ const baseStyle = (props: UiBoxProps): CSSProperties => ({
   boxSizing: "border-box",
   color: props.fg,
   display: "flex",
+  flexBasis: props.flexBasis,
   flexDirection: props.flexDirection ?? "row",
   flexGrow: props.flexGrow,
+  flexShrink: props.flexShrink,
   flexWrap: props.flexWrap,
   gap: unit(props.gap),
   height: unit(props.height),
@@ -34,6 +36,13 @@ const baseStyle = (props: UiBoxProps): CSSProperties => ({
   marginLeft: unit(props.marginLeft),
   marginRight: unit(props.marginRight),
   marginTop: unit(props.marginTop),
+  maxHeight: unit(props.maxHeight),
+  maxWidth: unit(props.maxWidth),
+  minHeight: unit(props.minHeight),
+  minWidth: unit(props.minWidth),
+  overflow: props.overflow,
+  overflowX: props.overflowX,
+  overflowY: props.overflowY,
   padding: unit(props.padding),
   width: unit(props.width)
 })
@@ -60,7 +69,7 @@ const interactiveStyle = (width: UiBoxProps["width"]): CSSProperties => ({
 const inputStyle: CSSProperties = {
   background: "#07101c",
   border: "1px solid #24537d",
-  borderRadius: "10px",
+  borderRadius: "8px",
   boxSizing: "border-box",
   color: "#56f39a",
   font: "inherit",
