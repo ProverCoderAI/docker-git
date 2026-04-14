@@ -38,7 +38,7 @@ describe("browser terminal helpers", () => {
     )
   })
 
-  it("falls back to direct local api origin for relative browser api paths", () => {
+  it("uses same-origin api proxy for relative browser api paths", () => {
     const host = "terminal.example.local"
     const httpProtocol = ["ht", "tp:"].join("")
     const wsProtocol = ["ws", "://"].join("")
@@ -53,7 +53,7 @@ describe("browser terminal helpers", () => {
     expect(resolveTerminalWebSocketUrl("/projects/proj/terminal-sessions/sess/ws", 80, 24)).toBe([
       wsProtocol,
       host,
-      ":3334/projects/proj/terminal-sessions/sess/ws?cols=80&rows=24"
+      ":4176/api/projects/proj/terminal-sessions/sess/ws?cols=80&rows=24"
     ].join(""))
   })
 

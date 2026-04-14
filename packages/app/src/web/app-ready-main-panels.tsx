@@ -19,7 +19,6 @@ type CenterPanelProps =
     MainPanelsProps,
     | "actionPrompt"
     | "authSnapshot"
-    | "compact"
     | "createView"
     | "controllerCwd"
     | "projectsRoot"
@@ -41,6 +40,7 @@ type CenterPanelProps =
     | "projectAuthSnapshot"
     | "selectedProjectSummary"
     | "terminalSession"
+    | "viewportLayout"
   >
   & {
     readonly showProjectPanel: boolean
@@ -55,7 +55,6 @@ type CenterPanelContentProps = Pick<
   CenterPanelProps,
   | "actionPrompt"
   | "authSnapshot"
-  | "compact"
   | "controllerCwd"
   | "createView"
   | "currentMenu"
@@ -73,6 +72,7 @@ type CenterPanelContentProps = Pick<
   | "projectNavigationArmed"
   | "projectsRoot"
   | "selectedProjectSummary"
+  | "viewportLayout"
 >
 
 const CenterPanelBody = (
@@ -95,7 +95,6 @@ const CenterPanelContent = (
   {
     actionPrompt,
     authSnapshot,
-    compact,
     controllerCwd,
     createView,
     currentMenu,
@@ -112,13 +111,14 @@ const CenterPanelContent = (
     projectAuthSnapshot,
     projectNavigationArmed,
     projectsRoot,
-    selectedProjectSummary
+    selectedProjectSummary,
+    viewportLayout
   }: CenterPanelContentProps
 ): JSX.Element => (
   <ContentPanel
     actionPrompt={actionPrompt}
     authSnapshot={authSnapshot}
-    compact={compact}
+    compact={viewportLayout.compact}
     controllerCwd={controllerCwd}
     createView={createView}
     currentMenu={currentMenu}
@@ -143,7 +143,7 @@ const centerPanelWidth = (compact: boolean, showProjectPanel: boolean): string =
   if (compact) {
     return "100%"
   }
-  return showProjectPanel ? "42%" : "69%"
+  return showProjectPanel ? "48%" : "auto"
 }
 
 const CenterPanel = (props: CenterPanelProps): JSX.Element => (
@@ -152,27 +152,45 @@ const CenterPanel = (props: CenterPanelProps): JSX.Element => (
     borderColor="#24537d"
     borderStyle="single"
     flexDirection="column"
+    flexGrow={1}
+    minHeight={0}
+    minWidth={0}
+    overflow="hidden"
     padding={1}
-    width={centerPanelWidth(props.compact, props.showProjectPanel)}
+    width={centerPanelWidth(props.viewportLayout.compact, props.showProjectPanel)}
   >
-    <CenterPanelContent {...props} />
-    <CenterPanelBody {...props} />
+    <Box
+      flexDirection="column"
+      flexShrink={0}
+      maxHeight={props.viewportLayout.dense ? "38%" : "46%"}
+      overflowY="auto"
+    >
+      <CenterPanelContent {...props} />
+    </Box>
+    <Box flexDirection="column" flexGrow={1} minHeight={0} overflow="hidden">
+      <CenterPanelBody {...props} />
+    </Box>
   </Box>
 )
 
 const ProjectPanelSlot = (
   {
-    compact,
     currentMenu,
     dashboard,
     onSelectProject,
     projectNavigationArmed,
     selectedProjectId,
-    showProjectPanel
+    showProjectPanel,
+    viewportLayout
   }:
     & Pick<
       MainPanelsProps,
-      "compact" | "currentMenu" | "dashboard" | "onSelectProject" | "projectNavigationArmed" | "selectedProjectId"
+      | "currentMenu"
+      | "dashboard"
+      | "onSelectProject"
+      | "projectNavigationArmed"
+      | "selectedProjectId"
+      | "viewportLayout"
     >
     & {
       readonly showProjectPanel: boolean
@@ -181,7 +199,7 @@ const ProjectPanelSlot = (
   showProjectPanel
     ? (
       <ProjectListPanel
-        compact={compact}
+        compact={viewportLayout.compact}
         currentMenu={currentMenu}
         dashboard={dashboard}
         onSelectProject={onSelectProject}
@@ -205,7 +223,6 @@ const MainCenterPanel = (
   <CenterPanel
     actionPrompt={props.actionPrompt}
     authSnapshot={props.authSnapshot}
-    compact={props.compact}
     controllerCwd={props.controllerCwd}
     projectsRoot={props.projectsRoot}
     createView={props.createView}
@@ -228,15 +245,22 @@ const MainCenterPanel = (
     selectedProjectSummary={selectedProjectSummary}
     showProjectPanel={showProjectPanel}
     terminalSession={props.terminalSession}
+    viewportLayout={props.viewportLayout}
   />
 )
 
 export const MainPanels = ({ selectedProjectSummary, ...props }: MainPanelsProps): JSX.Element => {
   const showProject = showsProjectPanel(props.currentMenu)
   return (
-    <Box flexDirection={props.compact ? "column" : "row"} flexGrow={1} gap={1}>
+    <Box
+      flexDirection={props.viewportLayout.compact ? "column" : "row"}
+      flexGrow={1}
+      gap={1}
+      minHeight={0}
+      overflow="hidden"
+    >
       <MenuSidebar
-        compact={props.compact}
+        compact={props.viewportLayout.compact}
         currentMenu={props.currentMenu}
         onSelectMenu={props.onSelectMenu}
         projectNavigationArmed={props.projectNavigationArmed}
@@ -245,13 +269,13 @@ export const MainPanels = ({ selectedProjectSummary, ...props }: MainPanelsProps
       />
       <MainCenterPanel props={props} selectedProjectSummary={selectedProjectSummary} showProjectPanel={showProject} />
       <ProjectPanelSlot
-        compact={props.compact}
         currentMenu={props.currentMenu}
         dashboard={props.dashboard}
         onSelectProject={props.onSelectProject}
         projectNavigationArmed={props.projectNavigationArmed}
         selectedProjectId={props.selectedProjectId}
         showProjectPanel={showProject}
+        viewportLayout={props.viewportLayout}
       />
     </Box>
   )

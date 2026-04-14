@@ -17,11 +17,12 @@ type TerminalPanelProps = {
 
 const panelStyle: CSSProperties = {
   border: "1px solid #21486d",
-  borderRadius: "12px",
+  borderRadius: "8px",
   display: "flex",
+  flex: 1,
   flexDirection: "column",
   marginTop: "8px",
-  minHeight: "320px",
+  minHeight: 0,
   overflow: "hidden"
 }
 
@@ -38,7 +39,7 @@ const headerStyle: CSSProperties = {
 const bodyStyle: CSSProperties = {
   background: "#050b14",
   flex: 1,
-  minHeight: "280px",
+  minHeight: 0,
   padding: "8px"
 }
 

@@ -10,11 +10,11 @@ import { Effect, Either } from "effect"
 import { randomUUID } from "node:crypto"
 import type { IncomingMessage, Server as HttpServer } from "node:http"
 import type { Duplex } from "node:stream"
-import { spawn, type IPty } from "node-pty"
 import { WebSocket, WebSocketServer, type RawData } from "ws"
 
 import type { TerminalSession, TerminalSessionStatus } from "../api/contracts.js"
 import { ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
+import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
 import { emitProjectEvent } from "./events.js"
 import { getProjectItemById, upProject } from "./projects.js"
 
@@ -31,7 +31,7 @@ type TerminalServerMessage =
 
 type TerminalRecord = {
   session: TerminalSession
-  pty: IPty | null
+  pty: PtyBridge | null
   socket: WebSocket | null
   attachTimeout: ReturnType<typeof setTimeout> | null
   projectId: string
@@ -241,7 +241,7 @@ const decodeClientMessage = (raw: RawData): TerminalClientMessage | null =>
 const clampTerminalSize = (value: number, fallback: number): number =>
   Number.isFinite(value) && value > 0 ? Math.max(1, Math.floor(value)) : fallback
 
-const writePtyInput = (pty: IPty | null, data: string): void => {
+const writePtyInput = (pty: PtyBridge | null, data: string): void => {
   if (pty === null) {
     return
   }
@@ -252,7 +252,7 @@ const writePtyInput = (pty: IPty | null, data: string): void => {
   }
 }
 
-const resizePty = (pty: IPty | null, cols: number, rows: number): void => {
+const resizePty = (pty: PtyBridge | null, cols: number, rows: number): void => {
   if (pty === null) {
     return
   }
@@ -270,14 +270,11 @@ const startTerminalPty = (
 ): void => {
   const resolvedCols = clampTerminalSize(cols, 120)
   const resolvedRows = clampTerminalSize(rows, 32)
-  const pty = spawn(record.prepared.command, [...record.prepared.args], {
+  const pty = spawnPtyBridge({
+    args: record.prepared.args,
+    command: record.prepared.command,
     cols: resolvedCols,
     cwd: record.prepared.cwd,
-    env: {
-      ...process.env,
-      TERM: "xterm-256color"
-    },
-    name: "xterm-256color",
     rows: resolvedRows
   })
   record.pty = pty

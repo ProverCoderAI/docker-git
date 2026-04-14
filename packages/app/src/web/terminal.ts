@@ -25,17 +25,7 @@ const resolveTerminalApiBaseUrl = (): string => {
     return trimTrailingSlash(configured.trim())
   }
 
-  const apiBaseUrl = resolveApiBaseUrl()
-  if (apiBaseUrl.startsWith("http://") || apiBaseUrl.startsWith("https://")) {
-    return apiBaseUrl
-  }
-
-  if (globalThis.location.protocol === "http:") {
-    const apiPort = import.meta.env.VITE_DOCKER_GIT_TERMINAL_API_PORT?.trim() || "3334"
-    return `http://${globalThis.location.hostname}:${apiPort}`
-  }
-
-  return apiBaseUrl
+  return resolveApiBaseUrl()
 }
 
 const resolveApiUrl = (): URL => {

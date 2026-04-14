@@ -9,14 +9,9 @@ import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "./termi
 
 export type TerminalStatus = "attached" | "connecting" | "error" | "exited"
 
-export type TerminalConnectionState = {
-  opened: boolean
-}
+export type TerminalConnectionState = { opened: boolean }
 
-type TerminalRuntime = {
-  readonly fitAddon: FitAddon
-  readonly terminal: Terminal
-}
+type TerminalRuntime = { readonly fitAddon: FitAddon; readonly terminal: Terminal }
 
 type TerminalMessageHandlers = {
   readonly notifyMessage: (message: string) => void
@@ -39,6 +34,33 @@ type TerminalLifecycleArgs = {
   readonly notifyMessage: (message: string) => void
   readonly session: ActiveTerminalSession
   readonly setStatus: (status: TerminalStatus) => void
+}
+
+type TerminalSocketListenerArgs = {
+  readonly connectionRef: { current: TerminalConnectionState }
+  readonly onClose: () => void
+  readonly onError: () => void
+  readonly onMessage: (payload: string) => void
+  readonly onOpen: () => void
+  readonly socket: WebSocket
+}
+
+type TerminalSocketFailureHandlerArgs = {
+  readonly notifyMessage: (message: string) => void
+  readonly setStatus: (status: TerminalStatus) => void
+  readonly terminal: Terminal
+  readonly terminalLine: string
+  readonly uiMessage: string
+}
+
+type TerminalSessionSocketArgs = {
+  readonly connectionRef: { current: TerminalConnectionState }
+  readonly handlers: TerminalMessageHandlers
+  readonly notifyMessage: (message: string) => void
+  readonly sendResize: () => void
+  readonly setStatus: (status: TerminalStatus) => void
+  readonly socket: WebSocket
+  readonly terminal: Terminal
 }
 
 const requestSessionClose = (closePath: string): void => {
@@ -67,14 +89,7 @@ const createTerminalRuntime = (host: HTMLDivElement): TerminalRuntime => {
 const createTerminalSocket = (
   session: ActiveTerminalSession,
   terminal: Terminal
-): WebSocket =>
-  new WebSocket(
-    resolveTerminalWebSocketUrl(
-      session.websocketPath,
-      terminal.cols,
-      terminal.rows
-    )
-  )
+): WebSocket => new WebSocket(resolveTerminalWebSocketUrl(session.websocketPath, terminal.cols, terminal.rows))
 
 const sendTerminalResize = (
   fitAddon: FitAddon,
@@ -99,9 +114,7 @@ const observeTerminalResize = (
   if (typeof ResizeObserver !== "function") {
     return null
   }
-  const resizeObserver = new ResizeObserver(() => {
-    onResize()
-  })
+  const resizeObserver = new ResizeObserver(onResize)
   resizeObserver.observe(host)
   return resizeObserver
 }
@@ -151,11 +164,7 @@ const handleTerminalServerMessage = (
 }
 
 const attachTerminalSocketListeners = (
-  connectionRef: { current: TerminalConnectionState },
-  socket: WebSocket,
-  onOpen: () => void,
-  onMessage: (payload: string) => void,
-  onError: () => void
+  { connectionRef, onClose, onError, onMessage, onOpen, socket }: TerminalSocketListenerArgs
 ): void => {
   socket.addEventListener("open", () => {
     connectionRef.current.opened = true
@@ -163,6 +172,11 @@ const attachTerminalSocketListeners = (
   })
   socket.addEventListener("message", (event) => {
     onMessage(typeof event.data === "string" ? event.data : "")
+  })
+  socket.addEventListener("close", () => {
+    if (!connectionRef.current.opened) {
+      onClose()
+    }
   })
   socket.addEventListener("error", onError)
 }
@@ -192,15 +206,13 @@ const createMessageHandlers = (
   terminal
 })
 
-const createSocketErrorHandler = (
-  notifyMessage: (message: string) => void,
-  setStatus: (status: TerminalStatus) => void,
-  terminal: Terminal
+const createSocketFailureHandler = (
+  { notifyMessage, setStatus, terminal, terminalLine, uiMessage }: TerminalSocketFailureHandlerArgs
 ) =>
-() => {
-  terminal.writeln("\r\n[websocket error]")
+(): void => {
+  terminal.writeln(`\r\n${terminalLine}`)
   setStatus("error")
-  notifyMessage("Terminal websocket error.")
+  notifyMessage(uiMessage)
 }
 
 const maybeDeletePendingSession = (
@@ -213,6 +225,33 @@ const maybeDeletePendingSession = (
     notifyMessage(session.pendingDeleteMessage)
     session.onExit?.()
   }
+}
+
+const attachTerminalSessionSocket = (
+  { connectionRef, handlers, notifyMessage, sendResize, setStatus, socket, terminal }: TerminalSessionSocketArgs
+): void => {
+  attachTerminalSocketListeners({
+    connectionRef,
+    onClose: createSocketFailureHandler({
+      notifyMessage,
+      setStatus,
+      terminal,
+      terminalLine: "[websocket closed before attach]",
+      uiMessage: "Terminal websocket closed before attach."
+    }),
+    onError: createSocketFailureHandler({
+      notifyMessage,
+      setStatus,
+      terminal,
+      terminalLine: "[websocket error]",
+      uiMessage: "Terminal websocket error."
+    }),
+    onMessage: (payload) => {
+      handleTerminalServerMessage(handlers, payload)
+    },
+    onOpen: sendResize,
+    socket
+  })
 }
 
 const mountTerminalSession = (
@@ -239,15 +278,15 @@ const mountTerminalSession = (
   )
 
   globalThis.addEventListener("resize", sendResize)
-  attachTerminalSocketListeners(
+  attachTerminalSessionSocket({
     connectionRef,
-    socket,
+    handlers,
+    notifyMessage,
     sendResize,
-    (payload) => {
-      handleTerminalServerMessage(handlers, payload)
-    },
-    createSocketErrorHandler(notifyMessage, setStatus, terminal)
-  )
+    setStatus,
+    socket,
+    terminal
+  })
 
   return () => {
     cleanupTerminalResources({

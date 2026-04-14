@@ -79,6 +79,7 @@
         "@types/node": "^24.12.0",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
+        "@types/ws": "^8.18.1",
         "@typescript-eslint/eslint-plugin": "^8.57.1",
         "@typescript-eslint/parser": "^8.57.1",
         "@vitejs/plugin-react": "^6.0.1",
@@ -99,6 +100,7 @@
         "typescript-eslint": "^8.57.1",
         "vite": "^8.0.1",
         "vitest": "^4.1.0",
+        "ws": "^8.20.0",
       },
     },
     "packages/lib": {
@@ -1735,6 +1737,8 @@
     "@prover-coder-ai/dist-deps-prune/@effect/platform": ["@effect/platform@0.94.5", "", { "dependencies": { "find-my-way-ts": "0.1.6", "msgpackr": "1.11.5", "multipasta": "0.2.7" }, "peerDependencies": { "effect": "3.21.0" } }, "sha512-z05APUiDDPbodhTkH/RJqOLoCU11bU2IZLfcwLFrld03+ob1VeqRnELQlmueLIYm6NZifHAtjl32V+GRt34y4A=="],
 
     "@prover-coder-ai/dist-deps-prune/@effect/platform-node": ["@effect/platform-node@0.104.1", "", { "dependencies": { "@effect/platform-node-shared": "0.57.1", "mime": "3.0.0", "undici": "7.16.0", "ws": "8.18.3" }, "peerDependencies": { "@effect/cluster": "0.58.0", "@effect/platform": "0.94.5", "@effect/rpc": "0.75.0", "@effect/sql": "0.51.0", "effect": "3.21.0" } }, "sha512-jT1a/z98niK6fnEU8pWHPPCdJMVDRCIdB65lolcOjse5rsTwVbczMjvKkhVQpF63mNWoOnol7OTRNkw5L54llg=="],
+
+    "@prover-coder-ai/docker-git/ws": ["ws@8.20.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA=="],
 
     "@prover-coder-ai/eslint-plugin-suggest-members/@effect/platform": ["@effect/platform@0.94.5", "", { "dependencies": { "find-my-way-ts": "0.1.6", "msgpackr": "1.11.5", "multipasta": "0.2.7" }, "peerDependencies": { "effect": "3.21.0" } }, "sha512-z05APUiDDPbodhTkH/RJqOLoCU11bU2IZLfcwLFrld03+ob1VeqRnELQlmueLIYm6NZifHAtjl32V+GRt34y4A=="],
 

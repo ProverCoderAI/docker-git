@@ -6,6 +6,7 @@ import { UiProvider } from "../ui/primitives.js"
 import { type DashboardData, loadDashboard, resolveApiBaseUrl } from "./api.js"
 import { AppReady } from "./app-ready.js"
 import { ErrorScreen, LoadingScreen } from "./panels.js"
+import { resolveViewportLayout, type ViewportLayout, type ViewportSize } from "./viewport-layout.js"
 
 type DashboardState =
   | { readonly _tag: "Loading"; readonly apiBaseUrl: string }
@@ -13,22 +14,11 @@ type DashboardState =
   | { readonly _tag: "Ready"; readonly dashboard: DashboardData; readonly refreshedAtMs: number }
 
 const refreshIntervalMs = 15_000
-const compactViewportWidth = 960
 
-const resolveViewportWidth = (): number => typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1280
-
-const resolveFontSize = (viewportWidth: number): number => {
-  if (viewportWidth < 480) {
-    return 11
-  }
-  if (viewportWidth < compactViewportWidth) {
-    return 12
-  }
-  if (viewportWidth < 1280) {
-    return 13
-  }
-  return 15
-}
+const resolveViewportSize = (): ViewportSize => ({
+  height: typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 900,
+  width: typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1280
+})
 
 const initialDashboardState = (): DashboardState => ({
   _tag: "Loading",
@@ -102,11 +92,11 @@ const useDashboardController = () => {
 }
 
 const useViewportMode = () => {
-  const [viewportWidth, setViewportWidth] = useState(resolveViewportWidth)
+  const [viewportSize, setViewportSize] = useState(resolveViewportSize)
 
   useEffect(() => {
     const onResize = () => {
-      setViewportWidth(resolveViewportWidth())
+      setViewportSize(resolveViewportSize())
     }
     globalThis.addEventListener("resize", onResize)
     return () => {
@@ -114,16 +104,13 @@ const useViewportMode = () => {
     }
   }, [])
 
-  return {
-    compact: viewportWidth < compactViewportWidth,
-    fontSize: resolveFontSize(viewportWidth)
-  } as const
+  return resolveViewportLayout(viewportSize)
 }
 
 const renderDashboardState = (
   state: DashboardState,
   refreshDashboard: () => void,
-  compact: boolean
+  viewportLayout: ViewportLayout
 ): JSX.Element =>
   Match.value(state).pipe(
     Match.when({ _tag: "Loading" }, ({ apiBaseUrl }) => <LoadingScreen apiBaseUrl={apiBaseUrl} />),
@@ -135,10 +122,10 @@ const renderDashboardState = (
       { _tag: "Ready" },
       ({ dashboard, refreshedAtMs }) => (
         <AppReady
-          compact={compact}
           dashboard={dashboard}
           dashboardRefreshTick={refreshedAtMs}
           refreshDashboard={refreshDashboard}
+          viewportLayout={viewportLayout}
         />
       )
     ),
@@ -156,13 +143,15 @@ export const App = (): JSX.Element => {
         color: "#d6e5f7",
         fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
         fontSize: viewport.fontSize,
-        minHeight: "100vh",
-        overflow: "auto",
+        height: "100vh",
+        inset: 0,
+        overflow: "hidden",
+        position: "fixed",
         width: "100%"
       }}
     >
       <UiProvider primitives={webPrimitives}>
-        {renderDashboardState(state, refresh, viewport.compact)}
+        {renderDashboardState(state, refresh, viewport)}
       </UiProvider>
     </div>
   )

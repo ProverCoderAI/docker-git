@@ -16,8 +16,10 @@ export type UiBoxProps = {
   readonly borderStyle?: "rounded" | "single"
   readonly children?: ReactNode
   readonly fg?: string
+  readonly flexBasis?: CSSProperties["flexBasis"]
   readonly flexDirection?: CSSProperties["flexDirection"]
   readonly flexGrow?: number
+  readonly flexShrink?: number
   readonly flexWrap?: CSSProperties["flexWrap"]
   readonly gap?: number | string
   readonly height?: number | string
@@ -26,7 +28,14 @@ export type UiBoxProps = {
   readonly marginLeft?: number | string
   readonly marginRight?: number | string
   readonly marginTop?: number | string
+  readonly maxHeight?: number | string
+  readonly maxWidth?: number | string
+  readonly minHeight?: number | string
+  readonly minWidth?: number | string
   readonly onClick?: MouseEventHandler<HTMLElement> | (() => void)
+  readonly overflow?: CSSProperties["overflow"]
+  readonly overflowX?: CSSProperties["overflowX"]
+  readonly overflowY?: CSSProperties["overflowY"]
   readonly padding?: number | string
   readonly width?: number | string
 }
