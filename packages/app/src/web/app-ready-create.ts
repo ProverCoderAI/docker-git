@@ -6,6 +6,7 @@ import { submitCreateInputs } from "./actions-projects.js"
 import { requireGithubAuthConfigured } from "./actions-shared.js"
 import type { BrowserActionContext } from "./actions.js"
 import type { BrowserMenuTag } from "./menu.js"
+import { menuScreen } from "./screen.js"
 
 type Setter<A> = Dispatch<SetStateAction<A>>
 
@@ -30,6 +31,7 @@ export const cancelCreate = (
   setCreateView: Setter<CreateFlowView>
 ) => {
   setCreateView(resetCreateView())
+  context.setActiveScreen(menuScreen())
   context.setMessage("Create cancelled.")
 }
 

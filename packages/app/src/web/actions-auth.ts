@@ -24,6 +24,7 @@ import {
   defaultLabel,
   nullableValue,
   requireSelectedProjectId,
+  returnToMainMenu,
   withBusy
 } from "./actions-shared.js"
 import {
@@ -34,6 +35,7 @@ import {
   runAuthMenuFlow,
   runProjectAuthFlow
 } from "./api.js"
+import { projectPickerScreen } from "./screen.js"
 
 type SupportedAuthMutation = Extract<
   AuthMenuAction,
@@ -205,15 +207,20 @@ const isMenuNavigationAction = (
 const handleBrowserMenuAction = (
   action: "Back" | "Refresh",
   context: BrowserActionContext,
-  refresh: (context: BrowserActionContext) => void
+  refresh: (context: BrowserActionContext) => void,
+  returnToProjectPicker: boolean
 ): void => {
   if (action === "Refresh") {
     refresh(context)
     return
   }
-  context.setActionPrompt(null)
-  context.setSelectedMenuIndex(0)
-  context.setMessage("Returned to main menu.")
+  if (returnToProjectPicker) {
+    context.setActionPrompt(null)
+    context.setActiveScreen(projectPickerScreen())
+    context.setMessage("Returned to project selection.")
+    return
+  }
+  returnToMainMenu(context)
 }
 
 export const runBrowserAuthAction = (
@@ -221,7 +228,7 @@ export const runBrowserAuthAction = (
   context: BrowserActionContext
 ) => {
   if (isMenuNavigationAction(action)) {
-    handleBrowserMenuAction(action, context, refreshAuthPanel)
+    handleBrowserMenuAction(action, context, refreshAuthPanel, false)
     return
   }
   openAuthPrompt(action, context)
@@ -232,7 +239,7 @@ export const runBrowserProjectAuthAction = (
   context: BrowserActionContext
 ) => {
   if (isMenuNavigationAction(action)) {
-    handleBrowserMenuAction(action, context, refreshProjectAuthPanel)
+    handleBrowserMenuAction(action, context, refreshProjectAuthPanel, true)
     return
   }
   const projectId = requireSelectedProjectId(context)

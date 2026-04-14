@@ -1,0 +1,139 @@
+import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
+
+import {
+  buildForwardSshScript,
+  buildPortForwardContainerName,
+  normalizePortForwardRequest,
+  parsePortForwardRows,
+  rowToProjectPortForward,
+  selectHostPort
+} from "../src/services/project-port-forward-core.js"
+import {
+  parseLinuxDefaultGatewayIp,
+  parseProjectPortProxyPath,
+  projectShortKey,
+  renderForwardProxyPath,
+  renderLegacyForwardProxyPath,
+  rewriteProxyLocation
+} from "../src/services/project-port-proxy-core.js"
+
+describe("project port forward core", () => {
+  it.effect("selects requested host ports only when free", () =>
+    Effect.sync(() => {
+      expect(selectHostPort(3000, 4000, new Set([3000]))).toBe(4000)
+      expect(selectHostPort(3000, 4000, new Set([4000]))).toBeNull()
+    }))
+
+  it.effect("falls forward from occupied target port", () =>
+    Effect.sync(() => {
+      expect(selectHostPort(3000, undefined, new Set([3000, 3001]))).toBe(3002)
+    }))
+
+  it.effect("validates project port forward request ports", () =>
+    Effect.sync(() => {
+      expect(normalizePortForwardRequest(3000, undefined)).toEqual({
+        ok: true,
+        ports: { hostPort: undefined, targetPort: 3000 }
+      })
+      expect(normalizePortForwardRequest(0, undefined)).toEqual({
+        ok: false,
+        message: "targetPort must be an integer between 1 and 65535."
+      })
+    }))
+
+  it.effect("builds stable Docker-safe forward container names", () =>
+    Effect.sync(() => {
+      const first = buildPortForwardContainerName("/home/dev/.docker-git/org/repo", 3000)
+      const second = buildPortForwardContainerName("/home/dev/.docker-git/org/repo", 3000)
+
+      expect(first).toBe(second)
+      expect(first).toMatch(/^dg-port-[a-f0-9]{12}-3000$/u)
+      expect(first.length).toBeLessThanOrEqual(63)
+    }))
+
+  it.effect("parses Docker label rows into port forwards", () =>
+    Effect.sync(() => {
+      const rows = parsePortForwardRows([
+        "abc123",
+        "dg-port-test-3000",
+        "running",
+        "2026-04-14 10:00:00 +0000 UTC",
+        "project-a",
+        "3000",
+        "4000",
+        "0.0.0.0",
+        "dev.example.test",
+        "dg-project"
+      ].join("\t"))
+      const row = rows[0]
+      if (row === undefined) {
+        throw new Error("Expected one parsed row")
+      }
+      const forward = rowToProjectPortForward(row)
+
+      expect(forward.status).toBe("running")
+      expect(forward.targetPort).toBe(3000)
+      expect(forward.hostPort).toBe(4000)
+      expect(forward.projectKey).toBe(projectShortKey("project-a"))
+      expect(forward.proxyPath).toBe(`/p/${projectShortKey("project-a")}/3000/`)
+      expect(forward.url).toBe("http://dev.example.test:4000")
+    }))
+
+  it.effect("parses project port proxy paths", () =>
+    Effect.sync(() => {
+      expect(parseProjectPortProxyPath("/projects/a%2Fb/ports/5173/proxy/src/main.ts")).toEqual({
+        _tag: "ProjectId",
+        projectId: "a/b",
+        targetPort: 5173,
+        upstreamPath: "/src/main.ts"
+      })
+      expect(parseProjectPortProxyPath(`/p/${projectShortKey("a/b")}/5173/src/main.ts`)).toEqual({
+        _tag: "ProjectKey",
+        projectKey: projectShortKey("a/b"),
+        targetPort: 5173,
+        upstreamPath: "/src/main.ts"
+      })
+      expect(renderForwardProxyPath("a/b", 5173)).toBe(`/p/${projectShortKey("a/b")}/5173/`)
+      expect(renderLegacyForwardProxyPath("a/b", 5173)).toBe("/projects/a%2Fb/ports/5173/proxy/")
+    }))
+
+  it.effect("parses Linux default gateway route", () =>
+    Effect.sync(() => {
+      const route = [
+        "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT",
+        "eth0\t00000000\t0112AC0A\t0003\t0\t0\t0\t00000000\t0\t0\t0"
+      ].join("\n")
+
+      expect(parseLinuxDefaultGatewayIp(route)).toBe("10.172.18.1")
+    }))
+
+  it.effect("rewrites upstream redirects into proxy paths", () =>
+    Effect.sync(() => {
+      expect(
+        rewriteProxyLocation(
+          "http://172.18.0.1:5173/login?next=/",
+          `/p/${projectShortKey("a/b")}/5173/`,
+          "http://172.18.0.1:5173",
+          "/api"
+        )
+      ).toBe(`/api/p/${projectShortKey("a/b")}/5173/login?next=/`)
+      expect(
+        rewriteProxyLocation(
+          "/login",
+          `/p/${projectShortKey("a/b")}/5173/`,
+          "http://172.18.0.1:5173",
+          "/api"
+        )
+      ).toBe(`/api/p/${projectShortKey("a/b")}/5173/login`)
+    }))
+
+  it.effect("renders SSH local-forward script for localhost-only services", () =>
+    Effect.sync(() => {
+      const script = buildForwardSshScript("172.17.0.10", "dev", 5173)
+
+      expect(script).toContain("-L 0.0.0.0:5173:127.0.0.1:5173")
+      expect(script).toContain("-p 22 dev@172.17.0.10")
+      expect(script).toContain("ExitOnForwardFailure=yes")
+    }))
+})

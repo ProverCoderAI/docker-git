@@ -74,8 +74,8 @@ const createTerminalRuntime = (host: HTMLDivElement): TerminalRuntime => {
     fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
     fontSize: 14,
     theme: {
-      background: "#050b14",
-      foreground: "#d6e5f7"
+      background: "#080a0d",
+      foreground: "#f4f7fb"
     }
   })
   const fitAddon = new FitAddon()

@@ -1,5 +1,12 @@
 import { updateActionPromptValue } from "./action-prompt.js"
-import { cancelBrowserActionPrompt, submitBrowserActionPrompt } from "./actions.js"
+import {
+  cancelBrowserActionPrompt,
+  closeSelectedProjectPort,
+  loadSelectedProjectPorts,
+  openSelectedProjectPort,
+  runBrowserMenuAction,
+  submitBrowserActionPrompt
+} from "./actions.js"
 import type { DashboardData } from "./api.js"
 import {
   createActionContext,
@@ -7,11 +14,11 @@ import {
   runAuthActionByIndex,
   runProjectAuthActionByIndex
 } from "./app-ready-actions.js"
+import { useBrowserShortcuts } from "./app-ready-browser-shortcuts-hook.js"
 import { cancelCreate, setCreateBuffer, submitCreateView, useCreateMenuReset } from "./app-ready-create.js"
+import { useGithubAuthGate } from "./app-ready-github-auth-gate-hook.js"
 import {
   useActionPromptReset,
-  useBrowserShortcuts,
-  useGithubAuthGate,
   usePanelAutoload,
   useProjectAuthReset,
   useProjectDetailsReset,
@@ -19,6 +26,9 @@ import {
   useProjectSelectionSync,
   useReadyState
 } from "./app-ready-hooks.js"
+import { useProjectPortForwardsReset } from "./app-ready-port-forwards-hook.js"
+import { useSshLink } from "./app-ready-ssh-link-hook.js"
+import { isProjectMenu, menuScreen, outputScreen, projectPickerScreen, screenForMenu } from "./screen.js"
 
 type ReadyControllerArgs = {
   readonly dashboard: DashboardData
@@ -53,16 +63,23 @@ const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
     githubStatus: args.state.githubStatus,
     selectedMenuIndex: args.state.selectedMenuIndex,
     setActionPrompt: args.state.setActionPrompt,
+    setActiveScreen: args.state.setActiveScreen,
     setMessage: args.state.setMessage,
     setSelectedMenuIndex: args.state.setSelectedMenuIndex
   })
   useProjectNavigationReset(args.currentMenu, args.state.setProjectNavigationArmed)
   useProjectAuthReset(args.state.selectedProjectId, args.state.setProjectAuthSnapshot)
   useProjectDetailsReset(args.state.selectedProjectId, args.state.setSelectedProject)
+  useProjectPortForwardsReset(
+    args.state.selectedProjectId,
+    args.state.setPortForwardInput,
+    args.state.setPortForwards
+  )
 }
 
 const useReadyAutoloadEffects = (args: ReadySideEffectsArgs) => {
   usePanelAutoload({
+    activeScreen: args.state.activeScreen,
     authSnapshot: args.state.authSnapshot,
     busyLabel: args.state.busyLabel,
     context: args.actionContext,
@@ -78,6 +95,7 @@ const useReadyAutoloadEffects = (args: ReadySideEffectsArgs) => {
 
 const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
   useBrowserShortcuts({
+    activeScreen: args.state.activeScreen,
     actionPrompt: args.state.actionPrompt,
     context: args.actionContext,
     controllerCwd: args.dashboard.health.cwd,
@@ -85,9 +103,9 @@ const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
     createView: args.state.createView,
     currentMenu: args.currentMenu,
     dashboard: args.dashboard,
-    projectNavigationArmed: args.state.projectNavigationArmed,
     selectedProjectId: args.state.selectedProjectId,
     setCreateView: args.state.setCreateView,
+    setActiveScreen: args.state.setActiveScreen,
     setProjectNavigationArmed: args.state.setProjectNavigationArmed,
     setSelectedMenuIndex: args.state.setSelectedMenuIndex,
     setSelectedProjectId: args.state.setSelectedProjectId,
@@ -98,6 +116,11 @@ const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
 const useReadySideEffects = (args: ReadySideEffectsArgs) => {
   useProjectSyncEffects(args)
   useReadyResetEffects(args)
+  useSshLink({
+    actionContext: args.actionContext,
+    busyLabel: args.state.busyLabel,
+    dashboard: args.dashboard
+  })
   useReadyAutoloadEffects(args)
   useReadyShortcutEffects(args)
 }
@@ -153,21 +176,91 @@ const bindActionPromptActions = (
   }
 })
 
+const bindPortForwardActions = (
+  actionContext: ReturnType<typeof createActionContext>,
+  state: ReturnType<typeof useReadyState>
+) => ({
+  onCloseProjectPortForward: (targetPort: number) => {
+    closeSelectedProjectPort(actionContext, targetPort)
+  },
+  onOpenProjectPortForward: () => {
+    openSelectedProjectPort(actionContext)
+  },
+  onPortForwardInputChange: (value: string) => {
+    state.setPortForwardInput(value)
+  },
+  onRefreshProjectPortForwards: () => {
+    loadSelectedProjectPorts(actionContext)
+  }
+})
+
+const bindScreenActions = (
+  actionContext: ReturnType<typeof createActionContext>,
+  dashboard: DashboardData,
+  state: ReturnType<typeof useReadyState>
+) => ({
+  onBackScreen: () => {
+    if (state.activeScreen.tag === "Create") {
+      cancelCreate(actionContext, state.setCreateView)
+      return
+    }
+    if (state.activeScreen.tag === "ProjectAuth" || state.activeScreen.tag === "Output") {
+      state.setActiveScreen(
+        isProjectMenu(resolveCurrentMenu(state.selectedMenuIndex)) ? projectPickerScreen() : menuScreen()
+      )
+      return
+    }
+    state.setProjectNavigationArmed(false)
+    state.setActiveScreen(menuScreen())
+  },
+  onOpenMenuScreen: (index: number) => {
+    const menu = resolveCurrentMenu(index)
+    state.setSelectedMenuIndex(index)
+    if (menu === "DownAll" || menu === "Quit") {
+      runBrowserMenuAction(menu, actionContext)
+      return
+    }
+    state.setActiveScreen(screenForMenu(menu))
+    if (isProjectMenu(menu)) {
+      state.setProjectNavigationArmed(true)
+      state.setSelectedProjectId((projectId) => projectId ?? dashboard.projects[0]?.id ?? null)
+    }
+  },
+  onRunCurrentMenuAction: () => {
+    const menu = resolveCurrentMenu(state.selectedMenuIndex)
+    if (menu === "ProjectAuth") {
+      state.setActiveScreen({ tag: "ProjectAuth" })
+      runBrowserMenuAction(menu, actionContext)
+      return
+    }
+    if (menu === "Logs" || menu === "Status") {
+      state.setActiveScreen(outputScreen())
+      runBrowserMenuAction(menu, actionContext)
+      return
+    }
+    runBrowserMenuAction(menu, actionContext)
+  }
+})
+
 export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDashboard }: ReadyControllerArgs) => {
   const state = useReadyState()
   const currentMenu = resolveCurrentMenu(state.selectedMenuIndex)
   const selectedProjectSummary = dashboard.projects.find((project) => project.id === state.selectedProjectId)
   const actionContext = createActionContext({
     githubStatus: state.githubStatus,
+    portForwardInput: state.portForwardInput,
     refreshDashboard,
     selectedProjectId: state.selectedProjectId,
     selectedProjectName: selectedProjectSummary?.displayName ?? null,
     setActionPrompt: state.setActionPrompt,
+    setActiveScreen: state.setActiveScreen,
     setAuthSnapshot: state.setAuthSnapshot,
     setBusyLabel: state.setBusyLabel,
     setGithubStatus: state.setGithubStatus,
     setMessage: state.setMessage,
     setOutput: state.setOutput,
+    setPortForwardInput: state.setPortForwardInput,
+    setPortForwards: state.setPortForwards,
     setProjectAuthSnapshot: state.setProjectAuthSnapshot,
     setSelectedMenuIndex: state.setSelectedMenuIndex,
     setSelectedProject: state.setSelectedProject,
@@ -180,6 +273,8 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     ...bindMenuActions(actionContext),
     ...bindCreateActions(actionContext, dashboard, state),
     ...bindActionPromptActions(actionContext, state),
+    ...bindPortForwardActions(actionContext, state),
+    ...bindScreenActions(actionContext, dashboard, state),
     currentMenu,
     selectedProjectSummary,
     state

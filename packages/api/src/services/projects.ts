@@ -27,6 +27,7 @@ import { ApiAuthRequiredError, ApiConflictError, ApiInternalError, ApiNotFoundEr
 import { ensureGithubAuthForCreate } from "./auth.js"
 import { emitProjectEvent } from "./events.js"
 import { resolveCreateAuthorizedKeysContents, resolveManagedAuthorizedKeysContents } from "./project-authorized-keys.js"
+import { projectShortKey } from "./project-port-proxy-core.js"
 import { loadProjectRuntimeByProject, runtimeForProject } from "./project-runtime.js"
 
 const readComposePsFormatted = (cwd: string) =>
@@ -130,6 +131,7 @@ const withProjectRuntime = (
     Effect.catchAll(() => Effect.succeed("")),
     Effect.map((rawStatus) => ({
       id: project.projectDir,
+      projectKey: projectShortKey(project.projectDir),
       displayName: project.displayName,
       repoUrl: project.repoUrl,
       repoRef: project.repoRef,

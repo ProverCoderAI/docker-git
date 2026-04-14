@@ -63,9 +63,10 @@ const proxyHttp = (
   request,
   response
 ) => {
+  const forwardedPrefix = request.url?.startsWith("/api/") ? "/api" : ""
   const upstream = httpRequest(
     {
-      headers: { ...request.headers, host: `${apiHost}:${apiPort}` },
+      headers: { ...request.headers, host: `${apiHost}:${apiPort}`, "x-forwarded-prefix": forwardedPrefix },
       host: apiHost,
       method: request.method,
       path: resolveUpstreamPath(request.url ?? "/"),
@@ -95,7 +96,7 @@ const webSocketServer = new WebSocketServer({ noServer: true })
 
 const server = createServer((request, response) => {
   const parsed = new URL(request.url ?? "/", "http://localhost")
-  if (parsed.pathname.startsWith("/api/")) {
+  if (parsed.pathname.startsWith("/api/") || parsed.pathname.startsWith("/p/")) {
     proxyHttp(request, response)
     return
   }
