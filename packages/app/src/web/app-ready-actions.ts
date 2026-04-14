@@ -7,15 +7,19 @@ import { browserMenuItems } from "./menu.js"
 
 type ActionContextArgs = {
   readonly githubStatus: BrowserActionContext["githubStatus"]
+  readonly portForwardInput: BrowserActionContext["portForwardInput"]
   readonly refreshDashboard: () => void
   readonly selectedProjectId: string | null
   readonly selectedProjectName: string | null
   readonly setActionPrompt: BrowserActionContext["setActionPrompt"]
+  readonly setActiveScreen: BrowserActionContext["setActiveScreen"]
   readonly setAuthSnapshot: BrowserActionContext["setAuthSnapshot"]
   readonly setBusyLabel: BrowserActionContext["setBusyLabel"]
   readonly setGithubStatus: BrowserActionContext["setGithubStatus"]
   readonly setMessage: BrowserActionContext["setMessage"]
   readonly setOutput: BrowserActionContext["setOutput"]
+  readonly setPortForwardInput: BrowserActionContext["setPortForwardInput"]
+  readonly setPortForwards: BrowserActionContext["setPortForwards"]
   readonly setProjectAuthSnapshot: BrowserActionContext["setProjectAuthSnapshot"]
   readonly setSelectedMenuIndex: BrowserActionContext["setSelectedMenuIndex"]
   readonly setSelectedProject: BrowserActionContext["setSelectedProject"]
@@ -28,15 +32,19 @@ export const resolveCurrentMenu = (selectedMenuIndex: number): BrowserMenuTag =>
 
 export const createActionContext = (args: ActionContextArgs): BrowserActionContext => ({
   githubStatus: args.githubStatus,
+  portForwardInput: args.portForwardInput,
   reloadDashboard: args.refreshDashboard,
   selectedProjectId: args.selectedProjectId,
   selectedProjectName: args.selectedProjectName,
   setActionPrompt: args.setActionPrompt,
+  setActiveScreen: args.setActiveScreen,
   setAuthSnapshot: args.setAuthSnapshot,
   setBusyLabel: args.setBusyLabel,
   setGithubStatus: args.setGithubStatus,
   setMessage: args.setMessage,
   setOutput: args.setOutput,
+  setPortForwardInput: args.setPortForwardInput,
+  setPortForwards: args.setPortForwards,
   setProjectAuthSnapshot: args.setProjectAuthSnapshot,
   setSelectedMenuIndex: args.setSelectedMenuIndex,
   setSelectedProject: args.setSelectedProject,

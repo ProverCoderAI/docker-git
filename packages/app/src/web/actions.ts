@@ -14,6 +14,7 @@ export {
   runBrowserProjectAuthAction,
   submitBrowserActionPrompt
 } from "./actions-auth.js"
+export { closeSelectedProjectPort, loadSelectedProjectPorts, openSelectedProjectPort } from "./actions-port-forwards.js"
 export { loadSelectedProjectInfo } from "./actions-projects.js"
 
 export const runBrowserMenuAction = (

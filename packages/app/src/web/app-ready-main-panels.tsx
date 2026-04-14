@@ -1,230 +1,135 @@
 import type { JSX } from "react"
 
 import type { ReadyLayoutProps } from "./app-ready-layout.js"
-import { Box } from "./elements.js"
+import { MainMenuScreen } from "./app-ready-menu-screen.js"
+import { ScreenFrame, screenPadding } from "./app-ready-screen-frame.js"
+import { Box, Text } from "./elements.js"
+import { ContentPanel } from "./panel-content.js"
+import { PortForwardPanel } from "./panel-port-forwards.js"
+import { ProjectDetailsPanel } from "./panel-project-details.js"
 import { TerminalPanel } from "./panel-terminal.js"
-import {
-  ContentPanel,
-  MenuSidebar,
-  OutputPanel,
-  ProjectListPanel,
-  projectSelectionLabel,
-  showsProjectPanel
-} from "./panels.js"
+import { OutputPanel, ProjectListPanel } from "./panels.js"
+import { projectPickerScreen } from "./screen.js"
+import type { BrowserScreen } from "./screen.js"
 
 type MainPanelsProps = Omit<ReadyLayoutProps, "busyLabel" | "message">
 
-type CenterPanelProps =
-  & Pick<
-    MainPanelsProps,
-    | "actionPrompt"
-    | "authSnapshot"
-    | "createView"
-    | "controllerCwd"
-    | "projectsRoot"
-    | "currentMenu"
-    | "githubStatus"
-    | "onActionPromptCancel"
-    | "onActionPromptChange"
-    | "onActionPromptSubmit"
-    | "onCreateBufferChange"
-    | "onCreateCancel"
-    | "onCreateSubmit"
-    | "onRunAuthAction"
-    | "onRunProjectAuthAction"
-    | "onTerminalClose"
-    | "onTerminalMessage"
-    | "output"
-    | "project"
-    | "projectNavigationArmed"
-    | "projectAuthSnapshot"
-    | "selectedProjectSummary"
-    | "terminalSession"
-    | "viewportLayout"
-  >
-  & {
-    readonly showProjectPanel: boolean
+const actionLabel = (menu: MainPanelsProps["currentMenu"]): string => {
+  if (menu === "Select") {
+    return "Open SSH"
   }
-
-type CenterPanelBodyProps = Pick<
-  CenterPanelProps,
-  "onTerminalClose" | "onTerminalMessage" | "output" | "terminalSession"
->
-
-type CenterPanelContentProps = Pick<
-  CenterPanelProps,
-  | "actionPrompt"
-  | "authSnapshot"
-  | "controllerCwd"
-  | "createView"
-  | "currentMenu"
-  | "githubStatus"
-  | "onActionPromptCancel"
-  | "onActionPromptChange"
-  | "onActionPromptSubmit"
-  | "onCreateBufferChange"
-  | "onCreateCancel"
-  | "onCreateSubmit"
-  | "onRunAuthAction"
-  | "onRunProjectAuthAction"
-  | "project"
-  | "projectAuthSnapshot"
-  | "projectNavigationArmed"
-  | "projectsRoot"
-  | "selectedProjectSummary"
-  | "viewportLayout"
->
-
-const CenterPanelBody = (
-  { onTerminalClose, onTerminalMessage, output, terminalSession }: CenterPanelBodyProps
-): JSX.Element =>
-  terminalSession === null
-    ? <OutputPanel output={output} />
-    : (
-      <TerminalPanel
-        key={terminalSession.session.id}
-        onClose={onTerminalClose}
-        onMessage={(message) => {
-          onTerminalMessage(message)
-        }}
-        session={terminalSession}
-      />
-    )
-
-const CenterPanelContent = (
-  {
-    actionPrompt,
-    authSnapshot,
-    controllerCwd,
-    createView,
-    currentMenu,
-    githubStatus,
-    onActionPromptCancel,
-    onActionPromptChange,
-    onActionPromptSubmit,
-    onCreateBufferChange,
-    onCreateCancel,
-    onCreateSubmit,
-    onRunAuthAction,
-    onRunProjectAuthAction,
-    project,
-    projectAuthSnapshot,
-    projectNavigationArmed,
-    projectsRoot,
-    selectedProjectSummary,
-    viewportLayout
-  }: CenterPanelContentProps
-): JSX.Element => (
-  <ContentPanel
-    actionPrompt={actionPrompt}
-    authSnapshot={authSnapshot}
-    compact={viewportLayout.compact}
-    controllerCwd={controllerCwd}
-    createView={createView}
-    currentMenu={currentMenu}
-    githubStatus={githubStatus}
-    onActionPromptCancel={onActionPromptCancel}
-    onActionPromptChange={onActionPromptChange}
-    onActionPromptSubmit={onActionPromptSubmit}
-    onCreateBufferChange={onCreateBufferChange}
-    onCreateCancel={onCreateCancel}
-    onCreateSubmit={onCreateSubmit}
-    onRunAuthAction={onRunAuthAction}
-    onRunProjectAuthAction={onRunProjectAuthAction}
-    project={project}
-    projectAuthSnapshot={projectAuthSnapshot}
-    projectNavigationArmed={projectNavigationArmed}
-    projectsRoot={projectsRoot}
-    selectedProjectSummary={selectedProjectSummary}
-  />
-)
-
-const centerPanelWidth = (compact: boolean, showProjectPanel: boolean): string => {
-  if (compact) {
-    return "100%"
+  if (menu === "ProjectAuth") {
+    return "Open project auth"
   }
-  return showProjectPanel ? "48%" : "auto"
+  if (menu === "Ports") {
+    return "Open port"
+  }
+  if (menu === "Status") {
+    return "Load status"
+  }
+  if (menu === "Logs") {
+    return "Load logs"
+  }
+  if (menu === "Down") {
+    return "Stop project"
+  }
+  if (menu === "Delete") {
+    return "Delete project"
+  }
+  return "Run"
 }
 
-const CenterPanel = (props: CenterPanelProps): JSX.Element => (
-  <Box
-    border={true}
-    borderColor="#24537d"
-    borderStyle="single"
-    flexDirection="column"
-    flexGrow={1}
-    minHeight={0}
-    minWidth={0}
-    overflow="hidden"
-    padding={1}
-    width={centerPanelWidth(props.viewportLayout.compact, props.showProjectPanel)}
+const screenTitle = (props: Pick<MainPanelsProps, "activeScreen" | "currentMenu">): string => {
+  if (props.activeScreen.tag === "Create") {
+    return "docker-git / Create"
+  }
+  if (props.activeScreen.tag === "Auth") {
+    return "docker-git / Auth profiles"
+  }
+  if (props.activeScreen.tag === "ProjectAuth") {
+    return "docker-git / Project auth"
+  }
+  if (props.activeScreen.tag === "Output") {
+    return props.currentMenu === "Logs" ? "docker compose logs" : "docker compose ps"
+  }
+  if (props.activeScreen.tag === "ProjectPicker") {
+    return `docker-git / ${actionLabel(props.currentMenu)}`
+  }
+  return "docker-git"
+}
+
+const MainMenuRoute = (
+  props: Pick<
+    MainPanelsProps,
+    | "dashboard"
+    | "onOpenMenuScreen"
+    | "onSelectMenu"
+    | "selectedMenuIndex"
+    | "selectedProjectSummary"
+    | "viewportLayout"
   >
-    <Box
-      flexDirection="column"
-      flexShrink={0}
-      maxHeight={props.viewportLayout.dense ? "38%" : "46%"}
-      overflowY="auto"
-    >
-      <CenterPanelContent {...props} />
-    </Box>
-    <Box flexDirection="column" flexGrow={1} minHeight={0} overflow="hidden">
-      <CenterPanelBody {...props} />
+): JSX.Element => (
+  <ScreenFrame
+    hint="↑/↓ choose, Enter open, R refresh"
+    title="docker-git menu"
+  >
+    <MainMenuScreen {...props} />
+  </ScreenFrame>
+)
+
+const ProjectActionBar = (
+  {
+    currentMenu,
+    onRunCurrentMenuAction,
+    selectedProjectSummary
+  }: Pick<MainPanelsProps, "currentMenu" | "onRunCurrentMenuAction" | "selectedProjectSummary">
+): JSX.Element => (
+  <Box
+    alignItems="center"
+    border={true}
+    borderColor="#3a4652"
+    flexShrink={0}
+    flexWrap="wrap"
+    gap={1}
+    justifyContent="space-between"
+    padding={1}
+  >
+    <Text fg="#aab7c4" wrap="truncate">
+      {selectedProjectSummary === undefined ? "No project selected." : selectedProjectSummary.displayName}
+    </Text>
+    <Box onClick={onRunCurrentMenuAction} width="auto">
+      <Text bold={true} fg="#78f0a3">{actionLabel(currentMenu)}</Text>
     </Box>
   </Box>
 )
 
-const ProjectPanelSlot = (
-  {
-    currentMenu,
-    dashboard,
-    onSelectProject,
-    projectNavigationArmed,
-    selectedProjectId,
-    showProjectPanel,
-    viewportLayout
-  }:
-    & Pick<
-      MainPanelsProps,
-      | "currentMenu"
-      | "dashboard"
-      | "onSelectProject"
-      | "projectNavigationArmed"
-      | "selectedProjectId"
-      | "viewportLayout"
-    >
-    & {
-      readonly showProjectPanel: boolean
-    }
-): JSX.Element | null =>
-  showProjectPanel
-    ? (
-      <ProjectListPanel
-        compact={viewportLayout.compact}
-        currentMenu={currentMenu}
-        dashboard={dashboard}
-        onSelectProject={onSelectProject}
-        projectNavigationArmed={projectNavigationArmed}
-        selectedProjectId={selectedProjectId}
-      />
-    )
-    : null
+const PortForwardDetails = (props: MainPanelsProps): JSX.Element => (
+  <PortForwardPanel
+    forwards={props.portForwards}
+    input={props.portForwardInput}
+    onCloseForward={props.onCloseProjectPortForward}
+    onInputChange={props.onPortForwardInputChange}
+    onOpenForward={props.onOpenProjectPortForward}
+    onRefreshForwards={props.onRefreshProjectPortForwards}
+    project={props.project}
+    selectedProjectSummary={props.selectedProjectSummary}
+  />
+)
 
-const MainCenterPanel = (
-  {
-    props,
-    selectedProjectSummary,
-    showProjectPanel
-  }: {
-    readonly props: Omit<MainPanelsProps, "selectedProjectSummary">
-    readonly selectedProjectSummary: MainPanelsProps["selectedProjectSummary"]
-    readonly showProjectPanel: boolean
-  }
-): JSX.Element => (
-  <CenterPanel
+const ProjectInfoDetails = (props: MainPanelsProps): JSX.Element => (
+  <ProjectDetailsPanel
+    currentMenu="Info"
+    project={props.project}
+    selectedProjectSummary={props.selectedProjectSummary}
+  />
+)
+
+const ProjectContentDetails = (props: MainPanelsProps): JSX.Element => (
+  <ContentPanel
     actionPrompt={props.actionPrompt}
     authSnapshot={props.authSnapshot}
+    compact={props.viewportLayout.compact}
     controllerCwd={props.controllerCwd}
-    projectsRoot={props.projectsRoot}
     createView={props.createView}
     currentMenu={props.currentMenu}
     githubStatus={props.githubStatus}
@@ -236,47 +141,153 @@ const MainCenterPanel = (
     onCreateSubmit={props.onCreateSubmit}
     onRunAuthAction={props.onRunAuthAction}
     onRunProjectAuthAction={props.onRunProjectAuthAction}
-    onTerminalClose={props.onTerminalClose}
-    onTerminalMessage={props.onTerminalMessage}
-    output={props.output}
     project={props.project}
     projectAuthSnapshot={props.projectAuthSnapshot}
-    projectNavigationArmed={props.projectNavigationArmed}
-    selectedProjectSummary={selectedProjectSummary}
-    showProjectPanel={showProjectPanel}
-    terminalSession={props.terminalSession}
-    viewportLayout={props.viewportLayout}
+    projectNavigationArmed={true}
+    projectsRoot={props.projectsRoot}
+    selectedProjectSummary={props.selectedProjectSummary}
   />
 )
 
-export const MainPanels = ({ selectedProjectSummary, ...props }: MainPanelsProps): JSX.Element => {
-  const showProject = showsProjectPanel(props.currentMenu)
-  return (
-    <Box
-      flexDirection={props.viewportLayout.compact ? "column" : "row"}
-      flexGrow={1}
-      gap={1}
-      minHeight={0}
-      overflow="hidden"
-    >
-      <MenuSidebar
-        compact={props.viewportLayout.compact}
+const ProjectPickerDetails = (props: MainPanelsProps): JSX.Element => {
+  if (props.currentMenu === "Ports") {
+    return <PortForwardDetails {...props} />
+  }
+  if (props.currentMenu === "ProjectAuth" || props.currentMenu === "Logs" || props.currentMenu === "Status") {
+    return <ProjectInfoDetails {...props} />
+  }
+  return <ProjectContentDetails {...props} />
+}
+
+const ProjectPickerScreen = (props: MainPanelsProps): JSX.Element => (
+  <ScreenFrame
+    hint="↑/↓ project, Enter run, Esc back"
+    onBack={props.onBackScreen}
+    title={screenTitle(props)}
+  >
+    <Box flexDirection="column" flexGrow={1} gap={1} minHeight={0} overflow="hidden">
+      <Box
+        flexDirection={props.viewportLayout.compact ? "column" : "row"}
+        flexGrow={1}
+        gap={1}
+        minHeight={0}
+        overflow="hidden"
+      >
+        <ProjectListPanel
+          compact={props.viewportLayout.compact}
+          currentMenu={props.currentMenu}
+          dashboard={props.dashboard}
+          onSelectProject={props.onSelectProject}
+          projectNavigationArmed={true}
+          selectedProjectId={props.selectedProjectId}
+        />
+        <Box
+          border={true}
+          borderColor="#3a4652"
+          flexDirection="column"
+          flexGrow={1}
+          minHeight={0}
+          minWidth={0}
+          overflowY="auto"
+          padding={1}
+        >
+          <ProjectPickerDetails {...props} />
+        </Box>
+      </Box>
+      <ProjectActionBar
         currentMenu={props.currentMenu}
-        onSelectMenu={props.onSelectMenu}
-        projectNavigationArmed={props.projectNavigationArmed}
-        selectedMenuIndex={props.selectedMenuIndex}
-        selectedProjectLabel={projectSelectionLabel(selectedProjectSummary)}
+        onRunCurrentMenuAction={props.onRunCurrentMenuAction}
+        selectedProjectSummary={props.selectedProjectSummary}
       />
-      <MainCenterPanel props={props} selectedProjectSummary={selectedProjectSummary} showProjectPanel={showProject} />
-      <ProjectPanelSlot
+    </Box>
+  </ScreenFrame>
+)
+
+const ContentScreen = (props: MainPanelsProps): JSX.Element => (
+  <ScreenFrame
+    hint="Esc back, R refresh"
+    onBack={props.onBackScreen}
+    title={screenTitle(props)}
+  >
+    <Box
+      flexDirection="column"
+      flexGrow={1}
+      minHeight={0}
+      overflowY="auto"
+      padding={screenPadding(props.viewportLayout.compact)}
+    >
+      <ContentPanel
+        actionPrompt={props.actionPrompt}
+        authSnapshot={props.authSnapshot}
+        compact={props.viewportLayout.compact}
+        controllerCwd={props.controllerCwd}
+        createView={props.createView}
         currentMenu={props.currentMenu}
-        dashboard={props.dashboard}
-        onSelectProject={props.onSelectProject}
-        projectNavigationArmed={props.projectNavigationArmed}
-        selectedProjectId={props.selectedProjectId}
-        showProjectPanel={showProject}
-        viewportLayout={props.viewportLayout}
+        githubStatus={props.githubStatus}
+        onActionPromptCancel={props.onActionPromptCancel}
+        onActionPromptChange={props.onActionPromptChange}
+        onActionPromptSubmit={props.onActionPromptSubmit}
+        onCreateBufferChange={props.onCreateBufferChange}
+        onCreateCancel={props.onCreateCancel}
+        onCreateSubmit={props.onCreateSubmit}
+        onRunAuthAction={props.onRunAuthAction}
+        onRunProjectAuthAction={props.onRunProjectAuthAction}
+        project={props.project}
+        projectAuthSnapshot={props.projectAuthSnapshot}
+        projectNavigationArmed={true}
+        projectsRoot={props.projectsRoot}
+        selectedProjectSummary={props.selectedProjectSummary}
+      />
+    </Box>
+  </ScreenFrame>
+)
+
+const OutputScreen = (props: MainPanelsProps): JSX.Element => (
+  <ScreenFrame
+    hint="Esc back, R reload"
+    onBack={props.onBackScreen}
+    title={screenTitle(props)}
+  >
+    <OutputPanel output={props.output} />
+  </ScreenFrame>
+)
+
+const TerminalScreen = (
+  props: Pick<MainPanelsProps, "onSetActiveScreen" | "onTerminalClose" | "onTerminalMessage" | "terminalSession">
+): JSX.Element | null => {
+  if (props.terminalSession === null) {
+    return null
+  }
+  const returnScreen: BrowserScreen = props.terminalSession.closePath.startsWith("/auth/")
+    ? { tag: "Auth" }
+    : projectPickerScreen()
+  return (
+    <Box flexDirection="column" flexGrow={1} minHeight={0} overflow="hidden">
+      <TerminalPanel
+        key={props.terminalSession.session.id}
+        onClose={() => {
+          props.onTerminalClose()
+          props.onSetActiveScreen(returnScreen)
+        }}
+        onMessage={props.onTerminalMessage}
+        session={props.terminalSession}
       />
     </Box>
   )
+}
+
+export const MainPanels = (props: MainPanelsProps): JSX.Element => {
+  if (props.terminalSession !== null) {
+    return <TerminalScreen {...props} />
+  }
+  if (props.activeScreen.tag === "Menu") {
+    return <MainMenuRoute {...props} />
+  }
+  if (props.activeScreen.tag === "ProjectPicker") {
+    return <ProjectPickerScreen {...props} />
+  }
+  if (props.activeScreen.tag === "Output") {
+    return <OutputScreen {...props} />
+  }
+  return <ContentScreen {...props} />
 }

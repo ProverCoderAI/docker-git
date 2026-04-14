@@ -44,7 +44,7 @@ const borderRadius = (borderStyle: GridElementProps["borderStyle"]): string => b
 const borderValue = (
   enabled: boolean | undefined,
   borderColor: string | undefined
-): string | undefined => enabled ? `1px solid ${borderColor ?? "#24537d"}` : undefined
+): string | undefined => enabled ? `1px solid ${borderColor ?? "#3a4652"}` : undefined
 
 const baseStyle = (props: GridElementProps): CSSProperties => ({
   alignItems: props.alignItems,

@@ -124,6 +124,11 @@ export const UpProjectRequestSchema = Schema.Struct({
   useManagedAuthorizedKeys: OptionalBoolean
 })
 
+export const ProjectPortForwardRequestSchema = Schema.Struct({
+  hostPort: Schema.optional(Schema.Number),
+  targetPort: Schema.Number
+})
+
 export const AgentProviderSchema = Schema.Literal("codex", "opencode", "claude", "custom")
 
 export const AgentEnvVarSchema = Schema.Struct({
@@ -201,5 +206,6 @@ export type StateCommitRequestInput = Schema.Schema.Type<typeof StateCommitReque
 export type StateSyncRequestInput = Schema.Schema.Type<typeof StateSyncRequestSchema>
 export type ApplyAllRequestInput = Schema.Schema.Type<typeof ApplyAllRequestSchema>
 export type UpProjectRequestInput = Schema.Schema.Type<typeof UpProjectRequestSchema>
+export type ProjectPortForwardRequestInput = Schema.Schema.Type<typeof ProjectPortForwardRequestSchema>
 export type CreateAgentRequestInput = Schema.Schema.Type<typeof CreateAgentRequestSchema>
 export type CreateFollowRequestInput = Schema.Schema.Type<typeof CreateFollowRequestSchema>

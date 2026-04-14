@@ -52,6 +52,7 @@ const dashboard: DashboardData = {
       clonedOnHostname: "host",
       displayName: "org/repo-a",
       id: "project-a",
+      projectKey: "project-a-key",
       repoUrl: "https://github.com/org/repo-a.git",
       repoRef: "main",
       sshSessions: 0,
@@ -64,6 +65,7 @@ const dashboard: DashboardData = {
       clonedOnHostname: "host",
       displayName: "org/repo-b",
       id: "project-b",
+      projectKey: "project-b-key",
       repoUrl: "https://github.com/org/repo-b.git",
       repoRef: "main",
       sshSessions: 1,
@@ -78,8 +80,10 @@ const dashboard: DashboardData = {
 describe("app-ready-shortcuts", () => {
   it("uses project-first arrows in Select-like screens", () => {
     expect(usesProjectPrimaryNavigation("Select")).toBe(true)
-    expect(usesProjectPrimaryNavigation("Info")).toBe(false)
-    expect(usesProjectPrimaryNavigation("ProjectAuth")).toBe(false)
+    expect(usesProjectPrimaryNavigation("Info")).toBe(true)
+    expect(usesProjectPrimaryNavigation("Ports")).toBe(true)
+    expect(usesProjectPrimaryNavigation("ProjectAuth")).toBe(true)
+    expect(usesProjectPrimaryNavigation("Logs")).toBe(true)
     expect(usesProjectPrimaryNavigation("Create")).toBe(false)
   })
 
@@ -142,9 +146,11 @@ describe("app-ready-shortcuts", () => {
   it("autoloads selected project details on project tabs after dashboard refresh", () => {
     expect(shouldRefreshProjectDetails("Info", false, "project-a")).toBe(true)
     expect(shouldRefreshProjectDetails("ProjectAuth", false, "project-a")).toBe(true)
-    expect(shouldRefreshProjectDetails("Select", false, "project-a")).toBe(false)
+    expect(shouldRefreshProjectDetails("Select", false, "project-a")).toBe(true)
+    expect(shouldRefreshProjectDetails("Ports", false, "project-a")).toBe(true)
     expect(shouldRefreshProjectDetails("Select", true, "project-a")).toBe(true)
-    expect(shouldRefreshProjectDetails("Status", false, "project-a")).toBe(false)
+    expect(shouldRefreshProjectDetails("Status", false, "project-a")).toBe(true)
+    expect(shouldRefreshProjectDetails("Logs", false, "project-a")).toBe(true)
     expect(shouldRefreshProjectDetails("Info", false, null)).toBe(false)
   })
 })

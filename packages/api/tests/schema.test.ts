@@ -14,6 +14,7 @@ import {
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
+  ProjectPortForwardRequestSchema,
   TerminalSessionSchema,
   UpProjectRequestSchema
 } from "../src/api/schema.js"
@@ -245,6 +246,24 @@ describe("api schemas", () => {
         },
         onRight: (value) => {
           expect(value.authorizedKeysContents).toContain("ssh-ed25519")
+        }
+      })
+    }))
+
+  it.effect("decodes project port forward payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(ProjectPortForwardRequestSchema)({
+        hostPort: 4000,
+        targetPort: 3000
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.hostPort).toBe(4000)
+          expect(value.targetPort).toBe(3000)
         }
       })
     }))

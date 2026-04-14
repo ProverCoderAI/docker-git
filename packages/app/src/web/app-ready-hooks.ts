@@ -2,25 +2,30 @@ import { type Dispatch, type SetStateAction, useEffect, useEffectEvent, useState
 
 import type { CreateFlowView } from "../docker-git/menu-create-shared.js"
 import type { ActionPromptState } from "./action-prompt.js"
-import { createAuthActionPrompt } from "./action-prompt.js"
 import {
   type BrowserActionContext,
   loadSelectedProjectInfo,
   refreshAuthPanel,
   refreshProjectAuthPanel
 } from "./actions.js"
-import type { AuthSnapshot, DashboardData, GithubAuthStatus, ProjectAuthSnapshot, ProjectDetails } from "./api.js"
+import type {
+  AuthSnapshot,
+  DashboardData,
+  GithubAuthStatus,
+  ProjectAuthSnapshot,
+  ProjectDetails,
+  ProjectPortForward
+} from "./api.js"
 import { resetCreateView } from "./app-ready-create.js"
-import { type BrowserShortcutArgs, dispatchBrowserShortcut } from "./app-ready-shortcut-runtime.js"
+import { maybeLoadProjectPortForwards, usePortForwardState } from "./app-ready-port-forwards-hook.js"
 import {
   normalizeSelectedProjectId,
   shouldRefreshAuthPanel,
   shouldRefreshProjectAuthPanel,
   shouldRefreshProjectDetails
 } from "./app-ready-shortcuts.js"
-import { githubAuthGateMessage, isGithubOauthPrompt, shouldRequireGithubAuth } from "./github-auth-gate.js"
 import type { BrowserMenuTag } from "./menu.js"
-import { browserMenuIndex } from "./menu.js"
+import { type BrowserScreen, menuScreen } from "./screen.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 
 type Setter<A> = Dispatch<SetStateAction<A>>
@@ -34,6 +39,7 @@ type SelectionSyncArgs = {
 }
 
 type PanelAutoloadArgs = {
+  readonly activeScreen: BrowserScreen
   readonly authSnapshot: AuthSnapshot | null
   readonly busyLabel: string | null
   readonly context: BrowserActionContext
@@ -46,16 +52,6 @@ type PanelAutoloadArgs = {
   readonly selectedProjectId: string | null
 }
 
-type GithubAuthGateArgs = {
-  readonly actionPrompt: ActionPromptState | null
-  readonly busyLabel: string | null
-  readonly githubStatus: GithubAuthStatus | null
-  readonly selectedMenuIndex: number
-  readonly setActionPrompt: Setter<ActionPromptState | null>
-  readonly setMessage: Setter<string | null>
-  readonly setSelectedMenuIndex: Setter<number>
-}
-
 type ReadyStateSetters = Pick<
   BrowserActionContext,
   | "setAuthSnapshot"
@@ -63,6 +59,8 @@ type ReadyStateSetters = Pick<
   | "setGithubStatus"
   | "setMessage"
   | "setOutput"
+  | "setPortForwardInput"
+  | "setPortForwards"
   | "setProjectAuthSnapshot"
   | "setSelectedMenuIndex"
   | "setSelectedProject"
@@ -71,16 +69,20 @@ type ReadyStateSetters = Pick<
 
 export type ReadyState = ReadyStateSetters & {
   readonly actionPrompt: ActionPromptState | null
+  readonly activeScreen: BrowserScreen
   readonly authSnapshot: AuthSnapshot | null
   readonly busyLabel: string | null
   readonly createView: CreateFlowView
   readonly githubStatus: GithubAuthStatus | null
   readonly message: string | null
   readonly output: string
+  readonly portForwardInput: string
+  readonly portForwards: ReadonlyArray<ProjectPortForward>
   readonly project: ProjectDetails | null
   readonly projectNavigationArmed: boolean
   readonly projectAuthSnapshot: ProjectAuthSnapshot | null
   readonly setActionPrompt: Setter<ActionPromptState | null>
+  readonly setActiveScreen: Setter<BrowserScreen>
   readonly setCreateView: Setter<CreateFlowView>
   readonly setProjectNavigationArmed: Setter<boolean>
   readonly selectedMenuIndex: number
@@ -91,7 +93,9 @@ export type ReadyState = ReadyStateSetters & {
 
 export const useReadyState = (): ReadyState => {
   const [selectedMenuIndex, setSelectedMenuIndex] = useState(0)
+  const [activeScreen, setActiveScreen] = useState<BrowserScreen>(menuScreen)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const portForwardState = usePortForwardState()
   const [actionPrompt, setActionPrompt] = useState<ActionPromptState | null>(null)
   const [project, setSelectedProject] = useState<ProjectDetails | null>(null)
   const [output, setOutput] = useState("")
@@ -106,16 +110,19 @@ export const useReadyState = (): ReadyState => {
 
   return {
     actionPrompt,
+    activeScreen,
     authSnapshot,
     busyLabel,
     createView,
     githubStatus,
     message,
     output,
+    ...portForwardState,
     project,
     projectNavigationArmed,
     projectAuthSnapshot,
     setActionPrompt,
+    setActiveScreen,
     selectedMenuIndex,
     selectedProjectId,
     setTerminalSession,
@@ -187,34 +194,6 @@ export const useActionPromptReset = (
   }, [actionPrompt, currentMenu, setActionPrompt])
 }
 
-export const useGithubAuthGate = ({
-  actionPrompt,
-  busyLabel,
-  githubStatus,
-  selectedMenuIndex,
-  setActionPrompt,
-  setMessage,
-  setSelectedMenuIndex
-}: GithubAuthGateArgs) => {
-  useEffect(() => {
-    if (busyLabel !== null) {
-      return
-    }
-    if (!shouldRequireGithubAuth(githubStatus)) {
-      return
-    }
-
-    const authIndex = browserMenuIndex("Auth")
-    if (selectedMenuIndex !== authIndex) {
-      setSelectedMenuIndex(authIndex)
-    }
-    if (!isGithubOauthPrompt(actionPrompt)) {
-      setActionPrompt(createAuthActionPrompt("GithubOauth"))
-    }
-    setMessage(githubAuthGateMessage(githubStatus))
-  }, [actionPrompt, busyLabel, githubStatus, selectedMenuIndex, setActionPrompt, setMessage, setSelectedMenuIndex])
-}
-
 export const useProjectNavigationReset = (
   currentMenu: BrowserMenuTag,
   setProjectNavigationArmed: Setter<boolean>
@@ -224,67 +203,70 @@ export const useProjectNavigationReset = (
   }, [currentMenu, setProjectNavigationArmed])
 }
 
-export const usePanelAutoload = ({
-  authSnapshot,
-  busyLabel,
-  context,
-  currentMenu,
-  dashboardRefreshTick,
-  githubStatus,
-  project,
-  projectAuthSnapshot,
-  projectNavigationArmed,
-  selectedProjectId
-}: PanelAutoloadArgs) => {
+const maybeRefreshGithubStatus = ({ context, githubStatus }: PanelAutoloadArgs): boolean => {
+  if (githubStatus !== null) {
+    return false
+  }
+  refreshAuthPanel(context)
+  return true
+}
+
+const maybeRefreshAuthScreen = ({ activeScreen, authSnapshot, context, currentMenu }: PanelAutoloadArgs): void => {
+  if (activeScreen.tag === "Auth" && shouldRefreshAuthPanel(currentMenu, authSnapshot)) {
+    refreshAuthPanel(context)
+  }
+}
+
+const maybeRefreshProjectAuthScreen = (
+  { activeScreen, context, currentMenu, projectAuthSnapshot }: PanelAutoloadArgs
+): void => {
+  if (activeScreen.tag === "ProjectAuth" && shouldRefreshProjectAuthPanel(currentMenu, projectAuthSnapshot)) {
+    refreshProjectAuthPanel(context)
+  }
+}
+
+const maybeLoadProjectPickerInfo = (
+  { activeScreen, context, currentMenu, project, projectNavigationArmed, selectedProjectId }: PanelAutoloadArgs
+): void => {
+  if (
+    activeScreen.tag === "ProjectPicker" &&
+    shouldRefreshProjectDetails(currentMenu, projectNavigationArmed, selectedProjectId)
+  ) {
+    loadSelectedProjectInfo(context, { silent: project !== null && project.id === selectedProjectId })
+  }
+}
+
+const loadReadyPanel = (args: PanelAutoloadArgs): void => {
+  if (maybeRefreshGithubStatus(args)) {
+    return
+  }
+  maybeRefreshAuthScreen(args)
+  maybeRefreshProjectAuthScreen(args)
+  maybeLoadProjectPickerInfo(args)
+  maybeLoadProjectPortForwards(args)
+}
+
+export const usePanelAutoload = (args: PanelAutoloadArgs) => {
   const loadCurrentPanel = useEffectEvent(() => {
-    if (busyLabel !== null) {
+    if (args.busyLabel !== null) {
       return
     }
-    if (githubStatus === null) {
-      refreshAuthPanel(context)
-      return
-    }
-    if (shouldRefreshAuthPanel(currentMenu, authSnapshot)) {
-      refreshAuthPanel(context)
-    }
-    if (shouldRefreshProjectAuthPanel(currentMenu, projectAuthSnapshot)) {
-      refreshProjectAuthPanel(context)
-    }
-    if (shouldRefreshProjectDetails(currentMenu, projectNavigationArmed, selectedProjectId)) {
-      loadSelectedProjectInfo(context, { silent: project !== null && project.id === selectedProjectId })
-    }
+    loadReadyPanel(args)
   })
 
   useEffect(() => {
     loadCurrentPanel()
   }, [
-    authSnapshot,
-    busyLabel,
-    currentMenu,
-    dashboardRefreshTick,
-    githubStatus,
-    project?.id,
-    projectAuthSnapshot,
-    projectNavigationArmed,
-    selectedProjectId,
+    args.authSnapshot,
+    args.activeScreen,
+    args.busyLabel,
+    args.currentMenu,
+    args.dashboardRefreshTick,
+    args.githubStatus,
+    args.project?.id,
+    args.projectAuthSnapshot,
+    args.projectNavigationArmed,
+    args.selectedProjectId,
     loadCurrentPanel
   ])
-}
-
-export const useBrowserShortcuts = ({
-  ...args
-}: BrowserShortcutArgs) => {
-  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
-    dispatchBrowserShortcut(event, args)
-  })
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      onKeyDown(event)
-    }
-    globalThis.addEventListener("keydown", handleKeyDown)
-    return () => {
-      globalThis.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [onKeyDown])
 }

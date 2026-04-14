@@ -139,11 +139,11 @@ export const App = (): JSX.Element => {
   return (
     <div
       style={{
-        backgroundColor: "#08111f",
-        color: "#d6e5f7",
+        backgroundColor: "#0b0d10",
+        color: "#f4f7fb",
         fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
         fontSize: viewport.fontSize,
-        height: "100vh",
+        height: "100dvh",
         inset: 0,
         overflow: "hidden",
         position: "fixed",

@@ -6,6 +6,7 @@ export type AgentStatus = "starting" | "running" | "stopping" | "stopped" | "exi
 
 export type ProjectSummary = {
   readonly id: string
+  readonly projectKey: string
   readonly displayName: string
   readonly repoUrl: string
   readonly repoRef: string
@@ -31,6 +32,29 @@ export type ProjectDetails = ProjectSummary & {
   readonly envProjectPath: string
   readonly codexAuthPath: string
   readonly codexHome: string
+}
+
+export type ProjectPortForwardStatus = "running" | "stopped" | "unknown"
+
+export type ProjectPortForward = {
+  readonly id: string
+  readonly projectId: string
+  readonly projectKey: string
+  readonly targetPort: number
+  readonly hostPort: number
+  readonly bindHost: string
+  readonly publicHost: string
+  readonly proxyPath: string
+  readonly url: string
+  readonly status: ProjectPortForwardStatus
+  readonly containerName: string
+  readonly targetContainerName: string
+  readonly createdAt: string | null
+}
+
+export type ProjectPortForwardRequest = {
+  readonly targetPort: number
+  readonly hostPort?: number | undefined
 }
 
 export type GithubAuthTokenStatus = {

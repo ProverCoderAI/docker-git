@@ -6,6 +6,7 @@ export type BrowserMenuTag =
   | "Auth"
   | "ProjectAuth"
   | "Info"
+  | "Ports"
   | "Status"
   | "Logs"
   | "Down"
@@ -19,6 +20,7 @@ const browserMenuOrder: ReadonlyArray<BrowserMenuTag> = [
   "Auth",
   "ProjectAuth",
   "Info",
+  "Ports",
   "Status",
   "Logs",
   "Down",

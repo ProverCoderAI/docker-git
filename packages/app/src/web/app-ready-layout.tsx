@@ -2,15 +2,24 @@ import type { JSX } from "react"
 
 import type { CreateFlowView } from "../docker-git/menu-create-shared.js"
 import type { ActionPromptState } from "./action-prompt.js"
-import type { AuthSnapshot, DashboardData, GithubAuthStatus, ProjectAuthSnapshot, ProjectDetails } from "./api.js"
+import type {
+  AuthSnapshot,
+  DashboardData,
+  GithubAuthStatus,
+  ProjectAuthSnapshot,
+  ProjectDetails,
+  ProjectPortForward
+} from "./api.js"
 import { MainPanels } from "./app-ready-main-panels.js"
 import { Box, Text } from "./elements.js"
 import type { BrowserMenuTag } from "./menu.js"
+import type { BrowserScreen } from "./screen.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 import type { ViewportLayout } from "./viewport-layout.js"
 
 export type ReadyLayoutProps = {
   readonly actionPrompt: ActionPromptState | null
+  readonly activeScreen: BrowserScreen
   readonly authSnapshot: AuthSnapshot | null
   readonly busyLabel: string | null
   readonly controllerCwd: string
@@ -23,16 +32,26 @@ export type ReadyLayoutProps = {
   readonly onActionPromptCancel: () => void
   readonly onActionPromptChange: (key: string, value: string) => void
   readonly onActionPromptSubmit: () => void
+  readonly onBackScreen: () => void
   readonly onCreateBufferChange: (buffer: string) => void
   readonly onCreateCancel: () => void
   readonly onCreateSubmit: (forceWizard?: boolean) => void
+  readonly onCloseProjectPortForward: (targetPort: number) => void
   readonly onRunAuthAction: (index: number) => void
   readonly onRunProjectAuthAction: (index: number) => void
+  readonly onOpenMenuScreen: (index: number) => void
+  readonly onOpenProjectPortForward: () => void
+  readonly onPortForwardInputChange: (value: string) => void
+  readonly onRefreshProjectPortForwards: () => void
+  readonly onSetActiveScreen: (screen: BrowserScreen) => void
   readonly onSelectMenu: (index: number) => void
   readonly onSelectProject: (projectId: string) => void
+  readonly onRunCurrentMenuAction: () => void
   readonly onTerminalClose: () => void
   readonly onTerminalMessage: (message: string | null) => void
   readonly output: string
+  readonly portForwardInput: string
+  readonly portForwards: ReadonlyArray<ProjectPortForward>
   readonly project: ProjectDetails | null
   readonly projectNavigationArmed: boolean
   readonly projectAuthSnapshot: ProjectAuthSnapshot | null
@@ -86,9 +105,9 @@ const StatusHeader = (
   >
 ): JSX.Element => (
   <Box
-    backgroundColor="#0a1730"
+    backgroundColor="#101317"
     border={true}
-    borderColor="#39d0ff"
+    borderColor="#3a4652"
     borderStyle="rounded"
     flexDirection="column"
     flexShrink={0}
@@ -102,13 +121,21 @@ const StatusHeader = (
 )
 
 export const ReadyLayout = ({ busyLabel, message, ...props }: ReadyLayoutProps): JSX.Element => (
-  <Box flexDirection="column" height="100%" minHeight={0} overflow="hidden" padding={1} width="100%">
-    <StatusHeader
-      busyLabel={busyLabel}
-      dashboard={props.dashboard}
-      message={message}
-      viewportLayout={props.viewportLayout}
-    />
-    <MainPanels {...props} />
-  </Box>
+  props.terminalSession === null
+    ? (
+      <Box flexDirection="column" height="100%" minHeight={0} overflow="hidden" padding={1} width="100%">
+        <StatusHeader
+          busyLabel={busyLabel}
+          dashboard={props.dashboard}
+          message={message}
+          viewportLayout={props.viewportLayout}
+        />
+        <MainPanels {...props} />
+      </Box>
+    )
+    : (
+      <Box flexDirection="column" height="100%" minHeight={0} overflow="hidden" padding={1} width="100%">
+        <MainPanels {...props} />
+      </Box>
+    )
 )

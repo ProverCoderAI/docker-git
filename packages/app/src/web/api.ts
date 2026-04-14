@@ -10,11 +10,19 @@ import {
   OutputResponseSchema,
   ProjectAuthSnapshotResponseSchema,
   ProjectEventsPollResponseSchema,
+  ProjectPortForwardResponseSchema,
+  ProjectPortForwardsResponseSchema,
   ProjectResponseSchema,
   ProjectsResponseSchema,
   TerminalSessionResponseSchema
 } from "./api-schema.js"
-import type { AuthMenuFlow, CreateProjectDraft, DashboardData, ProjectAuthFlow } from "./api-schema.js"
+import type {
+  AuthMenuFlow,
+  CreateProjectDraft,
+  DashboardData,
+  ProjectAuthFlow,
+  ProjectPortForward
+} from "./api-schema.js"
 
 export type {
   ApiEvent,
@@ -26,9 +34,13 @@ export type {
   ProjectAuthFlow,
   ProjectAuthSnapshot,
   ProjectDetails,
+  ProjectPortForward,
   ProjectSummary,
   TerminalSession
 } from "./api-schema.js"
+
+export const projectPortForwardProxyUrl = (forward: ProjectPortForward): string =>
+  `${resolveApiBaseUrl()}${forward.proxyPath}`
 
 export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
   Effect.all({
@@ -56,6 +68,30 @@ export const loadProjectLogs = (projectId: string) =>
   requestJson("GET", `/projects/${encodeURIComponent(projectId)}/logs`, OutputResponseSchema).pipe(
     Effect.map((response) => response.output)
   )
+
+export const loadProjectPortForwards = (projectId: string) =>
+  requestJson("GET", `/projects/${encodeURIComponent(projectId)}/ports`, ProjectPortForwardsResponseSchema).pipe(
+    Effect.map((response) => response.forwards)
+  )
+
+export const createProjectPortForward = (
+  projectId: string,
+  targetPort: number,
+  hostPort?: number
+) =>
+  requestJson(
+    "POST",
+    `/projects/${encodeURIComponent(projectId)}/ports`,
+    ProjectPortForwardResponseSchema,
+    hostPort === undefined ? { targetPort } : { hostPort, targetPort }
+  ).pipe(
+    Effect.map((response) => response.forward)
+  )
+
+export const deleteProjectPortForward = (
+  projectId: string,
+  targetPort: number
+) => requestText("DELETE", `/projects/${encodeURIComponent(projectId)}/ports/${targetPort}`).pipe(Effect.asVoid)
 
 export const createProject = (draft: CreateProjectDraft) =>
   requestJson(

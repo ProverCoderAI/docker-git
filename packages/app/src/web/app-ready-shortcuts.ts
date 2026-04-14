@@ -2,7 +2,13 @@ import { Match } from "effect"
 import type { Dispatch, SetStateAction } from "react"
 
 import type { BrowserActionContext } from "./actions.js"
-import { loadSelectedProjectInfo, refreshAuthPanel, refreshProjectAuthPanel, runBrowserMenuAction } from "./actions.js"
+import {
+  loadSelectedProjectInfo,
+  loadSelectedProjectPorts,
+  refreshAuthPanel,
+  refreshProjectAuthPanel,
+  runBrowserMenuAction
+} from "./actions.js"
 import type { AuthSnapshot, DashboardData, ProjectAuthSnapshot } from "./api.js"
 import type { BrowserMenuTag } from "./menu.js"
 import { browserMenuItems } from "./menu.js"
@@ -54,7 +60,16 @@ const isNativeActionTarget = (target: EventTarget | null): boolean =>
 const isVerticalArrowKey = (event: ShortcutKeyboardEvent): boolean =>
   event.key === "ArrowUp" || event.key === "ArrowDown"
 
-const projectPrimaryNavigationMenus: ReadonlySet<BrowserMenuTag> = new Set(["Select"])
+const projectPrimaryNavigationMenus: ReadonlySet<BrowserMenuTag> = new Set([
+  "Delete",
+  "Down",
+  "Info",
+  "Logs",
+  "Ports",
+  "ProjectAuth",
+  "Select",
+  "Status"
+])
 
 const resolveVerticalArrowDelta = (key: string): number | null => {
   if (key === "ArrowUp") {
@@ -71,6 +86,7 @@ const resolveRefreshAction = (
 ): (context: BrowserActionContext) => void =>
   Match.value(currentMenu).pipe(
     Match.when("Auth", () => refreshAuthPanel),
+    Match.when("Ports", () => loadSelectedProjectPorts),
     Match.when("ProjectAuth", () => refreshProjectAuthPanel),
     Match.orElse(() => loadSelectedProjectInfo)
   )
@@ -114,8 +130,11 @@ export const shouldLoadProjectDetails = (currentMenu: BrowserMenuTag): boolean =
     Match.when("Delete", () => true),
     Match.when("Down", () => true),
     Match.when("Info", () => true),
+    Match.when("Logs", () => true),
+    Match.when("Ports", () => true),
     Match.when("ProjectAuth", () => true),
     Match.when("Select", () => true),
+    Match.when("Status", () => true),
     Match.orElse(() => false)
   )
 
@@ -219,12 +238,9 @@ export const shouldRefreshProjectAuthPanel = (
 
 export const shouldRefreshProjectDetails = (
   currentMenu: BrowserMenuTag,
-  projectNavigationArmed: boolean,
+  _projectNavigationArmed: boolean,
   selectedProjectId: string | null
-): boolean =>
-  (!usesProjectPrimaryNavigation(currentMenu) || projectNavigationArmed) &&
-  shouldLoadProjectDetails(currentMenu) &&
-  selectedProjectId !== null
+): boolean => shouldLoadProjectDetails(currentMenu) && selectedProjectId !== null
 
 export const shortcutHintText = (
   currentMenu: BrowserMenuTag,

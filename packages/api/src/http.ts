@@ -24,6 +24,7 @@ import {
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
   ProjectAuthRequestSchema,
+  ProjectPortForwardRequestSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
@@ -73,6 +74,13 @@ import {
   upProject
 } from "./services/projects.js"
 import { readProjectAuthSnapshot, runProjectAuthFlow } from "./services/project-auth.js"
+import {
+  createProjectPortForward,
+  deleteProjectPortForward,
+  listProjectPortForwards
+} from "./services/project-port-forwards.js"
+import { proxyProjectPortForward } from "./services/project-port-proxy.js"
+import { parseProjectPortProxyPath } from "./services/project-port-proxy-core.js"
 import { createTerminalSession, deleteTerminalSession } from "./services/terminal-sessions.js"
 import {
   commitStateFromRequest,
@@ -86,6 +94,11 @@ import {
 
 const ProjectParamsSchema = Schema.Struct({
   projectId: Schema.String
+})
+
+const ProjectPortForwardParamsSchema = Schema.Struct({
+  projectId: Schema.String,
+  targetPort: Schema.String
 })
 
 const AgentParamsSchema = Schema.Struct({
@@ -169,6 +182,26 @@ const parseQueryInt = (url: string, key: string, fallback: number): number => {
 const hasQueryParam = (url: string, key: string): boolean =>
   new URL(url, "http://localhost").searchParams.has(key)
 
+const parsePortParam = (value: string): Effect.Effect<number, ApiBadRequestError> => {
+  const parsed = Number.parseInt(value, 10)
+  return String(parsed) === value && parsed > 0 && parsed <= 65_535
+    ? Effect.succeed(parsed)
+    : Effect.fail(new ApiBadRequestError({ message: `Invalid port: ${value}` }))
+}
+
+const hostWithoutPort = (host: string): string => {
+  if (host.startsWith("[")) {
+    const end = host.indexOf("]")
+    return end === -1 ? host : host.slice(1, end)
+  }
+  return host.split(":")[0] ?? host
+}
+
+const resolvePortPublicHost = (request: HttpServerRequest.HttpServerRequest): string | undefined => {
+  const host = firstCommaValue(readHeader(request, "x-forwarded-host")) ?? readHeader(request, "host")
+  return host === undefined || host.trim().length === 0 ? undefined : hostWithoutPort(host.trim())
+}
+
 const errorResponse = (error: ApiError | unknown) => {
   if (ParseResult.isParseError(error)) {
     return jsonResponse(
@@ -228,6 +261,7 @@ const errorResponse = (error: ApiError | unknown) => {
 }
 
 const projectParams = HttpRouter.schemaParams(ProjectParamsSchema)
+const projectPortForwardParams = HttpRouter.schemaParams(ProjectPortForwardParamsSchema)
 const agentParams = HttpRouter.schemaParams(AgentParamsSchema)
 const terminalSessionParams = HttpRouter.schemaParams(TerminalSessionParamsSchema)
 const authTerminalSessionParams = HttpRouter.schemaParams(AuthTerminalSessionParamsSchema)
@@ -242,6 +276,7 @@ const readCodexAuthImportRequest = () => HttpServerRequest.schemaBodyJson(CodexA
 const readCodexAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLoginRequestSchema)
 const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLogoutRequestSchema)
 const readProjectAuthRequest = () => HttpServerRequest.schemaBodyJson(ProjectAuthRequestSchema)
+const readProjectPortForwardRequest = () => HttpServerRequest.schemaBodyJson(ProjectPortForwardRequestSchema)
 const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitRequestSchema)
 const readStateCommitRequest = () => HttpServerRequest.schemaBodyJson(StateCommitRequestSchema)
 const readStateSyncRequest = () => HttpServerRequest.schemaBodyJson(StateSyncRequestSchema)
@@ -321,6 +356,16 @@ const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
       426
     )
   )
+})
+
+const projectPortProxyResponse = Effect.gen(function*(_) {
+  const request = yield* _(HttpServerRequest.HttpServerRequest)
+  const pathname = new URL(request.url, "http://localhost").pathname
+  const target = parseProjectPortProxyPath(pathname)
+  if (target === null) {
+    return yield* _(Effect.fail(new ApiNotFoundError({ message: `Route not found: ${pathname}` })))
+  }
+  return yield* _(proxyProjectPortForward(request, target))
 })
 
 export const makeRouter = () => {
@@ -651,6 +696,36 @@ export const makeRouter = () => {
         return yield* _(jsonResponse({ ok: true, snapshot }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
+    HttpRouter.get(
+      "/projects/:projectId/ports",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => listProjectPortForwards(projectId)),
+        Effect.flatMap((forwards) => jsonResponse({ forwards }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/ports",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(readProjectPortForwardRequest())
+        const serverRequest = yield* _(HttpServerRequest.HttpServerRequest)
+        const forward = yield* _(createProjectPortForward(projectId, request, resolvePortPublicHost(serverRequest)))
+        return yield* _(jsonResponse({ forward }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.del(
+      "/projects/:projectId/ports/:targetPort",
+      projectPortForwardParams.pipe(
+        Effect.flatMap(({ projectId, targetPort }) =>
+          parsePortParam(targetPort).pipe(
+            Effect.flatMap((port) => deleteProjectPortForward(projectId, port))
+          )
+        ),
+        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
     HttpRouter.del(
       "/projects/:projectId",
       projectParams.pipe(
@@ -877,6 +952,10 @@ export const makeRouter = () => {
         ),
         Effect.catchAll(errorResponse)
       )
+    ),
+    HttpRouter.all(
+      "*",
+      projectPortProxyResponse.pipe(Effect.catchAll(errorResponse))
     )
   )
 }

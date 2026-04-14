@@ -1,5 +1,6 @@
 import { createProjectDraftFromInputs } from "../docker-git/menu-create-shared.js"
 import type { CreateInputs } from "../docker-git/menu-types.js"
+import { openSelectedProjectPort } from "./actions-port-forwards.js"
 import {
   type BrowserActionContext,
   confirmAction,
@@ -19,6 +20,7 @@ import {
 } from "./api.js"
 import type { BrowserMenuTag } from "./menu.js"
 import { openProjectEventStream } from "./project-events.js"
+import { outputScreen, projectPickerScreen } from "./screen.js"
 
 const appendOutputLine = (
   context: BrowserActionContext,
@@ -72,6 +74,7 @@ export const submitCreateInputs = (
       context.setOutput("")
       context.setProjectAuthSnapshot(null)
       context.setSelectedMenuIndex(1)
+      context.setActiveScreen(projectPickerScreen())
       context.setSelectedProject(project)
       context.setSelectedProjectId(project.id)
       context.setMessage(`Created ${project.displayName}.`)
@@ -84,6 +87,14 @@ export const connectSelectedProject = (context: BrowserActionContext) => {
   if (projectId === null) {
     return
   }
+  connectProjectById(projectId, context)
+}
+
+export const connectProjectById = (
+  projectId: string,
+  context: BrowserActionContext
+) => {
+  context.setSelectedProjectId(projectId)
   context.setOutput("")
   appendOutputLine(context, "[ssh.prepare] Preparing SSH session")
   const stream = openProjectEventStream(projectId, {
@@ -143,6 +154,7 @@ const runProjectOutputAction = (
     label,
     onSuccess: (output) => {
       context.setOutput(output)
+      context.setActiveScreen(outputScreen())
       context.setMessage(successMessage)
     }
   })
@@ -215,11 +227,15 @@ export const runProjectMenuAction = (
     loadSelectedProjectInfo(context)
     return
   }
+  if (currentMenu === "Ports") {
+    openSelectedProjectPort(context)
+    return
+  }
   runProjectMenuCommand(currentMenu, context)
 }
 
 const runProjectMenuCommand = (
-  currentMenu: Exclude<BrowserMenuTag, "Auth" | "ProjectAuth" | "Create" | "Select" | "Info">,
+  currentMenu: Exclude<BrowserMenuTag, "Auth" | "ProjectAuth" | "Create" | "Select" | "Info" | "Ports">,
   context: BrowserActionContext
 ) => {
   if (currentMenu === "Status") {

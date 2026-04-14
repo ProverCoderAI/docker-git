@@ -16,7 +16,7 @@ type TerminalPanelProps = {
 }
 
 const panelStyle: CSSProperties = {
-  border: "1px solid #21486d",
+  border: "1px solid #3a4652",
   borderRadius: "8px",
   display: "flex",
   flex: 1,
@@ -28,8 +28,8 @@ const panelStyle: CSSProperties = {
 
 const headerStyle: CSSProperties = {
   alignItems: "center",
-  background: "#07111f",
-  borderBottom: "1px solid #21486d",
+  background: "#101419",
+  borderBottom: "1px solid #3a4652",
   display: "flex",
   gap: "12px",
   justifyContent: "space-between",
@@ -37,15 +37,15 @@ const headerStyle: CSSProperties = {
 }
 
 const bodyStyle: CSSProperties = {
-  background: "#050b14",
+  background: "#080a0d",
   flex: 1,
   minHeight: 0,
   padding: "8px"
 }
 
 const closeButtonStyle: CSSProperties = {
-  background: "#10253c",
-  border: "1px solid #24537d",
+  background: "#171d24",
+  border: "1px solid #3a4652",
   borderRadius: "8px",
   color: "#d6e5f7",
   cursor: "pointer",

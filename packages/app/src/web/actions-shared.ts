@@ -3,9 +3,11 @@ import type { Dispatch, SetStateAction } from "react"
 
 import type { ActionPromptState } from "./action-prompt.js"
 import { createAuthActionPrompt } from "./action-prompt.js"
-import type { AuthSnapshot, GithubAuthStatus, ProjectAuthSnapshot, ProjectDetails } from "./api.js"
+import type { AuthSnapshot, GithubAuthStatus, ProjectAuthSnapshot, ProjectDetails, ProjectPortForward } from "./api.js"
 import { githubAuthGateMessage, shouldRequireGithubAuth } from "./github-auth-gate.js"
 import { browserMenuIndex } from "./menu.js"
+import type { BrowserScreen } from "./screen.js"
+import { menuScreen } from "./screen.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 
 type Setter<A> = Dispatch<SetStateAction<A>>
@@ -29,15 +31,19 @@ const outputLineLimit = 120
 
 export type BrowserActionContext = {
   readonly githubStatus: GithubAuthStatus | null
+  readonly portForwardInput: string
   readonly reloadDashboard: () => void
   readonly selectedProjectId: string | null
   readonly selectedProjectName: string | null
   readonly setActionPrompt: Setter<ActionPromptState | null>
+  readonly setActiveScreen: Setter<BrowserScreen>
   readonly setAuthSnapshot: Setter<AuthSnapshot | null>
   readonly setBusyLabel: Setter<string | null>
   readonly setGithubStatus: Setter<GithubAuthStatus | null>
   readonly setMessage: Setter<string | null>
   readonly setOutput: Setter<string>
+  readonly setPortForwardInput: Setter<string>
+  readonly setPortForwards: Setter<ReadonlyArray<ProjectPortForward>>
   readonly setProjectAuthSnapshot: Setter<ProjectAuthSnapshot | null>
   readonly setSelectedMenuIndex: Setter<number>
   readonly setSelectedProject: Setter<ProjectDetails | null>
@@ -109,6 +115,7 @@ export const requireSelectedProjectId = (
 export const requireGithubAuthConfigured = (context: BrowserActionContext): boolean => {
   if (context.githubStatus === null) {
     context.setSelectedMenuIndex(browserMenuIndex("Auth"))
+    context.setActiveScreen({ tag: "Auth" })
     context.setMessage("Проверяю подключение GitHub перед продолжением.")
     return false
   }
@@ -116,9 +123,16 @@ export const requireGithubAuthConfigured = (context: BrowserActionContext): bool
     return true
   }
   context.setSelectedMenuIndex(browserMenuIndex("Auth"))
+  context.setActiveScreen({ tag: "Auth" })
   context.setActionPrompt(createAuthActionPrompt("GithubOauth"))
   context.setMessage(githubAuthGateMessage(context.githubStatus))
   return false
+}
+
+export const returnToMainMenu = (context: BrowserActionContext) => {
+  context.setActionPrompt(null)
+  context.setActiveScreen(menuScreen())
+  context.setMessage("Returned to main menu.")
 }
 
 export const projectActionLabel = (context: BrowserActionContext): string =>

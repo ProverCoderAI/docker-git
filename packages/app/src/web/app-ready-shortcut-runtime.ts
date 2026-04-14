@@ -3,44 +3,46 @@ import type { Dispatch, SetStateAction } from "react"
 import type { CreateFlowView } from "../docker-git/menu-create-shared.js"
 import type { ActionPromptState } from "./action-prompt.js"
 import type { BrowserActionContext } from "./actions.js"
+import { runBrowserMenuAction } from "./actions.js"
 import type { DashboardData } from "./api.js"
 import { handleCreateKey } from "./app-ready-create.js"
 import {
-  handleActionKey,
   handleMenuNavigationKey,
   handleProjectNavigationKey,
   isBlockedShortcut,
-  usesProjectPrimaryNavigation
+  refreshCurrentMenu
 } from "./app-ready-shortcuts.js"
 import type { BrowserMenuTag } from "./menu.js"
+import { type BrowserScreen, isProjectMenu, menuScreen, projectPickerScreen, screenForMenu } from "./screen.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 
 type Setter<A> = Dispatch<SetStateAction<A>>
 
 export type BrowserShortcutArgs = {
+  readonly activeScreen: BrowserScreen
   readonly actionPrompt: ActionPromptState | null
   readonly context: BrowserActionContext
   readonly controllerCwd: string
   readonly createView: CreateFlowView
   readonly currentMenu: BrowserMenuTag
   readonly dashboard: DashboardData
-  readonly projectNavigationArmed: boolean
   readonly projectsRoot: string
   readonly selectedProjectId: string | null
   readonly setCreateView: Setter<CreateFlowView>
+  readonly setActiveScreen: Setter<BrowserScreen>
   readonly setProjectNavigationArmed: Setter<boolean>
   readonly setSelectedMenuIndex: Setter<number>
   readonly setSelectedProjectId: Setter<string | null>
   readonly terminalSession: ActiveTerminalSession | null
 }
 
-type ProjectNavigationModeArgs = Pick<
+type MenuOpenArgs = Pick<
   BrowserShortcutArgs,
   | "context"
   | "currentMenu"
   | "dashboard"
-  | "projectNavigationArmed"
   | "selectedProjectId"
+  | "setActiveScreen"
   | "setProjectNavigationArmed"
   | "setSelectedProjectId"
 >
@@ -51,131 +53,229 @@ const shouldIgnoreShortcut = (
   terminalSession: ActiveTerminalSession | null
 ): boolean => terminalSession !== null || isBlockedShortcut(event, actionPrompt !== null)
 
-const armProjectNavigation = ({
+const openSelectedMenuScreen = ({
+  context,
+  currentMenu,
   dashboard,
   selectedProjectId,
+  setActiveScreen,
   setProjectNavigationArmed,
   setSelectedProjectId
-}: Pick<
-  ProjectNavigationModeArgs,
-  "dashboard" | "selectedProjectId" | "setProjectNavigationArmed" | "setSelectedProjectId"
->) => {
-  setProjectNavigationArmed(true)
-  if (selectedProjectId === null) {
-    setSelectedProjectId(dashboard.projects[0]?.id ?? null)
+}: MenuOpenArgs): void => {
+  if (currentMenu === "DownAll" || currentMenu === "Quit") {
+    runBrowserMenuAction(currentMenu, context)
+    return
+  }
+  setActiveScreen(screenForMenu(currentMenu))
+  if (isProjectMenu(currentMenu)) {
+    setProjectNavigationArmed(true)
+    if (selectedProjectId === null) {
+      setSelectedProjectId(dashboard.projects[0]?.id ?? null)
+    }
   }
 }
 
-const handleProjectNavigationModeKey = (
+const handleMenuScreenKey = (
   event: KeyboardEvent,
   {
     context,
     currentMenu,
     dashboard,
-    projectNavigationArmed,
     selectedProjectId,
+    setActiveScreen,
     setProjectNavigationArmed,
     setSelectedProjectId
-  }: ProjectNavigationModeArgs
+  }: MenuOpenArgs
 ): boolean => {
-  if (!usesProjectPrimaryNavigation(currentMenu)) {
-    return false
-  }
-  if (!projectNavigationArmed && (event.key === "ArrowRight" || event.key === "Enter")) {
+  if (event.key === "ArrowRight" || event.key === "Enter") {
     event.preventDefault()
-    armProjectNavigation({
+    openSelectedMenuScreen({
+      context,
+      currentMenu,
       dashboard,
       selectedProjectId,
+      setActiveScreen,
       setProjectNavigationArmed,
       setSelectedProjectId
     })
-    context.setMessage("Project selection active. Use ↑/↓ to choose a project, Enter to run, Esc or ← to return.")
-    return true
-  }
-  if (projectNavigationArmed && (event.key === "Escape" || event.key === "ArrowLeft")) {
-    event.preventDefault()
-    setProjectNavigationArmed(false)
-    context.setMessage("Returned to menu navigation.")
     return true
   }
   return false
 }
 
-const handleReadyShortcut = (
+const runProjectPickerAction = (
+  currentMenu: BrowserMenuTag,
+  context: BrowserActionContext,
+  setActiveScreen: Setter<BrowserScreen>
+): void => {
+  if (currentMenu === "ProjectAuth") {
+    setActiveScreen({ tag: "ProjectAuth" })
+    runBrowserMenuAction(currentMenu, context)
+    return
+  }
+  if (currentMenu === "Logs" || currentMenu === "Status") {
+    setActiveScreen({ tag: "Output" })
+    runBrowserMenuAction(currentMenu, context)
+    return
+  }
+  runBrowserMenuAction(currentMenu, context)
+}
+
+const handleRefreshShortcut = (
+  event: KeyboardEvent,
+  { context, currentMenu }: Pick<BrowserShortcutArgs, "context" | "currentMenu">
+): boolean => {
+  if (event.key !== "r" && event.key !== "R") {
+    return false
+  }
+  event.preventDefault()
+  refreshCurrentMenu(currentMenu, context)
+  return true
+}
+
+const handleProjectPickerShortcut = (
   event: KeyboardEvent,
   args: Pick<
     BrowserShortcutArgs,
     | "context"
     | "currentMenu"
     | "dashboard"
-    | "projectNavigationArmed"
     | "selectedProjectId"
+    | "setActiveScreen"
     | "setProjectNavigationArmed"
-    | "setSelectedMenuIndex"
     | "setSelectedProjectId"
   >
 ): boolean => {
-  if (handleProjectNavigationModeKey(event, args)) {
-    return true
-  }
-  if (handleMenuNavigationKey(event, args.currentMenu, args.projectNavigationArmed, args.setSelectedMenuIndex)) {
+  if (event.key === "Escape" || event.key === "ArrowLeft") {
+    event.preventDefault()
+    args.setProjectNavigationArmed(false)
+    args.setActiveScreen(menuScreen())
+    args.context.setMessage("Returned to main menu.")
     return true
   }
   if (
     handleProjectNavigationKey(event, {
       currentMenu: args.currentMenu,
       dashboard: args.dashboard,
-      projectNavigationArmed: args.projectNavigationArmed,
+      projectNavigationArmed: true,
       selectedProjectId: args.selectedProjectId,
       setSelectedProjectId: args.setSelectedProjectId
     })
   ) {
     return true
   }
-  return handleActionKey(
-    event,
-    args.currentMenu,
-    args.projectNavigationArmed,
-    args.context
-  )
+  if (event.key === "Enter") {
+    event.preventDefault()
+    runProjectPickerAction(args.currentMenu, args.context, args.setActiveScreen)
+    return true
+  }
+  return handleRefreshShortcut(event, args)
 }
 
-export const dispatchBrowserShortcut = (
+const handleBackToMenuShortcut = (
   event: KeyboardEvent,
-  {
-    actionPrompt,
-    context,
-    controllerCwd,
-    createView,
-    currentMenu,
-    dashboard,
-    projectNavigationArmed,
-    projectsRoot,
-    selectedProjectId,
-    setCreateView,
-    setProjectNavigationArmed,
-    setSelectedMenuIndex,
-    setSelectedProjectId,
-    terminalSession
-  }: BrowserShortcutArgs
-) => {
-  if (shouldIgnoreShortcut(actionPrompt, event, terminalSession)) {
+  context: BrowserActionContext,
+  setActiveScreen: Setter<BrowserScreen>,
+  returnToProjectPicker: boolean
+): boolean => {
+  if (event.key !== "Escape" && event.key !== "ArrowLeft") {
+    return false
+  }
+  event.preventDefault()
+  setActiveScreen(returnToProjectPicker ? projectPickerScreen() : menuScreen())
+  context.setMessage(returnToProjectPicker ? "Returned to project selection." : "Returned to main menu.")
+  return true
+}
+
+const handleOutputShortcut = (
+  event: KeyboardEvent,
+  args: Pick<BrowserShortcutArgs, "context" | "currentMenu" | "setActiveScreen">
+): void => {
+  if (handleBackToMenuShortcut(event, args.context, args.setActiveScreen, isProjectMenu(args.currentMenu))) {
     return
   }
-  if (
-    currentMenu === "Create" &&
-    handleCreateKey(event, { context, controllerCwd, projectsRoot, createView, setCreateView })
-  ) {
+  handleRefreshShortcut(event, args)
+}
+
+const handleContentShortcut = (
+  event: KeyboardEvent,
+  args: Pick<BrowserShortcutArgs, "context" | "currentMenu" | "setActiveScreen">
+): void => {
+  handleBackToMenuShortcut(event, args.context, args.setActiveScreen, false)
+  handleRefreshShortcut(event, args)
+}
+
+const handleMenuShortcut = (
+  event: KeyboardEvent,
+  args: Pick<
+    BrowserShortcutArgs,
+    | "context"
+    | "currentMenu"
+    | "dashboard"
+    | "selectedProjectId"
+    | "setActiveScreen"
+    | "setProjectNavigationArmed"
+    | "setSelectedMenuIndex"
+    | "setSelectedProjectId"
+  >
+): void => {
+  if (handleMenuNavigationKey(event, args.currentMenu, false, args.setSelectedMenuIndex)) {
     return
   }
-  handleReadyShortcut(event, {
-    context,
-    currentMenu,
-    dashboard,
-    projectNavigationArmed,
-    selectedProjectId,
-    setProjectNavigationArmed,
-    setSelectedMenuIndex,
-    setSelectedProjectId
+  handleMenuScreenKey(event, args)
+}
+
+const handleCreateShortcut = (
+  event: KeyboardEvent,
+  args: Pick<
+    BrowserShortcutArgs,
+    "context" | "controllerCwd" | "createView" | "projectsRoot" | "setActiveScreen" | "setCreateView"
+  >
+): void => {
+  const handled = handleCreateKey(event, {
+    context: args.context,
+    controllerCwd: args.controllerCwd,
+    projectsRoot: args.projectsRoot,
+    createView: args.createView,
+    setCreateView: args.setCreateView
   })
+  if (handled && event.key === "Escape") {
+    args.setActiveScreen(menuScreen())
+  }
+}
+
+const dispatchActiveScreenShortcut = (event: KeyboardEvent, args: BrowserShortcutArgs): void => {
+  if (args.activeScreen.tag === "Menu") {
+    handleMenuShortcut(event, args)
+    return
+  }
+
+  if (args.activeScreen.tag === "Create") {
+    handleCreateShortcut(event, args)
+    return
+  }
+
+  if (args.activeScreen.tag === "ProjectPicker") {
+    handleProjectPickerShortcut(event, args)
+    return
+  }
+
+  if (args.activeScreen.tag === "Output") {
+    handleOutputShortcut(event, args)
+    return
+  }
+
+  if (args.activeScreen.tag === "ProjectAuth") {
+    handleBackToMenuShortcut(event, args.context, args.setActiveScreen, true)
+    return
+  }
+
+  handleContentShortcut(event, args)
+}
+
+export const dispatchBrowserShortcut = (event: KeyboardEvent, args: BrowserShortcutArgs): void => {
+  if (shouldIgnoreShortcut(args.actionPrompt, event, args.terminalSession)) {
+    return
+  }
+  dispatchActiveScreenShortcut(event, args)
 }

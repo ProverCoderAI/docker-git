@@ -13,6 +13,7 @@ export const ProjectStatusSchema = Schema.Union(
 
 const projectSummaryFields = {
   id: Schema.String,
+  projectKey: Schema.String,
   displayName: Schema.String,
   repoUrl: Schema.String,
   repoRef: Schema.String,
@@ -57,6 +58,34 @@ export const ProjectsResponseSchema = Schema.Struct({
 export const ProjectResponseSchema = Schema.Struct({
   ok: Schema.optional(Schema.Boolean),
   project: ProjectDetailsSchema
+})
+
+export const ProjectPortForwardSchema = Schema.Struct({
+  bindHost: Schema.String,
+  containerName: Schema.String,
+  createdAt: NullableString,
+  hostPort: Schema.Number,
+  id: Schema.String,
+  projectId: Schema.String,
+  projectKey: Schema.String,
+  proxyPath: Schema.String,
+  publicHost: Schema.String,
+  status: Schema.Union(
+    Schema.Literal("running"),
+    Schema.Literal("stopped"),
+    Schema.Literal("unknown")
+  ),
+  targetContainerName: Schema.String,
+  targetPort: Schema.Number,
+  url: Schema.String
+})
+
+export const ProjectPortForwardsResponseSchema = Schema.Struct({
+  forwards: Schema.Array(ProjectPortForwardSchema)
+})
+
+export const ProjectPortForwardResponseSchema = Schema.Struct({
+  forward: ProjectPortForwardSchema
 })
 
 export const OutputResponseSchema = Schema.Struct({
@@ -161,6 +190,7 @@ export const ProjectEventsPollResponseSchema = Schema.Struct({
 
 export type ProjectSummary = Schema.Schema.Type<typeof ProjectSummarySchema>
 export type ProjectDetails = Schema.Schema.Type<typeof ProjectDetailsSchema>
+export type ProjectPortForward = Schema.Schema.Type<typeof ProjectPortForwardSchema>
 export type GithubAuthStatus = Schema.Schema.Type<typeof GithubAuthStatusSchema>
 export type AuthSnapshot = Schema.Schema.Type<typeof AuthSnapshotSchema>
 export type ProjectAuthSnapshot = Schema.Schema.Type<typeof ProjectAuthSnapshotSchema>

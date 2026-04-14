@@ -17,10 +17,17 @@ type ReadyLayoutRenderArgs = {
     readonly onActionPromptCancel: () => void
     readonly onActionPromptChange: (key: string, value: string) => void
     readonly onActionPromptSubmit: () => void
+    readonly onBackScreen: () => void
     readonly onCreateBufferChange: (buffer: string) => void
     readonly onCreateCancel: () => void
     readonly onCreateSubmit: (forceWizard?: boolean) => void
+    readonly onOpenMenuScreen: (index: number) => void
+    readonly onCloseProjectPortForward: (targetPort: number) => void
+    readonly onOpenProjectPortForward: () => void
+    readonly onPortForwardInputChange: (value: string) => void
+    readonly onRefreshProjectPortForwards: () => void
     readonly onRunAuthAction: (index: number) => void
+    readonly onRunCurrentMenuAction: () => void
     readonly onRunProjectAuthAction: (index: number) => void
   }
   readonly currentMenu: ReturnType<typeof useReadyController>["currentMenu"]
@@ -29,6 +36,50 @@ type ReadyLayoutRenderArgs = {
   readonly state: ReturnType<typeof useReadyController>["state"]
   readonly viewportLayout: ViewportLayout
 }
+
+const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
+  onActionPromptCancel: actions.onActionPromptCancel,
+  onActionPromptChange: actions.onActionPromptChange,
+  onActionPromptSubmit: actions.onActionPromptSubmit,
+  onBackScreen: actions.onBackScreen,
+  onCloseProjectPortForward: actions.onCloseProjectPortForward,
+  onCreateBufferChange: actions.onCreateBufferChange,
+  onCreateCancel: actions.onCreateCancel,
+  onCreateSubmit: actions.onCreateSubmit,
+  onOpenMenuScreen: actions.onOpenMenuScreen,
+  onOpenProjectPortForward: actions.onOpenProjectPortForward,
+  onPortForwardInputChange: actions.onPortForwardInputChange,
+  onRefreshProjectPortForwards: actions.onRefreshProjectPortForwards,
+  onRunAuthAction: actions.onRunAuthAction,
+  onRunCurrentMenuAction: actions.onRunCurrentMenuAction,
+  onRunProjectAuthAction: actions.onRunProjectAuthAction
+})
+
+const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
+  actionPrompt: state.actionPrompt,
+  activeScreen: state.activeScreen,
+  authSnapshot: state.authSnapshot,
+  busyLabel: state.busyLabel,
+  createView: state.createView,
+  githubStatus: state.githubStatus,
+  message: state.message,
+  onSelectMenu: state.setSelectedMenuIndex,
+  onSelectProject: state.setSelectedProjectId,
+  onSetActiveScreen: state.setActiveScreen,
+  onTerminalClose: () => {
+    state.setTerminalSession(null)
+  },
+  onTerminalMessage: state.setMessage,
+  output: state.output,
+  portForwardInput: state.portForwardInput,
+  portForwards: state.portForwards,
+  project: state.project,
+  projectAuthSnapshot: state.projectAuthSnapshot,
+  projectNavigationArmed: state.projectNavigationArmed,
+  selectedMenuIndex: state.selectedMenuIndex,
+  selectedProjectId: state.selectedProjectId,
+  terminalSession: state.terminalSession
+})
 
 const renderReadyLayout = ({
   actions,
@@ -39,39 +90,14 @@ const renderReadyLayout = ({
   viewportLayout
 }: ReadyLayoutRenderArgs): JSX.Element => (
   <ReadyLayout
-    actionPrompt={state.actionPrompt}
-    authSnapshot={state.authSnapshot}
-    busyLabel={state.busyLabel}
     controllerCwd={dashboard.health.cwd}
-    projectsRoot={dashboard.health.projectsRoot}
-    createView={state.createView}
     currentMenu={currentMenu}
     dashboard={dashboard}
-    githubStatus={state.githubStatus}
-    message={state.message}
-    onActionPromptCancel={actions.onActionPromptCancel}
-    onActionPromptChange={actions.onActionPromptChange}
-    onActionPromptSubmit={actions.onActionPromptSubmit}
-    onCreateBufferChange={actions.onCreateBufferChange}
-    onCreateCancel={actions.onCreateCancel}
-    onCreateSubmit={actions.onCreateSubmit}
-    onRunAuthAction={actions.onRunAuthAction}
-    onRunProjectAuthAction={actions.onRunProjectAuthAction}
-    onSelectMenu={state.setSelectedMenuIndex}
-    onSelectProject={state.setSelectedProjectId}
-    output={state.output}
-    project={state.project}
-    projectNavigationArmed={state.projectNavigationArmed}
-    projectAuthSnapshot={state.projectAuthSnapshot}
-    onTerminalClose={() => {
-      state.setTerminalSession(null)
-    }}
-    onTerminalMessage={state.setMessage}
-    selectedMenuIndex={state.selectedMenuIndex}
-    selectedProjectId={state.selectedProjectId}
+    projectsRoot={dashboard.health.projectsRoot}
     selectedProjectSummary={selectedProjectSummary}
-    terminalSession={state.terminalSession}
     viewportLayout={viewportLayout}
+    {...readyActionProps(actions)}
+    {...readyStateProps(state)}
   />
 )
 
@@ -81,35 +107,14 @@ export const AppReady = ({
   refreshDashboard,
   viewportLayout
 }: AppReadyProps): JSX.Element => {
-  const {
-    currentMenu,
-    onActionPromptCancel,
-    onActionPromptChange,
-    onActionPromptSubmit,
-    onCreateBufferChange,
-    onCreateCancel,
-    onCreateSubmit,
-    onRunAuthAction,
-    onRunProjectAuthAction,
-    selectedProjectSummary,
-    state
-  } = useReadyController({ dashboard, dashboardRefreshTick, refreshDashboard })
+  const controller = useReadyController({ dashboard, dashboardRefreshTick, refreshDashboard })
 
   return renderReadyLayout({
-    actions: {
-      onActionPromptCancel,
-      onActionPromptChange,
-      onActionPromptSubmit,
-      onCreateBufferChange,
-      onCreateCancel,
-      onCreateSubmit,
-      onRunAuthAction,
-      onRunProjectAuthAction
-    },
-    currentMenu,
+    actions: controller,
+    currentMenu: controller.currentMenu,
     dashboard,
-    selectedProjectSummary,
-    state,
+    selectedProjectSummary: controller.selectedProjectSummary,
+    state: controller.state,
     viewportLayout
   })
 }

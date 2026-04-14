@@ -42,6 +42,7 @@ const compactMenuLabels: Readonly<Record<BrowserMenuTag, string>> = {
   DownAll: "Down all",
   Info: "Info",
   Logs: "Logs",
+  Ports: "Ports",
   ProjectAuth: "Project auth",
   Quit: "Quit",
   Select: "Select",
@@ -178,7 +179,7 @@ export const MenuSidebar = (
 ): JSX.Element => (
   <Box
     border={true}
-    borderColor="#24537d"
+    borderColor="#3a4652"
     borderStyle="single"
     flexShrink={0}
     flexDirection="column"
@@ -209,7 +210,7 @@ export const ProjectListPanel = (
   return (
     <Box
       border={true}
-      borderColor="#24537d"
+      borderColor="#3a4652"
       borderStyle="single"
       flexDirection="column"
       flexShrink={compact ? 1 : 0}
@@ -247,7 +248,7 @@ export const ProjectListPanel = (
 export const OutputPanel = ({ output }: { readonly output: string }): JSX.Element => (
   <Box
     border={true}
-    borderColor="#21486d"
+    borderColor="#3a4652"
     borderStyle="single"
     flexDirection="column"
     flexGrow={1}
@@ -267,7 +268,7 @@ export const OutputPanel = ({ output }: { readonly output: string }): JSX.Elemen
 
 export const LoadingScreen = ({ apiBaseUrl }: { readonly apiBaseUrl: string }): JSX.Element => (
   <Box alignItems="center" height="100%" justifyContent="center" padding={2} width="100%">
-    <Box border={true} borderColor="#39d0ff" borderStyle="rounded" flexDirection="column" padding={2}>
+    <Box border={true} borderColor="#3a4652" borderStyle="rounded" flexDirection="column" padding={2}>
       <Text bold={true} fg="#f5fbff">docker-git browser</Text>
       <Text fg="#7fdfff">Подключение к API: {apiBaseUrl}</Text>
       <Text fg="#a8c0dc">Читаю controller state...</Text>

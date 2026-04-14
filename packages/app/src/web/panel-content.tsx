@@ -34,7 +34,10 @@ type ContentPanelProps = {
   readonly selectedProjectSummary: ProjectSummary | undefined
 }
 
-type StaticMenuTag = Exclude<BrowserMenuTag, "Auth" | "Create" | "Delete" | "Down" | "Info" | "ProjectAuth" | "Select">
+type StaticMenuTag = Exclude<
+  BrowserMenuTag,
+  "Auth" | "Create" | "Delete" | "Down" | "Info" | "Ports" | "ProjectAuth" | "Select"
+>
 
 const StaticActionPanel = (
   { description, title }: { readonly description: string; readonly title: string }
