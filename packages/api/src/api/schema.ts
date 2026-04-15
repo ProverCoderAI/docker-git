@@ -142,6 +142,60 @@ export const ProjectBrowserSessionSchema = Schema.Struct({
   status: ProjectBrowserStatusSchema
 })
 
+export const ProjectDatabaseEngineSchema = Schema.Literal("postgres", "mysql", "mariadb")
+
+export const ProjectDatabaseProfileSchema = Schema.Struct({
+  createdAt: Schema.String,
+  database: Schema.String,
+  engine: ProjectDatabaseEngineSchema,
+  host: Schema.String,
+  id: Schema.String,
+  label: Schema.String,
+  maskedConnectionString: Schema.String,
+  port: Schema.Number,
+  updatedAt: Schema.String,
+  user: Schema.String
+})
+
+export const ProjectDatabaseProfileRequestSchema = Schema.Struct({
+  connectionString: Schema.String,
+  label: OptionalNullableString
+})
+
+export const ProjectDatabaseSessionStatusSchema = Schema.Literal("running", "stopped", "missing", "unknown")
+
+export const ProjectDatabaseSessionSchema = Schema.Struct({
+  configHash: Schema.String,
+  containerName: Schema.String,
+  editorPath: Schema.String,
+  editorUrl: Schema.String,
+  projectId: Schema.String,
+  projectKey: Schema.String,
+  status: ProjectDatabaseSessionStatusSchema
+})
+
+export const ProjectDatabaseForwardStatusSchema = Schema.Literal("running", "stopped", "unknown")
+
+export const ProjectDatabaseForwardSchema = Schema.Struct({
+  bindHost: Schema.String,
+  containerName: Schema.String,
+  createdAt: Schema.NullOr(Schema.String),
+  database: Schema.String,
+  engine: ProjectDatabaseEngineSchema,
+  externalConnectionString: Schema.String,
+  hostPort: Schema.Number,
+  id: Schema.String,
+  maskedExternalConnectionString: Schema.String,
+  profileId: Schema.String,
+  profileLabel: Schema.String,
+  projectId: Schema.String,
+  projectKey: Schema.String,
+  publicHost: Schema.String,
+  status: ProjectDatabaseForwardStatusSchema,
+  targetHost: Schema.String,
+  targetPort: Schema.Number
+})
+
 export const AgentProviderSchema = Schema.Literal("codex", "opencode", "claude", "custom")
 
 export const AgentEnvVarSchema = Schema.Struct({
@@ -220,5 +274,6 @@ export type StateSyncRequestInput = Schema.Schema.Type<typeof StateSyncRequestSc
 export type ApplyAllRequestInput = Schema.Schema.Type<typeof ApplyAllRequestSchema>
 export type UpProjectRequestInput = Schema.Schema.Type<typeof UpProjectRequestSchema>
 export type ProjectPortForwardRequestInput = Schema.Schema.Type<typeof ProjectPortForwardRequestSchema>
+export type ProjectDatabaseProfileRequestInput = Schema.Schema.Type<typeof ProjectDatabaseProfileRequestSchema>
 export type CreateAgentRequestInput = Schema.Schema.Type<typeof CreateAgentRequestSchema>
 export type CreateFollowRequestInput = Schema.Schema.Type<typeof CreateFollowRequestSchema>

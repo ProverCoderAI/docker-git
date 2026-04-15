@@ -107,6 +107,10 @@ export interface MenuCommand {
   readonly _tag: "Menu"
 }
 
+export interface BrowserCommand {
+  readonly _tag: "Browser"
+}
+
 export interface AttachCommand {
   readonly _tag: "Attach"
   readonly projectDir: string
@@ -211,6 +215,7 @@ export type ScrapCommand =
 export type Command =
   | CreateCommand
   | MenuCommand
+  | BrowserCommand
   | AttachCommand
   | OpenCommand
   | PanesCommand

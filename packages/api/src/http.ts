@@ -23,6 +23,7 @@ import {
   CreateProjectRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
+  ProjectDatabaseProfileRequestSchema,
   ProjectAuthRequestSchema,
   ProjectPortForwardRequestSchema,
   StateCommitRequestSchema,
@@ -77,6 +78,22 @@ import { readProjectAuthSnapshot, runProjectAuthFlow } from "./services/project-
 import { readProjectBrowserSession, proxyProjectBrowser } from "./services/project-browser.js"
 import { parseProjectBrowserProxyPath } from "./services/project-browser-core.js"
 import {
+  deleteProjectDatabaseForward,
+  deleteProjectDatabaseProfile,
+  exposeProjectDatabaseProfile,
+  listProjectDatabaseForwards,
+  listProjectDatabaseProfiles,
+  openProjectDatabaseEditor,
+  proxyProjectDatabase,
+  readProjectDatabaseSession,
+  restartProjectDatabaseEditor,
+  saveProjectDatabaseProfile
+} from "./services/project-databases.js"
+import {
+  parseProjectDatabaseProxyPath,
+  parseProjectDatabaseStatefulProxyPath
+} from "./services/project-databases-core.js"
+import {
   createProjectPortForward,
   deleteProjectPortForward,
   listProjectPortForwards
@@ -101,6 +118,11 @@ const ProjectParamsSchema = Schema.Struct({
 const ProjectPortForwardParamsSchema = Schema.Struct({
   projectId: Schema.String,
   targetPort: Schema.String
+})
+
+const ProjectDatabaseProfileParamsSchema = Schema.Struct({
+  projectId: Schema.String,
+  profileId: Schema.String
 })
 
 const AgentParamsSchema = Schema.Struct({
@@ -264,6 +286,7 @@ const errorResponse = (error: ApiError | unknown) => {
 
 const projectParams = HttpRouter.schemaParams(ProjectParamsSchema)
 const projectPortForwardParams = HttpRouter.schemaParams(ProjectPortForwardParamsSchema)
+const projectDatabaseProfileParams = HttpRouter.schemaParams(ProjectDatabaseProfileParamsSchema)
 const agentParams = HttpRouter.schemaParams(AgentParamsSchema)
 const terminalSessionParams = HttpRouter.schemaParams(TerminalSessionParamsSchema)
 const authTerminalSessionParams = HttpRouter.schemaParams(AuthTerminalSessionParamsSchema)
@@ -279,6 +302,7 @@ const readCodexAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(CodexAu
 const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLogoutRequestSchema)
 const readProjectAuthRequest = () => HttpServerRequest.schemaBodyJson(ProjectAuthRequestSchema)
 const readProjectPortForwardRequest = () => HttpServerRequest.schemaBodyJson(ProjectPortForwardRequestSchema)
+const readProjectDatabaseProfileRequest = () => HttpServerRequest.schemaBodyJson(ProjectDatabaseProfileRequestSchema)
 const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitRequestSchema)
 const readStateCommitRequest = () => HttpServerRequest.schemaBodyJson(StateCommitRequestSchema)
 const readStateSyncRequest = () => HttpServerRequest.schemaBodyJson(StateSyncRequestSchema)
@@ -367,8 +391,20 @@ const projectProxyResponse = Effect.gen(function*(_) {
   if (browserTarget !== null) {
     return yield* _(proxyProjectBrowser(request, browserTarget, resolveRequestOrigin(request)))
   }
+  const databaseTarget = parseProjectDatabaseProxyPath(pathname)
+  if (databaseTarget !== null) {
+    return yield* _(proxyProjectDatabase(request, databaseTarget))
+  }
   const target = parseProjectPortProxyPath(pathname)
   if (target === null) {
+    const statefulDatabaseTarget = parseProjectDatabaseStatefulProxyPath(
+      pathname,
+      readHeader(request, "referer"),
+      readHeader(request, "cookie")
+    )
+    if (statefulDatabaseTarget !== null) {
+      return yield* _(proxyProjectDatabase(request, statefulDatabaseTarget))
+    }
     return yield* _(Effect.fail(new ApiNotFoundError({ message: `Route not found: ${pathname}` })))
   }
   return yield* _(proxyProjectPortForward(request, target))
@@ -740,7 +776,91 @@ export const makeRouter = () => {
         const browser = yield* _(readProjectBrowserSession(projectId, resolveRequestOrigin(request)))
         return yield* _(jsonResponse({ browser }, 200))
       }).pipe(Effect.catchAll(errorResponse))
+    )
+  )
+
+  const withProjectDatabases = withProjects.pipe(
+    HttpRouter.get(
+      "/projects/:projectId/databases/profiles",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => listProjectDatabaseProfiles(projectId)),
+        Effect.flatMap((profiles) => jsonResponse({ profiles }, 200)),
+        Effect.catchAll(errorResponse)
+      )
     ),
+    HttpRouter.get(
+      "/projects/:projectId/databases/forwards",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => listProjectDatabaseForwards(projectId)),
+        Effect.flatMap((forwards) => jsonResponse({ forwards }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/databases/profiles",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(readProjectDatabaseProfileRequest())
+        const profile = yield* _(saveProjectDatabaseProfile(projectId, request))
+        return yield* _(jsonResponse({ profile }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.del(
+      "/projects/:projectId/databases/profiles/:profileId",
+      projectDatabaseProfileParams.pipe(
+        Effect.flatMap(({ projectId, profileId }) => deleteProjectDatabaseProfile(projectId, profileId)),
+        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/databases/profiles/:profileId/expose",
+      Effect.gen(function*(_) {
+        const { projectId, profileId } = yield* _(projectDatabaseProfileParams)
+        const serverRequest = yield* _(HttpServerRequest.HttpServerRequest)
+        const forward = yield* _(exposeProjectDatabaseProfile(
+          projectId,
+          profileId,
+          resolvePortPublicHost(serverRequest)
+        ))
+        return yield* _(jsonResponse({ forward }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.del(
+      "/projects/:projectId/databases/profiles/:profileId/expose",
+      projectDatabaseProfileParams.pipe(
+        Effect.flatMap(({ projectId, profileId }) => deleteProjectDatabaseForward(projectId, profileId)),
+        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/projects/:projectId/databases/session",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => readProjectDatabaseSession(projectId)),
+        Effect.flatMap((session) => jsonResponse({ session }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/databases/open",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => openProjectDatabaseEditor(projectId)),
+        Effect.flatMap((session) => jsonResponse({ session }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/databases/restart",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => restartProjectDatabaseEditor(projectId)),
+        Effect.flatMap((session) => jsonResponse({ session }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    )
+  )
+
+  const withProjectLifecycle = withProjectDatabases.pipe(
     HttpRouter.del(
       "/projects/:projectId",
       projectParams.pipe(
@@ -816,7 +936,7 @@ export const makeRouter = () => {
     )
   )
 
-  const withAgents = withProjects.pipe(
+  const withAgents = withProjectLifecycle.pipe(
     HttpRouter.post(
       "/projects/:projectId/agents",
       Effect.gen(function*(_) {

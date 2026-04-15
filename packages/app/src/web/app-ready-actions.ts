@@ -6,6 +6,8 @@ import type { BrowserMenuTag } from "./menu.js"
 import { browserMenuItems } from "./menu.js"
 
 type ActionContextArgs = {
+  readonly databaseConnectionInput: BrowserActionContext["databaseConnectionInput"]
+  readonly databaseLabelInput: BrowserActionContext["databaseLabelInput"]
   readonly githubStatus: BrowserActionContext["githubStatus"]
   readonly portForwardInput: BrowserActionContext["portForwardInput"]
   readonly refreshDashboard: () => void
@@ -15,6 +17,11 @@ type ActionContextArgs = {
   readonly setActiveScreen: BrowserActionContext["setActiveScreen"]
   readonly setAuthSnapshot: BrowserActionContext["setAuthSnapshot"]
   readonly setBusyLabel: BrowserActionContext["setBusyLabel"]
+  readonly setDatabaseConnectionInput: BrowserActionContext["setDatabaseConnectionInput"]
+  readonly setDatabaseForwards: BrowserActionContext["setDatabaseForwards"]
+  readonly setDatabaseLabelInput: BrowserActionContext["setDatabaseLabelInput"]
+  readonly setDatabaseProfiles: BrowserActionContext["setDatabaseProfiles"]
+  readonly setDatabaseSession: BrowserActionContext["setDatabaseSession"]
   readonly setGithubStatus: BrowserActionContext["setGithubStatus"]
   readonly setMessage: BrowserActionContext["setMessage"]
   readonly setOutput: BrowserActionContext["setOutput"]
@@ -32,6 +39,8 @@ export const resolveCurrentMenu = (selectedMenuIndex: number): BrowserMenuTag =>
   browserMenuItems[selectedMenuIndex]?.tag ?? "Select"
 
 export const createActionContext = (args: ActionContextArgs): BrowserActionContext => ({
+  databaseConnectionInput: args.databaseConnectionInput,
+  databaseLabelInput: args.databaseLabelInput,
   githubStatus: args.githubStatus,
   portForwardInput: args.portForwardInput,
   reloadDashboard: args.refreshDashboard,
@@ -41,6 +50,11 @@ export const createActionContext = (args: ActionContextArgs): BrowserActionConte
   setActiveScreen: args.setActiveScreen,
   setAuthSnapshot: args.setAuthSnapshot,
   setBusyLabel: args.setBusyLabel,
+  setDatabaseConnectionInput: args.setDatabaseConnectionInput,
+  setDatabaseForwards: args.setDatabaseForwards,
+  setDatabaseLabelInput: args.setDatabaseLabelInput,
+  setDatabaseProfiles: args.setDatabaseProfiles,
+  setDatabaseSession: args.setDatabaseSession,
   setGithubStatus: args.setGithubStatus,
   setMessage: args.setMessage,
   setOutput: args.setOutput,

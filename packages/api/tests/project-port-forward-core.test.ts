@@ -2,6 +2,22 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
 import {
+  buildProjectDatabaseContainerName,
+  buildProjectDatabaseForwardContainerName,
+  buildStoredProfile,
+  externalDatabaseConnectionString,
+  dbGateEngine,
+  dbGateServerForProfile,
+  maskConnectionString,
+  parseDatabaseConnectionString,
+  parseProjectDatabaseForwardRows,
+  parseProjectDatabaseProxyPath,
+  parseProjectDatabaseStatefulProxyPath,
+  projectDatabaseCookieName,
+  renderProjectDatabaseProxyPath,
+  rowToProjectDatabaseForward
+} from "../src/services/project-databases-core.js"
+import {
   buildForwardSshScript,
   buildPortForwardContainerName,
   normalizePortForwardRequest,
@@ -129,6 +145,94 @@ describe("project port forward core", () => {
       expect(renderProjectBrowserCdpPath("a/b")).toBe(`/b/${key}/cdp/json/version`)
       expect(renderProjectBrowserNoVncPath("a/b")).toContain(`/b/${key}/vnc.html?`)
       expect(renderProjectBrowserNoVncPath("a/b")).toContain(`path=b%2F${key}%2Fwebsockify`)
+    }))
+
+  it.effect("normalizes database connection profiles", () =>
+    Effect.sync(() => {
+      const parsed = parseDatabaseConnectionString("postgres://dev:secret@localhost:5432/app")
+      expect(parsed).toEqual({
+        ok: true,
+        parsed: {
+          database: "app",
+          engine: "postgres",
+          host: "localhost",
+          password: "secret",
+          port: 5432,
+          user: "dev"
+        }
+      })
+      const profile = buildStoredProfile(
+        "mysql://root:password@127.0.0.1/app",
+        "",
+        "2026-04-15T00:00:00.000Z"
+      )
+      if (!profile.ok) {
+        throw new Error(profile.message)
+      }
+      expect(profile.profile.label).toBe("mysql 127.0.0.1:3306/app")
+      expect(maskConnectionString(profile.profile.connectionString)).toContain("********")
+      expect(dbGateEngine("mysql")).toBe("mysql@dbgate-plugin-mysql")
+      expect(dbGateServerForProfile(profile.profile, "172.18.0.4")).toBe("172.18.0.4")
+    }))
+
+  it.effect("parses database proxy paths", () =>
+    Effect.sync(() => {
+      const key = projectShortKey("a/b")
+
+      expect(renderProjectDatabaseProxyPath("a/b")).toBe(`/d/${key}/`)
+      expect(parseProjectDatabaseProxyPath(`/d/${key}/connections`)).toEqual({
+        projectKey: key,
+        upstreamPath: "/connections"
+      })
+      expect(parseProjectDatabaseStatefulProxyPath("/connections", `http://localhost/d/${key}/`, undefined)).toEqual({
+        projectKey: key,
+        upstreamPath: "/connections"
+      })
+      expect(parseProjectDatabaseStatefulProxyPath("/storage", undefined, `${projectDatabaseCookieName}=${key}`)).toEqual({
+        projectKey: key,
+        upstreamPath: "/storage"
+      })
+      expect(buildProjectDatabaseContainerName("dg-project")).toBe("dg-project-dbgate")
+    }))
+
+  it.effect("renders database TCP forwards from Docker labels", () =>
+    Effect.sync(() => {
+      const profile = buildStoredProfile(
+        "postgres://dev:secret@localhost:5432/app",
+        "dev postgres",
+        "2026-04-15T00:00:00.000Z"
+      )
+      if (!profile.ok) {
+        throw new Error(profile.message)
+      }
+      const containerName = buildProjectDatabaseForwardContainerName("/home/dev/project", profile.profile.id)
+      const rows = parseProjectDatabaseForwardRows([
+        "abc123",
+        containerName,
+        "running",
+        "2026-04-15 10:00:00 +0000 UTC",
+        "/home/dev/project",
+        profile.profile.id,
+        "172.18.0.9",
+        "5432",
+        "15432",
+        "0.0.0.0",
+        "db.example.test"
+      ].join("\t"))
+      const row = rows[0]
+      if (row === undefined) {
+        throw new Error("Expected one parsed row")
+      }
+      const forward = rowToProjectDatabaseForward(row, profile.profile)
+
+      expect(containerName.length).toBeLessThanOrEqual(63)
+      expect(externalDatabaseConnectionString(profile.profile, "db.example.test", 15432)).toBe(
+        "postgres://dev:secret@db.example.test:15432/app"
+      )
+      expect(forward.status).toBe("running")
+      expect(forward.hostPort).toBe(15432)
+      expect(forward.targetHost).toBe("172.18.0.9")
+      expect(forward.maskedExternalConnectionString).toBe("postgres://dev:********@db.example.test:15432/app")
     }))
 
   it.effect("rewrites CDP websocket URLs into browser proxy paths", () =>

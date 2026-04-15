@@ -38,6 +38,7 @@ const compactMenuLabels: Readonly<Record<BrowserMenuTag, string>> = {
   Auth: "Auth profiles",
   Browser: "Browser",
   Create: "Create",
+  Databases: "Databases",
   Delete: "Delete",
   Down: "Down",
   DownAll: "Down all",

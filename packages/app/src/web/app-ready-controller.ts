@@ -19,6 +19,8 @@ import {
 import { useProjectBrowserReset, useTerminalBrowserAutoload } from "./app-ready-browser-hook.js"
 import { useBrowserShortcuts } from "./app-ready-browser-shortcuts-hook.js"
 import { cancelCreate, setCreateBuffer, submitCreateView, useCreateMenuReset } from "./app-ready-create.js"
+import { bindDatabaseActions } from "./app-ready-database-actions.js"
+import { useProjectDatabasesReset } from "./app-ready-databases-hook.js"
 import { useGithubAuthGate } from "./app-ready-github-auth-gate-hook.js"
 import {
   useActionPromptReset,
@@ -74,6 +76,14 @@ const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
   useProjectNavigationReset(args.currentMenu, args.state.setProjectNavigationArmed)
   useProjectAuthReset(args.state.selectedProjectId, args.state.setProjectAuthSnapshot)
   useProjectBrowserReset(args.state.selectedProjectId, args.state.setProjectBrowser)
+  useProjectDatabasesReset({
+    selectedProjectId: args.state.selectedProjectId,
+    setDatabaseConnectionInput: args.state.setDatabaseConnectionInput,
+    setDatabaseForwards: args.state.setDatabaseForwards,
+    setDatabaseLabelInput: args.state.setDatabaseLabelInput,
+    setDatabaseProfiles: args.state.setDatabaseProfiles,
+    setDatabaseSession: args.state.setDatabaseSession
+  })
   useProjectDetailsReset(args.state.selectedProjectId, args.state.setSelectedProject)
   useProjectPortForwardsReset(
     args.state.selectedProjectId,
@@ -229,6 +239,8 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
   const currentMenu = resolveCurrentMenu(state.selectedMenuIndex)
   const selectedProjectSummary = dashboard.projects.find((project) => project.id === state.selectedProjectId)
   const actionContext = createActionContext({
+    databaseConnectionInput: state.databaseConnectionInput,
+    databaseLabelInput: state.databaseLabelInput,
     githubStatus: state.githubStatus,
     portForwardInput: state.portForwardInput,
     refreshDashboard,
@@ -238,6 +250,11 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     setActiveScreen: state.setActiveScreen,
     setAuthSnapshot: state.setAuthSnapshot,
     setBusyLabel: state.setBusyLabel,
+    setDatabaseConnectionInput: state.setDatabaseConnectionInput,
+    setDatabaseForwards: state.setDatabaseForwards,
+    setDatabaseLabelInput: state.setDatabaseLabelInput,
+    setDatabaseProfiles: state.setDatabaseProfiles,
+    setDatabaseSession: state.setDatabaseSession,
     setGithubStatus: state.setGithubStatus,
     setMessage: state.setMessage,
     setOutput: state.setOutput,
@@ -258,6 +275,7 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     ...bindActionPromptActions(actionContext, state),
     ...bindPortForwardActions(actionContext, state),
     ...bindBrowserActions(actionContext),
+    ...bindDatabaseActions(actionContext, state),
     ...bindScreenActions(actionContext, dashboard, state),
     currentMenu,
     selectedProjectSummary,

@@ -40,6 +40,11 @@ export const resolveConfiguredApiBaseUrl = (): string => {
   return `http://${host}:${resolveApiPort()}`
 }
 
+export const resolveControllerDnsApiBaseUrl = (): string => {
+  const host = process.env["DOCKER_GIT_API_CONTAINER_NAME"]?.trim() || "docker-git-api"
+  return `http://${host}:${resolveApiPort()}`
+}
+
 export const uniqueStrings = (values: ReadonlyArray<string>): ReadonlyArray<string> => {
   const seen = new Set<string>()
   const result: Array<string> = []
@@ -128,6 +133,7 @@ export const buildApiBaseUrlCandidates = ({
     [
       cachedApiBaseUrl ?? "",
       defaultApiBaseUrl,
+      resolveControllerDnsApiBaseUrl(),
       ...hostDockerInternalUrl,
       ...sharedNetworkUrls,
       ...bridgeUrl

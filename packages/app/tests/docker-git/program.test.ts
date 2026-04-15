@@ -6,12 +6,14 @@ import { beforeEach, vi } from "vitest"
 import type { Command } from "../../src/docker-git/frontend-lib/core/domain.js"
 
 const ensureControllerReadyMock = vi.hoisted(() => vi.fn(() => Effect.void))
+const runBrowserFrontendMock = vi.hoisted(() => vi.fn(() => Effect.void))
 const runMenuCallMock = vi.hoisted(() => vi.fn(() => {}))
 const readCommandMock = vi.hoisted(() => vi.fn<() => Command>())
 const codexLoginMock = vi.hoisted(() => vi.fn(() => Effect.void))
 const readStatePullMock = vi.hoisted(() => vi.fn(() => Effect.succeed("State pull completed.")))
 
 const menuCommand: Extract<Command, { readonly _tag: "Menu" }> = { _tag: "Menu" }
+const browserCommand: Extract<Command, { readonly _tag: "Browser" }> = { _tag: "Browser" }
 const codexLoginCommand: Extract<Command, { readonly _tag: "AuthCodexLogin" }> = {
   _tag: "AuthCodexLogin",
   label: null,
@@ -25,6 +27,10 @@ vi.mock("../../src/docker-git/cli/read-command.js", () => ({
 
 vi.mock("../../src/docker-git/controller.js", () => ({
   ensureControllerReady: ensureControllerReadyMock
+}))
+
+vi.mock("../../src/docker-git/browser-frontend.js", () => ({
+  runBrowserFrontend: Effect.flatMap(Effect.sync(() => runBrowserFrontendMock()), (effect) => effect)
 }))
 
 vi.mock("../../src/docker-git/api-client.js", () => ({
@@ -66,6 +72,8 @@ describe("program menu dispatch", () => {
   beforeEach(() => {
     ensureControllerReadyMock.mockReset()
     ensureControllerReadyMock.mockImplementation(() => Effect.void)
+    runBrowserFrontendMock.mockReset()
+    runBrowserFrontendMock.mockImplementation(() => Effect.void)
     runMenuCallMock.mockReset()
     readCommandMock.mockReset()
     readCommandMock.mockReturnValue(menuCommand)
@@ -83,6 +91,16 @@ describe("program menu dispatch", () => {
 
       expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
       expect(runMenuCallMock).toHaveBeenCalledTimes(1)
+      expect(process.exitCode ?? 0).toBe(0)
+    }))
+
+  it.effect("routes browser frontend through controller bootstrap", () =>
+    Effect.gen(function*(_) {
+      readCommandMock.mockReturnValue(browserCommand)
+      yield* _(runProgram())
+
+      expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
+      expect(runBrowserFrontendMock).toHaveBeenCalledTimes(1)
       expect(process.exitCode ?? 0).toBe(0)
     }))
 

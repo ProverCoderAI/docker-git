@@ -8,6 +8,7 @@ import { initializeAgentState } from "./services/agents.js"
 import { attachAuthTerminalWebSocketServer } from "./services/auth-terminal-sessions.js"
 import { startOutboxPolling } from "./services/federation.js"
 import { attachProjectBrowserWebSocketServer } from "./services/project-browser.js"
+import { attachProjectDatabaseWebSocketServer } from "./services/project-databases.js"
 import { attachTerminalWebSocketServer } from "./services/terminal-sessions.js"
 
 const resolvePort = (env: Record<string, string | undefined>): number => {
@@ -48,6 +49,7 @@ export const program = (() => {
   attachAuthTerminalWebSocketServer(server)
   attachTerminalWebSocketServer(server)
   attachProjectBrowserWebSocketServer(server)
+  attachProjectDatabaseWebSocketServer(server)
   const serverLayer = NodeHttpServer.layer(() => server, { port })
   
   const pollingInterval = parseInt(process.env["DOCKER_GIT_OUTBOX_POLLING_INTERVAL_MS"] ?? "5000", 10)

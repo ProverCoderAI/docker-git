@@ -24,7 +24,8 @@ describe("controller reachability", () => {
 
       expect(candidates).toEqual([
         makeHttpUrl("api-cache.local", "3334"),
-        makeHttpUrl(joinIp("127", "0", "0", "1"), "3334")
+        makeHttpUrl(joinIp("127", "0", "0", "1"), "3334"),
+        makeHttpUrl("docker-git-api", "3334")
       ])
     }))
 
@@ -61,6 +62,7 @@ describe("controller reachability", () => {
 
       expect(candidates).toEqual([
         makeHttpUrl(joinIp("127", "0", "0", "1"), "3334"),
+        makeHttpUrl("docker-git-api", "3334"),
         makeHttpUrl("host.docker.internal", "3334"),
         makeHttpUrl(joinIp("172", "18", "0", "2"), "3334"),
         makeHttpUrl(joinIp("172", "17", "0", "20"), "3334")

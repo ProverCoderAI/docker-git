@@ -40,6 +40,7 @@ const menuSlugs: Readonly<Record<BrowserMenuTag, string>> = {
   Auth: "auth",
   Browser: "browser",
   Create: "create",
+  Databases: "databases",
   Delete: "delete",
   Down: "down",
   DownAll: "down-all",
@@ -56,7 +57,7 @@ const menuBySlug = new Map<string, BrowserMenuTag>(
   browserMenuItems.map(({ tag }) => [menuSlugs[tag], tag])
 )
 
-const reservedPathPrefixes: ReadonlyArray<string> = ["/api/", "/assets/", "/b/", "/p/"]
+const reservedPathPrefixes: ReadonlyArray<string> = ["/api/", "/assets/", "/b/", "/d/", "/p/"]
 
 const isSshLinkUrl = (url: URL): boolean =>
   url.pathname.startsWith("/ssh/") || ((url.searchParams.get("ssh") ?? "").trim().length > 0)

@@ -8,6 +8,7 @@ import { TerminalScreen } from "./app-ready-terminal-screen.js"
 import { Box, Text } from "./elements.js"
 import { BrowserPanel } from "./panel-browser.js"
 import { ContentPanel } from "./panel-content.js"
+import { DatabasePanel } from "./panel-databases.js"
 import { PortForwardPanel } from "./panel-port-forwards.js"
 import { ProjectDetailsPanel } from "./panel-project-details.js"
 import { OutputPanel, ProjectListPanel } from "./panels.js"
@@ -18,6 +19,7 @@ const actionLabels: Record<MainPanelsProps["currentMenu"], string> = {
   Auth: "Run",
   Browser: "Open browser",
   Create: "Run",
+  Databases: "Open SQL editor",
   Delete: "Delete project",
   Down: "Stop project",
   DownAll: "Run",
@@ -123,6 +125,27 @@ const BrowserDetails = (props: MainPanelsProps): JSX.Element => (
   />
 )
 
+const DatabaseDetails = (props: MainPanelsProps): JSX.Element => (
+  <DatabasePanel
+    connectionInput={props.databaseConnectionInput}
+    forwards={props.databaseForwards}
+    labelInput={props.databaseLabelInput}
+    onConnectionInputChange={props.onDatabaseConnectionInputChange}
+    onCloseForward={props.onCloseDatabaseForward}
+    onDeleteProfile={props.onDeleteDatabaseProfile}
+    onExposeProfile={props.onExposeDatabaseProfile}
+    onLabelInputChange={props.onDatabaseLabelInputChange}
+    onOpenEditor={props.onOpenProjectDatabaseEditor}
+    onRefreshDatabases={props.onRefreshProjectDatabases}
+    onRestartEditor={props.onRestartProjectDatabaseEditor}
+    onSaveProfile={props.onSaveDatabaseProfile}
+    profiles={props.databaseProfiles}
+    project={props.project}
+    selectedProjectSummary={props.selectedProjectSummary}
+    session={props.databaseSession}
+  />
+)
+
 const ProjectInfoDetails = (props: MainPanelsProps): JSX.Element => (
   <ProjectDetailsPanel
     currentMenu="Info"
@@ -162,6 +185,9 @@ const ProjectPickerDetails = (props: MainPanelsProps): JSX.Element => {
   }
   if (props.currentMenu === "Browser") {
     return <BrowserDetails {...props} />
+  }
+  if (props.currentMenu === "Databases") {
+    return <DatabaseDetails {...props} />
   }
   if (props.currentMenu === "ProjectAuth" || props.currentMenu === "Logs" || props.currentMenu === "Status") {
     return <ProjectInfoDetails {...props} />
