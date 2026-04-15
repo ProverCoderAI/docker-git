@@ -270,6 +270,7 @@ describe("prepareProjectFiles", () => {
         )
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+        const envProjectAfter = yield* _(fs.readFileString(path.join(outDir, ".orch/env/project.env")))
         const configAfterText = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         const configAfter = yield* _(Effect.sync((): unknown => JSON.parse(configAfterText)))
 
@@ -284,6 +285,8 @@ describe("prepareProjectFiles", () => {
         expect(composeAfter).toContain("container_name: dg-test-browser\n    restart: unless-stopped")
         expect(composeAfter).toContain(`      - ${path.join(outDir, ".orch/env/global.env")}`)
         expect(composeAfter).toContain(`      - ${path.join(outDir, ".orch/env/project.env")}`)
+        expect(envProjectAfter).toContain("MCP_PLAYWRIGHT_CDP_GUARD=1")
+        expect(envProjectAfter).toContain("MCP_PLAYWRIGHT_BLOCK_BROWSER_CLOSE=1")
         expect(composeAfter).toContain("docker-git-shared")
         expect(composeAfter).toContain("external: true")
         expect(countOccurrences(composeAfter, dnsBlock)).toBe(2)

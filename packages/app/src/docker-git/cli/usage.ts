@@ -94,6 +94,8 @@ Container runtime env (set via .orch/env/project.env):
   DOCKER_GIT_ZSH_AUTOSUGGEST_STYLE=...  zsh-autosuggestions highlight style (default: fg=8,italic)
   DOCKER_GIT_ZSH_AUTOSUGGEST_STRATEGY=...  Suggestion sources (default: history completion)
   MCP_PLAYWRIGHT_ISOLATED=1|0           Isolated browser contexts (recommended for many Codex; default: 1)
+  MCP_PLAYWRIGHT_CDP_GUARD=1|0          Guard CDP so MCP cannot close/crash shared Chromium (default: 1)
+  MCP_PLAYWRIGHT_BLOCK_BROWSER_CLOSE=1|0  Block destructive Browser.close/crash CDP methods (default: 1)
   MCP_PLAYWRIGHT_CDP_ENDPOINT=http://...  Override CDP endpoint (default: http://dg-<repo>-browser:9223)
   MCP_PLAYWRIGHT_RETRY_ATTEMPTS=<n>     Retry attempts for browser sidecar startup wait (default: 10)
   MCP_PLAYWRIGHT_RETRY_DELAY=<seconds>  Delay between retry attempts (default: 2)

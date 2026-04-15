@@ -102,6 +102,8 @@ const buildPlaywrightFragments = (
     maybeBrowserService:
       `\n  ${browserServiceName}:\n    build:\n      context: .\n      dockerfile: ${browserDockerfile}\n    container_name: ${browserContainerName}\n    restart: unless-stopped\n${
         renderResourceLimits(resourceLimits)
+      }${
+        renderEnvFiles(config)
       }    environment:\n      VNC_NOPW: "1"\n    shm_size: "2gb"\n    expose:\n      - "9223"\n    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1\n    volumes:\n      - ${browserVolumeName}:/data\n    networks:\n      - ${networkName}\n`,
     maybeBrowserVolume: `  ${browserVolumeName}:`
   }
