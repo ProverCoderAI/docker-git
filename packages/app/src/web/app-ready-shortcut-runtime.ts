@@ -4,7 +4,8 @@ import type { CreateFlowView } from "../docker-git/menu-create-shared.js"
 import type { ActionPromptState } from "./action-prompt.js"
 import type { BrowserActionContext } from "./actions.js"
 import { runBrowserMenuAction } from "./actions.js"
-import type { DashboardData } from "./api.js"
+import type { DashboardData, ProjectBrowserSession } from "./api.js"
+import { browserSidecarUnavailableMessage, canRunProjectBrowserAction } from "./app-ready-browser-openable.js"
 import { handleCreateKey } from "./app-ready-create.js"
 import {
   handleMenuNavigationKey,
@@ -27,6 +28,7 @@ export type BrowserShortcutArgs = {
   readonly currentMenu: BrowserMenuTag
   readonly dashboard: DashboardData
   readonly projectsRoot: string
+  readonly projectBrowser: ProjectBrowserSession | null
   readonly selectedProjectId: string | null
   readonly setCreateView: Setter<CreateFlowView>
   readonly setActiveScreen: Setter<BrowserScreen>
@@ -106,8 +108,13 @@ const handleMenuScreenKey = (
 const runProjectPickerAction = (
   currentMenu: BrowserMenuTag,
   context: BrowserActionContext,
+  projectBrowser: ProjectBrowserSession | null,
   setActiveScreen: Setter<BrowserScreen>
 ): void => {
+  if (!canRunProjectBrowserAction(currentMenu, projectBrowser, context.selectedProjectId)) {
+    context.setMessage(browserSidecarUnavailableMessage)
+    return
+  }
   if (currentMenu === "ProjectAuth") {
     setActiveScreen({ tag: "ProjectAuth" })
     runBrowserMenuAction(currentMenu, context)
@@ -140,6 +147,7 @@ const handleProjectPickerShortcut = (
     | "context"
     | "currentMenu"
     | "dashboard"
+    | "projectBrowser"
     | "selectedProjectId"
     | "setActiveScreen"
     | "setProjectNavigationArmed"
@@ -166,7 +174,7 @@ const handleProjectPickerShortcut = (
   }
   if (event.key === "Enter") {
     event.preventDefault()
-    runProjectPickerAction(args.currentMenu, args.context, args.setActiveScreen)
+    runProjectPickerAction(args.currentMenu, args.context, args.projectBrowser, args.setActiveScreen)
     return true
   }
   return handleRefreshShortcut(event, args)

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 import { gridlandWebPlugin } from "@gridland/web/vite-plugin"
 import react from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type PluginOption } from "vite"
-import { WebSocket, WebSocketServer } from "ws"
+import { type RawData, WebSocket, WebSocketServer } from "ws"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -17,9 +17,16 @@ const noStoreHeaders = {
 }
 
 const createProxy = (apiTarget: string) => ({
+  "/b": {
+    target: apiTarget,
+    changeOrigin: false,
+    xfwd: true,
+    ws: false
+  },
   "/api": {
     target: apiTarget,
-    changeOrigin: true,
+    changeOrigin: false,
+    xfwd: true,
     ws: false,
     rewrite: (requestPath: string) => requestPath.replace(/^\/api/u, "")
   }
@@ -31,12 +38,63 @@ const resolveUpstreamPath = (requestUrl: string | undefined): string => {
   return `${pathname}${parsed.search}`
 }
 
-const isTerminalWebSocketRequest = (request: IncomingMessage): boolean => {
+const isApiTerminalWebSocketRequest = (request: IncomingMessage): boolean => {
   const parsed = new URL(request.url ?? "/", "http://localhost")
   return parsed.pathname.startsWith("/api/") && parsed.pathname.endsWith("/ws")
 }
 
-const proxyTerminalWebSocket = (
+const isBrowserWebSocketRequest = (request: IncomingMessage): boolean => {
+  const parsed = new URL(request.url ?? "/", "http://localhost")
+  return parsed.pathname.startsWith("/b/")
+}
+
+const firstHeader = (value: string | ReadonlyArray<string> | undefined): string | undefined =>
+  typeof value === "string" ? value : value?.[0]
+
+const proxyForwardHeaders = (request: IncomingMessage): Record<string, string> => {
+  const forwardedHost = firstHeader(request.headers["x-forwarded-host"]) ?? firstHeader(request.headers.host)
+  const forwardedProto = firstHeader(request.headers["x-forwarded-proto"]) ?? "http"
+  return {
+    ...(forwardedHost === undefined ? {} : { "x-forwarded-host": forwardedHost }),
+    "x-forwarded-proto": forwardedProto
+  }
+}
+
+const bridgeWebSockets = (clientSocket: WebSocket, upstream: WebSocket): void => {
+  const pending: Array<{ readonly data: RawData; readonly isBinary: boolean }> = []
+  const sendWhenOpen = (socket: WebSocket, data: RawData, isBinary: boolean): void => {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(data, { binary: isBinary })
+    }
+  }
+  const flushPending = (): void => {
+    for (const message of pending.splice(0)) {
+      sendWhenOpen(upstream, message.data, message.isBinary)
+    }
+  }
+  clientSocket.on("message", (data, isBinary) => {
+    if (upstream.readyState === WebSocket.OPEN) {
+      sendWhenOpen(upstream, data, isBinary)
+      return
+    }
+    pending.push({ data, isBinary })
+  })
+  clientSocket.on("close", () => {
+    upstream.close()
+  })
+  upstream.on("open", flushPending)
+  upstream.on("message", (data, isBinary) => {
+    sendWhenOpen(clientSocket, data, isBinary)
+  })
+  upstream.on("close", () => {
+    clientSocket.close()
+  })
+  upstream.on("error", () => {
+    clientSocket.close()
+  })
+}
+
+const proxyWebSocket = (
   apiTarget: string,
   request: IncomingMessage,
   socket: Duplex,
@@ -45,30 +103,12 @@ const proxyTerminalWebSocket = (
 ): void => {
   const apiUrl = new URL(apiTarget)
   apiUrl.protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:"
-  const upstream = new WebSocket(`${apiUrl.origin}${resolveUpstreamPath(request.url)}`)
-
-  upstream.on("open", () => {
-    webSocketServer.handleUpgrade(request, socket, head, (clientSocket) => {
-      clientSocket.on("message", (data, isBinary) => {
-        upstream.send(data, { binary: isBinary })
-      })
-      clientSocket.on("close", () => {
-        upstream.close()
-      })
-      upstream.on("message", (data, isBinary) => {
-        clientSocket.send(data, { binary: isBinary })
-      })
-      upstream.on("close", () => {
-        clientSocket.close()
-      })
-      upstream.on("error", () => {
-        clientSocket.close()
-      })
-    })
-  })
-
-  upstream.on("error", () => {
-    socket.destroy()
+  webSocketServer.handleUpgrade(request, socket, head, (clientSocket) => {
+    const upstream = new WebSocket(
+      `${apiUrl.origin}${resolveUpstreamPath(request.url)}`,
+      { headers: proxyForwardHeaders(request) }
+    )
+    bridgeWebSockets(clientSocket, upstream)
   })
 }
 
@@ -77,10 +117,10 @@ const terminalWebSocketProxyPlugin = (apiTarget: string): PluginOption => ({
   configureServer(server) {
     const webSocketServer = new WebSocketServer({ noServer: true })
     server.httpServer?.prependListener("upgrade", (request, socket, head) => {
-      if (!isTerminalWebSocketRequest(request)) {
+      if (!isApiTerminalWebSocketRequest(request) && !isBrowserWebSocketRequest(request)) {
         return
       }
-      proxyTerminalWebSocket(apiTarget, request, socket, head, webSocketServer)
+      proxyWebSocket(apiTarget, request, socket, head, webSocketServer)
     })
   }
 })

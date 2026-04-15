@@ -7,6 +7,8 @@ import { resolveApiBaseUrl, trimTrailingSlash } from "./api-http.js"
 import type { TerminalSession } from "./api-schema.js"
 
 export type ActiveTerminalSession = {
+  readonly browserProjectId?: string | undefined
+  readonly browserProjectName?: string | undefined
   readonly closePath: string
   readonly exitMessage: string
   readonly header: string

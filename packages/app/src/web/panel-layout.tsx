@@ -36,6 +36,7 @@ const renderListPurpose = (currentMenu: BrowserMenuTag): SelectPurpose => select
 
 const compactMenuLabels: Readonly<Record<BrowserMenuTag, string>> = {
   Auth: "Auth profiles",
+  Browser: "Browser",
   Create: "Create",
   Delete: "Delete",
   Down: "Down",

@@ -4,8 +4,8 @@ import { vi } from "vitest"
 
 import { githubLoginStreamMarkers } from "../../src/shared/auth-stream-markers.js"
 import { runGithubOauthMutation } from "../../src/web/actions-github-oauth.js"
-import type { BrowserActionContext } from "../../src/web/actions-shared.js"
 import type { AuthSnapshot, GithubAuthStatus } from "../../src/web/api.js"
+import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
 
 const loginGithubStreamMock = vi.hoisted(() => vi.fn())
 const loadAuthSnapshotMock = vi.hoisted(() => vi.fn())
@@ -41,42 +41,6 @@ const authSnapshot: AuthSnapshot = {
   totalEntries: 1
 }
 
-const makeContext = () => {
-  let output = ""
-  const setOutput: BrowserActionContext["setOutput"] = (next) => {
-    output = typeof next === "function" ? next(output) : next
-  }
-  const setMessage: BrowserActionContext["setMessage"] = vi.fn()
-  const reloadDashboard = vi.fn()
-
-  return {
-    context: {
-      githubStatus: null,
-      portForwardInput: "",
-      reloadDashboard,
-      selectedProjectId: null,
-      selectedProjectName: null,
-      setActionPrompt: vi.fn(),
-      setActiveScreen: vi.fn(),
-      setAuthSnapshot: vi.fn(),
-      setBusyLabel: vi.fn(),
-      setGithubStatus: vi.fn(),
-      setMessage,
-      setOutput,
-      setPortForwardInput: vi.fn(),
-      setPortForwards: vi.fn(),
-      setProjectAuthSnapshot: vi.fn(),
-      setSelectedMenuIndex: vi.fn(),
-      setSelectedProject: vi.fn(),
-      setSelectedProjectId: vi.fn(),
-      setTerminalSession: vi.fn()
-    } satisfies BrowserActionContext,
-    output: () => output,
-    reloadDashboard,
-    setMessage
-  }
-}
-
 describe("web GitHub OAuth action", () => {
   it.effect("refreshes dashboard projects after successful OAuth", () =>
     Effect.gen(function*(_) {
@@ -95,19 +59,13 @@ describe("web GitHub OAuth action", () => {
       loadAuthSnapshotMock.mockImplementation(() => Effect.succeed(authSnapshot))
       loadGithubStatusMock.mockImplementation(() => Effect.succeed(githubStatus))
 
-      const { context, output, reloadDashboard, setMessage } = makeContext()
+      const { context, output, reloadDashboard, setMessage } = makeBrowserActionContext()
 
       runGithubOauthMutation({ label: "" }, context)
 
-      yield* _(
-        Effect.tryPromise({
-          catch: (error) => error,
-          try: () =>
-            vi.waitFor(() => {
-              expect(reloadDashboard).toHaveBeenCalledTimes(1)
-            })
-        })
-      )
+      yield* _(waitForAssertion(() => {
+        expect(reloadDashboard).toHaveBeenCalledTimes(1)
+      }))
 
       expect(output()).toBe("Copy your one-time code: ABCD-1234\nState dir ready: /home/dev/.docker-git\n")
       expect(context.setActionPrompt).toHaveBeenCalledWith(null)

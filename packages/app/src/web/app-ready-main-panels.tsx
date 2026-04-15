@@ -1,43 +1,36 @@
 import type { JSX } from "react"
 
+import { canOpenProjectBrowser } from "./app-ready-browser-openable.js"
 import type { ReadyLayoutProps } from "./app-ready-layout.js"
 import { MainMenuScreen } from "./app-ready-menu-screen.js"
 import { ScreenFrame, screenPadding } from "./app-ready-screen-frame.js"
+import { TerminalScreen } from "./app-ready-terminal-screen.js"
 import { Box, Text } from "./elements.js"
+import { BrowserPanel } from "./panel-browser.js"
 import { ContentPanel } from "./panel-content.js"
 import { PortForwardPanel } from "./panel-port-forwards.js"
 import { ProjectDetailsPanel } from "./panel-project-details.js"
-import { TerminalPanel } from "./panel-terminal.js"
 import { OutputPanel, ProjectListPanel } from "./panels.js"
-import { projectPickerScreen } from "./screen.js"
-import type { BrowserScreen } from "./screen.js"
 
 type MainPanelsProps = Omit<ReadyLayoutProps, "busyLabel" | "message">
 
-const actionLabel = (menu: MainPanelsProps["currentMenu"]): string => {
-  if (menu === "Select") {
-    return "Open SSH"
-  }
-  if (menu === "ProjectAuth") {
-    return "Open project auth"
-  }
-  if (menu === "Ports") {
-    return "Open port"
-  }
-  if (menu === "Status") {
-    return "Load status"
-  }
-  if (menu === "Logs") {
-    return "Load logs"
-  }
-  if (menu === "Down") {
-    return "Stop project"
-  }
-  if (menu === "Delete") {
-    return "Delete project"
-  }
-  return "Run"
+const actionLabels: Record<MainPanelsProps["currentMenu"], string> = {
+  Auth: "Run",
+  Browser: "Open browser",
+  Create: "Run",
+  Delete: "Delete project",
+  Down: "Stop project",
+  DownAll: "Run",
+  Info: "Run",
+  Logs: "Load logs",
+  Ports: "Open port",
+  ProjectAuth: "Open project auth",
+  Quit: "Run",
+  Select: "Open SSH",
+  Status: "Load status"
 }
+
+const actionLabel = (menu: MainPanelsProps["currentMenu"]): string => actionLabels[menu]
 
 const screenTitle = (props: Pick<MainPanelsProps, "activeScreen" | "currentMenu">): string => {
   if (props.activeScreen.tag === "Create") {
@@ -81,8 +74,9 @@ const ProjectActionBar = (
   {
     currentMenu,
     onRunCurrentMenuAction,
+    projectBrowser,
     selectedProjectSummary
-  }: Pick<MainPanelsProps, "currentMenu" | "onRunCurrentMenuAction" | "selectedProjectSummary">
+  }: Pick<MainPanelsProps, "currentMenu" | "onRunCurrentMenuAction" | "projectBrowser" | "selectedProjectSummary">
 ): JSX.Element => (
   <Box
     alignItems="center"
@@ -97,9 +91,13 @@ const ProjectActionBar = (
     <Text fg="#aab7c4" wrap="truncate">
       {selectedProjectSummary === undefined ? "No project selected." : selectedProjectSummary.displayName}
     </Text>
-    <Box onClick={onRunCurrentMenuAction} width="auto">
-      <Text bold={true} fg="#78f0a3">{actionLabel(currentMenu)}</Text>
-    </Box>
+    {currentMenu === "Browser" && !canOpenProjectBrowser(projectBrowser, selectedProjectSummary?.id ?? null)
+      ? <Text bold={true} fg="#8fa6c4">{actionLabel(currentMenu)}</Text>
+      : (
+        <Box onClick={onRunCurrentMenuAction} width="auto">
+          <Text bold={true} fg="#78f0a3">{actionLabel(currentMenu)}</Text>
+        </Box>
+      )}
   </Box>
 )
 
@@ -112,6 +110,15 @@ const PortForwardDetails = (props: MainPanelsProps): JSX.Element => (
     onOpenForward={props.onOpenProjectPortForward}
     onRefreshForwards={props.onRefreshProjectPortForwards}
     project={props.project}
+    selectedProjectSummary={props.selectedProjectSummary}
+  />
+)
+
+const BrowserDetails = (props: MainPanelsProps): JSX.Element => (
+  <BrowserPanel
+    browser={props.projectBrowser}
+    onOpenBrowser={props.onOpenProjectBrowser}
+    onRefreshBrowser={props.onRefreshProjectBrowser}
     selectedProjectSummary={props.selectedProjectSummary}
   />
 )
@@ -152,6 +159,9 @@ const ProjectContentDetails = (props: MainPanelsProps): JSX.Element => (
 const ProjectPickerDetails = (props: MainPanelsProps): JSX.Element => {
   if (props.currentMenu === "Ports") {
     return <PortForwardDetails {...props} />
+  }
+  if (props.currentMenu === "Browser") {
+    return <BrowserDetails {...props} />
   }
   if (props.currentMenu === "ProjectAuth" || props.currentMenu === "Logs" || props.currentMenu === "Status") {
     return <ProjectInfoDetails {...props} />
@@ -197,6 +207,7 @@ const ProjectPickerScreen = (props: MainPanelsProps): JSX.Element => (
       <ProjectActionBar
         currentMenu={props.currentMenu}
         onRunCurrentMenuAction={props.onRunCurrentMenuAction}
+        projectBrowser={props.projectBrowser}
         selectedProjectSummary={props.selectedProjectSummary}
       />
     </Box>
@@ -251,30 +262,6 @@ const OutputScreen = (props: MainPanelsProps): JSX.Element => (
     <OutputPanel output={props.output} />
   </ScreenFrame>
 )
-
-const TerminalScreen = (
-  props: Pick<MainPanelsProps, "onSetActiveScreen" | "onTerminalClose" | "onTerminalMessage" | "terminalSession">
-): JSX.Element | null => {
-  if (props.terminalSession === null) {
-    return null
-  }
-  const returnScreen: BrowserScreen = props.terminalSession.closePath.startsWith("/auth/")
-    ? { tag: "Auth" }
-    : projectPickerScreen()
-  return (
-    <Box flexDirection="column" flexGrow={1} minHeight={0} overflow="hidden">
-      <TerminalPanel
-        key={props.terminalSession.session.id}
-        onClose={() => {
-          props.onTerminalClose()
-          props.onSetActiveScreen(returnScreen)
-        }}
-        onMessage={props.onTerminalMessage}
-        session={props.terminalSession}
-      />
-    </Box>
-  )
-}
 
 export const MainPanels = (props: MainPanelsProps): JSX.Element => {
   if (props.terminalSession !== null) {

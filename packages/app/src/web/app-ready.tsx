@@ -22,10 +22,13 @@ type ReadyLayoutRenderArgs = {
     readonly onCreateCancel: () => void
     readonly onCreateSubmit: (forceWizard?: boolean) => void
     readonly onOpenMenuScreen: (index: number) => void
+    readonly onOpenProjectBrowserById: (projectId: string) => void
+    readonly onOpenProjectBrowser: () => void
     readonly onCloseProjectPortForward: (targetPort: number) => void
     readonly onOpenProjectPortForward: () => void
     readonly onPortForwardInputChange: (value: string) => void
     readonly onRefreshProjectPortForwards: () => void
+    readonly onRefreshProjectBrowser: () => void
     readonly onRunAuthAction: (index: number) => void
     readonly onRunCurrentMenuAction: () => void
     readonly onRunProjectAuthAction: (index: number) => void
@@ -47,9 +50,12 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onCreateCancel: actions.onCreateCancel,
   onCreateSubmit: actions.onCreateSubmit,
   onOpenMenuScreen: actions.onOpenMenuScreen,
+  onOpenProjectBrowserById: actions.onOpenProjectBrowserById,
+  onOpenProjectBrowser: actions.onOpenProjectBrowser,
   onOpenProjectPortForward: actions.onOpenProjectPortForward,
   onPortForwardInputChange: actions.onPortForwardInputChange,
   onRefreshProjectPortForwards: actions.onRefreshProjectPortForwards,
+  onRefreshProjectBrowser: actions.onRefreshProjectBrowser,
   onRunAuthAction: actions.onRunAuthAction,
   onRunCurrentMenuAction: actions.onRunCurrentMenuAction,
   onRunProjectAuthAction: actions.onRunProjectAuthAction
@@ -75,6 +81,7 @@ const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   portForwards: state.portForwards,
   project: state.project,
   projectAuthSnapshot: state.projectAuthSnapshot,
+  projectBrowser: state.projectBrowser,
   projectNavigationArmed: state.projectNavigationArmed,
   selectedMenuIndex: state.selectedMenuIndex,
   selectedProjectId: state.selectedProjectId,

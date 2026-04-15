@@ -11,6 +11,7 @@ import {
   CreateProjectRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
+  ProjectBrowserSessionSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
@@ -264,6 +265,30 @@ describe("api schemas", () => {
         onRight: (value) => {
           expect(value.hostPort).toBe(4000)
           expect(value.targetPort).toBe(3000)
+        }
+      })
+    }))
+
+  it.effect("decodes project browser session payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(ProjectBrowserSessionSchema)({
+        cdpPath: "/b/abc123abc123/cdp/json/version",
+        cdpUrl: "https://docker-git.example.test/b/abc123abc123/cdp/json/version",
+        containerName: "dg-project-browser",
+        noVncPath: "/b/abc123abc123/vnc.html?autoconnect=true",
+        noVncUrl: "https://docker-git.example.test/b/abc123abc123/vnc.html?autoconnect=true",
+        projectId: "project-1",
+        projectKey: "abc123abc123",
+        status: "running"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.status).toBe("running")
+          expect(value.containerName).toBe("dg-project-browser")
         }
       })
     }))

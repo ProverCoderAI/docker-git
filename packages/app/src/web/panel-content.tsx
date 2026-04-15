@@ -36,7 +36,7 @@ type ContentPanelProps = {
 
 type StaticMenuTag = Exclude<
   BrowserMenuTag,
-  "Auth" | "Create" | "Delete" | "Down" | "Info" | "Ports" | "ProjectAuth" | "Select"
+  "Auth" | "Browser" | "Create" | "Delete" | "Down" | "Info" | "Ports" | "ProjectAuth" | "Select"
 >
 
 const StaticActionPanel = (

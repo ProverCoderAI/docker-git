@@ -59,6 +59,53 @@ const resolveUpstreamPath = (url) => {
   return `${pathname}${parsed.search}`
 }
 
+const firstHeader = (value) => Array.isArray(value) ? value[0] : value
+
+const proxyForwardHeaders = (request, forwardedPrefix) => {
+  const forwardedHost = firstHeader(request.headers["x-forwarded-host"]) ?? request.headers.host
+  const forwardedProto = firstHeader(request.headers["x-forwarded-proto"]) ?? "http"
+  return {
+    ...request.headers,
+    host: `${apiHost}:${apiPort}`,
+    ...(forwardedHost === undefined ? {} : { "x-forwarded-host": forwardedHost }),
+    "x-forwarded-prefix": forwardedPrefix,
+    "x-forwarded-proto": forwardedProto
+  }
+}
+
+const parseWebSocketProtocols = (value) => {
+  const header = firstHeader(value)
+  if (header === undefined) {
+    return []
+  }
+  return header
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+}
+
+const proxyWebSocketForwardHeaders = (request, forwardedPrefix) => {
+  const forwardedHost = firstHeader(request.headers["x-forwarded-host"]) ?? request.headers.host
+  const forwardedProto = firstHeader(request.headers["x-forwarded-proto"]) ?? "http"
+  return {
+    ...(forwardedHost === undefined ? {} : { "x-forwarded-host": forwardedHost }),
+    "x-forwarded-prefix": forwardedPrefix,
+    "x-forwarded-proto": forwardedProto
+  }
+}
+
+const connectUpstreamWebSocket = (
+  url,
+  request,
+  forwardedPrefix
+) => {
+  const protocols = parseWebSocketProtocols(request.headers["sec-websocket-protocol"])
+  const options = { headers: proxyWebSocketForwardHeaders(request, forwardedPrefix) }
+  return protocols.length === 0
+    ? new WebSocket(url, options)
+    : new WebSocket(url, protocols, options)
+}
+
 const proxyHttp = (
   request,
   response
@@ -66,7 +113,7 @@ const proxyHttp = (
   const forwardedPrefix = request.url?.startsWith("/api/") ? "/api" : ""
   const upstream = httpRequest(
     {
-      headers: { ...request.headers, host: `${apiHost}:${apiPort}`, "x-forwarded-prefix": forwardedPrefix },
+      headers: proxyForwardHeaders(request, forwardedPrefix),
       host: apiHost,
       method: request.method,
       path: resolveUpstreamPath(request.url ?? "/"),
@@ -94,9 +141,43 @@ const proxyHttp = (
 
 const webSocketServer = new WebSocketServer({ noServer: true })
 
+const bridgeWebSockets = (clientSocket, upstream) => {
+  const pending = []
+  const sendWhenOpen = (socket, data, isBinary) => {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(data, { binary: isBinary })
+    }
+  }
+  const flushPending = () => {
+    for (const message of pending.splice(0)) {
+      sendWhenOpen(upstream, message.data, message.isBinary)
+    }
+  }
+  clientSocket.on("message", (data, isBinary) => {
+    if (upstream.readyState === WebSocket.OPEN) {
+      sendWhenOpen(upstream, data, isBinary)
+      return
+    }
+    pending.push({ data, isBinary })
+  })
+  clientSocket.on("close", () => {
+    upstream.close()
+  })
+  upstream.on("open", flushPending)
+  upstream.on("message", (data, isBinary) => {
+    sendWhenOpen(clientSocket, data, isBinary)
+  })
+  upstream.on("close", () => {
+    clientSocket.close()
+  })
+  upstream.on("error", () => {
+    clientSocket.close()
+  })
+}
+
 const server = createServer((request, response) => {
   const parsed = new URL(request.url ?? "/", "http://localhost")
-  if (parsed.pathname.startsWith("/api/") || parsed.pathname.startsWith("/p/")) {
+  if (parsed.pathname.startsWith("/api/") || parsed.pathname.startsWith("/p/") || parsed.pathname.startsWith("/b/")) {
     proxyHttp(request, response)
     return
   }
@@ -117,35 +198,21 @@ const server = createServer((request, response) => {
 
 server.on("upgrade", (request, socket, head) => {
   const parsed = new URL(request.url ?? "/", "http://localhost")
-  if (!parsed.pathname.startsWith("/api/") || !parsed.pathname.endsWith("/ws")) {
+  const terminalWebSocket = parsed.pathname.startsWith("/api/") && parsed.pathname.endsWith("/ws")
+  const browserWebSocket = parsed.pathname.startsWith("/b/")
+  if (!terminalWebSocket && !browserWebSocket) {
     socket.destroy()
     return
   }
 
-  const upstream = new WebSocket(`ws://${apiHost}:${apiPort}${resolveUpstreamPath(request.url ?? "/")}`)
-
-  upstream.on("open", () => {
-    webSocketServer.handleUpgrade(request, socket, head, (clientSocket) => {
-      clientSocket.on("message", (data, isBinary) => {
-        upstream.send(data, { binary: isBinary })
-      })
-      clientSocket.on("close", () => {
-        upstream.close()
-      })
-      upstream.on("message", (data, isBinary) => {
-        clientSocket.send(data, { binary: isBinary })
-      })
-      upstream.on("close", () => {
-        clientSocket.close()
-      })
-      upstream.on("error", () => {
-        clientSocket.close()
-      })
-    })
-  })
-
-  upstream.on("error", () => {
-    socket.destroy()
+  webSocketServer.handleUpgrade(request, socket, head, (clientSocket) => {
+    const forwardedPrefix = request.url?.startsWith("/api/") ? "/api" : ""
+    const upstream = connectUpstreamWebSocket(
+      `ws://${apiHost}:${apiPort}${resolveUpstreamPath(request.url ?? "/")}`,
+      request,
+      forwardedPrefix
+    )
+    bridgeWebSockets(clientSocket, upstream)
   })
 })
 

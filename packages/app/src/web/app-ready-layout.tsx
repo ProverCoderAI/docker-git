@@ -7,6 +7,7 @@ import type {
   DashboardData,
   GithubAuthStatus,
   ProjectAuthSnapshot,
+  ProjectBrowserSession,
   ProjectDetails,
   ProjectPortForward
 } from "./api.js"
@@ -40,9 +41,12 @@ export type ReadyLayoutProps = {
   readonly onRunAuthAction: (index: number) => void
   readonly onRunProjectAuthAction: (index: number) => void
   readonly onOpenMenuScreen: (index: number) => void
+  readonly onOpenProjectBrowserById: (projectId: string) => void
+  readonly onOpenProjectBrowser: () => void
   readonly onOpenProjectPortForward: () => void
   readonly onPortForwardInputChange: (value: string) => void
   readonly onRefreshProjectPortForwards: () => void
+  readonly onRefreshProjectBrowser: () => void
   readonly onSetActiveScreen: (screen: BrowserScreen) => void
   readonly onSelectMenu: (index: number) => void
   readonly onSelectProject: (projectId: string) => void
@@ -55,6 +59,7 @@ export type ReadyLayoutProps = {
   readonly project: ProjectDetails | null
   readonly projectNavigationArmed: boolean
   readonly projectAuthSnapshot: ProjectAuthSnapshot | null
+  readonly projectBrowser: ProjectBrowserSession | null
   readonly selectedMenuIndex: number
   readonly selectedProjectId: string | null
   readonly selectedProjectSummary: DashboardData["projects"][number] | undefined
