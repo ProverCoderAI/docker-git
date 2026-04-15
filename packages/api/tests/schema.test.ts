@@ -12,10 +12,13 @@ import {
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
   ProjectBrowserSessionSchema,
+  ProjectDatabaseForwardSchema,
+  ProjectDatabaseProfileRequestSchema,
+  ProjectDatabaseSessionSchema,
+  ProjectPortForwardRequestSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
-  ProjectPortForwardRequestSchema,
   TerminalSessionSchema,
   UpProjectRequestSchema
 } from "../src/api/schema.js"
@@ -289,6 +292,71 @@ describe("api schemas", () => {
         onRight: (value) => {
           expect(value.status).toBe("running")
           expect(value.containerName).toBe("dg-project-browser")
+        }
+      })
+    }))
+
+  it.effect("decodes project database payloads", () =>
+    Effect.sync(() => {
+      const request = Schema.decodeUnknownEither(ProjectDatabaseProfileRequestSchema)({
+        connectionString: "postgres://dev:secret@localhost:5432/app",
+        label: null
+      })
+      Either.match(request, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.connectionString).toContain("postgres://")
+          expect(value.label).toBeNull()
+        }
+      })
+
+      const session = Schema.decodeUnknownEither(ProjectDatabaseSessionSchema)({
+        configHash: "abcdef1234567890",
+        containerName: "dg-project-dbgate",
+        editorPath: "/d/abc123abc123/",
+        editorUrl: "/d/abc123abc123/",
+        projectId: "project-1",
+        projectKey: "abc123abc123",
+        status: "running"
+      })
+      Either.match(session, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.status).toBe("running")
+          expect(value.editorPath).toBe("/d/abc123abc123/")
+        }
+      })
+
+      const forward = Schema.decodeUnknownEither(ProjectDatabaseForwardSchema)({
+        bindHost: "0.0.0.0",
+        containerName: "dg-db-abc123abc123-db_123",
+        createdAt: null,
+        database: "app",
+        engine: "postgres",
+        externalConnectionString: "postgres://dev:secret@localhost:15432/app",
+        hostPort: 15432,
+        id: "container-id",
+        maskedExternalConnectionString: "postgres://dev:********@localhost:15432/app",
+        profileId: "db_123",
+        profileLabel: "dev postgres",
+        projectId: "project-1",
+        projectKey: "abc123abc123",
+        publicHost: "localhost",
+        status: "running",
+        targetHost: "172.18.0.9",
+        targetPort: 5432
+      })
+      Either.match(forward, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.hostPort).toBe(15432)
+          expect(value.status).toBe("running")
         }
       })
     }))

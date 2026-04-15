@@ -8,6 +8,9 @@ import type {
   GithubAuthStatus,
   ProjectAuthSnapshot,
   ProjectBrowserSession,
+  ProjectDatabaseForward,
+  ProjectDatabaseProfile,
+  ProjectDatabaseSession,
   ProjectDetails,
   ProjectPortForward
 } from "./api.js"
@@ -45,6 +48,8 @@ type AuthSuccessState = {
 const outputLineLimit = 120
 
 export type BrowserActionContext = {
+  readonly databaseConnectionInput: string
+  readonly databaseLabelInput: string
   readonly githubStatus: GithubAuthStatus | null
   readonly portForwardInput: string
   readonly reloadDashboard: () => void
@@ -54,6 +59,11 @@ export type BrowserActionContext = {
   readonly setActiveScreen: Setter<BrowserScreen>
   readonly setAuthSnapshot: Setter<AuthSnapshot | null>
   readonly setBusyLabel: Setter<string | null>
+  readonly setDatabaseConnectionInput: Setter<string>
+  readonly setDatabaseForwards: Setter<ReadonlyArray<ProjectDatabaseForward>>
+  readonly setDatabaseLabelInput: Setter<string>
+  readonly setDatabaseProfiles: Setter<ReadonlyArray<ProjectDatabaseProfile>>
+  readonly setDatabaseSession: Setter<ProjectDatabaseSession | null>
   readonly setGithubStatus: Setter<GithubAuthStatus | null>
   readonly setMessage: Setter<string | null>
   readonly setOutput: Setter<string>

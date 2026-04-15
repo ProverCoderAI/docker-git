@@ -8,6 +8,9 @@ import type {
   GithubAuthStatus,
   ProjectAuthSnapshot,
   ProjectBrowserSession,
+  ProjectDatabaseForward,
+  ProjectDatabaseProfile,
+  ProjectDatabaseSession,
   ProjectDetails,
   ProjectPortForward
 } from "./api.js"
@@ -28,6 +31,11 @@ export type ReadyLayoutProps = {
   readonly createView: CreateFlowView
   readonly currentMenu: BrowserMenuTag
   readonly dashboard: DashboardData
+  readonly databaseConnectionInput: string
+  readonly databaseForwards: ReadonlyArray<ProjectDatabaseForward>
+  readonly databaseLabelInput: string
+  readonly databaseProfiles: ReadonlyArray<ProjectDatabaseProfile>
+  readonly databaseSession: ProjectDatabaseSession | null
   readonly githubStatus: GithubAuthStatus | null
   readonly message: string | null
   readonly onActionPromptCancel: () => void
@@ -38,15 +46,24 @@ export type ReadyLayoutProps = {
   readonly onCreateCancel: () => void
   readonly onCreateSubmit: (forceWizard?: boolean) => void
   readonly onCloseProjectPortForward: (targetPort: number) => void
+  readonly onDatabaseConnectionInputChange: (value: string) => void
+  readonly onDatabaseLabelInputChange: (value: string) => void
+  readonly onDeleteDatabaseProfile: (profile: ProjectDatabaseProfile) => void
+  readonly onCloseDatabaseForward: (profile: ProjectDatabaseProfile) => void
+  readonly onExposeDatabaseProfile: (profile: ProjectDatabaseProfile) => void
   readonly onRunAuthAction: (index: number) => void
   readonly onRunProjectAuthAction: (index: number) => void
   readonly onOpenMenuScreen: (index: number) => void
   readonly onOpenProjectBrowserById: (projectId: string) => void
   readonly onOpenProjectBrowser: () => void
+  readonly onOpenProjectDatabaseEditor: () => void
   readonly onOpenProjectPortForward: () => void
   readonly onPortForwardInputChange: (value: string) => void
   readonly onRefreshProjectPortForwards: () => void
   readonly onRefreshProjectBrowser: () => void
+  readonly onRefreshProjectDatabases: () => void
+  readonly onRestartProjectDatabaseEditor: () => void
+  readonly onSaveDatabaseProfile: () => void
   readonly onSetActiveScreen: (screen: BrowserScreen) => void
   readonly onSelectMenu: (index: number) => void
   readonly onSelectProject: (projectId: string) => void

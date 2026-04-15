@@ -20,6 +20,15 @@ export {
   openProjectBrowserById,
   openSelectedProjectBrowser
 } from "./actions-browser.js"
+export {
+  closeSelectedDatabaseForward,
+  deleteSelectedDatabaseProfile,
+  exposeSelectedDatabaseProfile,
+  loadSelectedProjectDatabases,
+  openSelectedProjectDatabaseEditor,
+  restartSelectedProjectDatabaseEditor,
+  saveSelectedDatabaseProfile
+} from "./actions-databases.js"
 export { closeSelectedProjectPort, loadSelectedProjectPorts, openSelectedProjectPort } from "./actions-port-forwards.js"
 export { loadSelectedProjectInfo } from "./actions-projects.js"
 

@@ -21,6 +21,7 @@ const isHelpFlag = (token: string): boolean => token === "--help" || token === "
 
 const helpCommand: Command = { _tag: "Help", message: usageText }
 const menuCommand: Command = { _tag: "Menu" }
+const browserCommand: Command = { _tag: "Browser" }
 const statusCommand: Command = { _tag: "Status" }
 const downAllCommand: Command = { _tag: "DownAll" }
 
@@ -90,6 +91,8 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("ui", () => Either.right(menuCommand))
     )
     .pipe(
+      Match.when("browser", () => Either.right(browserCommand)),
+      Match.when("web", () => Either.right(browserCommand)),
       Match.when("apply-all", () => parseApplyAll(rest)),
       Match.when("update-all", () => parseApplyAll(rest)),
       Match.when("auth", () => parseAuth(rest)),

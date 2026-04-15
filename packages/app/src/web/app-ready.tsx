@@ -21,17 +21,26 @@ type ReadyLayoutRenderArgs = {
     readonly onCreateBufferChange: (buffer: string) => void
     readonly onCreateCancel: () => void
     readonly onCreateSubmit: (forceWizard?: boolean) => void
+    readonly onDatabaseConnectionInputChange: (value: string) => void
+    readonly onDatabaseLabelInputChange: (value: string) => void
+    readonly onCloseDatabaseForward: ReturnType<typeof useReadyController>["onCloseDatabaseForward"]
+    readonly onDeleteDatabaseProfile: ReturnType<typeof useReadyController>["onDeleteDatabaseProfile"]
+    readonly onExposeDatabaseProfile: ReturnType<typeof useReadyController>["onExposeDatabaseProfile"]
     readonly onOpenMenuScreen: (index: number) => void
     readonly onOpenProjectBrowserById: (projectId: string) => void
     readonly onOpenProjectBrowser: () => void
+    readonly onOpenProjectDatabaseEditor: () => void
     readonly onCloseProjectPortForward: (targetPort: number) => void
     readonly onOpenProjectPortForward: () => void
     readonly onPortForwardInputChange: (value: string) => void
     readonly onRefreshProjectPortForwards: () => void
     readonly onRefreshProjectBrowser: () => void
+    readonly onRefreshProjectDatabases: () => void
+    readonly onRestartProjectDatabaseEditor: () => void
     readonly onRunAuthAction: (index: number) => void
     readonly onRunCurrentMenuAction: () => void
     readonly onRunProjectAuthAction: (index: number) => void
+    readonly onSaveDatabaseProfile: () => void
   }
   readonly currentMenu: ReturnType<typeof useReadyController>["currentMenu"]
   readonly dashboard: DashboardData
@@ -49,16 +58,25 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onCreateBufferChange: actions.onCreateBufferChange,
   onCreateCancel: actions.onCreateCancel,
   onCreateSubmit: actions.onCreateSubmit,
+  onCloseDatabaseForward: actions.onCloseDatabaseForward,
+  onDatabaseConnectionInputChange: actions.onDatabaseConnectionInputChange,
+  onDatabaseLabelInputChange: actions.onDatabaseLabelInputChange,
+  onDeleteDatabaseProfile: actions.onDeleteDatabaseProfile,
+  onExposeDatabaseProfile: actions.onExposeDatabaseProfile,
   onOpenMenuScreen: actions.onOpenMenuScreen,
   onOpenProjectBrowserById: actions.onOpenProjectBrowserById,
   onOpenProjectBrowser: actions.onOpenProjectBrowser,
+  onOpenProjectDatabaseEditor: actions.onOpenProjectDatabaseEditor,
   onOpenProjectPortForward: actions.onOpenProjectPortForward,
   onPortForwardInputChange: actions.onPortForwardInputChange,
   onRefreshProjectPortForwards: actions.onRefreshProjectPortForwards,
   onRefreshProjectBrowser: actions.onRefreshProjectBrowser,
+  onRefreshProjectDatabases: actions.onRefreshProjectDatabases,
+  onRestartProjectDatabaseEditor: actions.onRestartProjectDatabaseEditor,
   onRunAuthAction: actions.onRunAuthAction,
   onRunCurrentMenuAction: actions.onRunCurrentMenuAction,
-  onRunProjectAuthAction: actions.onRunProjectAuthAction
+  onRunProjectAuthAction: actions.onRunProjectAuthAction,
+  onSaveDatabaseProfile: actions.onSaveDatabaseProfile
 })
 
 const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
@@ -67,6 +85,11 @@ const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   authSnapshot: state.authSnapshot,
   busyLabel: state.busyLabel,
   createView: state.createView,
+  databaseConnectionInput: state.databaseConnectionInput,
+  databaseForwards: state.databaseForwards,
+  databaseLabelInput: state.databaseLabelInput,
+  databaseProfiles: state.databaseProfiles,
+  databaseSession: state.databaseSession,
   githubStatus: state.githubStatus,
   message: state.message,
   onSelectMenu: state.setSelectedMenuIndex,

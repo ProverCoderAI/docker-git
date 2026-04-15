@@ -1,6 +1,7 @@
 import { createProjectDraftFromInputs } from "../docker-git/menu-create-shared.js"
 import type { CreateInputs } from "../docker-git/menu-types.js"
 import { openSelectedProjectBrowser } from "./actions-browser.js"
+import { openSelectedProjectDatabaseEditor } from "./actions-databases.js"
 import { openSelectedProjectPort } from "./actions-port-forwards.js"
 import {
   type BrowserActionContext,
@@ -233,6 +234,10 @@ export const runProjectMenuAction = (
     openSelectedProjectPort(context)
     return
   }
+  if (currentMenu === "Databases") {
+    openSelectedProjectDatabaseEditor(context)
+    return
+  }
   if (currentMenu === "Browser") {
     openSelectedProjectBrowser(context)
     return
@@ -241,7 +246,10 @@ export const runProjectMenuAction = (
 }
 
 const runProjectMenuCommand = (
-  currentMenu: Exclude<BrowserMenuTag, "Auth" | "ProjectAuth" | "Browser" | "Create" | "Select" | "Info" | "Ports">,
+  currentMenu: Exclude<
+    BrowserMenuTag,
+    "Auth" | "ProjectAuth" | "Browser" | "Create" | "Databases" | "Select" | "Info" | "Ports"
+  >,
   context: BrowserActionContext
 ) => {
   if (currentMenu === "Status") {

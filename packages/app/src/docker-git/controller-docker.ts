@@ -69,9 +69,9 @@ const currentProcessEnv = (): Readonly<Record<string, string>> =>
 const renderDockerAccessDeniedMessage = (): string =>
   [
     "docker-git host CLI cannot access Docker from the client process.",
-    "Client-side sudo fallback is disabled.",
-    "Keep the docker-git backend container running and reach it via DOCKER_GIT_API_URL or the default local API port, or grant this user direct Docker access (docker group/rootless Docker).",
-    "Probe command: docker info"
+    "Tried direct Docker and passwordless sudo Docker.",
+    "Keep the docker-git backend container running and reach it via DOCKER_GIT_API_URL or the default local API port, grant this user direct Docker access (docker group/rootless Docker), or configure passwordless sudo for docker.",
+    "Probe commands: docker info; sudo -n docker info"
   ].join("\n")
 
 const runExitCode = (
@@ -95,11 +95,18 @@ export const resolveDockerCommand = (): Effect.Effect<
   CommandExecutor.CommandExecutor
 > =>
   runExitCode("docker", ["info"]).pipe(
-    Effect.flatMap((dockerInfoExit) =>
-      dockerInfoExit === 0
-        ? Effect.succeed<ReadonlyArray<string>>(["docker"])
-        : Effect.fail(controllerBootstrapError(renderDockerAccessDeniedMessage()))
-    )
+    Effect.flatMap((dockerInfoExit) => {
+      if (dockerInfoExit === 0) {
+        return Effect.succeed<ReadonlyArray<string>>(["docker"])
+      }
+      return runExitCode("sudo", ["-n", "docker", "info"]).pipe(
+        Effect.flatMap((sudoDockerInfoExit) =>
+          sudoDockerInfoExit === 0
+            ? Effect.succeed<ReadonlyArray<string>>(["sudo", "-n", "docker"])
+            : Effect.fail(controllerBootstrapError(renderDockerAccessDeniedMessage()))
+        )
+      )
+    })
   )
 
 type DockerInvocation = {

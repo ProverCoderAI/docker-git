@@ -70,6 +70,60 @@ export type ProjectBrowserSession = {
   readonly cdpUrl: string
 }
 
+export type ProjectDatabaseEngine = "postgres" | "mysql" | "mariadb"
+
+export type ProjectDatabaseProfile = {
+  readonly createdAt: string
+  readonly database: string
+  readonly engine: ProjectDatabaseEngine
+  readonly host: string
+  readonly id: string
+  readonly label: string
+  readonly maskedConnectionString: string
+  readonly port: number
+  readonly updatedAt: string
+  readonly user: string
+}
+
+export type ProjectDatabaseProfileRequest = {
+  readonly connectionString: string
+  readonly label?: string | null | undefined
+}
+
+export type ProjectDatabaseSessionStatus = "running" | "stopped" | "missing" | "unknown"
+
+export type ProjectDatabaseSession = {
+  readonly configHash: string
+  readonly containerName: string
+  readonly editorPath: string
+  readonly editorUrl: string
+  readonly projectId: string
+  readonly projectKey: string
+  readonly status: ProjectDatabaseSessionStatus
+}
+
+export type ProjectDatabaseForwardStatus = "running" | "stopped" | "unknown"
+
+export type ProjectDatabaseForward = {
+  readonly bindHost: string
+  readonly containerName: string
+  readonly createdAt: string | null
+  readonly database: string
+  readonly engine: ProjectDatabaseEngine
+  readonly externalConnectionString: string
+  readonly hostPort: number
+  readonly id: string
+  readonly maskedExternalConnectionString: string
+  readonly profileId: string
+  readonly profileLabel: string
+  readonly projectId: string
+  readonly projectKey: string
+  readonly publicHost: string
+  readonly status: ProjectDatabaseForwardStatus
+  readonly targetHost: string
+  readonly targetPort: number
+}
+
 export type GithubAuthTokenStatus = {
   readonly key: string
   readonly label: string

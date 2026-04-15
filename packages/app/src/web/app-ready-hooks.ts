@@ -14,11 +14,15 @@ import type {
   GithubAuthStatus,
   ProjectAuthSnapshot,
   ProjectBrowserSession,
+  ProjectDatabaseForward,
+  ProjectDatabaseProfile,
+  ProjectDatabaseSession,
   ProjectDetails,
   ProjectPortForward
 } from "./api.js"
 import { maybeLoadProjectBrowser } from "./app-ready-browser-hook.js"
 import { resetCreateView } from "./app-ready-create.js"
+import { maybeLoadProjectDatabases, useDatabaseState } from "./app-ready-databases-hook.js"
 import { maybeLoadProjectPortForwards, usePortForwardState } from "./app-ready-port-forwards-hook.js"
 import {
   normalizeSelectedProjectId,
@@ -58,6 +62,11 @@ type ReadyStateSetters = Pick<
   BrowserActionContext,
   | "setAuthSnapshot"
   | "setBusyLabel"
+  | "setDatabaseConnectionInput"
+  | "setDatabaseForwards"
+  | "setDatabaseLabelInput"
+  | "setDatabaseProfiles"
+  | "setDatabaseSession"
   | "setGithubStatus"
   | "setMessage"
   | "setOutput"
@@ -76,6 +85,11 @@ export type ReadyState = ReadyStateSetters & {
   readonly authSnapshot: AuthSnapshot | null
   readonly busyLabel: string | null
   readonly createView: CreateFlowView
+  readonly databaseConnectionInput: string
+  readonly databaseForwards: ReadonlyArray<ProjectDatabaseForward>
+  readonly databaseLabelInput: string
+  readonly databaseProfiles: ReadonlyArray<ProjectDatabaseProfile>
+  readonly databaseSession: ProjectDatabaseSession | null
   readonly githubStatus: GithubAuthStatus | null
   readonly message: string | null
   readonly output: string
@@ -161,12 +175,14 @@ const useReadyProjectState = () => {
 export const useReadyState = (): ReadyState => {
   const navigationState = useReadyNavigationState()
   const panelState = useReadyPanelState()
+  const databaseState = useDatabaseState()
   const portForwardState = usePortForwardState()
   const projectState = useReadyProjectState()
 
   return {
     ...navigationState,
     ...panelState,
+    ...databaseState,
     ...portForwardState,
     ...projectState
   }
@@ -275,6 +291,7 @@ const loadReadyPanel = (args: PanelAutoloadArgs): void => {
   maybeRefreshProjectAuthScreen(args)
   maybeLoadProjectPickerInfo(args)
   maybeLoadProjectPortForwards(args)
+  maybeLoadProjectDatabases(args)
   maybeLoadProjectBrowser(args)
 }
 

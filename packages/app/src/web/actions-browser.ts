@@ -1,13 +1,6 @@
 import { type BrowserActionContext, requireSelectedProjectId, withBusy } from "./actions-shared.js"
 import { loadProjectBrowser, projectBrowserCdpUrl, projectBrowserNoVncUrl, type ProjectBrowserSession } from "./api.js"
-
-const openUrl = (url: string): boolean => {
-  if (typeof globalThis.open === "function") {
-    const openedWindow = globalThis.open(url, "_blank", "noopener")
-    return openedWindow !== null
-  }
-  return false
-}
+import { openUrl } from "./open-url.js"
 
 const browserStatusMessage = (browser: ProjectBrowserSession): string =>
   browser.status === "running"

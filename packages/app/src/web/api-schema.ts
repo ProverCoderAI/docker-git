@@ -60,6 +60,12 @@ export const ProjectResponseSchema = Schema.Struct({
   project: ProjectDetailsSchema
 })
 
+const ProjectPublishedStatusSchema = Schema.Union(
+  Schema.Literal("running"),
+  Schema.Literal("stopped"),
+  Schema.Literal("unknown")
+)
+
 export const ProjectPortForwardSchema = Schema.Struct({
   bindHost: Schema.String,
   containerName: Schema.String,
@@ -70,11 +76,7 @@ export const ProjectPortForwardSchema = Schema.Struct({
   projectKey: Schema.String,
   proxyPath: Schema.String,
   publicHost: Schema.String,
-  status: Schema.Union(
-    Schema.Literal("running"),
-    Schema.Literal("stopped"),
-    Schema.Literal("unknown")
-  ),
+  status: ProjectPublishedStatusSchema,
   targetContainerName: Schema.String,
   targetPort: Schema.Number,
   url: Schema.String
@@ -88,6 +90,13 @@ export const ProjectPortForwardResponseSchema = Schema.Struct({
   forward: ProjectPortForwardSchema
 })
 
+const ProjectSidecarStatusSchema = Schema.Union(
+  Schema.Literal("running"),
+  Schema.Literal("stopped"),
+  Schema.Literal("missing"),
+  Schema.Literal("unknown")
+)
+
 export const ProjectBrowserSessionSchema = Schema.Struct({
   cdpPath: Schema.String,
   cdpUrl: Schema.String,
@@ -96,16 +105,80 @@ export const ProjectBrowserSessionSchema = Schema.Struct({
   noVncUrl: Schema.String,
   projectId: Schema.String,
   projectKey: Schema.String,
-  status: Schema.Union(
-    Schema.Literal("running"),
-    Schema.Literal("stopped"),
-    Schema.Literal("missing"),
-    Schema.Literal("unknown")
-  )
+  status: ProjectSidecarStatusSchema
 })
 
 export const ProjectBrowserResponseSchema = Schema.Struct({
   browser: ProjectBrowserSessionSchema
+})
+
+export const ProjectDatabaseEngineSchema = Schema.Union(
+  Schema.Literal("postgres"),
+  Schema.Literal("mysql"),
+  Schema.Literal("mariadb")
+)
+
+export const ProjectDatabaseProfileSchema = Schema.Struct({
+  createdAt: Schema.String,
+  database: Schema.String,
+  engine: ProjectDatabaseEngineSchema,
+  host: Schema.String,
+  id: Schema.String,
+  label: Schema.String,
+  maskedConnectionString: Schema.String,
+  port: Schema.Number,
+  updatedAt: Schema.String,
+  user: Schema.String
+})
+
+export const ProjectDatabaseProfilesResponseSchema = Schema.Struct({
+  profiles: Schema.Array(ProjectDatabaseProfileSchema)
+})
+
+export const ProjectDatabaseProfileResponseSchema = Schema.Struct({
+  profile: ProjectDatabaseProfileSchema
+})
+
+export const ProjectDatabaseSessionSchema = Schema.Struct({
+  configHash: Schema.String,
+  containerName: Schema.String,
+  editorPath: Schema.String,
+  editorUrl: Schema.String,
+  projectId: Schema.String,
+  projectKey: Schema.String,
+  status: ProjectSidecarStatusSchema
+})
+
+export const ProjectDatabaseSessionResponseSchema = Schema.Struct({
+  session: ProjectDatabaseSessionSchema
+})
+
+export const ProjectDatabaseForwardSchema = Schema.Struct({
+  bindHost: Schema.String,
+  containerName: Schema.String,
+  createdAt: NullableString,
+  database: Schema.String,
+  engine: ProjectDatabaseEngineSchema,
+  externalConnectionString: Schema.String,
+  hostPort: Schema.Number,
+  id: Schema.String,
+  maskedExternalConnectionString: Schema.String,
+  profileId: Schema.String,
+  profileLabel: Schema.String,
+  projectId: Schema.String,
+  projectKey: Schema.String,
+  publicHost: Schema.String,
+  status: ProjectPublishedStatusSchema,
+  targetHost: Schema.String,
+  targetPort: Schema.Number
+})
+
+export const ProjectDatabaseForwardsResponseSchema = Schema.Struct({
+  forwards: Schema.Array(ProjectDatabaseForwardSchema)
+})
+
+export const ProjectDatabaseForwardResponseSchema = Schema.Struct({
+  forward: ProjectDatabaseForwardSchema
 })
 
 export const OutputResponseSchema = Schema.Struct({
@@ -212,6 +285,9 @@ export type ProjectSummary = Schema.Schema.Type<typeof ProjectSummarySchema>
 export type ProjectDetails = Schema.Schema.Type<typeof ProjectDetailsSchema>
 export type ProjectPortForward = Schema.Schema.Type<typeof ProjectPortForwardSchema>
 export type ProjectBrowserSession = Schema.Schema.Type<typeof ProjectBrowserSessionSchema>
+export type ProjectDatabaseForward = Schema.Schema.Type<typeof ProjectDatabaseForwardSchema>
+export type ProjectDatabaseProfile = Schema.Schema.Type<typeof ProjectDatabaseProfileSchema>
+export type ProjectDatabaseSession = Schema.Schema.Type<typeof ProjectDatabaseSessionSchema>
 export type GithubAuthStatus = Schema.Schema.Type<typeof GithubAuthStatusSchema>
 export type AuthSnapshot = Schema.Schema.Type<typeof AuthSnapshotSchema>
 export type ProjectAuthSnapshot = Schema.Schema.Type<typeof ProjectAuthSnapshotSchema>

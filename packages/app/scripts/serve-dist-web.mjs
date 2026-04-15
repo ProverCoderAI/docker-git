@@ -1,13 +1,19 @@
 import { createReadStream, existsSync, statSync } from "node:fs"
 import { createServer, request as httpRequest } from "node:http"
+import { request as httpsRequest } from "node:https"
 import { extname, join, normalize } from "node:path"
+import { fileURLToPath } from "node:url"
 
 import { WebSocket, WebSocketServer } from "ws"
 
-const appRoot = "/home/dev/workspaces/provercoderai/docker-git/packages/app"
+const appRoot = normalize(join(fileURLToPath(new URL(".", import.meta.url)), ".."))
 const staticRoot = join(appRoot, "dist-web")
-const apiHost = process.env["DOCKER_GIT_API_HOST"]?.trim() || "127.0.0.1"
-const apiPort = Number(process.env["DOCKER_GIT_API_PORT"]?.trim() || "3334")
+const configuredApiUrl = process.env["DOCKER_GIT_API_URL"]?.trim()
+const apiUrl = new URL(
+  configuredApiUrl && configuredApiUrl.length > 0
+    ? configuredApiUrl
+    : `http://${process.env["DOCKER_GIT_API_HOST"]?.trim() || "127.0.0.1"}:${process.env["DOCKER_GIT_API_PORT"]?.trim() || "3334"}`
+)
 const host = process.env["DOCKER_GIT_WEB_HOST"]?.trim() || "127.0.0.1"
 const port = Number(process.env["DOCKER_GIT_WEB_PORT"]?.trim() || "4191")
 
@@ -27,6 +33,35 @@ const contentTypes = {
 const noStoreHeaders = {
   "cache-control": "no-store"
 }
+
+const dbGateOwnedPathPrefixes = [
+  "/admin",
+  "/admin-license",
+  "/build/",
+  "/bulma.css",
+  "/connections",
+  "/database-connections",
+  "/dimensions.css",
+  "/favicon.ico",
+  "/forgot-password",
+  "/global.css",
+  "/icon-colors.css",
+  "/license",
+  "/login",
+  "/manifest.json",
+  "/oauth",
+  "/plugins",
+  "/redirect",
+  "/reset-password",
+  "/runners",
+  "/scheduler",
+  "/set-admin-password",
+  "/storage",
+  "/tokens.css"
+]
+
+const isDbGateOwnedPath = (pathname) =>
+  dbGateOwnedPathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(prefix))
 
 const resolveStaticPath = (pathname) => {
   const normalized = normalize(pathname)
@@ -66,7 +101,7 @@ const proxyForwardHeaders = (request, forwardedPrefix) => {
   const forwardedProto = firstHeader(request.headers["x-forwarded-proto"]) ?? "http"
   return {
     ...request.headers,
-    host: `${apiHost}:${apiPort}`,
+    host: apiUrl.host,
     ...(forwardedHost === undefined ? {} : { "x-forwarded-host": forwardedHost }),
     "x-forwarded-prefix": forwardedPrefix,
     "x-forwarded-proto": forwardedProto
@@ -111,13 +146,14 @@ const proxyHttp = (
   response
 ) => {
   const forwardedPrefix = request.url?.startsWith("/api/") ? "/api" : ""
-  const upstream = httpRequest(
+  const upstreamRequest = apiUrl.protocol === "https:" ? httpsRequest : httpRequest
+  const upstream = upstreamRequest(
     {
       headers: proxyForwardHeaders(request, forwardedPrefix),
-      host: apiHost,
+      hostname: apiUrl.hostname,
       method: request.method,
       path: resolveUpstreamPath(request.url ?? "/"),
-      port: apiPort
+      port: apiUrl.port || (apiUrl.protocol === "https:" ? 443 : 80)
     },
     (upstreamResponse) => {
       response.writeHead(upstreamResponse.statusCode ?? 502, {
@@ -177,7 +213,14 @@ const bridgeWebSockets = (clientSocket, upstream) => {
 
 const server = createServer((request, response) => {
   const parsed = new URL(request.url ?? "/", "http://localhost")
-  if (parsed.pathname.startsWith("/api/") || parsed.pathname.startsWith("/p/") || parsed.pathname.startsWith("/b/")) {
+  if (
+    parsed.pathname === "/api" ||
+    parsed.pathname.startsWith("/api/") ||
+    parsed.pathname.startsWith("/p/") ||
+    parsed.pathname.startsWith("/b/") ||
+    parsed.pathname.startsWith("/d/") ||
+    isDbGateOwnedPath(parsed.pathname)
+  ) {
     proxyHttp(request, response)
     return
   }
@@ -200,7 +243,8 @@ server.on("upgrade", (request, socket, head) => {
   const parsed = new URL(request.url ?? "/", "http://localhost")
   const terminalWebSocket = parsed.pathname.startsWith("/api/") && parsed.pathname.endsWith("/ws")
   const browserWebSocket = parsed.pathname.startsWith("/b/")
-  if (!terminalWebSocket && !browserWebSocket) {
+  const databaseWebSocket = parsed.pathname.startsWith("/d/")
+  if (!terminalWebSocket && !browserWebSocket && !databaseWebSocket) {
     socket.destroy()
     return
   }
@@ -208,7 +252,7 @@ server.on("upgrade", (request, socket, head) => {
   webSocketServer.handleUpgrade(request, socket, head, (clientSocket) => {
     const forwardedPrefix = request.url?.startsWith("/api/") ? "/api" : ""
     const upstream = connectUpstreamWebSocket(
-      `ws://${apiHost}:${apiPort}${resolveUpstreamPath(request.url ?? "/")}`,
+      `${apiUrl.protocol === "https:" ? "wss" : "ws"}://${apiUrl.host}${resolveUpstreamPath(request.url ?? "/")}`,
       request,
       forwardedPrefix
     )

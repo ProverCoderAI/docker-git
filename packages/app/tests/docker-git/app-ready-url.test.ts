@@ -51,6 +51,16 @@ describe("app ready URL state", () => {
     })).toBe("/browser/octocat/hello-world")
   })
 
+  it("renders database project tabs as readable deep links", () => {
+    expect(readyUrlPath({
+      activeScreen: { tag: "ProjectPicker" },
+      currentMenu: "Databases",
+      selectedProjectId: "project-1",
+      selectedProjectSummary,
+      terminalSession: null
+    })).toBe("/databases/octocat/hello-world")
+  })
+
   it("renders active SSH project terminals as SSH deep links", () => {
     expect(readyUrlPath({
       activeScreen: { tag: "ProjectPicker" },
@@ -91,5 +101,9 @@ describe("app ready URL state", () => {
   it("keeps /ssh links owned by SSH auto-connect flow", () => {
     expect(parseReadyUrlNavigation("https://docker-git.local/ssh/octocat/hello-world", dashboard.projects)).toBeNull()
     expect(parseReadyUrlNavigation("https://docker-git.local/?ssh=octocat/hello-world", dashboard.projects)).toBeNull()
+  })
+
+  it("keeps database proxy links owned by the DbGate proxy", () => {
+    expect(parseReadyUrlNavigation("https://docker-git.local/d/abc123abc123/", dashboard.projects)).toBeNull()
   })
 })

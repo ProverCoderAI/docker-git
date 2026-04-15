@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from "react"
 import type { BrowserActionContext } from "./actions.js"
 import {
   loadSelectedProjectBrowser,
+  loadSelectedProjectDatabases,
   loadSelectedProjectInfo,
   loadSelectedProjectPorts,
   refreshAuthPanel,
@@ -63,6 +64,7 @@ const isVerticalArrowKey = (event: ShortcutKeyboardEvent): boolean =>
 
 const projectPrimaryNavigationMenus: ReadonlySet<BrowserMenuTag> = new Set([
   "Browser",
+  "Databases",
   "Delete",
   "Down",
   "Info",
@@ -89,6 +91,7 @@ const resolveRefreshAction = (
   Match.value(currentMenu).pipe(
     Match.when("Auth", () => refreshAuthPanel),
     Match.when("Browser", () => loadSelectedProjectBrowser),
+    Match.when("Databases", () => loadSelectedProjectDatabases),
     Match.when("Ports", () => loadSelectedProjectPorts),
     Match.when("ProjectAuth", () => refreshProjectAuthPanel),
     Match.orElse(() => loadSelectedProjectInfo)
@@ -132,6 +135,7 @@ export const shouldLoadProjectDetails = (currentMenu: BrowserMenuTag): boolean =
   Match.value(currentMenu).pipe(
     Match.when("Delete", () => true),
     Match.when("Browser", () => true),
+    Match.when("Databases", () => true),
     Match.when("Down", () => true),
     Match.when("Info", () => true),
     Match.when("Logs", () => true),

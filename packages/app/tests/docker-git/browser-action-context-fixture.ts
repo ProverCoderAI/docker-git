@@ -22,6 +22,8 @@ export const makeBrowserActionContext = (
 
   return {
     context: {
+      databaseConnectionInput: "",
+      databaseLabelInput: "",
       githubStatus: null,
       portForwardInput: "",
       reloadDashboard,
@@ -31,6 +33,11 @@ export const makeBrowserActionContext = (
       setActiveScreen: vi.fn(),
       setAuthSnapshot: vi.fn(),
       setBusyLabel: vi.fn(),
+      setDatabaseConnectionInput: vi.fn(),
+      setDatabaseForwards: vi.fn(),
+      setDatabaseLabelInput: vi.fn(),
+      setDatabaseProfiles: vi.fn(),
+      setDatabaseSession: vi.fn(),
       setGithubStatus: vi.fn(),
       setMessage,
       setOutput,

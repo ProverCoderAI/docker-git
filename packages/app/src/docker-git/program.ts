@@ -25,6 +25,7 @@ import {
   renderProjectSummaryLine,
   syncState
 } from "./api-client.js"
+import { runBrowserFrontend } from "./browser-frontend.js"
 import { readCommand } from "./cli/read-command.js"
 import { usageText } from "./cli/usage.js"
 import { type ControllerRuntime, ensureControllerReady } from "./controller.js"
@@ -205,7 +206,7 @@ const unsupportedOperationalCommand = (
 
 type DirectOperationalCommand = Extract<
   OperationalCommand,
-  { readonly _tag: "Menu" | "Create" | "Open" | "Status" | "DownAll" | "ApplyAll" }
+  { readonly _tag: "Menu" | "Browser" | "Create" | "Open" | "Status" | "DownAll" | "ApplyAll" }
 >
 type RoutedOperationalCommand = Exclude<OperationalCommand, DirectOperationalCommand>
 
@@ -235,6 +236,7 @@ const dispatchOperationalCommand = (
 ): Effect.Effect<void, CliError, ControllerRuntime> =>
   Match.value(command).pipe(
     Match.when({ _tag: "Menu" }, () => withControllerReady(runMenu)),
+    Match.when({ _tag: "Browser" }, () => withControllerReady(runBrowserFrontend)),
     Match.when({ _tag: "Create" }, handleCreateCommand),
     Match.when({ _tag: "Open" }, handleOpenCommand),
     Match.when({ _tag: "Status" }, handleStatusCommand),
