@@ -118,8 +118,7 @@ RUN ARCH="$(uname -m)" \
 
 const dockerfilePlaywrightMcpBlock = String.raw`RUN npm install -g @playwright/mcp@latest
 
-# docker-git: wrapper that converts a CDP HTTP endpoint into a usable WS endpoint
-# Some Chromium images return webSocketDebuggerUrl pointing at 127.0.0.1 (container-local).
+# docker-git: wrapper that waits for the guarded CDP endpoint before launching Playwright MCP.
 RUN cat <<'EOF' > /usr/local/bin/docker-git-playwright-mcp
 #!/usr/bin/env bash
 set -euo pipefail
@@ -149,6 +148,7 @@ fi
 # COMPLEXITY: O(max_attempts * timeout_per_attempt)
 MCP_PLAYWRIGHT_RETRY_ATTEMPTS="\${MCP_PLAYWRIGHT_RETRY_ATTEMPTS:-10}"
 MCP_PLAYWRIGHT_RETRY_DELAY="\${MCP_PLAYWRIGHT_RETRY_DELAY:-2}"
+MCP_PLAYWRIGHT_CDP_GUARD="\${MCP_PLAYWRIGHT_CDP_GUARD:-1}"
 
 fetch_cdp_version() {
   curl -sSf --connect-timeout 3 --max-time 10 -H 'Host: 127.0.0.1:9222' "\${CDP_ENDPOINT%/}/json/version" 2>/dev/null
@@ -170,7 +170,19 @@ if [[ -z "$JSON" ]]; then
   exit 1
 fi
 
+EXTRA_ARGS=()
+if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-1}" == "1" ]]; then
+  EXTRA_ARGS+=(--isolated)
+fi
+
+# Guarded endpoints are stable HTTP CDP endpoints. Passing the HTTP URL lets Playwright MCP
+# re-resolve /json/version instead of pinning itself to one stale /devtools/browser/<id>.
+if [[ "$MCP_PLAYWRIGHT_CDP_GUARD" == "1" ]]; then
+  exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" "\${EXTRA_ARGS[@]}" "$@"
+fi
+
 # kechangdev/browser-vnc binds Chromium CDP on 127.0.0.1:9222; it also host-checks HTTP requests.
+# When the guard is disabled, preserve the old behavior by converting the HTTP endpoint to WS.
 WS_URL="$(printf "%s" "$JSON" | node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.webSocketDebuggerUrl || "")')"
 if [[ -z "$WS_URL" ]]; then
   echo "docker-git-playwright-mcp: webSocketDebuggerUrl missing" >&2
@@ -180,11 +192,6 @@ fi
 # Rewrite ws origin to match the CDP endpoint origin (docker DNS).
 BASE_WS="$(CDP_ENDPOINT="$CDP_ENDPOINT" node -e 'const { URL } = require("url"); const u=new URL(process.env.CDP_ENDPOINT); const proto=u.protocol==="https:"?"wss:":"ws:"; process.stdout.write(proto + "//" + u.host)')"
 WS_REWRITTEN="$(BASE_WS="$BASE_WS" WS_URL="$WS_URL" node -e 'const { URL } = require("url"); const base=new URL(process.env.BASE_WS); const ws=new URL(process.env.WS_URL); ws.protocol=base.protocol; ws.host=base.host; process.stdout.write(ws.toString())')"
-
-EXTRA_ARGS=()
-if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-1}" == "1" ]]; then
-  EXTRA_ARGS+=(--isolated)
-fi
 
 exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" "\${EXTRA_ARGS[@]}" "$@"
 EOF
