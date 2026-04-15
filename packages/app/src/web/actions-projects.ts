@@ -122,6 +122,8 @@ export const connectProjectById = (
       const encodedProjectId = encodeURIComponent(project.id)
       const encodedSessionId = encodeURIComponent(session.id)
       context.setTerminalSession({
+        browserProjectId: project.id,
+        browserProjectName: project.displayName,
         closePath: `/projects/${encodedProjectId}/terminal-sessions/${encodedSessionId}`,
         exitMessage: "SSH session ended.",
         header: `SSH terminal: ${project.displayName}`,

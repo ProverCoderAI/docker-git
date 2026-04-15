@@ -41,6 +41,7 @@ export type ReadyLayoutProps = {
   readonly onRunAuthAction: (index: number) => void
   readonly onRunProjectAuthAction: (index: number) => void
   readonly onOpenMenuScreen: (index: number) => void
+  readonly onOpenProjectBrowserById: (projectId: string) => void
   readonly onOpenProjectBrowser: () => void
   readonly onOpenProjectPortForward: () => void
   readonly onPortForwardInputChange: (value: string) => void

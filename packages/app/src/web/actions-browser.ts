@@ -6,10 +6,12 @@ import {
 } from "./actions-shared.js"
 import { loadProjectBrowser, projectBrowserCdpUrl, projectBrowserNoVncUrl } from "./api.js"
 
-const openUrl = (url: string): void => {
+const openUrl = (url: string): boolean => {
   if (typeof globalThis.open === "function") {
-    globalThis.open(url, "_blank", "noopener")
+    const openedWindow = globalThis.open(url, "_blank", "noopener")
+    return openedWindow !== null
   }
+  return false
 }
 
 export const loadSelectedProjectBrowser = (
@@ -41,6 +43,10 @@ export const openSelectedProjectBrowser = (context: BrowserActionContext) => {
   if (projectId === null) {
     return
   }
+  openProjectBrowserById(projectId, context)
+}
+
+export const openProjectBrowserById = (projectId: string, context: BrowserActionContext) => {
   withBusy({
     context,
     effect: loadProjectBrowser(projectId),
@@ -51,8 +57,12 @@ export const openSelectedProjectBrowser = (context: BrowserActionContext) => {
         context.setMessage(`Browser sidecar is ${browser.status}. Enable Playwright MCP and start the project first.`)
         return
       }
-      openUrl(projectBrowserNoVncUrl(browser))
-      context.setMessage(`Browser opened. CDP endpoint: ${projectBrowserCdpUrl(browser)}.`)
+      const noVncUrl = projectBrowserNoVncUrl(browser)
+      context.setMessage(
+        openUrl(noVncUrl)
+          ? `Browser opened. CDP endpoint: ${projectBrowserCdpUrl(browser)}.`
+          : `Browser popup was blocked. Open ${noVncUrl} manually. CDP endpoint: ${projectBrowserCdpUrl(browser)}.`
+      )
     }
   })
 }

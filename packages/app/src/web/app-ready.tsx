@@ -22,6 +22,7 @@ type ReadyLayoutRenderArgs = {
     readonly onCreateCancel: () => void
     readonly onCreateSubmit: (forceWizard?: boolean) => void
     readonly onOpenMenuScreen: (index: number) => void
+    readonly onOpenProjectBrowserById: (projectId: string) => void
     readonly onOpenProjectBrowser: () => void
     readonly onCloseProjectPortForward: (targetPort: number) => void
     readonly onOpenProjectPortForward: () => void
@@ -49,6 +50,7 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onCreateCancel: actions.onCreateCancel,
   onCreateSubmit: actions.onCreateSubmit,
   onOpenMenuScreen: actions.onOpenMenuScreen,
+  onOpenProjectBrowserById: actions.onOpenProjectBrowserById,
   onOpenProjectBrowser: actions.onOpenProjectBrowser,
   onOpenProjectPortForward: actions.onOpenProjectPortForward,
   onPortForwardInputChange: actions.onPortForwardInputChange,

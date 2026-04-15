@@ -12,6 +12,7 @@ import type { ActiveTerminalSession } from "./terminal.js"
 type TerminalPanelProps = {
   readonly onClose: () => void
   readonly onMessage: (message: string) => void
+  readonly onOpenBrowser?: (() => void) | undefined
   readonly session: ActiveTerminalSession
 }
 
@@ -53,6 +54,15 @@ const closeButtonStyle: CSSProperties = {
   padding: "6px 10px"
 }
 
+const headerActionsStyle: CSSProperties = {
+  alignItems: "center",
+  display: "flex",
+  flexShrink: 0,
+  flexWrap: "wrap",
+  gap: "8px",
+  justifyContent: "flex-end"
+}
+
 const statusColor = (status: TerminalStatus): string => {
   if (status === "attached") {
     return "#56f39a"
@@ -69,9 +79,10 @@ const statusColor = (status: TerminalStatus): string => {
 const TerminalHeader = (
   {
     onClose,
+    onOpenBrowser,
     session,
     status
-  }: Pick<TerminalPanelProps, "onClose" | "session"> & { readonly status: TerminalStatus }
+  }: Pick<TerminalPanelProps, "onClose" | "onOpenBrowser" | "session"> & { readonly status: TerminalStatus }
 ): JSX.Element => (
   <div style={headerStyle}>
     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -85,18 +96,31 @@ const TerminalHeader = (
         {session.subtitle}
       </div>
     </div>
-    <button
-      onClick={onClose}
-      style={closeButtonStyle}
-      type="button"
-    >
-      Close terminal
-    </button>
+    <div style={headerActionsStyle}>
+      {session.browserProjectId === undefined || onOpenBrowser === undefined
+        ? null
+        : (
+          <button
+            onClick={onOpenBrowser}
+            style={closeButtonStyle}
+            type="button"
+          >
+            Open browser
+          </button>
+        )}
+      <button
+        onClick={onClose}
+        style={closeButtonStyle}
+        type="button"
+      >
+        Close terminal
+      </button>
+    </div>
   </div>
 )
 
 export const TerminalPanel = (
-  { onClose, onMessage, session }: TerminalPanelProps
+  { onClose, onMessage, onOpenBrowser, session }: TerminalPanelProps
 ): JSX.Element => {
   const connectionRef = useRef<TerminalConnectionState>({ opened: false })
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -113,7 +137,7 @@ export const TerminalPanel = (
 
   return (
     <div style={panelStyle}>
-      <TerminalHeader onClose={onClose} session={session} status={status} />
+      <TerminalHeader onClose={onClose} onOpenBrowser={onOpenBrowser} session={session} status={status} />
       <div ref={hostRef} style={bodyStyle} />
     </div>
   )

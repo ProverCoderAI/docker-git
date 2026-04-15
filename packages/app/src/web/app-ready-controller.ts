@@ -4,6 +4,7 @@ import {
   closeSelectedProjectPort,
   loadSelectedProjectBrowser,
   loadSelectedProjectPorts,
+  openProjectBrowserById,
   openSelectedProjectBrowser,
   openSelectedProjectPort,
   runBrowserMenuAction,
@@ -201,6 +202,9 @@ const bindPortForwardActions = (
 const bindBrowserActions = (
   actionContext: ReturnType<typeof createActionContext>
 ) => ({
+  onOpenProjectBrowserById: (projectId: string) => {
+    openProjectBrowserById(projectId, actionContext)
+  },
   onOpenProjectBrowser: () => {
     openSelectedProjectBrowser(actionContext)
   },

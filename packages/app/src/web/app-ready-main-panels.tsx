@@ -259,11 +259,15 @@ const OutputScreen = (props: MainPanelsProps): JSX.Element => (
 )
 
 const TerminalScreen = (
-  props: Pick<MainPanelsProps, "onSetActiveScreen" | "onTerminalClose" | "onTerminalMessage" | "terminalSession">
+  props: Pick<
+    MainPanelsProps,
+    "onOpenProjectBrowserById" | "onSetActiveScreen" | "onTerminalClose" | "onTerminalMessage" | "terminalSession"
+  >
 ): JSX.Element | null => {
   if (props.terminalSession === null) {
     return null
   }
+  const browserProjectId = props.terminalSession.browserProjectId
   const returnScreen: BrowserScreen = props.terminalSession.closePath.startsWith("/auth/")
     ? { tag: "Auth" }
     : projectPickerScreen()
@@ -275,6 +279,11 @@ const TerminalScreen = (
           props.onTerminalClose()
           props.onSetActiveScreen(returnScreen)
         }}
+        onOpenBrowser={browserProjectId === undefined
+          ? undefined
+          : () => {
+            props.onOpenProjectBrowserById(browserProjectId)
+          }}
         onMessage={props.onTerminalMessage}
         session={props.terminalSession}
       />
