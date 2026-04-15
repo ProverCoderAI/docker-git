@@ -1,10 +1,5 @@
-import {
-  type BrowserActionContext,
-  requireSelectedProjectId,
-  withBusy,
-  withSelectedProjectBusy
-} from "./actions-shared.js"
-import { loadProjectBrowser, projectBrowserCdpUrl, projectBrowserNoVncUrl } from "./api.js"
+import { type BrowserActionContext, requireSelectedProjectId, withBusy } from "./actions-shared.js"
+import { loadProjectBrowser, projectBrowserCdpUrl, projectBrowserNoVncUrl, type ProjectBrowserSession } from "./api.js"
 
 const openUrl = (url: string): boolean => {
   if (typeof globalThis.open === "function") {
@@ -14,28 +9,39 @@ const openUrl = (url: string): boolean => {
   return false
 }
 
+const browserStatusMessage = (browser: ProjectBrowserSession): string =>
+  browser.status === "running"
+    ? `Browser is available at ${projectBrowserNoVncUrl(browser)}.`
+    : `Browser sidecar is ${browser.status} for ${browser.projectKey}.`
+
+export const loadProjectBrowserById = (
+  projectId: string,
+  context: BrowserActionContext,
+  options?: { readonly silent?: boolean }
+) => {
+  withBusy({
+    context,
+    effect: loadProjectBrowser(projectId),
+    label: "Loading project browser",
+    onSuccess: (browser) => {
+      context.setProjectBrowser(browser)
+      if (options?.silent !== true) {
+        context.setMessage(browserStatusMessage(browser))
+      }
+    }
+  })
+}
+
 export const loadSelectedProjectBrowser = (
   context: BrowserActionContext,
   options?: { readonly silent?: boolean }
 ) => {
-  withSelectedProjectBusy({
-    context,
-    effect: loadProjectBrowser,
-    label: "Loading project browser",
-    onMissing: () => {
-      context.setProjectBrowser(null)
-    },
-    onSuccess: (browser) => {
-      context.setProjectBrowser(browser)
-      if (options?.silent !== true) {
-        context.setMessage(
-          browser.status === "running"
-            ? `Browser is available at ${projectBrowserNoVncUrl(browser)}.`
-            : `Browser sidecar is ${browser.status} for ${context.selectedProjectName ?? browser.projectId}.`
-        )
-      }
-    }
-  })
+  const projectId = requireSelectedProjectId(context)
+  if (projectId === null) {
+    context.setProjectBrowser(null)
+    return
+  }
+  loadProjectBrowserById(projectId, context, options)
 }
 
 export const openSelectedProjectBrowser = (context: BrowserActionContext) => {

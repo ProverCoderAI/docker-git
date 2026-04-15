@@ -7,7 +7,6 @@ import {
   openProjectBrowserById,
   openSelectedProjectBrowser,
   openSelectedProjectPort,
-  runBrowserMenuAction,
   submitBrowserActionPrompt
 } from "./actions.js"
 import type { DashboardData } from "./api.js"
@@ -17,7 +16,7 @@ import {
   runAuthActionByIndex,
   runProjectAuthActionByIndex
 } from "./app-ready-actions.js"
-import { useProjectBrowserReset } from "./app-ready-browser-hook.js"
+import { useProjectBrowserReset, useTerminalBrowserAutoload } from "./app-ready-browser-hook.js"
 import { useBrowserShortcuts } from "./app-ready-browser-shortcuts-hook.js"
 import { cancelCreate, setCreateBuffer, submitCreateView, useCreateMenuReset } from "./app-ready-create.js"
 import { useGithubAuthGate } from "./app-ready-github-auth-gate-hook.js"
@@ -31,9 +30,9 @@ import {
   useReadyState
 } from "./app-ready-hooks.js"
 import { useProjectPortForwardsReset } from "./app-ready-port-forwards-hook.js"
+import { bindScreenActions } from "./app-ready-screen-actions.js"
 import { useSshLink } from "./app-ready-ssh-link-hook.js"
 import { useReadyUrlSync } from "./app-ready-url.js"
-import { isProjectMenu, menuScreen, outputScreen, projectPickerScreen, screenForMenu } from "./screen.js"
 
 type ReadyControllerArgs = {
   readonly dashboard: DashboardData
@@ -84,6 +83,11 @@ const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
 }
 
 const useReadyAutoloadEffects = (args: ReadySideEffectsArgs) => {
+  useTerminalBrowserAutoload({
+    context: args.actionContext,
+    dashboardRefreshTick: args.dashboardRefreshTick,
+    terminalSession: args.state.terminalSession
+  })
   usePanelAutoload({
     activeScreen: args.state.activeScreen,
     authSnapshot: args.state.authSnapshot,
@@ -109,6 +113,7 @@ const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
     createView: args.state.createView,
     currentMenu: args.currentMenu,
     dashboard: args.dashboard,
+    projectBrowser: args.state.projectBrowser,
     selectedProjectId: args.state.selectedProjectId,
     setCreateView: args.state.setCreateView,
     setActiveScreen: args.state.setActiveScreen,
@@ -216,54 +221,6 @@ const bindBrowserActions = (
   },
   onRefreshProjectBrowser: () => {
     loadSelectedProjectBrowser(actionContext)
-  }
-})
-
-const bindScreenActions = (
-  actionContext: ReturnType<typeof createActionContext>,
-  dashboard: DashboardData,
-  state: ReturnType<typeof useReadyState>
-) => ({
-  onBackScreen: () => {
-    if (state.activeScreen.tag === "Create") {
-      cancelCreate(actionContext, state.setCreateView)
-      return
-    }
-    if (state.activeScreen.tag === "ProjectAuth" || state.activeScreen.tag === "Output") {
-      state.setActiveScreen(
-        isProjectMenu(resolveCurrentMenu(state.selectedMenuIndex)) ? projectPickerScreen() : menuScreen()
-      )
-      return
-    }
-    state.setProjectNavigationArmed(false)
-    state.setActiveScreen(menuScreen())
-  },
-  onOpenMenuScreen: (index: number) => {
-    const menu = resolveCurrentMenu(index)
-    state.setSelectedMenuIndex(index)
-    if (menu === "DownAll" || menu === "Quit") {
-      runBrowserMenuAction(menu, actionContext)
-      return
-    }
-    state.setActiveScreen(screenForMenu(menu))
-    if (isProjectMenu(menu)) {
-      state.setProjectNavigationArmed(true)
-      state.setSelectedProjectId((projectId) => projectId ?? dashboard.projects[0]?.id ?? null)
-    }
-  },
-  onRunCurrentMenuAction: () => {
-    const menu = resolveCurrentMenu(state.selectedMenuIndex)
-    if (menu === "ProjectAuth") {
-      state.setActiveScreen({ tag: "ProjectAuth" })
-      runBrowserMenuAction(menu, actionContext)
-      return
-    }
-    if (menu === "Logs" || menu === "Status") {
-      state.setActiveScreen(outputScreen())
-      runBrowserMenuAction(menu, actionContext)
-      return
-    }
-    runBrowserMenuAction(menu, actionContext)
   }
 })
 
