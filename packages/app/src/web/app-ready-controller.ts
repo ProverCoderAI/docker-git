@@ -32,6 +32,7 @@ import {
 } from "./app-ready-hooks.js"
 import { useProjectPortForwardsReset } from "./app-ready-port-forwards-hook.js"
 import { useSshLink } from "./app-ready-ssh-link-hook.js"
+import { useReadyUrlSync } from "./app-ready-url.js"
 import { isProjectMenu, menuScreen, outputScreen, projectPickerScreen, screenForMenu } from "./screen.js"
 
 type ReadyControllerArgs = {
@@ -119,6 +120,11 @@ const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
 }
 
 const useReadySideEffects = (args: ReadySideEffectsArgs) => {
+  useReadyUrlSync({
+    currentMenu: args.currentMenu,
+    dashboard: args.dashboard,
+    state: args.state
+  })
   useProjectSyncEffects(args)
   useReadyResetEffects(args)
   useSshLink({
