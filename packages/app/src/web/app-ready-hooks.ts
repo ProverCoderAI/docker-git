@@ -13,9 +13,11 @@ import type {
   DashboardData,
   GithubAuthStatus,
   ProjectAuthSnapshot,
+  ProjectBrowserSession,
   ProjectDetails,
   ProjectPortForward
 } from "./api.js"
+import { maybeLoadProjectBrowser } from "./app-ready-browser-hook.js"
 import { resetCreateView } from "./app-ready-create.js"
 import { maybeLoadProjectPortForwards, usePortForwardState } from "./app-ready-port-forwards-hook.js"
 import {
@@ -62,6 +64,7 @@ type ReadyStateSetters = Pick<
   | "setPortForwardInput"
   | "setPortForwards"
   | "setProjectAuthSnapshot"
+  | "setProjectBrowser"
   | "setSelectedMenuIndex"
   | "setSelectedProject"
   | "setSelectedProjectId"
@@ -81,6 +84,7 @@ export type ReadyState = ReadyStateSetters & {
   readonly project: ProjectDetails | null
   readonly projectNavigationArmed: boolean
   readonly projectAuthSnapshot: ProjectAuthSnapshot | null
+  readonly projectBrowser: ProjectBrowserSession | null
   readonly setActionPrompt: Setter<ActionPromptState | null>
   readonly setActiveScreen: Setter<BrowserScreen>
   readonly setCreateView: Setter<CreateFlowView>
@@ -91,53 +95,80 @@ export type ReadyState = ReadyStateSetters & {
   readonly terminalSession: ActiveTerminalSession | null
 }
 
-export const useReadyState = (): ReadyState => {
+const useReadyNavigationState = () => {
   const [selectedMenuIndex, setSelectedMenuIndex] = useState(0)
   const [activeScreen, setActiveScreen] = useState<BrowserScreen>(menuScreen)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-  const portForwardState = usePortForwardState()
+
+  return {
+    activeScreen,
+    selectedMenuIndex,
+    selectedProjectId,
+    setActiveScreen,
+    setSelectedMenuIndex,
+    setSelectedProjectId
+  }
+}
+
+const useReadyPanelState = () => {
   const [actionPrompt, setActionPrompt] = useState<ActionPromptState | null>(null)
-  const [project, setSelectedProject] = useState<ProjectDetails | null>(null)
   const [output, setOutput] = useState("")
   const [message, setMessage] = useState<string | null>(null)
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [authSnapshot, setAuthSnapshot] = useState<AuthSnapshot | null>(null)
   const [githubStatus, setGithubStatus] = useState<GithubAuthStatus | null>(null)
-  const [projectNavigationArmed, setProjectNavigationArmed] = useState(false)
-  const [projectAuthSnapshot, setProjectAuthSnapshot] = useState<ProjectAuthSnapshot | null>(null)
   const [createView, setCreateView] = useState<CreateFlowView>(resetCreateView())
   const [terminalSession, setTerminalSession] = useState<ActiveTerminalSession | null>(null)
 
   return {
     actionPrompt,
-    activeScreen,
     authSnapshot,
     busyLabel,
     createView,
     githubStatus,
     message,
     output,
-    ...portForwardState,
-    project,
-    projectNavigationArmed,
-    projectAuthSnapshot,
     setActionPrompt,
-    setActiveScreen,
-    selectedMenuIndex,
-    selectedProjectId,
-    setTerminalSession,
     setAuthSnapshot,
     setBusyLabel,
     setCreateView,
     setGithubStatus,
     setMessage,
     setOutput,
+    setTerminalSession,
+    terminalSession
+  }
+}
+
+const useReadyProjectState = () => {
+  const [project, setSelectedProject] = useState<ProjectDetails | null>(null)
+  const [projectNavigationArmed, setProjectNavigationArmed] = useState(false)
+  const [projectAuthSnapshot, setProjectAuthSnapshot] = useState<ProjectAuthSnapshot | null>(null)
+  const [projectBrowser, setProjectBrowser] = useState<ProjectBrowserSession | null>(null)
+
+  return {
+    project,
+    projectNavigationArmed,
+    projectAuthSnapshot,
+    projectBrowser,
     setProjectNavigationArmed,
     setProjectAuthSnapshot,
-    setSelectedMenuIndex,
-    setSelectedProject,
-    setSelectedProjectId,
-    terminalSession
+    setProjectBrowser,
+    setSelectedProject
+  }
+}
+
+export const useReadyState = (): ReadyState => {
+  const navigationState = useReadyNavigationState()
+  const panelState = useReadyPanelState()
+  const portForwardState = usePortForwardState()
+  const projectState = useReadyProjectState()
+
+  return {
+    ...navigationState,
+    ...panelState,
+    ...portForwardState,
+    ...projectState
   }
 }
 
@@ -244,6 +275,7 @@ const loadReadyPanel = (args: PanelAutoloadArgs): void => {
   maybeRefreshProjectAuthScreen(args)
   maybeLoadProjectPickerInfo(args)
   maybeLoadProjectPortForwards(args)
+  maybeLoadProjectBrowser(args)
 }
 
 export const usePanelAutoload = (args: PanelAutoloadArgs) => {

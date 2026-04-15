@@ -88,6 +88,26 @@ export const ProjectPortForwardResponseSchema = Schema.Struct({
   forward: ProjectPortForwardSchema
 })
 
+export const ProjectBrowserSessionSchema = Schema.Struct({
+  cdpPath: Schema.String,
+  cdpUrl: Schema.String,
+  containerName: Schema.String,
+  noVncPath: Schema.String,
+  noVncUrl: Schema.String,
+  projectId: Schema.String,
+  projectKey: Schema.String,
+  status: Schema.Union(
+    Schema.Literal("running"),
+    Schema.Literal("stopped"),
+    Schema.Literal("missing"),
+    Schema.Literal("unknown")
+  )
+})
+
+export const ProjectBrowserResponseSchema = Schema.Struct({
+  browser: ProjectBrowserSessionSchema
+})
+
 export const OutputResponseSchema = Schema.Struct({
   output: Schema.String
 })
@@ -191,6 +211,7 @@ export const ProjectEventsPollResponseSchema = Schema.Struct({
 export type ProjectSummary = Schema.Schema.Type<typeof ProjectSummarySchema>
 export type ProjectDetails = Schema.Schema.Type<typeof ProjectDetailsSchema>
 export type ProjectPortForward = Schema.Schema.Type<typeof ProjectPortForwardSchema>
+export type ProjectBrowserSession = Schema.Schema.Type<typeof ProjectBrowserSessionSchema>
 export type GithubAuthStatus = Schema.Schema.Type<typeof GithubAuthStatusSchema>
 export type AuthSnapshot = Schema.Schema.Type<typeof AuthSnapshotSchema>
 export type ProjectAuthSnapshot = Schema.Schema.Type<typeof ProjectAuthSnapshotSchema>

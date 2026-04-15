@@ -21,6 +21,7 @@ type ActionContextArgs = {
   readonly setPortForwardInput: BrowserActionContext["setPortForwardInput"]
   readonly setPortForwards: BrowserActionContext["setPortForwards"]
   readonly setProjectAuthSnapshot: BrowserActionContext["setProjectAuthSnapshot"]
+  readonly setProjectBrowser: BrowserActionContext["setProjectBrowser"]
   readonly setSelectedMenuIndex: BrowserActionContext["setSelectedMenuIndex"]
   readonly setSelectedProject: BrowserActionContext["setSelectedProject"]
   readonly setSelectedProjectId: BrowserActionContext["setSelectedProjectId"]
@@ -46,6 +47,7 @@ export const createActionContext = (args: ActionContextArgs): BrowserActionConte
   setPortForwardInput: args.setPortForwardInput,
   setPortForwards: args.setPortForwards,
   setProjectAuthSnapshot: args.setProjectAuthSnapshot,
+  setProjectBrowser: args.setProjectBrowser,
   setSelectedMenuIndex: args.setSelectedMenuIndex,
   setSelectedProject: args.setSelectedProject,
   setSelectedProjectId: args.setSelectedProjectId,

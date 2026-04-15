@@ -57,6 +57,19 @@ export type ProjectPortForwardRequest = {
   readonly hostPort?: number | undefined
 }
 
+export type ProjectBrowserStatus = "running" | "stopped" | "missing" | "unknown"
+
+export type ProjectBrowserSession = {
+  readonly projectId: string
+  readonly projectKey: string
+  readonly containerName: string
+  readonly status: ProjectBrowserStatus
+  readonly noVncPath: string
+  readonly noVncUrl: string
+  readonly cdpPath: string
+  readonly cdpUrl: string
+}
+
 export type GithubAuthTokenStatus = {
   readonly key: string
   readonly label: string

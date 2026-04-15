@@ -74,6 +74,8 @@ import {
   upProject
 } from "./services/projects.js"
 import { readProjectAuthSnapshot, runProjectAuthFlow } from "./services/project-auth.js"
+import { readProjectBrowserSession, proxyProjectBrowser } from "./services/project-browser.js"
+import { parseProjectBrowserProxyPath } from "./services/project-browser-core.js"
 import {
   createProjectPortForward,
   deleteProjectPortForward,
@@ -358,9 +360,13 @@ const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
   )
 })
 
-const projectPortProxyResponse = Effect.gen(function*(_) {
+const projectProxyResponse = Effect.gen(function*(_) {
   const request = yield* _(HttpServerRequest.HttpServerRequest)
   const pathname = new URL(request.url, "http://localhost").pathname
+  const browserTarget = parseProjectBrowserProxyPath(pathname)
+  if (browserTarget !== null) {
+    return yield* _(proxyProjectBrowser(request, browserTarget, resolveRequestOrigin(request)))
+  }
   const target = parseProjectPortProxyPath(pathname)
   if (target === null) {
     return yield* _(Effect.fail(new ApiNotFoundError({ message: `Route not found: ${pathname}` })))
@@ -726,6 +732,15 @@ export const makeRouter = () => {
         Effect.catchAll(errorResponse)
       )
     ),
+    HttpRouter.get(
+      "/projects/:projectId/browser",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const browser = yield* _(readProjectBrowserSession(projectId, resolveRequestOrigin(request)))
+        return yield* _(jsonResponse({ browser }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
     HttpRouter.del(
       "/projects/:projectId",
       projectParams.pipe(
@@ -955,7 +970,7 @@ export const makeRouter = () => {
     ),
     HttpRouter.all(
       "*",
-      projectPortProxyResponse.pipe(Effect.catchAll(errorResponse))
+      projectProxyResponse.pipe(Effect.catchAll(errorResponse))
     )
   )
 }

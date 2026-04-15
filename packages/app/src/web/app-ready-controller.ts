@@ -2,7 +2,9 @@ import { updateActionPromptValue } from "./action-prompt.js"
 import {
   cancelBrowserActionPrompt,
   closeSelectedProjectPort,
+  loadSelectedProjectBrowser,
   loadSelectedProjectPorts,
+  openSelectedProjectBrowser,
   openSelectedProjectPort,
   runBrowserMenuAction,
   submitBrowserActionPrompt
@@ -14,6 +16,7 @@ import {
   runAuthActionByIndex,
   runProjectAuthActionByIndex
 } from "./app-ready-actions.js"
+import { useProjectBrowserReset } from "./app-ready-browser-hook.js"
 import { useBrowserShortcuts } from "./app-ready-browser-shortcuts-hook.js"
 import { cancelCreate, setCreateBuffer, submitCreateView, useCreateMenuReset } from "./app-ready-create.js"
 import { useGithubAuthGate } from "./app-ready-github-auth-gate-hook.js"
@@ -69,6 +72,7 @@ const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
   })
   useProjectNavigationReset(args.currentMenu, args.state.setProjectNavigationArmed)
   useProjectAuthReset(args.state.selectedProjectId, args.state.setProjectAuthSnapshot)
+  useProjectBrowserReset(args.state.selectedProjectId, args.state.setProjectBrowser)
   useProjectDetailsReset(args.state.selectedProjectId, args.state.setSelectedProject)
   useProjectPortForwardsReset(
     args.state.selectedProjectId,
@@ -194,6 +198,17 @@ const bindPortForwardActions = (
   }
 })
 
+const bindBrowserActions = (
+  actionContext: ReturnType<typeof createActionContext>
+) => ({
+  onOpenProjectBrowser: () => {
+    openSelectedProjectBrowser(actionContext)
+  },
+  onRefreshProjectBrowser: () => {
+    loadSelectedProjectBrowser(actionContext)
+  }
+})
+
 const bindScreenActions = (
   actionContext: ReturnType<typeof createActionContext>,
   dashboard: DashboardData,
@@ -262,6 +277,7 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     setPortForwardInput: state.setPortForwardInput,
     setPortForwards: state.setPortForwards,
     setProjectAuthSnapshot: state.setProjectAuthSnapshot,
+    setProjectBrowser: state.setProjectBrowser,
     setSelectedMenuIndex: state.setSelectedMenuIndex,
     setSelectedProject: state.setSelectedProject,
     setSelectedProjectId: state.setSelectedProjectId,
@@ -274,6 +290,7 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     ...bindCreateActions(actionContext, dashboard, state),
     ...bindActionPromptActions(actionContext, state),
     ...bindPortForwardActions(actionContext, state),
+    ...bindBrowserActions(actionContext),
     ...bindScreenActions(actionContext, dashboard, state),
     currentMenu,
     selectedProjectSummary,

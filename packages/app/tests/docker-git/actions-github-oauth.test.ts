@@ -66,6 +66,7 @@ const makeContext = () => {
       setPortForwardInput: vi.fn(),
       setPortForwards: vi.fn(),
       setProjectAuthSnapshot: vi.fn(),
+      setProjectBrowser: vi.fn(),
       setSelectedMenuIndex: vi.fn(),
       setSelectedProject: vi.fn(),
       setSelectedProjectId: vi.fn(),

@@ -129,6 +129,19 @@ export const ProjectPortForwardRequestSchema = Schema.Struct({
   targetPort: Schema.Number
 })
 
+export const ProjectBrowserStatusSchema = Schema.Literal("running", "stopped", "missing", "unknown")
+
+export const ProjectBrowserSessionSchema = Schema.Struct({
+  cdpPath: Schema.String,
+  cdpUrl: Schema.String,
+  containerName: Schema.String,
+  noVncPath: Schema.String,
+  noVncUrl: Schema.String,
+  projectId: Schema.String,
+  projectKey: Schema.String,
+  status: ProjectBrowserStatusSchema
+})
+
 export const AgentProviderSchema = Schema.Literal("codex", "opencode", "claude", "custom")
 
 export const AgentEnvVarSchema = Schema.Struct({

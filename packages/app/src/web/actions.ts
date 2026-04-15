@@ -14,6 +14,7 @@ export {
   runBrowserProjectAuthAction,
   submitBrowserActionPrompt
 } from "./actions-auth.js"
+export { loadSelectedProjectBrowser, openSelectedProjectBrowser } from "./actions-browser.js"
 export { closeSelectedProjectPort, loadSelectedProjectPorts, openSelectedProjectPort } from "./actions-port-forwards.js"
 export { loadSelectedProjectInfo } from "./actions-projects.js"
 

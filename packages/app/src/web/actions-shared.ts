@@ -3,7 +3,14 @@ import type { Dispatch, SetStateAction } from "react"
 
 import type { ActionPromptState } from "./action-prompt.js"
 import { createAuthActionPrompt } from "./action-prompt.js"
-import type { AuthSnapshot, GithubAuthStatus, ProjectAuthSnapshot, ProjectDetails, ProjectPortForward } from "./api.js"
+import type {
+  AuthSnapshot,
+  GithubAuthStatus,
+  ProjectAuthSnapshot,
+  ProjectBrowserSession,
+  ProjectDetails,
+  ProjectPortForward
+} from "./api.js"
 import { githubAuthGateMessage, shouldRequireGithubAuth } from "./github-auth-gate.js"
 import { browserMenuIndex } from "./menu.js"
 import type { BrowserScreen } from "./screen.js"
@@ -18,6 +25,14 @@ type BusyAction<A> = {
   readonly label: string
   readonly onFailure?: (error: string) => void
   readonly onFinally?: () => void
+  readonly onSuccess: (value: A) => void
+}
+
+type SelectedProjectBusyAction<A> = {
+  readonly context: BrowserActionContext
+  readonly effect: (projectId: string) => Effect.Effect<A, string>
+  readonly label: string
+  readonly onMissing: () => void
   readonly onSuccess: (value: A) => void
 }
 
@@ -45,6 +60,7 @@ export type BrowserActionContext = {
   readonly setPortForwardInput: Setter<string>
   readonly setPortForwards: Setter<ReadonlyArray<ProjectPortForward>>
   readonly setProjectAuthSnapshot: Setter<ProjectAuthSnapshot | null>
+  readonly setProjectBrowser: Setter<ProjectBrowserSession | null>
   readonly setSelectedMenuIndex: Setter<number>
   readonly setSelectedProject: Setter<ProjectDetails | null>
   readonly setSelectedProjectId: Setter<string | null>
@@ -110,6 +126,22 @@ export const requireSelectedProjectId = (
   }
   context.setMessage("No project selected.")
   return null
+}
+
+export const withSelectedProjectBusy = <A>(
+  { context, effect, label, onMissing, onSuccess }: SelectedProjectBusyAction<A>
+) => {
+  const projectId = requireSelectedProjectId(context)
+  if (projectId === null) {
+    onMissing()
+    return
+  }
+  withBusy({
+    context,
+    effect: effect(projectId),
+    label,
+    onSuccess
+  })
 }
 
 export const requireGithubAuthConfigured = (context: BrowserActionContext): boolean => {

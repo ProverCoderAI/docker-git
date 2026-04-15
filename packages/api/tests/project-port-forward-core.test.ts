@@ -10,6 +10,14 @@ import {
   selectHostPort
 } from "../src/services/project-port-forward-core.js"
 import {
+  parseProjectBrowserProxyPath,
+  renderProjectBrowserCdpPath,
+  renderProjectBrowserNoVncPath,
+  renderProjectBrowserProxyPath,
+  rewriteCdpVersionPayload,
+  rewriteCdpWebSocketUrl
+} from "../src/services/project-browser-core.js"
+import {
   parseLinuxDefaultGatewayIp,
   parseProjectPortProxyPath,
   projectShortKey,
@@ -96,6 +104,54 @@ describe("project port forward core", () => {
       })
       expect(renderForwardProxyPath("a/b", 5173)).toBe(`/p/${projectShortKey("a/b")}/5173/`)
       expect(renderLegacyForwardProxyPath("a/b", 5173)).toBe("/projects/a%2Fb/ports/5173/proxy/")
+    }))
+
+  it.effect("parses project browser proxy paths", () =>
+    Effect.sync(() => {
+      const key = projectShortKey("a/b")
+
+      expect(parseProjectBrowserProxyPath(`/b/${key}/vnc.html`)).toEqual({
+        _tag: "NoVnc",
+        projectKey: key,
+        upstreamPath: "/vnc.html"
+      })
+      expect(parseProjectBrowserProxyPath(`/b/${key}/websockify`)).toEqual({
+        _tag: "NoVnc",
+        projectKey: key,
+        upstreamPath: "/websockify"
+      })
+      expect(parseProjectBrowserProxyPath(`/b/${key}/cdp/json/version`)).toEqual({
+        _tag: "Cdp",
+        projectKey: key,
+        upstreamPath: "/json/version"
+      })
+      expect(renderProjectBrowserProxyPath("a/b")).toBe(`/b/${key}/`)
+      expect(renderProjectBrowserCdpPath("a/b")).toBe(`/b/${key}/cdp/json/version`)
+      expect(renderProjectBrowserNoVncPath("a/b")).toContain(`/b/${key}/vnc.html?`)
+      expect(renderProjectBrowserNoVncPath("a/b")).toContain(`path=b%2F${key}%2Fwebsockify`)
+    }))
+
+  it.effect("rewrites CDP websocket URLs into browser proxy paths", () =>
+    Effect.sync(() => {
+      const key = projectShortKey("a/b")
+      expect(
+        rewriteCdpWebSocketUrl(
+          "ws://127.0.0.1:9222/devtools/browser/abc",
+          "https://docker-git.example.test",
+          "a/b"
+        )
+      ).toBe(`wss://docker-git.example.test/b/${key}/cdp/devtools/browser/abc`)
+
+      expect(
+        rewriteCdpVersionPayload(
+          JSON.stringify({ Browser: "Chrome", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/browser/abc" }),
+          "http://localhost:4191",
+          "a/b"
+        )
+      ).toBe(JSON.stringify({
+        Browser: "Chrome",
+        webSocketDebuggerUrl: `ws://localhost:4191/b/${key}/cdp/devtools/browser/abc`
+      }))
     }))
 
   it.effect("parses Linux default gateway route", () =>

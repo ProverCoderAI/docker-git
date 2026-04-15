@@ -1,12 +1,14 @@
 import { createProjectDraftFromInputs } from "../docker-git/menu-create-shared.js"
 import type { CreateInputs } from "../docker-git/menu-types.js"
+import { openSelectedProjectBrowser } from "./actions-browser.js"
 import { openSelectedProjectPort } from "./actions-port-forwards.js"
 import {
   type BrowserActionContext,
   confirmAction,
   projectActionLabel,
   requireSelectedProjectId,
-  withBusy
+  withBusy,
+  withSelectedProjectBusy
 } from "./actions-shared.js"
 import {
   createProject,
@@ -43,15 +45,13 @@ export const loadSelectedProjectInfo = (
     readonly silent?: boolean
   }
 ) => {
-  const projectId = requireSelectedProjectId(context)
-  if (projectId === null) {
-    context.setSelectedProject(null)
-    return
-  }
-  withBusy({
+  withSelectedProjectBusy({
     context,
-    effect: loadProjectDetails(projectId),
+    effect: loadProjectDetails,
     label: "Loading project info",
+    onMissing: () => {
+      context.setSelectedProject(null)
+    },
     onSuccess: (project) => {
       context.setSelectedProject(project)
       if (options?.silent !== true) {
@@ -231,11 +231,15 @@ export const runProjectMenuAction = (
     openSelectedProjectPort(context)
     return
   }
+  if (currentMenu === "Browser") {
+    openSelectedProjectBrowser(context)
+    return
+  }
   runProjectMenuCommand(currentMenu, context)
 }
 
 const runProjectMenuCommand = (
-  currentMenu: Exclude<BrowserMenuTag, "Auth" | "ProjectAuth" | "Create" | "Select" | "Info" | "Ports">,
+  currentMenu: Exclude<BrowserMenuTag, "Auth" | "ProjectAuth" | "Browser" | "Create" | "Select" | "Info" | "Ports">,
   context: BrowserActionContext
 ) => {
   if (currentMenu === "Status") {

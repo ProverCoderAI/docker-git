@@ -9,6 +9,7 @@ import {
   HealthResponseSchema,
   OutputResponseSchema,
   ProjectAuthSnapshotResponseSchema,
+  ProjectBrowserResponseSchema,
   ProjectEventsPollResponseSchema,
   ProjectPortForwardResponseSchema,
   ProjectPortForwardsResponseSchema,
@@ -21,6 +22,7 @@ import type {
   CreateProjectDraft,
   DashboardData,
   ProjectAuthFlow,
+  ProjectBrowserSession,
   ProjectPortForward
 } from "./api-schema.js"
 
@@ -33,6 +35,7 @@ export type {
   GithubAuthStatus,
   ProjectAuthFlow,
   ProjectAuthSnapshot,
+  ProjectBrowserSession,
   ProjectDetails,
   ProjectPortForward,
   ProjectSummary,
@@ -41,6 +44,10 @@ export type {
 
 export const projectPortForwardProxyUrl = (forward: ProjectPortForward): string =>
   `${resolveApiBaseUrl()}${forward.proxyPath}`
+
+export const projectBrowserNoVncUrl = (browser: ProjectBrowserSession): string => browser.noVncPath
+
+export const projectBrowserCdpUrl = (browser: ProjectBrowserSession): string => browser.cdpPath
 
 export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
   Effect.all({
@@ -72,6 +79,11 @@ export const loadProjectLogs = (projectId: string) =>
 export const loadProjectPortForwards = (projectId: string) =>
   requestJson("GET", `/projects/${encodeURIComponent(projectId)}/ports`, ProjectPortForwardsResponseSchema).pipe(
     Effect.map((response) => response.forwards)
+  )
+
+export const loadProjectBrowser = (projectId: string) =>
+  requestJson("GET", `/projects/${encodeURIComponent(projectId)}/browser`, ProjectBrowserResponseSchema).pipe(
+    Effect.map((response) => response.browser)
   )
 
 export const createProjectPortForward = (
