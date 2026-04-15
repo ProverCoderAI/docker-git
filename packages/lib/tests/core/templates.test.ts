@@ -241,6 +241,10 @@ describe("renderDockerCompose", () => {
     )
 
     expect(compose).toContain('MCP_PLAYWRIGHT_CDP_ENDPOINT: "http://dg-test-browser:9223"')
+    expect(compose).toContain("dg-test-browser:\n    build:")
+    expect(compose.slice(browserServiceIndex)).toContain(
+      "    env_file:\n      - /workspace/.orch/env/global.env\n      - /workspace/.orch/env/project.env\n"
+    )
     expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
     expect(browserDnsIndex).toBeGreaterThan(browserServiceIndex)
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(2)
