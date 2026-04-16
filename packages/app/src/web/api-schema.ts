@@ -60,6 +60,12 @@ export const ProjectResponseSchema = Schema.Struct({
   project: ProjectDetailsSchema
 })
 
+export const CreateProjectAcceptedResponseSchema = Schema.Struct({
+  accepted: Schema.Literal(true),
+  projectId: Schema.String,
+  cursor: Schema.Number
+})
+
 const ProjectPublishedStatusSchema = Schema.Union(
   Schema.Literal("running"),
   Schema.Literal("stopped"),
@@ -283,6 +289,7 @@ export const ProjectEventsPollResponseSchema = Schema.Struct({
 
 export type ProjectSummary = Schema.Schema.Type<typeof ProjectSummarySchema>
 export type ProjectDetails = Schema.Schema.Type<typeof ProjectDetailsSchema>
+export type CreateProjectAcceptedResponse = Schema.Schema.Type<typeof CreateProjectAcceptedResponseSchema>
 export type ProjectPortForward = Schema.Schema.Type<typeof ProjectPortForwardSchema>
 export type ProjectBrowserSession = Schema.Schema.Type<typeof ProjectBrowserSessionSchema>
 export type ProjectDatabaseForward = Schema.Schema.Type<typeof ProjectDatabaseForwardSchema>

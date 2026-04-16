@@ -45,7 +45,7 @@ type AuthSuccessState = {
   readonly snapshot: AuthSnapshot
 }
 
-const outputLineLimit = 120
+const outputLineLimit = 4000
 
 export type BrowserActionContext = {
   readonly databaseConnectionInput: string

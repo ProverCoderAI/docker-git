@@ -1,11 +1,16 @@
 import { Effect } from "effect"
 
 import { buildCreateProjectRequest } from "./api-client-create.js"
-import { readProjectEventCursor, startProjectEventPolling, stopProjectEventPolling } from "./api-client-events.js"
+import {
+  readProjectEventCursor,
+  startProjectEventPolling,
+  stopProjectEventPolling,
+  waitForProjectCreation
+} from "./api-client-events.js"
 import { readProjectOutput, resolveCreateRequestPaths } from "./api-client-helpers.js"
 import { request, requestVoid } from "./api-http.js"
 import { asArray, asObject, asString, type JsonValue } from "./api-json.js"
-import { decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
+import { decodeCreateProjectAccepted, decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
 import { decodeTerminalSession } from "./api-terminal-codec.js"
 import type {
   CreateCommand,
@@ -13,6 +18,7 @@ import type {
   StateInitCommand,
   StateSyncCommand
 } from "./frontend-lib/core/domain.js"
+import type { ApiRequestError } from "./host-errors.js"
 
 export {
   codexImport,
@@ -42,6 +48,37 @@ const decodeProjectResponse = (payload: JsonValue) => {
     : decodeProjectDetails(object["project"] ?? payload)
 }
 
+const invalidCreateAcceptedResponse = (): ApiRequestError => ({
+  _tag: "ApiRequestError",
+  method: "POST",
+  path: "/projects",
+  message: "API accepted async create but returned an invalid response."
+})
+
+type ResolvedCreateRequestPaths = {
+  readonly authorizedKeysPath: string
+  readonly authorizedKeysContents?: string | undefined
+}
+
+const createProjectAsync = (
+  command: CreateCommand,
+  resolvedPaths: ResolvedCreateRequestPaths
+) =>
+  Effect.gen(function*(_) {
+    const createRequest = buildCreateProjectRequest(command, resolvedPaths, { async: true })
+    const payload = yield* _(request("POST", "/projects", createRequest))
+    const accepted = decodeCreateProjectAccepted(payload)
+    if (accepted === null) {
+      return yield* _(Effect.fail(invalidCreateAcceptedResponse()))
+    }
+
+    const created = yield* _(waitForProjectCreation(accepted.projectId, accepted.cursor))
+    if (created.project !== null) {
+      return created.project
+    }
+    return yield* _(getProject(created.projectId))
+  })
+
 export const listProjects = () =>
   request("GET", "/projects").pipe(
     Effect.map((payload) => {
@@ -60,12 +97,13 @@ export const getProject = (projectId: string) =>
 
 const createProjectWithResolvedPaths = (
   command: CreateCommand,
-  resolvedPaths: {
-    readonly authorizedKeysPath: string
-    readonly authorizedKeysContents?: string | undefined
-  }
+  resolvedPaths: ResolvedCreateRequestPaths
 ) =>
   Effect.gen(function*(_) {
+    if (command.runUp) {
+      return yield* _(createProjectAsync(command, resolvedPaths))
+    }
+
     const createRequest = buildCreateProjectRequest(command, resolvedPaths)
     const projectId = asString(createRequest.outDir)
     const initialCursor = projectId === null

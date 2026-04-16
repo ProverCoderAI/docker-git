@@ -687,8 +687,12 @@ export const makeRouter = () => {
       "/projects",
       Effect.gen(function*(_) {
         const request = yield* _(readCreateProjectRequest())
-        const project = yield* _(createProjectFromRequest(request))
-        return yield* _(jsonResponse({ project }, 201))
+        const result = yield* _(createProjectFromRequest(request))
+        return yield* _(
+          "accepted" in result && result.accepted === true
+            ? jsonResponse(result, 202)
+            : jsonResponse({ project: result }, 201)
+        )
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(

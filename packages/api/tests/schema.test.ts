@@ -32,7 +32,8 @@ describe("api schemas", () => {
         authorizedKeysContents: "ssh-ed25519 AAAA-test test@example\n",
         skipGithubAuth: true,
         up: true,
-        force: false
+        force: false,
+        async: true
       })
 
       Either.match(result, {
@@ -44,6 +45,7 @@ describe("api schemas", () => {
           expect(value.authorizedKeysContents).toContain("ssh-ed25519")
           expect(value.skipGithubAuth).toBe(true)
           expect(value.up).toBe(true)
+          expect(value.async).toBe(true)
         }
       })
     }))

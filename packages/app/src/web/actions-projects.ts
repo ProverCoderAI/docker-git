@@ -1,7 +1,6 @@
-import { createProjectDraftFromInputs } from "../docker-git/menu-create-shared.js"
-import type { CreateInputs } from "../docker-git/menu-types.js"
 import { openSelectedProjectBrowser } from "./actions-browser.js"
 import { openSelectedProjectDatabaseEditor } from "./actions-databases.js"
+import { appendOutputLine, appendOutputLineHandler, notifyProjectEventRateLimit } from "./actions-output.js"
 import { openSelectedProjectPort } from "./actions-port-forwards.js"
 import {
   type BrowserActionContext,
@@ -12,7 +11,6 @@ import {
   withSelectedProjectBusy
 } from "./actions-shared.js"
 import {
-  createProject,
   createProjectTerminalSession,
   deleteProject,
   downAllProjects,
@@ -23,22 +21,9 @@ import {
 } from "./api.js"
 import type { BrowserMenuTag } from "./menu.js"
 import { openProjectEventStream } from "./project-events.js"
-import { outputScreen, projectPickerScreen } from "./screen.js"
+import { outputScreen } from "./screen.js"
 
-const appendOutputLine = (
-  context: BrowserActionContext,
-  line: string
-) => {
-  context.setOutput((current) => {
-    const trimmed = line.trim()
-    if (trimmed.length === 0) {
-      return current
-    }
-    const next = current.trim().length === 0 ? trimmed : `${current}\n${trimmed}`
-    const lines = next.split("\n")
-    return lines.length <= 120 ? next : lines.slice(-120).join("\n")
-  })
-}
+export { submitCreateInputs } from "./actions-project-create.js"
 
 export const loadSelectedProjectInfo = (
   context: BrowserActionContext,
@@ -62,27 +47,6 @@ export const loadSelectedProjectInfo = (
   })
 }
 
-export const submitCreateInputs = (
-  inputs: CreateInputs,
-  context: BrowserActionContext
-) => {
-  withBusy({
-    context,
-    effect: createProject(createProjectDraftFromInputs(inputs)),
-    label: "Creating project",
-    onSuccess: (project) => {
-      context.reloadDashboard()
-      context.setOutput("")
-      context.setProjectAuthSnapshot(null)
-      context.setSelectedMenuIndex(1)
-      context.setActiveScreen(projectPickerScreen())
-      context.setSelectedProject(project)
-      context.setSelectedProjectId(project.id)
-      context.setMessage(`Created ${project.displayName}.`)
-    }
-  })
-}
-
 export const connectSelectedProject = (context: BrowserActionContext) => {
   const projectId = requireSelectedProjectId(context)
   if (projectId === null) {
@@ -99,11 +63,9 @@ export const connectProjectById = (
   context.setOutput("")
   appendOutputLine(context, "[ssh.prepare] Preparing SSH session")
   const stream = openProjectEventStream(projectId, {
-    onLine: (line) => {
-      appendOutputLine(context, line)
-    },
+    onLine: appendOutputLineHandler(context),
     onRateLimit: () => {
-      context.setMessage("HTTP 429: tunnel or proxy rate limited the live stream. Retry or request a fresh tunnel URL.")
+      notifyProjectEventRateLimit(context)
     }
   })
   withBusy({

@@ -6,8 +6,10 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as Scope from "effect/Scope"
 
+import type { ApiEvent } from "../src/api/contracts.js"
 import { ApiConflictError, ApiInternalError } from "../src/api/errors.js"
 import { resolveManagedAuthorizedKeysContents } from "../src/services/project-authorized-keys.js"
+import { listProjectEventsSince } from "../src/services/events.js"
 import { createProjectFromRequest, seedAuthorizedKeysForCreate } from "../src/services/projects.js"
 
 const withTempDir = <A, E, R>(
@@ -91,6 +93,25 @@ const withEnvVar = <A, E, R>(
         })
     ).pipe(Effect.flatMap(() => effect))
   )
+
+const realSleep = (milliseconds: number): Effect.Effect<void> =>
+  Effect.promise(() => new Promise((resolve) => {
+    globalThis.setTimeout(resolve, milliseconds)
+  }))
+
+const waitForEvents = (
+  projectId: string,
+  predicate: (events: ReadonlyArray<ApiEvent>) => boolean,
+  attempts: number
+): Effect.Effect<ReadonlyArray<ApiEvent>> =>
+  Effect.gen(function*(_) {
+    const events = listProjectEventsSince(projectId, 0)
+    if (predicate(events) || attempts <= 0) {
+      return events
+    }
+    yield* _(realSleep(50))
+    return yield* _(waitForEvents(projectId, predicate, attempts - 1))
+  })
 
 describe("projects service", () => {
   it.effect("seeds host SSH keys into the controller managed authorized_keys file", () =>
@@ -181,6 +202,59 @@ describe("projects service", () => {
           expect(failure.message).toContain("Cannot connect to Docker daemon.")
           expect(failure.message).not.toContain("docker-daemon-access.js")
         }
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("accepts async create and records realtime lifecycle events on the request project id", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const projectId = path.join(projectsRoot, "async", "realtime")
+
+        yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              Effect.gen(function*(_) {
+                const accepted = yield* _(
+                  createProjectFromRequest({
+                    repoUrl: "https://git.example.test/test-owner/realtime.git",
+                    repoRef: "main",
+                    outDir: projectId,
+                    skipGithubAuth: true,
+                    up: false,
+                    async: true
+                  })
+                )
+
+                expect(accepted).toMatchObject({
+                  accepted: true,
+                  projectId,
+                  cursor: 0
+                })
+
+                const events = yield* _(
+                  waitForEvents(projectId, (items) => items.some((event) => event.type === "project.created"), 20)
+                )
+
+                expect(events.map((event) => event.type)).toContain("project.deployment.status")
+                expect(events.map((event) => event.type)).toContain("project.created")
+                expect(events.find((event) => event.type === "project.deployment.status")?.payload).toMatchObject({
+                  phase: "create",
+                  message: "Project creation started"
+                })
+                expect(events.find((event) => event.type === "project.created")?.payload).toMatchObject({
+                  projectId,
+                  project: {
+                    projectDir: projectId
+                  }
+                })
+              })
+            )
+          )
+        )
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

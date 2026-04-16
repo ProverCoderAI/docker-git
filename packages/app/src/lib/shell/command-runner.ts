@@ -86,6 +86,59 @@ const collectStreamText = (
 ): Effect.Effect<string, PlatformError> =>
   pipe(stream, Stream.runCollect, Effect.map((chunks) => decodeUint8Array(collectUint8Array(chunks))))
 
+type StreamCommandState = {
+  readonly output: string
+  readonly remainder: string
+}
+
+const maxStreamingFailureOutputLength = 20_000
+
+const appendLimitedOutput = (output: string, chunk: string): string => {
+  const next = output + chunk
+  return next.length <= maxStreamingFailureOutputLength
+    ? next
+    : next.slice(next.length - maxStreamingFailureOutputLength)
+}
+
+const emitStreamLines = (
+  lines: ReadonlyArray<string>,
+  onLine: (line: string) => Effect.Effect<void>
+): Effect.Effect<void> =>
+  Effect.forEach(
+    lines,
+    (line) => {
+      const trimmed = line.trimEnd()
+      return trimmed.length === 0 ? Effect.void : onLine(trimmed)
+    },
+    { discard: true }
+  )
+
+const collectStreamTextWithLines = (
+  stream: Stream.Stream<Uint8Array, PlatformError>,
+  onLine: (line: string) => Effect.Effect<void>
+): Effect.Effect<string, PlatformError> =>
+  pipe(
+    stream,
+    Stream.decodeText(),
+    Stream.runFoldEffect({ output: "", remainder: "" } satisfies StreamCommandState, (state, chunk) => {
+      const normalized = `${state.remainder}${chunk}`.replaceAll("\r", "\n")
+      const parts = normalized.split("\n")
+      const remainder = parts.at(-1) ?? ""
+      const lines = parts.slice(0, -1)
+
+      return emitStreamLines(lines, onLine).pipe(
+        Effect.as(
+          {
+            output: appendLimitedOutput(state.output, chunk),
+            remainder
+          } satisfies StreamCommandState
+        )
+      )
+    }),
+    Effect.tap((state) => emitStreamLines([state.remainder], onLine)),
+    Effect.map((state) => state.output)
+  )
+
 const combineCommandOutput = (stdout: string, stderr: string): string =>
   [stdout.trim(), stderr.trim()].filter((chunk) => chunk.length > 0).join("\n")
 
@@ -140,6 +193,33 @@ export const runCommandWithCapturedOutput = <E>(
       const output = combineCommandOutput(stdout, stderr)
       yield* _(
         ensureExitCode(exitCode, okExitCodes, (numericExitCode) => onFailure(numericExitCode, output))
+      )
+    })
+  )
+
+export const runCommandWithStreamingOutput = <E>(
+  spec: RunCommandSpec,
+  okExitCodes: ReadonlyArray<number>,
+  onFailure: (exitCode: number, output: string) => E,
+  onLine: (line: string) => Effect.Effect<void> = (line) => Effect.log(line)
+): Effect.Effect<void, E | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const executor = yield* _(CommandExecutor.CommandExecutor)
+      const process = yield* _(executor.start(buildCommand(spec, "pipe", "pipe", "pipe")))
+      const [stdout, stderr] = yield* _(
+        Effect.all(
+          [
+            collectStreamTextWithLines(process.stdout, onLine),
+            collectStreamTextWithLines(process.stderr, onLine)
+          ],
+          { concurrency: "unbounded" }
+        )
+      )
+      const exitCode = yield* _(process.exitCode)
+      yield* _(
+        ensureExitCode(Number(exitCode), okExitCodes, (numericExitCode) =>
+          onFailure(numericExitCode, combineCommandOutput(stdout, stderr)))
       )
     })
   )

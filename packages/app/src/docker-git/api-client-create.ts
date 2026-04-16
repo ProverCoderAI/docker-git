@@ -6,9 +6,14 @@ type ResolvedCreateRequestPaths = {
   readonly authorizedKeysContents?: string | undefined
 }
 
+type CreateProjectRequestOptions = {
+  readonly async?: boolean | undefined
+}
+
 export const buildCreateProjectRequest = (
   command: CreateCommand,
-  resolvedPaths: ResolvedCreateRequestPaths
+  resolvedPaths: ResolvedCreateRequestPaths,
+  options?: CreateProjectRequestOptions
 ) => {
   const config = command.config
   return {
@@ -44,6 +49,7 @@ export const buildCreateProjectRequest = (
     openSsh: false,
     force: command.force,
     forceEnv: command.forceEnv,
-    waitForClone: command.waitForClone
+    waitForClone: command.waitForClone,
+    ...(options?.async === true ? { async: true } : {})
   } satisfies JsonRequest
 }

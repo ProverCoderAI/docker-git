@@ -22,10 +22,16 @@ import type { CreateCommand as LibCreateCommand } from "@effect-template/lib/cor
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import { Effect, Either, Logger } from "effect"
 
-import type { CreateProjectRequest, ProjectDetails, ProjectStatus, ProjectSummary } from "../api/contracts.js"
+import type {
+  CreateProjectAccepted,
+  CreateProjectRequest,
+  ProjectDetails,
+  ProjectStatus,
+  ProjectSummary
+} from "../api/contracts.js"
 import { ApiAuthRequiredError, ApiConflictError, ApiInternalError, ApiNotFoundError, ApiBadRequestError } from "../api/errors.js"
 import { ensureGithubAuthForCreate } from "./auth.js"
-import { emitProjectEvent } from "./events.js"
+import { clearProjectEvents, emitProjectEvent, latestProjectCursor } from "./events.js"
 import { resolveCreateAuthorizedKeysContents, resolveManagedAuthorizedKeysContents } from "./project-authorized-keys.js"
 import { projectShortKey } from "./project-port-proxy-core.js"
 import { loadProjectRuntimeByProject, runtimeForProject } from "./project-runtime.js"
@@ -66,7 +72,7 @@ const runComposeCapture = (
     Effect.tap((output) =>
       Effect.sync(() => {
         for (const line of output.split(/\r?\n/u)) {
-          const trimmed = line.trimEnd()
+          const trimmed = redactProjectLogLine(line.trimEnd())
           if (trimmed.length > 0) {
             emitProjectEvent(projectId, "project.deployment.log", {
               line: trimmed,
@@ -85,7 +91,7 @@ const runWithProjectEventLogs = <A, E, R>(
   Effect.gen(function*(_) {
     const logger = Logger.make(({ message }) => {
       for (const line of String(message).split(/\r?\n/u)) {
-        const trimmed = line.trimEnd()
+        const trimmed = redactProjectLogLine(line.trimEnd())
         if (trimmed.length > 0) {
           emitProjectEvent(projectId, "project.deployment.log", { line: trimmed })
         }
@@ -94,6 +100,11 @@ const runWithProjectEventLogs = <A, E, R>(
 
     return yield* _(effect.pipe(Effect.provide(Logger.replace(Logger.defaultLogger, logger))))
   })
+
+const redactProjectLogLine = (line: string): string =>
+  line
+    .replace(/https:\/\/([^:\s/@]+):([^@\s]+)@/gu, "https://$1:***@")
+    .replace(/\b(GH_TOKEN|GITHUB_TOKEN|GIT_AUTH_TOKEN)=\S+/gu, "$1=***")
 
 const toProjectStatus = (raw: string): ProjectStatus => {
   const normalized = raw.toLowerCase()
@@ -164,15 +175,35 @@ const toProjectDetails = (
   codexHome: project.codexHome
 })
 
+const projectIdAliases = (
+  path: Path.Path,
+  projectId: string
+): ReadonlySet<string> => {
+  const projectsRoot = path.resolve(defaultProjectsRoot(process.cwd()))
+  const normalized = projectId
+    .replaceAll("\\", "/")
+    .replace(/^\.\//u, "")
+  const rooted = normalized === ".docker-git"
+    ? projectsRoot
+    : normalized.startsWith(".docker-git/")
+      ? path.join(projectsRoot, normalized.slice(".docker-git/".length))
+      : projectId
+  const absolute = path.isAbsolute(rooted) ? path.resolve(rooted) : path.resolve(process.cwd(), rooted)
+  return new Set([projectId, rooted, absolute])
+}
+
 const findProjectById = (projectId: string) =>
-  listProjectItems.pipe(
-    Effect.flatMap((projects) => {
-      const project = projects.find((item) => item.projectDir === projectId)
+  Effect.gen(function*(_) {
+    const path = yield* _(Path.Path)
+    const aliases = projectIdAliases(path, projectId)
+    const projects = yield* _(listProjectItems)
+    const project = projects.find((item) => item.projectDir === projectId)
+      ?? projects.find((item) => aliases.has(item.projectDir) || aliases.has(path.resolve(item.projectDir)))
+    if (project) {
       return project
-        ? Effect.succeed(project)
-        : Effect.fail(new ApiNotFoundError({ message: `Project not found: ${projectId}` }))
-    })
-  )
+    }
+    return yield* _(Effect.fail(new ApiNotFoundError({ message: `Project not found: ${projectId}` })))
+  })
 
 export const getProjectItemById = (projectId: string) => findProjectById(projectId)
 
@@ -295,6 +326,182 @@ export const seedAuthorizedKeysForCreate = (
     }
   })
 
+type PreparedCreateProject = {
+  readonly command: LibCreateCommand
+  readonly projectId: string
+}
+
+const toCreateRawOptions = (request: CreateProjectRequest): RawOptions => ({
+  ...(request.repoUrl === undefined ? {} : { repoUrl: request.repoUrl }),
+  ...(request.repoRef === undefined ? {} : { repoRef: request.repoRef }),
+  ...(request.targetDir === undefined ? {} : { targetDir: request.targetDir }),
+  ...(request.sshPort === undefined ? {} : { sshPort: request.sshPort }),
+  ...(request.sshUser === undefined ? {} : { sshUser: request.sshUser }),
+  ...(request.containerName === undefined ? {} : { containerName: request.containerName }),
+  ...(request.serviceName === undefined ? {} : { serviceName: request.serviceName }),
+  ...(request.volumeName === undefined ? {} : { volumeName: request.volumeName }),
+  ...(request.secretsRoot === undefined ? {} : { secretsRoot: request.secretsRoot }),
+  ...(request.authorizedKeysPath === undefined ? {} : { authorizedKeysPath: request.authorizedKeysPath }),
+  ...(request.envGlobalPath === undefined ? {} : { envGlobalPath: request.envGlobalPath }),
+  ...(request.envProjectPath === undefined ? {} : { envProjectPath: request.envProjectPath }),
+  ...(request.codexAuthPath === undefined ? {} : { codexAuthPath: request.codexAuthPath }),
+  ...(request.codexHome === undefined ? {} : { codexHome: request.codexHome }),
+  ...(request.cpuLimit === undefined ? {} : { cpuLimit: request.cpuLimit }),
+  ...(request.ramLimit === undefined ? {} : { ramLimit: request.ramLimit }),
+  ...(request.dockerNetworkMode === undefined ? {} : { dockerNetworkMode: request.dockerNetworkMode }),
+  ...(request.dockerSharedNetworkName === undefined
+    ? {}
+    : { dockerSharedNetworkName: request.dockerSharedNetworkName }),
+  ...(request.enableMcpPlaywright === undefined ? {} : { enableMcpPlaywright: request.enableMcpPlaywright }),
+  ...(request.outDir === undefined ? {} : { outDir: request.outDir }),
+  ...(request.gitTokenLabel === undefined ? {} : { gitTokenLabel: request.gitTokenLabel }),
+  ...(request.skipGithubAuth === undefined ? {} : { skipGithubAuth: request.skipGithubAuth }),
+  ...(request.codexTokenLabel === undefined ? {} : { codexTokenLabel: request.codexTokenLabel }),
+  ...(request.claudeTokenLabel === undefined ? {} : { claudeTokenLabel: request.claudeTokenLabel }),
+  ...(request.agentAutoMode === undefined ? {} : { agentAutoMode: request.agentAutoMode }),
+  ...(request.up === undefined ? {} : { up: request.up }),
+  ...(request.openSsh === undefined ? {} : { openSsh: request.openSsh }),
+  ...(request.force === undefined ? {} : { force: request.force }),
+  ...(request.forceEnv === undefined ? {} : { forceEnv: request.forceEnv })
+})
+
+const parseCreateCommandRequest = (
+  request: CreateProjectRequest
+): Effect.Effect<LibCreateCommand, ApiBadRequestError> => {
+  const parsed = buildCreateCommand(toCreateRawOptions(request))
+  if (Either.isLeft(parsed)) {
+    return Effect.fail(
+      new ApiBadRequestError({
+        message: "Invalid create payload.",
+        details: formatParseError(parsed.left)
+      })
+    )
+  }
+
+  return Effect.succeed({
+    ...parsed.right,
+    openSsh: false,
+    waitForClone: request.waitForClone ?? parsed.right.waitForClone
+  })
+}
+
+const prepareCreateProjectRequest = (
+  request: CreateProjectRequest
+) =>
+  Effect.gen(function*(_) {
+    const parsedCommand = yield* _(parseCreateCommandRequest(request))
+    const requestAuthorizedKeysContents = request.authorizedKeysContents ?? (
+      request.useManagedAuthorizedKeys === true
+        ? yield* _(resolveCreateAuthorizedKeysContents(parsedCommand.outDir, parsedCommand.config.authorizedKeysPath))
+        : undefined
+    )
+    const resolvedAuthorizedKeysContents = yield* _(
+      resolveRequestedAuthorizedKeysContents(requestAuthorizedKeysContents, request.useManagedAuthorizedKeys === true)
+    )
+
+    const command = withManagedAuthorizedKeysForCreate(parsedCommand, resolvedAuthorizedKeysContents)
+
+    yield* _(seedAuthorizedKeysForCreate(command.outDir, resolvedAuthorizedKeysContents))
+    yield* _(ensureGithubAuthForCreate(command.config))
+
+    return {
+      command,
+      projectId: command.outDir
+    }
+  })
+
+const emitCreateStatus = (
+  projectId: string,
+  phase: string,
+  message: string
+) =>
+  Effect.sync(() => {
+    emitProjectEvent(projectId, "project.deployment.status", { phase, message })
+  })
+
+const emitProjectCreatedEvents = (
+  projectId: string,
+  project: ProjectItem,
+  details: ProjectDetails
+) =>
+  Effect.sync(() => {
+    const payload = {
+      projectId: project.projectDir,
+      containerName: project.containerName,
+      project: details
+    }
+    emitProjectEvent(project.projectDir, "project.created", payload)
+    if (project.projectDir !== projectId) {
+      emitProjectEvent(projectId, "project.created", payload)
+    }
+  })
+
+const toCreateFailureMessage = (error: ProjectApiError): string =>
+  error instanceof ApiAuthRequiredError ||
+  error instanceof ApiBadRequestError ||
+  error instanceof ApiConflictError ||
+  error instanceof ApiInternalError ||
+  error instanceof ApiNotFoundError
+    ? error.message
+    : renderError(error)
+
+const runPreparedCreateProject = (
+  prepared: PreparedCreateProject
+) =>
+  Effect.gen(function*(_) {
+    const { command, projectId } = prepared
+
+    yield* _(
+      runWithProjectEventLogs(
+        projectId,
+        createProject(command).pipe(
+          Effect.catchTag("DockerIdentityConflictError", (error) =>
+            Effect.fail(new ApiConflictError({ message: renderError(error) }))
+          )
+        )
+      )
+    )
+
+    const project = yield* _(
+      resolveCreatedProject(
+        command.config.containerName,
+        command.config.repoUrl,
+        command.config.repoRef
+      )
+    )
+    const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
+    const summary = yield* _(withProjectRuntime(project, runtimeForProject(runtimeByProject, project)))
+    const details = toProjectDetails(project, summary)
+
+    yield* _(emitProjectCreatedEvents(projectId, project, details))
+
+    return details
+  }).pipe(Effect.mapError(toProjectApiError))
+
+const startCreateProjectJob = (
+  prepared: PreparedCreateProject
+) =>
+  Effect.gen(function*(_) {
+    clearProjectEvents(prepared.projectId)
+    const cursor = latestProjectCursor(prepared.projectId)
+    yield* _(emitCreateStatus(prepared.projectId, "create", "Project creation started"))
+    yield* _(
+      runPreparedCreateProject(prepared).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            emitCreateStatus(prepared.projectId, "failed", toCreateFailureMessage(error)),
+          onSuccess: () => Effect.void
+        }),
+        Effect.forkDaemon
+      )
+    )
+    return {
+      accepted: true,
+      projectId: prepared.projectId,
+      cursor
+    } satisfies CreateProjectAccepted
+  })
+
 export const listProjects = () =>
   listProjectItems.pipe(
     Effect.flatMap((projects) =>
@@ -343,111 +550,14 @@ export const createProjectFromRequest = (
   request: CreateProjectRequest
 ) =>
   Effect.gen(function*(_) {
-    const raw: RawOptions = {
-      ...(request.repoUrl === undefined ? {} : { repoUrl: request.repoUrl }),
-      ...(request.repoRef === undefined ? {} : { repoRef: request.repoRef }),
-      ...(request.targetDir === undefined ? {} : { targetDir: request.targetDir }),
-      ...(request.sshPort === undefined ? {} : { sshPort: request.sshPort }),
-      ...(request.sshUser === undefined ? {} : { sshUser: request.sshUser }),
-      ...(request.containerName === undefined ? {} : { containerName: request.containerName }),
-      ...(request.serviceName === undefined ? {} : { serviceName: request.serviceName }),
-      ...(request.volumeName === undefined ? {} : { volumeName: request.volumeName }),
-      ...(request.secretsRoot === undefined ? {} : { secretsRoot: request.secretsRoot }),
-      ...(request.authorizedKeysPath === undefined ? {} : { authorizedKeysPath: request.authorizedKeysPath }),
-      ...(request.envGlobalPath === undefined ? {} : { envGlobalPath: request.envGlobalPath }),
-      ...(request.envProjectPath === undefined ? {} : { envProjectPath: request.envProjectPath }),
-      ...(request.codexAuthPath === undefined ? {} : { codexAuthPath: request.codexAuthPath }),
-      ...(request.codexHome === undefined ? {} : { codexHome: request.codexHome }),
-      ...(request.cpuLimit === undefined ? {} : { cpuLimit: request.cpuLimit }),
-      ...(request.ramLimit === undefined ? {} : { ramLimit: request.ramLimit }),
-      ...(request.dockerNetworkMode === undefined ? {} : { dockerNetworkMode: request.dockerNetworkMode }),
-      ...(request.dockerSharedNetworkName === undefined ? {} : { dockerSharedNetworkName: request.dockerSharedNetworkName }),
-      ...(request.enableMcpPlaywright === undefined ? {} : { enableMcpPlaywright: request.enableMcpPlaywright }),
-      ...(request.outDir === undefined ? {} : { outDir: request.outDir }),
-      ...(request.gitTokenLabel === undefined ? {} : { gitTokenLabel: request.gitTokenLabel }),
-      ...(request.skipGithubAuth === undefined ? {} : { skipGithubAuth: request.skipGithubAuth }),
-      ...(request.codexTokenLabel === undefined ? {} : { codexTokenLabel: request.codexTokenLabel }),
-      ...(request.claudeTokenLabel === undefined ? {} : { claudeTokenLabel: request.claudeTokenLabel }),
-      ...(request.agentAutoMode === undefined ? {} : { agentAutoMode: request.agentAutoMode }),
-      ...(request.up === undefined ? {} : { up: request.up }),
-      ...(request.openSsh === undefined ? {} : { openSsh: request.openSsh }),
-      ...(request.force === undefined ? {} : { force: request.force }),
-      ...(request.forceEnv === undefined ? {} : { forceEnv: request.forceEnv })
+    const prepared = yield* _(prepareCreateProjectRequest(request).pipe(Effect.mapError(toProjectApiError)))
+    if (request.async === true) {
+      return yield* _(startCreateProjectJob(prepared))
     }
 
-    const parsed = buildCreateCommand(raw)
-    if (Either.isLeft(parsed)) {
-      return yield* _(
-        Effect.fail(
-          new ApiBadRequestError({
-            message: "Invalid create payload.",
-            details: formatParseError(parsed.left)
-          })
-        )
-      )
-    }
-
-    const parsedCommand = {
-      ...parsed.right,
-      openSsh: false,
-      waitForClone: request.waitForClone ?? parsed.right.waitForClone
-    }
-
-    const requestAuthorizedKeysContents = request.authorizedKeysContents ?? (
-      request.useManagedAuthorizedKeys === true
-        ? yield* _(resolveCreateAuthorizedKeysContents(parsedCommand.outDir, parsedCommand.config.authorizedKeysPath))
-        : undefined
-    )
-    const resolvedAuthorizedKeysContents = yield* _(
-      resolveRequestedAuthorizedKeysContents(requestAuthorizedKeysContents, request.useManagedAuthorizedKeys === true)
-    )
-
-    const command = withManagedAuthorizedKeysForCreate(parsedCommand, resolvedAuthorizedKeysContents)
-
-    yield* _(seedAuthorizedKeysForCreate(command.outDir, resolvedAuthorizedKeysContents))
-
-    yield* _(ensureGithubAuthForCreate(command.config))
-
-    yield* _(
-      Effect.sync(() => {
-        emitProjectEvent(command.outDir, "project.deployment.status", {
-          phase: "create",
-          message: "Project creation started"
-        })
-      })
-    )
-
-    yield* _(
-      runWithProjectEventLogs(
-        command.outDir,
-        createProject(command).pipe(
-        Effect.catchTag("DockerIdentityConflictError", (error) =>
-          Effect.fail(new ApiConflictError({ message: renderError(error) }))
-        )
-      )
-      )
-    )
-
-    const project = yield* _(
-      resolveCreatedProject(
-        command.config.containerName,
-        command.config.repoUrl,
-        command.config.repoRef
-      )
-    )
-    const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
-    const summary = yield* _(withProjectRuntime(project, runtimeForProject(runtimeByProject, project)))
-
-    yield* _(
-      Effect.sync(() => {
-        emitProjectEvent(project.projectDir, "project.created", {
-          projectId: project.projectDir,
-          containerName: project.containerName
-        })
-      })
-    )
-
-    return toProjectDetails(project, summary)
+    clearProjectEvents(prepared.projectId)
+    yield* _(emitCreateStatus(prepared.projectId, "create", "Project creation started"))
+    return yield* _(runPreparedCreateProject(prepared).pipe(Effect.mapError(toProjectApiError)))
   }).pipe(Effect.mapError(toProjectApiError))
 
 export const deleteProjectById = (
