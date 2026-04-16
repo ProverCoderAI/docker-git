@@ -12,3 +12,8 @@ export const mergeDashboardRefreshState = (
   next._tag === "Error" && current._tag === "Ready"
     ? current
     : next
+
+export const createDashboardRefreshReducer =
+  (next: DashboardState) =>
+  (current: DashboardState): DashboardState =>
+    mergeDashboardRefreshState(current, next)

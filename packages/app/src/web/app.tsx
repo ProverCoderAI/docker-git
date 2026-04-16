@@ -4,7 +4,7 @@ import { type JSX, startTransition, useEffect, useEffectEvent, useState } from "
 import { webPrimitives } from "../ui/primitives-web.js"
 import { UiProvider } from "../ui/primitives.js"
 import { loadDashboard, resolveApiBaseUrl } from "./api.js"
-import { type DashboardState, mergeDashboardRefreshState } from "./app-dashboard-state.js"
+import { createDashboardRefreshReducer, type DashboardState } from "./app-dashboard-state.js"
 import { AppReady } from "./app-ready.js"
 import { ErrorScreen, LoadingScreen } from "./panels.js"
 import { resolveViewportLayout, type ViewportLayout, type ViewportSize } from "./viewport-layout.js"
@@ -69,7 +69,7 @@ const useDashboardController = () => {
   const refresh = () => {
     void Effect.runPromise(loadDashboardState()).then((nextState) => {
       startTransition(() => {
-        setState((current) => mergeDashboardRefreshState(current, nextState))
+        setState(createDashboardRefreshReducer(nextState))
       })
     })
   }
