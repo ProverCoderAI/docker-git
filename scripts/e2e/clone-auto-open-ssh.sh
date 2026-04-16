@@ -35,7 +35,8 @@ CLONE_LOG="$ROOT/clone-auto-open-ssh.log"
 SSH_INVOCATION_LOG="$ROOT/ssh-invocation.log"
 SSH_SESSION_LOG="$ROOT/ssh-session.log"
 RUN_SCRIPT="$ROOT/run-clone-auto-open-ssh.sh"
-CLONE_AUTO_OPEN_TIMEOUT="${DOCKER_GIT_E2E_CLONE_AUTO_OPEN_TIMEOUT:-300s}"
+# Cold controller/project image builds can exceed 5 minutes on GitHub-hosted runners.
+CLONE_AUTO_OPEN_TIMEOUT="${DOCKER_GIT_E2E_CLONE_AUTO_OPEN_TIMEOUT:-900s}"
 FAILURE_DUMPED=0
 
 fail() {
