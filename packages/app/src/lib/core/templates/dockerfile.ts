@@ -8,7 +8,20 @@ const renderDockerfilePrelude = (): string =>
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NVM_DIR=/usr/local/nvm
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN set -eu; \
+  for attempt in 1 2 3 4 5; do \
+    rm -rf /var/lib/apt/lists/*; \
+    if apt-get -o Acquire::Retries=3 update; then \
+      break; \
+    fi; \
+    if [ "$attempt" = "5" ]; then \
+      echo "apt-get update failed after retries" >&2; \
+      exit 1; \
+    fi; \
+    echo "apt-get update attempt \${attempt} failed; retrying..." >&2; \
+    sleep $((attempt * 2)); \
+  done; \
+  apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
     openssh-server git gh ca-certificates curl unzip bsdutils sudo \
     make docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
     ncurses-term \
