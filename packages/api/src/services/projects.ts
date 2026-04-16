@@ -175,15 +175,35 @@ const toProjectDetails = (
   codexHome: project.codexHome
 })
 
+const projectIdAliases = (
+  path: Path.Path,
+  projectId: string
+): ReadonlySet<string> => {
+  const projectsRoot = path.resolve(defaultProjectsRoot(process.cwd()))
+  const normalized = projectId
+    .replaceAll("\\", "/")
+    .replace(/^\.\//u, "")
+  const rooted = normalized === ".docker-git"
+    ? projectsRoot
+    : normalized.startsWith(".docker-git/")
+      ? path.join(projectsRoot, normalized.slice(".docker-git/".length))
+      : projectId
+  const absolute = path.isAbsolute(rooted) ? path.resolve(rooted) : path.resolve(process.cwd(), rooted)
+  return new Set([projectId, rooted, absolute])
+}
+
 const findProjectById = (projectId: string) =>
-  listProjectItems.pipe(
-    Effect.flatMap((projects) => {
-      const project = projects.find((item) => item.projectDir === projectId)
+  Effect.gen(function*(_) {
+    const path = yield* _(Path.Path)
+    const aliases = projectIdAliases(path, projectId)
+    const projects = yield* _(listProjectItems)
+    const project = projects.find((item) => item.projectDir === projectId)
+      ?? projects.find((item) => aliases.has(item.projectDir) || aliases.has(path.resolve(item.projectDir)))
+    if (project) {
       return project
-        ? Effect.succeed(project)
-        : Effect.fail(new ApiNotFoundError({ message: `Project not found: ${projectId}` }))
-    })
-  )
+    }
+    return yield* _(Effect.fail(new ApiNotFoundError({ message: `Project not found: ${projectId}` })))
+  })
 
 export const getProjectItemById = (projectId: string) => findProjectById(projectId)
 
@@ -401,12 +421,14 @@ const emitCreateStatus = (
 
 const emitProjectCreatedEvents = (
   projectId: string,
-  project: ProjectItem
+  project: ProjectItem,
+  details: ProjectDetails
 ) =>
   Effect.sync(() => {
     const payload = {
       projectId: project.projectDir,
-      containerName: project.containerName
+      containerName: project.containerName,
+      project: details
     }
     emitProjectEvent(project.projectDir, "project.created", payload)
     if (project.projectDir !== projectId) {
@@ -449,10 +471,11 @@ const runPreparedCreateProject = (
     )
     const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
     const summary = yield* _(withProjectRuntime(project, runtimeForProject(runtimeByProject, project)))
+    const details = toProjectDetails(project, summary)
 
-    yield* _(emitProjectCreatedEvents(projectId, project))
+    yield* _(emitProjectCreatedEvents(projectId, project, details))
 
-    return toProjectDetails(project, summary)
+    return details
   }).pipe(Effect.mapError(toProjectApiError))
 
 const startCreateProjectJob = (

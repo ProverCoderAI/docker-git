@@ -72,8 +72,11 @@ const createProjectAsync = (
       return yield* _(Effect.fail(invalidCreateAcceptedResponse()))
     }
 
-    const createdProjectId = yield* _(waitForProjectCreation(accepted.projectId, accepted.cursor))
-    return yield* _(getProject(createdProjectId))
+    const created = yield* _(waitForProjectCreation(accepted.projectId, accepted.cursor))
+    if (created.project !== null) {
+      return created.project
+    }
+    return yield* _(getProject(created.projectId))
   })
 
 export const listProjects = () =>

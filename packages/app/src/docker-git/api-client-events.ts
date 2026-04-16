@@ -3,6 +3,7 @@ import * as Fiber from "effect/Fiber"
 
 import { request } from "./api-http.js"
 import { asArray, asObject, asString, type JsonValue } from "./api-json.js"
+import { type ApiProjectDetails, decodeProjectDetails } from "./api-project-codec.js"
 import type { ControllerRuntime } from "./controller.js"
 import type { ApiAuthRequiredError, ApiRequestError } from "./host-errors.js"
 import { formatProjectEventLine } from "./project-event-lines.js"
@@ -22,6 +23,11 @@ type ProjectEventPollResponse = {
 }
 
 type ProjectCreationWaitError = ApiAuthRequiredError | ApiRequestError
+
+export type ProjectCreationResult = {
+  readonly projectId: string
+  readonly project: ApiProjectDetails | null
+}
 
 export type ProjectEventPolling = {
   readonly cursorRef: Ref.Ref<number>
@@ -88,13 +94,19 @@ const readProjectEventPayloadField = (
   return object === null ? null : asString(object[key])
 }
 
-const readCreatedProjectId = (
+const readCreatedProject = (
   event: ProjectEvent,
   fallbackProjectId: string
-): string | null =>
-  event.type === "project.created"
-    ? (readProjectEventPayloadField(event, "projectId") ?? fallbackProjectId)
-    : null
+): ProjectCreationResult | null => {
+  if (event.type !== "project.created") {
+    return null
+  }
+
+  const payload = asObject(event.payload)
+  const projectId = readProjectEventPayloadField(event, "projectId") ?? fallbackProjectId
+  const project = payload === null ? null : decodeProjectDetails(payload["project"] ?? null)
+  return { projectId, project }
+}
 
 const readFailedMessage = (event: ProjectEvent): string | null =>
   event.type === "project.deployment.status" && readProjectEventPayloadField(event, "phase") === "failed"
@@ -137,14 +149,14 @@ const pollProjectEventsOnce = (
     return response
   })
 
-const findCreatedProjectId = (
+const findCreatedProject = (
   projectId: string,
   events: ReadonlyArray<ProjectEvent>
-): string | null => {
+): ProjectCreationResult | null => {
   for (const event of events) {
-    const createdProjectId = readCreatedProjectId(event, projectId)
-    if (createdProjectId !== null) {
-      return createdProjectId
+    const created = readCreatedProject(event, projectId)
+    if (created !== null) {
+      return created
     }
   }
   return null
@@ -165,7 +177,7 @@ const findFailureMessage = (
 const waitForProjectCreationLoop = (
   projectId: string,
   cursorRef: Ref.Ref<number>
-): Effect.Effect<string, ProjectCreationWaitError, ControllerRuntime> =>
+): Effect.Effect<ProjectCreationResult, ProjectCreationWaitError, ControllerRuntime> =>
   Effect.gen(function*(_) {
     const response = yield* _(pollProjectEventsOnce(projectId, cursorRef))
     const failureMessage = findFailureMessage(response.events)
@@ -173,9 +185,9 @@ const waitForProjectCreationLoop = (
       return yield* _(Effect.fail(toProjectCreationError(projectId, failureMessage)))
     }
 
-    const createdProjectId = findCreatedProjectId(projectId, response.events)
-    if (createdProjectId !== null) {
-      return createdProjectId
+    const created = findCreatedProject(projectId, response.events)
+    if (created !== null) {
+      return created
     }
 
     yield* _(Effect.sleep(projectEventPollInterval))

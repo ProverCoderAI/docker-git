@@ -245,6 +245,12 @@ describe("projects service", () => {
                   phase: "create",
                   message: "Project creation started"
                 })
+                expect(events.find((event) => event.type === "project.created")?.payload).toMatchObject({
+                  projectId,
+                  project: {
+                    projectDir: projectId
+                  }
+                })
               })
             )
           )

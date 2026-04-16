@@ -1,7 +1,11 @@
+import * as ParseResult from "@effect/schema/ParseResult"
+import { Either } from "effect"
+
 import { createProjectDraftFromInputs } from "../docker-git/menu-create-shared.js"
 import type { CreateInputs } from "../docker-git/menu-types.js"
 import { appendOutputLine, appendOutputLineHandler, notifyProjectEventRateLimit } from "./actions-output.js"
 import { type BrowserActionContext, withBusy } from "./actions-shared.js"
+import { ProjectDetailsSchema } from "./api-schema.js"
 import { type ApiEvent, loadProjectDetails, type ProjectDetails, startCreateProject } from "./api.js"
 import { openProjectEventStream } from "./project-events.js"
 import { outputScreen, projectPickerScreen } from "./screen.js"
@@ -20,6 +24,21 @@ const readEventPayloadString = (
 
 const readCreatedProjectId = (event: ApiEvent): string | null =>
   event.type === "project.created" ? readEventPayloadString(event, "projectId") : null
+
+const readCreatedProject = (event: ApiEvent): ProjectDetails | null => {
+  if (event.type !== "project.created") {
+    return null
+  }
+  const payload = event.payload
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    return null
+  }
+  const project = Object.entries(payload).find(([name]) => name === "project")?.[1]
+  return Either.match(ParseResult.decodeUnknownEither(ProjectDetailsSchema)(project), {
+    onLeft: () => null,
+    onRight: (value) => value
+  })
+}
 
 const readCreateFailureMessage = (event: ApiEvent): string | null =>
   event.type === "project.deployment.status" && readEventPayloadString(event, "phase") === "failed"
@@ -41,9 +60,14 @@ const applyCreatedProject = (
 
 const finishCreateFromEvent = (
   context: BrowserActionContext,
-  projectId: string
+  projectId: string,
+  project: ProjectDetails | null
 ) => {
   appendOutputLine(context, "[create] Project created")
+  if (project !== null) {
+    applyCreatedProject(context, project)
+    return
+  }
   withBusy({
     context,
     effect: loadProjectDetails(projectId),
@@ -89,7 +113,7 @@ export const submitCreateInputs = (
           const projectId = readCreatedProjectId(event)
           if (projectId !== null) {
             stream?.close()
-            finishCreateFromEvent(context, projectId)
+            finishCreateFromEvent(context, projectId, readCreatedProject(event))
           }
         },
         onLine: appendOutputLineHandler(context),
