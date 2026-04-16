@@ -10,7 +10,9 @@ ENV PATH=/opt/bun/bin:$PATH
 WORKDIR /workspace
 
 RUN set -eu; \
-  sed -i 's|http://archive.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g' \
+  sed -i \
+    -e 's|http://archive.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g' \
+    -e 's|http://security.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g' \
     /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true; \
   for attempt in 1 2 3; do \
     rm -rf /var/lib/apt/lists/*; \
