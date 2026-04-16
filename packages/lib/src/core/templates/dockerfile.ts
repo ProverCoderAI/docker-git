@@ -7,7 +7,24 @@ const renderDockerfilePrelude = (): string =>
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NVM_DIR=/usr/local/nvm
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN set -eu; \
+  sed -i \
+    -e 's|http://archive.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g' \
+    -e 's|http://security.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g' \
+    /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true; \
+  for attempt in 1 2 3 4 5; do \
+    rm -rf /var/lib/apt/lists/*; \
+    if apt-get -o Acquire::Retries=3 -o Acquire::By-Hash=force update; then \
+      break; \
+    fi; \
+    if [ "$attempt" = "5" ]; then \
+      echo "apt-get update failed after retries" >&2; \
+      exit 1; \
+    fi; \
+    echo "apt-get update attempt \${attempt} failed; retrying..." >&2; \
+    sleep $((attempt * 2)); \
+  done; \
+  apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
     openssh-server git gh ca-certificates curl unzip bsdutils sudo \
     make docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
     ncurses-term \
@@ -171,7 +188,7 @@ if [[ -z "$JSON" ]]; then
 fi
 
 EXTRA_ARGS=()
-if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-1}" == "1" ]]; then
+if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-0}" == "1" ]]; then
   EXTRA_ARGS+=(--isolated)
 fi
 

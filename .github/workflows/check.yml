@@ -100,7 +100,7 @@ jobs:
   e2e-opencode:
     name: E2E (OpenCode)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
@@ -113,7 +113,7 @@ jobs:
   e2e-clone-cache:
     name: E2E (Clone cache)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
@@ -126,7 +126,7 @@ jobs:
   e2e-login-context:
     name: E2E (Login context)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
@@ -139,7 +139,7 @@ jobs:
   e2e-runtime-volumes-ssh:
     name: E2E (Runtime volumes + SSH)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
@@ -152,7 +152,7 @@ jobs:
   e2e-clone-auto-open-ssh:
     name: E2E (Clone auto-open SSH)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies

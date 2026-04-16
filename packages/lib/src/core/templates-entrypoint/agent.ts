@@ -51,8 +51,13 @@ fi`
 
 const renderAgentPromptCommand = (mode: AgentMode): string =>
   Match.value(mode).pipe(
-    Match.when("claude", () => String.raw`claude --dangerously-skip-permissions -p \"\$(cat \"$AGENT_PROMPT_FILE\")\"`),
-    Match.when("codex", () => String.raw`codex exec \"\$(cat \"$AGENT_PROMPT_FILE\")\"`),
+    Match.when(
+      "claude",
+      () =>
+        String
+          .raw`MCP_PLAYWRIGHT_ISOLATED=1 claude --dangerously-skip-permissions -p \"\$(cat \"$AGENT_PROMPT_FILE\")\"`
+    ),
+    Match.when("codex", () => String.raw`MCP_PLAYWRIGHT_ISOLATED=1 codex exec \"\$(cat \"$AGENT_PROMPT_FILE\")\"`),
     Match.when("gemini", () => String.raw`gemini --approval-mode=yolo \"\$(cat \"$AGENT_PROMPT_FILE\")\"`),
     Match.exhaustive
   )

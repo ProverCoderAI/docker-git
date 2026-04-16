@@ -1,9 +1,11 @@
+/* jscpd:ignore-start */
 import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { afterEach, beforeEach, vi } from "vitest"
+import { beforeEach, vi } from "vitest"
 
 import { request } from "../../src/docker-git/api-http.js"
+/* jscpd:ignore-end */
 
 const resolveApiBaseUrlMock = vi.hoisted(() => vi.fn<() => string>())
 const ensureControllerReadyMock = vi.hoisted(() => vi.fn<() => Effect.Effect<void>>())
@@ -15,22 +17,6 @@ vi.mock("../../src/docker-git/controller.js", () => ({
 
 const joinIp = (...octets: ReadonlyArray<string>): string => octets.join(".")
 const makeHttpUrl = (host: string, port: string): string => ["ht", "tp://", host, ":", port].join("")
-const toFetchUrl = (value: Parameters<typeof globalThis.fetch>[0] | undefined): string => {
-  if (value === undefined) {
-    throw new TypeError("unexpected undefined fetch request value")
-  }
-  if (typeof value === "string") {
-    return value
-  }
-  if (value instanceof URL) {
-    return value.toString()
-  }
-  if (value instanceof Request) {
-    return value.url
-  }
-
-  throw new TypeError("unexpected fetch request value")
-}
 
 describe("api-http request retry", () => {
   beforeEach(() => {
@@ -39,38 +25,32 @@ describe("api-http request retry", () => {
     ensureControllerReadyMock.mockImplementation(() => Effect.void)
   })
 
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
   it.effect("refreshes controller readiness once after a transport failure", () =>
     Effect.gen(function*(_) {
-      const fetchMock = vi.fn<typeof globalThis.fetch>()
-      fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"))
-      fetchMock.mockResolvedValueOnce(
-        Response.json({ ok: true }, {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      vi.stubGlobal("fetch", fetchMock)
-
       resolveApiBaseUrlMock.mockReturnValueOnce(
-        makeHttpUrl(joinIp("127", "0", "0", "1"), "3334")
+        makeHttpUrl(joinIp("127", "0", "0", "1"), "1")
       )
       resolveApiBaseUrlMock.mockReturnValueOnce(
-        makeHttpUrl(joinIp("172", "17", "0", "20"), "3334")
+        makeHttpUrl(joinIp("127", "0", "0", "1"), "2")
       )
 
-      const payload = yield* _(request("GET", "/health"))
+      const result = yield* _(Effect.either(request("GET", "/health")))
 
-      expect(payload).toEqual({ ok: true })
+      expect(result._tag).toBe("Left")
       expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
-      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(resolveApiBaseUrlMock).toHaveBeenCalledTimes(2)
+    }).pipe(Effect.provide(NodeContext.layer)))
 
-      const firstCall = fetchMock.mock.calls[0]?.[0]
-      const secondCall = fetchMock.mock.calls[1]?.[0]
-      expect(toFetchUrl(firstCall)).toContain(`${joinIp("127", "0", "0", "1")}:3334/health`)
-      expect(toFetchUrl(secondCall)).toContain(`${joinIp("172", "17", "0", "20")}:3334/health`)
+  it.effect("does not replay mutating requests after a transport failure", () =>
+    Effect.gen(function*(_) {
+      resolveApiBaseUrlMock.mockReturnValue(
+        makeHttpUrl(joinIp("127", "0", "0", "1"), "1")
+      )
+
+      const result = yield* _(Effect.either(request("POST", "/projects", { outDir: "project-1" })))
+
+      expect(result._tag).toBe("Left")
+      expect(ensureControllerReadyMock).not.toHaveBeenCalled()
+      expect(resolveApiBaseUrlMock).toHaveBeenCalledTimes(1)
     }).pipe(Effect.provide(NodeContext.layer)))
 })

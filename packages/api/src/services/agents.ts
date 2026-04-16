@@ -55,18 +55,18 @@ const sourceLabel = (request: CreateAgentRequest): string =>
 
 const pickDefaultCommand = (provider: CreateAgentRequest["provider"]): string => {
   if (provider === "codex") {
-    return "codex"
+    return "MCP_PLAYWRIGHT_ISOLATED=1 codex"
   }
   if (provider === "opencode") {
     return "opencode"
   }
   if (provider === "claude") {
-    return "claude"
+    return "MCP_PLAYWRIGHT_ISOLATED=1 claude"
   }
   return ""
 }
 
-const buildCommand = (request: CreateAgentRequest): string => {
+export const buildCommand = (request: CreateAgentRequest): string => {
   const direct = request.command?.trim() ?? ""
   if (direct.length > 0) {
     return direct

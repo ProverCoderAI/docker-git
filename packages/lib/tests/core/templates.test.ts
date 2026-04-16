@@ -167,6 +167,7 @@ describe("renderEntrypoint auth bridge", () => {
       "\"codex\")",
       "\"claude\")",
       "\"gemini\")",
+      'MCP_PLAYWRIGHT_ISOLATED="${MCP_PLAYWRIGHT_ISOLATED:-0}"',
       "\"20-agents-skills::.agents/skills\"",
       "\"30-agents-dot-skills::.agents/.skills\"",
       "\"80-codex-skills::.codex/skills\"",
@@ -176,7 +177,8 @@ describe("renderEntrypoint auth bridge", () => {
       "$project_dir/.gemini/settings.json",
       "$project_dir/.gemini/commands",
       "$project_dir/.gemini/skills",
-      "codex exec"
+      "MCP_PLAYWRIGHT_ISOLATED=1 codex exec",
+      "MCP_PLAYWRIGHT_ISOLATED=1 claude --dangerously-skip-permissions -p"
     ])
     expect(entrypoint).not.toContain("codex --approval-mode full-auto")
     expect(entrypoint).not.toContain("\"40-claude-skills::.claude/skills\"")
@@ -190,7 +192,7 @@ describe("renderEntrypoint auth bridge", () => {
       ". /etc/profile 2>/dev/null || true;",
       String.raw`. \"$AGENT_ENV_FILE\" 2>/dev/null || true;`,
       "AGENT_PROMPT_FILE=\"/run/docker-git/agent-prompt.txt\"",
-      "claude --dangerously-skip-permissions -p",
+      "MCP_PLAYWRIGHT_ISOLATED=1 claude --dangerously-skip-permissions -p",
       "CLAUDE_GLOBAL_PROMPT_FILE=\"/home/dev/.claude/CLAUDE.md\"",
       "CLAUDE_AUTO_SYSTEM_PROMPT=\"${CLAUDE_AUTO_SYSTEM_PROMPT:-1}\"",
       "docker-git-managed:claude-md",

@@ -1,6 +1,7 @@
 import type { HttpClientResponse } from "@effect/platform"
-import { FetchHttpClient, HttpBody, HttpClient } from "@effect/platform"
+import { HttpBody, HttpClient } from "@effect/platform"
 import type * as HttpClientError from "@effect/platform/HttpClientError"
+import { NodeHttpClient } from "@effect/platform-node"
 import { Effect } from "effect"
 
 import { readHttpResponseTextStream } from "../shared/http-response-stream.js"
@@ -140,16 +141,19 @@ const executeRequestWithControllerRetry = (
   body: JsonRequest | undefined
 ) => {
   const execute = () => executeRequest(client, resolveApiBaseUrl(), method, path, body)
+  const shouldRetry = method === "GET"
 
   return execute().pipe(
     Effect.matchEffect({
       onFailure: (error) =>
-        ensureControllerReady().pipe(
-          Effect.matchEffect({
-            onFailure: () => Effect.fail(error),
-            onSuccess: () => execute()
-          })
-        ),
+        !shouldRetry
+          ? Effect.fail(error)
+          : ensureControllerReady().pipe(
+            Effect.matchEffect({
+              onFailure: () => Effect.fail(error),
+              onSuccess: () => execute()
+            })
+          ),
       onSuccess: (value) => Effect.succeed(value)
     })
   )
@@ -198,7 +202,7 @@ export const request = (
     }
 
     return parsed
-  }).pipe(Effect.provide(FetchHttpClient.layer), mapTransportError(method, path))
+  }).pipe(Effect.provide(NodeHttpClient.layer), mapTransportError(method, path))
 
 export const requestVoid = (method: ApiHttpMethod, path: string, body?: JsonRequest) =>
   request(method, path, body).pipe(Effect.asVoid)
@@ -219,4 +223,4 @@ export const requestTextStream = (
     }
 
     return yield* _(readHttpResponseTextStream(response, onChunk))
-  }).pipe(Effect.provide(FetchHttpClient.layer), mapTransportError(method, path))
+  }).pipe(Effect.provide(NodeHttpClient.layer), mapTransportError(method, path))

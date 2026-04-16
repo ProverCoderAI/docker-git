@@ -35,7 +35,9 @@ CLONE_LOG="$ROOT/clone-auto-open-ssh.log"
 SSH_INVOCATION_LOG="$ROOT/ssh-invocation.log"
 SSH_SESSION_LOG="$ROOT/ssh-session.log"
 RUN_SCRIPT="$ROOT/run-clone-auto-open-ssh.sh"
-CLONE_AUTO_OPEN_TIMEOUT="${DOCKER_GIT_E2E_CLONE_AUTO_OPEN_TIMEOUT:-300s}"
+# Cold controller and project image builds can be slow on GitHub-hosted runners,
+# especially when Ubuntu/NodeSource package mirrors are cold.
+CLONE_AUTO_OPEN_TIMEOUT="${DOCKER_GIT_E2E_CLONE_AUTO_OPEN_TIMEOUT:-1800s}"
 FAILURE_DUMPED=0
 
 fail() {
@@ -230,8 +232,16 @@ export DOCKER_GIT_E2E_CONTAINER_NAME="$CONTAINER_NAME"
 export DOCKER_GIT_SSH_KEY="$SSH_KEY"
 export REPO_ROOT REPO_URL ROOT SSH_PORT OUT_DIR_REL CONTAINER_NAME SERVICE_NAME VOLUME_NAME
 
-timeout "$CLONE_AUTO_OPEN_TIMEOUT" script -q -e -c "$RUN_SCRIPT" /dev/null >"$CLONE_LOG" 2>&1 \
-  || fail "clone auto-open command failed"
+set +e
+timeout "$CLONE_AUTO_OPEN_TIMEOUT" script -q -e -c "$RUN_SCRIPT" /dev/null >"$CLONE_LOG" 2>&1
+clone_exit=$?
+set -e
+if [[ "$clone_exit" -eq 124 ]]; then
+  fail "clone auto-open command timed out after $CLONE_AUTO_OPEN_TIMEOUT"
+fi
+if [[ "$clone_exit" -ne 0 ]]; then
+  fail "clone auto-open command failed with exit code $clone_exit"
+fi
 
 grep -Fq -- "Project created: octocat/hello-world" "$CLONE_LOG" \
   || fail "expected clone log to confirm project creation"

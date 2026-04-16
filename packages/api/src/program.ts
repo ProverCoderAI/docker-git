@@ -11,10 +11,18 @@ import { attachProjectBrowserWebSocketServer } from "./services/project-browser.
 import { attachProjectDatabaseWebSocketServer } from "./services/project-databases.js"
 import { attachTerminalWebSocketServer } from "./services/terminal-sessions.js"
 
+type ApiHttpServer = ReturnType<typeof createServer>
+
 const resolvePort = (env: Record<string, string | undefined>): number => {
   const raw = env["DOCKER_GIT_API_PORT"] ?? env["PORT"]
   const parsed = raw === undefined ? Number.NaN : Number(raw)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 3334
+}
+
+export const configureLongRunningRequestTimeouts = (server: ApiHttpServer): ApiHttpServer => {
+  server.requestTimeout = 0
+  server.setTimeout(0)
+  return server
 }
 
 const requestLogger = HttpMiddleware.make((httpApp) =>
@@ -45,7 +53,7 @@ export const program = (() => {
   const port = resolvePort(process.env)
   const router = makeRouter()
   const app = router.pipe(HttpServer.serve(requestLogger), HttpServer.withLogAddress)
-  const server = createServer()
+  const server = configureLongRunningRequestTimeouts(createServer())
   attachAuthTerminalWebSocketServer(server)
   attachTerminalWebSocketServer(server)
   attachProjectBrowserWebSocketServer(server)
