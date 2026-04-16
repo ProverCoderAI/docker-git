@@ -171,7 +171,7 @@ if [[ -z "$JSON" ]]; then
 fi
 
 EXTRA_ARGS=()
-if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-1}" == "1" ]]; then
+if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-0}" == "1" ]]; then
   EXTRA_ARGS+=(--isolated)
 fi
 

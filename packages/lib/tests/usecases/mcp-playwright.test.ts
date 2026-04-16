@@ -129,6 +129,7 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_RETRY_ATTEMPTS")
         expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_RETRY_DELAY")
         expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_CDP_GUARD")
+        expect(dockerfileAfter).toContain('if [[ "${MCP_PLAYWRIGHT_ISOLATED:-0}" == "1" ]]; then')
         expect(dockerfileAfter).toContain("fetch_cdp_version()")
         expect(dockerfileAfter).toContain("waiting for browser sidecar")
         expect(dockerfileAfter).toContain('exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT"')
