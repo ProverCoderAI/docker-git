@@ -10,7 +10,9 @@ type EventStreamControls = {
 
 type EventStreamHandlers = {
   readonly onLine: (line: string) => void
+  readonly onEvent?: (event: ApiEvent) => void
   readonly onRateLimit: () => void
+  readonly initialCursor?: number | undefined
 }
 
 type PollState = {
@@ -53,6 +55,7 @@ const handlePollFailure = (
 const handlePollSuccess = (
   state: PollState,
   onLine: (line: string) => void,
+  onEvent: ((event: ApiEvent) => void) | undefined,
   response: EventPollSuccess,
   runPoll: () => void
 ): void => {
@@ -69,6 +72,7 @@ const handlePollSuccess = (
     if (line !== null) {
       onLine(line)
     }
+    onEvent?.(event)
   }
   let delayMs = 150
   if (isInitialPoll) {
@@ -81,11 +85,11 @@ const handlePollSuccess = (
 
 export const openProjectEventStream = (
   projectId: string,
-  { onLine, onRateLimit }: EventStreamHandlers
+  { initialCursor, onEvent, onLine, onRateLimit }: EventStreamHandlers
 ): EventStreamControls => {
   const state: PollState = {
     closed: false,
-    cursor: undefined,
+    cursor: initialCursor,
     timeout: null
   }
 
@@ -97,7 +101,7 @@ export const openProjectEventStream = (
             handlePollFailure(state, onLine, onRateLimit, error, runPoll)
           },
           onSuccess: (response) => {
-            handlePollSuccess(state, onLine, response, runPoll)
+            handlePollSuccess(state, onLine, onEvent, response, runPoll)
           }
         })
       )

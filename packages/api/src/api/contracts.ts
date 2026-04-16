@@ -34,6 +34,14 @@ export type ProjectDetails = ProjectSummary & {
   readonly codexHome: string
 }
 
+export type CreateProjectAccepted = {
+  readonly accepted: true
+  readonly projectId: string
+  readonly cursor: number
+}
+
+export type CreateProjectResult = ProjectDetails | CreateProjectAccepted
+
 export type ProjectPortForwardStatus = "running" | "stopped" | "unknown"
 
 export type ProjectPortForward = {
@@ -295,6 +303,7 @@ export type CreateProjectRequest = {
   readonly force?: boolean | undefined
   readonly forceEnv?: boolean | undefined
   readonly waitForClone?: boolean | undefined
+  readonly async?: boolean | undefined
 }
 
 export type AgentEnvVar = {

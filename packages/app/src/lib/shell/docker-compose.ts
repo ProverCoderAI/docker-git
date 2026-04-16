@@ -3,7 +3,7 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
-import { runCommandCapture, runCommandWithCapturedOutput } from "./command-runner.js"
+import { runCommandCapture, runCommandWithStreamingOutput } from "./command-runner.js"
 import { composeSpec, resolveDockerComposeEnv } from "./docker-compose-env.js"
 import { DockerCommandError } from "./errors.js"
 
@@ -24,7 +24,7 @@ const runCompose = (
   Effect.gen(function*(_) {
     const env = yield* _(resolveDockerComposeEnv(cwd))
     yield* _(
-      runCommandWithCapturedOutput(
+      runCommandWithStreamingOutput(
         buildComposeCommand(cwd, args, env),
         okExitCodes,
         (exitCode, output) => new DockerCommandError({ exitCode, ...(output.length > 0 ? { details: output } : {}) })

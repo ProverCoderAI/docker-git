@@ -29,6 +29,12 @@ export type ApiProjectDetails = ApiProjectSummary & {
   readonly codexHome: string
 }
 
+export type ApiCreateProjectAccepted = {
+  readonly accepted: true
+  readonly projectId: string
+  readonly cursor: number
+}
+
 type ProjectDetailFields = Omit<ApiProjectDetails, keyof ApiProjectSummary>
 type RawProjectDetailFields = {
   readonly containerName: string | null
@@ -54,6 +60,8 @@ const stringOrEmpty = (value: string | null): string => value ?? ""
 
 const numberOrZero = (value: number | null): number => value ?? 0
 const readNullableNumber = (value: JsonValue | undefined): number | null => typeof value === "number" ? value : null
+const readRequiredNumber = (value: JsonValue | undefined): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null
 
 const readSummaryBaseFields = (
   object: ReturnType<typeof asObject>
@@ -163,6 +171,23 @@ export const decodeProjectDetails = (value: JsonValue): ApiProjectDetails | null
   const summary = readProjectSummaryFields(value)
   const details = readProjectDetailFields(value)
   return summary === null || details === null ? null : { ...summary, ...details }
+}
+
+export const decodeCreateProjectAccepted = (value: JsonValue): ApiCreateProjectAccepted | null => {
+  const object = asObject(value)
+  if (object === null || object["accepted"] !== true) {
+    return null
+  }
+
+  const projectId = asString(object["projectId"])
+  const cursor = readRequiredNumber(object["cursor"])
+  return projectId === null || cursor === null
+    ? null
+    : {
+      accepted: true,
+      projectId,
+      cursor
+    }
 }
 
 export const renderProjectSummaryLine = (project: ApiProjectSummary): string =>

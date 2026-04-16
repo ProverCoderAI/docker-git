@@ -7,7 +7,6 @@ import {
   AuthTerminalSessionResponseSchema,
   GithubStatusResponseSchema,
   HealthResponseSchema,
-  OutputResponseSchema,
   ProjectAuthSnapshotResponseSchema,
   ProjectBrowserResponseSchema,
   ProjectDatabaseForwardResponseSchema,
@@ -18,13 +17,11 @@ import {
   ProjectEventsPollResponseSchema,
   ProjectPortForwardResponseSchema,
   ProjectPortForwardsResponseSchema,
-  ProjectResponseSchema,
   ProjectsResponseSchema,
   TerminalSessionResponseSchema
 } from "./api-schema.js"
 import type {
   AuthMenuFlow,
-  CreateProjectDraft,
   DashboardData,
   ProjectAuthFlow,
   ProjectBrowserSession,
@@ -33,10 +30,14 @@ import type {
   ProjectPortForward
 } from "./api-schema.js"
 
+export { startCreateProject } from "./api-create-project.js"
+export { createProject, loadProjectDetails, loadProjectLogs, loadProjectPs, upProject } from "./api-project-core.js"
+
 export type {
   ApiEvent,
   AuthMenuFlow,
   AuthSnapshot,
+  CreateProjectAcceptedResponse,
   CreateProjectDraft,
   DashboardData,
   GithubAuthStatus,
@@ -74,21 +75,6 @@ export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
       health,
       projects: projectsResponse.projects
     }))
-  )
-
-export const loadProjectDetails = (projectId: string) =>
-  requestJson("GET", `/projects/${encodeURIComponent(projectId)}`, ProjectResponseSchema).pipe(
-    Effect.map((response) => response.project)
-  )
-
-export const loadProjectPs = (projectId: string) =>
-  requestJson("GET", `/projects/${encodeURIComponent(projectId)}/ps`, OutputResponseSchema).pipe(
-    Effect.map((response) => response.output)
-  )
-
-export const loadProjectLogs = (projectId: string) =>
-  requestJson("GET", `/projects/${encodeURIComponent(projectId)}/logs`, OutputResponseSchema).pipe(
-    Effect.map((response) => response.output)
   )
 
 export const loadProjectPortForwards = (projectId: string) =>
@@ -208,26 +194,6 @@ export const deleteProjectPortForward = (
   projectId: string,
   targetPort: number
 ) => requestText("DELETE", `/projects/${encodeURIComponent(projectId)}/ports/${targetPort}`).pipe(Effect.asVoid)
-
-export const createProject = (draft: CreateProjectDraft) =>
-  requestJson(
-    "POST",
-    "/projects",
-    ProjectResponseSchema,
-    { ...draft, openSsh: false, useManagedAuthorizedKeys: true }
-  ).pipe(
-    Effect.map((response) => response.project)
-  )
-
-export const upProject = (projectId: string) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/up`,
-    ProjectResponseSchema,
-    { useManagedAuthorizedKeys: true }
-  ).pipe(
-    Effect.map((response) => response.project)
-  )
 
 export const createProjectTerminalSession = (projectId: string) =>
   requestJson(

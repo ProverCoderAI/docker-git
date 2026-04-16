@@ -3,12 +3,14 @@ import * as Fiber from "effect/Fiber"
 
 import { request } from "./api-http.js"
 import { asArray, asObject, asString, type JsonValue } from "./api-json.js"
+import type { ControllerRuntime } from "./controller.js"
+import type { ApiAuthRequiredError, ApiRequestError } from "./host-errors.js"
 import { formatProjectEventLine } from "./project-event-lines.js"
 
 const projectPath = (projectId: string, suffix = ""): string => `/projects/${encodeURIComponent(projectId)}${suffix}`
 const projectEventPollInterval = Duration.millis(250)
 
-type ProjectEvent = {
+export type ProjectEvent = {
   readonly seq: number
   readonly type: string
   readonly payload: JsonValue | undefined
@@ -18,6 +20,8 @@ type ProjectEventPollResponse = {
   readonly cursor: number
   readonly events: ReadonlyArray<ProjectEvent>
 }
+
+type ProjectCreationWaitError = ApiAuthRequiredError | ApiRequestError
 
 export type ProjectEventPolling = {
   readonly cursorRef: Ref.Ref<number>
@@ -76,6 +80,38 @@ const writeProjectEventLines = (events: ReadonlyArray<ProjectEvent>) =>
     }
   })
 
+const readProjectEventPayloadField = (
+  event: ProjectEvent,
+  key: string
+): string | null => {
+  const object = asObject(event.payload)
+  return object === null ? null : asString(object[key])
+}
+
+const readCreatedProjectId = (
+  event: ProjectEvent,
+  fallbackProjectId: string
+): string | null =>
+  event.type === "project.created"
+    ? (readProjectEventPayloadField(event, "projectId") ?? fallbackProjectId)
+    : null
+
+const readFailedMessage = (event: ProjectEvent): string | null =>
+  event.type === "project.deployment.status" && readProjectEventPayloadField(event, "phase") === "failed"
+    ? (readProjectEventPayloadField(event, "message") ?? "Project creation failed.")
+    : null
+
+const toProjectCreationError = (
+  projectId: string,
+  message: string
+): ApiRequestError => ({
+  _tag: "ApiRequestError",
+  method: "POST",
+  path: "/projects",
+  message: `${message}\nProject event stream: ${projectId}`,
+  displayOnlyMessage: true
+})
+
 export const readProjectEventCursor = (projectId: string) =>
   request("GET", projectPath(projectId, "/events-poll")).pipe(
     Effect.map((payload) => decodeProjectEventPollResponse(payload)?.cursor ?? 0)
@@ -90,11 +126,69 @@ const pollProjectEventsOnce = (
     const payload = yield* _(request("GET", projectPath(projectId, `/events-poll?cursor=${cursor}`)))
     const response = decodeProjectEventPollResponse(payload)
     if (response === null) {
-      return
+      return {
+        cursor,
+        events: []
+      } satisfies ProjectEventPollResponse
     }
 
     yield* _(Ref.set(cursorRef, response.cursor))
     yield* _(writeProjectEventLines(response.events))
+    return response
+  })
+
+const findCreatedProjectId = (
+  projectId: string,
+  events: ReadonlyArray<ProjectEvent>
+): string | null => {
+  for (const event of events) {
+    const createdProjectId = readCreatedProjectId(event, projectId)
+    if (createdProjectId !== null) {
+      return createdProjectId
+    }
+  }
+  return null
+}
+
+const findFailureMessage = (
+  events: ReadonlyArray<ProjectEvent>
+): string | null => {
+  for (const event of events) {
+    const message = readFailedMessage(event)
+    if (message !== null) {
+      return message
+    }
+  }
+  return null
+}
+
+const waitForProjectCreationLoop = (
+  projectId: string,
+  cursorRef: Ref.Ref<number>
+): Effect.Effect<string, ProjectCreationWaitError, ControllerRuntime> =>
+  Effect.gen(function*(_) {
+    const response = yield* _(pollProjectEventsOnce(projectId, cursorRef))
+    const failureMessage = findFailureMessage(response.events)
+    if (failureMessage !== null) {
+      return yield* _(Effect.fail(toProjectCreationError(projectId, failureMessage)))
+    }
+
+    const createdProjectId = findCreatedProjectId(projectId, response.events)
+    if (createdProjectId !== null) {
+      return createdProjectId
+    }
+
+    yield* _(Effect.sleep(projectEventPollInterval))
+    return yield* _(waitForProjectCreationLoop(projectId, cursorRef))
+  })
+
+export const waitForProjectCreation = (
+  projectId: string,
+  initialCursor: number
+) =>
+  Effect.gen(function*(_) {
+    const cursorRef = yield* _(Ref.make(initialCursor))
+    return yield* _(waitForProjectCreationLoop(projectId, cursorRef))
   })
 
 export const startProjectEventPolling = (projectId: string, initialCursor: number) =>

@@ -36,7 +36,8 @@ export const CreateProjectRequestSchema = Schema.Struct({
   openSsh: OptionalBoolean,
   force: OptionalBoolean,
   forceEnv: OptionalBoolean,
-  waitForClone: OptionalBoolean
+  waitForClone: OptionalBoolean,
+  async: OptionalBoolean
 })
 
 export const GithubAuthLoginRequestSchema = Schema.Struct({

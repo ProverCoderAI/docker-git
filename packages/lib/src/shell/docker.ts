@@ -7,8 +7,8 @@ import { Duration, Effect, pipe, Schedule } from "effect"
 import {
   runCommandCapture,
   runCommandExitCode,
-  runCommandWithCapturedOutput,
-  runCommandWithExitCodes
+  runCommandWithExitCodes,
+  runCommandWithStreamingOutput
 } from "./command-runner.js"
 import { composeSpec, resolveDockerComposeEnv } from "./docker-compose-env.js"
 import { parseInspectNetworkEntry } from "./docker-inspect-parse.js"
@@ -25,7 +25,7 @@ const runCompose = (
   Effect.gen(function*(_) {
     const env = yield* _(resolveDockerComposeEnv(cwd))
     yield* _(
-      runCommandWithCapturedOutput(
+      runCommandWithStreamingOutput(
         {
           ...composeSpec(cwd, args),
           ...(Object.keys(env).length > 0 ? { env } : {})
