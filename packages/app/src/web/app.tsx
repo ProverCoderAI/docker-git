@@ -3,15 +3,11 @@ import { type JSX, startTransition, useEffect, useEffectEvent, useState } from "
 
 import { webPrimitives } from "../ui/primitives-web.js"
 import { UiProvider } from "../ui/primitives.js"
-import { type DashboardData, loadDashboard, resolveApiBaseUrl } from "./api.js"
+import { loadDashboard, resolveApiBaseUrl } from "./api.js"
+import { createDashboardRefreshReducer, type DashboardState } from "./app-dashboard-state.js"
 import { AppReady } from "./app-ready.js"
 import { ErrorScreen, LoadingScreen } from "./panels.js"
 import { resolveViewportLayout, type ViewportLayout, type ViewportSize } from "./viewport-layout.js"
-
-type DashboardState =
-  | { readonly _tag: "Loading"; readonly apiBaseUrl: string }
-  | { readonly _tag: "Error"; readonly apiBaseUrl: string; readonly message: string }
-  | { readonly _tag: "Ready"; readonly dashboard: DashboardData; readonly refreshedAtMs: number }
 
 const refreshIntervalMs = 15_000
 
@@ -73,7 +69,7 @@ const useDashboardController = () => {
   const refresh = () => {
     void Effect.runPromise(loadDashboardState()).then((nextState) => {
       startTransition(() => {
-        setState(nextState)
+        setState(createDashboardRefreshReducer(nextState))
       })
     })
   }

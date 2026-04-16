@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { afterEach, beforeEach, vi } from "vitest"
 
+import { resolveTerminalReconnectDelay } from "../../src/web/terminal-reconnect.js"
 import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "../../src/web/terminal.js"
 import type { TerminalServerMessage } from "../../src/web/terminal.js"
 
@@ -65,5 +66,15 @@ describe("browser terminal helpers", () => {
 
   it("rejects malformed terminal messages", () => {
     expect(parseTerminalServerMessage("{\"type\":\"output\",\"data\":1}")).toBeNull()
+  })
+
+  it("caps reconnect backoff inside the server reconnect grace window", () => {
+    expect([
+      resolveTerminalReconnectDelay(-1),
+      resolveTerminalReconnectDelay(0),
+      resolveTerminalReconnectDelay(1),
+      resolveTerminalReconnectDelay(2),
+      resolveTerminalReconnectDelay(3)
+    ]).toEqual([500, 500, 1000, 2000, 3000])
   })
 })

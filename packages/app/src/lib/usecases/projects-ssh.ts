@@ -55,6 +55,10 @@ const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
     "StrictHostKeyChecking=no",
     "-o",
     "UserKnownHostsFile=/dev/null",
+    "-o",
+    "ServerAliveInterval=30",
+    "-o",
+    "ServerAliveCountMax=3",
     "-p",
     String(port),
     `${item.sshUser}@${host}`

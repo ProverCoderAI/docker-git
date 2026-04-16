@@ -1,257 +1,49 @@
-import { Effect } from "effect"
 import { useEffect } from "react"
-import { Terminal } from "xterm"
-import { FitAddon } from "xterm-addon-fit"
 
-import { deleteTerminalSessionByPath } from "./api.js"
-import type { ActiveTerminalSession } from "./terminal.js"
-import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "./terminal.js"
+import {
+  attachTerminalInput,
+  cleanupTerminalResources,
+  connectTerminalSocket,
+  createLifecycleState,
+  createMessageHandlers,
+  createTerminalRuntime,
+  observeTerminalResize,
+  sendTerminalResize
+} from "./terminal-panel-runtime-core.js"
+import type {
+  TerminalLifecycleArgs,
+  TerminalSocketConnectArgs,
+  TerminalSocketRef
+} from "./terminal-panel-runtime-types.js"
 
-export type TerminalStatus = "attached" | "connecting" | "error" | "exited"
-
-export type TerminalConnectionState = { opened: boolean }
-
-type TerminalRuntime = { readonly fitAddon: FitAddon; readonly terminal: Terminal }
-
-type TerminalMessageHandlers = {
-  readonly notifyMessage: (message: string) => void
-  readonly session: ActiveTerminalSession
-  readonly setStatus: (status: TerminalStatus) => void
-  readonly terminal: Terminal
-}
-
-type TerminalCleanupArgs = {
-  readonly removeInput: () => void
-  readonly removeResize: () => void
-  readonly resizeObserver: ResizeObserver | null
-  readonly socket: WebSocket
-  readonly terminal: Terminal
-}
-
-type TerminalLifecycleArgs = {
-  readonly connectionRef: { current: TerminalConnectionState }
-  readonly hostRef: { readonly current: HTMLDivElement | null }
-  readonly notifyMessage: (message: string) => void
-  readonly session: ActiveTerminalSession
-  readonly setStatus: (status: TerminalStatus) => void
-}
-
-type TerminalSocketListenerArgs = {
-  readonly connectionRef: { current: TerminalConnectionState }
-  readonly onClose: () => void
-  readonly onError: () => void
-  readonly onMessage: (payload: string) => void
-  readonly onOpen: () => void
-  readonly socket: WebSocket
-}
-
-type TerminalSocketFailureHandlerArgs = {
-  readonly notifyMessage: (message: string) => void
-  readonly setStatus: (status: TerminalStatus) => void
-  readonly terminal: Terminal
-  readonly terminalLine: string
-  readonly uiMessage: string
-}
-
-type TerminalSessionSocketArgs = {
-  readonly connectionRef: { current: TerminalConnectionState }
-  readonly handlers: TerminalMessageHandlers
-  readonly notifyMessage: (message: string) => void
+type TerminalCleanupFactoryArgs = {
+  readonly cleanupArgs: Omit<Parameters<typeof cleanupTerminalResources>[0], "removeInput" | "removeResize">
+  readonly inputDisposable: { readonly dispose: () => void }
   readonly sendResize: () => void
-  readonly setStatus: (status: TerminalStatus) => void
-  readonly socket: WebSocket
-  readonly terminal: Terminal
 }
 
-const requestSessionClose = (closePath: string): void => {
-  void Effect.runPromise(deleteTerminalSessionByPath(closePath).pipe(Effect.either, Effect.asVoid))
-}
-
-const createTerminalRuntime = (host: HTMLDivElement): TerminalRuntime => {
-  const terminal = new Terminal({
-    convertEol: false,
-    cursorBlink: true,
-    fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
-    fontSize: 14,
-    theme: {
-      background: "#080a0d",
-      foreground: "#f4f7fb"
-    }
-  })
-  const fitAddon = new FitAddon()
-  terminal.loadAddon(fitAddon)
-  terminal.open(host)
-  fitAddon.fit()
-  terminal.focus()
-  return { fitAddon, terminal }
-}
-
-const createTerminalSocket = (
-  session: ActiveTerminalSession,
-  terminal: Terminal
-): WebSocket => new WebSocket(resolveTerminalWebSocketUrl(session.websocketPath, terminal.cols, terminal.rows))
-
-const sendTerminalResize = (
-  fitAddon: FitAddon,
-  socket: WebSocket,
-  terminal: Terminal
-): void => {
-  fitAddon.fit()
-  if (socket.readyState !== WebSocket.OPEN) {
-    return
-  }
-  socket.send(JSON.stringify({
-    cols: terminal.cols,
-    rows: terminal.rows,
-    type: "resize"
-  }))
-}
-
-const observeTerminalResize = (
-  host: HTMLDivElement,
-  onResize: () => void
-): ResizeObserver | null => {
-  if (typeof ResizeObserver !== "function") {
-    return null
-  }
-  const resizeObserver = new ResizeObserver(onResize)
-  resizeObserver.observe(host)
-  return resizeObserver
-}
-
-const attachTerminalInput = (
-  terminal: Terminal,
-  socket: WebSocket
-) =>
-  terminal.onData((data) => {
-    if (socket.readyState !== WebSocket.OPEN) {
-      return
-    }
-    socket.send(JSON.stringify({ data, type: "input" }))
-  })
-
-const handleTerminalServerMessage = (
-  handlers: TerminalMessageHandlers,
-  payload: string
-): void => {
-  const message = parseTerminalServerMessage(payload)
-  if (message === null) {
-    handlers.terminal.writeln("\r\n[terminal protocol error]")
-    handlers.setStatus("error")
-    handlers.notifyMessage("Terminal protocol error.")
-    return
-  }
-  if (message.type === "ready") {
-    handlers.setStatus("attached")
-    handlers.notifyMessage(handlers.session.readyMessage)
-    handlers.session.onReady?.()
-    return
-  }
-  if (message.type === "output") {
-    handlers.terminal.write(message.data)
-    return
-  }
-  if (message.type === "error") {
-    handlers.terminal.writeln(`\r\n[error] ${message.message}`)
-    handlers.setStatus("error")
-    handlers.notifyMessage(message.message)
-    return
-  }
-  handlers.terminal.writeln("\r\n[session ended]")
-  handlers.setStatus("exited")
-  handlers.notifyMessage(handlers.session.exitMessage)
-  handlers.session.onExit?.()
-}
-
-const attachTerminalSocketListeners = (
-  { connectionRef, onClose, onError, onMessage, onOpen, socket }: TerminalSocketListenerArgs
-): void => {
-  socket.addEventListener("open", () => {
-    connectionRef.current.opened = true
-    onOpen()
-  })
-  socket.addEventListener("message", (event) => {
-    onMessage(typeof event.data === "string" ? event.data : "")
-  })
-  socket.addEventListener("close", () => {
-    if (!connectionRef.current.opened) {
-      onClose()
-    }
-  })
-  socket.addEventListener("error", onError)
-}
-
-const cleanupTerminalResources = (
-  { removeInput, removeResize, resizeObserver, socket, terminal }: TerminalCleanupArgs
-): void => {
-  removeInput()
-  resizeObserver?.disconnect()
-  removeResize()
-  if (socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: "close" }))
-  }
-  socket.close()
-  terminal.dispose()
-}
-
-const createMessageHandlers = (
-  notifyMessage: (message: string) => void,
-  session: ActiveTerminalSession,
-  setStatus: (status: TerminalStatus) => void,
-  terminal: Terminal
-): TerminalMessageHandlers => ({
-  notifyMessage,
-  session,
-  setStatus,
-  terminal
-})
-
-const createSocketFailureHandler = (
-  { notifyMessage, setStatus, terminal, terminalLine, uiMessage }: TerminalSocketFailureHandlerArgs
-) =>
+const createTerminalCleanup = (
+  { cleanupArgs, inputDisposable, sendResize }: TerminalCleanupFactoryArgs
+): () => void =>
 (): void => {
-  terminal.writeln(`\r\n${terminalLine}`)
-  setStatus("error")
-  notifyMessage(uiMessage)
-}
-
-const maybeDeletePendingSession = (
-  connectionRef: { current: TerminalConnectionState },
-  notifyMessage: (message: string) => void,
-  session: ActiveTerminalSession
-): void => {
-  if (!connectionRef.current.opened) {
-    requestSessionClose(session.closePath)
-    notifyMessage(session.pendingDeleteMessage)
-    session.onExit?.()
-  }
-}
-
-const attachTerminalSessionSocket = (
-  { connectionRef, handlers, notifyMessage, sendResize, setStatus, socket, terminal }: TerminalSessionSocketArgs
-): void => {
-  attachTerminalSocketListeners({
-    connectionRef,
-    onClose: createSocketFailureHandler({
-      notifyMessage,
-      setStatus,
-      terminal,
-      terminalLine: "[websocket closed before attach]",
-      uiMessage: "Terminal websocket closed before attach."
-    }),
-    onError: createSocketFailureHandler({
-      notifyMessage,
-      setStatus,
-      terminal,
-      terminalLine: "[websocket error]",
-      uiMessage: "Terminal websocket error."
-    }),
-    onMessage: (payload) => {
-      handleTerminalServerMessage(handlers, payload)
+  cleanupTerminalResources({
+    ...cleanupArgs,
+    removeInput: () => {
+      inputDisposable.dispose()
     },
-    onOpen: sendResize,
-    socket
+    removeResize: () => {
+      globalThis.removeEventListener("resize", sendResize)
+    }
   })
+}
+
+const createConnectSocket = (
+  args: Omit<TerminalSocketConnectArgs, "reconnect">
+): () => void => {
+  const connectSocket = () => {
+    connectTerminalSocket({ ...args, reconnect: connectSocket })
+  }
+  return connectSocket
 }
 
 const mountTerminalSession = (
@@ -262,46 +54,50 @@ const mountTerminalSession = (
     return undefined
   }
 
-  connectionRef.current = { opened: false }
+  connectionRef.current = { closing: false, opened: false }
+  const lifecycle = createLifecycleState()
+  const socketRef: TerminalSocketRef = { current: null }
   const { fitAddon, terminal } = createTerminalRuntime(host)
-  const socket = createTerminalSocket(session, terminal)
   const sendResize = () => {
-    sendTerminalResize(fitAddon, socket, terminal)
+    sendTerminalResize(fitAddon, socketRef, terminal)
   }
   const resizeObserver = observeTerminalResize(host, sendResize)
-  const inputDisposable = attachTerminalInput(terminal, socket)
-  const handlers = createMessageHandlers(
+  const inputDisposable = attachTerminalInput(terminal, socketRef)
+  const handlers = createMessageHandlers({
+    connectionRef,
+    lifecycle,
     notifyMessage,
     session,
     setStatus,
     terminal
-  )
-
-  globalThis.addEventListener("resize", sendResize)
-  attachTerminalSessionSocket({
-    connectionRef,
+  })
+  const connectSocket = createConnectSocket({
     handlers,
+    lifecycle,
     notifyMessage,
     sendResize,
+    session,
     setStatus,
-    socket,
+    socketRef,
     terminal
   })
 
-  return () => {
-    cleanupTerminalResources({
-      removeInput: () => {
-        inputDisposable.dispose()
-      },
-      removeResize: () => {
-        globalThis.removeEventListener("resize", sendResize)
-      },
+  globalThis.addEventListener("resize", sendResize)
+  connectSocket()
+
+  return createTerminalCleanup({
+    cleanupArgs: {
+      connectionRef,
+      lifecycle,
+      notifyMessage,
       resizeObserver,
-      socket,
+      session,
+      socketRef,
       terminal
-    })
-    maybeDeletePendingSession(connectionRef, notifyMessage, session)
-  }
+    },
+    inputDisposable,
+    sendResize
+  })
 }
 
 export const useTerminalSessionLifecycle = (
@@ -315,5 +111,7 @@ export const useTerminalSessionLifecycle = (
       session,
       setStatus
     })
-  }, [connectionRef, hostRef, session, setStatus])
+  }, [connectionRef, hostRef, notifyMessage, session, setStatus])
 }
+
+export { type TerminalConnectionState, type TerminalStatus } from "./terminal-panel-runtime-types.js"

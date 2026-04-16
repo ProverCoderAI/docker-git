@@ -176,6 +176,32 @@ const proxyHttp = (
 }
 
 const webSocketServer = new WebSocketServer({ noServer: true })
+const webSocketHeartbeatIntervalMs = 25_000
+
+const attachWebSocketHeartbeat = (socket) => {
+  let alive = true
+  const interval = setInterval(() => {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return
+    }
+    if (!alive) {
+      socket.terminate()
+      return
+    }
+    alive = false
+    socket.ping()
+  }, webSocketHeartbeatIntervalMs)
+
+  socket.on("pong", () => {
+    alive = true
+  })
+  socket.on("close", () => {
+    clearInterval(interval)
+  })
+  socket.on("error", () => {
+    clearInterval(interval)
+  })
+}
 
 const bridgeWebSockets = (clientSocket, upstream) => {
   const pending = []
@@ -184,6 +210,8 @@ const bridgeWebSockets = (clientSocket, upstream) => {
       socket.send(data, { binary: isBinary })
     }
   }
+  attachWebSocketHeartbeat(clientSocket)
+  attachWebSocketHeartbeat(upstream)
   const flushPending = () => {
     for (const message of pending.splice(0)) {
       sendWhenOpen(upstream, message.data, message.isBinary)
