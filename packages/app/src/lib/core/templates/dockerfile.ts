@@ -11,7 +11,7 @@ ENV NVM_DIR=/usr/local/nvm
 RUN set -eu; \
   for attempt in 1 2 3 4 5; do \
     rm -rf /var/lib/apt/lists/*; \
-    if apt-get -o Acquire::Retries=3 update; then \
+    if apt-get -o Acquire::Retries=3 -o Acquire::By-Hash=force update; then \
       break; \
     fi; \
     if [ "$attempt" = "5" ]; then \

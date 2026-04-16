@@ -9,7 +9,22 @@ ENV BUN_INSTALL=/opt/bun
 ENV PATH=/opt/bun/bin:$PATH
 WORKDIR /workspace
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN set -eu; \
+  sed -i 's|http://archive.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g' \
+    /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true; \
+  for attempt in 1 2 3; do \
+    rm -rf /var/lib/apt/lists/*; \
+    if apt-get -o Acquire::Retries=3 -o Acquire::By-Hash=force update; then \
+      break; \
+    fi; \
+    if [ "$attempt" = "3" ]; then \
+      echo "apt-get update failed after retries" >&2; \
+      exit 1; \
+    fi; \
+    echo "apt-get update attempt ${attempt} failed; retrying..." >&2; \
+    sleep $((attempt * 2)); \
+  done; \
+  apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
     ca-certificates curl git docker.io docker-compose-v2 openssh-client sshpass python3 make g++ unzip \
  && rm -rf /var/lib/apt/lists/*
 
