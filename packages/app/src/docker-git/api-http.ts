@@ -140,16 +140,19 @@ const executeRequestWithControllerRetry = (
   body: JsonRequest | undefined
 ) => {
   const execute = () => executeRequest(client, resolveApiBaseUrl(), method, path, body)
+  const shouldRetry = method === "GET"
 
   return execute().pipe(
     Effect.matchEffect({
       onFailure: (error) =>
-        ensureControllerReady().pipe(
-          Effect.matchEffect({
-            onFailure: () => Effect.fail(error),
-            onSuccess: () => execute()
-          })
-        ),
+        !shouldRetry
+          ? Effect.fail(error)
+          : ensureControllerReady().pipe(
+            Effect.matchEffect({
+              onFailure: () => Effect.fail(error),
+              onSuccess: () => execute()
+            })
+          ),
       onSuccess: (value) => Effect.succeed(value)
     })
   )

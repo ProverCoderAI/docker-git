@@ -73,4 +73,21 @@ describe("api-http request retry", () => {
       expect(toFetchUrl(firstCall)).toContain(`${joinIp("127", "0", "0", "1")}:3334/health`)
       expect(toFetchUrl(secondCall)).toContain(`${joinIp("172", "17", "0", "20")}:3334/health`)
     }).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("does not replay mutating requests after a transport failure", () =>
+    Effect.gen(function*(_) {
+      const fetchMock = vi.fn<typeof globalThis.fetch>()
+      fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"))
+      vi.stubGlobal("fetch", fetchMock)
+
+      resolveApiBaseUrlMock.mockReturnValue(
+        makeHttpUrl(joinIp("127", "0", "0", "1"), "3334")
+      )
+
+      const result = yield* _(Effect.either(request("POST", "/projects", { outDir: "project-1" })))
+
+      expect(result._tag).toBe("Left")
+      expect(ensureControllerReadyMock).not.toHaveBeenCalled()
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    }).pipe(Effect.provide(NodeContext.layer)))
 })
