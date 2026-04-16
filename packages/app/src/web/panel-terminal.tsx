@@ -122,7 +122,7 @@ const TerminalHeader = (
 export const TerminalPanel = (
   { onClose, onMessage, onOpenBrowser, session }: TerminalPanelProps
 ): JSX.Element => {
-  const connectionRef = useRef<TerminalConnectionState>({ opened: false })
+  const connectionRef = useRef<TerminalConnectionState>({ closing: false, opened: false })
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [status, setStatus] = useState<TerminalStatus>("connecting")
   const notifyMessage = useEffectEvent(onMessage)
@@ -137,7 +137,15 @@ export const TerminalPanel = (
 
   return (
     <div style={panelStyle}>
-      <TerminalHeader onClose={onClose} onOpenBrowser={onOpenBrowser} session={session} status={status} />
+      <TerminalHeader
+        onClose={() => {
+          connectionRef.current.closing = true
+          onClose()
+        }}
+        onOpenBrowser={onOpenBrowser}
+        session={session}
+        status={status}
+      />
       <div ref={hostRef} style={bodyStyle} />
     </div>
   )

@@ -10,6 +10,7 @@ import { WebSocket, WebSocketServer, type RawData } from "ws"
 import type { AuthTerminalFlow, AuthTerminalSessionRequest, TerminalSession, TerminalSessionStatus } from "../api/contracts.js"
 import { ApiConflictError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
 import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
+import { attachWebSocketHeartbeat } from "./websocket-heartbeat.js"
 
 type TerminalClientMessage =
   | { readonly type: "input"; readonly data: string }
@@ -26,12 +27,14 @@ type AuthTerminalRecord = {
   attachTimeout: ReturnType<typeof setTimeout> | null
   args: ReadonlyArray<string>
   cwd: string
+  detachTimeout: ReturnType<typeof setTimeout> | null
   pty: PtyBridge | null
   session: TerminalSession
   socket: WebSocket | null
 }
 
 const attachTimeoutMs = 30_000
+const reconnectGraceMs = 60_000
 const authTerminalProjectId = "__controller__"
 const authTerminalWsPathPattern = /^(?:\/api)?\/auth\/terminal-sessions\/([^/]+)\/ws$/u
 const authRunnerPath = fileURLToPath(new URL("../auth-terminal-runner.js", import.meta.url))
@@ -95,6 +98,13 @@ const clearAttachTimeout = (record: AuthTerminalRecord): void => {
   }
 }
 
+const clearDetachTimeout = (record: AuthTerminalRecord): void => {
+  if (record.detachTimeout !== null) {
+    clearTimeout(record.detachTimeout)
+    record.detachTimeout = null
+  }
+}
+
 const closeSocket = (socket: WebSocket | null): void => {
   if (socket === null || socket.readyState === WebSocket.CLOSED) {
     return
@@ -104,6 +114,7 @@ const closeSocket = (socket: WebSocket | null): void => {
 
 const cleanupRecord = (record: AuthTerminalRecord): void => {
   clearAttachTimeout(record)
+  clearDetachTimeout(record)
   if (record.pty !== null) {
     record.pty.kill()
     record.pty = null
@@ -130,6 +141,7 @@ const finalizeRecord = (
   record.socket = null
   record.pty = null
   clearAttachTimeout(record)
+  clearDetachTimeout(record)
   records.delete(record.session.id)
 }
 
@@ -172,6 +184,10 @@ const resizePty = (pty: PtyBridge | null, cols: number, rows: number): void => {
 }
 
 const startTerminalPty = (record: AuthTerminalRecord, cols: number, rows: number): void => {
+  if (record.pty !== null) {
+    resizePty(record.pty, clampTerminalSize(cols, 120), clampTerminalSize(rows, 32))
+    return
+  }
   const pty = spawnPtyBridge({
     args: record.args,
     cols: clampTerminalSize(cols, 120),
@@ -217,6 +233,7 @@ const registerRecord = (request: AuthTerminalSessionRequest): TerminalSession =>
     args: resolveRunnerArgs(request.flow, request.label),
     attachTimeout: null,
     cwd: process.cwd(),
+    detachTimeout: null,
     pty: null,
     session,
     socket: null
@@ -224,6 +241,27 @@ const registerRecord = (request: AuthTerminalSessionRequest): TerminalSession =>
   record.attachTimeout = createAttachTimeout(session.id)
   records.set(session.id, record)
   return session
+}
+
+const createDetachTimeout = (sessionId: string): ReturnType<typeof setTimeout> =>
+  setTimeout(() => {
+    const record = records.get(sessionId)
+    if (record !== undefined && record.socket === null) {
+      cleanupRecord(record)
+    }
+  }, reconnectGraceMs)
+
+const detachSocketFromRecord = (
+  record: AuthTerminalRecord,
+  socket: WebSocket
+): void => {
+  const current = records.get(record.session.id)
+  if (current === undefined || current.socket !== socket) {
+    return
+  }
+  current.socket = null
+  clearDetachTimeout(current)
+  current.detachTimeout = createDetachTimeout(current.session.id)
 }
 
 const handleSocketMessage = (record: AuthTerminalRecord, raw: RawData): void => {
@@ -249,21 +287,20 @@ const attachSocketToRecord = (
   cols: number,
   rows: number
 ): void => {
-  if (record.socket !== null) {
+  if (record.socket !== null && record.socket.readyState !== WebSocket.CLOSED) {
     throw new ApiConflictError({ message: `Auth terminal session already attached: ${record.session.id}` })
   }
   clearAttachTimeout(record)
+  clearDetachTimeout(record)
   record.socket = socket
+  attachWebSocketHeartbeat(socket)
   startTerminalPty(record, cols, rows)
   sendServerMessage(socket, { type: "ready", session: record.session })
   socket.on("message", (raw: RawData) => {
     handleSocketMessage(record, raw)
   })
   socket.on("close", () => {
-    const current = records.get(record.session.id)
-    if (current !== undefined) {
-      cleanupRecord(current)
-    }
+    detachSocketFromRecord(record, socket)
   })
 }
 

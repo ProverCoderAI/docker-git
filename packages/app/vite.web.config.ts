@@ -15,6 +15,7 @@ const noStoreHeaders = {
   "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
   Pragma: "no-cache"
 }
+const webSocketHeartbeatIntervalMs = 25_000
 
 const createProxy = (apiTarget: string) => ({
   "/b": {
@@ -60,6 +61,31 @@ const proxyForwardHeaders = (request: IncomingMessage): Record<string, string> =
   }
 }
 
+const attachWebSocketHeartbeat = (socket: WebSocket): void => {
+  let alive = true
+  const interval = setInterval(() => {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return
+    }
+    if (!alive) {
+      socket.terminate()
+      return
+    }
+    alive = false
+    socket.ping()
+  }, webSocketHeartbeatIntervalMs)
+
+  socket.on("pong", () => {
+    alive = true
+  })
+  socket.on("close", () => {
+    clearInterval(interval)
+  })
+  socket.on("error", () => {
+    clearInterval(interval)
+  })
+}
+
 const bridgeWebSockets = (clientSocket: WebSocket, upstream: WebSocket): void => {
   const pending: Array<{ readonly data: RawData; readonly isBinary: boolean }> = []
   const sendWhenOpen = (socket: WebSocket, data: RawData, isBinary: boolean): void => {
@@ -67,6 +93,8 @@ const bridgeWebSockets = (clientSocket: WebSocket, upstream: WebSocket): void =>
       socket.send(data, { binary: isBinary })
     }
   }
+  attachWebSocketHeartbeat(clientSocket)
+  attachWebSocketHeartbeat(upstream)
   const flushPending = (): void => {
     for (const message of pending.splice(0)) {
       sendWhenOpen(upstream, message.data, message.isBinary)

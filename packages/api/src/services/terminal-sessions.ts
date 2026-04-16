@@ -17,6 +17,7 @@ import { ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown }
 import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
 import { emitProjectEvent } from "./events.js"
 import { getProjectItemById, upProject } from "./projects.js"
+import { attachWebSocketHeartbeat } from "./websocket-heartbeat.js"
 
 type TerminalClientMessage =
   | { readonly type: "input"; readonly data: string }
@@ -34,12 +35,14 @@ type TerminalRecord = {
   pty: PtyBridge | null
   socket: WebSocket | null
   attachTimeout: ReturnType<typeof setTimeout> | null
+  detachTimeout: ReturnType<typeof setTimeout> | null
   projectId: string
   prepared: ReturnType<typeof prepareProjectSsh>
 }
 
 const records = new Map<string, TerminalRecord>()
 const attachTimeoutMs = 30_000
+const reconnectGraceMs = 60_000
 const terminalWsPathPattern = /^(?:\/api)?\/projects\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
 
 const TerminalClientMessageSchema = Schema.parseJson(
@@ -187,6 +190,13 @@ const clearAttachTimeout = (record: TerminalRecord): void => {
   }
 }
 
+const clearDetachTimeout = (record: TerminalRecord): void => {
+  if (record.detachTimeout !== null) {
+    clearTimeout(record.detachTimeout)
+    record.detachTimeout = null
+  }
+}
+
 const closeSocket = (socket: WebSocket | null): void => {
   if (socket === null || socket.readyState === WebSocket.CLOSED) {
     return
@@ -196,6 +206,7 @@ const closeSocket = (socket: WebSocket | null): void => {
 
 const cleanupRecord = (record: TerminalRecord): void => {
   clearAttachTimeout(record)
+  clearDetachTimeout(record)
   if (record.pty !== null) {
     record.pty.kill()
     record.pty = null
@@ -222,6 +233,7 @@ const finalizeRecord = (
   record.socket = null
   record.pty = null
   clearAttachTimeout(record)
+  clearDetachTimeout(record)
   records.delete(record.session.id)
 }
 
@@ -268,6 +280,10 @@ const startTerminalPty = (
   cols: number,
   rows: number
 ): void => {
+  if (record.pty !== null) {
+    resizePty(record.pty, clampTerminalSize(cols, 120), clampTerminalSize(rows, 32))
+    return
+  }
   const resolvedCols = clampTerminalSize(cols, 120)
   const resolvedRows = clampTerminalSize(rows, 32)
   const pty = spawnPtyBridge({
@@ -316,6 +332,7 @@ const registerRecord = (
   }
   const record: TerminalRecord = {
     attachTimeout: null,
+    detachTimeout: null,
     prepared,
     projectId,
     pty: null,
@@ -399,6 +416,27 @@ const handleCloseMessage = (record: TerminalRecord): void => {
   cleanupRecord(record)
 }
 
+const createDetachTimeout = (sessionId: string): ReturnType<typeof setTimeout> =>
+  setTimeout(() => {
+    const record = records.get(sessionId)
+    if (record !== undefined && record.socket === null) {
+      cleanupRecord(record)
+    }
+  }, reconnectGraceMs)
+
+const detachSocketFromRecord = (
+  record: TerminalRecord,
+  socket: WebSocket
+): void => {
+  const current = records.get(record.session.id)
+  if (current === undefined || current.socket !== socket) {
+    return
+  }
+  current.socket = null
+  clearDetachTimeout(current)
+  current.detachTimeout = createDetachTimeout(current.session.id)
+}
+
 const handleSocketMessage = (record: TerminalRecord, raw: RawData): void => {
   const message = decodeClientMessage(raw)
   if (message === null) {
@@ -422,22 +460,21 @@ const attachSocketToRecord = (
   cols: number,
   rows: number
 ): void => {
-  if (record.socket !== null) {
+  if (record.socket !== null && record.socket.readyState !== WebSocket.CLOSED) {
     throw new ApiConflictError({ message: `Terminal session already attached: ${record.session.id}` })
   }
 
   clearAttachTimeout(record)
+  clearDetachTimeout(record)
   record.socket = socket
+  attachWebSocketHeartbeat(socket)
   startTerminalPty(record, cols, rows)
   sendServerMessage(socket, { type: "ready", session: record.session })
   socket.on("message", (raw: RawData) => {
     handleSocketMessage(record, raw)
   })
   socket.on("close", () => {
-    const current = records.get(record.session.id)
-    if (current !== undefined) {
-      cleanupRecord(current)
-    }
+    detachSocketFromRecord(record, socket)
   })
 }
 
