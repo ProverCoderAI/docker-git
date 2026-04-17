@@ -97,7 +97,7 @@ export const selectHint = (
   _connectEnableMcpPlaywright: boolean
 ): string =>
   Match.value(purpose).pipe(
-    Match.when("Connect", () => "Enter = select + SSH, Esc = back"),
+    Match.when("Connect", () => "Enter = start if needed + SSH, Esc = back"),
     Match.when("Auth", () => "Enter = open project auth menu, Esc = back"),
     Match.when("Down", () => "Enter = stop container, Esc = back"),
     Match.when("Info", () => "Use arrows to browse details, Enter = set active, Esc = back"),
@@ -166,6 +166,7 @@ const connectDetails = (context: SelectDetailsContext): SelectDetailsModel => ({
   title: "Connect + SSH",
   lines: [
     ...context.common,
+    "If the container is stopped, docker-git starts it before SSH.",
     context.connectEnableMcpPlaywright
       ? "Playwright MCP: will be enabled before SSH (P to disable)."
       : "Playwright MCP: keep current project setting (P to enable before SSH).",

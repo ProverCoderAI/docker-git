@@ -6,7 +6,7 @@ import { parseGithubRepoUrl, resolveRepoInput } from "./frontend-lib/core/repo.j
 import { getProject, listProjects } from "./api-client.js"
 import type { ApiProjectDetails } from "./api-project-codec.js"
 import type { ProjectResolutionError } from "./host-errors.js"
-import { openResolvedProjectSsh } from "./open-project-ssh.js"
+import { openResolvedProjectSshWithUp } from "./open-project-ssh.js"
 import { resolveApiProjectItem } from "./project-item.js"
 
 export type DockerContainerRuntimeInfo = {
@@ -18,6 +18,9 @@ export {
   type OpenHostProjectSshDeps,
   openHostProjectSshEffect,
   openResolvedProjectSsh,
+  openResolvedProjectSshWithUp,
+  type OpenResolvedProjectSshWithUpDeps,
+  openResolvedProjectSshWithUpEffect,
   type OpenResolvedProjectSshDeps,
   openResolvedProjectSshEffect,
   openResolvedProjectSshViaController
@@ -287,5 +290,5 @@ export const openExistingProjectSsh = (
     const selector = command.projectDir ?? command.projectRef
     const project = yield* _(selectOpenProject(projects, selector))
     const item = resolveApiProjectItem(project)
-    yield* _(openResolvedProjectSsh(item))
+    yield* _(openResolvedProjectSshWithUp(item))
   })

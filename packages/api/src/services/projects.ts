@@ -155,6 +155,23 @@ const withProjectRuntime = (
     }))
   )
 
+const summarizeProjectRuntime = (
+  project: ProjectItem,
+  runtime: ReturnType<typeof runtimeForProject>
+): ProjectSummary => ({
+  id: project.projectDir,
+  projectKey: projectShortKey(project.projectDir),
+  displayName: project.displayName,
+  repoUrl: project.repoUrl,
+  repoRef: project.repoRef,
+  status: runtime.running ? "running" : "stopped",
+  statusLabel: runtime.running ? "running" : "stopped",
+  sshSessions: runtime.sshSessions,
+  startedAtIso: runtime.startedAtIso,
+  startedAtEpochMs: runtime.startedAtEpochMs,
+  clonedOnHostname: project.clonedOnHostname
+})
+
 const toProjectDetails = (
   project: ProjectItem,
   summary: ProjectSummary
@@ -505,11 +522,14 @@ const startCreateProjectJob = (
 export const listProjects = () =>
   listProjectItems.pipe(
     Effect.flatMap((projects) =>
-      loadProjectRuntimeByProject(projects).pipe(
+      loadProjectRuntimeByProject(projects, {
+        includeSshSessions: false,
+        includeStartedAt: false
+      }).pipe(
         Effect.flatMap((runtimeByProject) =>
           Effect.forEach(
             projects,
-            (project) => withProjectRuntime(project, runtimeForProject(runtimeByProject, project)),
+            (project) => Effect.succeed(summarizeProjectRuntime(project, runtimeForProject(runtimeByProject, project))),
             { concurrency: "unbounded" }
           )
         )

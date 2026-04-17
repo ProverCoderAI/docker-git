@@ -27,7 +27,7 @@ import {
 } from "./projects-core.js"
 import { runDockerComposeUpWithPortCheck } from "./projects-up.js"
 import { buildEditorSshAccess, formatEditorSshAccessSummary } from "./ssh-access.js"
-import { ensureTerminalCursorVisible } from "./terminal-cursor.js"
+import { withPreservedTerminalState } from "./terminal-cursor.js"
 
 export type PreparedProjectSsh = {
   readonly item: ProjectItem
@@ -140,20 +140,16 @@ export const prepareProjectSsh = (item: ProjectItem): PreparedProjectSsh => ({
 const connectPreparedProjectSsh = (
   prepared: PreparedProjectSsh
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  pipe(
-    ensureTerminalCursorVisible(),
-    Effect.zipRight(
-      runCommandWithExitCodes(
-        {
-          cwd: prepared.cwd,
-          command: prepared.command,
-          args: prepared.args
-        },
-        [0, 130],
-        (exitCode) => new CommandFailedError({ command: prepared.command, exitCode })
-      )
-    ),
-    Effect.ensuring(ensureTerminalCursorVisible())
+  withPreservedTerminalState(
+    runCommandWithExitCodes(
+      {
+        cwd: prepared.cwd,
+        command: prepared.command,
+        args: prepared.args
+      },
+      [0, 130],
+      (exitCode) => new CommandFailedError({ command: prepared.command, exitCode })
+    )
   )
 
 // CHANGE: connect to a project via SSH using its resolved settings

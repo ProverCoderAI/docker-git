@@ -1,6 +1,6 @@
 import "xterm/css/xterm.css"
 
-import { type CSSProperties, type JSX, useEffectEvent, useRef, useState } from "react"
+import { type CSSProperties, type JSX, useCallback, useEffect, useRef, useState } from "react"
 
 import {
   type TerminalConnectionState,
@@ -125,7 +125,13 @@ export const TerminalPanel = (
   const connectionRef = useRef<TerminalConnectionState>({ closing: false, opened: false })
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [status, setStatus] = useState<TerminalStatus>("connecting")
-  const notifyMessage = useEffectEvent(onMessage)
+  const onMessageRef = useRef(onMessage)
+  useEffect(() => {
+    onMessageRef.current = onMessage
+  }, [onMessage])
+  const notifyMessage = useCallback((message: string) => {
+    onMessageRef.current(message)
+  }, [])
 
   useTerminalSessionLifecycle({
     connectionRef,

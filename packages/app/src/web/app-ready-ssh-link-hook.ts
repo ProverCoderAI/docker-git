@@ -26,17 +26,30 @@ const readSshLinkToken = (): string | null => {
 }
 
 export const useSshLink = ({ actionContext, busyLabel, dashboard }: SshLinkArgs) => {
-  const handledRef = useRef(false)
+  const connectTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
+  const handledTokenRef = useRef<string | null>(null)
+  const locationSignature = `${globalThis.location.pathname}${globalThis.location.search}`
+
+  useEffect(() => () => {
+    if (connectTimerRef.current !== null) {
+      globalThis.clearTimeout(connectTimerRef.current)
+      connectTimerRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
-    if (handledRef.current || busyLabel !== null) {
-      return
-    }
     const token = readSshLinkToken()
     if (token === null) {
+      if (connectTimerRef.current !== null) {
+        globalThis.clearTimeout(connectTimerRef.current)
+        connectTimerRef.current = null
+      }
+      handledTokenRef.current = null
       return
     }
-    handledRef.current = true
+    if (busyLabel !== null || handledTokenRef.current === token) {
+      return
+    }
 
     const project = dashboard.projects.find((candidate) => candidate.projectKey === token || candidate.id === token)
     if (project === undefined) {
@@ -44,8 +57,16 @@ export const useSshLink = ({ actionContext, busyLabel, dashboard }: SshLinkArgs)
       return
     }
 
+    handledTokenRef.current = token
     actionContext.setSelectedMenuIndex(browserMenuIndex("Select"))
     actionContext.setActiveScreen(projectPickerScreen())
-    connectProjectById(project.id, actionContext)
-  }, [actionContext, busyLabel, dashboard.projects])
+    actionContext.setSelectedProjectId(project.id)
+    if (connectTimerRef.current !== null) {
+      globalThis.clearTimeout(connectTimerRef.current)
+    }
+    connectTimerRef.current = globalThis.setTimeout(() => {
+      connectTimerRef.current = null
+      connectProjectById(project.id, actionContext)
+    }, 0)
+  }, [actionContext, busyLabel, dashboard.projects, locationSignature])
 }

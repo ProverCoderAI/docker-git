@@ -137,7 +137,9 @@ export const createProject = (command: CreateCommand) =>
 export const deleteProject = (projectId: string) => requestVoid("DELETE", projectPath(projectId))
 
 export const upProject = (projectId: string) =>
-  requestVoid("POST", projectPath(projectId, "/up"), { useManagedAuthorizedKeys: true })
+  request("POST", projectPath(projectId, "/up"), { useManagedAuthorizedKeys: true }).pipe(
+    Effect.map((payload) => decodeProjectResponse(payload))
+  )
 
 export const downProject = (projectId: string) => requestVoid("POST", projectPath(projectId, "/down"))
 

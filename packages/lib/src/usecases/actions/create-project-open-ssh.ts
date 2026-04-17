@@ -9,7 +9,7 @@ import { CommandFailedError } from "../../shell/errors.js"
 import { renderError } from "../errors.js"
 import { findSshPrivateKey } from "../path-helpers.js"
 import { buildSshCommand, getContainerIpIfInsideContainer } from "../projects-core.js"
-import { ensureTerminalCursorVisible } from "../terminal-cursor.js"
+import { withPreservedTerminalState } from "../terminal-cursor.js"
 
 type CreateProjectOpenSshRuntime =
   | FileSystem.FileSystem
@@ -68,17 +68,18 @@ const openSshBestEffort = (
     const remoteCommandLabel = remoteCommand === undefined ? "" : ` (${remoteCommand})`
 
     yield* _(Effect.log(`Opening SSH: ${sshCommand}${remoteCommandLabel}`))
-    yield* _(ensureTerminalCursorVisible())
     yield* _(
-      runCommandWithExitCodes(
-        {
-          cwd: process.cwd(),
-          command: "ssh",
-          args: buildSshArgs(template, sshKey, remoteCommand, ipAddress)
-        },
-        [0, 130],
-        (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
-      ).pipe(Effect.ensuring(ensureTerminalCursorVisible()))
+      withPreservedTerminalState(
+        runCommandWithExitCodes(
+          {
+            cwd: process.cwd(),
+            command: "ssh",
+            args: buildSshArgs(template, sshKey, remoteCommand, ipAddress)
+          },
+          [0, 130],
+          (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
+        )
+      )
     )
   }).pipe(
     Effect.asVoid,

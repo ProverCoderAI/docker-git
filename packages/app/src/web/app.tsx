@@ -1,5 +1,5 @@
 import { Effect, Match } from "effect"
-import { type JSX, startTransition, useEffect, useEffectEvent, useState } from "react"
+import { type JSX, startTransition, useEffect, useEffectEvent, useRef, useState } from "react"
 
 import { webPrimitives } from "../ui/primitives-web.js"
 import { UiProvider } from "../ui/primitives.js"
@@ -65,14 +65,23 @@ const useDashboardRefreshTriggers = (refresh: () => void) => {
 
 const useDashboardController = () => {
   const [state, setState] = useState<DashboardState>(initialDashboardState)
+  const refreshInFlightRef = useRef(false)
 
-  const refresh = () => {
-    void Effect.runPromise(loadDashboardState()).then((nextState) => {
-      startTransition(() => {
-        setState(createDashboardRefreshReducer(nextState))
+  const refresh = useEffectEvent(() => {
+    if (refreshInFlightRef.current) {
+      return
+    }
+    refreshInFlightRef.current = true
+    void Effect.runPromise(loadDashboardState())
+      .then((nextState) => {
+        startTransition(() => {
+          setState(createDashboardRefreshReducer(nextState))
+        })
       })
-    })
-  }
+      .finally(() => {
+        refreshInFlightRef.current = false
+      })
+  })
 
   useEffect(() => {
     refresh()

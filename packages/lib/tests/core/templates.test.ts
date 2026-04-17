@@ -200,6 +200,20 @@ describe("renderEntrypoint auth bridge", () => {
     ])
     expect(entrypoint.split("Для решения задач обязательно используй subagents.").length - 1).toBeGreaterThanOrEqual(2)
   })
+
+  it("renders terminal recovery hooks and disables zsh autosuggestions by default", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      "stty sane < /dev/tty > /dev/tty 2>/dev/null",
+      "docker_git_terminal_sanitize",
+      "trap 'docker_git_terminal_sanitize' EXIT INT TERM",
+      "add-zsh-hook zshexit docker_git_terminal_on_exit",
+      "TRAPINT() {",
+      'if [[ "${DOCKER_GIT_ZSH_AUTOSUGGEST:-0}" == "1" ]]',
+      "DOCKER_GIT_ZSH_AUTOSUGGEST=0"
+    ])
+  })
 })
 
 describe("renderDockerCompose", () => {

@@ -14,7 +14,7 @@ import {
   withSuspendedTui
 } from "./menu-shared.js"
 import type { MenuRunner, MenuViewContext } from "./menu-types.js"
-import { openResolvedProjectSsh } from "./open-project.js"
+import { openResolvedProjectSshWithUp } from "./open-project.js"
 import type { ProjectItem } from "./project-item.js"
 
 export type SelectContext = MenuViewContext & {
@@ -42,7 +42,7 @@ export const runConnectSelection = (
     pipe(
       withSuspendedTui(
         buildConnectEffect(selected, false, {
-          connectWithUp: (item) => openResolvedProjectSsh(item),
+          connectWithUp: (item) => openResolvedProjectSshWithUp(item),
           enableMcpPlaywright: () => Effect.void
         }),
         {

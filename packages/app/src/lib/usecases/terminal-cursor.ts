@@ -1,4 +1,6 @@
 /* jscpd:ignore-start */
+import * as childProcess from "node:child_process"
+import * as fs from "node:fs"
 import { Effect } from "effect"
 
 const terminalSaneEscape = "\u001B[0m" + // reset rendition
@@ -18,7 +20,117 @@ const terminalSaneEscape = "\u001B[0m" + // reset rendition
   "\u001B[>4m" + // reset xterm modifyOtherKeys
   "\u001B[<u" // disable kitty keyboard protocol
 
+const controllingTtyPath = "/dev/tty"
+
 const hasInteractiveTty = (): boolean => process.stdin.isTTY && process.stdout.isTTY
+
+const disableRawMode = (): void => {
+  if (typeof process.stdin.setRawMode !== "function") {
+    return
+  }
+  try {
+    process.stdin.setRawMode(false)
+  } catch {
+    // Ignore raw-mode reset failures when stdin is no longer attached to a tty.
+  }
+}
+
+const withControllingTty = <A>(use: (fd: number) => A): A | null => {
+  try {
+    const fd = fs.openSync(controllingTtyPath, "r+")
+    try {
+      return use(fd)
+    } finally {
+      fs.closeSync(fd)
+    }
+  } catch {
+    return null
+  }
+}
+
+const runSttyOnFd = (
+  fd: number,
+  args: ReadonlyArray<string>,
+  captureOutput: boolean = false
+): {
+  readonly ok: boolean
+  readonly stdout: string
+} => {
+  const result = childProcess.spawnSync("stty", args, {
+    encoding: "utf8",
+    stdio: [fd, captureOutput ? "pipe" : "ignore", "ignore"]
+  })
+
+  return {
+    ok: result.error === undefined && result.status === 0,
+    stdout: typeof result.stdout === "string" ? result.stdout.trim() : ""
+  }
+}
+
+const writeTerminalReset = (fd?: number): boolean => {
+  if (typeof fd === "number") {
+    try {
+      fs.writeSync(fd, terminalSaneEscape)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  try {
+    process.stdout.write(terminalSaneEscape)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const snapshotTerminalStateSync = (): string | null => {
+  if (!hasInteractiveTty()) {
+    return null
+  }
+
+  disableRawMode()
+  return withControllingTty((fd) => {
+    const result = runSttyOnFd(fd, ["-g"], true)
+    return result.ok && result.stdout.length > 0 ? result.stdout : null
+  })
+}
+
+const repairInteractiveTerminalSync = (): void => {
+  if (!hasInteractiveTty()) {
+    return
+  }
+
+  disableRawMode()
+  const repaired = withControllingTty((fd) => {
+    const sane = runSttyOnFd(fd, ["sane"])
+    return sane.ok && writeTerminalReset(fd)
+  })
+
+  if (!repaired) {
+    writeTerminalReset()
+  }
+}
+
+const restoreTerminalStateSync = (snapshot: string | null): void => {
+  if (!hasInteractiveTty()) {
+    return
+  }
+
+  disableRawMode()
+  const restored = withControllingTty((fd) => {
+    if (snapshot !== null && runSttyOnFd(fd, [snapshot]).ok) {
+      return writeTerminalReset(fd)
+    }
+    const sane = runSttyOnFd(fd, ["sane"])
+    return sane.ok && writeTerminalReset(fd)
+  })
+
+  if (!restored) {
+    writeTerminalReset()
+  }
+}
 
 // CHANGE: ensure the terminal cursor is visible before handing control to interactive SSH
 // WHY: Ink/TTY transitions can leave cursor hidden, which makes SSH shells look frozen
@@ -32,12 +144,15 @@ const hasInteractiveTty = (): boolean => process.stdin.isTTY && process.stdout.i
 // COMPLEXITY: O(1)
 export const ensureTerminalCursorVisible = (): Effect.Effect<void> =>
   Effect.sync(() => {
-    if (!hasInteractiveTty()) {
-      return
-    }
-    if (typeof process.stdin.setRawMode === "function") {
-      process.stdin.setRawMode(false)
-    }
-    process.stdout.write(terminalSaneEscape)
+    repairInteractiveTerminalSync()
+  })
+
+export const withPreservedTerminalState = <A, E, R>(
+  use: Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R> =>
+  Effect.gen(function*(_) {
+    const snapshot = yield* _(Effect.sync(() => snapshotTerminalStateSync()))
+    yield* _(ensureTerminalCursorVisible())
+    return yield* _(use.pipe(Effect.ensuring(Effect.sync(() => restoreTerminalStateSync(snapshot)))))
   })
 /* jscpd:ignore-end */

@@ -226,7 +226,7 @@ const defaultProjectEnvContents = [
   "# docker-git project env defaults",
   "CODEX_SHARE_AUTH=1",
   "CODEX_AUTO_UPDATE=1",
-  "DOCKER_GIT_ZSH_AUTOSUGGEST=1",
+  "DOCKER_GIT_ZSH_AUTOSUGGEST=0",
   "DOCKER_GIT_ZSH_AUTOSUGGEST_STYLE=fg=8,italic",
   "DOCKER_GIT_ZSH_AUTOSUGGEST_STRATEGY=history completion",
   "MCP_PLAYWRIGHT_ISOLATED=0",

@@ -48,6 +48,20 @@ compose() {
   "${DOCKER_CMD[@]}" compose -f "$COMPOSE_FILE" "$@"
 }
 
+compute_controller_revision() {
+  bun --cwd "$ROOT/packages/app" scripts/print-controller-revision.ts "$COMPOSE_FILE"
+}
+
+prepare_controller_revision() {
+  local revision
+  revision="$(compute_controller_revision)"
+  if [[ -z "$revision" ]]; then
+    echo "Failed to compute controller revision." >&2
+    exit 1
+  fi
+  export DOCKER_GIT_CONTROLLER_REV="$revision"
+}
+
 require_running() {
   if ! "${DOCKER_CMD[@]}" ps --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
     echo "Controller is not running. Start it with: ./ctl up" >&2
@@ -180,6 +194,7 @@ resolve_docker_cmd
 
 case "${1:-}" in
   up)
+    prepare_controller_revision
     compose up -d --build
     wait_for_health
     echo "Controller API: http://${API_HOST}:${API_PORT}"
@@ -194,7 +209,8 @@ case "${1:-}" in
     compose logs -f --tail=200
     ;;
   restart)
-    compose restart
+    prepare_controller_revision
+    compose up -d --build --force-recreate
     wait_for_health
     ;;
   shell)

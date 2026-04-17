@@ -12,6 +12,11 @@ type ProjectRuntime = {
   readonly startedAtEpochMs: number | null
 }
 
+type LoadProjectRuntimeOptions = {
+  readonly includeSshSessions?: boolean
+  readonly includeStartedAt?: boolean
+}
+
 const emptyRuntimeByProject = (): Readonly<Record<string, ProjectRuntime>> => ({})
 
 export const stoppedProjectRuntime = (): ProjectRuntime => ({
@@ -99,7 +104,8 @@ const inspectContainerStartedAt = (containerName: string) =>
   )
 
 export const loadProjectRuntimeByProject = (
-  items: ReadonlyArray<ProjectItem>
+  items: ReadonlyArray<ProjectItem>,
+  options: LoadProjectRuntimeOptions = {}
 ) =>
   pipe(
     runDockerPsNames(process.cwd()),
@@ -108,11 +114,14 @@ export const loadProjectRuntimeByProject = (
         items,
         (item) => {
           const running = runningNames.includes(item.containerName)
-          const sshSessionsEffect = running
+          const sshSessionsEffect = running && options.includeSshSessions !== false
             ? countContainerSshSessions(item.containerName)
             : Effect.succeed(0)
+          const startedAtEffect = options.includeStartedAt === false
+            ? Effect.succeed(null)
+            : inspectContainerStartedAt(item.containerName)
           return pipe(
-            Effect.all([sshSessionsEffect, inspectContainerStartedAt(item.containerName)]),
+            Effect.all([sshSessionsEffect, startedAtEffect]),
             Effect.map(([sshSessions, startedAt]): ProjectRuntime => ({
               running,
               sshSessions,

@@ -3,15 +3,16 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Duration, Effect } from "effect"
 
-import { createProjectTerminalSession } from "./api-client.js"
+import { createProjectTerminalSession, upProject } from "./api-client.js"
 import type { ApiTerminalSession } from "./api-terminal-codec.js"
 import { type ControllerRuntime, isRemoteDockerHost } from "./controller.js"
 import { runCommandWithExitCodes } from "./frontend-lib/shell/command-runner.js"
 import { CommandFailedError } from "./frontend-lib/shell/errors.js"
 import { findSshPrivateKey } from "./frontend-lib/usecases/path-helpers.js"
 import type { HostError } from "./host-errors.js"
+import { withPreservedTerminalState } from "../lib/usecases/terminal-cursor.js"
 import { writeToTerminal } from "./menu-shared.js"
-import type { ProjectItem } from "./project-item.js"
+import { projectItemFromApiDetails, type ProjectItem } from "./project-item.js"
 import { attachTerminalSession } from "./terminal-session-client.js"
 
 export type OpenResolvedProjectSshDeps = {
@@ -52,6 +53,11 @@ export const openResolvedProjectSshEffect = (
 export type OpenHostProjectSshDeps<E, R> = {
   readonly writeHeader: (item: ProjectItem) => Effect.Effect<void>
   readonly runCommand: (item: ProjectItem) => Effect.Effect<void, E, R>
+}
+
+export type OpenResolvedProjectSshWithUpDeps<E, R> = {
+  readonly openProjectSsh: (item: ProjectItem) => Effect.Effect<void, E, R>
+  readonly upProject: (projectId: string) => Effect.Effect<ProjectItem | null, E, R>
 }
 
 type HostSshLaunchSpec = {
@@ -157,14 +163,16 @@ const runProjectSshCommand = (
   launch: HostSshLaunchSpec,
   attempt = 0
 ): Effect.Effect<void, CommandFailedError | PlatformError, ControllerRuntime> =>
-  runCommandWithExitCodes(
-    {
-      cwd: process.cwd(),
-      command: launch.command,
-      args: launch.args
-    },
-    [0, 130],
-    (exitCode) => new CommandFailedError({ command: launch.label, exitCode })
+  withPreservedTerminalState(
+    runCommandWithExitCodes(
+      {
+        cwd: process.cwd(),
+        command: launch.command,
+        args: launch.args
+      },
+      [0, 130],
+      (exitCode) => new CommandFailedError({ command: launch.label, exitCode })
+    )
   ).pipe(
     Effect.catchTag("CommandFailedError", (error) =>
       error.exitCode === 255 && attempt < 5
@@ -183,6 +191,15 @@ export const openHostProjectSshEffect = <E, R>(
     yield* _(deps.runCommand(item))
   })
 
+export const openResolvedProjectSshWithUpEffect = <E, R>(
+  item: ProjectItem,
+  deps: OpenResolvedProjectSshWithUpDeps<E, R>
+) =>
+  Effect.gen(function*(_) {
+    const refreshedItem = yield* _(deps.upProject(item.projectDir))
+    yield* _(deps.openProjectSsh(refreshedItem ?? item))
+  })
+
 export const openResolvedProjectSsh = (item: ProjectItem) =>
   Effect.gen(function*(_) {
     const launch = yield* _(resolveHostSshLaunchSpec(item))
@@ -197,6 +214,15 @@ export const openResolvedProjectSsh = (item: ProjectItem) =>
         runCommand: () => runProjectSshCommand(launch)
       })
     )
+  })
+
+export const openResolvedProjectSshWithUp = (item: ProjectItem) =>
+  openResolvedProjectSshWithUpEffect<HostError, ControllerRuntime | FileSystem.FileSystem | Path.Path>(item, {
+    openProjectSsh: openResolvedProjectSsh,
+    upProject: (projectId) =>
+      upProject(projectId).pipe(
+        Effect.map((project) => (project === null ? null : projectItemFromApiDetails(project)))
+      )
   })
 
 export const openResolvedProjectSshViaController = (item: ProjectItem) =>
