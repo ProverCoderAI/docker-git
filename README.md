@@ -57,6 +57,18 @@ docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force 
 - `--auto=claude` или `--auto=codex` принудительно выбирает агента.
 - В auto-режиме агент сам выполняет задачу, создаёт PR и после завершения контейнер очищается.
 
+Применение конфигурации:
+
+```bash
+docker-git apply
+docker-git apply --no-up
+docker-git apply-all
+docker-git apply-all --active
+```
+
+- `apply` применяет конфиг к одному проекту. `--no-up` только обновляет файлы без `docker compose up`. В текущем API-only host mode команда ещё недоступна.
+- `apply-all` применяет конфиг ко всем проектам. `--active` только к запущенным контейнерам.
+
 ## Browser frontend
 
 Browser UI использует тот же backend-контракт, что и CLI. API находится в `packages/api`,
