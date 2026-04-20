@@ -31,6 +31,18 @@ type TerminalHandlers = {
   readonly resizeHandler: () => void
 }
 
+type TerminalLifecycle = {
+  attachTimeout: ReturnType<typeof setTimeout> | null
+  openTimeout: ReturnType<typeof setTimeout> | null
+  sawExit: boolean
+  sawOpen: boolean
+  sawServerMessage: boolean
+  settled: boolean
+}
+
+const terminalOpenTimeoutMs = 3000
+const terminalAttachTimeoutMs = 5000
+
 const terminalSessionError = (message: string): TerminalSessionClientError => ({
   _tag: "TerminalSessionClientError",
   message
@@ -66,6 +78,24 @@ const sendResize = (socket: WebSocket): void => {
 const setRawMode = (enabled: boolean): void => {
   if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
     process.stdin.setRawMode(enabled)
+  }
+}
+
+const clearTimer = (timer: ReturnType<typeof setTimeout> | null): null => {
+  if (timer !== null) {
+    clearTimeout(timer)
+  }
+  return null
+}
+
+const clearLifecycleTimers = (lifecycle: TerminalLifecycle): void => {
+  lifecycle.openTimeout = clearTimer(lifecycle.openTimeout)
+  lifecycle.attachTimeout = clearTimer(lifecycle.attachTimeout)
+}
+
+const closeSocket = (socket: WebSocket): void => {
+  if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+    socket.close()
   }
 }
 
@@ -128,22 +158,41 @@ const createTerminalResizeHandler = (socket: WebSocket) => (): void => {
 
 const createTerminalOpenHandler = (
   attachment: TerminalAttachment,
+  socket: WebSocket,
   inputHandler: (chunk: Buffer) => void,
-  resizeHandler: () => void
+  resizeHandler: () => void,
+  lifecycle: TerminalLifecycle,
+  startAttachTimeout: () => void
 ) =>
 (): void => {
+  if (lifecycle.settled) {
+    return
+  }
+
+  lifecycle.sawOpen = true
+  lifecycle.openTimeout = clearTimer(lifecycle.openTimeout)
+  startAttachTimeout()
   writeHeader(attachment)
   process.stdin.resume()
   setRawMode(true)
   process.stdin.on("data", inputHandler)
   process.stdout.on("resize", resizeHandler)
+  sendResize(socket)
 }
 
 const createTerminalMessageHandler = (
+  lifecycle: TerminalLifecycle,
   finish: (effect: Effect.Effect<void, TerminalSessionClientError>) => void,
   markExit: () => void
 ) =>
 (event: MessageEvent): void => {
+  if (lifecycle.settled) {
+    return
+  }
+
+  lifecycle.sawServerMessage = true
+  lifecycle.attachTimeout = clearTimer(lifecycle.attachTimeout)
+
   const payload = typeof event.data === "string" ? event.data : String(event.data)
   const message = parseServerMessage(payload)
   if (message === null) {
@@ -154,21 +203,31 @@ const createTerminalMessageHandler = (
 }
 
 const createTerminalErrorHandler = (
+  lifecycle: TerminalLifecycle,
   finish: (effect: Effect.Effect<void, TerminalSessionClientError>) => void
 ) =>
 (): void => {
+  if (lifecycle.settled) {
+    return
+  }
   finish(Effect.fail(terminalSessionError("Terminal websocket error.")))
 }
 
 const createTerminalCloseHandler = (
-  socket: WebSocket,
-  inputHandler: (chunk: Buffer) => void,
-  resizeHandler: () => void,
+  lifecycle: TerminalLifecycle,
   finish: (effect: Effect.Effect<void, TerminalSessionClientError>) => void,
   hasSeenExit: () => boolean
 ) =>
 (): void => {
-  cleanupTerminalHandlers(socket, inputHandler, resizeHandler)
+  if (lifecycle.settled) {
+    return
+  }
+
+  if (!lifecycle.sawOpen || !lifecycle.sawServerMessage) {
+    finish(Effect.fail(terminalSessionError("Terminal websocket closed before attach.")))
+    return
+  }
+
   if (!hasSeenExit()) {
     finish(Effect.fail(terminalSessionError("Terminal websocket closed before exit.")))
   }
@@ -177,16 +236,25 @@ const createTerminalCloseHandler = (
 const createTerminalHandlers = (
   attachment: TerminalAttachment,
   socket: WebSocket,
+  lifecycle: TerminalLifecycle,
   finish: (effect: Effect.Effect<void, TerminalSessionClientError>) => void,
   hasSeenExit: () => boolean,
-  markExit: () => void
+  markExit: () => void,
+  startAttachTimeout: () => void
 ): TerminalHandlers => {
   const inputHandler = createTerminalInputHandler(socket)
   const resizeHandler = createTerminalResizeHandler(socket)
-  const handleOpen = createTerminalOpenHandler(attachment, inputHandler, resizeHandler)
-  const handleMessage = createTerminalMessageHandler(finish, markExit)
-  const handleError = createTerminalErrorHandler(finish)
-  const handleClose = createTerminalCloseHandler(socket, inputHandler, resizeHandler, finish, hasSeenExit)
+  const handleOpen = createTerminalOpenHandler(
+    attachment,
+    socket,
+    inputHandler,
+    resizeHandler,
+    lifecycle,
+    startAttachTimeout
+  )
+  const handleMessage = createTerminalMessageHandler(lifecycle, finish, markExit)
+  const handleError = createTerminalErrorHandler(lifecycle, finish)
+  const handleClose = createTerminalCloseHandler(lifecycle, finish, hasSeenExit)
   return { handleClose, handleError, handleMessage, handleOpen, inputHandler, resizeHandler }
 }
 
@@ -195,26 +263,59 @@ export const attachTerminalSession = (
 ): Effect.Effect<void, TerminalSessionClientError> =>
   Effect.async((resume) => {
     const socket = new WebSocket(resolveTerminalWebSocketUrl(attachment.websocketPath))
-    let settled = false
-    let sawExit = false
+    const lifecycle: TerminalLifecycle = {
+      attachTimeout: null,
+      openTimeout: null,
+      sawExit: false,
+      sawOpen: false,
+      sawServerMessage: false,
+      settled: false
+    }
+    let handlers: TerminalHandlers | null = null
+
+    const cleanup = (): void => {
+      clearLifecycleTimers(lifecycle)
+      if (handlers !== null) {
+        cleanupTerminalHandlers(socket, handlers.inputHandler, handlers.resizeHandler)
+      }
+      closeSocket(socket)
+    }
 
     const finish = (effect: Effect.Effect<void, TerminalSessionClientError>): void => {
-      if (settled) {
+      if (lifecycle.settled) {
         return
       }
-      settled = true
+      lifecycle.settled = true
+      cleanup()
       resume(effect)
     }
 
-    const handlers = createTerminalHandlers(
+    const startAttachTimeout = (): void => {
+      lifecycle.attachTimeout = clearTimer(lifecycle.attachTimeout)
+      lifecycle.attachTimeout = setTimeout(() => {
+        if (!lifecycle.settled && !lifecycle.sawServerMessage) {
+          finish(Effect.fail(terminalSessionError("Terminal session attach timed out.")))
+        }
+      }, terminalAttachTimeoutMs)
+    }
+
+    handlers = createTerminalHandlers(
       attachment,
       socket,
+      lifecycle,
       finish,
-      () => sawExit,
+      () => lifecycle.sawExit,
       () => {
-        sawExit = true
-      }
+        lifecycle.sawExit = true
+      },
+      startAttachTimeout
     )
+
+    lifecycle.openTimeout = setTimeout(() => {
+      if (!lifecycle.settled && !lifecycle.sawOpen) {
+        finish(Effect.fail(terminalSessionError("Terminal websocket open timed out.")))
+      }
+    }, terminalOpenTimeoutMs)
 
     socket.addEventListener("open", handlers.handleOpen)
     socket.addEventListener("message", handlers.handleMessage)
@@ -222,9 +323,9 @@ export const attachTerminalSession = (
     socket.addEventListener("close", handlers.handleClose)
 
     return Effect.sync(() => {
-      cleanupTerminalHandlers(socket, handlers.inputHandler, handlers.resizeHandler)
-      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
-        socket.close()
+      if (!lifecycle.settled) {
+        lifecycle.settled = true
+        cleanup()
       }
     })
   })

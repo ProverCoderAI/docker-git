@@ -1,6 +1,7 @@
 import type { MenuViewContext, ViewState } from "./menu-types.js"
 
 import { Effect, pipe } from "effect"
+import { repairInteractiveTerminal } from "../lib/usecases/terminal-cursor.js"
 
 // CHANGE: share menu escape handling across flows
 // WHY: avoid duplicated logic in TUI handlers
@@ -21,6 +22,7 @@ let stdoutPatched = false
 let stdoutMuted = false
 let baseStdoutWrite: OutputWrite | null = null
 let baseStderrWrite: OutputWrite | null = null
+const primaryScreenEscape = "\u001B[?1049l\r\u001B[2K"
 
 const wrapWrite = (baseWrite: OutputWrite): OutputWrite =>
 (
@@ -41,9 +43,15 @@ const wrapWrite = (baseWrite: OutputWrite): OutputWrite =>
   return baseWrite(chunk, encoding, cb)
 }
 
+const writeTerminalControl = (text: string): void => {
+  ensureStdoutPatched()
+  const write = baseStdoutWrite ?? process.stdout.write.bind(process.stdout)
+  write(text)
+}
+
 const disableTerminalInputModes = (): void => {
   // Disable mouse/input modes that can leak across TUI <-> SSH transitions.
-  process.stdout.write(
+  writeTerminalControl(
     "\u001B[0m" +
       "\u001B[?25h" +
       "\u001B[?1l" +
@@ -84,9 +92,7 @@ const ensureStdoutPatched = (): void => {
 // EFFECT: n/a
 // INVARIANT: bypasses the mute wrapper safely
 export const writeToTerminal = (text: string): void => {
-  ensureStdoutPatched()
-  const write = baseStdoutWrite ?? process.stdout.write.bind(process.stdout)
-  write(text)
+  writeTerminalControl(text)
 }
 
 // CHANGE: keep the user on the primary screen until they acknowledge
@@ -207,14 +213,11 @@ export const suspendTui = (): void => {
   if (!process.stdout.isTTY) {
     return
   }
-  disableTerminalInputModes()
-  if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
-    process.stdin.setRawMode(false)
-  }
+  setStdoutMuted(true)
+  repairInteractiveTerminal(writeTerminalControl)
   // Switch back to the primary screen so interactive commands (ssh/gh/codex)
   // can render normally. Do not clear it: users may need scrollback (OAuth codes/URLs).
-  process.stdout.write("\u001B[?1049l")
-  setStdoutMuted(true)
+  writeTerminalControl(primaryScreenEscape)
 }
 
 // CHANGE: restore TUI rendering after interactive commands
@@ -231,14 +234,14 @@ export const resumeTui = (): void => {
   if (!process.stdout.isTTY) {
     return
   }
-  setStdoutMuted(false)
-  disableTerminalInputModes()
+  repairInteractiveTerminal(writeTerminalControl)
   // Return to the alternate screen for Ink rendering.
-  process.stdout.write("\u001B[?1049h\u001B[2J\u001B[H")
+  writeTerminalControl("\u001B[?1049h\u001B[2J\u001B[H")
   if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
     process.stdin.setRawMode(true)
   }
   disableTerminalInputModes()
+  setStdoutMuted(false)
 }
 
 export const leaveTui = (): void => {
@@ -246,13 +249,14 @@ export const leaveTui = (): void => {
     return
   }
   // Ensure we don't leave the terminal in a broken "mouse reporting" mode.
-  setStdoutMuted(false)
-  disableTerminalInputModes()
+  setStdoutMuted(true)
+  repairInteractiveTerminal(writeTerminalControl)
   // Restore the primary screen on exit without clearing it (keeps useful scrollback).
-  process.stdout.write("\u001B[?1049l")
+  writeTerminalControl(primaryScreenEscape)
   if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
     process.stdin.setRawMode(false)
   }
+  setStdoutMuted(false)
 }
 
 export const resetToMenu = (context: MenuResetContext): void => {

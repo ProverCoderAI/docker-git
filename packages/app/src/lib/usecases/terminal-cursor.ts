@@ -1,7 +1,7 @@
 /* jscpd:ignore-start */
+import { Effect } from "effect"
 import * as childProcess from "node:child_process"
 import * as fs from "node:fs"
-import { Effect } from "effect"
 
 const terminalSaneEscape = "\u001B[0m" + // reset rendition
   "\u001B[?25h" + // show cursor
@@ -85,6 +85,8 @@ const writeTerminalReset = (fd?: number): boolean => {
   }
 }
 
+type TerminalResetFallbackWrite = (chunk: string) => void
+
 const snapshotTerminalStateSync = (): string | null => {
   if (!hasInteractiveTty()) {
     return null
@@ -97,7 +99,7 @@ const snapshotTerminalStateSync = (): string | null => {
   })
 }
 
-const repairInteractiveTerminalSync = (): void => {
+const repairInteractiveTerminalSync = (fallbackWrite?: TerminalResetFallbackWrite): void => {
   if (!hasInteractiveTty()) {
     return
   }
@@ -109,6 +111,10 @@ const repairInteractiveTerminalSync = (): void => {
   })
 
   if (!repaired) {
+    if (typeof fallbackWrite === "function") {
+      fallbackWrite(terminalSaneEscape)
+      return
+    }
     writeTerminalReset()
   }
 }
@@ -147,12 +153,28 @@ export const ensureTerminalCursorVisible = (): Effect.Effect<void> =>
     repairInteractiveTerminalSync()
   })
 
+// CHANGE: share the low-level tty repair across SSH launch and TUI suspend/resume
+// WHY: both paths must reset the same controlling terminal before interactive output
+// QUOTE(ТЗ): "при подключении по SSH контейнер забаганный. Кривокосо печатается текст"
+// REF: user-request-2026-04-20-menu-select-ssh-terminal
+// SOURCE: n/a
+// FORMAT THEOREM: forall t: interactive(t) -> sane_tty(t)
+// PURITY: SHELL
+// EFFECT: n/a
+// INVARIANT: fallback writer is used only when /dev/tty repair is unavailable
+// COMPLEXITY: O(1)
+export const repairInteractiveTerminal = (fallbackWrite?: TerminalResetFallbackWrite): void => {
+  repairInteractiveTerminalSync(fallbackWrite)
+}
+
 export const withPreservedTerminalState = <A, E, R>(
   use: Effect.Effect<A, E, R>
 ): Effect.Effect<A, E, R> =>
   Effect.gen(function*(_) {
     const snapshot = yield* _(Effect.sync(() => snapshotTerminalStateSync()))
     yield* _(ensureTerminalCursorVisible())
-    return yield* _(use.pipe(Effect.ensuring(Effect.sync(() => restoreTerminalStateSync(snapshot)))))
+    return yield* _(use.pipe(Effect.ensuring(Effect.sync(() => {
+      restoreTerminalStateSync(snapshot)
+    }))))
   })
 /* jscpd:ignore-end */

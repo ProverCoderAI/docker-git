@@ -9,12 +9,12 @@
 // EFFECT: n/a
 // INVARIANT: script is deterministic
 // COMPLEXITY: O(1)
-const dockerGitTerminalSanitizeShell = `docker_git_terminal_write_escape() {
+const dockerGitTerminalSanitizeShell = String.raw`docker_git_terminal_write_escape() {
   if [ -c /dev/tty ]; then
-    printf "\\033[0m\\033[?25h\\033[?1l\\033>\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1005l\\033[?1006l\\033[?1015l\\033[?1007l\\033[?1004l\\033[?2004l\\033[>4;0m\\033[>4m\\033[<u" > /dev/tty 2>/dev/null && return 0
+    printf "\033[0m\033[?25h\033[?1l\033>\033[?1000l\033[?1002l\033[?1003l\033[?1005l\033[?1006l\033[?1015l\033[?1007l\033[?1004l\033[?2004l\033[>4;0m\033[>4m\033[<u" > /dev/tty 2>/dev/null && return 0
   fi
   if [ -t 1 ]; then
-    printf "\\033[0m\\033[?25h\\033[?1l\\033>\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1005l\\033[?1006l\\033[?1015l\\033[?1007l\\033[?1004l\\033[?2004l\\033[>4;0m\\033[>4m\\033[<u"
+    printf "\033[0m\033[?25h\033[?1l\033>\033[?1000l\033[?1002l\033[?1003l\033[?1005l\033[?1006l\033[?1015l\033[?1007l\033[?1004l\033[?2004l\033[>4;0m\033[>4m\033[<u"
     return 0
   fi
   return 1

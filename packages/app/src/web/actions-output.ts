@@ -11,11 +11,9 @@ export const appendOutputLine = (
   appendOutputChunk(context, `${trimmed}\n`)
 }
 
-export const appendOutputLineHandler =
-  (context: BrowserActionContext) =>
-  (line: string) => {
-    appendOutputLine(context, line)
-  }
+export const appendOutputLineHandler = (context: BrowserActionContext) => (line: string) => {
+  appendOutputLine(context, line)
+}
 
 export const notifyProjectEventRateLimit = (context: BrowserActionContext) => {
   context.setMessage("HTTP 429: tunnel or proxy rate limited the live stream. Retry or request a fresh tunnel URL.")

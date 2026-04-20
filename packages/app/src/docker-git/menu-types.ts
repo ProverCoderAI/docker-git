@@ -26,6 +26,7 @@ export type MenuEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.Comman
 
 export type MenuRunner = {
   readonly runEffect: <E extends MenuError>(effect: Effect.Effect<void, E, MenuEnv>) => void
+  readonly runInteractiveEffect: <E extends MenuError>(effect: Effect.Effect<void, E, MenuEnv>) => void
 }
 
 export type MenuViewContext = {

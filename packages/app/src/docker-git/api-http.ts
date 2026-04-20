@@ -1,7 +1,7 @@
 import type { HttpClientResponse } from "@effect/platform"
 import { HttpBody, HttpClient } from "@effect/platform"
-import type * as HttpClientError from "@effect/platform/HttpClientError"
 import { NodeHttpClient } from "@effect/platform-node"
+import type * as HttpClientError from "@effect/platform/HttpClientError"
 import { Effect } from "effect"
 
 import { readHttpResponseTextStream } from "../shared/http-response-stream.js"
@@ -146,14 +146,14 @@ const executeRequestWithControllerRetry = (
   return execute().pipe(
     Effect.matchEffect({
       onFailure: (error) =>
-        !shouldRetry
-          ? Effect.fail(error)
-          : ensureControllerReady().pipe(
+        shouldRetry
+          ? ensureControllerReady().pipe(
             Effect.matchEffect({
               onFailure: () => Effect.fail(error),
               onSuccess: () => execute()
             })
-          ),
+          )
+          : Effect.fail(error),
       onSuccess: (value) => Effect.succeed(value)
     })
   )

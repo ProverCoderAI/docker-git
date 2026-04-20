@@ -12,6 +12,7 @@ const makeContext = (inputStage: "cold" | "active"): MenuInputContext & {
 } => {
   let currentInputStage = inputStage
   const runnerRunEffect = vi.fn()
+  const runnerRunInteractiveEffect = vi.fn()
   const setViewMock = vi.fn()
   const setMessageMock = vi.fn()
   const setSkipInputsMock = vi.fn()
@@ -32,7 +33,7 @@ const makeContext = (inputStage: "cold" | "active"): MenuInputContext & {
     sshActive: false,
     setSshActive: vi.fn(),
     state: { cwd: process.cwd(), activeDir: null },
-    runner: { runEffect: runnerRunEffect },
+    runner: { runEffect: runnerRunEffect, runInteractiveEffect: runnerRunInteractiveEffect },
     exit: vi.fn(),
     setView: setViewMock,
     setMessage: setMessageMock,

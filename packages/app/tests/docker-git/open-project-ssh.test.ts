@@ -124,49 +124,50 @@ const captureOpenResolvedProjectSshEvents = (
     return events
   }).pipe(Effect.provide(NodeContext.layer))
 
-const captureOpenHostProjectSshEvents = (
-  item: ReturnType<typeof makeProjectItem>
+const captureSshEvents = (
+  use: (events: Array<string>) => Effect.Effect<void>
 ): Effect.Effect<ReadonlyArray<string>> =>
   Effect.gen(function*(_) {
     const events: Array<string> = []
-    yield* _(
-      openHostProjectSshEffect(item, {
-        writeHeader: (project) =>
-          Effect.sync(() => {
-            events.push(`header:${project.displayName}:${project.sshCommand}`)
-          }),
-        runCommand: (project) =>
-          Effect.sync(() => {
-            events.push(`run:${project.sshCommand}`)
-          })
-      })
-    )
+    yield* _(use(events))
     return events
-  }).pipe(Effect.provide(NodeContext.layer))
+  })
+
+const captureOpenHostProjectSshEvents = (
+  item: ReturnType<typeof makeProjectItem>
+): Effect.Effect<ReadonlyArray<string>> =>
+  captureSshEvents((events) =>
+    openHostProjectSshEffect(item, {
+      writeHeader: (project) =>
+        Effect.sync(() => {
+          events.push(`header:${project.displayName}:${project.sshCommand}`)
+        }),
+      runCommand: (project) =>
+        Effect.sync(() => {
+          events.push(`run:${project.sshCommand}`)
+        })
+    })
+  ).pipe(Effect.provide(NodeContext.layer))
 
 const captureOpenResolvedProjectSshWithUpEvents = (
   item: ReturnType<typeof makeProjectItem>
 ): Effect.Effect<ReadonlyArray<string>> =>
-  Effect.gen(function*(_) {
-    const events: Array<string> = []
-    yield* _(
-      openResolvedProjectSshWithUpEffect(item, {
-        upProject: (projectId) =>
-          Effect.sync(() => {
-            events.push(`up:${projectId}`)
-            return {
-              ...item,
-              sshCommand: "ssh -p 2299 dev@127.0.0.1",
-              sshPort: 2299,
-              status: "running" as const,
-              statusLabel: "running"
-            }
-          }),
-        openProjectSsh: (project) =>
-          Effect.sync(() => {
-            events.push(`open:${project.sshCommand}`)
-          })
-      })
-    )
-    return events
-  }).pipe(Effect.provide(NodeContext.layer))
+  captureSshEvents((events) =>
+    openResolvedProjectSshWithUpEffect(item, {
+      upProject: (projectId) =>
+        Effect.sync(() => {
+          events.push(`up:${projectId}`)
+          return {
+            ...item,
+            sshCommand: "ssh -p 2299 dev@127.0.0.1",
+            sshPort: 2299,
+            status: "running" as const,
+            statusLabel: "running"
+          }
+        }),
+      openProjectSsh: (project) =>
+        Effect.sync(() => {
+          events.push(`open:${project.sshCommand}`)
+        })
+    })
+  ).pipe(Effect.provide(NodeContext.layer))

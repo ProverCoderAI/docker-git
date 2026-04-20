@@ -6,15 +6,9 @@ import { openProjectAuthSelection } from "./menu-project-auth.js"
 import { buildConnectEffect } from "./menu-select-connect.js"
 import { loadRuntimeByProject } from "./menu-select-runtime.js"
 import { startSelectView } from "./menu-select-view.js"
-import {
-  pauseOnError,
-  resetToMenu,
-  resumeSshWithSkipInputs,
-  resumeWithSkipInputs,
-  withSuspendedTui
-} from "./menu-shared.js"
+import { pauseOnError, resetToMenu, resumeWithSkipInputs, withSuspendedTui } from "./menu-shared.js"
 import type { MenuRunner, MenuViewContext } from "./menu-types.js"
-import { openResolvedProjectSshWithUp } from "./open-project.js"
+import { openResolvedProjectSshViaControllerWithUp } from "./open-project.js"
 import type { ProjectItem } from "./project-item.js"
 
 export type SelectContext = MenuViewContext & {
@@ -38,21 +32,21 @@ export const runConnectSelection = (
 
   context.setMessage(`Connecting to ${selected.displayName}...`)
   context.setSshActive(true)
-  context.runner.runEffect(
+  context.runner.runInteractiveEffect(
     pipe(
-      withSuspendedTui(
-        buildConnectEffect(selected, false, {
-          connectWithUp: (item) => openResolvedProjectSshWithUp(item),
-          enableMcpPlaywright: () => Effect.void
-        }),
-        {
-          onError: pauseOnError(renderMenuError),
-          onResume: resumeSshWithSkipInputs(context)
-        }
-      ),
+      buildConnectEffect(selected, false, {
+        connectWithUp: (item) => openResolvedProjectSshViaControllerWithUp(item),
+        enableMcpPlaywright: () => Effect.void
+      }),
       Effect.tap(() =>
         Effect.sync(() => {
           context.setMessage("SSH session ended. Press Esc to return to the menu.")
+        })
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          context.setSshActive(false)
+          context.setSkipInputs(() => 2)
         })
       ),
       Effect.asVoid

@@ -3,6 +3,7 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Duration, Effect } from "effect"
 
+import { withPreservedTerminalState } from "../lib/usecases/terminal-cursor.js"
 import { createProjectTerminalSession, upProject } from "./api-client.js"
 import type { ApiTerminalSession } from "./api-terminal-codec.js"
 import { type ControllerRuntime, isRemoteDockerHost } from "./controller.js"
@@ -10,9 +11,8 @@ import { runCommandWithExitCodes } from "./frontend-lib/shell/command-runner.js"
 import { CommandFailedError } from "./frontend-lib/shell/errors.js"
 import { findSshPrivateKey } from "./frontend-lib/usecases/path-helpers.js"
 import type { HostError } from "./host-errors.js"
-import { withPreservedTerminalState } from "../lib/usecases/terminal-cursor.js"
 import { writeToTerminal } from "./menu-shared.js"
-import { projectItemFromApiDetails, type ProjectItem } from "./project-item.js"
+import { type ProjectItem, projectItemFromApiDetails } from "./project-item.js"
 import { attachTerminalSession } from "./terminal-session-client.js"
 
 export type OpenResolvedProjectSshDeps = {
@@ -236,4 +236,13 @@ export const openResolvedProjectSshViaController = (item: ProjectItem) =>
           encodeURIComponent(session.id)
         }/ws`
       })
+  })
+
+export const openResolvedProjectSshViaControllerWithUp = (item: ProjectItem) =>
+  openResolvedProjectSshWithUpEffect<HostError, ControllerRuntime>(item, {
+    openProjectSsh: openResolvedProjectSshViaController,
+    upProject: (projectId) =>
+      upProject(projectId).pipe(
+        Effect.map((project) => (project === null ? null : projectItemFromApiDetails(project)))
+      )
   })

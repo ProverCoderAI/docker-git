@@ -2,15 +2,14 @@ import { Effect, Match, pipe } from "effect"
 
 import { createAuthTerminalSession, githubLogin } from "./api-client.js"
 import { readAuthSnapshot, successMessage, writeAuthFlow } from "./menu-auth-data.js"
-import { type MenuError, renderMenuError } from "./menu-errors.js"
-import { pauseOnError, resumeSshWithSkipInputs, withSuspendedTui } from "./menu-shared.js"
-import type { AuthSnapshot, MenuEnv, MenuViewContext, ViewState } from "./menu-types.js"
+import type { MenuError } from "./menu-errors.js"
+import type { AuthSnapshot, MenuEnv, MenuRunner, MenuViewContext, ViewState } from "./menu-types.js"
 import { attachTerminalSession } from "./terminal-session-client.js"
 
 type AuthPromptView = Extract<ViewState, { readonly _tag: "AuthPrompt" }>
 
 type AuthEffectContext = MenuViewContext & {
-  readonly runner: { readonly runEffect: (effect: Effect.Effect<void, MenuError, MenuEnv>) => void }
+  readonly runner: MenuRunner
   readonly setSshActive: (active: boolean) => void
   readonly setSkipInputs: (update: (value: number) => number) => void
   readonly cwd: string
@@ -86,25 +85,30 @@ export const runAuthPromptEffect = (
   context: AuthEffectContext,
   options: { readonly suspendTui: boolean }
 ): void => {
-  const withOptionalSuspension = options.suspendTui
-    ? withSuspendedTui(effect, {
-      onError: pauseOnError(renderMenuError),
-      onResume: resumeSshWithSkipInputs(context)
-    })
-    : effect
+  const program = pipe(
+    effect,
+    Effect.zipRight(readAuthSnapshot(context.cwd)),
+    Effect.tap((snapshot) =>
+      Effect.sync(() => {
+        startAuthMenuWithSnapshot(snapshot, context)
+        context.setMessage(successMessage(view.flow, label))
+      })
+    ),
+    Effect.ensuring(
+      Effect.sync(() => {
+        if (options.suspendTui) {
+          context.setSshActive(false)
+          context.setSkipInputs(() => 2)
+        }
+      })
+    ),
+    Effect.asVoid
+  )
 
   context.setSshActive(options.suspendTui)
-  context.runner.runEffect(
-    pipe(
-      withOptionalSuspension,
-      Effect.zipRight(readAuthSnapshot(context.cwd)),
-      Effect.tap((snapshot) =>
-        Effect.sync(() => {
-          startAuthMenuWithSnapshot(snapshot, context)
-          context.setMessage(successMessage(view.flow, label))
-        })
-      ),
-      Effect.asVoid
-    )
-  )
+  if (options.suspendTui) {
+    context.runner.runInteractiveEffect(program)
+    return
+  }
+  context.runner.runEffect(program)
 }

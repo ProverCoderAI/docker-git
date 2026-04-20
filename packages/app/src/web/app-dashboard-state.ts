@@ -13,7 +13,5 @@ export const mergeDashboardRefreshState = (
     ? current
     : next
 
-export const createDashboardRefreshReducer =
-  (next: DashboardState) =>
-  (current: DashboardState): DashboardState =>
-    mergeDashboardRefreshState(current, next)
+export const createDashboardRefreshReducer = (next: DashboardState) => (current: DashboardState): DashboardState =>
+  mergeDashboardRefreshState(current, next)

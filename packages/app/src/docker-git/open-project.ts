@@ -18,12 +18,13 @@ export {
   type OpenHostProjectSshDeps,
   openHostProjectSshEffect,
   openResolvedProjectSsh,
-  openResolvedProjectSshWithUp,
-  type OpenResolvedProjectSshWithUpDeps,
-  openResolvedProjectSshWithUpEffect,
   type OpenResolvedProjectSshDeps,
   openResolvedProjectSshEffect,
-  openResolvedProjectSshViaController
+  openResolvedProjectSshViaController,
+  openResolvedProjectSshViaControllerWithUp,
+  openResolvedProjectSshWithUp,
+  type OpenResolvedProjectSshWithUpDeps,
+  openResolvedProjectSshWithUpEffect
 } from "./open-project-ssh.js"
 
 type ResolveOpenProjectDeps<E, R> = {

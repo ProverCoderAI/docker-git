@@ -1,4 +1,4 @@
-import { Effect } from "effect"
+import { Effect, pipe } from "effect"
 import React, { useMemo } from "react"
 
 import type { GridlandKeyEvent, GridlandModule, GridlandRenderer } from "@gridland/bun"
@@ -101,18 +101,35 @@ const runEmbeddedGridlandMenu = (renderApp: GridlandAppFactory): Effect.Effect<v
     const gridland = yield* loadGridlandModule()
     const renderer = yield* createGridlandRenderer(gridland)
     const root = gridland.createRoot(renderer)
+    let exiting = false
+
+    const exit = () => {
+      if (exiting) {
+        return
+      }
+      exiting = true
+      root.unmount()
+      renderer.destroy()
+    }
 
     root.render(
       renderApp({
-        exit: () => {
-          renderer.destroy()
-        },
+        exit,
         gridland
       })
     )
 
     renderer.start()
-    yield* waitForRendererDestroy(renderer)
+    yield* pipe(
+      waitForRendererDestroy(renderer),
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (!exiting) {
+            root.unmount()
+          }
+        })
+      )
+    )
   })
 
 export const runGridlandMenu = (renderApp: GridlandAppFactory): Effect.Effect<void, InputReadError> =>
