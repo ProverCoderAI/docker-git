@@ -1,8 +1,7 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import path from "node:path"
-
 import { NodeContext as BrowserFrontendTestNodeContext } from "@effect/platform-node"
+import type { PlatformError } from "@effect/platform/Error"
+import * as FileSystem from "@effect/platform/FileSystem"
+import * as Path from "@effect/platform/Path"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { afterEach, beforeEach, vi } from "vitest"
@@ -67,39 +66,72 @@ const requireEnvValue = (
 const writeWebStateFile = (
   statePath: string,
   state: Readonly<Record<string, string | number>>
-): void => {
-  mkdirSync(path.dirname(statePath), { recursive: true })
-  writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`)
-}
+): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    yield* _(fs.makeDirectory(path.dirname(statePath), { recursive: true }))
+    yield* _(fs.writeFileString(statePath, `${JSON.stringify(state, null, 2)}\n`))
+  }).pipe(Effect.provide(BrowserFrontendTestNodeContext.layer))
+
+const makeProjectsRoot = (): Effect.Effect<string, PlatformError> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    return yield* _(fs.makeTempDirectory({ prefix: "docker-git-browser-test-" }))
+  }).pipe(Effect.provide(BrowserFrontendTestNodeContext.layer))
+
+const removeProjectsRoot = (root: string): Effect.Effect<void, PlatformError> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    yield* _(fs.remove(root, { force: true, recursive: true }))
+  }).pipe(Effect.provide(BrowserFrontendTestNodeContext.layer))
 
 describe("browser frontend command", () => {
   let projectsRoot: string | null = null
 
-  beforeEach(() => {
-    vi.resetModules()
-    projectsRoot = mkdtempSync(path.join(tmpdir(), "docker-git-browser-test-"))
-    process.env["DOCKER_GIT_PROJECTS_ROOT"] = projectsRoot
-    makeNonInteractive()
-    ensureControllerReadyMock.mockReset()
-    ensureControllerReadyMock.mockImplementation(() => Effect.void)
-    runCommandCaptureMock.mockReset()
-    runCommandCaptureMock.mockImplementation(() => Effect.succeed(""))
-    runCommandExitCodeMock.mockReset()
-    runCommandExitCodeMock.mockImplementation(() => Effect.succeed(0))
-    runCommandExitCodeStreamingMock.mockReset()
-    runCommandExitCodeStreamingMock.mockImplementation(() => Effect.succeed(0))
-  })
+  beforeEach(() =>
+    Effect.runPromise(
+      makeProjectsRoot().pipe(
+        Effect.tap((root) =>
+          Effect.sync(() => {
+            vi.resetModules()
+            projectsRoot = root
+            process.env["DOCKER_GIT_PROJECTS_ROOT"] = root
+            makeNonInteractive()
+            ensureControllerReadyMock.mockReset()
+            ensureControllerReadyMock.mockImplementation(() => Effect.void)
+            runCommandCaptureMock.mockReset()
+            runCommandCaptureMock.mockImplementation(() => Effect.succeed(""))
+            runCommandExitCodeMock.mockReset()
+            runCommandExitCodeMock.mockImplementation(() => Effect.succeed(0))
+            runCommandExitCodeStreamingMock.mockReset()
+            runCommandExitCodeStreamingMock.mockImplementation(() => Effect.succeed(0))
+          })
+        ),
+        Effect.asVoid
+      )
+    )
+  )
 
-  afterEach(() => {
-    restoreTty()
-    delete process.env["DOCKER_GIT_WEB_PORT"]
-    delete process.env["DOCKER_GIT_WEB_HOST"]
-    delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
-    if (projectsRoot !== null) {
-      rmSync(projectsRoot, { force: true, recursive: true })
-      projectsRoot = null
-    }
-  })
+  afterEach(() =>
+    Effect.runPromise(
+      Effect.gen(function*(_) {
+        const root = projectsRoot
+        yield* _(
+          Effect.sync(() => {
+            restoreTty()
+            delete process.env["DOCKER_GIT_WEB_PORT"]
+            delete process.env["DOCKER_GIT_WEB_HOST"]
+            delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
+            projectsRoot = null
+          })
+        )
+        if (root !== null) {
+          yield* _(removeProjectsRoot(root))
+        }
+      })
+    )
+  )
 
   it.effect("starts controller and web when nothing is running", () =>
     Effect.gen(function*(_) {
@@ -172,7 +204,7 @@ describe("browser frontend command", () => {
       const revision = requireEnvValue(serveEnv, "DOCKER_GIT_WEB_REVISION")
       const statePath = requireEnvValue(serveEnv, "DOCKER_GIT_WEB_STATE_PATH")
 
-      writeWebStateFile(statePath, {
+      yield* _(writeWebStateFile(statePath, {
         schemaVersion: 1,
         revision,
         pid: "123",
@@ -180,7 +212,7 @@ describe("browser frontend command", () => {
         port: "4174",
         apiBaseUrl: "http://127.0.0.1:3334",
         startedAtIso: "2026-04-21T00:00:00.000Z"
-      })
+      }))
 
       ensureControllerReadyMock.mockClear()
       runCommandExitCodeMock.mockClear()

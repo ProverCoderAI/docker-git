@@ -112,14 +112,21 @@ export const readBrowserFrontendState = (
 ): Effect.Effect<BrowserFrontendStateFile | null, never, FileSystem.FileSystem> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
-    const exists = yield* _(fs.exists(statePath))
-    if (!exists) {
+    const exists = yield* _(Effect.either(fs.exists(statePath)))
+    const fileExists = Either.match(exists, {
+      onLeft: () => false,
+      onRight: (value) => value
+    })
+    if (!fileExists) {
       return null
     }
 
-    const contents = yield* _(fs.readFileString(statePath))
-    return decodeBrowserFrontendStateFile(contents)
-  }).pipe(Effect.catchAll(() => Effect.succeed(null)))
+    const contents = yield* _(Effect.either(fs.readFileString(statePath)))
+    return Either.match(contents, {
+      onLeft: () => null,
+      onRight: decodeBrowserFrontendStateFile
+    })
+  })
 
 // CHANGE: make web reuse a pure predicate over durable state and observed listening pids
 // WHY: reruns should restart only the changed browser runtime, not the whole stack
