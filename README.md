@@ -89,6 +89,14 @@ bun run web:dev
 
 Открой `http://127.0.0.1:4174/`.
 
+Одна команда для controller + web frontend:
+
+```bash
+bun run docker-git -- browser
+```
+
+Если controller или web frontend уже запущены, команда спросит про restart. В non-interactive запуске restart выполняется автоматически.
+
 Preview собранного frontend:
 
 ```bash

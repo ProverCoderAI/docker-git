@@ -25,7 +25,7 @@ import {
   renderProjectSummaryLine,
   syncState
 } from "./api-client.js"
-import { runBrowserFrontend } from "./browser-frontend.js"
+import { runBrowserFrontendCommand } from "./browser-frontend.js"
 import { readCommand } from "./cli/read-command.js"
 import { usageText } from "./cli/usage.js"
 import { type ControllerRuntime, ensureControllerReady } from "./controller.js"
@@ -236,7 +236,7 @@ const dispatchOperationalCommand = (
 ): Effect.Effect<void, CliError, ControllerRuntime> =>
   Match.value(command).pipe(
     Match.when({ _tag: "Menu" }, () => withControllerReady(runMenu)),
-    Match.when({ _tag: "Browser" }, () => withControllerReady(runBrowserFrontend)),
+    Match.when({ _tag: "Browser" }, () => runBrowserFrontendCommand),
     Match.when({ _tag: "Create" }, handleCreateCommand),
     Match.when({ _tag: "Open" }, handleOpenCommand),
     Match.when({ _tag: "Status" }, handleStatusCommand),

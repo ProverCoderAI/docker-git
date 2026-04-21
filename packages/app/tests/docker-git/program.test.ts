@@ -6,7 +6,7 @@ import { beforeEach, vi } from "vitest"
 import type { Command } from "../../src/docker-git/frontend-lib/core/domain.js"
 
 const ensureControllerReadyMock = vi.hoisted(() => vi.fn(() => Effect.void))
-const runBrowserFrontendMock = vi.hoisted(() => vi.fn(() => Effect.void))
+const runBrowserFrontendCommandMock = vi.hoisted(() => vi.fn(() => Effect.void))
 const runMenuCallMock = vi.hoisted(() => vi.fn(() => {}))
 const readCommandMock = vi.hoisted(() => vi.fn<() => Command>())
 const codexLoginMock = vi.hoisted(() => vi.fn(() => Effect.void))
@@ -30,7 +30,7 @@ vi.mock("../../src/docker-git/controller.js", () => ({
 }))
 
 vi.mock("../../src/docker-git/browser-frontend.js", () => ({
-  runBrowserFrontend: Effect.flatMap(Effect.sync(() => runBrowserFrontendMock()), (effect) => effect)
+  runBrowserFrontendCommand: Effect.flatMap(Effect.sync(() => runBrowserFrontendCommandMock()), (effect) => effect)
 }))
 
 vi.mock("../../src/docker-git/api-client.js", () => ({
@@ -72,8 +72,8 @@ describe("program menu dispatch", () => {
   beforeEach(() => {
     ensureControllerReadyMock.mockReset()
     ensureControllerReadyMock.mockImplementation(() => Effect.void)
-    runBrowserFrontendMock.mockReset()
-    runBrowserFrontendMock.mockImplementation(() => Effect.void)
+    runBrowserFrontendCommandMock.mockReset()
+    runBrowserFrontendCommandMock.mockImplementation(() => Effect.void)
     runMenuCallMock.mockReset()
     readCommandMock.mockReset()
     readCommandMock.mockReturnValue(menuCommand)
@@ -94,13 +94,13 @@ describe("program menu dispatch", () => {
       expect(process.exitCode ?? 0).toBe(0)
     }))
 
-  it.effect("routes browser frontend through controller bootstrap", () =>
+  it.effect("routes browser frontend through the browser command runner", () =>
     Effect.gen(function*(_) {
       readCommandMock.mockReturnValue(browserCommand)
       yield* _(runProgram())
 
-      expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
-      expect(runBrowserFrontendMock).toHaveBeenCalledTimes(1)
+      expect(ensureControllerReadyMock).not.toHaveBeenCalled()
+      expect(runBrowserFrontendCommandMock).toHaveBeenCalledTimes(1)
       expect(process.exitCode ?? 0).toBe(0)
     }))
 
