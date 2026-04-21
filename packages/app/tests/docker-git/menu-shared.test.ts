@@ -1,10 +1,13 @@
+import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { afterEach, beforeEach, vi } from "vitest"
 
-const repairInteractiveTerminalMock = vi.hoisted(() => vi.fn<(fallbackWrite?: (chunk: string) => void) => void>())
+const repairInteractiveTerminalMock = vi.hoisted(() =>
+  vi.fn<(fallbackWrite?: (chunk: string) => void) => Effect.Effect<void>>()
+)
 
-vi.mock("../../src/lib/usecases/terminal-cursor.js", () => ({
+vi.mock("../../src/docker-git/frontend-lib/shell/terminal-cursor.js", () => ({
   repairInteractiveTerminal: repairInteractiveTerminalMock
 }))
 
@@ -17,13 +20,20 @@ const inputModesEscape = "\u001B[0m" +
   "\u001B[?1000l\u001B[?1002l\u001B[?1003l\u001B[?1005l\u001B[?1006l\u001B[?1015l\u001B[?1007l" +
   "\u001B[?1004l\u001B[?2004l" +
   "\u001B[>4;0m\u001B[>4m\u001B[<u"
+const primaryScreenRepairEvents = ["repair", "write:<repair>", `write:${primaryScreenEscape}`]
+const alternateScreenResumeEvents = [
+  "repair",
+  "write:<repair>",
+  `write:${alternateScreenEscape}`,
+  "raw:true",
+  `write:${inputModesEscape}`
+]
 
 const originalStdoutWrite: typeof process.stdout.write = process.stdout.write.bind(process.stdout)
 const originalStderrWrite: typeof process.stderr.write = process.stderr.write.bind(process.stderr)
 const originalStdinTty = process.stdin.isTTY
 const originalStdoutTty = process.stdout.isTTY
-const originalSetRawMode: typeof process.stdin.setRawMode =
-  ((_enabled: boolean) => process.stdin) as typeof process.stdin.setRawMode
+const originalSetRawMode = Reflect.get(process.stdin, "setRawMode")
 
 const loadMenuShared = Effect.tryPromise({
   try: () => import("../../src/docker-git/menu-shared.js"),
@@ -33,42 +43,44 @@ const loadMenuShared = Effect.tryPromise({
 const restoreTerminalBindings = (): void => {
   process.stdout.write = originalStdoutWrite
   process.stderr.write = originalStderrWrite
-  process.stdin.setRawMode = originalSetRawMode
+  Object.defineProperty(process.stdin, "setRawMode", { configurable: true, value: originalSetRawMode })
   Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: originalStdinTty })
   Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: originalStdoutTty })
 }
 
 const createRawModeStub = (events: Array<string>): typeof process.stdin.setRawMode =>
-  ((enabled: boolean) => {
+  function setRawModeStub(this: typeof process.stdin, enabled: boolean) {
     events.push(`raw:${String(enabled)}`)
-    return process.stdin
-  }) as typeof process.stdin.setRawMode
+    return this
+  }
 
 const createWriteStub = (
   events: Array<string>
 ): typeof process.stdout.write =>
-  ((
+  function writeStub(
     chunk: string | Uint8Array,
     encoding?: BufferEncoding | ((err?: Error | null) => void),
     cb?: (err?: Error | null) => void
-  ) => {
+  ) {
     events.push(`write:${String(chunk)}`)
     const callback = typeof encoding === "function" ? encoding : cb
     callback?.()
     return true
-  }) as typeof process.stdout.write
+  }
 
 const installPatchedTerminal = (events: Array<string>): void => {
   process.stdin.setRawMode = createRawModeStub(events)
   process.stdout.write = createWriteStub(events)
-  process.stderr.write = (() => true) as typeof process.stderr.write
+  process.stderr.write = createWriteStub(events)
 }
 
 const installRepairRecorder = (events: Array<string>): void => {
-  repairInteractiveTerminalMock.mockImplementation((fallbackWrite) => {
-    events.push("repair")
-    fallbackWrite?.("<repair>")
-  })
+  repairInteractiveTerminalMock.mockImplementation((fallbackWrite) =>
+    Effect.sync(() => {
+      events.push("repair")
+      fallbackWrite?.("<repair>")
+    })
+  )
 }
 
 const createMenuSharedFixture = () =>
@@ -77,7 +89,7 @@ const createMenuSharedFixture = () =>
     installPatchedTerminal(events)
     installRepairRecorder(events)
     const menuShared = yield* _(loadMenuShared)
-    return { events, menuShared } as const
+    return { events, menuShared }
   })
 
 describe("menu-shared terminal boundary", () => {
@@ -99,7 +111,7 @@ describe("menu-shared terminal boundary", () => {
         menuShared: { suspendTui, writeToTerminal }
       } = yield* _(createMenuSharedFixture())
 
-      suspendTui()
+      yield* _(suspendTui().pipe(Effect.provide(NodeContext.layer)))
       process.stdout.write("hidden gridland frame")
       writeToTerminal("visible ssh header")
 
@@ -119,12 +131,12 @@ describe("menu-shared terminal boundary", () => {
         menuShared: { resumeTui, suspendTui }
       } = yield* _(createMenuSharedFixture())
 
-      suspendTui()
+      yield* _(suspendTui().pipe(Effect.provide(NodeContext.layer)))
       events.length = 0
       repairInteractiveTerminalMock.mockClear()
       installRepairRecorder(events)
 
-      resumeTui()
+      yield* _(resumeTui().pipe(Effect.provide(NodeContext.layer)))
       process.stdout.write("restored gridland frame")
 
       expect(events).toEqual([
@@ -155,20 +167,14 @@ describe("menu-shared terminal boundary", () => {
               events.push("resume")
             }
           }
-        )
+        ).pipe(Effect.provide(NodeContext.layer))
       )
 
       expect(events).toEqual([
-        "repair",
-        "write:<repair>",
-        `write:${primaryScreenEscape}`,
+        ...primaryScreenRepairEvents,
         "effect",
         "write:ssh output",
-        "repair",
-        "write:<repair>",
-        `write:${alternateScreenEscape}`,
-        "raw:true",
-        `write:${inputModesEscape}`,
+        ...alternateScreenResumeEvents,
         "resume"
       ])
     }))
@@ -180,13 +186,8 @@ describe("menu-shared terminal boundary", () => {
         menuShared: { leaveTui }
       } = yield* _(createMenuSharedFixture())
 
-      leaveTui()
+      yield* _(leaveTui().pipe(Effect.provide(NodeContext.layer)))
 
-      expect(events).toEqual([
-        "repair",
-        "write:<repair>",
-        `write:${primaryScreenEscape}`,
-        "raw:false"
-      ])
+      expect(events).toEqual([...primaryScreenRepairEvents, "raw:false"])
     }))
 })

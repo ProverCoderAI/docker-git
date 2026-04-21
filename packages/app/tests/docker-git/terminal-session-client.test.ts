@@ -15,12 +15,23 @@ vi.mock("../../src/docker-git/menu-shared.js", () => ({
   writeToTerminal: writeToTerminalMock
 }))
 
-type FakeSocketListenerMap = {
-  readonly close: Array<() => void>
-  readonly error: Array<() => void>
-  readonly message: Array<(event: { readonly data: string }) => void>
-  readonly open: Array<() => void>
-}
+type FakeSocketListener =
+  | { readonly listener: () => void; readonly type: "close" }
+  | { readonly listener: () => void; readonly type: "error" }
+  | { readonly listener: () => void; readonly type: "open" }
+  | { readonly listener: (event: { readonly data: string }) => void; readonly type: "message" }
+
+type SocketListenerType = "close" | "error" | "message" | "open"
+
+const isMessageSocketListener = (
+  type: SocketListenerType,
+  _listener: (() => void) | ((event: { readonly data: string }) => void)
+): _listener is (event: { readonly data: string }) => void => type === "message"
+
+const isVoidSocketListener = (
+  type: SocketListenerType,
+  _listener: (() => void) | ((event: { readonly data: string }) => void)
+): _listener is () => void => type !== "message"
 
 type StdinListener = Parameters<typeof process.stdin.on>[1]
 type StdoutListener = Parameters<typeof process.stdout.on>[1]
@@ -35,27 +46,34 @@ class FakeWebSocket {
   readonly sent: Array<string> = []
   readonly url: string
   readyState = FakeWebSocket.CONNECTING
-  private readonly listeners: FakeSocketListenerMap = {
-    close: [],
-    error: [],
-    message: [],
-    open: []
-  }
+  private readonly listeners: Array<FakeSocketListener> = []
 
   constructor(url: string) {
     this.url = url
     FakeWebSocket.instances.push(this)
   }
 
+  addEventListener(type: "message", listener: (event: { readonly data: string }) => void): void
+  addEventListener(type: "close" | "error" | "open", listener: () => void): void
   addEventListener(
-    type: keyof FakeSocketListenerMap,
+    type: SocketListenerType,
     listener: (() => void) | ((event: { readonly data: string }) => void)
   ): void {
-    if (type === "message") {
-      this.listeners.message.push(listener as (event: { readonly data: string }) => void)
+    if (type === "message" && isMessageSocketListener(type, listener)) {
+      this.listeners.push({ listener, type: "message" })
       return
     }
-    this.listeners[type].push(listener as () => void)
+    if (isVoidSocketListener(type, listener)) {
+      if (type === "close") {
+        this.listeners.push({ listener, type: "close" })
+      }
+      if (type === "error") {
+        this.listeners.push({ listener, type: "error" })
+      }
+      if (type === "open") {
+        this.listeners.push({ listener, type: "open" })
+      }
+    }
   }
 
   close(): void {
@@ -63,8 +81,10 @@ class FakeWebSocket {
       return
     }
     this.readyState = FakeWebSocket.CLOSED
-    for (const listener of this.listeners.close) {
-      listener()
+    for (const entry of this.listeners) {
+      if (entry.type === "close") {
+        entry.listener()
+      }
     }
   }
 
@@ -73,15 +93,19 @@ class FakeWebSocket {
   }
 
   emitMessage(data: string): void {
-    for (const listener of this.listeners.message) {
-      listener({ data })
+    for (const entry of this.listeners) {
+      if (entry.type === "message") {
+        entry.listener({ data })
+      }
     }
   }
 
   emitOpen(): void {
     this.readyState = FakeWebSocket.OPEN
-    for (const listener of this.listeners.open) {
-      listener()
+    for (const entry of this.listeners) {
+      if (entry.type === "open") {
+        entry.listener()
+      }
     }
   }
 }
@@ -127,8 +151,10 @@ const makeAttachment = () => ({
 
 const firstSocket = (): FakeWebSocket => {
   const socket = FakeWebSocket.instances[0]
-  expect(socket).toBeDefined()
-  return socket as FakeWebSocket
+  if (socket === undefined) {
+    expect.fail("Expected a websocket instance.")
+  }
+  return socket
 }
 
 const startAttachment = (
@@ -137,7 +163,7 @@ const startAttachment = (
   ) => Effect.Effect<void, TerminalSessionClientError>
 ) => {
   const promise = Effect.runPromise(attachTerminalSession(makeAttachment()).pipe(Effect.either))
-  return { promise, socket: firstSocket() } as const
+  return { promise, socket: firstSocket() }
 }
 
 const startOpenedAttachment = (
@@ -183,22 +209,22 @@ describe("terminal-session-client", () => {
     Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true })
     Object.defineProperty(process.stdout, "columns", { configurable: true, value: 132 })
     Object.defineProperty(process.stdout, "rows", { configurable: true, value: 40 })
-    process.stdin.setRawMode = setRawModeMock as typeof process.stdin.setRawMode
-    process.stdin.on = stdinOnMock as typeof process.stdin.on
-    process.stdin.off = stdinOffMock as typeof process.stdin.off
-    process.stdout.on = stdoutOnMock as typeof process.stdout.on
-    process.stdout.off = stdoutOffMock as typeof process.stdout.off
-    process.stdin.resume = stdinResumeMock as typeof process.stdin.resume
+    Object.defineProperty(process.stdin, "setRawMode", { configurable: true, value: setRawModeMock })
+    Object.defineProperty(process.stdin, "on", { configurable: true, value: stdinOnMock })
+    Object.defineProperty(process.stdin, "off", { configurable: true, value: stdinOffMock })
+    Object.defineProperty(process.stdout, "on", { configurable: true, value: stdoutOnMock })
+    Object.defineProperty(process.stdout, "off", { configurable: true, value: stdoutOffMock })
+    Object.defineProperty(process.stdin, "resume", { configurable: true, value: stdinResumeMock })
   })
 
   afterEach(() => {
     vi.useRealTimers()
-    process.stdin.setRawMode = originalSetRawMode as typeof process.stdin.setRawMode
-    process.stdin.on = originalStdinOn
-    process.stdin.off = originalStdinOff
-    process.stdout.on = originalStdoutOn
-    process.stdout.off = originalStdoutOff
-    process.stdin.resume = originalStdinResume
+    Object.defineProperty(process.stdin, "setRawMode", { configurable: true, value: originalSetRawMode })
+    Object.defineProperty(process.stdin, "on", { configurable: true, value: originalStdinOn })
+    Object.defineProperty(process.stdin, "off", { configurable: true, value: originalStdinOff })
+    Object.defineProperty(process.stdout, "on", { configurable: true, value: originalStdoutOn })
+    Object.defineProperty(process.stdout, "off", { configurable: true, value: originalStdoutOff })
+    Object.defineProperty(process.stdin, "resume", { configurable: true, value: originalStdinResume })
     Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: originalStdinIsTty })
     Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: originalStdoutIsTty })
     Object.defineProperty(process.stdout, "columns", { configurable: true, value: originalStdoutColumns })

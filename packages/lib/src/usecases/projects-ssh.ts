@@ -36,7 +36,8 @@ export type PreparedProjectSsh = {
   readonly args: ReadonlyArray<string>
 }
 
-type ProjectSshUpRequirements = CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
+type ProjectSshRuntime = CommandExecutor.CommandExecutor | FileSystem.FileSystem
+type ProjectSshUpRequirements = ProjectSshRuntime | Path.Path
 
 const buildSshArgs = (item: ProjectItem): ReadonlyArray<string> => {
   const host = item.ipAddress ?? "localhost"
@@ -139,7 +140,7 @@ export const prepareProjectSsh = (item: ProjectItem): PreparedProjectSsh => ({
 
 const connectPreparedProjectSsh = (
   prepared: PreparedProjectSsh
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+): Effect.Effect<void, CommandFailedError | PlatformError, ProjectSshRuntime> =>
   withPreservedTerminalState(
     runCommandWithExitCodes(
       {
@@ -164,7 +165,7 @@ const connectPreparedProjectSsh = (
 // COMPLEXITY: O(1)
 export const connectProjectSsh = (
   item: ProjectItem
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+): Effect.Effect<void, CommandFailedError | PlatformError, ProjectSshRuntime> =>
   connectPreparedProjectSsh(prepareProjectSsh(item))
 
 // CHANGE: ensure docker compose is up before SSH connection

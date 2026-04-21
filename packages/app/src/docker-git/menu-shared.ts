@@ -1,7 +1,7 @@
 import type { MenuViewContext, ViewState } from "./menu-types.js"
 
 import { Effect, pipe } from "effect"
-import { repairInteractiveTerminal } from "../lib/usecases/terminal-cursor.js"
+import { repairInteractiveTerminal, type TerminalCursorRuntime } from "./frontend-lib/shell/terminal-cursor.js"
 
 // CHANGE: share menu escape handling across flows
 // WHY: avoid duplicated logic in TUI handlers
@@ -146,19 +146,23 @@ export const withSuspendedTui = <A, E, R>(
     readonly onError?: (error: E) => Effect.Effect<void>
     readonly onResume?: () => void
   }
-): Effect.Effect<A, E, R> => {
+): Effect.Effect<A, E, R | TerminalCursorRuntime> => {
   const withError = options?.onError
     ? pipe(effect, Effect.tapError((error) => Effect.ignore(options.onError?.(error) ?? Effect.void)))
     : effect
 
   return pipe(
-    Effect.sync(suspendTui),
+    suspendTui(),
     Effect.zipRight(withError),
     Effect.ensuring(
-      Effect.sync(() => {
-        resumeTui()
-        options?.onResume?.()
-      })
+      pipe(
+        resumeTui(),
+        Effect.zipRight(
+          Effect.sync(() => {
+            options?.onResume?.()
+          })
+        )
+      )
     )
   )
 }
@@ -199,6 +203,36 @@ const setStdoutMuted = (muted: boolean): void => {
   stdoutMuted = muted
 }
 
+const setStdoutMutedEffect = (muted: boolean): Effect.Effect<void> =>
+  Effect.sync(() => {
+    setStdoutMuted(muted)
+  })
+
+const writeTerminalControlEffect = (text: string): Effect.Effect<void> =>
+  Effect.sync(() => {
+    writeTerminalControl(text)
+  })
+
+const setRawModeEffect = (enabled: boolean): Effect.Effect<void> =>
+  process.stdin.isTTY && typeof process.stdin.setRawMode === "function"
+    ? pipe(
+      Effect.try(() => {
+        process.stdin.setRawMode(enabled)
+      }),
+      Effect.ignore
+    )
+    : Effect.void
+
+const whenStdoutTty = (effect: Effect.Effect<void, never, TerminalCursorRuntime>) =>
+  process.stdout.isTTY ? effect : Effect.void
+
+const preparePrimaryScreen = (): Effect.Effect<void, never, TerminalCursorRuntime> =>
+  Effect.gen(function*(_) {
+    yield* _(setStdoutMutedEffect(true))
+    yield* _(repairInteractiveTerminal(writeTerminalControl))
+    yield* _(writeTerminalControlEffect(primaryScreenEscape))
+  })
+
 // CHANGE: temporarily suspend TUI rendering when running interactive commands
 // WHY: avoid mixed output from docker/ssh and the Ink UI
 // QUOTE(ТЗ): "Почему так кривокосо всё отображается?"
@@ -209,16 +243,14 @@ const setStdoutMuted = (muted: boolean): void => {
 // EFFECT: n/a
 // INVARIANT: only toggles when TTY is available
 // COMPLEXITY: O(1)
-export const suspendTui = (): void => {
-  if (!process.stdout.isTTY) {
-    return
-  }
-  setStdoutMuted(true)
-  repairInteractiveTerminal(writeTerminalControl)
-  // Switch back to the primary screen so interactive commands (ssh/gh/codex)
-  // can render normally. Do not clear it: users may need scrollback (OAuth codes/URLs).
-  writeTerminalControl(primaryScreenEscape)
-}
+export const suspendTui = (): Effect.Effect<void, never, TerminalCursorRuntime> =>
+  whenStdoutTty(
+    preparePrimaryScreen().pipe(
+      // Switch back to the primary screen so interactive commands (ssh/gh/codex)
+      // can render normally. Do not clear it: users may need scrollback (OAuth codes/URLs).
+      Effect.asVoid
+    )
+  )
 
 // CHANGE: restore TUI rendering after interactive commands
 // WHY: return to Ink UI without broken terminal state
@@ -230,34 +262,30 @@ export const suspendTui = (): void => {
 // EFFECT: n/a
 // INVARIANT: only toggles when TTY is available
 // COMPLEXITY: O(1)
-export const resumeTui = (): void => {
-  if (!process.stdout.isTTY) {
-    return
-  }
-  repairInteractiveTerminal(writeTerminalControl)
-  // Return to the alternate screen for Ink rendering.
-  writeTerminalControl("\u001B[?1049h\u001B[2J\u001B[H")
-  if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
-    process.stdin.setRawMode(true)
-  }
-  disableTerminalInputModes()
-  setStdoutMuted(false)
-}
+export const resumeTui = (): Effect.Effect<void, never, TerminalCursorRuntime> =>
+  whenStdoutTty(
+    Effect.gen(function*(_) {
+      yield* _(repairInteractiveTerminal(writeTerminalControl))
+      // Return to the alternate screen for Ink rendering.
+      yield* _(writeTerminalControlEffect("\u001B[?1049h\u001B[2J\u001B[H"))
+      yield* _(setRawModeEffect(true))
+      yield* _(Effect.sync(() => {
+        disableTerminalInputModes()
+      }))
+      yield* _(setStdoutMutedEffect(false))
+    })
+  )
 
-export const leaveTui = (): void => {
-  if (!process.stdout.isTTY) {
-    return
-  }
-  // Ensure we don't leave the terminal in a broken "mouse reporting" mode.
-  setStdoutMuted(true)
-  repairInteractiveTerminal(writeTerminalControl)
-  // Restore the primary screen on exit without clearing it (keeps useful scrollback).
-  writeTerminalControl(primaryScreenEscape)
-  if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
-    process.stdin.setRawMode(false)
-  }
-  setStdoutMuted(false)
-}
+export const leaveTui = (): Effect.Effect<void, never, TerminalCursorRuntime> =>
+  whenStdoutTty(
+    Effect.gen(function*(_) {
+      // Ensure we don't leave the terminal in a broken "mouse reporting" mode.
+      yield* _(preparePrimaryScreen())
+      // Restore the primary screen on exit without clearing it (keeps useful scrollback).
+      yield* _(setRawModeEffect(false))
+      yield* _(setStdoutMutedEffect(false))
+    })
+  )
 
 export const resetToMenu = (context: MenuResetContext): void => {
   const view: ViewState = { _tag: "Menu" }
