@@ -259,6 +259,8 @@ jobs:
       - name: Publish to npm
         if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
         shell: bash
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           PKG_PATH="packages/app/package.json"
@@ -277,6 +279,8 @@ jobs:
       - name: Publish to GitHub Packages
         if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
         shell: bash
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           OWNER="${{ github.repository_owner }}"
