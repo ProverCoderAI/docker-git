@@ -143,15 +143,22 @@ export const readProjectRuntimeState = (
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const statePath = resolveProjectRuntimeStatePath(path, projectDir)
-    const exists = yield* _(fs.exists(statePath))
-    if (!exists) {
+    const exists = yield* _(Effect.either(fs.exists(statePath)))
+    const fileExists = Either.match(exists, {
+      onLeft: () => false,
+      onRight: (value) => value
+    })
+    if (!fileExists) {
       return emptyProjectRuntimeState()
     }
 
-    const contents = yield* _(fs.readFileString(statePath))
-    const decoded = decodeProjectRuntimeStateFile(contents)
+    const contents = yield* _(Effect.either(fs.readFileString(statePath)))
+    const decoded = Either.match(contents, {
+      onLeft: () => null,
+      onRight: decodeProjectRuntimeStateFile
+    })
     return decoded === null ? emptyProjectRuntimeState() : toRuntimeState(decoded)
-  }).pipe(Effect.catchAll(() => Effect.succeed(emptyProjectRuntimeState())))
+  })
 
 // CHANGE: persist successful runtime launches into project-local `.orch/state`
 // WHY: DB-only project listing can still sort by latest launch time
