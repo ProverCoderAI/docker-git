@@ -3,17 +3,6 @@
 `docker-git` создаёт отдельную Docker-среду для каждого репозитория, issue или PR.
 По умолчанию проекты лежат в `~/.docker-git`.
 
-## Что нужно
-
-- Bun `1.3+`
-- Docker Engine или Docker Desktop
-- Доступ к Docker без `sudo`
-- Git и OpenSSH client (`ssh`, `ssh-keygen`)
-- GitHub CLI `gh` для `docker-git auth github login --web`
-
-`Node.js` не является основным runtime для `docker-git`: CLI и workspace запускаются через Bun.
-Node всё ещё устанавливается внутри создаваемых Docker-сред, потому что часть агентских CLI зависит от Node ecosystem.
-
 ## Установка
 
 ```bash
@@ -69,65 +58,10 @@ docker-git apply-all --active
 - `apply` применяет конфиг к одному проекту. `--no-up` только обновляет файлы без `docker compose up`. В текущем API-only host mode команда ещё недоступна.
 - `apply-all` применяет конфиг ко всем проектам. `--active` только к запущенным контейнерам.
 
-## Browser frontend
 
-Browser UI использует тот же backend-контракт, что и CLI. API находится в `packages/api`,
-а frontend shell в `packages/app`.
-
-Dev-режим:
-
-```bash
-bun install
-bun run api:start
-```
-
-Во втором терминале:
-
-```bash
-bun run web:dev
-```
-
-Открой `http://127.0.0.1:4174/`.
-
-Одна команда для controller + web frontend:
-
+Для запуска WEB версии:
 ```bash
 bun run docker-git -- browser
-```
-
-Если controller или web frontend уже запущены, команда спросит про restart. В non-interactive запуске restart выполняется автоматически.
-
-Preview собранного frontend:
-
-```bash
-bun run web:build
-bun run web:serve
-```
-
-Открой `http://127.0.0.1:4191/`.
-`web:serve` проксирует `/api` и WebSocket terminal-сессии в API на `127.0.0.1:3334`.
-
-## Архитектура workspace
-
-- `packages/app` — CLI/Web frontend, renderer, API client.
-- `packages/api` — HTTP/WebSocket controller, единственный backend entrypoint для frontend.
-- `packages/lib` — бизнес-логика, Docker/SSH/usecase слой.
-
-Frontend не должен напрямую вызывать бизнес-логику из `packages/lib`; он работает через `packages/api`.
-
-## Проверки
-
-```bash
-bun run typecheck
-bun run lint
-bun run lint:effect
-bun run test
-```
-
-E2E:
-
-```bash
-bun run e2e
 ```
 
 ## Подробности
