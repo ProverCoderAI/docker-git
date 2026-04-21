@@ -290,3 +290,16 @@ export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrap
     }
     yield* _(startAndRememberController(bootstrapContext))
   })
+
+export const restartController = (): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
+  Effect.gen(function*(_) {
+    yield* _(failIfRemoteDockerWithoutApiUrl())
+    const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
+    if (explicitApiBaseUrl !== undefined) {
+      yield* _(ensureControllerReady())
+      return
+    }
+
+    const bootstrapContext = yield* _(loadControllerBootstrapContext())
+    yield* _(startAndRememberController({ ...bootstrapContext, forceRecreateController: true }))
+  })
