@@ -1,6 +1,7 @@
-import * as childProcess from "node:child_process"
-import * as fs from "node:fs"
-import { Effect } from "effect"
+import * as Command from "@effect/platform/Command"
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import * as FileSystem from "@effect/platform/FileSystem"
+import { Effect, Option, pipe } from "effect"
 
 const terminalSaneEscape = "\u001B[0m" + // reset rendition
   "\u001B[?25h" + // show cursor
@@ -20,115 +21,138 @@ const terminalSaneEscape = "\u001B[0m" + // reset rendition
   "\u001B[<u" // disable kitty keyboard protocol
 
 const controllingTtyPath = "/dev/tty"
+const shellPath = "/bin/sh"
+const sttyPath = "/usr/bin/stty"
+const snapshotPattern = /^[0-9a-fA-F:]+$/u
+
+type TerminalCursorRuntime = CommandExecutor.CommandExecutor | FileSystem.FileSystem
+
+const optionOrElse = <A>(option: Option.Option<A>, fallback: A): A => pipe(option, Option.getOrElse(() => fallback))
+
+const succeeds = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<boolean, never, R> =>
+  pipe(
+    effect,
+    Effect.as(true),
+    Effect.option,
+    Effect.map((result) => optionOrElse(result, false))
+  )
 
 const hasInteractiveTty = (): boolean => process.stdin.isTTY && process.stdout.isTTY
 
-const disableRawMode = (): void => {
+const disableRawMode = (): Effect.Effect<void> => {
   if (typeof process.stdin.setRawMode !== "function") {
-    return
+    return Effect.void
   }
-  try {
-    process.stdin.setRawMode(false)
-  } catch {
-    // Ignore raw-mode reset failures when stdin is no longer attached to a tty.
-  }
+
+  return pipe(
+    Effect.try(() => {
+      process.stdin.setRawMode(false)
+    }),
+    Effect.ignore
+  )
 }
 
-const withControllingTty = <A>(use: (fd: number) => A): A | null => {
-  try {
-    const fd = fs.openSync(controllingTtyPath, "r+")
-    try {
-      return use(fd)
-    } finally {
-      fs.closeSync(fd)
-    }
-  } catch {
-    return null
-  }
-}
+const ttyShellCommand = (script: string): Command.Command =>
+  pipe(
+    Command.make(shellPath, "-c", script),
+    Command.stdin("inherit"),
+    Command.stdout("pipe"),
+    Command.stderr("pipe")
+  )
 
-const runSttyOnFd = (
-  fd: number,
-  args: ReadonlyArray<string>,
-  captureOutput: boolean = false
-): {
-  readonly ok: boolean
-  readonly stdout: string
-} => {
-  const result = childProcess.spawnSync("stty", args, {
-    encoding: "utf8",
-    stdio: [fd, captureOutput ? "pipe" : "ignore", "ignore"]
+const runTtyShell = (script: string): Effect.Effect<boolean, never, CommandExecutor.CommandExecutor> =>
+  pipe(
+    ttyShellCommand(script),
+    Command.exitCode,
+    Effect.map((exitCode) => Number(exitCode) === 0),
+    Effect.option,
+    Effect.map((result) => optionOrElse(result, false))
+  )
+
+const runTtyShellString = (script: string): Effect.Effect<string, never, CommandExecutor.CommandExecutor> =>
+  pipe(
+    ttyShellCommand(script),
+    Command.string,
+    Effect.map((output) => output.trim()),
+    Effect.option,
+    Effect.map((result) => optionOrElse(result, ""))
+  )
+
+const snapshotTerminalState = (): Effect.Effect<string | null, never, CommandExecutor.CommandExecutor> => {
+  if (!hasInteractiveTty()) {
+    return Effect.succeed(null)
+  }
+
+  return Effect.gen(function*(_) {
+    yield* _(disableRawMode())
+    const snapshot = yield* _(
+      runTtyShellString(
+        `if [ -c ${controllingTtyPath} ]; then ${sttyPath} -g < ${controllingTtyPath} 2>/dev/null || true; fi`
+      )
+    )
+    return snapshotPattern.test(snapshot) ? snapshot : null
   })
-
-  return {
-    ok: result.error === undefined && result.status === 0,
-    stdout: typeof result.stdout === "string" ? result.stdout.trim() : ""
-  }
 }
 
-const writeTerminalReset = (fd?: number): boolean => {
-  if (typeof fd === "number") {
-    try {
-      fs.writeSync(fd, terminalSaneEscape)
+const writeTerminalReset = (): Effect.Effect<boolean, never, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const wroteTty = yield* _(succeeds(fs.writeFileString(controllingTtyPath, terminalSaneEscape)))
+    if (wroteTty) {
       return true
-    } catch {
-      return false
     }
-  }
 
-  try {
-    process.stdout.write(terminalSaneEscape)
-    return true
-  } catch {
-    return false
-  }
-}
-
-const snapshotTerminalStateSync = (): string | null => {
-  if (!hasInteractiveTty()) {
-    return null
-  }
-
-  disableRawMode()
-  return withControllingTty((fd) => {
-    const result = runSttyOnFd(fd, ["-g"], true)
-    return result.ok && result.stdout.length > 0 ? result.stdout : null
-  })
-}
-
-const repairInteractiveTerminalSync = (): void => {
-  if (!hasInteractiveTty()) {
-    return
-  }
-
-  disableRawMode()
-  const repaired = withControllingTty((fd) => {
-    const sane = runSttyOnFd(fd, ["sane"])
-    return sane.ok && writeTerminalReset(fd)
+    return yield* _(
+      succeeds(
+        Effect.try(() => {
+          process.stdout.write(terminalSaneEscape)
+        })
+      )
+    )
   })
 
-  if (!repaired) {
-    writeTerminalReset()
-  }
-}
+const runSttySane = (): Effect.Effect<boolean, never, CommandExecutor.CommandExecutor> =>
+  runTtyShell(
+    `if [ -c ${controllingTtyPath} ]; then ${sttyPath} sane < ${controllingTtyPath} > ${controllingTtyPath} 2>/dev/null; else exit 1; fi`
+  )
 
-const restoreTerminalStateSync = (snapshot: string | null): void => {
+const restoreSttySnapshot = (snapshot: string): Effect.Effect<boolean, never, CommandExecutor.CommandExecutor> =>
+  snapshotPattern.test(snapshot)
+    ? runTtyShell(
+      `if [ -c ${controllingTtyPath} ]; then ${sttyPath} '${snapshot}' < ${controllingTtyPath} > ${controllingTtyPath} 2>/dev/null; else exit 1; fi`
+    )
+    : Effect.succeed(false)
+
+const repairInteractiveTerminal = (): Effect.Effect<void, never, TerminalCursorRuntime> => {
   if (!hasInteractiveTty()) {
-    return
+    return Effect.void
   }
 
-  disableRawMode()
-  const restored = withControllingTty((fd) => {
-    if (snapshot !== null && runSttyOnFd(fd, [snapshot]).ok) {
-      return writeTerminalReset(fd)
+  return Effect.gen(function*(_) {
+    yield* _(disableRawMode())
+    const sane = yield* _(runSttySane())
+    const wroteReset = sane ? yield* _(writeTerminalReset()) : false
+    if (!wroteReset) {
+      yield* _(writeTerminalReset())
     }
-    const sane = runSttyOnFd(fd, ["sane"])
-    return sane.ok && writeTerminalReset(fd)
   })
+}
 
-  if (!restored) {
-    writeTerminalReset()
+const restoreTerminalState = (
+  snapshot: string | null
+): Effect.Effect<void, never, TerminalCursorRuntime> => {
+  if (!hasInteractiveTty()) {
+    return Effect.void
   }
+
+  return Effect.gen(function*(_) {
+    yield* _(disableRawMode())
+    const restored = snapshot === null ? false : yield* _(restoreSttySnapshot(snapshot))
+    if (!restored) {
+      yield* _(runSttySane())
+    }
+    yield* _(writeTerminalReset())
+  })
 }
 
 // CHANGE: ensure the terminal cursor is visible before handing control to interactive SSH
@@ -138,19 +162,17 @@ const restoreTerminalStateSync = (snapshot: string | null): void => {
 // SOURCE: n/a
 // FORMAT THEOREM: forall t: interactive(t) -> cursor_visible(t)
 // PURITY: SHELL
-// EFFECT: Effect<void, never, never>
+// EFFECT: Effect<void, never, TerminalCursorRuntime>
 // INVARIANT: escape sequence is emitted only in interactive tty mode
 // COMPLEXITY: O(1)
-export const ensureTerminalCursorVisible = (): Effect.Effect<void> =>
-  Effect.sync(() => {
-    repairInteractiveTerminalSync()
-  })
+export const ensureTerminalCursorVisible = (): Effect.Effect<void, never, TerminalCursorRuntime> =>
+  repairInteractiveTerminal()
 
 export const withPreservedTerminalState = <A, E, R>(
   use: Effect.Effect<A, E, R>
-): Effect.Effect<A, E, R> =>
+): Effect.Effect<A, E, R | TerminalCursorRuntime> =>
   Effect.gen(function*(_) {
-    const snapshot = yield* _(Effect.sync(() => snapshotTerminalStateSync()))
+    const snapshot = yield* _(snapshotTerminalState())
     yield* _(ensureTerminalCursorVisible())
-    return yield* _(use.pipe(Effect.ensuring(Effect.sync(() => restoreTerminalStateSync(snapshot)))))
+    return yield* _(use.pipe(Effect.ensuring(restoreTerminalState(snapshot))))
   })

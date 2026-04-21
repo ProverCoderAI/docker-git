@@ -28,6 +28,21 @@ jobs:
       - name: Build (api)
         run: bun run --cwd packages/api build
 
+  dist-deps-prune:
+    name: Dist deps prune
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+        with:
+          node-version: 24.14.0
+      - name: Build package
+        run: bun run --cwd packages/app build
+      - name: Dist deps prune (lint)
+        run: bun run check:dist-deps-prune
+
   types:
     name: Types
     runs-on: ubuntu-latest

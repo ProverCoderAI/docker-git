@@ -26,8 +26,8 @@ const shellPath = "/bin/sh"
 const sttyPath = "/usr/bin/stty"
 const snapshotPattern = /^[0-9a-fA-F:]+$/u
 
-type TerminalCursorRuntime = CommandExecutor.CommandExecutor | FileSystem.FileSystem
-type TerminalResetFallbackWrite = (chunk: string) => void
+export type TerminalCursorRuntime = CommandExecutor.CommandExecutor | FileSystem.FileSystem
+export type TerminalResetFallbackWrite = (chunk: string) => void
 
 const optionOrElse = <A>(option: Option.Option<A>, fallback: A): A => pipe(option, Option.getOrElse(() => fallback))
 
@@ -137,7 +137,17 @@ const restoreSttySnapshot = (snapshot: string): Effect.Effect<boolean, never, Co
     )
     : Effect.succeed(false)
 
-const repairInteractiveTerminalEffect = (
+// CHANGE: share the low-level tty repair across SSH launch and TUI suspend/resume
+// WHY: both paths must reset the same controlling terminal before interactive output
+// QUOTE(ТЗ): "при подключении по SSH контейнер забаганный. Кривокосо печатается текст"
+// REF: user-request-2026-04-20-menu-select-ssh-terminal
+// SOURCE: n/a
+// FORMAT THEOREM: forall t: interactive(t) -> sane_tty(t)
+// PURITY: SHELL
+// EFFECT: Effect<void, never, TerminalCursorRuntime>
+// INVARIANT: fallback writer is used only when /dev/tty repair is unavailable
+// COMPLEXITY: O(1)
+export const repairInteractiveTerminal = (
   fallbackWrite?: TerminalResetFallbackWrite
 ): Effect.Effect<void, never, TerminalCursorRuntime> => {
   if (!hasInteractiveTty()) {
@@ -182,21 +192,7 @@ const restoreTerminalState = (
 // INVARIANT: escape sequence is emitted only in interactive tty mode
 // COMPLEXITY: O(1)
 export const ensureTerminalCursorVisible = (): Effect.Effect<void, never, TerminalCursorRuntime> =>
-  repairInteractiveTerminalEffect()
-
-// CHANGE: share the low-level tty repair across SSH launch and TUI suspend/resume
-// WHY: both paths must reset the same controlling terminal before interactive output
-// QUOTE(ТЗ): "при подключении по SSH контейнер забаганный. Кривокосо печатается текст"
-// REF: user-request-2026-04-20-menu-select-ssh-terminal
-// SOURCE: n/a
-// FORMAT THEOREM: forall t: interactive(t) -> sane_tty(t)
-// PURITY: SHELL
-// EFFECT: Effect<void, never, TerminalCursorRuntime>
-// INVARIANT: fallback writer is used only when /dev/tty repair is unavailable
-// COMPLEXITY: O(1)
-export const repairInteractiveTerminal = (
-  fallbackWrite?: TerminalResetFallbackWrite
-): Effect.Effect<void, never, TerminalCursorRuntime> => repairInteractiveTerminalEffect(fallbackWrite)
+  repairInteractiveTerminal()
 
 export const withPreservedTerminalState = <A, E, R>(
   use: Effect.Effect<A, E, R>

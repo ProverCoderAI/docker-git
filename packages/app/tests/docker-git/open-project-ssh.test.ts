@@ -161,7 +161,7 @@ const captureOpenResolvedProjectSshWithUpEvents = (
             ...item,
             sshCommand: "ssh -p 2299 dev@127.0.0.1",
             sshPort: 2299,
-            status: "running" as const,
+            status: "running",
             statusLabel: "running"
           }
         }),
