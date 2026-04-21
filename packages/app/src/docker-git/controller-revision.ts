@@ -117,18 +117,36 @@ export const shouldForceRecreateController = (
 // EFFECT: Effect<string, PlatformError, FileSystem | Path>
 // INVARIANT: revision changes whenever any tracked controller input changes
 // COMPLEXITY: O(total_bytes(inputs))
-export const computeLocalControllerRevision = (
-  composePath: string
+// CHANGE: share deterministic source fingerprinting between controller and browser runtimes
+// WHY: selective restarts require comparable revision proofs for independent runtime parts
+// QUOTE(ТЗ): "Надо перезапускать только те контейнеры у которых изменился код"
+// REF: user-message-2026-04-21-browser-selective-restart
+// SOURCE: n/a
+// FORMAT THEOREM: forall inputs: same_tree(root, inputs) -> same_revision(root, inputs)
+// PURITY: SHELL
+// EFFECT: Effect<string, PlatformError, FileSystem | Path>
+// INVARIANT: tracked missing paths, file bytes, directory markers and sorted entries fully determine the revision
+// COMPLEXITY: O(total_bytes(inputs))
+export const computeRevisionFromInputs = (
+  rootDir: string,
+  inputs: ReadonlyArray<string>
 ): Effect.Effect<string, PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
-    const repoRoot = path.dirname(composePath)
     const chunks: Array<string> = []
 
-    for (const relativePath of controllerRevisionInputs) {
-      yield* _(hashTree(fs, path, repoRoot, relativePath, chunks))
+    for (const relativePath of inputs) {
+      yield* _(hashTree(fs, path, rootDir, relativePath, chunks))
     }
 
     return yield* _(digestRevision(chunks))
+  })
+
+export const computeLocalControllerRevision = (
+  composePath: string
+): Effect.Effect<string, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const path = yield* _(Path.Path)
+    return yield* _(computeRevisionFromInputs(path.dirname(composePath), controllerRevisionInputs))
   })

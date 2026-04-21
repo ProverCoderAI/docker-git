@@ -30,9 +30,9 @@ import {
   shouldRefreshProjectAuthPanel,
   shouldRefreshProjectDetails
 } from "./app-ready-shortcuts.js"
+import { type TerminalWorkspaceReadyState, useTerminalWorkspaceState } from "./app-ready-terminal-state-hook.js"
 import type { BrowserMenuTag } from "./menu.js"
 import { type BrowserScreen, menuScreen } from "./screen.js"
-import type { ActiveTerminalSession } from "./terminal.js"
 
 type Setter<A> = Dispatch<SetStateAction<A>>
 
@@ -79,7 +79,7 @@ type ReadyStateSetters = Pick<
   | "setSelectedProjectId"
 >
 
-export type ReadyState = ReadyStateSetters & {
+export type ReadyState = ReadyStateSetters & TerminalWorkspaceReadyState & {
   readonly actionPrompt: ActionPromptState | null
   readonly activeScreen: BrowserScreen
   readonly authSnapshot: AuthSnapshot | null
@@ -105,8 +105,6 @@ export type ReadyState = ReadyStateSetters & {
   readonly setProjectNavigationArmed: Setter<boolean>
   readonly selectedMenuIndex: number
   readonly selectedProjectId: string | null
-  readonly setTerminalSession: Setter<ActiveTerminalSession | null>
-  readonly terminalSession: ActiveTerminalSession | null
 }
 
 const useReadyNavigationState = () => {
@@ -132,7 +130,7 @@ const useReadyPanelState = () => {
   const [authSnapshot, setAuthSnapshot] = useState<AuthSnapshot | null>(null)
   const [githubStatus, setGithubStatus] = useState<GithubAuthStatus | null>(null)
   const [createView, setCreateView] = useState<CreateFlowView>(resetCreateView())
-  const [terminalSession, setTerminalSession] = useState<ActiveTerminalSession | null>(null)
+  const terminalWorkspaceState = useTerminalWorkspaceState()
 
   return {
     actionPrompt,
@@ -149,8 +147,7 @@ const useReadyPanelState = () => {
     setGithubStatus,
     setMessage,
     setOutput,
-    setTerminalSession,
-    terminalSession
+    ...terminalWorkspaceState
   }
 }
 
@@ -277,9 +274,9 @@ const maybeLoadProjectPickerInfo = (
 ): void => {
   if (
     activeScreen.tag === "ProjectPicker" &&
-    shouldRefreshProjectDetails(currentMenu, projectNavigationArmed, selectedProjectId)
+    shouldRefreshProjectDetails(currentMenu, projectNavigationArmed, selectedProjectId, project)
   ) {
-    loadSelectedProjectInfo(context, { silent: project !== null && project.id === selectedProjectId })
+    loadSelectedProjectInfo(context)
   }
 }
 

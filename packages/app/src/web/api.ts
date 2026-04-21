@@ -1,5 +1,7 @@
 import { Effect } from "effect"
 
+import { sortSelectItemsByLaunchTime } from "../docker-git/menu-select-order.js"
+import type { SelectProjectRuntime } from "../docker-git/menu-types.js"
 import type { AuthMenuRequestBody, ProjectAuthMenuRequestBody } from "../shared/auth-menu-request.js"
 import { requestJson, requestText, requestTextStream, resolveApiBaseUrl } from "./api-http.js"
 import {
@@ -27,7 +29,8 @@ import type {
   ProjectBrowserSession,
   ProjectDatabaseForward,
   ProjectDatabaseSession,
-  ProjectPortForward
+  ProjectPortForward,
+  ProjectSummary
 } from "./api-schema.js"
 
 export { startCreateProject } from "./api-create-project.js"
@@ -65,6 +68,39 @@ export const projectDatabaseEditorUrl = (session: ProjectDatabaseSession): strin
 export const projectDatabaseExternalUrl = (forward: ProjectDatabaseForward): string =>
   `${forward.publicHost}:${forward.hostPort}`
 
+const dashboardRuntimeByProject = (
+  projects: ReadonlyArray<ProjectSummary>
+): Readonly<Record<string, SelectProjectRuntime>> =>
+  Object.fromEntries(
+    projects.map((project) => [
+      project.id,
+      {
+        running: project.status === "running",
+        sshSessions: project.sshSessions,
+        startedAtIso: project.startedAtIso,
+        startedAtEpochMs: project.startedAtEpochMs
+      }
+    ])
+  )
+
+// CHANGE: keep WEB `/select/` project order identical to CLI Select
+// WHY: both surfaces must use the same launch-time ordering and tie-breakers
+// QUOTE(ТЗ): "мы можем иметь 1 в 1 логику что в CLI что на WEB?"
+// REF: user-message-2026-04-21-unify-cli-web-select
+// SOURCE: n/a
+// FORMAT THEOREM: forall projects: web_order(projects) = select_order(projects)
+// PURITY: CORE
+// EFFECT: none
+// INVARIANT: loadDashboard returns projects ordered by the shared select comparator
+// COMPLEXITY: O(n log n)
+export const sortDashboardProjects = (
+  projects: ReadonlyArray<ProjectSummary>
+): ReadonlyArray<ProjectSummary> =>
+  sortSelectItemsByLaunchTime(projects, dashboardRuntimeByProject(projects), {
+    displayName: (project) => project.displayName,
+    projectKey: (project) => project.id
+  })
+
 export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
   Effect.all({
     health: requestJson("GET", "/health", HealthResponseSchema),
@@ -73,7 +109,7 @@ export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
     Effect.map(({ health, projectsResponse }) => ({
       apiBaseUrl: resolveApiBaseUrl(),
       health,
-      projects: projectsResponse.projects
+      projects: sortDashboardProjects(projectsResponse.projects)
     }))
   )
 

@@ -24,6 +24,8 @@ import type { ViewportLayout } from "./viewport-layout.js"
 export type ReadyLayoutProps = {
   readonly actionPrompt: ActionPromptState | null
   readonly activeScreen: BrowserScreen
+  readonly activeTerminalSession: ActiveTerminalSession | null
+  readonly activeTerminalSessionId: string | null
   readonly authSnapshot: AuthSnapshot | null
   readonly busyLabel: string | null
   readonly controllerCwd: string
@@ -68,7 +70,8 @@ export type ReadyLayoutProps = {
   readonly onSelectMenu: (index: number) => void
   readonly onSelectProject: (projectId: string) => void
   readonly onRunCurrentMenuAction: () => void
-  readonly onTerminalClose: () => void
+  readonly onSelectTerminal: (sessionId: string) => void
+  readonly onTerminalClose: (sessionId: string) => void
   readonly onTerminalMessage: (message: string | null) => void
   readonly output: string
   readonly portForwardInput: string
@@ -80,7 +83,7 @@ export type ReadyLayoutProps = {
   readonly selectedMenuIndex: number
   readonly selectedProjectId: string | null
   readonly selectedProjectSummary: DashboardData["projects"][number] | undefined
-  readonly terminalSession: ActiveTerminalSession | null
+  readonly terminalSessions: ReadonlyArray<ActiveTerminalSession>
   readonly viewportLayout: ViewportLayout
 }
 
@@ -143,7 +146,7 @@ const StatusHeader = (
 )
 
 export const ReadyLayout = ({ busyLabel, message, ...props }: ReadyLayoutProps): JSX.Element => (
-  props.terminalSession === null
+  props.terminalSessions.length === 0
     ? (
       <Box flexDirection="column" height="100%" minHeight={0} overflow="hidden" padding={1} width="100%">
         <StatusHeader

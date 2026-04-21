@@ -10,7 +10,7 @@ import type { ApiEvent } from "../src/api/contracts.js"
 import { ApiConflictError, ApiInternalError } from "../src/api/errors.js"
 import { resolveManagedAuthorizedKeysContents } from "../src/services/project-authorized-keys.js"
 import { listProjectEventsSince } from "../src/services/events.js"
-import { createProjectFromRequest, seedAuthorizedKeysForCreate } from "../src/services/projects.js"
+import { createProjectFromRequest, getProject, listProjects, seedAuthorizedKeysForCreate } from "../src/services/projects.js"
 
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
@@ -255,6 +255,126 @@ describe("projects service", () => {
             )
           )
         )
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("lists project inventory from .docker-git with conservative runtime defaults", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const projectId = path.join(projectsRoot, "test-owner", "db-only")
+
+        yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              createProjectFromRequest({
+                repoUrl: "https://git.example.test/test-owner/db-only.git",
+                repoRef: "main",
+                outDir: projectId,
+                skipGithubAuth: true,
+                up: false
+              })
+            )
+          )
+        )
+
+        const projects = yield* _(
+          withEnvVar(
+            "DOCKER_HOST",
+            "unix:///definitely-missing-docker.sock",
+            withProjectsRoot(projectsRoot, withWorkingDirectory(root, listProjects()))
+          )
+        )
+        const details = yield* _(
+          withEnvVar(
+            "DOCKER_HOST",
+            "unix:///definitely-missing-docker.sock",
+            withProjectsRoot(projectsRoot, withWorkingDirectory(root, getProject(projectId)))
+          )
+        )
+
+        expect(projects).toHaveLength(1)
+        expect(projects[0]).toMatchObject({
+          id: projectId,
+          projectDir: projectId,
+          status: "unknown",
+          statusLabel: "unknown",
+          sshSessions: 0,
+          startedAtIso: null,
+          startedAtEpochMs: null
+        })
+        expect(details).toMatchObject({
+          id: projectId,
+          projectDir: projectId,
+          status: "unknown",
+          statusLabel: "unknown"
+        })
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("lists persisted launch metadata from .docker-git without Docker access", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const projectId = path.join(projectsRoot, "test-owner", "launched")
+        const startedAtIso = "2026-04-21T10:00:00.000Z"
+        const startedAtEpochMs = Date.parse(startedAtIso)
+        const statePath = path.join(projectId, ".orch", "state", "runtime.json")
+
+        yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              createProjectFromRequest({
+                repoUrl: "https://git.example.test/test-owner/launched.git",
+                repoRef: "main",
+                outDir: projectId,
+                skipGithubAuth: true,
+                up: false
+              })
+            )
+          )
+        )
+
+        yield* _(fs.makeDirectory(path.dirname(statePath), { recursive: true }))
+        yield* _(
+          fs.writeFileString(
+            statePath,
+            `${JSON.stringify({
+              schemaVersion: 1,
+              lastStartedAtIso: startedAtIso,
+              lastStartedAtEpochMs: startedAtEpochMs,
+              lastStartAction: "up",
+              lastKnownStatus: "running",
+              updatedAtIso: "2026-04-21T10:00:01.000Z"
+            }, null, 2)}\n`
+          )
+        )
+
+        const projects = yield* _(
+          withEnvVar(
+            "DOCKER_HOST",
+            "unix:///definitely-missing-docker.sock",
+            withProjectsRoot(projectsRoot, withWorkingDirectory(root, listProjects()))
+          )
+        )
+
+        expect(projects).toHaveLength(1)
+        expect(projects[0]).toMatchObject({
+          id: projectId,
+          projectDir: projectId,
+          status: "running",
+          statusLabel: "last known: running",
+          sshSessions: 0,
+          startedAtIso,
+          startedAtEpochMs
+        })
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

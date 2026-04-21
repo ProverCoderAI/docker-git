@@ -1,21 +1,37 @@
-import { createReadStream, existsSync, statSync } from "node:fs"
+import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs"
 import { createServer, request as httpRequest } from "node:http"
 import { request as httpsRequest } from "node:https"
-import { extname, join, normalize } from "node:path"
+import { networkInterfaces } from "node:os"
+import { dirname, extname, join, normalize } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { WebSocket, WebSocketServer } from "ws"
 
 const appRoot = normalize(join(fileURLToPath(new URL(".", import.meta.url)), ".."))
 const staticRoot = join(appRoot, "dist-web")
+const trimTrailingSlashes = (value) => value.replace(/\/+$/u, "")
 const configuredApiUrl = process.env["DOCKER_GIT_API_URL"]?.trim()
-const apiUrl = new URL(
+const apiBaseUrl = trimTrailingSlashes(
   configuredApiUrl && configuredApiUrl.length > 0
     ? configuredApiUrl
     : `http://${process.env["DOCKER_GIT_API_HOST"]?.trim() || "127.0.0.1"}:${process.env["DOCKER_GIT_API_PORT"]?.trim() || "3334"}`
 )
-const host = process.env["DOCKER_GIT_WEB_HOST"]?.trim() || "127.0.0.1"
+const apiUrl = new URL(apiBaseUrl)
+// CHANGE: bind the browser runtime to all host interfaces unless explicitly overridden.
+// WHY: the browser shell proxies API calls, so LAN users need only the web port reachable.
+// QUOTE(ТЗ): "Я хочу подключить"
+// REF: user-request-2026-04-21-browser-lan-bind
+// SOURCE: n/a
+// FORMAT THEOREM: default(bindHost) = 0.0.0.0 -> forall h in HostIPv4Interfaces: listens(h, webPort), firewall permitting
+// PURITY: SHELL
+// EFFECT: reads process.env and host network interfaces.
+// INVARIANT: explicit DOCKER_GIT_WEB_HOST still narrows the exposed interface.
+// COMPLEXITY: O(i)/O(i), where i = number of host network interfaces.
+const defaultWebHost = "0.0.0.0"
+const host = process.env["DOCKER_GIT_WEB_HOST"]?.trim() || defaultWebHost
 const port = Number(process.env["DOCKER_GIT_WEB_PORT"]?.trim() || "4191")
+const webRevision = process.env["DOCKER_GIT_WEB_REVISION"]?.trim()
+const webStatePath = process.env["DOCKER_GIT_WEB_STATE_PATH"]?.trim()
 
 const contentTypes = {
   ".css": "text/css; charset=utf-8",
@@ -33,6 +49,19 @@ const contentTypes = {
 const noStoreHeaders = {
   "cache-control": "no-store"
 }
+
+const wildcardHosts = new Set(["0.0.0.0", "::"])
+
+const hostNetworkUrls = (port) =>
+  Object.values(networkInterfaces())
+    .flatMap((entries) => entries ?? [])
+    .filter((entry) => entry.family === "IPv4" && !entry.internal)
+    .map((entry) => `http://${entry.address}:${port}`)
+
+const reachableUrls = (host, port) =>
+  wildcardHosts.has(host)
+    ? [`http://127.0.0.1:${port}`, ...hostNetworkUrls(port)]
+    : [`http://${host}:${port}`]
 
 const dbGateOwnedPathPrefixes = [
   "/admin",
@@ -288,6 +317,31 @@ server.on("upgrade", (request, socket, head) => {
   })
 })
 
+const writeRuntimeState = () => {
+  if (webStatePath === undefined || webStatePath.length === 0 || webRevision === undefined || webRevision.length === 0) {
+    return
+  }
+
+  const state = {
+    schemaVersion: 1,
+    revision: webRevision,
+    pid: String(process.pid),
+    host,
+    port: String(port),
+    apiBaseUrl,
+    startedAtIso: new Date().toISOString()
+  }
+
+  try {
+    mkdirSync(dirname(webStatePath), { recursive: true })
+    writeFileSync(webStatePath, `${JSON.stringify(state, null, 2)}\n`)
+  } catch (error) {
+    console.warn(`docker-git web runtime could not write state to ${webStatePath}: ${String(error)}`)
+  }
+}
+
 server.listen(port, host, () => {
+  writeRuntimeState()
   console.log(`docker-git web runtime listening on http://${host}:${port}`)
+  console.log(`docker-git web runtime reachable at ${reachableUrls(host, port).join(", ")}`)
 })

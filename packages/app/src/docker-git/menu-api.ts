@@ -3,8 +3,8 @@ import { Effect, pipe } from "effect"
 import {
   deleteProject,
   downProject,
-  getProject,
   githubStatus,
+  listProjectDetails,
   listProjects,
   readProjectLogs,
   readProjectPs,
@@ -30,23 +30,6 @@ const decodeGithubSummary = (payload: JsonValue): string => {
   return asString(status?.["summary"]) ?? "Controller GitHub auth status loaded."
 }
 
-const listProjectDetails = (
-  items: ReadonlyArray<Readonly<{ id: string; status: string }>>
-) =>
-  Effect.forEach(
-    items,
-    (item) =>
-      pipe(
-        getProject(item.id),
-        Effect.map((project) => (project === null ? null : resolveApiProjectItem(project))),
-        Effect.match({
-          onFailure: () => null,
-          onSuccess: (project) => project
-        })
-      ),
-    { concurrency: 4 }
-  )
-
 const renderOutput = (label: string, output: string) =>
   Effect.log(output.trim().length > 0 ? output : `${label}: no output.`)
 
@@ -54,23 +37,20 @@ const listMenuProjectItemsByStatus = (
   status: "running" | null
 ): Effect.Effect<ReadonlyArray<ProjectItem>, MenuError, MenuEnv> =>
   pipe(
-    listProjects(),
-    Effect.flatMap((projects) =>
-      listProjectDetails(
-        (status === null ? projects : projects.filter((project) => project.status === status)).map((project) => ({
-          id: project.id,
-          status: project.status
-        }))
+    listProjectDetails(),
+    Effect.map((projects) =>
+      compact(
+        (status === null ? projects : projects.filter((project) => project.status === status))
+          .map((project) => resolveApiProjectItem(project))
       )
-    ),
-    Effect.map((projects) => compact(projects))
+    )
   )
 
 export const listMenuProjectItems: Effect.Effect<ReadonlyArray<ProjectItem>, MenuError, MenuEnv> =
   listMenuProjectItemsByStatus(null)
 
 export const listMenuRunningProjectItems: Effect.Effect<ReadonlyArray<ProjectItem>, MenuError, MenuEnv> =
-  listMenuProjectItemsByStatus("running")
+  listMenuProjectItems
 
 export const renderMenuProjectSummaries = () =>
   pipe(

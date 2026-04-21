@@ -58,6 +58,7 @@ export type OpenHostProjectSshDeps<E, R> = {
 export type OpenResolvedProjectSshWithUpDeps<E, R> = {
   readonly openProjectSsh: (item: ProjectItem) => Effect.Effect<void, E, R>
   readonly upProject: (projectId: string) => Effect.Effect<ProjectItem | null, E, R>
+  readonly writeProgress?: (message: string) => Effect.Effect<void, E, R>
 }
 
 type HostSshLaunchSpec = {
@@ -159,6 +160,11 @@ const writeProjectSshHeader = (item: ProjectItem): Effect.Effect<void> =>
     writeToTerminal(`[docker-git] ${item.sshCommand}\n\n`)
   })
 
+const writeProjectOpenProgress = (message: string): Effect.Effect<void> =>
+  Effect.sync(() => {
+    writeToTerminal(`[docker-git] ${message}\n`)
+  })
+
 const runProjectSshCommand = (
   launch: HostSshLaunchSpec,
   attempt = 0
@@ -196,7 +202,10 @@ export const openResolvedProjectSshWithUpEffect = <E, R>(
   deps: OpenResolvedProjectSshWithUpDeps<E, R>
 ) =>
   Effect.gen(function*(_) {
+    const writeProgress = deps.writeProgress ?? writeProjectOpenProgress
+    yield* _(writeProgress(`Starting project before SSH: ${item.displayName}`))
     const refreshedItem = yield* _(deps.upProject(item.projectDir))
+    yield* _(writeProgress(`Opening SSH terminal: ${(refreshedItem ?? item).displayName}`))
     yield* _(deps.openProjectSsh(refreshedItem ?? item))
   })
 

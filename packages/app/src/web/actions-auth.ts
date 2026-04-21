@@ -138,7 +138,7 @@ const runTerminalOnlyAuthAction = (
     label: provider,
     onSuccess: (session) => {
       context.setActionPrompt(null)
-      context.setTerminalSession({
+      context.addTerminalSession({
         closePath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}`,
         exitMessage: `${provider} finished (${sessionLabel}).`,
         header: provider,

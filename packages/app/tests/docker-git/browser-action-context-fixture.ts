@@ -24,6 +24,7 @@ export const makeBrowserActionContext = (
     context: {
       databaseConnectionInput: "",
       databaseLabelInput: "",
+      addTerminalSession: vi.fn(),
       githubStatus: null,
       portForwardInput: "",
       reloadDashboard,
@@ -48,7 +49,6 @@ export const makeBrowserActionContext = (
       setSelectedMenuIndex: vi.fn(),
       setSelectedProject: vi.fn(),
       setSelectedProjectId: vi.fn(),
-      setTerminalSession: vi.fn(),
       ...overrides
     } satisfies BrowserActionContext,
     output: () => output,

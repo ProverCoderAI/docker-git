@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+
 import { NodeContext as BrowserFrontendTestNodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
@@ -11,20 +15,13 @@ type CommandSpec = {
 }
 
 const ensureControllerReadyMock = vi.hoisted(() => vi.fn<() => Effect.Effect<void>>())
-const restartControllerMock = vi.hoisted(() => vi.fn<() => Effect.Effect<void>>())
-const controllerExistsMock = vi.hoisted(() => vi.fn<() => Effect.Effect<boolean>>())
 const runCommandCaptureMock = vi.hoisted(() => vi.fn<(spec: CommandSpec) => Effect.Effect<string>>())
 const runCommandExitCodeMock = vi.hoisted(() => vi.fn<(spec: CommandSpec) => Effect.Effect<number>>())
 const runCommandExitCodeStreamingMock = vi.hoisted(() => vi.fn<(spec: CommandSpec) => Effect.Effect<number>>())
 
 vi.mock("../../src/docker-git/controller.js", () => ({
   ensureControllerReady: ensureControllerReadyMock,
-  resolveApiBaseUrl: () => "http://127.0.0.1:3334",
-  restartController: restartControllerMock
-}))
-
-vi.mock("../../src/docker-git/controller-docker.js", () => ({
-  controllerExists: controllerExistsMock
+  resolveApiBaseUrl: () => "http://127.0.0.1:3334"
 }))
 
 vi.mock("../../src/docker-git/frontend-lib/shell/command-runner.js", () => ({
@@ -53,16 +50,38 @@ const runBrowserCommandUnderTest = Effect.gen(function*(_) {
   yield* _(runBrowserFrontendCommand.pipe(Effect.provide(BrowserFrontendTestNodeContext.layer)))
 })
 
+const streamingEnvs = (): ReadonlyArray<Readonly<Record<string, string | undefined>> | undefined> =>
+  runCommandExitCodeStreamingMock.mock.calls.map(([spec]) => spec.env)
+
+const requireEnvValue = (
+  env: Readonly<Record<string, string | undefined>> | undefined,
+  key: string
+): string => {
+  const value = env?.[key]
+  if (value === undefined) {
+    throw new Error(`Missing ${key} in test command env.`)
+  }
+  return value
+}
+
+const writeWebStateFile = (
+  statePath: string,
+  state: Readonly<Record<string, string | number>>
+): void => {
+  mkdirSync(path.dirname(statePath), { recursive: true })
+  writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`)
+}
+
 describe("browser frontend command", () => {
+  let projectsRoot: string | null = null
+
   beforeEach(() => {
     vi.resetModules()
+    projectsRoot = mkdtempSync(path.join(tmpdir(), "docker-git-browser-test-"))
+    process.env["DOCKER_GIT_PROJECTS_ROOT"] = projectsRoot
     makeNonInteractive()
     ensureControllerReadyMock.mockReset()
     ensureControllerReadyMock.mockImplementation(() => Effect.void)
-    restartControllerMock.mockReset()
-    restartControllerMock.mockImplementation(() => Effect.void)
-    controllerExistsMock.mockReset()
-    controllerExistsMock.mockImplementation(() => Effect.succeed(false))
     runCommandCaptureMock.mockReset()
     runCommandCaptureMock.mockImplementation(() => Effect.succeed(""))
     runCommandExitCodeMock.mockReset()
@@ -75,6 +94,11 @@ describe("browser frontend command", () => {
     restoreTty()
     delete process.env["DOCKER_GIT_WEB_PORT"]
     delete process.env["DOCKER_GIT_WEB_HOST"]
+    delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
+    if (projectsRoot !== null) {
+      rmSync(projectsRoot, { force: true, recursive: true })
+      projectsRoot = null
+    }
   })
 
   it.effect("starts controller and web when nothing is running", () =>
@@ -82,21 +106,42 @@ describe("browser frontend command", () => {
       yield* _(runBrowserCommandUnderTest)
 
       expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
-      expect(restartControllerMock).not.toHaveBeenCalled()
       expect(runCommandExitCodeMock).not.toHaveBeenCalled()
       expect(runCommandExitCodeStreamingMock).toHaveBeenCalledTimes(2)
     }))
 
-  it.effect("restarts controller and replaces the web process when rerun non-interactively", () =>
+  it.effect("binds browser web to all host interfaces by default", () =>
+    Effect.gen(function*(_) {
+      yield* _(runBrowserCommandUnderTest)
+
+      expect(streamingEnvs()).toEqual([
+        expect.objectContaining({
+          DOCKER_GIT_WEB_HOST: "0.0.0.0",
+          DOCKER_GIT_WEB_PORT: "4174"
+        }),
+        expect.objectContaining({
+          DOCKER_GIT_WEB_HOST: "0.0.0.0",
+          DOCKER_GIT_WEB_PORT: "4174"
+        })
+      ])
+    }))
+
+  it.effect("preserves an explicit web bind host", () =>
+    Effect.gen(function*(_) {
+      process.env["DOCKER_GIT_WEB_HOST"] = "127.0.0.1"
+
+      yield* _(runBrowserCommandUnderTest)
+
+      expect(streamingEnvs()).toEqual([
+        expect.objectContaining({ DOCKER_GIT_WEB_HOST: "127.0.0.1" }),
+        expect.objectContaining({ DOCKER_GIT_WEB_HOST: "127.0.0.1" })
+      ])
+    }))
+
+  it.effect("replaces a stale web process without forcing the controller restart", () =>
     Effect.gen(function*(_) {
       const events: Array<string> = []
-      controllerExistsMock.mockImplementation(() => Effect.succeed(true))
       runCommandCaptureMock.mockImplementation(() => Effect.succeed("123\n"))
-      restartControllerMock.mockImplementation(() =>
-        Effect.sync(() => {
-          events.push("restart-controller")
-        })
-      )
       runCommandExitCodeMock.mockImplementation((spec) =>
         Effect.sync(() => {
           events.push(`stop:${spec.args.join(" ")}`)
@@ -112,12 +157,40 @@ describe("browser frontend command", () => {
 
       yield* _(runBrowserCommandUnderTest)
 
-      expect(ensureControllerReadyMock).not.toHaveBeenCalled()
+      expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
       expect(events).toEqual([
-        "restart-controller",
         "stop:-c kill \"$@\" 2>/dev/null || true\nsleep 1\nkill -9 \"$@\" 2>/dev/null || true sh 123",
         "stream:run --cwd packages/app build:web",
         "stream:run --cwd packages/app serve:web"
       ])
+    }))
+
+  it.effect("does not restart the web process when .docker-git state matches the local revision", () =>
+    Effect.gen(function*(_) {
+      yield* _(runBrowserCommandUnderTest)
+      const serveEnv = streamingEnvs()[1]
+      const revision = requireEnvValue(serveEnv, "DOCKER_GIT_WEB_REVISION")
+      const statePath = requireEnvValue(serveEnv, "DOCKER_GIT_WEB_STATE_PATH")
+
+      writeWebStateFile(statePath, {
+        schemaVersion: 1,
+        revision,
+        pid: "123",
+        host: "0.0.0.0",
+        port: "4174",
+        apiBaseUrl: "http://127.0.0.1:3334",
+        startedAtIso: "2026-04-21T00:00:00.000Z"
+      })
+
+      ensureControllerReadyMock.mockClear()
+      runCommandExitCodeMock.mockClear()
+      runCommandExitCodeStreamingMock.mockClear()
+      runCommandCaptureMock.mockImplementation(() => Effect.succeed("123\n"))
+
+      yield* _(runBrowserCommandUnderTest)
+
+      expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
+      expect(runCommandExitCodeMock).not.toHaveBeenCalled()
+      expect(runCommandExitCodeStreamingMock).not.toHaveBeenCalled()
     }))
 })

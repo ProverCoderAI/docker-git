@@ -35,6 +35,10 @@ type ProjectNavigationArgs = {
   readonly setSelectedProjectId: Setter<string | null>
 }
 
+type LoadedProjectDetails = {
+  readonly id: string
+} | null
+
 type ShortcutTarget = EventTarget & {
   readonly isContentEditable?: boolean
   readonly tagName: string
@@ -247,8 +251,12 @@ export const shouldRefreshProjectAuthPanel = (
 export const shouldRefreshProjectDetails = (
   currentMenu: BrowserMenuTag,
   _projectNavigationArmed: boolean,
-  selectedProjectId: string | null
-): boolean => shouldLoadProjectDetails(currentMenu) && selectedProjectId !== null
+  selectedProjectId: string | null,
+  loadedProject: LoadedProjectDetails
+): boolean =>
+  shouldLoadProjectDetails(currentMenu) &&
+  selectedProjectId !== null &&
+  loadedProject?.id !== selectedProjectId
 
 export const shortcutHintText = (
   currentMenu: BrowserMenuTag,

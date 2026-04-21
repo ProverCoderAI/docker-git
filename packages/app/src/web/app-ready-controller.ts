@@ -94,9 +94,9 @@ const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
 
 const useReadyAutoloadEffects = (args: ReadySideEffectsArgs) => {
   useTerminalBrowserAutoload({
+    activeTerminalSession: args.state.activeTerminalSession,
     context: args.actionContext,
-    dashboardRefreshTick: args.dashboardRefreshTick,
-    terminalSession: args.state.terminalSession
+    dashboardRefreshTick: args.dashboardRefreshTick
   })
   usePanelAutoload({
     activeScreen: args.state.activeScreen,
@@ -130,7 +130,7 @@ const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
     setProjectNavigationArmed: args.state.setProjectNavigationArmed,
     setSelectedMenuIndex: args.state.setSelectedMenuIndex,
     setSelectedProjectId: args.state.setSelectedProjectId,
-    terminalSession: args.state.terminalSession
+    terminalSessions: args.state.terminalSessions
   })
 }
 
@@ -239,6 +239,7 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
   const currentMenu = resolveCurrentMenu(state.selectedMenuIndex)
   const selectedProjectSummary = dashboard.projects.find((project) => project.id === state.selectedProjectId)
   const actionContext = createActionContext({
+    addTerminalSession: state.addTerminalSession,
     databaseConnectionInput: state.databaseConnectionInput,
     databaseLabelInput: state.databaseLabelInput,
     githubStatus: state.githubStatus,
@@ -264,8 +265,7 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     setProjectBrowser: state.setProjectBrowser,
     setSelectedMenuIndex: state.setSelectedMenuIndex,
     setSelectedProject: state.setSelectedProject,
-    setSelectedProjectId: state.setSelectedProjectId,
-    setTerminalSession: state.setTerminalSession
+    setSelectedProjectId: state.setSelectedProjectId
   })
 
   useReadySideEffects({ actionContext, currentMenu, dashboard, dashboardRefreshTick, state })

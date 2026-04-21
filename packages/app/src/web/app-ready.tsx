@@ -82,6 +82,8 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
 const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   actionPrompt: state.actionPrompt,
   activeScreen: state.activeScreen,
+  activeTerminalSession: state.activeTerminalSession,
+  activeTerminalSessionId: state.activeTerminalSessionId,
   authSnapshot: state.authSnapshot,
   busyLabel: state.busyLabel,
   createView: state.createView,
@@ -92,12 +94,11 @@ const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   databaseSession: state.databaseSession,
   githubStatus: state.githubStatus,
   message: state.message,
+  onSelectTerminal: state.selectTerminalSession,
   onSelectMenu: state.setSelectedMenuIndex,
   onSelectProject: state.setSelectedProjectId,
   onSetActiveScreen: state.setActiveScreen,
-  onTerminalClose: () => {
-    state.setTerminalSession(null)
-  },
+  onTerminalClose: state.closeTerminalSession,
   onTerminalMessage: state.setMessage,
   output: state.output,
   portForwardInput: state.portForwardInput,
@@ -108,7 +109,7 @@ const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   projectNavigationArmed: state.projectNavigationArmed,
   selectedMenuIndex: state.selectedMenuIndex,
   selectedProjectId: state.selectedProjectId,
-  terminalSession: state.terminalSession
+  terminalSessions: state.terminalSessions
 })
 
 const renderReadyLayout = ({

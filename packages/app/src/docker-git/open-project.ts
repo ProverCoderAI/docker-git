@@ -3,7 +3,7 @@ import { Effect } from "effect"
 import type { OpenCommand } from "./frontend-lib/core/domain.js"
 import { parseGithubRepoUrl, resolveRepoInput } from "./frontend-lib/core/repo.js"
 
-import { getProject, listProjects } from "./api-client.js"
+import { listProjectDetails } from "./api-client.js"
 import type { ApiProjectDetails } from "./api-project-codec.js"
 import type { ProjectResolutionError } from "./host-errors.js"
 import { openResolvedProjectSshWithUp } from "./open-project-ssh.js"
@@ -269,19 +269,6 @@ export const resolveOpenProjectEffect = <E, R>(
       ownedProject === null ? selectOpenProject(projects, selector) : Effect.succeed(ownedProject)
     )
   )
-
-const listProjectDetails = () =>
-  Effect.gen(function*(_) {
-    const summaries = yield* _(listProjects())
-    const details = yield* _(
-      Effect.forEach(
-        summaries,
-        (summary) => getProject(summary.id),
-        { concurrency: 4 }
-      )
-    )
-    return details.filter((project): project is ApiProjectDetails => project !== null)
-  })
 
 export const openExistingProjectSsh = (
   command: OpenCommand

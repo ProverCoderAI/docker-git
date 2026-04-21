@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 
 import { buildSelectLabels, buildSelectListWindow } from "../../src/docker-git/menu-render-select.js"
-import { sortItemsByLaunchTime } from "../../src/docker-git/menu-select-order.js"
+import { sortItemsByLaunchTime, sortSelectItemsByLaunchTime } from "../../src/docker-git/menu-select-order.js"
 import type { SelectProjectRuntime } from "../../src/docker-git/menu-types.js"
+import type { ProjectSummary } from "../../src/web/api-schema.js"
+import { sortDashboardProjects } from "../../src/web/api.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
 
 const makeRuntime = (
@@ -18,6 +20,22 @@ const makeRuntime = (
 const emitProof = (message: string): void => {
   process.stdout.write(`[issue-57-proof] ${message}\n`)
 }
+
+const makeProjectSummary = (
+  overrides: Partial<ProjectSummary> = {}
+): ProjectSummary => ({
+  id: "/home/dev/.docker-git/org-repo",
+  projectKey: "org-repo",
+  displayName: "org/repo",
+  repoUrl: "https://github.com/org/repo.git",
+  repoRef: "main",
+  status: "stopped",
+  statusLabel: "last known: stopped",
+  sshSessions: 0,
+  startedAtIso: null,
+  startedAtEpochMs: null,
+  ...overrides
+})
 
 describe("menu-select order", () => {
   it("sorts projects by last container start time (newest first)", () => {
@@ -49,6 +67,70 @@ describe("menu-select order", () => {
       neverStarted.projectDir
     ])
     emitProof("sorting by launch time works: newest container is selected first")
+  })
+
+  it("uses the same launch-time comparator for non-CLI project shapes", () => {
+    const newest = { key: "newest", name: "org/newest" }
+    const runningTie = { key: "running-tie", name: "org/running" }
+    const stoppedTie = { key: "stopped-tie", name: "org/stopped" }
+    const alpha = { key: "alpha", name: "org/alpha" }
+    const sameNameA = { key: "a-key", name: "org/same" }
+    const sameNameZ = { key: "z-key", name: "org/same" }
+    const runtimeByProject: Readonly<Record<string, SelectProjectRuntime>> = {
+      [newest.key]: makeRuntime({ startedAtEpochMs: 200 }),
+      [runningTie.key]: makeRuntime({ running: true, startedAtEpochMs: 100 }),
+      [stoppedTie.key]: makeRuntime({ running: false, startedAtEpochMs: 100 })
+    }
+
+    const sorted = sortSelectItemsByLaunchTime(
+      [sameNameZ, stoppedTie, alpha, sameNameA, runningTie, newest],
+      runtimeByProject,
+      {
+        displayName: (item) => item.name,
+        projectKey: (item) => item.key
+      }
+    )
+
+    expect(sorted.map((item) => item.key)).toEqual([
+      newest.key,
+      runningTie.key,
+      stoppedTie.key,
+      alpha.key,
+      sameNameA.key,
+      sameNameZ.key
+    ])
+  })
+
+  it("orders WEB dashboard projects with the shared Select comparator", () => {
+    const newest = makeProjectSummary({
+      id: "/home/dev/.docker-git/newest",
+      projectKey: "newest",
+      displayName: "org/newest",
+      status: "running",
+      statusLabel: "last known: running",
+      startedAtIso: "2026-04-21T11:30:00.000Z",
+      startedAtEpochMs: Date.parse("2026-04-21T11:30:00.000Z")
+    })
+    const older = makeProjectSummary({
+      id: "/home/dev/.docker-git/older",
+      projectKey: "older",
+      displayName: "org/older",
+      startedAtIso: "2026-04-20T08:00:00.000Z",
+      startedAtEpochMs: Date.parse("2026-04-20T08:00:00.000Z")
+    })
+    const neverStarted = makeProjectSummary({
+      id: "/home/dev/.docker-git/never",
+      projectKey: "never",
+      displayName: "org/never"
+    })
+
+    const sorted = sortDashboardProjects([neverStarted, older, newest])
+
+    expect(sorted.map((project) => project.id)).toEqual([
+      newest.id,
+      older.id,
+      neverStarted.id
+    ])
   })
 
   it("shows container launch timestamp in select labels", () => {

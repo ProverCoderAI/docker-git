@@ -8,6 +8,7 @@ import { browserMenuItems } from "./menu.js"
 type ActionContextArgs = {
   readonly databaseConnectionInput: BrowserActionContext["databaseConnectionInput"]
   readonly databaseLabelInput: BrowserActionContext["databaseLabelInput"]
+  readonly addTerminalSession: BrowserActionContext["addTerminalSession"]
   readonly githubStatus: BrowserActionContext["githubStatus"]
   readonly portForwardInput: BrowserActionContext["portForwardInput"]
   readonly refreshDashboard: () => void
@@ -32,13 +33,13 @@ type ActionContextArgs = {
   readonly setSelectedMenuIndex: BrowserActionContext["setSelectedMenuIndex"]
   readonly setSelectedProject: BrowserActionContext["setSelectedProject"]
   readonly setSelectedProjectId: BrowserActionContext["setSelectedProjectId"]
-  readonly setTerminalSession: BrowserActionContext["setTerminalSession"]
 }
 
 export const resolveCurrentMenu = (selectedMenuIndex: number): BrowserMenuTag =>
   browserMenuItems[selectedMenuIndex]?.tag ?? "Select"
 
 export const createActionContext = (args: ActionContextArgs): BrowserActionContext => ({
+  addTerminalSession: args.addTerminalSession,
   databaseConnectionInput: args.databaseConnectionInput,
   databaseLabelInput: args.databaseLabelInput,
   githubStatus: args.githubStatus,
@@ -64,8 +65,7 @@ export const createActionContext = (args: ActionContextArgs): BrowserActionConte
   setProjectBrowser: args.setProjectBrowser,
   setSelectedMenuIndex: args.setSelectedMenuIndex,
   setSelectedProject: args.setSelectedProject,
-  setSelectedProjectId: args.setSelectedProjectId,
-  setTerminalSession: args.setTerminalSession
+  setSelectedProjectId: args.setSelectedProjectId
 })
 
 export const runAuthActionByIndex = (index: number, context: BrowserActionContext) => {

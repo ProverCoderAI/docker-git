@@ -50,6 +50,7 @@ const outputLineLimit = 4000
 export type BrowserActionContext = {
   readonly databaseConnectionInput: string
   readonly databaseLabelInput: string
+  readonly addTerminalSession: (session: ActiveTerminalSession) => void
   readonly githubStatus: GithubAuthStatus | null
   readonly portForwardInput: string
   readonly reloadDashboard: () => void
@@ -74,7 +75,6 @@ export type BrowserActionContext = {
   readonly setSelectedMenuIndex: Setter<number>
   readonly setSelectedProject: Setter<ProjectDetails | null>
   readonly setSelectedProjectId: Setter<string | null>
-  readonly setTerminalSession: Setter<ActiveTerminalSession | null>
 }
 
 export const confirmAction = (label: string): boolean => {

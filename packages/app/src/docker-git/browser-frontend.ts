@@ -2,8 +2,17 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Effect, pipe } from "effect"
 
-import { controllerExists } from "./controller-docker.js"
-import { type ControllerRuntime, ensureControllerReady, resolveApiBaseUrl, restartController } from "./controller.js"
+import {
+  type BrowserFrontendReuseInput,
+  type BrowserFrontendStartDecision,
+  type BrowserFrontendStateFile,
+  computeLocalBrowserFrontendRevision,
+  describeBrowserFrontendRestartReason,
+  readBrowserFrontendState,
+  resolveBrowserFrontendStatePath,
+  shouldReuseBrowserFrontend
+} from "./browser-frontend-state.js"
+import { type ControllerRuntime, ensureControllerReady, resolveApiBaseUrl } from "./controller.js"
 import {
   runCommandCapture,
   runCommandExitCode,
@@ -26,20 +35,34 @@ const copyProcessEnv = (): Readonly<Record<string, string>> => {
   return env
 }
 
-const webHost = (): string => process.env["DOCKER_GIT_WEB_HOST"]?.trim() || "127.0.0.1"
+// CHANGE: expose `docker-git browser` on all host interfaces by default
+// WHY: LAN clients cannot connect when the web shell is bound to loopback only
+// QUOTE(ТЗ): "Я хочу подключить"
+// REF: user-request-2026-04-21-browser-lan-bind
+// SOURCE: n/a
+// FORMAT THEOREM: default(bindHost) = 0.0.0.0 -> forall h in HostIPv4Interfaces: listens(h, webPort), firewall permitting
+// PURITY: SHELL
+// EFFECT: reads process.env only at CLI boundary
+// INVARIANT: explicit DOCKER_GIT_WEB_HOST takes precedence over the LAN-friendly default
+// COMPLEXITY: O(1)/O(1)
+const defaultWebHost = "0.0.0.0"
+
+const webHost = (): string => process.env["DOCKER_GIT_WEB_HOST"]?.trim() || defaultWebHost
 
 const webPort = (): string => process.env["DOCKER_GIT_WEB_PORT"]?.trim() || "4174"
 
 type BrowserFrontendRuntimeState = {
-  readonly controllerRunning: boolean
   readonly webPids: ReadonlyArray<string>
+  readonly webState: BrowserFrontendStateFile | null
 }
 
-const browserEnv = (apiBaseUrl: string): Readonly<Record<string, string>> => ({
+const browserEnv = (decision: BrowserFrontendStartDecision): Readonly<Record<string, string>> => ({
   ...copyProcessEnv(),
-  DOCKER_GIT_API_URL: apiBaseUrl,
-  DOCKER_GIT_WEB_HOST: webHost(),
-  DOCKER_GIT_WEB_PORT: webPort()
+  DOCKER_GIT_API_URL: decision.apiBaseUrl,
+  DOCKER_GIT_WEB_HOST: decision.host,
+  DOCKER_GIT_WEB_PORT: decision.port,
+  DOCKER_GIT_WEB_REVISION: decision.webRevision,
+  DOCKER_GIT_WEB_STATE_PATH: decision.statePath
 })
 
 const runStreaming = (
@@ -111,55 +134,17 @@ const stopWebServerPids = (
   )
 }
 
-const readBrowserFrontendRuntimeState = (): Effect.Effect<
+const readBrowserFrontendRuntimeState = (
+  statePath: string
+): Effect.Effect<
   BrowserFrontendRuntimeState,
   never,
   ControllerRuntime
 > =>
   Effect.all({
-    controllerRunning: controllerExists().pipe(Effect.orElseSucceed(() => false)),
-    webPids: findWebServerPids()
+    webPids: findWebServerPids(),
+    webState: readBrowserFrontendState(statePath)
   })
-
-const renderRunningSummary = (state: BrowserFrontendRuntimeState): string =>
-  [
-    state.controllerRunning ? "API controller is already running" : "",
-    state.webPids.length > 0 ? `browser frontend is listening on port ${webPort()}` : ""
-  ].filter((line) => line.length > 0).join("; ")
-
-const hasRunningBrowserStack = (state: BrowserFrontendRuntimeState): boolean =>
-  state.controllerRunning || state.webPids.length > 0
-
-const normalizePromptAnswer = (answer: string): boolean => {
-  const normalized = answer.trim().toLowerCase()
-  return normalized.length === 0 || normalized === "y" || normalized === "yes" || normalized === "д" ||
-    normalized === "да"
-}
-
-const promptRestart = (state: BrowserFrontendRuntimeState): Effect.Effect<boolean> => {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    return Effect.succeed(true)
-  }
-
-  return Effect.async((resume) => {
-    const onData = (chunk: Buffer) => {
-      process.stdin.off("data", onData)
-      resume(Effect.succeed(normalizePromptAnswer(chunk.toString("utf8"))))
-    }
-
-    process.stdout.write(`${renderRunningSummary(state)}. Restart API and web frontend? [Y/n] `)
-    process.stdin.resume()
-    process.stdin.once("data", onData)
-
-    return Effect.sync(() => {
-      process.stdin.off("data", onData)
-    })
-  })
-}
-
-const shouldRestartBrowserStack = (
-  state: BrowserFrontendRuntimeState
-): Effect.Effect<boolean> => hasRunningBrowserStack(state) ? promptRestart(state) : Effect.succeed(false)
 
 const stopCurrentWebServer = (): Effect.Effect<
   void,
@@ -175,22 +160,53 @@ const stopCurrentWebServer = (): Effect.Effect<
   )
 
 const prepareBrowserStack = (): Effect.Effect<
-  boolean,
+  BrowserFrontendStartDecision,
   ControllerBootstrapError | PlatformError,
   ControllerRuntime
 > =>
   Effect.gen(function*(_) {
-    const runtimeState = yield* _(readBrowserFrontendRuntimeState())
-    const restart = yield* _(shouldRestartBrowserStack(runtimeState))
-    if (!restart) {
-      yield* _(ensureControllerReady())
-      return runtimeState.webPids.length === 0
+    const host = webHost()
+    const port = webPort()
+    const statePath = yield* _(resolveBrowserFrontendStatePath())
+    const webRevision = yield* _(computeLocalBrowserFrontendRevision())
+
+    yield* _(Effect.log("Ensuring docker-git API controller is current."))
+    yield* _(ensureControllerReady())
+
+    const apiBaseUrl = resolveApiBaseUrl()
+    const runtimeState = yield* _(readBrowserFrontendRuntimeState(statePath))
+    const reuseInput: BrowserFrontendReuseInput = {
+      apiBaseUrl,
+      host,
+      port,
+      revision: webRevision,
+      state: runtimeState.webState,
+      webPids: runtimeState.webPids
+    }
+    const shouldStartWeb = !shouldReuseBrowserFrontend(reuseInput)
+
+    if (!shouldStartWeb) {
+      yield* _(Effect.log(`docker-git browser frontend unchanged (${webRevision}).`))
+      return {
+        shouldStartWeb,
+        apiBaseUrl,
+        host,
+        port,
+        statePath,
+        webRevision
+      }
     }
 
-    yield* _(Effect.log("Restarting docker-git API controller."))
-    yield* _(restartController())
+    yield* _(Effect.log(`Starting docker-git browser frontend: ${describeBrowserFrontendRestartReason(reuseInput)}.`))
     yield* _(stopCurrentWebServer())
-    return true
+    return {
+      shouldStartWeb,
+      apiBaseUrl,
+      host,
+      port,
+      statePath,
+      webRevision
+    }
   })
 
 const ensureSuccess = (
@@ -201,46 +217,46 @@ const ensureSuccess = (
     ? Effect.void
     : Effect.fail(browserFrontendError(`${action} failed with exit code ${exitCode}.`))
 
-export const runBrowserFrontend: Effect.Effect<
+export const runBrowserFrontend = (
+  decision: BrowserFrontendStartDecision
+): Effect.Effect<
   void,
   ControllerBootstrapError | PlatformError,
   CommandExecutor.CommandExecutor
-> = Effect.gen(function*(_) {
-  const apiBaseUrl = resolveApiBaseUrl()
-  const host = webHost()
-  const port = webPort()
-  const env = browserEnv(apiBaseUrl)
-  const localUrl = `http://${host}:${port}/`
+> =>
+  Effect.gen(function*(_) {
+    const env = browserEnv(decision)
+    const localUrl = `http://${decision.host}:${decision.port}/`
 
-  yield* _(Effect.log(`Building docker-git browser frontend for API ${apiBaseUrl}.`))
-  const buildExitCode = yield* _(runStreaming(["run", "--cwd", "packages/app", "build:web"], env))
-  yield* _(ensureSuccess(buildExitCode, "Browser frontend build"))
+    yield* _(Effect.log(`Building docker-git browser frontend ${decision.webRevision} for API ${decision.apiBaseUrl}.`))
+    const buildExitCode = yield* _(runStreaming(["run", "--cwd", "packages/app", "build:web"], env))
+    yield* _(ensureSuccess(buildExitCode, "Browser frontend build"))
 
-  yield* _(Effect.log(`docker-git browser frontend: ${localUrl}`))
-  yield* _(Effect.log("Press Ctrl+C to stop the browser frontend."))
-  const serveExitCode = yield* _(runStreaming(["run", "--cwd", "packages/app", "serve:web"], env))
-  yield* _(ensureSuccess(serveExitCode, "Browser frontend server"))
-})
+    yield* _(Effect.log(`docker-git browser frontend: ${localUrl}`))
+    yield* _(Effect.log("Press Ctrl+C to stop the browser frontend."))
+    const serveExitCode = yield* _(runStreaming(["run", "--cwd", "packages/app", "serve:web"], env))
+    yield* _(ensureSuccess(serveExitCode, "Browser frontend server"))
+  })
 
 // CHANGE: make `docker-git browser` idempotent for local development
-// WHY: repeated invocations should deploy current controller code and replace the previous web process
-// QUOTE(ТЗ): "если её вызвать заново то перезапустит и web и api"
-// REF: user-request-2026-04-21-browser-restart
+// WHY: repeated invocations should deploy only changed API or browser code
+// QUOTE(ТЗ): "Надо перезапускать только те контейнеры у которых изменился код"
+// REF: user-message-2026-04-21-browser-selective-restart
 // SOURCE: n/a
-// FORMAT THEOREM: ∀run: existing(api ∨ web) ∧ confirm(run) → restarted(api) ∧ restarted(web)
+// FORMAT THEOREM: forall run: unchanged(web_revision, state, pid) -> not restarted(web)
 // PURITY: SHELL
-// EFFECT: Effect<void, ControllerBootstrapError | PlatformError, CommandExecutor>
-// INVARIANT: a confirmed rerun force-recreates the controller before serving the new frontend
-// COMPLEXITY: O(processes + compose)
+// EFFECT: Effect<void, ControllerBootstrapError | PlatformError, ControllerRuntime>
+// INVARIANT: controller readiness is checked independently from browser runtime reuse
+// COMPLEXITY: O(total_bytes(web_inputs) + processes + controller_probe)
 export const runBrowserFrontendCommand: Effect.Effect<
   void,
   ControllerBootstrapError | PlatformError,
   ControllerRuntime
 > = pipe(
   prepareBrowserStack(),
-  Effect.flatMap((shouldStartWeb) =>
-    shouldStartWeb
-      ? runBrowserFrontend
-      : Effect.log(`docker-git browser frontend is already running at http://${webHost()}:${webPort()}/`)
+  Effect.flatMap((decision) =>
+    decision.shouldStartWeb
+      ? runBrowserFrontend(decision)
+      : Effect.log(`docker-git browser frontend is already running at http://${decision.host}:${decision.port}/`)
   )
 )

@@ -15,9 +15,9 @@ type BrowserPanelAutoloadArgs = {
 }
 
 type TerminalBrowserAutoloadArgs = {
+  readonly activeTerminalSession: ActiveTerminalSession | null
   readonly context: BrowserActionContext
   readonly dashboardRefreshTick: number
-  readonly terminalSession: ActiveTerminalSession | null
 }
 
 export const useProjectBrowserReset = (
@@ -38,16 +38,16 @@ export const maybeLoadProjectBrowser = (
 }
 
 export const useTerminalBrowserAutoload = (
-  { context, dashboardRefreshTick, terminalSession }: TerminalBrowserAutoloadArgs
+  { activeTerminalSession, context, dashboardRefreshTick }: TerminalBrowserAutoloadArgs
 ) => {
   const contextRef = useRef(context)
   contextRef.current = context
 
   useEffect(() => {
-    const projectId = terminalSession?.browserProjectId
+    const projectId = activeTerminalSession?.browserProjectId
     if (projectId === undefined) {
       return
     }
     loadProjectBrowserById(projectId, contextRef.current, { silent: true })
-  }, [dashboardRefreshTick, terminalSession?.browserProjectId])
+  }, [dashboardRefreshTick, activeTerminalSession?.browserProjectId])
 }

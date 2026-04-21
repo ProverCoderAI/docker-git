@@ -14,6 +14,11 @@ import { findDockerGitConfigPaths } from "./docker-git-config-search.js"
 import { renderError } from "./errors.js"
 import { defaultProjectsRoot, formatConnectionInfo } from "./menu-helpers.js"
 import { findSshPrivateKey, resolveAuthorizedKeysPath, resolvePathFromCwd } from "./path-helpers.js"
+import {
+  type ProjectRuntimeKnownStatus,
+  type ProjectRuntimeStartAction,
+  readProjectRuntimeState
+} from "./project-runtime-state.js"
 import { withFsPathContext } from "./runtime.js"
 import { buildEditorSshAccess, buildSshCommand, formatEditorSshAccessDetails } from "./ssh-access.js"
 
@@ -49,6 +54,10 @@ export type ProjectItem = {
   readonly codexAuthPath: string
   readonly codexHome: string
   readonly clonedOnHostname?: string | undefined
+  readonly lastStartedAtIso: string | null
+  readonly lastStartedAtEpochMs: number | null
+  readonly lastStartAction: ProjectRuntimeStartAction | null
+  readonly lastKnownStatus: ProjectRuntimeKnownStatus
 }
 
 export type ProjectStatus = {
@@ -109,12 +118,10 @@ export const loadProjectSummary = (
 ): Effect.Effect<
   ProjectSummary,
   ProjectLoadError,
-  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+  FileSystem.FileSystem | Path.Path
 > =>
   Effect.gen(function*(_) {
     const { config, fs, path, projectDir } = yield* _(loadProjectBase(configPath))
-
-    const ipAddress = yield* _(getContainerIpIfInsideContainer(fs, projectDir, config.template.containerName))
 
     const resolvedAuthorizedKeys = resolveAuthorizedKeysPath(
       path,
@@ -122,14 +129,13 @@ export const loadProjectSummary = (
       config.template.authorizedKeysPath
     )
     const authExists = yield* _(fs.exists(resolvedAuthorizedKeys))
-    const sshCommand = buildSshCommand(config.template, sshKey, ipAddress)
+    const sshCommand = buildSshCommand(config.template, sshKey)
 
     return {
       projectDir,
       config,
       sshCommand,
       sshKeyPath: sshKey,
-      ipAddress,
       authorizedKeysPath: resolvedAuthorizedKeys,
       authorizedKeysExists: authExists
     }
@@ -166,20 +172,29 @@ const formatDisplayName = (repoUrl: string): string => {
   return repoUrl
 }
 
+// CHANGE: keep project inventory reads DB-only
+// WHY: `.docker-git` is the project database; list/select must not depend on Docker runtime responsiveness
+// QUOTE(ТЗ): ".docker-git это наша база данных можно скзаать"
+// REF: user-message-2026-04-21-db-only-project-list
+// SOURCE: n/a
+// FORMAT THEOREM: forall c in docker_git_configs: loadProjectItem(c) reads filesystem(c) and not docker(c)
+// PURITY: SHELL
+// EFFECT: Effect<ProjectItem, ProjectLoadError, FileSystem | Path>
+// INVARIANT: project inventory is derived only from docker-git.json and adjacent DB files
+// COMPLEXITY: O(1) per project config
 export const loadProjectItem = (
   configPath: string,
   sshKey: string | null
-): Effect.Effect<ProjectItem, ProjectLoadError, FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor> =>
+): Effect.Effect<ProjectItem, ProjectLoadError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     const { config, fs, path, projectDir } = yield* _(loadProjectBase(configPath))
     const template = config.template
 
-    const ipAddress = yield* _(getContainerIpIfInsideContainer(fs, projectDir, template.containerName))
-
     const resolvedAuthorizedKeys = resolveAuthorizedKeysPath(path, projectDir, template.authorizedKeysPath)
     const authExists = yield* _(fs.exists(resolvedAuthorizedKeys))
-    const sshCommand = buildSshCommand(template, sshKey, ipAddress)
+    const sshCommand = buildSshCommand(template, sshKey)
     const displayName = formatDisplayName(template.repoUrl)
+    const runtimeState = yield* _(readProjectRuntimeState(projectDir))
 
     return {
       projectDir,
@@ -192,7 +207,6 @@ export const loadProjectItem = (
       sshPort: template.sshPort,
       targetDir: template.targetDir,
       sshCommand,
-      ipAddress,
       sshKeyPath: sshKey,
       authorizedKeysPath: resolvedAuthorizedKeys,
       authorizedKeysExists: authExists,
@@ -200,7 +214,11 @@ export const loadProjectItem = (
       envProjectPath: resolvePathFromCwd(path, projectDir, template.envProjectPath),
       codexAuthPath: resolvePathFromCwd(path, projectDir, template.codexAuthPath),
       codexHome: template.codexHome,
-      clonedOnHostname: template.clonedOnHostname
+      clonedOnHostname: template.clonedOnHostname,
+      lastStartedAtIso: runtimeState.lastStartedAtIso,
+      lastStartedAtEpochMs: runtimeState.lastStartedAtEpochMs,
+      lastStartAction: runtimeState.lastStartAction,
+      lastKnownStatus: runtimeState.lastKnownStatus
     }
   })
 

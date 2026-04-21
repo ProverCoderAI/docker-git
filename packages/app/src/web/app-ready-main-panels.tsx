@@ -290,7 +290,7 @@ const OutputScreen = (props: MainPanelsProps): JSX.Element => (
 )
 
 export const MainPanels = (props: MainPanelsProps): JSX.Element => {
-  if (props.terminalSession !== null) {
+  if (props.terminalSessions.length > 0) {
     return <TerminalScreen {...props} />
   }
   if (props.activeScreen.tag === "Menu") {

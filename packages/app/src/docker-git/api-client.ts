@@ -12,6 +12,7 @@ import { request, requestVoid } from "./api-http.js"
 import { asArray, asObject, asString, type JsonValue } from "./api-json.js"
 import { decodeCreateProjectAccepted, decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
 import { decodeTerminalSession } from "./api-terminal-codec.js"
+import type { ControllerRuntime } from "./controller.js"
 import type {
   CreateCommand,
   StateCommitCommand,
@@ -48,6 +49,17 @@ const decodeProjectResponse = (payload: JsonValue) => {
     : decodeProjectDetails(object["project"] ?? payload)
 }
 
+const decodeProjectsResponse = <A>(
+  payload: JsonValue,
+  decode: (value: JsonValue) => A | null
+): ReadonlyArray<A> => {
+  const object = asObject(payload)
+  const items = object === null ? asArray(payload) : asArray(object["projects"])
+  return items
+    .map((item) => decode(item))
+    .filter((value): value is A => value !== null)
+}
+
 const invalidCreateAcceptedResponse = (): ApiRequestError => ({
   _tag: "ApiRequestError",
   method: "POST",
@@ -81,13 +93,22 @@ const createProjectAsync = (
 
 export const listProjects = () =>
   request("GET", "/projects").pipe(
-    Effect.map((payload) => {
-      const object = asObject(payload)
-      const items = object === null ? asArray(payload) : asArray(object["projects"])
-      return items
-        .map((item) => decodeProjectSummary(item))
-        .filter((value): value is NonNullable<typeof value> => value !== null)
-    })
+    Effect.map((payload) => decodeProjectsResponse(payload, decodeProjectSummary))
+  )
+
+// CHANGE: expose DB-only project details already returned by GET /projects
+// WHY: TUI Select/Open must not issue N follow-up project reads for the same `.docker-git` inventory
+// QUOTE(ТЗ): "А должен ходить только в .docker-git папку и читать данные из неё если необходимо"
+// REF: user-message-2026-04-21-db-only-project-list
+// SOURCE: n/a
+// FORMAT THEOREM: forall projects response R: details(R) is decoded from one API response
+// PURITY: SHELL
+// EFFECT: Effect<ReadonlyArray<ApiProjectDetails>, ApiRequestError, ControllerRuntime>
+// INVARIANT: no per-project API fan-out is required for project selection
+// COMPLEXITY: O(n)
+export const listProjectDetails = () =>
+  request("GET", "/projects").pipe(
+    Effect.map((payload) => decodeProjectsResponse(payload, decodeProjectDetails))
   )
 
 export const getProject = (projectId: string) =>
@@ -128,6 +149,24 @@ const createProjectWithResolvedPaths = (
     return decodeProjectResponse(payload)
   })
 
+const withProjectEventPolling = <A, E, R>(
+  projectId: string,
+  effect: Effect.Effect<A, E, R>
+): Effect.Effect<A, E | ApiRequestError, R | ControllerRuntime> =>
+  Effect.gen(function*(_) {
+    const initialCursor = yield* _(
+      readProjectEventCursor(projectId).pipe(
+        Effect.orElseSucceed(() => 0)
+      )
+    )
+    const eventPolling = yield* _(startProjectEventPolling(projectId, initialCursor))
+    return yield* _(
+      effect.pipe(
+        Effect.ensuring(stopProjectEventPolling(eventPolling))
+      )
+    )
+  })
+
 export const createProject = (command: CreateCommand) =>
   Effect.gen(function*(_) {
     const resolvedPaths = yield* _(resolveCreateRequestPaths(command))
@@ -137,11 +176,15 @@ export const createProject = (command: CreateCommand) =>
 export const deleteProject = (projectId: string) => requestVoid("DELETE", projectPath(projectId))
 
 export const upProject = (projectId: string) =>
-  request("POST", projectPath(projectId, "/up"), { useManagedAuthorizedKeys: true }).pipe(
-    Effect.map((payload) => decodeProjectResponse(payload))
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/up"), { useManagedAuthorizedKeys: true }).pipe(
+      Effect.map((payload) => decodeProjectResponse(payload))
+    )
   )
 
-export const downProject = (projectId: string) => requestVoid("POST", projectPath(projectId, "/down"))
+export const downProject = (projectId: string) =>
+  withProjectEventPolling(projectId, requestVoid("POST", projectPath(projectId, "/down")))
 
 export const readProjectPs = (projectId: string) =>
   request("GET", projectPath(projectId, "/ps")).pipe(
@@ -154,13 +197,16 @@ export const readProjectLogs = (projectId: string) =>
   )
 
 export const createProjectTerminalSession = (projectId: string) =>
-  request("POST", projectPath(projectId, "/terminal-sessions")).pipe(
-    Effect.map((payload) => {
-      const object = asObject(payload)
-      const project = decodeProjectDetails(object?.["project"] ?? payload)
-      const session = decodeTerminalSession(object?.["session"] ?? payload)
-      return project === null || session === null ? null : { project, session }
-    })
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/terminal-sessions")).pipe(
+      Effect.map((payload) => {
+        const object = asObject(payload)
+        const project = decodeProjectDetails(object?.["project"] ?? payload)
+        const session = decodeTerminalSession(object?.["session"] ?? payload)
+        return project === null || session === null ? null : { project, session }
+      })
+    )
   )
 
 export const createAuthTerminalSession = (

@@ -34,40 +34,37 @@ describe("app ready URL state", () => {
   it("renders menu tab highlights as copyable URLs", () => {
     expect(readyUrlPath({
       activeScreen: { tag: "Menu" },
+      activeTerminalSession: null,
       currentMenu: "Browser",
       selectedProjectId: null,
-      selectedProjectSummary: undefined,
-      terminalSession: null
+      selectedProjectSummary: undefined
     })).toBe("/menu/browser")
   })
 
   it("renders selected project tabs as readable deep links", () => {
     expect(readyUrlPath({
       activeScreen: { tag: "ProjectPicker" },
+      activeTerminalSession: null,
       currentMenu: "Browser",
       selectedProjectId: "project-1",
-      selectedProjectSummary,
-      terminalSession: null
+      selectedProjectSummary
     })).toBe("/browser/octocat/hello-world")
   })
 
   it("renders database project tabs as readable deep links", () => {
     expect(readyUrlPath({
       activeScreen: { tag: "ProjectPicker" },
+      activeTerminalSession: null,
       currentMenu: "Databases",
       selectedProjectId: "project-1",
-      selectedProjectSummary,
-      terminalSession: null
+      selectedProjectSummary
     })).toBe("/databases/octocat/hello-world")
   })
 
   it("renders active SSH project terminals as SSH deep links", () => {
     expect(readyUrlPath({
       activeScreen: { tag: "ProjectPicker" },
-      currentMenu: "Select",
-      selectedProjectId: "project-1",
-      selectedProjectSummary,
-      terminalSession: {
+      activeTerminalSession: {
         browserProjectId: "project-1",
         closePath: "/projects/project-1/terminal-sessions/session-1",
         exitMessage: "done",
@@ -83,7 +80,10 @@ describe("app ready URL state", () => {
         },
         subtitle: "ssh dev@127.0.0.1",
         websocketPath: "/projects/project-1/terminal-sessions/session-1/ws"
-      }
+      },
+      currentMenu: "Select",
+      selectedProjectId: "project-1",
+      selectedProjectSummary
     })).toBe("/ssh/octocat/hello-world")
   })
 

@@ -35,7 +35,7 @@ export type BrowserShortcutArgs = {
   readonly setProjectNavigationArmed: Setter<boolean>
   readonly setSelectedMenuIndex: Setter<number>
   readonly setSelectedProjectId: Setter<string | null>
-  readonly terminalSession: ActiveTerminalSession | null
+  readonly terminalSessions: ReadonlyArray<ActiveTerminalSession>
 }
 
 type MenuOpenArgs = Pick<
@@ -52,8 +52,8 @@ type MenuOpenArgs = Pick<
 const shouldIgnoreShortcut = (
   actionPrompt: ActionPromptState | null,
   event: KeyboardEvent,
-  terminalSession: ActiveTerminalSession | null
-): boolean => terminalSession !== null || isBlockedShortcut(event, actionPrompt !== null)
+  terminalSessions: ReadonlyArray<ActiveTerminalSession>
+): boolean => terminalSessions.length > 0 || isBlockedShortcut(event, actionPrompt !== null)
 
 const openSelectedMenuScreen = ({
   context,
@@ -282,7 +282,7 @@ const dispatchActiveScreenShortcut = (event: KeyboardEvent, args: BrowserShortcu
 }
 
 export const dispatchBrowserShortcut = (event: KeyboardEvent, args: BrowserShortcutArgs): void => {
-  if (shouldIgnoreShortcut(args.actionPrompt, event, args.terminalSession)) {
+  if (shouldIgnoreShortcut(args.actionPrompt, event, args.terminalSessions)) {
     return
   }
   dispatchActiveScreenShortcut(event, args)

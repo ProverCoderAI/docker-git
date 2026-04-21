@@ -8,6 +8,8 @@ import {
   downAllDockerGitProjects,
   listProjectItems,
   readProjectConfig,
+  recordProjectRuntimeStarted,
+  recordProjectRuntimeStopped,
   renderError,
   runDockerComposeUpWithPortCheck
 } from "@effect-template/lib"
@@ -35,6 +37,8 @@ import { clearProjectEvents, emitProjectEvent, latestProjectCursor } from "./eve
 import { resolveCreateAuthorizedKeysContents, resolveManagedAuthorizedKeysContents } from "./project-authorized-keys.js"
 import { projectShortKey } from "./project-port-proxy-core.js"
 import { loadProjectRuntimeByProject, runtimeForProject } from "./project-runtime.js"
+
+type RuntimeStartAction = "create" | "up" | "recreate"
 
 const readComposePsFormatted = (cwd: string) =>
   runCommandCapture(
@@ -155,20 +159,32 @@ const withProjectRuntime = (
     }))
   )
 
-const summarizeProjectRuntime = (
-  project: ProjectItem,
-  runtime: ReturnType<typeof runtimeForProject>
+const cachedStatusLabel = (status: ProjectStatus): string =>
+  status === "unknown" ? "unknown" : `last known: ${status}`
+
+// CHANGE: derive project list/detail API payloads from `.docker-git` only
+// WHY: project inventory is database state, while Docker runtime is queried only by explicit runtime actions
+// QUOTE(ТЗ): ".docker-git это наша база данных можно скзаать"
+// REF: user-message-2026-04-21-db-only-project-list
+// SOURCE: n/a
+// FORMAT THEOREM: forall p in DB: listProjects(p) does not require docker(p)
+// PURITY: SHELL
+// EFFECT: n/a
+// INVARIANT: runtime fields are conservative defaults when not stored in `.docker-git`
+// COMPLEXITY: O(1)
+const dbProjectSummary = (
+  project: ProjectItem
 ): ProjectSummary => ({
   id: project.projectDir,
   projectKey: projectShortKey(project.projectDir),
   displayName: project.displayName,
   repoUrl: project.repoUrl,
   repoRef: project.repoRef,
-  status: runtime.running ? "running" : "stopped",
-  statusLabel: runtime.running ? "running" : "stopped",
-  sshSessions: runtime.sshSessions,
-  startedAtIso: runtime.startedAtIso,
-  startedAtEpochMs: runtime.startedAtEpochMs,
+  status: project.lastKnownStatus,
+  statusLabel: cachedStatusLabel(project.lastKnownStatus),
+  sshSessions: 0,
+  startedAtIso: project.lastStartedAtIso,
+  startedAtEpochMs: project.lastStartedAtEpochMs,
   clonedOnHostname: project.clonedOnHostname
 })
 
@@ -191,6 +207,26 @@ const toProjectDetails = (
   codexAuthPath: project.codexAuthPath,
   codexHome: project.codexHome
 })
+
+const dbProjectDetails = (project: ProjectItem): ProjectDetails => toProjectDetails(project, dbProjectSummary(project))
+
+const runtimeProjectDetails = (project: ProjectItem) =>
+  Effect.gen(function*(_) {
+    const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
+    const summary = yield* _(withProjectRuntime(project, runtimeForProject(runtimeByProject, project)))
+    return toProjectDetails(project, summary)
+  })
+
+const recordProjectStartedFromDetails = (
+  project: ProjectItem,
+  details: ProjectDetails,
+  action: RuntimeStartAction
+) =>
+  recordProjectRuntimeStarted(project.projectDir, {
+    action,
+    startedAtIso: details.startedAtIso,
+    startedAtEpochMs: details.startedAtEpochMs
+  }).pipe(Effect.asVoid)
 
 const projectIdAliases = (
   path: Path.Path,
@@ -486,9 +522,10 @@ const runPreparedCreateProject = (
         command.config.repoRef
       )
     )
-    const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
-    const summary = yield* _(withProjectRuntime(project, runtimeForProject(runtimeByProject, project)))
-    const details = toProjectDetails(project, summary)
+    const details = command.runUp ? yield* _(runtimeProjectDetails(project)) : dbProjectDetails(project)
+    if (command.runUp) {
+      yield* _(recordProjectStartedFromDetails(project, details, "create"))
+    }
 
     yield* _(emitProjectCreatedEvents(projectId, project, details))
 
@@ -521,21 +558,8 @@ const startCreateProjectJob = (
 
 export const listProjects = () =>
   listProjectItems.pipe(
-    Effect.flatMap((projects) =>
-      loadProjectRuntimeByProject(projects, {
-        includeSshSessions: false,
-        includeStartedAt: false
-      }).pipe(
-        Effect.flatMap((runtimeByProject) =>
-          Effect.forEach(
-            projects,
-            (project) => Effect.succeed(summarizeProjectRuntime(project, runtimeForProject(runtimeByProject, project))),
-            { concurrency: "unbounded" }
-          )
-        )
-      )
-    ),
-    Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<ProjectSummary>))
+    Effect.map((projects) => projects.map((project) => dbProjectDetails(project))),
+    Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<ProjectDetails>))
   )
 
 export const applyAllProjects = (activeOnly: boolean) =>
@@ -551,9 +575,7 @@ export const getProject = (
 ) =>
   Effect.gen(function*(_) {
     const project = yield* _(findProjectById(projectId))
-    const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
-    const summary = yield* _(withProjectRuntime(project, runtimeForProject(runtimeByProject, project)))
-    return toProjectDetails(project, summary)
+    return dbProjectDetails(project)
   })
 
 // CHANGE: create a docker-git project exclusively through typed API input.
@@ -686,9 +708,9 @@ export const upProject = (
       yield* _(syncContainerAuthorizedKeys(project))
     }
     yield* _(markDeployment(projectId, "running", "Container running"))
-    const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
-    const summary = yield* _(withProjectRuntime(project, runtimeForProject(runtimeByProject, project)))
-    return toProjectDetails(project, summary)
+    const details = yield* _(runtimeProjectDetails(project))
+    yield* _(recordProjectStartedFromDetails(project, details, "up"))
+    return details
   }).pipe(Effect.mapError(toProjectApiError))
 
 export const downProject = (
@@ -699,6 +721,7 @@ export const downProject = (
     yield* _(markDeployment(projectId, "down", "docker compose down"))
     yield* _(runComposeCapture(projectId, project.projectDir, ["down"], [0, 1]))
     yield* _(markDeployment(projectId, "idle", "Container stopped"))
+    yield* _(recordProjectRuntimeStopped(project.projectDir))
   }).pipe(Effect.mapError(toProjectApiError))
 
 export const recreateProject = (
@@ -725,6 +748,8 @@ export const recreateProject = (
 
     yield* _(runComposeCapture(projectId, project.projectDir, ["down"], [0, 1]))
     yield* _(runDockerComposeUpWithPortCheck(project.projectDir))
+    const details = yield* _(runtimeProjectDetails(project))
+    yield* _(recordProjectStartedFromDetails(project, details, "recreate"))
     yield* _(markDeployment(projectId, "running", "Recreate completed"))
   }).pipe(Effect.mapError(toProjectApiError))
 

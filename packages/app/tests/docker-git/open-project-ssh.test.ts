@@ -69,7 +69,9 @@ describe("openResolvedProjectSshWithUpEffect", () => {
       })
       const events = yield* _(captureOpenResolvedProjectSshWithUpEvents(item))
       expect(events).toEqual([
+        "progress:Starting project before SSH: org/repo",
         "up:/controller/org/repo/issue-9",
+        "progress:Opening SSH terminal: org/repo",
         "open:ssh -p 2299 dev@127.0.0.1"
       ])
     }))
@@ -88,6 +90,7 @@ describe("openResolvedProjectSshWithUpEffect", () => {
               expect(projectId).toBe("/controller/org/repo/issue-10")
               return null
             }),
+          writeProgress: () => Effect.void,
           openProjectSsh: (project) =>
             Effect.sync(() => {
               expect(project.sshCommand).toBe("ssh -p 2222 dev@localhost")
@@ -164,6 +167,10 @@ const captureOpenResolvedProjectSshWithUpEvents = (
             status: "running",
             statusLabel: "running"
           }
+        }),
+      writeProgress: (message) =>
+        Effect.sync(() => {
+          events.push(`progress:${message}`)
         }),
       openProjectSsh: (project) =>
         Effect.sync(() => {

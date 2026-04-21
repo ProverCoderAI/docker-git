@@ -16,16 +16,19 @@ type ReadyUrlNavigation = {
 type ReadyUrlSyncArgs = {
   readonly currentMenu: BrowserMenuTag
   readonly dashboard: DashboardData
-  readonly state: Pick<
-    BrowserShortcutArgs,
-    | "activeScreen"
-    | "selectedProjectId"
-    | "setActiveScreen"
-    | "setProjectNavigationArmed"
-    | "setSelectedMenuIndex"
-    | "setSelectedProjectId"
-    | "terminalSession"
-  >
+  readonly state:
+    & Pick<
+      BrowserShortcutArgs,
+      | "activeScreen"
+      | "selectedProjectId"
+      | "setActiveScreen"
+      | "setProjectNavigationArmed"
+      | "setSelectedMenuIndex"
+      | "setSelectedProjectId"
+    >
+    & {
+      readonly activeTerminalSession: ActiveTerminalSession | null
+    }
 }
 
 type ReadyUrlPathArgs = {
@@ -33,7 +36,7 @@ type ReadyUrlPathArgs = {
   readonly currentMenu: BrowserMenuTag
   readonly selectedProjectId: string | null
   readonly selectedProjectSummary: DashboardData["projects"][number] | undefined
-  readonly terminalSession: ActiveTerminalSession | null
+  readonly activeTerminalSession: ActiveTerminalSession | null
 }
 
 const menuSlugs: Readonly<Record<BrowserMenuTag, string>> = {
@@ -158,16 +161,17 @@ export const parseReadyUrlNavigation = (
 export const readyUrlPath = (
   {
     activeScreen,
+    activeTerminalSession,
     currentMenu,
     selectedProjectId,
-    selectedProjectSummary,
-    terminalSession
+    selectedProjectSummary
   }: ReadyUrlPathArgs
 ): string | null => {
-  if (terminalSession?.browserProjectId !== undefined) {
+  if (activeTerminalSession?.browserProjectId !== undefined) {
     return `/ssh/${
       encodePathTail(
-        projectToken(selectedProjectSummary, terminalSession.browserProjectId) ?? terminalSession.browserProjectId
+        projectToken(selectedProjectSummary, activeTerminalSession.browserProjectId) ??
+          activeTerminalSession.browserProjectId
       )
     }`
   }
@@ -220,16 +224,16 @@ const writeReadyUrl = (
   }
 
   const currentUrl = new URL(globalThis.location.href)
-  if (isSshLinkUrl(currentUrl) && args.state.terminalSession === null) {
+  if (isSshLinkUrl(currentUrl) && args.state.activeTerminalSession === null) {
     return
   }
 
   const path = readyUrlPath({
+    activeTerminalSession: args.state.activeTerminalSession,
     activeScreen: args.state.activeScreen,
     currentMenu: args.currentMenu,
     selectedProjectId: args.state.selectedProjectId,
-    selectedProjectSummary: selectedProjectSummary(args),
-    terminalSession: args.state.terminalSession
+    selectedProjectSummary: selectedProjectSummary(args)
   })
   if (path === null || `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}` === path) {
     return
@@ -266,7 +270,7 @@ export const useReadyUrlSync = (args: ReadyUrlSyncArgs) => {
     args.currentMenu,
     args.state.selectedProjectId,
     selectedProjectSummary(args)?.projectKey,
-    args.state.terminalSession,
-    args.state.terminalSession?.browserProjectId
+    args.state.activeTerminalSession,
+    args.state.activeTerminalSession?.browserProjectId
   ])
 }
