@@ -119,7 +119,7 @@ jobs:
 
           open_group "Prune package manifest"
           cp "$PKG_PATH" "$BACKUP_PKG"
-          bun x @prover-coder-ai/dist-deps-prune apply \
+          bun node_modules/@prover-coder-ai/dist-deps-prune/dist/main.js apply \
             --package "$PKG_PATH" \
             --prune-dev true \
             --write
@@ -270,7 +270,7 @@ jobs:
             exit 0
           fi
 
-          bun x @prover-coder-ai/dist-deps-prune release \
+          bun node_modules/@prover-coder-ai/dist-deps-prune/dist/main.js release \
             --package "${PKG_PATH}" \
             --command "bash -lc 'cd packages/app && bun publish --ignore-scripts --access public'" \
             --silent
@@ -295,7 +295,7 @@ jobs:
           printf '%s\n' "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> "$HOME/.npmrc"
 
           bun -e "const p='packages/app/package.json';const pkg=JSON.parse(await Bun.file(p).text());pkg.name='${GH_PKG}';await Bun.write(p, JSON.stringify(pkg, null, 2)+'\n');"
-          bun x @prover-coder-ai/dist-deps-prune release \
+          bun node_modules/@prover-coder-ai/dist-deps-prune/dist/main.js release \
             --package "packages/app/package.json" \
             --command "bash -lc 'cd packages/app && bun publish --ignore-scripts --registry https://npm.pkg.github.com'" \
             --silent
