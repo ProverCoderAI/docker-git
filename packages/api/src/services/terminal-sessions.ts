@@ -7,6 +7,8 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
 import { Effect, Either } from "effect"
+import { Buffer } from "node:buffer"
+import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import type { IncomingMessage, Server as HttpServer } from "node:http"
 import type { Duplex } from "node:stream"
@@ -14,14 +16,20 @@ import { WebSocket, WebSocketServer, type RawData } from "ws"
 
 import type { TerminalSession, TerminalSessionStatus } from "../api/contracts.js"
 import { ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
-import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
 import { emitProjectEvent } from "./events.js"
+import {
+  createTerminalImagePastePlan,
+  terminalImagePasteDirectory,
+  type TerminalImagePastePayload
+} from "./terminal-image-paste-core.js"
+import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
 import { getProjectItemById, upProject } from "./projects.js"
 import { attachWebSocketHeartbeat } from "./websocket-heartbeat.js"
 
 type TerminalClientMessage =
   | { readonly type: "input"; readonly data: string }
   | { readonly type: "resize"; readonly cols: number; readonly rows: number }
+  | ({ readonly type: "image" } & TerminalImagePastePayload)
   | { readonly type: "close" }
 
 type TerminalServerMessage =
@@ -36,6 +44,7 @@ type TerminalRecord = {
   socket: WebSocket | null
   attachTimeout: ReturnType<typeof setTimeout> | null
   detachTimeout: ReturnType<typeof setTimeout> | null
+  projectContainerName: string
   projectId: string
   prepared: ReturnType<typeof prepareProjectSsh>
 }
@@ -55,6 +64,13 @@ const TerminalClientMessageSchema = Schema.parseJson(
       type: Schema.Literal("resize"),
       cols: Schema.Number,
       rows: Schema.Number
+    }),
+    Schema.Struct({
+      type: Schema.Literal("image"),
+      data: Schema.String,
+      mediaType: Schema.String,
+      name: Schema.String,
+      size: Schema.Number
     }),
     Schema.Struct({
       type: Schema.Literal("close")
@@ -264,6 +280,118 @@ const writePtyInput = (pty: PtyBridge | null, data: string): void => {
   }
 }
 
+const shellQuote = (value: string): string => `'${value.replace(/'/gu, "'\\''")}'`
+
+const writeBufferToProjectContainer = (
+  containerName: string,
+  containerPath: string,
+  buffer: Buffer
+): Effect.Effect<void, ApiInternalError> =>
+  Effect.async((resume) => {
+    const child = spawn(
+      "docker",
+      [
+        "exec",
+        "-i",
+        "-u",
+        "dev",
+        containerName,
+        "bash",
+        "--noprofile",
+        "--norc",
+        "-c",
+        `mkdir -p ${shellQuote(terminalImagePasteDirectory)} && cat > ${shellQuote(containerPath)}`
+      ],
+      {
+        cwd: process.cwd(),
+        stdio: ["pipe", "ignore", "pipe"]
+      }
+    )
+    const stderrChunks: Array<Buffer> = []
+    let completed = false
+    const resumeOnce = (effect: Effect.Effect<void, ApiInternalError>): void => {
+      if (completed) {
+        return
+      }
+      completed = true
+      resume(effect)
+    }
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      stderrChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    })
+    child.stdin.on("error", (error) => {
+      resumeOnce(Effect.fail(new ApiInternalError({
+        message: `Failed to write pasted image to ${containerName}.`,
+        cause: error
+      })))
+    })
+    child.on("error", (error) => {
+      resumeOnce(Effect.fail(new ApiInternalError({
+        message: `Failed to run docker exec for ${containerName}.`,
+        cause: error
+      })))
+    })
+    child.on("close", (exitCode) => {
+      if (exitCode === 0) {
+        resumeOnce(Effect.void)
+        return
+      }
+      const stderr = Buffer.concat(stderrChunks).toString("utf8").trim()
+      resumeOnce(Effect.fail(new ApiInternalError({
+        message: stderr.length > 0
+          ? `Failed to save pasted image: ${stderr}`
+          : `Failed to save pasted image; docker exec exited with code ${exitCode ?? "unknown"}.`
+      })))
+    })
+    child.stdin.end(buffer)
+  })
+
+const saveTerminalImagePaste = (
+  record: TerminalRecord,
+  payload: TerminalImagePastePayload
+): Effect.Effect<string, ApiInternalError> =>
+  Effect.gen(function*(_) {
+    const plan = createTerminalImagePastePlan(payload, randomUUID())
+    if (plan._tag === "InvalidTerminalImagePaste") {
+      return yield* _(Effect.fail(new ApiInternalError({ message: plan.message })))
+    }
+    const bytes = Buffer.from(plan.normalizedBase64, "base64")
+    if (bytes.length !== plan.decodedBytes) {
+      return yield* _(Effect.fail(new ApiInternalError({ message: "Decoded image size changed during upload." })))
+    }
+    yield* _(writeBufferToProjectContainer(record.projectContainerName, plan.containerPath, bytes))
+    return plan.containerPath
+  })
+
+const terminalOutputLine = (line: string): string => `\r\n[docker-git] ${line}\r\n`
+
+const handleImagePasteMessage = (
+  record: TerminalRecord,
+  message: Extract<TerminalClientMessage, { readonly type: "image" }>
+): void => {
+  Effect.runFork(
+    saveTerminalImagePaste(record, message).pipe(
+      Effect.tap((containerPath) =>
+        Effect.sync(() => {
+          sendServerMessage(record.socket, {
+            type: "output",
+            data: terminalOutputLine(`Pasted image saved: ${containerPath}`)
+          })
+          writePtyInput(record.pty, `${containerPath} `)
+        })
+      ),
+      Effect.catchAll((error) =>
+        Effect.sync(() => {
+          sendServerMessage(record.socket, {
+            type: "output",
+            data: terminalOutputLine(`Failed to paste image: ${error.message}`)
+          })
+        })
+      )
+    )
+  )
+}
+
 const resizePty = (pty: PtyBridge | null, cols: number, rows: number): void => {
   if (pty === null) {
     return
@@ -321,7 +449,8 @@ const createAttachTimeout = (sessionId: string): ReturnType<typeof setTimeout> =
 
 const registerRecord = (
   projectId: string,
-  prepared: ReturnType<typeof prepareProjectSsh>
+  prepared: ReturnType<typeof prepareProjectSsh>,
+  projectContainerName: string
 ): TerminalSession => {
   const session: TerminalSession = {
     createdAt: nowIso(),
@@ -334,6 +463,7 @@ const registerRecord = (
     attachTimeout: null,
     detachTimeout: null,
     prepared,
+    projectContainerName,
     projectId,
     pty: null,
     session,
@@ -378,7 +508,7 @@ export const createTerminalSession = (
       })
     )
     const prepared = prepareProjectSsh(projectItem)
-    const session = registerRecord(projectId, prepared)
+    const session = registerRecord(projectId, prepared, projectItem.containerName)
     yield* _(
       Effect.sync(() => {
         emitProjectEvent(projectId, "project.ssh.session", {
@@ -449,6 +579,10 @@ const handleSocketMessage = (record: TerminalRecord, raw: RawData): void => {
   }
   if (message.type === "resize") {
     resizePty(record.pty, clampTerminalSize(message.cols, 120), clampTerminalSize(message.rows, 32))
+    return
+  }
+  if (message.type === "image") {
+    handleImagePasteMessage(record, message)
     return
   }
   handleCloseMessage(record)

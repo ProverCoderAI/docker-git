@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 
+import { attachTerminalImagePaste, createTerminalPasteGuard } from "./terminal-image-paste.js"
 import {
   attachTerminalInput,
   cleanupTerminalResources,
@@ -17,17 +18,24 @@ import type {
 } from "./terminal-panel-runtime-types.js"
 
 type TerminalCleanupFactoryArgs = {
-  readonly cleanupArgs: Omit<Parameters<typeof cleanupTerminalResources>[0], "removeInput" | "removeResize">
+  readonly cleanupArgs: Omit<
+    Parameters<typeof cleanupTerminalResources>[0],
+    "removeImagePaste" | "removeInput" | "removeResize"
+  >
+  readonly imagePasteDisposable: { readonly dispose: () => void }
   readonly inputDisposable: { readonly dispose: () => void }
   readonly sendResize: () => void
 }
 
 const createTerminalCleanup = (
-  { cleanupArgs, inputDisposable, sendResize }: TerminalCleanupFactoryArgs
+  { cleanupArgs, imagePasteDisposable, inputDisposable, sendResize }: TerminalCleanupFactoryArgs
 ): () => void =>
 (): void => {
   cleanupTerminalResources({
     ...cleanupArgs,
+    removeImagePaste: () => {
+      imagePasteDisposable.dispose()
+    },
     removeInput: () => {
       inputDisposable.dispose()
     },
@@ -58,19 +66,14 @@ const mountTerminalSession = (
   const lifecycle = createLifecycleState()
   const socketRef: TerminalSocketRef = { current: null }
   const { fitAddon, terminal } = createTerminalRuntime(host)
+  const pasteGuard = createTerminalPasteGuard()
   const sendResize = () => {
     sendTerminalResize(fitAddon, socketRef, terminal)
   }
   const resizeObserver = observeTerminalResize(host, sendResize)
-  const inputDisposable = attachTerminalInput(terminal, socketRef)
-  const handlers = createMessageHandlers({
-    connectionRef,
-    lifecycle,
-    notifyMessage,
-    session,
-    setStatus,
-    terminal
-  })
+  const inputDisposable = attachTerminalInput(terminal, socketRef, pasteGuard)
+  const imagePasteDisposable = attachTerminalImagePaste({ host, notifyMessage, pasteGuard, socketRef, terminal })
+  const handlers = createMessageHandlers({ connectionRef, lifecycle, notifyMessage, session, setStatus, terminal })
   const connectSocket = createConnectSocket({
     handlers,
     lifecycle,
@@ -86,15 +89,8 @@ const mountTerminalSession = (
   connectSocket()
 
   return createTerminalCleanup({
-    cleanupArgs: {
-      connectionRef,
-      lifecycle,
-      notifyMessage,
-      resizeObserver,
-      session,
-      socketRef,
-      terminal
-    },
+    cleanupArgs: { connectionRef, lifecycle, notifyMessage, resizeObserver, session, socketRef, terminal },
+    imagePasteDisposable,
     inputDisposable,
     sendResize
   })

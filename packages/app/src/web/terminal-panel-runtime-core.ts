@@ -7,6 +7,7 @@ import type {
   TerminalCleanupArgs,
   TerminalLifecycleState,
   TerminalMessageHandlers,
+  TerminalPasteGuard,
   TerminalRuntime,
   TerminalSocketConnectArgs,
   TerminalSocketListenerArgs,
@@ -14,6 +15,10 @@ import type {
 } from "./terminal-panel-runtime-types.js"
 import { resolveTerminalReconnectDelay, terminalReconnectGraceMs } from "./terminal-reconnect.js"
 import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "./terminal.js"
+
+type TerminalClientMessage =
+  | { readonly data: string; readonly type: "input" }
+  | { readonly cols: number; readonly rows: number; readonly type: "resize" }
 
 const requestSessionClose = (closePath: string): void => {
   void Effect.runPromise(deleteTerminalSessionByPath(closePath).pipe(Effect.either, Effect.asVoid))
@@ -69,6 +74,17 @@ const createTerminalSocket = (
   terminal: Terminal
 ): WebSocket => new WebSocket(resolveTerminalWebSocketUrl(session.websocketPath, terminal.cols, terminal.rows))
 
+const sendTerminalClientMessage = (
+  socketRef: TerminalSocketRef,
+  message: TerminalClientMessage
+): void => {
+  const socket = socketRef.current
+  if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    return
+  }
+  socket.send(JSON.stringify(message))
+}
+
 export const sendTerminalResize = (
   fitAddon: FitAddon,
   socketRef: TerminalSocketRef,
@@ -81,15 +97,11 @@ export const sendTerminalResize = (
   ) {
     return
   }
-  const socket = socketRef.current
-  if (socket === null || socket.readyState !== WebSocket.OPEN) {
-    return
-  }
-  socket.send(JSON.stringify({
+  sendTerminalClientMessage(socketRef, {
     cols: terminal.cols,
     rows: terminal.rows,
     type: "resize"
-  }))
+  })
 }
 
 export const observeTerminalResize = (
@@ -106,14 +118,14 @@ export const observeTerminalResize = (
 
 export const attachTerminalInput = (
   terminal: Terminal,
-  socketRef: TerminalSocketRef
+  socketRef: TerminalSocketRef,
+  pasteGuard: TerminalPasteGuard
 ) =>
   terminal.onData((data) => {
-    const socket = socketRef.current
-    if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    if (pasteGuard.shouldSuppressTerminalInput(data)) {
       return
     }
-    socket.send(JSON.stringify({ data, type: "input" }))
+    sendTerminalClientMessage(socketRef, { data, type: "input" })
   })
 
 const notifyTerminalReady = (
@@ -205,6 +217,7 @@ export const cleanupTerminalResources = (
 ): void => {
   args.lifecycle.disposed = true
   clearReconnectTimer(args.lifecycle)
+  args.removeImagePaste()
   args.removeInput()
   args.resizeObserver?.disconnect()
   args.removeResize()

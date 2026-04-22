@@ -1,6 +1,11 @@
 import { describe, expect, it } from "@effect/vitest"
 import { afterEach, beforeEach, vi } from "vitest"
 
+import {
+  createTerminalPasteGuard,
+  extractTerminalImageBase64,
+  isTerminalPasteShortcut
+} from "../../src/web/terminal-image-paste.js"
 import { resolveTerminalReconnectDelay } from "../../src/web/terminal-reconnect.js"
 import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "../../src/web/terminal.js"
 import type { TerminalServerMessage } from "../../src/web/terminal.js"
@@ -76,5 +81,34 @@ describe("browser terminal helpers", () => {
       resolveTerminalReconnectDelay(2),
       resolveTerminalReconnectDelay(3)
     ]).toEqual([500, 500, 1000, 2000, 3000])
+  })
+
+  it("extracts base64 data from pasted image data urls", () => {
+    expect(extractTerminalImageBase64("data:image/png;base64,aGVsbG8=")).toBe("aGVsbG8=")
+    expect(extractTerminalImageBase64("plain-text")).toBeNull()
+  })
+
+  it("detects image paste shortcut without matching text paste shortcut", () => {
+    expect(isTerminalPasteShortcut({ altKey: false, ctrlKey: true, key: "v", metaKey: false, shiftKey: false })).toBe(
+      true
+    )
+    expect(isTerminalPasteShortcut({ altKey: false, ctrlKey: true, key: "v", metaKey: false, shiftKey: true })).toBe(
+      false
+    )
+  })
+
+  it("suppresses only the next native image paste control input", () => {
+    let currentTimeMillis = 1000
+    const pasteGuard = createTerminalPasteGuard(() => currentTimeMillis)
+
+    expect(pasteGuard.shouldSuppressTerminalInput("\u0016")).toBe(false)
+    pasteGuard.suppressNextNativeImagePaste()
+    expect(pasteGuard.shouldSuppressTerminalInput("text")).toBe(false)
+    expect(pasteGuard.shouldSuppressTerminalInput("\u0016")).toBe(true)
+    expect(pasteGuard.shouldSuppressTerminalInput("\u0016")).toBe(false)
+
+    pasteGuard.suppressNextNativeImagePaste()
+    currentTimeMillis = 2000
+    expect(pasteGuard.shouldSuppressTerminalInput("\u0016")).toBe(false)
   })
 })

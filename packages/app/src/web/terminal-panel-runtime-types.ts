@@ -21,6 +21,11 @@ export type TerminalLifecycleState = {
 
 export type TerminalSocketRef = { current: WebSocket | null }
 
+export type TerminalPasteGuard = {
+  readonly shouldSuppressTerminalInput: (data: string) => boolean
+  readonly suppressNextNativeImagePaste: () => void
+}
+
 export type TerminalMessageHandlers = {
   readonly connectionRef: { current: TerminalConnectionState }
   readonly lifecycle: TerminalLifecycleState
@@ -34,6 +39,7 @@ export type TerminalCleanupArgs = {
   readonly connectionRef: { current: TerminalConnectionState }
   readonly lifecycle: TerminalLifecycleState
   readonly notifyMessage: (message: string) => void
+  readonly removeImagePaste: () => void
   readonly removeInput: () => void
   readonly removeResize: () => void
   readonly resizeObserver: ResizeObserver | null
