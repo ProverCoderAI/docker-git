@@ -77,6 +77,53 @@ const statusColor = (status: TerminalStatus): string => {
   return "#8fd3ff"
 }
 
+const TerminalHeaderTitle = (
+  { session, status }: Pick<TerminalPanelProps, "session"> & { readonly status: TerminalStatus }
+): JSX.Element => (
+  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+    <div style={{ color: "#f6fbff", fontWeight: 700 }}>
+      {session.header}
+    </div>
+    <div style={{ color: statusColor(status) }}>
+      {status}
+    </div>
+    <div style={{ color: "#8fa6c4", fontSize: "12px" }}>
+      {session.subtitle}
+    </div>
+  </div>
+)
+
+const TerminalActionButton = (
+  { children, onClick }: { readonly children: string; readonly onClick: () => void }
+): JSX.Element => (
+  <button
+    onClick={onClick}
+    style={closeButtonStyle}
+    type="button"
+  >
+    {children}
+  </button>
+)
+
+const TerminalHeaderActions = (
+  {
+    onClose,
+    onOpenBrowser,
+    onOpenTerminal,
+    session
+  }: Pick<TerminalPanelProps, "onClose" | "onOpenBrowser" | "onOpenTerminal" | "session">
+): JSX.Element => (
+  <div style={headerActionsStyle}>
+    {session.browserProjectId === undefined || onOpenBrowser === undefined
+      ? null
+      : <TerminalActionButton onClick={onOpenBrowser}>Open browser</TerminalActionButton>}
+    {session.browserProjectId === undefined || onOpenTerminal === undefined
+      ? null
+      : <TerminalActionButton onClick={onOpenTerminal}>New terminal</TerminalActionButton>}
+    <TerminalActionButton onClick={onClose}>Close terminal</TerminalActionButton>
+  </div>
+)
+
 const TerminalHeader = (
   {
     onClose,
@@ -89,48 +136,13 @@ const TerminalHeader = (
   }
 ): JSX.Element => (
   <div style={headerStyle}>
-    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-      <div style={{ color: "#f6fbff", fontWeight: 700 }}>
-        {session.header}
-      </div>
-      <div style={{ color: statusColor(status) }}>
-        {status}
-      </div>
-      <div style={{ color: "#8fa6c4", fontSize: "12px" }}>
-        {session.subtitle}
-      </div>
-    </div>
-    <div style={headerActionsStyle}>
-      {session.browserProjectId === undefined || onOpenBrowser === undefined
-        ? null
-        : (
-          <button
-            onClick={onOpenBrowser}
-            style={closeButtonStyle}
-            type="button"
-          >
-            Open browser
-          </button>
-        )}
-      {session.browserProjectId === undefined || onOpenTerminal === undefined
-        ? null
-        : (
-          <button
-            onClick={onOpenTerminal}
-            style={closeButtonStyle}
-            type="button"
-          >
-            New terminal
-          </button>
-        )}
-      <button
-        onClick={onClose}
-        style={closeButtonStyle}
-        type="button"
-      >
-        Close terminal
-      </button>
-    </div>
+    <TerminalHeaderTitle session={session} status={status} />
+    <TerminalHeaderActions
+      onClose={onClose}
+      onOpenBrowser={onOpenBrowser}
+      onOpenTerminal={onOpenTerminal}
+      session={session}
+    />
   </div>
 )
 

@@ -35,49 +35,79 @@ const isTaskKind = (value: string): value is ApiContainerTaskKind =>
   value === "background" ||
   value === "system"
 
+type DecodedContainerTaskFields = {
+  readonly command: string | null
+  readonly etime: string | null
+  readonly etimes: number | null
+  readonly kind: string | null
+  readonly logAvailable: boolean | null
+  readonly managedId: string | undefined
+  readonly pid: number | null
+  readonly ppid: number | null
+  readonly tty: string | null
+  readonly user: string | null
+}
+
+const readContainerTaskFields = (object: NonNullable<ReturnType<typeof asObject>>): DecodedContainerTaskFields => ({
+  command: asString(object["command"]),
+  etime: asString(object["etime"]),
+  etimes: readNumber(object["etimes"]),
+  kind: asString(object["kind"]),
+  logAvailable: readBoolean(object["logAvailable"]),
+  managedId: asString(object["managedId"]) ?? undefined,
+  pid: readNumber(object["pid"]),
+  ppid: readNumber(object["ppid"]),
+  tty: asString(object["tty"]),
+  user: asString(object["user"])
+})
+
+const hasCompleteContainerTaskFields = (
+  fields: DecodedContainerTaskFields
+): fields is DecodedContainerTaskFields & {
+  readonly command: string
+  readonly etime: string
+  readonly etimes: number
+  readonly kind: ApiContainerTaskKind
+  readonly logAvailable: boolean
+  readonly pid: number
+  readonly ppid: number
+  readonly tty: string
+  readonly user: string
+} =>
+  [
+    fields.command,
+    fields.etime,
+    fields.etimes,
+    fields.logAvailable,
+    fields.pid,
+    fields.ppid,
+    fields.tty,
+    fields.user
+  ].every((field) => field !== null) &&
+  fields.kind !== null &&
+  isTaskKind(fields.kind)
+
 const decodeContainerTask = (value: JsonValue): ApiContainerTask | null => {
   const object = asObject(value)
   if (object === null) {
     return null
   }
-
-  const pid = readNumber(object["pid"])
-  const ppid = readNumber(object["ppid"])
-  const user = asString(object["user"])
-  const tty = asString(object["tty"])
-  const etime = asString(object["etime"])
-  const etimes = readNumber(object["etimes"])
-  const command = asString(object["command"])
-  const kind = asString(object["kind"])
-  const managedId = asString(object["managedId"]) ?? undefined
-  const logAvailable = readBoolean(object["logAvailable"])
-
-  if (
-    pid === null ||
-    ppid === null ||
-    user === null ||
-    tty === null ||
-    etime === null ||
-    etimes === null ||
-    command === null ||
-    kind === null ||
-    !isTaskKind(kind) ||
-    logAvailable === null
-  ) {
+  const fields = readContainerTaskFields(object)
+  if (!hasCompleteContainerTaskFields(fields)) {
     return null
   }
 
   return {
-    pid,
-    ppid,
-    user,
-    tty,
-    etime,
-    etimes,
-    command,
-    kind,
-    managedId,
-    logAvailable
+    command: fields.command,
+    etime: fields.etime,
+    etimes: fields.etimes,
+    kind: fields.kind,
+    logAvailable: fields.logAvailable,
+    managedId: fields.managedId,
+    pid: fields.pid,
+    ppid: fields.ppid,
+    tty: fields.tty,
+    user: fields.user
   }
 }
 

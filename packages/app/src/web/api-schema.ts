@@ -1,7 +1,14 @@
 import * as Schema from "@effect/schema/Schema"
 
-import { JsonValueSchema } from "../shared/json-schema.js"
 import { TerminalSessionSchema } from "../shared/terminal-session-schema.js"
+
+export { ApiEventSchema, ProjectEventsPollResponseSchema } from "./api-events-schema.js"
+export {
+  ContainerTaskKindSchema,
+  ContainerTaskSchema,
+  ContainerTaskSnapshotResponseSchema,
+  ContainerTaskSnapshotSchema
+} from "./api-task-schema.js"
 
 const NullableString = Schema.NullOr(Schema.String)
 
@@ -258,122 +265,31 @@ export const TerminalSessionResponseSchema = Schema.Struct({
   session: TerminalSessionSchema
 })
 
-export const ContainerTaskKindSchema = Schema.Union(
-  Schema.Literal("ssh"),
-  Schema.Literal("web-terminal"),
-  Schema.Literal("agent"),
-  Schema.Literal("background"),
-  Schema.Literal("system")
-)
-
-export const ContainerTaskSchema = Schema.Struct({
-  pid: Schema.Number,
-  ppid: Schema.Number,
-  user: Schema.String,
-  tty: Schema.String,
-  etime: Schema.String,
-  etimes: Schema.Number,
-  command: Schema.String,
-  kind: ContainerTaskKindSchema,
-  managedId: Schema.optional(Schema.String),
-  logAvailable: Schema.Boolean
-})
-
-export const ContainerTaskSnapshotSchema = Schema.Struct({
-  projectId: Schema.String,
-  containerName: Schema.String,
-  generatedAt: Schema.String,
-  sshConnections: Schema.Number,
-  tasks: Schema.Array(ContainerTaskSchema)
-})
-
-export const ContainerTaskSnapshotResponseSchema = Schema.Struct({
-  snapshot: ContainerTaskSnapshotSchema
-})
-
 export const AuthTerminalSessionResponseSchema = Schema.Struct({
   ok: Schema.optional(Schema.Boolean),
   session: TerminalSessionSchema
 })
 
-export const ApiEventSchema = Schema.Struct({
-  seq: Schema.Number,
-  projectId: Schema.String,
-  type: Schema.Union(
-    Schema.Literal("snapshot"),
-    Schema.Literal("project.created"),
-    Schema.Literal("project.deleted"),
-    Schema.Literal("project.deployment.status"),
-    Schema.Literal("project.deployment.log"),
-    Schema.Literal("project.ssh.session"),
-    Schema.Literal("agent.started"),
-    Schema.Literal("agent.output"),
-    Schema.Literal("agent.exited"),
-    Schema.Literal("agent.stopped"),
-    Schema.Literal("agent.error")
-  ),
-  at: Schema.String,
-  payload: JsonValueSchema
-})
-
-export const ProjectEventsPollResponseSchema = Schema.Struct({
-  cursor: Schema.Number,
-  events: Schema.Array(ApiEventSchema)
-})
-
-export type ProjectSummary = Schema.Schema.Type<typeof ProjectSummarySchema>
-export type ProjectDetails = Schema.Schema.Type<typeof ProjectDetailsSchema>
-export type CreateProjectAcceptedResponse = Schema.Schema.Type<typeof CreateProjectAcceptedResponseSchema>
-export type ProjectPortForward = Schema.Schema.Type<typeof ProjectPortForwardSchema>
-export type ProjectBrowserSession = Schema.Schema.Type<typeof ProjectBrowserSessionSchema>
-export type ProjectDatabaseForward = Schema.Schema.Type<typeof ProjectDatabaseForwardSchema>
-export type ProjectDatabaseProfile = Schema.Schema.Type<typeof ProjectDatabaseProfileSchema>
-export type ProjectDatabaseSession = Schema.Schema.Type<typeof ProjectDatabaseSessionSchema>
-export type GithubAuthStatus = Schema.Schema.Type<typeof GithubAuthStatusSchema>
-export type AuthSnapshot = Schema.Schema.Type<typeof AuthSnapshotSchema>
-export type ProjectAuthSnapshot = Schema.Schema.Type<typeof ProjectAuthSnapshotSchema>
-export type ApiEvent = Schema.Schema.Type<typeof ApiEventSchema>
-export type ContainerTask = Schema.Schema.Type<typeof ContainerTaskSchema>
-export type ContainerTaskSnapshot = Schema.Schema.Type<typeof ContainerTaskSnapshotSchema>
-
-export type DashboardData = {
-  readonly apiBaseUrl: string
-  readonly health: Schema.Schema.Type<typeof HealthResponseSchema>
-  readonly projects: ReadonlyArray<ProjectSummary>
-}
-
-export type CreateProjectDraft = {
-  readonly repoUrl: string
-  readonly repoRef: string
-  readonly outDir: string
-  readonly cpuLimit: string
-  readonly ramLimit: string
-  readonly enableMcpPlaywright: boolean
-  readonly force: boolean
-  readonly forceEnv: boolean
-  readonly up: boolean
-}
-
-export type AuthMenuFlow =
-  | "GithubRemove"
-  | "GitSet"
-  | "GitRemove"
-  | "ClaudeLogout"
-  | "GeminiApiKey"
-  | "GeminiLogout"
-
-export type ProjectAuthFlow =
-  | "ProjectGithubConnect"
-  | "ProjectGithubDisconnect"
-  | "ProjectGitConnect"
-  | "ProjectGitDisconnect"
-  | "ProjectClaudeConnect"
-  | "ProjectClaudeDisconnect"
-  | "ProjectGeminiConnect"
-  | "ProjectGeminiDisconnect"
-
-export {
-  type TerminalServerMessage,
-  TerminalServerMessageSchema,
-  type TerminalSession
-} from "../shared/terminal-session-schema.js"
+export { TerminalServerMessageSchema } from "../shared/terminal-session-schema.js"
+export type {
+  ApiEvent,
+  AuthMenuFlow,
+  AuthSnapshot,
+  ContainerTask,
+  ContainerTaskSnapshot,
+  CreateProjectAcceptedResponse,
+  CreateProjectDraft,
+  DashboardData,
+  GithubAuthStatus,
+  ProjectAuthFlow,
+  ProjectAuthSnapshot,
+  ProjectBrowserSession,
+  ProjectDatabaseForward,
+  ProjectDatabaseProfile,
+  ProjectDatabaseSession,
+  ProjectDetails,
+  ProjectPortForward,
+  ProjectSummary,
+  TerminalServerMessage,
+  TerminalSession
+} from "./api-types.js"

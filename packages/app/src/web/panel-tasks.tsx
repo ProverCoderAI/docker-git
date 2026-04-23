@@ -113,6 +113,43 @@ const TaskLogs = ({ logs }: Pick<TaskPanelProps, "logs">): JSX.Element | null =>
       </Box>
     )
 
+type TaskPanelSummary = {
+  readonly containerName: string
+  readonly projectName: string
+  readonly sshConnections: number
+  readonly tasks: ReadonlyArray<ContainerTask>
+  readonly updatedAt: string
+}
+
+const projectContainerName = (project: ProjectDetails | null): string =>
+  project === null ? "load project info first" : project.containerName
+
+const snapshotContainerName = (
+  { project, snapshot }: Pick<TaskPanelProps, "project" | "snapshot">
+): string => snapshot === null ? projectContainerName(project) : snapshot.containerName
+
+const summaryProjectName = (selectedProjectSummary: ProjectSummary | undefined): string =>
+  selectedProjectSummary === undefined ? "not selected" : selectedProjectSummary.displayName
+
+const snapshotSshConnections = (snapshot: ContainerTaskSnapshot | null): number =>
+  snapshot === null ? 0 : snapshot.sshConnections
+
+const snapshotTasks = (snapshot: ContainerTaskSnapshot | null): ReadonlyArray<ContainerTask> =>
+  snapshot === null ? [] : snapshot.tasks
+
+const snapshotUpdatedAt = (snapshot: ContainerTaskSnapshot | null): string =>
+  snapshot === null ? "never" : snapshot.generatedAt
+
+const taskPanelSummary = (
+  { project, selectedProjectSummary, snapshot }: Pick<TaskPanelProps, "project" | "selectedProjectSummary" | "snapshot">
+): TaskPanelSummary => ({
+  containerName: snapshotContainerName({ project, snapshot }),
+  projectName: summaryProjectName(selectedProjectSummary),
+  sshConnections: snapshotSshConnections(snapshot),
+  tasks: snapshotTasks(snapshot),
+  updatedAt: snapshotUpdatedAt(snapshot)
+})
+
 export const TaskPanel = (
   {
     logs,
@@ -123,30 +160,33 @@ export const TaskPanel = (
     selectedProjectSummary,
     snapshot
   }: TaskPanelProps
-): JSX.Element => (
-  <Box flexDirection="column">
-    <Box alignItems="center" flexWrap="wrap" gap={1} justifyContent="space-between">
-      <Text bold={true} fg="#8be9fd">Container tasks</Text>
-      <Box onClick={onRefreshTasks} width="auto">
-        <Text bold={true} fg="#7fdfff">refresh</Text>
+): JSX.Element => {
+  const summary = taskPanelSummary({ project, selectedProjectSummary, snapshot })
+  return (
+    <Box flexDirection="column">
+      <Box alignItems="center" flexWrap="wrap" gap={1} justifyContent="space-between">
+        <Text bold={true} fg="#8be9fd">Container tasks</Text>
+        <Box onClick={onRefreshTasks} width="auto">
+          <Text bold={true} fg="#7fdfff">refresh</Text>
+        </Box>
       </Box>
+      <Text fg="#8fa6c4" marginTop={1} wrap="truncate">
+        Project: {summary.projectName}
+      </Text>
+      <Text fg="#8fa6c4" wrap="truncate">
+        Container: {summary.containerName}
+      </Text>
+      <Box flexWrap="wrap" gap={1} marginTop={1}>
+        <Text fg="#d6e5f7">tasks: {summary.tasks.length}</Text>
+        <Text fg="#d6e5f7">ssh: {summary.sshConnections}</Text>
+        <Text fg="#8fa6c4">updated: {summary.updatedAt}</Text>
+      </Box>
+      <TaskList
+        onLoadLogs={onLoadLogs}
+        onStopTask={onStopTask}
+        tasks={summary.tasks}
+      />
+      <TaskLogs logs={logs} />
     </Box>
-    <Text fg="#8fa6c4" marginTop={1} wrap="truncate">
-      Project: {selectedProjectSummary?.displayName ?? "not selected"}
-    </Text>
-    <Text fg="#8fa6c4" wrap="truncate">
-      Container: {snapshot?.containerName ?? project?.containerName ?? "load project info first"}
-    </Text>
-    <Box flexWrap="wrap" gap={1} marginTop={1}>
-      <Text fg="#d6e5f7">tasks: {snapshot?.tasks.length ?? 0}</Text>
-      <Text fg="#d6e5f7">ssh: {snapshot?.sshConnections ?? 0}</Text>
-      <Text fg="#8fa6c4">updated: {snapshot?.generatedAt ?? "never"}</Text>
-    </Box>
-    <TaskList
-      onLoadLogs={onLoadLogs}
-      onStopTask={onStopTask}
-      tasks={snapshot?.tasks ?? []}
-    />
-    <TaskLogs logs={logs} />
-  </Box>
-)
+  )
+}

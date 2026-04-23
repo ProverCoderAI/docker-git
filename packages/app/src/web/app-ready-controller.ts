@@ -5,23 +5,17 @@ import {
   connectProjectById,
   loadSelectedProjectBrowser,
   loadSelectedProjectPorts,
-  loadSelectedProjectTaskLogs,
-  loadSelectedProjectTasks,
   openProjectBrowserById,
   openSelectedProjectBrowser,
   openSelectedProjectPort,
-  stopSelectedProjectTask,
   submitBrowserActionPrompt
 } from "./actions.js"
 import type { DashboardData } from "./api.js"
-import {
-  createActionContext,
-  resolveCurrentMenu,
-  runAuthActionByIndex,
-  runProjectAuthActionByIndex
-} from "./app-ready-actions.js"
+import type { createActionContext } from "./app-ready-actions.js"
+import { resolveCurrentMenu, runAuthActionByIndex, runProjectAuthActionByIndex } from "./app-ready-actions.js"
 import { useProjectBrowserReset, useTerminalBrowserAutoload } from "./app-ready-browser-hook.js"
 import { useBrowserShortcuts } from "./app-ready-browser-shortcuts-hook.js"
+import { createReadyActionContext } from "./app-ready-controller-context.js"
 import { cancelCreate, setCreateBuffer, submitCreateView, useCreateMenuReset } from "./app-ready-create.js"
 import { bindDatabaseActions } from "./app-ready-database-actions.js"
 import { useProjectDatabasesReset } from "./app-ready-databases-hook.js"
@@ -36,11 +30,13 @@ import {
   useReadyState
 } from "./app-ready-hooks.js"
 import { useProjectPortForwardsReset } from "./app-ready-port-forwards-hook.js"
+import { bindProjectSearchActions } from "./app-ready-project-search-actions.js"
 import { bindScreenActions } from "./app-ready-screen-actions.js"
 import { useSshLink } from "./app-ready-ssh-link-hook.js"
+import { bindTaskActions } from "./app-ready-task-actions.js"
 import { useProjectTasksReset } from "./app-ready-tasks-hook.js"
 import { useReadyUrlSync } from "./app-ready-url.js"
-import { filterDashboardProjectsByQuery, filterProjectSummariesByQuery } from "./project-search.js"
+import { filterDashboardProjectsByQuery } from "./project-search.js"
 
 type ReadyControllerArgs = {
   readonly dashboard: DashboardData
@@ -254,77 +250,12 @@ const bindTerminalActions = (
   }
 })
 
-const bindTaskActions = (
-  actionContext: ReturnType<typeof createActionContext>
-) => ({
-  onLoadProjectTaskLogs: (pid: number) => {
-    loadSelectedProjectTaskLogs(actionContext, pid)
-  },
-  onRefreshProjectTasks: () => {
-    loadSelectedProjectTasks(actionContext)
-  },
-  onStopProjectTask: (pid: number) => {
-    stopSelectedProjectTask(actionContext, pid)
-  }
-})
-
-const resolveSearchSelectedProjectId = (
-  projects: DashboardData["projects"],
-  selectedProjectId: string | null
-): string | null => {
-  if (selectedProjectId !== null && projects.some((project) => project.id === selectedProjectId)) {
-    return selectedProjectId
-  }
-  return projects[0]?.id ?? null
-}
-
-const bindProjectSearchActions = (
-  dashboard: DashboardData,
-  state: ReturnType<typeof useReadyState>
-) => ({
-  onProjectSearchQueryChange: (query: string) => {
-    const projects = filterProjectSummariesByQuery(dashboard.projects, query)
-    state.setProjectSearchQuery(query)
-    state.setSelectedProjectId((selectedProjectId) => resolveSearchSelectedProjectId(projects, selectedProjectId))
-  }
-})
-
 export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDashboard }: ReadyControllerArgs) => {
   const state = useReadyState()
   const currentMenu = resolveCurrentMenu(state.selectedMenuIndex)
   const navigationDashboard = filterDashboardProjectsByQuery(dashboard, state.projectSearchQuery)
   const selectedProjectSummary = dashboard.projects.find((project) => project.id === state.selectedProjectId)
-  const actionContext = createActionContext({
-    addTerminalSession: state.addTerminalSession,
-    databaseConnectionInput: state.databaseConnectionInput,
-    databaseLabelInput: state.databaseLabelInput,
-    githubStatus: state.githubStatus,
-    portForwardInput: state.portForwardInput,
-    refreshDashboard,
-    selectedProjectId: state.selectedProjectId,
-    selectedProjectName: selectedProjectSummary?.displayName ?? null,
-    setActionPrompt: state.setActionPrompt,
-    setActiveScreen: state.setActiveScreen,
-    setAuthSnapshot: state.setAuthSnapshot,
-    setBusyLabel: state.setBusyLabel,
-    setDatabaseConnectionInput: state.setDatabaseConnectionInput,
-    setDatabaseForwards: state.setDatabaseForwards,
-    setDatabaseLabelInput: state.setDatabaseLabelInput,
-    setDatabaseProfiles: state.setDatabaseProfiles,
-    setDatabaseSession: state.setDatabaseSession,
-    setGithubStatus: state.setGithubStatus,
-    setMessage: state.setMessage,
-    setOutput: state.setOutput,
-    setPortForwardInput: state.setPortForwardInput,
-    setPortForwards: state.setPortForwards,
-    setProjectAuthSnapshot: state.setProjectAuthSnapshot,
-    setProjectBrowser: state.setProjectBrowser,
-    setProjectTaskLogs: state.setProjectTaskLogs,
-    setProjectTasks: state.setProjectTasks,
-    setSelectedMenuIndex: state.setSelectedMenuIndex,
-    setSelectedProject: state.setSelectedProject,
-    setSelectedProjectId: state.setSelectedProjectId
-  })
+  const actionContext = createReadyActionContext({ refreshDashboard, selectedProjectSummary, state })
 
   useReadySideEffects({ actionContext, currentMenu, dashboard, dashboardRefreshTick, navigationDashboard, state })
   return {

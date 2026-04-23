@@ -1,9 +1,10 @@
 import type { JSX } from "react"
 
 import { canOpenProjectBrowser } from "./app-ready-browser-openable.js"
+import { ContentScreen } from "./app-ready-content-screen.js"
 import type { ReadyLayoutProps } from "./app-ready-layout.js"
 import { MainMenuScreen } from "./app-ready-menu-screen.js"
-import { ScreenFrame, screenPadding } from "./app-ready-screen-frame.js"
+import { ScreenFrame } from "./app-ready-screen-frame.js"
 import { TerminalScreen } from "./app-ready-terminal-screen.js"
 import { Box, Text } from "./elements.js"
 import { BrowserPanel } from "./panel-browser.js"
@@ -14,7 +15,7 @@ import { ProjectDetailsPanel } from "./panel-project-details.js"
 import { TaskPanel } from "./panel-tasks.js"
 import { OutputPanel, ProjectListPanel } from "./panels.js"
 
-type MainPanelsProps = Omit<ReadyLayoutProps, "busyLabel" | "message">
+export type MainPanelsProps = Omit<ReadyLayoutProps, "busyLabel" | "message">
 
 const actionLabels: Record<MainPanelsProps["currentMenu"], string> = {
   Auth: "Run",
@@ -261,45 +262,6 @@ const ProjectPickerScreen = (props: MainPanelsProps): JSX.Element => (
   </ScreenFrame>
 )
 
-const ContentScreen = (props: MainPanelsProps): JSX.Element => (
-  <ScreenFrame
-    hint="Esc back, R refresh"
-    onBack={props.onBackScreen}
-    title={screenTitle(props)}
-  >
-    <Box
-      flexDirection="column"
-      flexGrow={1}
-      minHeight={0}
-      overflowY="auto"
-      padding={screenPadding(props.viewportLayout.compact)}
-    >
-      <ContentPanel
-        actionPrompt={props.actionPrompt}
-        authSnapshot={props.authSnapshot}
-        compact={props.viewportLayout.compact}
-        controllerCwd={props.controllerCwd}
-        createView={props.createView}
-        currentMenu={props.currentMenu}
-        githubStatus={props.githubStatus}
-        onActionPromptCancel={props.onActionPromptCancel}
-        onActionPromptChange={props.onActionPromptChange}
-        onActionPromptSubmit={props.onActionPromptSubmit}
-        onCreateBufferChange={props.onCreateBufferChange}
-        onCreateCancel={props.onCreateCancel}
-        onCreateSubmit={props.onCreateSubmit}
-        onRunAuthAction={props.onRunAuthAction}
-        onRunProjectAuthAction={props.onRunProjectAuthAction}
-        project={props.project}
-        projectAuthSnapshot={props.projectAuthSnapshot}
-        projectNavigationArmed={true}
-        projectsRoot={props.projectsRoot}
-        selectedProjectSummary={props.selectedProjectSummary}
-      />
-    </Box>
-  </ScreenFrame>
-)
-
 const OutputScreen = (props: MainPanelsProps): JSX.Element => (
   <ScreenFrame
     hint="Esc back, R reload"
@@ -323,5 +285,5 @@ export const MainPanels = (props: MainPanelsProps): JSX.Element => {
   if (props.activeScreen.tag === "Output") {
     return <OutputScreen {...props} />
   }
-  return <ContentScreen {...props} />
+  return <ContentScreen props={props} title={screenTitle(props)} />
 }

@@ -7,17 +7,10 @@ import { requestJson, requestText, requestTextStream, resolveApiBaseUrl } from "
 import {
   AuthSnapshotResponseSchema,
   AuthTerminalSessionResponseSchema,
-  ContainerTaskSnapshotResponseSchema,
   GithubStatusResponseSchema,
   HealthResponseSchema,
-  OutputResponseSchema,
   ProjectAuthSnapshotResponseSchema,
   ProjectBrowserResponseSchema,
-  ProjectDatabaseForwardResponseSchema,
-  ProjectDatabaseForwardsResponseSchema,
-  ProjectDatabaseProfileResponseSchema,
-  ProjectDatabaseProfilesResponseSchema,
-  ProjectDatabaseSessionResponseSchema,
   ProjectEventsPollResponseSchema,
   ProjectPortForwardResponseSchema,
   ProjectPortForwardsResponseSchema,
@@ -29,36 +22,28 @@ import type {
   DashboardData,
   ProjectAuthFlow,
   ProjectBrowserSession,
-  ProjectDatabaseForward,
-  ProjectDatabaseSession,
   ProjectPortForward,
   ProjectSummary
 } from "./api-schema.js"
 
 export { startCreateProject } from "./api-create-project.js"
+export {
+  deleteProjectDatabaseForward,
+  deleteProjectDatabaseProfile,
+  exposeProjectDatabaseProfile,
+  loadProjectDatabaseForwards,
+  loadProjectDatabaseProfiles,
+  loadProjectDatabaseSession,
+  openProjectDatabaseEditor,
+  projectDatabaseEditorUrl,
+  projectDatabaseExternalUrl,
+  restartProjectDatabaseEditor,
+  saveProjectDatabaseProfile
+} from "./api-database.js"
 export { createProject, loadProjectDetails, loadProjectLogs, loadProjectPs, upProject } from "./api-project-core.js"
+export { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api-tasks.js"
 
-export type {
-  ApiEvent,
-  AuthMenuFlow,
-  AuthSnapshot,
-  ContainerTask,
-  ContainerTaskSnapshot,
-  CreateProjectAcceptedResponse,
-  CreateProjectDraft,
-  DashboardData,
-  GithubAuthStatus,
-  ProjectAuthFlow,
-  ProjectAuthSnapshot,
-  ProjectBrowserSession,
-  ProjectDatabaseForward,
-  ProjectDatabaseProfile,
-  ProjectDatabaseSession,
-  ProjectDetails,
-  ProjectPortForward,
-  ProjectSummary,
-  TerminalSession
-} from "./api-schema.js"
+export type * from "./api-types.js"
 
 export const projectPortForwardProxyUrl = (forward: ProjectPortForward): string =>
   `${resolveApiBaseUrl()}${forward.proxyPath}`
@@ -66,11 +51,6 @@ export const projectPortForwardProxyUrl = (forward: ProjectPortForward): string 
 export const projectBrowserNoVncUrl = (browser: ProjectBrowserSession): string => browser.noVncPath
 
 export const projectBrowserCdpUrl = (browser: ProjectBrowserSession): string => browser.cdpPath
-
-export const projectDatabaseEditorUrl = (session: ProjectDatabaseSession): string => session.editorPath
-
-export const projectDatabaseExternalUrl = (forward: ProjectDatabaseForward): string =>
-  `${forward.publicHost}:${forward.hostPort}`
 
 const dashboardRuntimeByProject = (
   projects: ReadonlyArray<ProjectSummary>
@@ -125,126 +105,6 @@ export const loadProjectPortForwards = (projectId: string) =>
 export const loadProjectBrowser = (projectId: string) =>
   requestJson("GET", `/projects/${encodeURIComponent(projectId)}/browser`, ProjectBrowserResponseSchema).pipe(
     Effect.map((response) => response.browser)
-  )
-
-export const loadProjectTasks = (projectId: string) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/tasks`,
-    ContainerTaskSnapshotResponseSchema
-  ).pipe(
-    Effect.map((response) => response.snapshot)
-  )
-
-export const stopProjectTask = (
-  projectId: string,
-  pid: number
-) =>
-  requestText(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/tasks/${pid}/stop`
-  ).pipe(Effect.asVoid)
-
-export const loadProjectTaskLogs = (
-  projectId: string,
-  pid: number,
-  lines = 200
-) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/tasks/${pid}/logs?lines=${lines}`,
-    OutputResponseSchema
-  ).pipe(
-    Effect.map((response) => response.output)
-  )
-
-export const loadProjectDatabaseProfiles = (projectId: string) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/databases/profiles`,
-    ProjectDatabaseProfilesResponseSchema
-  ).pipe(
-    Effect.map((response) => response.profiles)
-  )
-
-export const loadProjectDatabaseForwards = (projectId: string) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/databases/forwards`,
-    ProjectDatabaseForwardsResponseSchema
-  ).pipe(
-    Effect.map((response) => response.forwards)
-  )
-
-export const saveProjectDatabaseProfile = (
-  projectId: string,
-  connectionString: string,
-  label: string | null
-) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/databases/profiles`,
-    ProjectDatabaseProfileResponseSchema,
-    { connectionString, label }
-  ).pipe(
-    Effect.map((response) => response.profile)
-  )
-
-export const deleteProjectDatabaseProfile = (
-  projectId: string,
-  profileId: string
-) =>
-  requestText(
-    "DELETE",
-    `/projects/${encodeURIComponent(projectId)}/databases/profiles/${encodeURIComponent(profileId)}`
-  ).pipe(Effect.asVoid)
-
-export const exposeProjectDatabaseProfile = (
-  projectId: string,
-  profileId: string
-) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/databases/profiles/${encodeURIComponent(profileId)}/expose`,
-    ProjectDatabaseForwardResponseSchema
-  ).pipe(
-    Effect.map((response) => response.forward)
-  )
-
-export const deleteProjectDatabaseForward = (
-  projectId: string,
-  profileId: string
-) =>
-  requestText(
-    "DELETE",
-    `/projects/${encodeURIComponent(projectId)}/databases/profiles/${encodeURIComponent(profileId)}/expose`
-  ).pipe(Effect.asVoid)
-
-export const loadProjectDatabaseSession = (projectId: string) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/databases/session`,
-    ProjectDatabaseSessionResponseSchema
-  ).pipe(
-    Effect.map((response) => response.session)
-  )
-
-export const openProjectDatabaseEditor = (projectId: string) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/databases/open`,
-    ProjectDatabaseSessionResponseSchema
-  ).pipe(
-    Effect.map((response) => response.session)
-  )
-
-export const restartProjectDatabaseEditor = (projectId: string) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/databases/restart`,
-    ProjectDatabaseSessionResponseSchema
-  ).pipe(
-    Effect.map((response) => response.session)
   )
 
 export const createProjectPortForward = (

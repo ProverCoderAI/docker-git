@@ -48,74 +48,126 @@ const readStoredActiveSessionId = (value: JsonValue | undefined): string | null 
 const readJsonArray = (value: JsonValue | undefined): ReadonlyArray<JsonValue> | null =>
   Array.isArray(value) ? value : null
 
+const isStoredTerminalStatus = (
+  value: string | null
+): value is ActiveTerminalSession["session"]["status"] =>
+  value === "ready" || value === "attached" || value === "exited" || value === "failed"
+
+type StoredTerminalSessionFields = {
+  readonly createdAt: string | null
+  readonly id: string | null
+  readonly projectId: string | null
+  readonly sshCommand: string | null
+  readonly status: string | null
+}
+
+const readStoredTerminalSessionFields = (value: JsonObject): StoredTerminalSessionFields => ({
+  createdAt: readString(value["createdAt"]),
+  id: readString(value["id"]),
+  projectId: readString(value["projectId"]),
+  sshCommand: readString(value["sshCommand"]),
+  status: readString(value["status"])
+})
+
+const hasStoredTerminalSessionFields = (
+  fields: StoredTerminalSessionFields
+): fields is StoredTerminalSessionFields & {
+  readonly createdAt: string
+  readonly id: string
+  readonly projectId: string
+  readonly sshCommand: string
+  readonly status: ActiveTerminalSession["session"]["status"]
+} =>
+  [fields.createdAt, fields.id, fields.projectId, fields.sshCommand].every((field) => field !== null) &&
+  isStoredTerminalStatus(fields.status)
+
 const decodeStoredTerminalSessionCore = (
   value: JsonValue | undefined
 ): ActiveTerminalSession["session"] | null => {
   if (!isRecord(value)) {
     return null
   }
-  const id = readString(value["id"])
-  const projectId = readString(value["projectId"])
-  const sshCommand = readString(value["sshCommand"])
-  const status = readString(value["status"])
-  const createdAt = readString(value["createdAt"])
-  if (
-    id === null ||
-    projectId === null ||
-    sshCommand === null ||
-    createdAt === null ||
-    (status !== "ready" && status !== "attached" && status !== "exited" && status !== "failed")
-  ) {
+  const fields = readStoredTerminalSessionFields(value)
+  if (!hasStoredTerminalSessionFields(fields)) {
     return null
   }
   return {
     closedAt: readOptionalString(value["closedAt"]),
-    createdAt,
+    createdAt: fields.createdAt,
     exitCode: typeof value["exitCode"] === "number" ? value["exitCode"] : undefined,
-    id,
-    projectId,
+    id: fields.id,
+    projectId: fields.projectId,
     signal: typeof value["signal"] === "number" ? value["signal"] : undefined,
-    sshCommand,
+    sshCommand: fields.sshCommand,
     startedAt: readOptionalString(value["startedAt"]),
-    status
+    status: fields.status
   }
 }
+
+type StoredActiveTerminalSessionFields = {
+  readonly closePath: string | null
+  readonly exitMessage: string | null
+  readonly header: string | null
+  readonly pendingDeleteMessage: string | null
+  readonly readyMessage: string | null
+  readonly session: ActiveTerminalSession["session"] | null
+  readonly subtitle: string | null
+  readonly websocketPath: string | null
+}
+
+const readStoredActiveTerminalSessionFields = (value: JsonObject): StoredActiveTerminalSessionFields => ({
+  closePath: readString(value["closePath"]),
+  exitMessage: readString(value["exitMessage"]),
+  header: readString(value["header"]),
+  pendingDeleteMessage: readString(value["pendingDeleteMessage"]),
+  readyMessage: readString(value["readyMessage"]),
+  session: decodeStoredTerminalSessionCore(value["session"]),
+  subtitle: readString(value["subtitle"]),
+  websocketPath: readString(value["websocketPath"])
+})
+
+const hasStoredActiveTerminalSessionFields = (
+  fields: StoredActiveTerminalSessionFields
+): fields is StoredActiveTerminalSessionFields & {
+  readonly closePath: string
+  readonly exitMessage: string
+  readonly header: string
+  readonly pendingDeleteMessage: string
+  readonly readyMessage: string
+  readonly session: ActiveTerminalSession["session"]
+  readonly subtitle: string
+  readonly websocketPath: string
+} =>
+  [
+    fields.closePath,
+    fields.exitMessage,
+    fields.header,
+    fields.pendingDeleteMessage,
+    fields.readyMessage,
+    fields.session,
+    fields.subtitle,
+    fields.websocketPath
+  ].every((field) => field !== null)
 
 const decodeStoredActiveTerminalSession = (value: JsonValue | undefined): ActiveTerminalSession | null => {
   if (!isRecord(value)) {
     return null
   }
-  const closePath = readString(value["closePath"])
-  const exitMessage = readString(value["exitMessage"])
-  const header = readString(value["header"])
-  const pendingDeleteMessage = readString(value["pendingDeleteMessage"])
-  const readyMessage = readString(value["readyMessage"])
-  const session = decodeStoredTerminalSessionCore(value["session"])
-  const subtitle = readString(value["subtitle"])
-  const websocketPath = readString(value["websocketPath"])
-  if (
-    closePath === null ||
-    exitMessage === null ||
-    header === null ||
-    pendingDeleteMessage === null ||
-    readyMessage === null ||
-    session === null ||
-    subtitle === null ||
-    websocketPath === null
-  ) {
+  const fields = readStoredActiveTerminalSessionFields(value)
+  if (!hasStoredActiveTerminalSessionFields(fields)) {
     return null
   }
   return {
     browserProjectId: readOptionalString(value["browserProjectId"]),
     browserProjectName: readOptionalString(value["browserProjectName"]),
-    closePath,
-    exitMessage,
-    header,
-    pendingDeleteMessage,
-    readyMessage,
-    session,
-    subtitle,
-    websocketPath
+    closePath: fields.closePath,
+    exitMessage: fields.exitMessage,
+    header: fields.header,
+    pendingDeleteMessage: fields.pendingDeleteMessage,
+    readyMessage: fields.readyMessage,
+    session: fields.session,
+    subtitle: fields.subtitle,
+    websocketPath: fields.websocketPath
   }
 }
 
@@ -145,15 +197,20 @@ const readStoredTerminalWorkspace = (): TerminalWorkspaceState => {
     try: () => globalThis.sessionStorage.getItem(terminalWorkspaceStorageKey),
     catch: () => null
   }).pipe(
-    Effect.map((raw) => {
-      if (raw === null) {
-        return emptyTerminalWorkspaceState
-      }
-      const parsed = Either.getOrNull(ParseResult.decodeUnknownEither(JsonValueFromStringSchema)(raw))
-      const decoded = decodeStoredTerminalWorkspace(parsed ?? undefined)
-      return decoded ?? emptyTerminalWorkspaceState
-    }),
-    Effect.catchAll(() => Effect.succeed(emptyTerminalWorkspaceState))
+    Effect.either,
+    Effect.map((result) =>
+      Either.match(result, {
+        onLeft: () => emptyTerminalWorkspaceState,
+        onRight: (raw) => {
+          if (raw === null) {
+            return emptyTerminalWorkspaceState
+          }
+          const parsed = Either.getOrNull(ParseResult.decodeUnknownEither(JsonValueFromStringSchema)(raw))
+          const decoded = decodeStoredTerminalWorkspace(parsed ?? undefined)
+          return decoded ?? emptyTerminalWorkspaceState
+        }
+      })
+    )
   )
   return Effect.runSync(read)
 }
@@ -186,7 +243,10 @@ const writeStoredTerminalWorkspace = (state: TerminalWorkspaceState): void => {
       globalThis.sessionStorage.setItem(terminalWorkspaceStorageKey, JSON.stringify(payload))
     },
     catch: () => null
-  }).pipe(Effect.catchAll(() => Effect.void))
+  }).pipe(
+    Effect.either,
+    Effect.asVoid
+  )
   Effect.runSync(write)
 }
 
