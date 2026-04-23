@@ -6,13 +6,13 @@ import {
   cleanupTerminalResources,
   connectTerminalSocket,
   createLifecycleState,
-  createMessageHandlers,
   createTerminalRuntime,
   observeTerminalResize,
   sendTerminalResize
 } from "./terminal-panel-runtime-core.js"
 import type {
   TerminalLifecycleArgs,
+  TerminalMessageHandlers,
   TerminalSocketConnectArgs,
   TerminalSocketRef
 } from "./terminal-panel-runtime-types.js"
@@ -55,7 +55,7 @@ const createConnectSocket = (
 }
 
 const mountTerminalSession = (
-  { connectionRef, hostRef, notifyMessage, session, setStatus }: TerminalLifecycleArgs
+  { connectionRef, hostRef, notifyMessage, onAttachFailure, session, setStatus }: TerminalLifecycleArgs
 ): (() => void) | undefined => {
   const host = hostRef.current
   if (host === null) {
@@ -73,11 +73,12 @@ const mountTerminalSession = (
   const resizeObserver = observeTerminalResize(host, sendResize)
   const inputDisposable = attachTerminalInput(terminal, socketRef, pasteGuard)
   const imagePasteDisposable = attachTerminalImagePaste({ host, notifyMessage, pasteGuard, socketRef, terminal })
-  const handlers = createMessageHandlers({ connectionRef, lifecycle, notifyMessage, session, setStatus, terminal })
+  const handlers: TerminalMessageHandlers = { connectionRef, lifecycle, notifyMessage, session, setStatus, terminal }
   const connectSocket = createConnectSocket({
     handlers,
     lifecycle,
     notifyMessage,
+    onAttachFailure,
     sendResize,
     session,
     setStatus,
@@ -97,17 +98,18 @@ const mountTerminalSession = (
 }
 
 export const useTerminalSessionLifecycle = (
-  { connectionRef, hostRef, notifyMessage, session, setStatus }: TerminalLifecycleArgs
+  { connectionRef, hostRef, notifyMessage, onAttachFailure, session, setStatus }: TerminalLifecycleArgs
 ): void => {
   useEffect(() => {
     return mountTerminalSession({
       connectionRef,
       hostRef,
       notifyMessage,
+      onAttachFailure,
       session,
       setStatus
     })
-  }, [connectionRef, hostRef, notifyMessage, session, setStatus])
+  }, [connectionRef, hostRef, notifyMessage, onAttachFailure, session, setStatus])
 }
 
 export { type TerminalConnectionState, type TerminalStatus } from "./terminal-panel-runtime-types.js"

@@ -34,7 +34,6 @@ type TerminalPaneProps =
     | "projectBrowser"
   >
   & {
-    readonly active: boolean
     readonly singleSession: boolean
     readonly terminalSession: ActiveTerminalSession
   }
@@ -50,19 +49,21 @@ const resolveActiveTerminalSessionId = (
   sessions: ReadonlyArray<ActiveTerminalSession>,
   activeTerminalSessionId: string | null
 ): string | null => {
-  if (sessions.some((session) => terminalSessionId(session) === activeTerminalSessionId)) {
+  if (
+    activeTerminalSessionId !== null &&
+    sessions.some((session) => terminalSessionId(session) === activeTerminalSessionId)
+  ) {
     return activeTerminalSessionId
   }
-  const first = sessions[0]
-  return first === undefined ? null : terminalSessionId(first)
+  return null
 }
 
-const terminalPaneStyle = (active: boolean): CSSProperties => ({
-  display: active ? "flex" : "none",
+const activeTerminalPaneStyle: CSSProperties = {
+  display: "flex",
   flex: 1,
   minHeight: 0,
   overflow: "hidden"
-})
+}
 
 const terminalTabLabel = (session: ActiveTerminalSession): string => session.browserProjectName ?? session.header
 
@@ -140,7 +141,6 @@ const TerminalTabs = (
 
 const TerminalPane = (
   {
-    active,
     onOpenProjectBrowserById,
     onOpenProjectTerminalById,
     onSetActiveScreen,
@@ -155,8 +155,14 @@ const TerminalPane = (
   const browserProjectId = terminalSession.browserProjectId
   const canOpenBrowser = canOpenProjectBrowser(projectBrowser, browserProjectId)
   return (
-    <div style={terminalPaneStyle(active)}>
+    <div style={activeTerminalPaneStyle}>
       <TerminalPanel
+        onAttachFailure={() => {
+          onTerminalClose(sessionId)
+          if (singleSession) {
+            onSetActiveScreen(terminalReturnScreen(terminalSession))
+          }
+        }}
         onClose={() => {
           requestTerminalSessionClose(terminalSession.closePath)
           onTerminalClose(sessionId)
@@ -186,6 +192,7 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
     return null
   }
   const activeSessionId = resolveActiveTerminalSessionId(props.terminalSessions, props.activeTerminalSessionId)
+  const activeSession = props.terminalSessions.find((session) => terminalSessionId(session) === activeSessionId)
   return (
     <Box flexDirection="column" flexGrow={1} gap={1} minHeight={0} overflow="hidden">
       <TerminalTabs
@@ -195,12 +202,11 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
         terminalSessions={props.terminalSessions}
       />
       <Box flexDirection="column" flexGrow={1} minHeight={0} overflow="hidden">
-        {props.terminalSessions.map((terminalSession) => {
-          const sessionId = terminalSessionId(terminalSession)
-          return (
+        {activeSession === undefined
+          ? null
+          : (
             <TerminalPane
-              active={sessionId === activeSessionId}
-              key={sessionId}
+              key={terminalSessionId(activeSession)}
               onOpenProjectBrowserById={props.onOpenProjectBrowserById}
               onOpenProjectTerminalById={props.onOpenProjectTerminalById}
               onSetActiveScreen={props.onSetActiveScreen}
@@ -208,10 +214,9 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
               onTerminalMessage={props.onTerminalMessage}
               projectBrowser={props.projectBrowser}
               singleSession={props.terminalSessions.length === 1}
-              terminalSession={terminalSession}
+              terminalSession={activeSession}
             />
-          )
-        })}
+          )}
       </Box>
     </Box>
   )

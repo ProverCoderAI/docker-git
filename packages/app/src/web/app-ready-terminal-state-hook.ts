@@ -8,6 +8,7 @@ import type { JsonObject, JsonValue } from "../shared/json-schema.js"
 import {
   activeTerminalSession,
   addTerminalSessionState,
+  deactivateTerminalWorkspaceState,
   emptyTerminalWorkspaceState,
   removeTerminalSessionState,
   selectTerminalSessionState,
@@ -207,7 +208,7 @@ const readStoredTerminalWorkspace = (): TerminalWorkspaceState => {
           }
           const parsed = Either.getOrNull(ParseResult.decodeUnknownEither(JsonValueFromStringSchema)(raw))
           const decoded = decodeStoredTerminalWorkspace(parsed ?? undefined)
-          return decoded ?? emptyTerminalWorkspaceState
+          return decoded === null ? emptyTerminalWorkspaceState : deactivateTerminalWorkspaceState(decoded)
         }
       })
     )
@@ -256,7 +257,7 @@ export const useTerminalWorkspaceState = (): TerminalWorkspaceReadyState => {
     setTerminalWorkspace((state) => addTerminalSessionState(state, session))
   }, [])
   const closeTerminalSession = useCallback((sessionId: string) => {
-    setTerminalWorkspace((state) => removeTerminalSessionState(state, sessionId))
+    setTerminalWorkspace((state) => removeTerminalSessionState(state, sessionId, { activateNeighbor: false }))
   }, [])
   const selectTerminalSession = useCallback((sessionId: string) => {
     setTerminalWorkspace((state) => selectTerminalSessionState(state, sessionId))

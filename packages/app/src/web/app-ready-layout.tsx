@@ -19,6 +19,7 @@ import { MainPanels } from "./app-ready-main-panels.js"
 import { Box, Text } from "./elements.js"
 import type { BrowserMenuTag } from "./menu.js"
 import type { BrowserScreen } from "./screen.js"
+import { visibleTerminalWorkspaceState } from "./terminal-state.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 import type { ViewportLayout } from "./viewport-layout.js"
 
@@ -132,6 +133,13 @@ const HeaderMessage = ({ message }: Pick<ReadyLayoutProps, "message">): JSX.Elem
     ? null
     : <Text fg="#f6d27b" marginTop="4px" wrap="truncate">message: {message}</Text>
 
+const hasVisibleTerminalWorkspace = (
+  { activeTerminalSessionId, terminalSessions }: Pick<
+    ReadyLayoutProps,
+    "activeTerminalSessionId" | "terminalSessions"
+  >
+): boolean => visibleTerminalWorkspaceState({ activeTerminalSessionId, terminalSessions }).terminalSessions.length > 0
+
 const StatusHeader = (
   { busyLabel, dashboard, message, viewportLayout }: Pick<
     ReadyLayoutProps,
@@ -155,8 +163,13 @@ const StatusHeader = (
 )
 
 export const ReadyLayout = ({ busyLabel, message, ...props }: ReadyLayoutProps): JSX.Element => (
-  props.terminalSessions.length === 0
+  hasVisibleTerminalWorkspace(props)
     ? (
+      <Box flexDirection="column" height="100%" minHeight={0} overflow="hidden" padding={1} width="100%">
+        <MainPanels {...props} />
+      </Box>
+    )
+    : (
       <Box flexDirection="column" height="100%" minHeight={0} overflow="hidden" padding={1} width="100%">
         <StatusHeader
           busyLabel={busyLabel}
@@ -164,11 +177,6 @@ export const ReadyLayout = ({ busyLabel, message, ...props }: ReadyLayoutProps):
           message={message}
           viewportLayout={props.viewportLayout}
         />
-        <MainPanels {...props} />
-      </Box>
-    )
-    : (
-      <Box flexDirection="column" height="100%" minHeight={0} overflow="hidden" padding={1} width="100%">
         <MainPanels {...props} />
       </Box>
     )

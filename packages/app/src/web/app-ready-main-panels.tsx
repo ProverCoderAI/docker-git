@@ -14,6 +14,7 @@ import { PortForwardPanel } from "./panel-port-forwards.js"
 import { ProjectDetailsPanel } from "./panel-project-details.js"
 import { TaskPanel } from "./panel-tasks.js"
 import { OutputPanel, ProjectListPanel } from "./panels.js"
+import { visibleTerminalWorkspaceState } from "./terminal-state.js"
 
 export type MainPanelsProps = Omit<ReadyLayoutProps, "busyLabel" | "message">
 
@@ -273,8 +274,18 @@ const OutputScreen = (props: MainPanelsProps): JSX.Element => (
 )
 
 export const MainPanels = (props: MainPanelsProps): JSX.Element => {
-  if (props.terminalSessions.length > 0) {
-    return <TerminalScreen {...props} />
+  const visibleTerminalWorkspace = visibleTerminalWorkspaceState({
+    activeTerminalSessionId: props.activeTerminalSessionId,
+    terminalSessions: props.terminalSessions
+  })
+  if (visibleTerminalWorkspace.terminalSessions.length > 0) {
+    return (
+      <TerminalScreen
+        {...props}
+        activeTerminalSessionId={visibleTerminalWorkspace.activeTerminalSessionId}
+        terminalSessions={visibleTerminalWorkspace.terminalSessions}
+      />
+    )
   }
   if (props.activeScreen.tag === "Menu") {
     return <MainMenuRoute {...props} />

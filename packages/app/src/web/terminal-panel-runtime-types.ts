@@ -52,6 +52,7 @@ export type TerminalLifecycleArgs = {
   readonly connectionRef: { current: TerminalConnectionState }
   readonly hostRef: { readonly current: HTMLDivElement | null }
   readonly notifyMessage: (message: string) => void
+  readonly onAttachFailure: () => void
   readonly session: ActiveTerminalSession
   readonly setStatus: (status: TerminalStatus) => void
 }
@@ -69,6 +70,7 @@ export type TerminalSocketConnectArgs = {
   readonly handlers: TerminalMessageHandlers
   readonly lifecycle: TerminalLifecycleState
   readonly notifyMessage: (message: string) => void
+  readonly onAttachFailure: () => void
   readonly reconnect: () => void
   readonly sendResize: () => void
   readonly session: ActiveTerminalSession

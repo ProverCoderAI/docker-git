@@ -231,12 +231,6 @@ export const cleanupTerminalResources = (
   }
 }
 
-export const createMessageHandlers = (
-  args:
-    & Omit<TerminalMessageHandlers, "terminal">
-    & { readonly terminal: Terminal }
-): TerminalMessageHandlers => args
-
 const failBeforeAttach = (
   args: TerminalSocketConnectArgs,
   terminalLine: string,
@@ -247,7 +241,11 @@ const failBeforeAttach = (
   args.terminal.writeln(`\r\n${terminalLine}`)
   args.setStatus("error")
   args.notifyMessage(uiMessage)
+  args.handlers.connectionRef.current.closing = true
   requestSessionClose(args.session.closePath)
+  if (!args.lifecycle.attachedOnce) {
+    args.onAttachFailure()
+  }
 }
 
 const scheduleReconnect = (args: TerminalSocketConnectArgs): void => {

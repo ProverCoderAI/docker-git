@@ -5,6 +5,10 @@ export type TerminalWorkspaceState = {
   readonly terminalSessions: ReadonlyArray<ActiveTerminalSession>
 }
 
+type RemoveTerminalSessionOptions = {
+  readonly activateNeighbor?: boolean
+}
+
 export const emptyTerminalWorkspaceState: TerminalWorkspaceState = {
   activeTerminalSessionId: null,
   terminalSessions: []
@@ -12,17 +16,48 @@ export const emptyTerminalWorkspaceState: TerminalWorkspaceState = {
 
 export const terminalSessionId = (session: ActiveTerminalSession): string => session.session.id
 
+const isProjectTerminalSession = (session: ActiveTerminalSession, projectId: string): boolean =>
+  session.browserProjectId === projectId
+
+export const terminalSessionsForProject = (
+  sessions: ReadonlyArray<ActiveTerminalSession>,
+  projectId: string
+): ReadonlyArray<ActiveTerminalSession> => sessions.filter((session) => isProjectTerminalSession(session, projectId))
+
+const latestProjectTerminalSession = (
+  sessions: ReadonlyArray<ActiveTerminalSession>,
+  projectId: string
+): ActiveTerminalSession | null => {
+  let latest: ActiveTerminalSession | null = null
+  for (const session of sessions) {
+    if (isProjectTerminalSession(session, projectId)) {
+      latest = session
+    }
+  }
+  return latest
+}
+
+export const reusableProjectTerminalSessionId = (
+  sessions: ReadonlyArray<ActiveTerminalSession>,
+  activeTerminalSessionId: string | null,
+  projectId: string
+): string | null => {
+  const active = sessions.find((session) =>
+    terminalSessionId(session) === activeTerminalSessionId && isProjectTerminalSession(session, projectId)
+  )
+  const reusable = active ?? latestProjectTerminalSession(sessions, projectId)
+  return reusable === null ? null : terminalSessionId(reusable)
+}
+
 const hasSessionId = (sessions: ReadonlyArray<ActiveTerminalSession>, sessionId: string | null): boolean =>
   sessionId !== null && sessions.some((session) => terminalSessionId(session) === sessionId)
 
 const normalizeTerminalWorkspaceState = (state: TerminalWorkspaceState): TerminalWorkspaceState =>
-  hasSessionId(state.terminalSessions, state.activeTerminalSessionId)
+  state.activeTerminalSessionId === null || hasSessionId(state.terminalSessions, state.activeTerminalSessionId)
     ? state
     : {
       ...state,
-      activeTerminalSessionId: state.terminalSessions[0] === undefined
-        ? null
-        : terminalSessionId(state.terminalSessions[0])
+      activeTerminalSessionId: null
     }
 
 export const activeTerminalSession = (state: TerminalWorkspaceState): ActiveTerminalSession | null => {
@@ -30,6 +65,39 @@ export const activeTerminalSession = (state: TerminalWorkspaceState): ActiveTerm
   return normalized.terminalSessions.find((session) =>
     terminalSessionId(session) === normalized.activeTerminalSessionId
   ) ?? null
+}
+
+export const activeTerminalSessionForProject = (
+  state: TerminalWorkspaceState,
+  projectId: string
+): ActiveTerminalSession | null => {
+  const active = activeTerminalSession(state)
+  return active !== null && isProjectTerminalSession(active, projectId) ? active : null
+}
+
+export const deactivateTerminalWorkspaceState = (state: TerminalWorkspaceState): TerminalWorkspaceState => ({
+  activeTerminalSessionId: null,
+  terminalSessions: state.terminalSessions
+})
+
+export const visibleTerminalWorkspaceState = (state: TerminalWorkspaceState): TerminalWorkspaceState => {
+  const active = activeTerminalSession(state)
+  if (active === null) {
+    return emptyTerminalWorkspaceState
+  }
+
+  const activeSessionId = terminalSessionId(active)
+  if (active.browserProjectId === undefined) {
+    return {
+      activeTerminalSessionId: activeSessionId,
+      terminalSessions: [active]
+    }
+  }
+
+  return {
+    activeTerminalSessionId: activeSessionId,
+    terminalSessions: terminalSessionsForProject(state.terminalSessions, active.browserProjectId)
+  }
 }
 
 export const addTerminalSessionState = (
@@ -57,7 +125,8 @@ export const selectTerminalSessionState = (
 
 export const removeTerminalSessionState = (
   state: TerminalWorkspaceState,
-  sessionId: string
+  sessionId: string,
+  options: RemoveTerminalSessionOptions = {}
 ): TerminalWorkspaceState => {
   const removedIndex = state.terminalSessions.findIndex((session) => terminalSessionId(session) === sessionId)
   if (removedIndex === -1) {
@@ -70,6 +139,13 @@ export const removeTerminalSessionState = (
       ...state,
       terminalSessions
     })
+  }
+
+  if (options.activateNeighbor === false) {
+    return {
+      activeTerminalSessionId: null,
+      terminalSessions
+    }
   }
 
   const nextActiveSession = terminalSessions[removedIndex] ?? terminalSessions[removedIndex - 1]

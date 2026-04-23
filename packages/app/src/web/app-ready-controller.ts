@@ -152,8 +152,11 @@ const useReadySideEffects = (args: ReadySideEffectsArgs) => {
   useReadyResetEffects(args)
   useSshLink({
     actionContext: args.actionContext,
+    activeTerminalSessionId: args.state.activeTerminalSessionId,
     busyLabel: args.state.busyLabel,
-    dashboard: args.dashboard
+    dashboard: args.dashboard,
+    selectTerminalSession: args.state.selectTerminalSession,
+    terminalSessions: args.state.terminalSessions
   })
   useReadyAutoloadEffects(args)
   useReadyShortcutEffects(args)

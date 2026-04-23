@@ -10,6 +10,7 @@ import {
 import type { ActiveTerminalSession } from "./terminal.js"
 
 type TerminalPanelProps = {
+  readonly onAttachFailure: () => void
   readonly onClose: () => void
   readonly onMessage: (message: string) => void
   readonly onOpenBrowser?: (() => void) | undefined
@@ -147,15 +148,22 @@ const TerminalHeader = (
 )
 
 export const TerminalPanel = (
-  { onClose, onMessage, onOpenBrowser, onOpenTerminal, session }: TerminalPanelProps
+  { onAttachFailure, onClose, onMessage, onOpenBrowser, onOpenTerminal, session }: TerminalPanelProps
 ): JSX.Element => {
   const connectionRef = useRef<TerminalConnectionState>({ closing: false, opened: false })
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [status, setStatus] = useState<TerminalStatus>("connecting")
+  const onAttachFailureRef = useRef(onAttachFailure)
   const onMessageRef = useRef(onMessage)
+  useEffect(() => {
+    onAttachFailureRef.current = onAttachFailure
+  }, [onAttachFailure])
   useEffect(() => {
     onMessageRef.current = onMessage
   }, [onMessage])
+  const notifyAttachFailure = useCallback(() => {
+    onAttachFailureRef.current()
+  }, [])
   const notifyMessage = useCallback((message: string) => {
     onMessageRef.current(message)
   }, [])
@@ -164,6 +172,7 @@ export const TerminalPanel = (
     connectionRef,
     hostRef,
     notifyMessage,
+    onAttachFailure: notifyAttachFailure,
     session,
     setStatus
   })
