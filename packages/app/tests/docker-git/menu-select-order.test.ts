@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest"
 
 import { buildSelectLabels, buildSelectListWindow } from "../../src/docker-git/menu-render-select.js"
+import { filterProjectItemsByQuery } from "../../src/docker-git/menu-select-filter.js"
 import { sortItemsByLaunchTime, sortSelectItemsByLaunchTime } from "../../src/docker-git/menu-select-order.js"
 import type { SelectProjectRuntime } from "../../src/docker-git/menu-types.js"
 import type { ProjectSummary } from "../../src/web/api-schema.js"
 import { sortDashboardProjects } from "../../src/web/api.js"
+import { filterProjectSummariesByQuery } from "../../src/web/project-search.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
 
 const makeRuntime = (
@@ -29,6 +31,7 @@ const makeProjectSummary = (
   displayName: "org/repo",
   repoUrl: "https://github.com/org/repo.git",
   repoRef: "main",
+  containerName: "dg-org-repo",
   status: "stopped",
   statusLabel: "last known: stopped",
   sshSessions: 0,
@@ -131,6 +134,42 @@ describe("menu-select order", () => {
       older.id,
       neverStarted.id
     ])
+  })
+
+  it("filters CLI Select projects by container name", () => {
+    const api = makeProjectItem({
+      projectDir: "/home/dev/.docker-git/api",
+      displayName: "org/api",
+      containerName: "dg-api-main"
+    })
+    const web = makeProjectItem({
+      projectDir: "/home/dev/.docker-git/web",
+      displayName: "org/web",
+      containerName: "dg-web-main"
+    })
+
+    const filtered = filterProjectItemsByQuery([api, web], "web main")
+
+    expect(filtered.map((project) => project.projectDir)).toEqual([web.projectDir])
+  })
+
+  it("filters WEB dashboard projects with the same container-name semantics", () => {
+    const api = makeProjectSummary({
+      id: "/home/dev/.docker-git/api",
+      projectKey: "api",
+      displayName: "org/api",
+      containerName: "dg-api-main"
+    })
+    const web = makeProjectSummary({
+      id: "/home/dev/.docker-git/web",
+      projectKey: "web",
+      displayName: "org/web",
+      containerName: "dg-web-main"
+    })
+
+    const filtered = filterProjectSummariesByQuery([api, web], "dg web")
+
+    expect(filtered.map((project) => project.id)).toEqual([web.id])
   })
 
   it("shows container launch timestamp in select labels", () => {

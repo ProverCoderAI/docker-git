@@ -49,10 +49,14 @@ vi.mock("../../src/docker-git/api-client.js", () => ({
   listProjects: vi.fn(() => Effect.succeed([])),
   pullState: readStatePullMock,
   pushState: vi.fn(() => Effect.succeed("State push completed.")),
+  readContainerTaskLogs: vi.fn(() => Effect.succeed("logs")),
+  readContainerTaskSnapshot: vi.fn(() => Effect.succeed(null)),
   readStatePath: vi.fn(() => Effect.succeed("/controller-state/.docker-git")),
   readStateStatus: vi.fn(() => Effect.succeed("## main")),
+  renderContainerTaskSnapshot: vi.fn(() => "tasks"),
   renderJsonPayload: vi.fn(() => "{}"),
   renderProjectSummaryLine: vi.fn(() => "project"),
+  stopContainerTask: vi.fn(() => Effect.void),
   syncState: vi.fn(() => Effect.succeed("State sync completed."))
 }))
 

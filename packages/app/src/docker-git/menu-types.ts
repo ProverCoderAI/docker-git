@@ -158,7 +158,9 @@ export type ViewState =
   | {
     readonly _tag: "SelectProject"
     readonly purpose: "Connect" | "Down" | "Info" | "Delete" | "Auth"
+    readonly allItems: ReadonlyArray<ProjectItem>
     readonly items: ReadonlyArray<ProjectItem>
+    readonly query: string
     readonly runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
     readonly selected: number
     readonly confirmDelete: boolean

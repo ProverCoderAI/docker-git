@@ -8,6 +8,7 @@ import {
   waitForProjectCreation
 } from "./api-client-events.js"
 import { readProjectOutput, resolveCreateRequestPaths } from "./api-client-helpers.js"
+import { decodeContainerTaskSnapshot } from "./api-container-tasks-codec.js"
 import { request, requestVoid } from "./api-http.js"
 import { asArray, asObject, asString, type JsonValue } from "./api-json.js"
 import { decodeCreateProjectAccepted, decodeProjectDetails, decodeProjectSummary } from "./api-project-codec.js"
@@ -30,6 +31,12 @@ export {
   githubLogout,
   githubStatus
 } from "./api-client-auth.js"
+export {
+  type ApiContainerTask,
+  type ApiContainerTaskKind,
+  type ApiContainerTaskSnapshot,
+  renderContainerTaskSnapshot
+} from "./api-container-tasks-codec.js"
 export { type JsonObject, type JsonRequest, type JsonValue, renderJsonPayload } from "./api-json.js"
 export {
   type ApiProjectDetails,
@@ -193,6 +200,19 @@ export const readProjectPs = (projectId: string) =>
 
 export const readProjectLogs = (projectId: string) =>
   request("GET", projectPath(projectId, "/logs")).pipe(
+    Effect.map((payload) => readProjectOutput(payload))
+  )
+
+export const readContainerTaskSnapshot = (projectId: string, includeDefault: boolean) =>
+  request("GET", projectPath(projectId, `/tasks${includeDefault ? "?includeDefault=true" : ""}`)).pipe(
+    Effect.map((payload) => decodeContainerTaskSnapshot(payload))
+  )
+
+export const stopContainerTask = (projectId: string, pid: number) =>
+  requestVoid("POST", projectPath(projectId, `/tasks/${pid}/stop`))
+
+export const readContainerTaskLogs = (projectId: string, pid: number, lines: number) =>
+  request("GET", projectPath(projectId, `/tasks/${pid}/logs?lines=${lines}`)).pipe(
     Effect.map((payload) => readProjectOutput(payload))
   )
 

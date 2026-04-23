@@ -19,10 +19,14 @@ import {
   listProjects,
   pullState,
   pushState,
+  readContainerTaskLogs,
+  readContainerTaskSnapshot,
   readStatePath,
   readStateStatus,
+  renderContainerTaskSnapshot,
   renderJsonPayload,
   renderProjectSummaryLine,
+  stopContainerTask,
   syncState
 } from "./api-client.js"
 import { runBrowserFrontendCommand } from "./browser-frontend.js"
@@ -197,6 +201,34 @@ const handleStatePushCommand = () =>
 const handleStateSyncCommand = (command: Extract<OperationalCommand, { readonly _tag: "StateSync" }>) =>
   withControllerReady(pipe(syncState(command), Effect.flatMap((output) => logOutput(output))))
 
+const handleSessionsListCommand = (command: Extract<OperationalCommand, { readonly _tag: "SessionsList" }>) =>
+  withControllerReady(
+    pipe(
+      readContainerTaskSnapshot(command.projectDir, command.includeDefault),
+      Effect.flatMap((snapshot) =>
+        snapshot === null
+          ? Effect.log("Invalid container task snapshot returned by API.")
+          : Effect.log(renderContainerTaskSnapshot(snapshot))
+      )
+    )
+  )
+
+const handleSessionsKillCommand = (command: Extract<OperationalCommand, { readonly _tag: "SessionsKill" }>) =>
+  withControllerReady(
+    pipe(
+      stopContainerTask(command.projectDir, command.pid),
+      Effect.zipRight(Effect.log(`Sent SIGTERM to PID ${command.pid}`))
+    )
+  )
+
+const handleSessionsLogsCommand = (command: Extract<OperationalCommand, { readonly _tag: "SessionsLogs" }>) =>
+  withControllerReady(
+    pipe(
+      readContainerTaskLogs(command.projectDir, command.pid, command.lines),
+      Effect.flatMap((output) => logOutput(output))
+    )
+  )
+
 const unsupportedOperationalCommand = (
   command: UnsupportedOperationalCommand
 ): Effect.Effect<void, UnsupportedCommandError> => {
@@ -228,6 +260,9 @@ const dispatchRoutedOperationalCommand = (
     Match.when({ _tag: "StateCommit" }, handleStateCommitCommand),
     Match.when({ _tag: "StatePush" }, handleStatePushCommand),
     Match.when({ _tag: "StateSync" }, handleStateSyncCommand),
+    Match.when({ _tag: "SessionsList" }, handleSessionsListCommand),
+    Match.when({ _tag: "SessionsKill" }, handleSessionsKillCommand),
+    Match.when({ _tag: "SessionsLogs" }, handleSessionsLogsCommand),
     Match.orElse((unsupported) => unsupportedOperationalCommand(unsupported))
   )
 

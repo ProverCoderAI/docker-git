@@ -10,6 +10,12 @@ import { WebSocket, WebSocketServer, type RawData } from "ws"
 import type { AuthTerminalFlow, AuthTerminalSessionRequest, TerminalSession, TerminalSessionStatus } from "../api/contracts.js"
 import { ApiConflictError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
 import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
+import {
+  appendTerminalOutput,
+  emptyTerminalOutputBuffer,
+  renderTerminalOutputBuffer,
+  type TerminalOutputBuffer
+} from "./terminal-output-buffer.js"
 import { attachWebSocketHeartbeat } from "./websocket-heartbeat.js"
 
 type TerminalClientMessage =
@@ -28,13 +34,13 @@ type AuthTerminalRecord = {
   args: ReadonlyArray<string>
   cwd: string
   detachTimeout: ReturnType<typeof setTimeout> | null
+  outputBuffer: TerminalOutputBuffer
   pty: PtyBridge | null
   session: TerminalSession
   socket: WebSocket | null
 }
 
 const attachTimeoutMs = 30_000
-const reconnectGraceMs = 60_000
 const authTerminalProjectId = "__controller__"
 const authTerminalWsPathPattern = /^(?:\/api)?\/auth\/terminal-sessions\/([^/]+)\/ws$/u
 const authRunnerPath = fileURLToPath(new URL("../auth-terminal-runner.js", import.meta.url))
@@ -89,6 +95,18 @@ const sendServerMessage = (socket: WebSocket | null, message: TerminalServerMess
     return
   }
   socket.send(encodeServerMessage(message))
+}
+
+const sendTerminalOutput = (record: AuthTerminalRecord, data: string): void => {
+  record.outputBuffer = appendTerminalOutput(record.outputBuffer, data)
+  sendServerMessage(record.socket, { type: "output", data })
+}
+
+const replayTerminalOutput = (record: AuthTerminalRecord, socket: WebSocket): void => {
+  const data = renderTerminalOutputBuffer(record.outputBuffer)
+  if (data.length > 0) {
+    sendServerMessage(socket, { type: "output", data })
+  }
 }
 
 const clearAttachTimeout = (record: AuthTerminalRecord): void => {
@@ -201,7 +219,7 @@ const startTerminalPty = (record: AuthTerminalRecord, cols: number, rows: number
     status: "attached"
   })
   pty.onData((data) => {
-    sendServerMessage(record.socket, { type: "output", data })
+    sendTerminalOutput(record, data)
   })
   pty.onExit(({ exitCode, signal }) => {
     finalizeRecord(
@@ -234,6 +252,7 @@ const registerRecord = (request: AuthTerminalSessionRequest): TerminalSession =>
     attachTimeout: null,
     cwd: process.cwd(),
     detachTimeout: null,
+    outputBuffer: emptyTerminalOutputBuffer,
     pty: null,
     session,
     socket: null
@@ -242,14 +261,6 @@ const registerRecord = (request: AuthTerminalSessionRequest): TerminalSession =>
   records.set(session.id, record)
   return session
 }
-
-const createDetachTimeout = (sessionId: string): ReturnType<typeof setTimeout> =>
-  setTimeout(() => {
-    const record = records.get(sessionId)
-    if (record !== undefined && record.socket === null) {
-      cleanupRecord(record)
-    }
-  }, reconnectGraceMs)
 
 const detachSocketFromRecord = (
   record: AuthTerminalRecord,
@@ -261,7 +272,6 @@ const detachSocketFromRecord = (
   }
   current.socket = null
   clearDetachTimeout(current)
-  current.detachTimeout = createDetachTimeout(current.session.id)
 }
 
 const handleSocketMessage = (record: AuthTerminalRecord, raw: RawData): void => {
@@ -296,6 +306,7 @@ const attachSocketToRecord = (
   attachWebSocketHeartbeat(socket)
   startTerminalPty(record, cols, rows)
   sendServerMessage(socket, { type: "ready", session: record.session })
+  replayTerminalOutput(record, socket)
   socket.on("message", (raw: RawData) => {
     handleSocketMessage(record, raw)
   })

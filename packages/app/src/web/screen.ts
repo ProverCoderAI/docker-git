@@ -2,7 +2,17 @@ import type { BrowserMenuTag } from "./menu.js"
 
 export type BrowserProjectMenuTag = Extract<
   BrowserMenuTag,
-  "Browser" | "Databases" | "Delete" | "Down" | "Info" | "Logs" | "Ports" | "ProjectAuth" | "Select" | "Status"
+  | "Browser"
+  | "Databases"
+  | "Delete"
+  | "Down"
+  | "Info"
+  | "Logs"
+  | "Ports"
+  | "ProjectAuth"
+  | "Select"
+  | "Status"
+  | "Tasks"
 >
 
 export type BrowserScreen =
@@ -29,7 +39,8 @@ const projectMenuTags: ReadonlySet<BrowserMenuTag> = new Set<BrowserMenuTag>([
   "Ports",
   "ProjectAuth",
   "Select",
-  "Status"
+  "Status",
+  "Tasks"
 ])
 
 export const isProjectMenu = (menu: BrowserMenuTag): menu is BrowserProjectMenuTag => projectMenuTags.has(menu)

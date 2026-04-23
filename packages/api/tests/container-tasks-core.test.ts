@@ -1,0 +1,49 @@
+import { describe, expect, it } from "vitest"
+
+import { buildContainerTasks } from "../src/services/container-tasks-core.js"
+import type { RawContainerProcess } from "../src/services/container-tasks-core.js"
+
+const processOf = (
+  patch: Partial<RawContainerProcess> & Pick<RawContainerProcess, "pid" | "ppid" | "command">
+): RawContainerProcess => ({
+  baseline: false,
+  etime: "00:01",
+  etimes: 1,
+  logAvailable: false,
+  tty: "?",
+  user: "dev",
+  ...patch
+})
+
+describe("container task classification", () => {
+  it("excludes baseline system processes unless includeDefault is true", () => {
+    const tasks = buildContainerTasks(
+      [
+        processOf({ baseline: true, command: "/usr/sbin/sshd -D", pid: 1, ppid: 0 }),
+        processOf({ command: "node server.js", pid: 20, ppid: 1 })
+      ],
+      [],
+      false
+    )
+
+    expect(tasks.map((task) => task.pid)).toEqual([20])
+    expect(buildContainerTasks([processOf({ baseline: true, command: "/usr/sbin/sshd -D", pid: 1, ppid: 0 })], [], true))
+      .toHaveLength(1)
+  })
+
+  it("marks descendants of managed agent pid as agent tasks", () => {
+    const tasks = buildContainerTasks(
+      [
+        processOf({ command: "codex", pid: 10, ppid: 1 }),
+        processOf({ command: "bash", pid: 11, ppid: 10, tty: "pts/1" })
+      ],
+      [{ agentId: "agent-1", pid: 10 }],
+      false
+    )
+
+    expect(tasks.map((task) => [task.pid, task.kind, task.managedId])).toEqual([
+      [10, "agent", "agent-1"],
+      [11, "agent", "agent-1"]
+    ])
+  })
+})

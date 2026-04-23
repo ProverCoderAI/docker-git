@@ -222,18 +222,48 @@ const renderSelectDetailsBox = (
   )
 }
 
-export const renderSelect = (
-  input: {
-    readonly purpose: SelectPurpose
-    readonly items: ReadonlyArray<ProjectItem>
-    readonly selected: number
-    readonly runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
-    readonly confirmDelete: boolean
-    readonly connectEnableMcpPlaywright: boolean
-    readonly message: string | null
+type RenderSelectInput = {
+  readonly purpose: SelectPurpose
+  readonly items: ReadonlyArray<ProjectItem>
+  readonly selected: number
+  readonly query: string
+  readonly runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
+  readonly confirmDelete: boolean
+  readonly connectEnableMcpPlaywright: boolean
+  readonly message: string | null
+}
+
+const selectConfirmHint = (
+  purpose: SelectPurpose,
+  confirmDelete: boolean,
+  connectEnableMcpPlaywright: boolean
+): string => {
+  if (purpose === "Delete" && confirmDelete) {
+    return "Confirm mode: Enter = delete now, Esc = cancel"
   }
-): React.ReactElement => {
-  const { confirmDelete, connectEnableMcpPlaywright, items, message, purpose, runtimeByProject, selected } = input
+  if (purpose === "Down" && confirmDelete) {
+    return "Confirm mode: Enter = stop now, Esc = cancel"
+  }
+  return selectHint(purpose, connectEnableMcpPlaywright)
+}
+
+const renderSelectSearch = (
+  el: typeof React.createElement,
+  query: string
+): React.ReactElement =>
+  el(
+    Box,
+    { marginTop: 1 },
+    el(
+      Text,
+      { fg: "gray", wrap: "truncate" },
+      `Search container/project: ${query.length === 0 ? "(type to filter)" : query}`
+    )
+  )
+
+export const renderSelect = (input: RenderSelectInput): React.ReactElement => {
+  const { confirmDelete, connectEnableMcpPlaywright, items, message, purpose, query, runtimeByProject, selected } =
+    input
   const el = React.createElement
   const listLabels = buildSelectLabels(items, selected, purpose, runtimeByProject)
   const { detailsWidth, listWidth } = computeSelectColumnWidths(listLabels)
@@ -246,21 +276,14 @@ export const renderSelect = (
     runtimeByProject,
     connectEnableMcpPlaywright
   })
-  const baseHint = selectHint(purpose, connectEnableMcpPlaywright)
-  const confirmHint = (() => {
-    if (purpose === "Delete" && confirmDelete) {
-      return "Confirm mode: Enter = delete now, Esc = cancel"
-    }
-    if (purpose === "Down" && confirmDelete) {
-      return "Confirm mode: Enter = stop now, Esc = cancel"
-    }
-    return baseHint
-  })()
+  const confirmHint = selectConfirmHint(purpose, confirmDelete, connectEnableMcpPlaywright)
   const hints = el(Box, { marginTop: 1 }, el(Text, { fg: "gray" }, confirmHint))
+  const search = renderSelectSearch(el, query)
 
   return renderLayout(
     selectTitle(purpose),
     [
+      search,
       el(Box, { flexDirection: "row", marginTop: 1 }, listBox, detailsBox),
       hints
     ],

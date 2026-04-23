@@ -13,6 +13,7 @@ type TerminalPanelProps = {
   readonly onClose: () => void
   readonly onMessage: (message: string) => void
   readonly onOpenBrowser?: (() => void) | undefined
+  readonly onOpenTerminal?: (() => void) | undefined
   readonly session: ActiveTerminalSession
 }
 
@@ -80,9 +81,12 @@ const TerminalHeader = (
   {
     onClose,
     onOpenBrowser,
+    onOpenTerminal,
     session,
     status
-  }: Pick<TerminalPanelProps, "onClose" | "onOpenBrowser" | "session"> & { readonly status: TerminalStatus }
+  }: Pick<TerminalPanelProps, "onClose" | "onOpenBrowser" | "onOpenTerminal" | "session"> & {
+    readonly status: TerminalStatus
+  }
 ): JSX.Element => (
   <div style={headerStyle}>
     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -108,6 +112,17 @@ const TerminalHeader = (
             Open browser
           </button>
         )}
+      {session.browserProjectId === undefined || onOpenTerminal === undefined
+        ? null
+        : (
+          <button
+            onClick={onOpenTerminal}
+            style={closeButtonStyle}
+            type="button"
+          >
+            New terminal
+          </button>
+        )}
       <button
         onClick={onClose}
         style={closeButtonStyle}
@@ -120,7 +135,7 @@ const TerminalHeader = (
 )
 
 export const TerminalPanel = (
-  { onClose, onMessage, onOpenBrowser, session }: TerminalPanelProps
+  { onClose, onMessage, onOpenBrowser, onOpenTerminal, session }: TerminalPanelProps
 ): JSX.Element => {
   const connectionRef = useRef<TerminalConnectionState>({ closing: false, opened: false })
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -149,6 +164,7 @@ export const TerminalPanel = (
           onClose()
         }}
         onOpenBrowser={onOpenBrowser}
+        onOpenTerminal={onOpenTerminal}
         session={session}
         status={status}
       />

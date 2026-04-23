@@ -11,6 +11,7 @@ import { ContentPanel } from "./panel-content.js"
 import { DatabasePanel } from "./panel-databases.js"
 import { PortForwardPanel } from "./panel-port-forwards.js"
 import { ProjectDetailsPanel } from "./panel-project-details.js"
+import { TaskPanel } from "./panel-tasks.js"
 import { OutputPanel, ProjectListPanel } from "./panels.js"
 
 type MainPanelsProps = Omit<ReadyLayoutProps, "busyLabel" | "message">
@@ -29,7 +30,8 @@ const actionLabels: Record<MainPanelsProps["currentMenu"], string> = {
   ProjectAuth: "Open project auth",
   Quit: "Run",
   Select: "Open SSH",
-  Status: "Load status"
+  Status: "Load status",
+  Tasks: "Refresh tasks"
 }
 
 const actionLabel = (menu: MainPanelsProps["currentMenu"]): string => actionLabels[menu]
@@ -146,6 +148,18 @@ const DatabaseDetails = (props: MainPanelsProps): JSX.Element => (
   />
 )
 
+const TaskDetails = (props: MainPanelsProps): JSX.Element => (
+  <TaskPanel
+    logs={props.projectTaskLogs}
+    onLoadLogs={props.onLoadProjectTaskLogs}
+    onRefreshTasks={props.onRefreshProjectTasks}
+    onStopTask={props.onStopProjectTask}
+    project={props.project}
+    selectedProjectSummary={props.selectedProjectSummary}
+    snapshot={props.projectTasks}
+  />
+)
+
 const ProjectInfoDetails = (props: MainPanelsProps): JSX.Element => (
   <ProjectDetailsPanel
     currentMenu="Info"
@@ -189,6 +203,9 @@ const ProjectPickerDetails = (props: MainPanelsProps): JSX.Element => {
   if (props.currentMenu === "Databases") {
     return <DatabaseDetails {...props} />
   }
+  if (props.currentMenu === "Tasks") {
+    return <TaskDetails {...props} />
+  }
   if (props.currentMenu === "ProjectAuth" || props.currentMenu === "Logs" || props.currentMenu === "Status") {
     return <ProjectInfoDetails {...props} />
   }
@@ -213,8 +230,12 @@ const ProjectPickerScreen = (props: MainPanelsProps): JSX.Element => (
           compact={props.viewportLayout.compact}
           currentMenu={props.currentMenu}
           dashboard={props.dashboard}
+          onBack={props.onBackScreen}
+          onRunCurrentMenuAction={props.onRunCurrentMenuAction}
           onSelectProject={props.onSelectProject}
+          onProjectSearchQueryChange={props.onProjectSearchQueryChange}
           projectNavigationArmed={true}
+          projectSearchQuery={props.projectSearchQuery}
           selectedProjectId={props.selectedProjectId}
         />
         <Box

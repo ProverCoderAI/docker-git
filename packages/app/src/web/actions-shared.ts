@@ -5,6 +5,7 @@ import type { ActionPromptState } from "./action-prompt.js"
 import { createAuthActionPrompt } from "./action-prompt.js"
 import type {
   AuthSnapshot,
+  ContainerTaskSnapshot,
   GithubAuthStatus,
   ProjectAuthSnapshot,
   ProjectBrowserSession,
@@ -72,6 +73,8 @@ export type BrowserActionContext = {
   readonly setPortForwards: Setter<ReadonlyArray<ProjectPortForward>>
   readonly setProjectAuthSnapshot: Setter<ProjectAuthSnapshot | null>
   readonly setProjectBrowser: Setter<ProjectBrowserSession | null>
+  readonly setProjectTaskLogs: Setter<string>
+  readonly setProjectTasks: Setter<ContainerTaskSnapshot | null>
   readonly setSelectedMenuIndex: Setter<number>
   readonly setSelectedProject: Setter<ProjectDetails | null>
   readonly setSelectedProjectId: Setter<string | null>

@@ -7,8 +7,10 @@ import { requestJson, requestText, requestTextStream, resolveApiBaseUrl } from "
 import {
   AuthSnapshotResponseSchema,
   AuthTerminalSessionResponseSchema,
+  ContainerTaskSnapshotResponseSchema,
   GithubStatusResponseSchema,
   HealthResponseSchema,
+  OutputResponseSchema,
   ProjectAuthSnapshotResponseSchema,
   ProjectBrowserResponseSchema,
   ProjectDatabaseForwardResponseSchema,
@@ -40,6 +42,8 @@ export type {
   ApiEvent,
   AuthMenuFlow,
   AuthSnapshot,
+  ContainerTask,
+  ContainerTaskSnapshot,
   CreateProjectAcceptedResponse,
   CreateProjectDraft,
   DashboardData,
@@ -121,6 +125,37 @@ export const loadProjectPortForwards = (projectId: string) =>
 export const loadProjectBrowser = (projectId: string) =>
   requestJson("GET", `/projects/${encodeURIComponent(projectId)}/browser`, ProjectBrowserResponseSchema).pipe(
     Effect.map((response) => response.browser)
+  )
+
+export const loadProjectTasks = (projectId: string) =>
+  requestJson(
+    "GET",
+    `/projects/${encodeURIComponent(projectId)}/tasks`,
+    ContainerTaskSnapshotResponseSchema
+  ).pipe(
+    Effect.map((response) => response.snapshot)
+  )
+
+export const stopProjectTask = (
+  projectId: string,
+  pid: number
+) =>
+  requestText(
+    "POST",
+    `/projects/${encodeURIComponent(projectId)}/tasks/${pid}/stop`
+  ).pipe(Effect.asVoid)
+
+export const loadProjectTaskLogs = (
+  projectId: string,
+  pid: number,
+  lines = 200
+) =>
+  requestJson(
+    "GET",
+    `/projects/${encodeURIComponent(projectId)}/tasks/${pid}/logs?lines=${lines}`,
+    OutputResponseSchema
+  ).pipe(
+    Effect.map((response) => response.output)
   )
 
 export const loadProjectDatabaseProfiles = (projectId: string) =>

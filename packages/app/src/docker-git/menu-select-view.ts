@@ -1,5 +1,6 @@
 import type { ProjectItem } from "./project-item.js"
 
+import { filterProjectItemsByQuery } from "./menu-select-filter.js"
 import { sortItemsByLaunchTime } from "./menu-select-order.js"
 import type { MenuViewContext, SelectProjectRuntime } from "./menu-types.js"
 
@@ -16,7 +17,9 @@ export const startSelectView = (
   context.setView({
     _tag: "SelectProject",
     purpose,
-    items: sortedItems,
+    allItems: sortedItems,
+    items: filterProjectItemsByQuery(sortedItems, ""),
+    query: "",
     runtimeByProject,
     selected: 0,
     confirmDelete: false,

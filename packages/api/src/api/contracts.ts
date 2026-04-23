@@ -10,6 +10,7 @@ export type ProjectSummary = {
   readonly displayName: string
   readonly repoUrl: string
   readonly repoRef: string
+  readonly containerName?: string | undefined
   readonly status: ProjectStatus
   readonly statusLabel: string
   readonly sshSessions: number
@@ -365,6 +366,31 @@ export type TerminalSession = {
   readonly closedAt?: string | undefined
   readonly exitCode?: number | undefined
   readonly signal?: number | undefined
+}
+
+export type ContainerTaskKind = "ssh" | "web-terminal" | "agent" | "background" | "system"
+
+export type ContainerTask = {
+  readonly pid: number
+  readonly ppid: number
+  readonly user: string
+  readonly tty: string
+  readonly etime: string
+  readonly etimes: number
+  readonly command: string
+  readonly kind: ContainerTaskKind
+  readonly managedId?: string | undefined
+  readonly logAvailable: boolean
+}
+
+export type ContainerTaskSnapshot = {
+  readonly projectId: string
+  readonly containerName: string
+  readonly generatedAt: string
+  readonly sshConnections: number
+  readonly tasks: ReadonlyArray<ContainerTask>
+  readonly terminalSessions: ReadonlyArray<TerminalSession>
+  readonly agents: ReadonlyArray<AgentSession>
 }
 
 export type ForgeFedTicket = {

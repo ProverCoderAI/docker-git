@@ -22,6 +22,12 @@ import {
   terminalImagePasteDirectory,
   type TerminalImagePastePayload
 } from "./terminal-image-paste-core.js"
+import {
+  appendTerminalOutput,
+  emptyTerminalOutputBuffer,
+  renderTerminalOutputBuffer,
+  type TerminalOutputBuffer
+} from "./terminal-output-buffer.js"
 import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
 import { getProjectItemById, upProject } from "./projects.js"
 import { attachWebSocketHeartbeat } from "./websocket-heartbeat.js"
@@ -44,6 +50,7 @@ type TerminalRecord = {
   socket: WebSocket | null
   attachTimeout: ReturnType<typeof setTimeout> | null
   detachTimeout: ReturnType<typeof setTimeout> | null
+  outputBuffer: TerminalOutputBuffer
   projectContainerName: string
   projectId: string
   prepared: ReturnType<typeof prepareProjectSsh>
@@ -51,7 +58,6 @@ type TerminalRecord = {
 
 const records = new Map<string, TerminalRecord>()
 const attachTimeoutMs = 30_000
-const reconnectGraceMs = 60_000
 const terminalWsPathPattern = /^(?:\/api)?\/projects\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
 
 const TerminalClientMessageSchema = Schema.parseJson(
@@ -197,6 +203,18 @@ const sendServerMessage = (socket: WebSocket | null, message: TerminalServerMess
     return
   }
   socket.send(encodeServerMessage(message))
+}
+
+const sendTerminalOutput = (record: TerminalRecord, data: string): void => {
+  record.outputBuffer = appendTerminalOutput(record.outputBuffer, data)
+  sendServerMessage(record.socket, { type: "output", data })
+}
+
+const replayTerminalOutput = (record: TerminalRecord, socket: WebSocket): void => {
+  const data = renderTerminalOutputBuffer(record.outputBuffer)
+  if (data.length > 0) {
+    sendServerMessage(socket, { type: "output", data })
+  }
 }
 
 const clearAttachTimeout = (record: TerminalRecord): void => {
@@ -373,19 +391,13 @@ const handleImagePasteMessage = (
     saveTerminalImagePaste(record, message).pipe(
       Effect.tap((containerPath) =>
         Effect.sync(() => {
-          sendServerMessage(record.socket, {
-            type: "output",
-            data: terminalOutputLine(`Pasted image saved: ${containerPath}`)
-          })
+          sendTerminalOutput(record, terminalOutputLine(`Pasted image saved: ${containerPath}`))
           writePtyInput(record.pty, `${containerPath} `)
         })
       ),
       Effect.catchAll((error) =>
         Effect.sync(() => {
-          sendServerMessage(record.socket, {
-            type: "output",
-            data: terminalOutputLine(`Failed to paste image: ${error.message}`)
-          })
+          sendTerminalOutput(record, terminalOutputLine(`Failed to paste image: ${error.message}`))
         })
       )
     )
@@ -427,7 +439,7 @@ const startTerminalPty = (
     status: "attached"
   })
   pty.onData((data) => {
-    sendServerMessage(record.socket, { type: "output", data })
+    sendTerminalOutput(record, data)
   })
   pty.onExit(({ exitCode, signal }) => {
     finalizeRecord(
@@ -462,6 +474,7 @@ const registerRecord = (
   const record: TerminalRecord = {
     attachTimeout: null,
     detachTimeout: null,
+    outputBuffer: emptyTerminalOutputBuffer,
     prepared,
     projectContainerName,
     projectId,
@@ -542,17 +555,14 @@ export const deleteTerminalSession = (
     )
   })
 
+export const listProjectTerminalSessions = (projectId: string): ReadonlyArray<TerminalSession> =>
+  [...records.values()]
+    .filter((record) => record.projectId === projectId)
+    .map((record) => record.session)
+
 const handleCloseMessage = (record: TerminalRecord): void => {
   cleanupRecord(record)
 }
-
-const createDetachTimeout = (sessionId: string): ReturnType<typeof setTimeout> =>
-  setTimeout(() => {
-    const record = records.get(sessionId)
-    if (record !== undefined && record.socket === null) {
-      cleanupRecord(record)
-    }
-  }, reconnectGraceMs)
 
 const detachSocketFromRecord = (
   record: TerminalRecord,
@@ -564,7 +574,6 @@ const detachSocketFromRecord = (
   }
   current.socket = null
   clearDetachTimeout(current)
-  current.detachTimeout = createDetachTimeout(current.session.id)
 }
 
 const handleSocketMessage = (record: TerminalRecord, raw: RawData): void => {
@@ -604,6 +613,7 @@ const attachSocketToRecord = (
   attachWebSocketHeartbeat(socket)
   startTerminalPty(record, cols, rows)
   sendServerMessage(socket, { type: "ready", session: record.session })
+  replayTerminalOutput(record, socket)
   socket.on("message", (raw: RawData) => {
     handleSocketMessage(record, raw)
   })

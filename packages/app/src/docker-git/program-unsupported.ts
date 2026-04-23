@@ -1,9 +1,6 @@
 export type UnsupportedOperationalCommandTag =
   | "Attach"
   | "Panes"
-  | "SessionsList"
-  | "SessionsKill"
-  | "SessionsLogs"
   | "ScrapExport"
   | "ScrapImport"
   | "McpPlaywrightUp"
@@ -25,9 +22,6 @@ export const unsupportedOperationalCommands: Record<
 > = {
   Attach: { command: "attach", message: "Host-side SSH attach is disabled in API-only mode." },
   Panes: { command: "panes", message: "Host-side pane inspection is disabled in API-only mode." },
-  SessionsList: { command: "sessions", message: "Terminal session inspection is disabled in API-only mode." },
-  SessionsKill: { command: "sessions kill", message: "Terminal session control is disabled in API-only mode." },
-  SessionsLogs: { command: "sessions logs", message: "Terminal session log access is disabled in API-only mode." },
   ScrapExport: { command: "scrap export", message: "Scrap export is disabled in API-only host mode." },
   ScrapImport: { command: "scrap import", message: "Scrap import is disabled in API-only host mode." },
   McpPlaywrightUp: {

@@ -53,7 +53,8 @@ const menuSlugs: Readonly<Record<BrowserMenuTag, string>> = {
   ProjectAuth: "project-auth",
   Quit: "quit",
   Select: "select",
-  Status: "status"
+  Status: "status",
+  Tasks: "tasks"
 }
 
 const menuBySlug = new Map<string, BrowserMenuTag>(

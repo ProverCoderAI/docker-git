@@ -10,6 +10,7 @@ import {
   withBusy,
   withSelectedProjectBusy
 } from "./actions-shared.js"
+import { loadSelectedProjectTasks } from "./actions-tasks.js"
 import {
   createProjectTerminalSession,
   deleteProject,
@@ -204,13 +205,17 @@ export const runProjectMenuAction = (
     openSelectedProjectBrowser(context)
     return
   }
+  if (currentMenu === "Tasks") {
+    loadSelectedProjectTasks(context)
+    return
+  }
   runProjectMenuCommand(currentMenu, context)
 }
 
 const runProjectMenuCommand = (
   currentMenu: Exclude<
     BrowserMenuTag,
-    "Auth" | "ProjectAuth" | "Browser" | "Create" | "Databases" | "Select" | "Info" | "Ports"
+    "Auth" | "ProjectAuth" | "Browser" | "Create" | "Databases" | "Select" | "Info" | "Ports" | "Tasks"
   >,
   context: BrowserActionContext
 ) => {

@@ -32,15 +32,20 @@ type ReadyLayoutRenderArgs = {
     readonly onOpenProjectDatabaseEditor: () => void
     readonly onCloseProjectPortForward: (targetPort: number) => void
     readonly onOpenProjectPortForward: () => void
+    readonly onOpenProjectTerminalById: (projectId: string) => void
     readonly onPortForwardInputChange: (value: string) => void
+    readonly onProjectSearchQueryChange: (value: string) => void
     readonly onRefreshProjectPortForwards: () => void
     readonly onRefreshProjectBrowser: () => void
     readonly onRefreshProjectDatabases: () => void
+    readonly onRefreshProjectTasks: () => void
     readonly onRestartProjectDatabaseEditor: () => void
     readonly onRunAuthAction: (index: number) => void
     readonly onRunCurrentMenuAction: () => void
     readonly onRunProjectAuthAction: (index: number) => void
     readonly onSaveDatabaseProfile: () => void
+    readonly onLoadProjectTaskLogs: (pid: number) => void
+    readonly onStopProjectTask: (pid: number) => void
   }
   readonly currentMenu: ReturnType<typeof useReadyController>["currentMenu"]
   readonly dashboard: DashboardData
@@ -68,15 +73,20 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onOpenProjectBrowser: actions.onOpenProjectBrowser,
   onOpenProjectDatabaseEditor: actions.onOpenProjectDatabaseEditor,
   onOpenProjectPortForward: actions.onOpenProjectPortForward,
+  onOpenProjectTerminalById: actions.onOpenProjectTerminalById,
   onPortForwardInputChange: actions.onPortForwardInputChange,
+  onProjectSearchQueryChange: actions.onProjectSearchQueryChange,
   onRefreshProjectPortForwards: actions.onRefreshProjectPortForwards,
   onRefreshProjectBrowser: actions.onRefreshProjectBrowser,
   onRefreshProjectDatabases: actions.onRefreshProjectDatabases,
+  onRefreshProjectTasks: actions.onRefreshProjectTasks,
   onRestartProjectDatabaseEditor: actions.onRestartProjectDatabaseEditor,
   onRunAuthAction: actions.onRunAuthAction,
   onRunCurrentMenuAction: actions.onRunCurrentMenuAction,
   onRunProjectAuthAction: actions.onRunProjectAuthAction,
-  onSaveDatabaseProfile: actions.onSaveDatabaseProfile
+  onSaveDatabaseProfile: actions.onSaveDatabaseProfile,
+  onLoadProjectTaskLogs: actions.onLoadProjectTaskLogs,
+  onStopProjectTask: actions.onStopProjectTask
 })
 
 const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
@@ -106,7 +116,10 @@ const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   project: state.project,
   projectAuthSnapshot: state.projectAuthSnapshot,
   projectBrowser: state.projectBrowser,
+  projectTaskLogs: state.projectTaskLogs,
+  projectTasks: state.projectTasks,
   projectNavigationArmed: state.projectNavigationArmed,
+  projectSearchQuery: state.projectSearchQuery,
   selectedMenuIndex: state.selectedMenuIndex,
   selectedProjectId: state.selectedProjectId,
   terminalSessions: state.terminalSessions

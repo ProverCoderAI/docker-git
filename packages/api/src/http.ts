@@ -48,6 +48,7 @@ import { streamGithubAuthLogin } from "./services/auth-github-login-stream.js"
 import { createAuthTerminalSession, deleteAuthTerminalSession } from "./services/auth-terminal-sessions.js"
 import { streamCodexAuthLogin } from "./services/auth-codex-login-stream.js"
 import { getAgent, getAgentAttachInfo, listAgents, readAgentLogs, startAgent, stopAgent } from "./services/agents.js"
+import { readContainerTaskLogs, readContainerTaskSnapshot, stopContainerTask } from "./services/container-tasks.js"
 import { latestProjectCursor, listProjectEventsSince } from "./services/events.js"
 import {
   createFollowSubscription,
@@ -135,6 +136,11 @@ const TerminalSessionParamsSchema = Schema.Struct({
   sessionId: Schema.String
 })
 
+const ContainerTaskParamsSchema = Schema.Struct({
+  projectId: Schema.String,
+  pid: Schema.String
+})
+
 const AuthTerminalSessionParamsSchema = Schema.Struct({
   sessionId: Schema.String
 })
@@ -213,6 +219,18 @@ const parsePortParam = (value: string): Effect.Effect<number, ApiBadRequestError
     : Effect.fail(new ApiBadRequestError({ message: `Invalid port: ${value}` }))
 }
 
+const parsePidParam = (value: string): Effect.Effect<number, ApiBadRequestError> => {
+  const parsed = Number.parseInt(value, 10)
+  return String(parsed) === value && parsed > 0
+    ? Effect.succeed(parsed)
+    : Effect.fail(new ApiBadRequestError({ message: `Invalid pid: ${value}` }))
+}
+
+const parseQueryBoolean = (url: string, key: string): boolean => {
+  const value = new URL(url, "http://localhost").searchParams.get(key)
+  return value === "1" || value === "true" || value === "yes"
+}
+
 const hostWithoutPort = (host: string): string => {
   if (host.startsWith("[")) {
     const end = host.indexOf("]")
@@ -289,6 +307,7 @@ const projectPortForwardParams = HttpRouter.schemaParams(ProjectPortForwardParam
 const projectDatabaseProfileParams = HttpRouter.schemaParams(ProjectDatabaseProfileParamsSchema)
 const agentParams = HttpRouter.schemaParams(AgentParamsSchema)
 const terminalSessionParams = HttpRouter.schemaParams(TerminalSessionParamsSchema)
+const containerTaskParams = HttpRouter.schemaParams(ContainerTaskParamsSchema)
 const authTerminalSessionParams = HttpRouter.schemaParams(AuthTerminalSessionParamsSchema)
 
 const readCreateProjectRequest = () => HttpServerRequest.schemaBodyJson(CreateProjectRequestSchema)
@@ -913,6 +932,37 @@ export const makeRouter = () => {
         Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
         Effect.catchAll(errorResponse)
       )
+    ),
+    HttpRouter.get(
+      "/projects/:projectId/tasks",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const snapshot = yield* _(readContainerTaskSnapshot(projectId, parseQueryBoolean(request.url, "includeDefault")))
+        return yield* _(jsonResponse({ snapshot }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/tasks/:pid/stop",
+      containerTaskParams.pipe(
+        Effect.flatMap(({ projectId, pid }) =>
+          parsePidParam(pid).pipe(
+            Effect.flatMap((taskPid) => stopContainerTask(projectId, taskPid))
+          )
+        ),
+        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/projects/:projectId/tasks/:pid/logs",
+      Effect.gen(function*(_) {
+        const { projectId, pid } = yield* _(containerTaskParams)
+        const taskPid = yield* _(parsePidParam(pid))
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const output = yield* _(readContainerTaskLogs(projectId, taskPid, parseQueryInt(request.url, "lines", 200)))
+        return yield* _(jsonResponse({ output }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(
       "/projects/:projectId/recreate",

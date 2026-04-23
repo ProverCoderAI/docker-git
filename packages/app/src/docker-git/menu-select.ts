@@ -1,5 +1,6 @@
 import { Match } from "effect"
 
+import { nextBufferValue } from "./menu-buffer-input.js"
 import {
   runAuthSelection,
   runConnectSelection,
@@ -9,6 +10,7 @@ import {
   type SelectContext
 } from "./menu-select-actions.js"
 import { isConnectMcpToggleInput } from "./menu-select-connect.js"
+import { filterProjectItemsByQuery } from "./menu-select-filter.js"
 import { runtimeForSelection } from "./menu-select-runtime.js"
 import { resetToMenu } from "./menu-shared.js"
 import type { MenuKeyInput, ViewState } from "./menu-types.js"
@@ -26,6 +28,47 @@ const clampIndex = (value: number, size: number): number => {
     return size - 1
   }
   return value
+}
+
+const updateSelectSearch = (
+  view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
+  query: string
+): Extract<ViewState, { readonly _tag: "SelectProject" }> => {
+  const selectedProjectDir = view.items[view.selected]?.projectDir
+  const items = filterProjectItemsByQuery(view.allItems, query)
+  const nextSelected = selectedProjectDir === undefined
+    ? 0
+    : items.findIndex((item) => item.projectDir === selectedProjectDir)
+  return {
+    ...view,
+    confirmDelete: false,
+    items,
+    query,
+    selected: clampIndex(nextSelected, items.length)
+  }
+}
+
+const selectSearchMessage = (
+  view: Extract<ViewState, { readonly _tag: "SelectProject" }>
+): string | null =>
+  view.query.length === 0
+    ? null
+    : `Search "${view.query}": ${view.items.length}/${view.allItems.length} project(s).`
+
+const handleSelectSearchInput = (
+  input: string,
+  key: MenuKeyInput,
+  view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
+  context: SelectContext
+): boolean => {
+  const nextQuery = nextBufferValue(input, key, view.query)
+  if (nextQuery === null) {
+    return false
+  }
+  const nextView = updateSelectSearch(view, nextQuery)
+  context.setView(nextView)
+  context.setMessage(selectSearchMessage(nextView))
+  return true
 }
 
 export const handleSelectInput = (
@@ -48,8 +91,11 @@ export const handleSelectInput = (
     handleSelectReturn(view, context)
     return
   }
+  if (handleSelectSearchInput(input, key, view, context)) {
+    return
+  }
   if (input.trim().length > 0) {
-    context.setMessage("Use arrows + Enter to select a project, Esc to cancel.")
+    context.setMessage("Type to search by container/project name, arrows + Enter to select, Esc to cancel.")
   }
 }
 
@@ -58,7 +104,7 @@ const handleConnectOptionToggle = (
   view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
   context: Pick<SelectContext, "setView" | "setMessage">
 ): boolean => {
-  if (view.purpose !== "Connect" || !isConnectMcpToggleInput(input)) {
+  if (view.purpose !== "Connect" || view.query.length > 0 || input !== "P" || !isConnectMcpToggleInput(input)) {
     return false
   }
   context.setMessage(

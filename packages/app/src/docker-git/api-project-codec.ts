@@ -5,6 +5,7 @@ export type ApiProjectSummary = {
   readonly displayName: string
   readonly repoUrl: string
   readonly repoRef: string
+  readonly containerName?: string | undefined
   readonly status: "running" | "stopped" | "unknown"
   readonly statusLabel: string
   readonly sshSessions: number
@@ -35,7 +36,7 @@ export type ApiCreateProjectAccepted = {
   readonly cursor: number
 }
 
-type ProjectDetailFields = Omit<ApiProjectDetails, keyof ApiProjectSummary>
+type ProjectDetailFields = Omit<ApiProjectDetails, keyof ApiProjectSummary> & Pick<ApiProjectDetails, "containerName">
 type RawProjectDetailFields = {
   readonly containerName: string | null
   readonly serviceName: string | null
@@ -74,6 +75,7 @@ const readSummaryBaseFields = (
   const displayName = asString(object["displayName"])
   const repoUrl = asString(object["repoUrl"])
   const repoRef = asString(object["repoRef"])
+  const containerName = asString(object["containerName"]) ?? undefined
   const status = asString(object["status"])
   const statusLabel = asString(object["statusLabel"])
   const sshSessions = typeof object["sshSessions"] === "number" ? object["sshSessions"] : null
@@ -90,6 +92,7 @@ const readSummaryBaseFields = (
     displayName: stringOrEmpty(displayName),
     repoUrl: stringOrEmpty(repoUrl),
     repoRef: stringOrEmpty(repoRef),
+    containerName,
     status: stringOrEmpty(status),
     statusLabel: stringOrEmpty(statusLabel),
     sshSessions: numberOrZero(sshSessions),

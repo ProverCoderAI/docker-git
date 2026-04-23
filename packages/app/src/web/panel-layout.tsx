@@ -1,12 +1,10 @@
 import type { JSX } from "react"
 
-import { buildSelectLabels, type SelectPurpose } from "../docker-git/menu-select-presenter.js"
 import type { DashboardData } from "./api.js"
 import { shortcutHintText } from "./app-ready-shortcuts.js"
 import { Box, Text } from "./elements.js"
 import { browserMenuItems } from "./menu.js"
 import type { BrowserMenuTag } from "./menu.js"
-import { selectPurposeForMenu } from "./panel-project-details.js"
 
 type MenuSidebarProps = {
   readonly compact: boolean
@@ -17,22 +15,9 @@ type MenuSidebarProps = {
   readonly selectedProjectLabel: string
 }
 
-type ProjectListPanelProps = {
-  readonly compact: boolean
-  readonly currentMenu: BrowserMenuTag
-  readonly dashboard: DashboardData
-  readonly onSelectProject: (projectId: string) => void
-  readonly projectNavigationArmed: boolean
-  readonly selectedProjectId: string | null
-}
-
-export const showsProjectPanel = (currentMenu: BrowserMenuTag): boolean => currentMenu === "Select"
-
 export const projectSelectionLabel = (
   project: DashboardData["projects"][number] | undefined
 ): string => project === undefined ? "not selected" : `${project.displayName} · ${project.statusLabel}`
-
-const renderListPurpose = (currentMenu: BrowserMenuTag): SelectPurpose => selectPurposeForMenu(currentMenu) ?? "Connect"
 
 const compactMenuLabels: Readonly<Record<BrowserMenuTag, string>> = {
   Auth: "Auth profiles",
@@ -48,64 +33,13 @@ const compactMenuLabels: Readonly<Record<BrowserMenuTag, string>> = {
   ProjectAuth: "Project auth",
   Quit: "Quit",
   Select: "Select",
-  Status: "Status"
+  Status: "Status",
+  Tasks: "Tasks"
 }
 
 const menuPanelMaxHeight = (compact: boolean): string => compact ? "154px" : "100%"
 const menuListDirection = (compact: boolean): "column" | "row" => compact ? "row" : "column"
 const menuListTopMargin = (compact: boolean): number | string => compact ? "6px" : 1
-const projectPanelMaxHeight = (compact: boolean): string => compact ? "30%" : "100%"
-
-const runtimeByProject = (dashboard: DashboardData): Readonly<
-  Record<string, {
-    readonly running: boolean
-    readonly sshSessions: number
-    readonly startedAtIso: string | null
-    readonly startedAtEpochMs: number | null
-  }>
-> =>
-  Object.fromEntries(
-    dashboard.projects.map((project) => [
-      project.id,
-      {
-        running: project.status === "running",
-        sshSessions: project.sshSessions,
-        startedAtIso: project.startedAtIso,
-        startedAtEpochMs: project.startedAtEpochMs
-      }
-    ])
-  )
-
-const stripSelectionPrefix = (label: string): string => label.slice(2)
-
-const resolveProjectListSelectionIndex = (
-  currentMenu: BrowserMenuTag,
-  dashboard: DashboardData,
-  projectNavigationArmed: boolean,
-  selectedProjectId: string | null
-): number =>
-  !showsProjectPanel(currentMenu) || projectNavigationArmed
-    ? dashboard.projects.findIndex((project) => project.id === selectedProjectId)
-    : -1
-
-const buildProjectListLabels = (
-  currentMenu: BrowserMenuTag,
-  dashboard: DashboardData,
-  selectedIndex: number
-): ReadonlyArray<string> =>
-  (
-    buildSelectLabels(
-      dashboard.projects.map((project) => ({
-        clonedOnHostname: project.clonedOnHostname,
-        displayName: project.displayName,
-        projectDir: project.id,
-        repoRef: project.repoRef
-      })),
-      selectedIndex === -1 ? 0 : selectedIndex,
-      renderListPurpose(currentMenu),
-      runtimeByProject(dashboard)
-    )
-  ).map((label) => selectedIndex === -1 ? stripSelectionPrefix(label) : label)
 
 const MenuHeader = ({ compact }: Pick<MenuSidebarProps, "compact">): JSX.Element => (
   <Box flexWrap="wrap" gap={1} justifyContent="space-between">
@@ -197,55 +131,6 @@ export const MenuSidebar = (
     <MenuHints compact={compact} currentMenu={currentMenu} projectNavigationArmed={projectNavigationArmed} />
   </Box>
 )
-
-export const ProjectListPanel = (
-  { compact, currentMenu, dashboard, onSelectProject, projectNavigationArmed, selectedProjectId }: ProjectListPanelProps
-): JSX.Element => {
-  const selectedIndex = resolveProjectListSelectionIndex(
-    currentMenu,
-    dashboard,
-    projectNavigationArmed,
-    selectedProjectId
-  )
-  const labels = buildProjectListLabels(currentMenu, dashboard, selectedIndex)
-
-  return (
-    <Box
-      border={true}
-      borderColor="#3a4652"
-      borderStyle="single"
-      flexDirection="column"
-      flexShrink={compact ? 1 : 0}
-      maxHeight={projectPanelMaxHeight(compact)}
-      minHeight={0}
-      overflowY="auto"
-      padding={1}
-      width={compact ? "100%" : "320px"}
-    >
-      <Text bold={true} fg="#8be9fd">Projects</Text>
-      <Box flexDirection="column" marginTop={1} minHeight={0}>
-        {dashboard.projects.length === 0
-          ? <Text fg="#9fb8d5">Проекты не найдены.</Text>
-          : dashboard.projects.map((project, index) => (
-            <Box
-              key={project.id}
-              marginBottom={1}
-              onClick={() => {
-                onSelectProject(project.id)
-              }}
-            >
-              <Text
-                bold={projectNavigationArmed && project.id === selectedProjectId}
-                fg={projectNavigationArmed && project.id === selectedProjectId ? "#56f39a" : "#d6e5f7"}
-              >
-                {labels[index] ?? project.displayName}
-              </Text>
-            </Box>
-          ))}
-      </Box>
-    </Box>
-  )
-}
 
 export const OutputPanel = ({ output }: { readonly output: string }): JSX.Element => (
   <Box

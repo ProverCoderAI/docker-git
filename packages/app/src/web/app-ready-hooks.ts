@@ -10,6 +10,7 @@ import {
 } from "./actions.js"
 import type {
   AuthSnapshot,
+  ContainerTaskSnapshot,
   DashboardData,
   GithubAuthStatus,
   ProjectAuthSnapshot,
@@ -30,6 +31,7 @@ import {
   shouldRefreshProjectAuthPanel,
   shouldRefreshProjectDetails
 } from "./app-ready-shortcuts.js"
+import { maybeLoadProjectTasks, useProjectTasksState } from "./app-ready-tasks-hook.js"
 import { type TerminalWorkspaceReadyState, useTerminalWorkspaceState } from "./app-ready-terminal-state-hook.js"
 import type { BrowserMenuTag } from "./menu.js"
 import { type BrowserScreen, menuScreen } from "./screen.js"
@@ -74,6 +76,8 @@ type ReadyStateSetters = Pick<
   | "setPortForwards"
   | "setProjectAuthSnapshot"
   | "setProjectBrowser"
+  | "setProjectTaskLogs"
+  | "setProjectTasks"
   | "setSelectedMenuIndex"
   | "setSelectedProject"
   | "setSelectedProjectId"
@@ -99,12 +103,16 @@ export type ReadyState = ReadyStateSetters & TerminalWorkspaceReadyState & {
   readonly projectNavigationArmed: boolean
   readonly projectAuthSnapshot: ProjectAuthSnapshot | null
   readonly projectBrowser: ProjectBrowserSession | null
+  readonly projectTaskLogs: string
+  readonly projectTasks: ContainerTaskSnapshot | null
   readonly setActionPrompt: Setter<ActionPromptState | null>
   readonly setActiveScreen: Setter<BrowserScreen>
   readonly setCreateView: Setter<CreateFlowView>
   readonly setProjectNavigationArmed: Setter<boolean>
+  readonly setProjectSearchQuery: Setter<string>
   readonly selectedMenuIndex: number
   readonly selectedProjectId: string | null
+  readonly projectSearchQuery: string
 }
 
 const useReadyNavigationState = () => {
@@ -154,15 +162,18 @@ const useReadyPanelState = () => {
 const useReadyProjectState = () => {
   const [project, setSelectedProject] = useState<ProjectDetails | null>(null)
   const [projectNavigationArmed, setProjectNavigationArmed] = useState(false)
+  const [projectSearchQuery, setProjectSearchQuery] = useState("")
   const [projectAuthSnapshot, setProjectAuthSnapshot] = useState<ProjectAuthSnapshot | null>(null)
   const [projectBrowser, setProjectBrowser] = useState<ProjectBrowserSession | null>(null)
 
   return {
     project,
     projectNavigationArmed,
+    projectSearchQuery,
     projectAuthSnapshot,
     projectBrowser,
     setProjectNavigationArmed,
+    setProjectSearchQuery,
     setProjectAuthSnapshot,
     setProjectBrowser,
     setSelectedProject
@@ -174,6 +185,7 @@ export const useReadyState = (): ReadyState => {
   const panelState = useReadyPanelState()
   const databaseState = useDatabaseState()
   const portForwardState = usePortForwardState()
+  const projectTasksState = useProjectTasksState()
   const projectState = useReadyProjectState()
 
   return {
@@ -181,6 +193,7 @@ export const useReadyState = (): ReadyState => {
     ...panelState,
     ...databaseState,
     ...portForwardState,
+    ...projectTasksState,
     ...projectState
   }
 }
@@ -290,6 +303,7 @@ const loadReadyPanel = (args: PanelAutoloadArgs): void => {
   maybeLoadProjectPortForwards(args)
   maybeLoadProjectDatabases(args)
   maybeLoadProjectBrowser(args)
+  maybeLoadProjectTasks(args)
 }
 
 export const usePanelAutoload = (args: PanelAutoloadArgs) => {

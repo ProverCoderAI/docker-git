@@ -46,6 +46,7 @@ type StaticMenuTag = Exclude<
   | "Ports"
   | "ProjectAuth"
   | "Select"
+  | "Tasks"
 >
 
 const StaticActionPanel = (

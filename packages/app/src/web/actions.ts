@@ -30,7 +30,8 @@ export {
   saveSelectedDatabaseProfile
 } from "./actions-databases.js"
 export { closeSelectedProjectPort, loadSelectedProjectPorts, openSelectedProjectPort } from "./actions-port-forwards.js"
-export { loadSelectedProjectInfo } from "./actions-projects.js"
+export { connectProjectById, loadSelectedProjectInfo } from "./actions-projects.js"
+export { loadSelectedProjectTaskLogs, loadSelectedProjectTasks, stopSelectedProjectTask } from "./actions-tasks.js"
 
 export const runBrowserMenuAction = (
   currentMenu: BrowserMenuTag,

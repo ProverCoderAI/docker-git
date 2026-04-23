@@ -14,6 +14,7 @@ type TerminalScreenProps = Pick<
   ReadyLayoutProps,
   | "activeTerminalSessionId"
   | "onOpenProjectBrowserById"
+  | "onOpenProjectTerminalById"
   | "onSelectTerminal"
   | "onSetActiveScreen"
   | "onTerminalClose"
@@ -26,6 +27,7 @@ type TerminalPaneProps =
   & Pick<
     TerminalScreenProps,
     | "onOpenProjectBrowserById"
+    | "onOpenProjectTerminalById"
     | "onSetActiveScreen"
     | "onTerminalClose"
     | "onTerminalMessage"
@@ -92,9 +94,10 @@ const TerminalTab = (
 const TerminalTabs = (
   {
     activeSessionId,
+    onOpenProjectTerminalById,
     onSelectTerminal,
     terminalSessions
-  }: Pick<TerminalScreenProps, "onSelectTerminal" | "terminalSessions"> & {
+  }: Pick<TerminalScreenProps, "onOpenProjectTerminalById" | "onSelectTerminal" | "terminalSessions"> & {
     readonly activeSessionId: string | null
   }
 ): JSX.Element => (
@@ -112,6 +115,26 @@ const TerminalTabs = (
         />
       )
     })}
+    {terminalSessions.length === 0
+      ? null
+      : (
+        <Box
+          border={true}
+          borderColor="#3a4652"
+          onClick={() => {
+            const active = terminalSessions.find((session) => terminalSessionId(session) === activeSessionId) ??
+              terminalSessions.at(-1)
+            const projectId = active?.browserProjectId
+            if (projectId !== undefined) {
+              onOpenProjectTerminalById(projectId)
+            }
+          }}
+          padding="6px"
+          width="auto"
+        >
+          <Text bold={true} fg="#78f0a3">+ New terminal</Text>
+        </Box>
+      )}
   </Box>
 )
 
@@ -119,6 +142,7 @@ const TerminalPane = (
   {
     active,
     onOpenProjectBrowserById,
+    onOpenProjectTerminalById,
     onSetActiveScreen,
     onTerminalClose,
     onTerminalMessage,
@@ -145,6 +169,11 @@ const TerminalPane = (
           : () => {
             onOpenProjectBrowserById(browserProjectId)
           }}
+        onOpenTerminal={browserProjectId === undefined
+          ? undefined
+          : () => {
+            onOpenProjectTerminalById(browserProjectId)
+          }}
         onMessage={onTerminalMessage}
         session={terminalSession}
       />
@@ -161,6 +190,7 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
     <Box flexDirection="column" flexGrow={1} gap={1} minHeight={0} overflow="hidden">
       <TerminalTabs
         activeSessionId={activeSessionId}
+        onOpenProjectTerminalById={props.onOpenProjectTerminalById}
         onSelectTerminal={props.onSelectTerminal}
         terminalSessions={props.terminalSessions}
       />
@@ -172,6 +202,7 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
               active={sessionId === activeSessionId}
               key={sessionId}
               onOpenProjectBrowserById={props.onOpenProjectBrowserById}
+              onOpenProjectTerminalById={props.onOpenProjectTerminalById}
               onSetActiveScreen={props.onSetActiveScreen}
               onTerminalClose={props.onTerminalClose}
               onTerminalMessage={props.onTerminalMessage}

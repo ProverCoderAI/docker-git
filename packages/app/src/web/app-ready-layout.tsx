@@ -4,6 +4,7 @@ import type { CreateFlowView } from "../docker-git/menu-create-shared.js"
 import type { ActionPromptState } from "./action-prompt.js"
 import type {
   AuthSnapshot,
+  ContainerTaskSnapshot,
   DashboardData,
   GithubAuthStatus,
   ProjectAuthSnapshot,
@@ -60,10 +61,13 @@ export type ReadyLayoutProps = {
   readonly onOpenProjectBrowser: () => void
   readonly onOpenProjectDatabaseEditor: () => void
   readonly onOpenProjectPortForward: () => void
+  readonly onOpenProjectTerminalById: (projectId: string) => void
   readonly onPortForwardInputChange: (value: string) => void
+  readonly onProjectSearchQueryChange: (value: string) => void
   readonly onRefreshProjectPortForwards: () => void
   readonly onRefreshProjectBrowser: () => void
   readonly onRefreshProjectDatabases: () => void
+  readonly onRefreshProjectTasks: () => void
   readonly onRestartProjectDatabaseEditor: () => void
   readonly onSaveDatabaseProfile: () => void
   readonly onSetActiveScreen: (screen: BrowserScreen) => void
@@ -73,6 +77,8 @@ export type ReadyLayoutProps = {
   readonly onSelectTerminal: (sessionId: string) => void
   readonly onTerminalClose: (sessionId: string) => void
   readonly onTerminalMessage: (message: string | null) => void
+  readonly onLoadProjectTaskLogs: (pid: number) => void
+  readonly onStopProjectTask: (pid: number) => void
   readonly output: string
   readonly portForwardInput: string
   readonly portForwards: ReadonlyArray<ProjectPortForward>
@@ -80,9 +86,12 @@ export type ReadyLayoutProps = {
   readonly projectNavigationArmed: boolean
   readonly projectAuthSnapshot: ProjectAuthSnapshot | null
   readonly projectBrowser: ProjectBrowserSession | null
+  readonly projectTaskLogs: string
+  readonly projectTasks: ContainerTaskSnapshot | null
   readonly selectedMenuIndex: number
   readonly selectedProjectId: string | null
   readonly selectedProjectSummary: DashboardData["projects"][number] | undefined
+  readonly projectSearchQuery: string
   readonly terminalSessions: ReadonlyArray<ActiveTerminalSession>
   readonly viewportLayout: ViewportLayout
 }

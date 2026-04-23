@@ -2,11 +2,15 @@ import { updateActionPromptValue } from "./action-prompt.js"
 import {
   cancelBrowserActionPrompt,
   closeSelectedProjectPort,
+  connectProjectById,
   loadSelectedProjectBrowser,
   loadSelectedProjectPorts,
+  loadSelectedProjectTaskLogs,
+  loadSelectedProjectTasks,
   openProjectBrowserById,
   openSelectedProjectBrowser,
   openSelectedProjectPort,
+  stopSelectedProjectTask,
   submitBrowserActionPrompt
 } from "./actions.js"
 import type { DashboardData } from "./api.js"
@@ -34,7 +38,9 @@ import {
 import { useProjectPortForwardsReset } from "./app-ready-port-forwards-hook.js"
 import { bindScreenActions } from "./app-ready-screen-actions.js"
 import { useSshLink } from "./app-ready-ssh-link-hook.js"
+import { useProjectTasksReset } from "./app-ready-tasks-hook.js"
 import { useReadyUrlSync } from "./app-ready-url.js"
+import { filterDashboardProjectsByQuery, filterProjectSummariesByQuery } from "./project-search.js"
 
 type ReadyControllerArgs = {
   readonly dashboard: DashboardData
@@ -47,12 +53,13 @@ type ReadySideEffectsArgs = {
   readonly currentMenu: ReturnType<typeof resolveCurrentMenu>
   readonly dashboard: DashboardData
   readonly dashboardRefreshTick: number
+  readonly navigationDashboard: DashboardData
   readonly state: ReturnType<typeof useReadyState>
 }
 
 const useProjectSyncEffects = (args: ReadySideEffectsArgs) => {
   useProjectSelectionSync({
-    dashboard: args.dashboard,
+    dashboard: args.navigationDashboard,
     selectedProjectId: args.state.selectedProjectId,
     setProjectAuthSnapshot: args.state.setProjectAuthSnapshot,
     setSelectedProject: args.state.setSelectedProject,
@@ -90,6 +97,11 @@ const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
     args.state.setPortForwardInput,
     args.state.setPortForwards
   )
+  useProjectTasksReset(
+    args.state.selectedProjectId,
+    args.state.setProjectTaskLogs,
+    args.state.setProjectTasks
+  )
 }
 
 const useReadyAutoloadEffects = (args: ReadySideEffectsArgs) => {
@@ -122,7 +134,7 @@ const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
     projectsRoot: args.dashboard.health.projectsRoot,
     createView: args.state.createView,
     currentMenu: args.currentMenu,
-    dashboard: args.dashboard,
+    dashboard: args.navigationDashboard,
     projectBrowser: args.state.projectBrowser,
     selectedProjectId: args.state.selectedProjectId,
     setCreateView: args.state.setCreateView,
@@ -234,9 +246,53 @@ const bindBrowserActions = (
   }
 })
 
+const bindTerminalActions = (
+  actionContext: ReturnType<typeof createActionContext>
+) => ({
+  onOpenProjectTerminalById: (projectId: string) => {
+    connectProjectById(projectId, actionContext)
+  }
+})
+
+const bindTaskActions = (
+  actionContext: ReturnType<typeof createActionContext>
+) => ({
+  onLoadProjectTaskLogs: (pid: number) => {
+    loadSelectedProjectTaskLogs(actionContext, pid)
+  },
+  onRefreshProjectTasks: () => {
+    loadSelectedProjectTasks(actionContext)
+  },
+  onStopProjectTask: (pid: number) => {
+    stopSelectedProjectTask(actionContext, pid)
+  }
+})
+
+const resolveSearchSelectedProjectId = (
+  projects: DashboardData["projects"],
+  selectedProjectId: string | null
+): string | null => {
+  if (selectedProjectId !== null && projects.some((project) => project.id === selectedProjectId)) {
+    return selectedProjectId
+  }
+  return projects[0]?.id ?? null
+}
+
+const bindProjectSearchActions = (
+  dashboard: DashboardData,
+  state: ReturnType<typeof useReadyState>
+) => ({
+  onProjectSearchQueryChange: (query: string) => {
+    const projects = filterProjectSummariesByQuery(dashboard.projects, query)
+    state.setProjectSearchQuery(query)
+    state.setSelectedProjectId((selectedProjectId) => resolveSearchSelectedProjectId(projects, selectedProjectId))
+  }
+})
+
 export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDashboard }: ReadyControllerArgs) => {
   const state = useReadyState()
   const currentMenu = resolveCurrentMenu(state.selectedMenuIndex)
+  const navigationDashboard = filterDashboardProjectsByQuery(dashboard, state.projectSearchQuery)
   const selectedProjectSummary = dashboard.projects.find((project) => project.id === state.selectedProjectId)
   const actionContext = createActionContext({
     addTerminalSession: state.addTerminalSession,
@@ -263,18 +319,23 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     setPortForwards: state.setPortForwards,
     setProjectAuthSnapshot: state.setProjectAuthSnapshot,
     setProjectBrowser: state.setProjectBrowser,
+    setProjectTaskLogs: state.setProjectTaskLogs,
+    setProjectTasks: state.setProjectTasks,
     setSelectedMenuIndex: state.setSelectedMenuIndex,
     setSelectedProject: state.setSelectedProject,
     setSelectedProjectId: state.setSelectedProjectId
   })
 
-  useReadySideEffects({ actionContext, currentMenu, dashboard, dashboardRefreshTick, state })
+  useReadySideEffects({ actionContext, currentMenu, dashboard, dashboardRefreshTick, navigationDashboard, state })
   return {
     ...bindMenuActions(actionContext),
     ...bindCreateActions(actionContext, dashboard, state),
     ...bindActionPromptActions(actionContext, state),
     ...bindPortForwardActions(actionContext, state),
     ...bindBrowserActions(actionContext),
+    ...bindTerminalActions(actionContext),
+    ...bindTaskActions(actionContext),
+    ...bindProjectSearchActions(dashboard, state),
     ...bindDatabaseActions(actionContext, state),
     ...bindScreenActions(actionContext, dashboard, state),
     currentMenu,
