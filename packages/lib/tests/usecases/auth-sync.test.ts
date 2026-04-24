@@ -82,7 +82,7 @@ describe("syncGithubAuthKeys", () => {
     expect(next).toBe(target)
   })
 
-  it.effect("creates codex config with gpt-5.4 and long-context overrides", () =>
+  it.effect("creates codex config with gpt-5.5 and long-context overrides", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const fs = yield* _(FileSystem.FileSystem)
@@ -93,7 +93,7 @@ describe("syncGithubAuthKeys", () => {
         yield* _(ensureCodexConfigFile(root, ".orch/auth/codex"))
 
         const configText = yield* _(fs.readFileString(configPath))
-        expect(configText).toContain("model = \"gpt-5.4\"")
+        expect(configText).toContain("model = \"gpt-5.5\"")
         expect(configText).toContain("model_context_window = 1050000")
         expect(configText).toContain("model_auto_compact_token_limit = 945000")
         expect(configText).toContain("model_reasoning_effort = \"xhigh\"")
@@ -276,7 +276,7 @@ describe("syncGithubAuthKeys", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("rewrites managed codex config to include gpt-5.4 and plan mode xhigh", () =>
+  it.effect("rewrites managed codex config to include gpt-5.5 and plan mode xhigh", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const fs = yield* _(FileSystem.FileSystem)
@@ -306,7 +306,7 @@ describe("syncGithubAuthKeys", () => {
         yield* _(ensureCodexConfigFile(root, ".orch/auth/codex"))
 
         const next = yield* _(fs.readFileString(configPath))
-        expect(next).toContain("model = \"gpt-5.4\"")
+        expect(next).toContain("model = \"gpt-5.5\"")
         expect(next).toContain("model_context_window = 1050000")
         expect(next).toContain("model_auto_compact_token_limit = 945000")
         expect(next).toContain("model_reasoning_effort = \"xhigh\"")

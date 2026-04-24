@@ -35,14 +35,14 @@ const codexConfigMarker = "# docker-git codex config"
 // QUOTE(ТЗ): "добавь longcontx"
 // REF: github-issue-183
 // SOURCE: n/a
-// FORMAT THEOREM: ∀c: config(c) -> model(c)="gpt-5.4" ∧ reasoning(c)=xhigh ∧ longcontx_profile(c)=defined
+// FORMAT THEOREM: ∀c: config(c) -> model(c)="gpt-5.5" ∧ reasoning(c)=xhigh ∧ longcontx_profile(c)=defined
 // PURITY: CORE
 // EFFECT: n/a
 // INVARIANT: default config stays deterministic; longcontx profile always present
 // COMPLEXITY: O(1)
 export const defaultCodexConfig = [
   "# docker-git codex config",
-  "model = \"gpt-5.4\"",
+  "model = \"gpt-5.5\"",
   "model_reasoning_effort = \"xhigh\"",
   "plan_mode_reasoning_effort = \"xhigh\"",
   "personality = \"pragmatic\"",
@@ -58,7 +58,7 @@ export const defaultCodexConfig = [
   "shell_tool = true",
   "",
   "[profiles.longcontx]",
-  "model = \"gpt-5.4\"",
+  "model = \"gpt-5.5\"",
   "model_context_window = 1050000",
   "model_auto_compact_token_limit = 945000",
   "model_reasoning_effort = \"xhigh\"",
