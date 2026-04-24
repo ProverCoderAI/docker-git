@@ -74,3 +74,11 @@ DOCKER_GIT_WEB_HOST=127.0.0.1 bun run docker-git -- browser
 ```bash
 docker-git --help
 ```
+
+Структура проекта:
+APP - CLI + React (Frontend)
+LIB - Весь бекенд (Основная бизнес логика)
+API - Просто апи сервер поднятный над LIB 
+
+APP работает только с API, и не имеет доступа к LIB
+API работает только с LIB
