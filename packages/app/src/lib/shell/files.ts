@@ -2,8 +2,6 @@
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
-import { createRequire } from "node:module"
-import nodePath from "node:path"
 import { Effect, Match } from "effect"
 
 import { dockerGitScriptNames } from "../core/docker-git-scripts.js"
@@ -17,8 +15,8 @@ import { resolveWorkspaceRoot } from "./workspace-root.js"
 const ensureParentDir = (path: Path.Path, fs: FileSystem.FileSystem, filePath: string) =>
   fs.makeDirectory(path.dirname(filePath), { recursive: true })
 
-const require = createRequire(import.meta.url)
 const sessionSyncToolRelativePath = ".docker-git-tools/docker-git-session-sync"
+const sessionSyncPackageJsonSpecifier = "@prover-coder-ai/docker-git-session-sync/package.json"
 
 const fallbackHostResources = {
   cpuCount: 1,
@@ -145,26 +143,37 @@ const provisionDockerGitScripts = (
     }
   })
 
-const resolveInstalledSessionSyncTool = (): string | null => {
-  try {
-    const packageJsonPath = require.resolve("@prover-coder-ai/docker-git-session-sync/package.json")
-    return nodePath.join(nodePath.dirname(packageJsonPath), "dist", "docker-git-session-sync.js")
-  } catch {
-    return null
-  }
+const resolveFileUrlPath = (fileUrl: string): string => {
+  const url = new URL(fileUrl)
+  return url.protocol === "file:" ? decodeURIComponent(url.pathname) : fileUrl
 }
 
-const sessionSyncToolCandidates = (path: Path.Path, workspaceRoot: string): ReadonlyArray<string> => {
-  const installed = resolveInstalledSessionSyncTool()
-  const workspaceCandidate = path.join(
-    workspaceRoot,
-    "packages",
-    "docker-git-session-sync",
-    "dist",
-    "docker-git-session-sync.js"
+const resolveInstalledSessionSyncTool = (path: Path.Path): Effect.Effect<string | null> =>
+  Effect.try(() => import.meta.resolve(sessionSyncPackageJsonSpecifier)).pipe(
+    Effect.match({
+      onFailure: () => null,
+      onSuccess: (packageJsonUrl) => {
+        const packageJsonPath = resolveFileUrlPath(packageJsonUrl)
+        return path.join(path.dirname(packageJsonPath), "dist", "docker-git-session-sync.js")
+      }
+    })
   )
-  return installed === null ? [workspaceCandidate] : [workspaceCandidate, installed]
-}
+
+const sessionSyncToolCandidates = (
+  path: Path.Path,
+  workspaceRoot: string
+): Effect.Effect<ReadonlyArray<string>> =>
+  Effect.gen(function*(_) {
+    const installed = yield* _(resolveInstalledSessionSyncTool(path))
+    const workspaceCandidate = path.join(
+      workspaceRoot,
+      "packages",
+      "docker-git-session-sync",
+      "dist",
+      "docker-git-session-sync.js"
+    )
+    return installed === null ? [workspaceCandidate] : [workspaceCandidate, installed]
+  })
 
 // CHANGE: provision standalone session sync tool into the Docker build context
 // WHY: generated containers call docker-git-session-sync directly after git push
@@ -181,7 +190,8 @@ const provisionDockerGitSessionSyncTool = (
   Effect.gen(function*(_) {
     const workspaceRoot = yield* _(resolveWorkspaceRoot(process.cwd()))
     const targetPath = path.join(baseDir, sessionSyncToolRelativePath)
-    for (const sourcePath of sessionSyncToolCandidates(path, workspaceRoot)) {
+    const candidates = yield* _(sessionSyncToolCandidates(path, workspaceRoot))
+    for (const sourcePath of candidates) {
       const exists = yield* _(fs.exists(sourcePath))
       if (exists) {
         const contents = yield* _(fs.readFileString(sourcePath))
@@ -190,7 +200,11 @@ const provisionDockerGitSessionSyncTool = (
         return
       }
     }
-    yield* _(Effect.dieMessage("docker-git-session-sync build artifact not found; run bun run --cwd packages/docker-git-session-sync build"))
+    yield* _(
+      Effect.dieMessage(
+        "docker-git-session-sync build artifact not found; run bun run --cwd packages/docker-git-session-sync build"
+      )
+    )
   })
 
 // CHANGE: write generated docker-git files to disk
