@@ -11,6 +11,7 @@ import {
   buildSnapshotRef,
   formatBytes,
   isPathWithinParent,
+  isChatTranscriptPath,
   sessionDirNames,
   sessionWalkIgnoreDirNames,
   shouldIgnoreSessionPath,
@@ -202,7 +203,11 @@ const findPrContext = (
   return null
 }
 
-const getAllowedSessionRoots = (): ReadonlyArray<{ readonly name: string; readonly path: string }> => {
+type SessionDir = { readonly name: string; readonly path: string }
+
+const allowedSessionRootDescription = sessionDirNames.map((dirName) => `~/${dirName}`).join(" or ")
+
+const getAllowedSessionRoots = (): ReadonlyArray<SessionDir> => {
   const homeDir = os.homedir()
   return sessionDirNames
     .map((dirName) => ({ name: dirName, path: path.join(homeDir, dirName) }))
@@ -213,14 +218,22 @@ const resolveAllowedSessionDir = (
   candidatePath: string,
   verbose: boolean,
   output: Output
-): string | null => {
+): SessionDir | null => {
   const resolvedPath = path.resolve(candidatePath)
   if (!fs.existsSync(resolvedPath)) {
     return null
   }
+  const stats = fs.statSync(resolvedPath)
+  if (!stats.isDirectory()) {
+    return null
+  }
   for (const root of getAllowedSessionRoots()) {
     if (isPathWithinParent(resolvedPath, root.path)) {
-      return resolvedPath
+      const relativePath = toLogicalRelativePath(path.relative(root.path, resolvedPath))
+      return {
+        name: relativePath.length === 0 ? root.name : path.posix.join(root.name, relativePath),
+        path: resolvedPath
+      }
     }
   }
   logVerbose(verbose, output, `Skipping non-session directory: ${candidatePath}`)
@@ -231,23 +244,21 @@ const findSessionDirs = (
   explicitPath: string | null,
   verbose: boolean,
   output: Output
-): ReadonlyArray<{ readonly name: string; readonly path: string }> => {
+): ReadonlyArray<SessionDir> => {
   if (explicitPath !== null) {
-    const allowedPath = resolveAllowedSessionDir(path.resolve(explicitPath), verbose, output)
-    if (allowedPath === null) {
-      throw new Error(
-        `--session-dir must point to a directory under ${sessionDirNames.map((dirName) => `~/${dirName}`).join(", ")}`
-      )
+    const allowedDir = resolveAllowedSessionDir(path.resolve(explicitPath), verbose, output)
+    if (allowedDir === null) {
+      throw new Error(`--session-dir must point to a directory under ${allowedSessionRootDescription}`)
     }
-    return [{ name: path.basename(allowedPath), path: allowedPath }]
+    return [allowedDir]
   }
 
-  const dirs: Array<{ readonly name: string; readonly path: string }> = []
+  const dirs: Array<SessionDir> = []
   for (const root of getAllowedSessionRoots()) {
-    const allowedPath = resolveAllowedSessionDir(root.path, verbose, output)
-    if (allowedPath !== null) {
-      logVerbose(verbose, output, `Found session directory: ${allowedPath}`)
-      dirs.push({ name: root.name, path: allowedPath })
+    const allowedDir = resolveAllowedSessionDir(root.path, verbose, output)
+    if (allowedDir !== null) {
+      logVerbose(verbose, output, `Found session directory: ${allowedDir.path}`)
+      dirs.push(allowedDir)
     }
   }
   return dirs
@@ -277,6 +288,10 @@ export const collectSessionFiles = (dirPath: string, baseName: string, verbose: 
       try {
         const stats = fs.statSync(fullPath)
         const logicalName = path.posix.join(baseName, logicalRelPath)
+        if (!isChatTranscriptPath(logicalName)) {
+          logVerbose(verbose, output, `Skipping non-chat file: ${logicalName}`)
+          continue
+        }
         files.push({ logicalName, sourcePath: fullPath, size: stats.size })
         logVerbose(verbose, output, `Collected file: ${logicalName} (${stats.size} bytes)`)
       } catch (error) {
@@ -364,10 +379,6 @@ export const backupSessions = (options: BackupOptions, cwd: string, output: Outp
   }
 
   const sessionFiles = sessionDirs.flatMap((dir) => collectSessionFiles(dir.path, dir.name, verbose, output))
-  if (sessionFiles.length === 0) {
-    logVerbose(verbose, output, "No session files found to backup")
-    return 0
-  }
   logVerbose(verbose, output, `Total files to backup: ${sessionFiles.length}`)
 
   const backupRepo = ensureBackupRepo(ghEnv, (message) => logVerbose(verbose, output, message), !options.dryRun)
@@ -379,7 +390,7 @@ export const backupSessions = (options: BackupOptions, cwd: string, output: Outp
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "session-sync-repo-"))
   try {
     const snapshotCreatedAt = new Date().toISOString()
-    const snapshotRef = buildSnapshotRef(sourceRepo, prContext?.prNumber ?? null, commitSha, snapshotCreatedAt)
+    const snapshotRef = buildSnapshotRef(sourceRepo, prContext?.prNumber ?? null, branch)
     const prepared = prepareUploadArtifacts(
       sessionFiles,
       snapshotRef,

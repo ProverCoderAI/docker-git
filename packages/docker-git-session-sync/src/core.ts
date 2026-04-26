@@ -14,7 +14,7 @@ export const backupDefaultBranch = "main"
 export const chunkManifestSuffix = ".chunks.json"
 export const maxRepoFileSize = 99 * 1000 * 1000
 export const maxPushBatchBytes = 50 * 1000 * 1000
-export const sessionDirNames: ReadonlyArray<string> = [".codex", ".claude", ".qwen", ".gemini"]
+export const sessionDirNames: ReadonlyArray<string> = [".codex/sessions", ".claude/projects"]
 export const sessionWalkIgnoreDirNames: ReadonlySet<string> = new Set([".git", "node_modules", "tmp"])
 export const githubEnvKeys: ReadonlyArray<string> = ["GITHUB_TOKEN", "GH_TOKEN"]
 
@@ -64,13 +64,29 @@ export const buildBlobUrl = (repoFullName: string, branch: string, repoPath: str
 export const toSnapshotStamp = (createdAt: string): string =>
   createdAt.replaceAll(":", "-").replaceAll(".", "-")
 
+const branchSlugPattern = /[^A-Za-z0-9._-]+/gu
+
+export const toBranchSnapshotSlug = (branch: string): string => {
+  const slug = branch.replace(branchSlugPattern, "-").replace(/^-+|-+$/gu, "")
+  return slug.length === 0 ? "detached" : slug
+}
+
 export const buildSnapshotRef = (
   sourceRepo: string,
   prNumber: number | null,
-  commitSha: string,
-  createdAt: string
+  branch: string
 ): string =>
-  `${sourceRepo}/pr-${prNumber === null ? "no-pr" : prNumber}/commit-${commitSha}/${toSnapshotStamp(createdAt)}`
+  prNumber === null
+    ? `${sourceRepo}/branch-${toBranchSnapshotSlug(branch)}/current`
+    : `${sourceRepo}/pr-${prNumber}/current`
+
+export const isChatTranscriptPath = (logicalName: string): boolean => {
+  const logicalPath = toLogicalRelativePath(logicalName)
+  return (
+    logicalPath.startsWith(".codex/sessions/")
+    || logicalPath.startsWith(".claude/projects/")
+  ) && logicalPath.endsWith(".jsonl")
+}
 
 export const buildCommitMessage = (source: SourceInfo): string =>
   `session-backup: ${source.repo} ${source.branch} ${source.commitSha.slice(0, 12)} ${

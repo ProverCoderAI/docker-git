@@ -11,7 +11,7 @@ const usageText = `Usage:
   docker-git-session-sync download <snapshot-ref> [options]
 
 Options:
-  --session-dir <path>    Path under ~/.codex, ~/.claude, ~/.qwen, or ~/.gemini
+  --session-dir <path>    Path under ~/.codex/sessions or ~/.claude/projects
   --pr-number <number>    Open PR number to post comment to
   --repo <owner/repo>     Source repository or list filter
   --limit <number>        Maximum snapshots to list (default: 20)

@@ -591,6 +591,30 @@ const buildFileMapFromTreeEntries = (entries: ReadonlyArray<TreeEntry>): Map<str
   return fileMap
 }
 
+export const removeSnapshotTreeEntries = (
+  entries: ReadonlyArray<TreeEntry>,
+  snapshotRef: string
+): ReadonlyArray<TreeEntry> => {
+  const snapshotPrefix = `${snapshotRef}/`
+  return entries.filter((entry) => entry.path !== snapshotRef && !entry.path.startsWith(snapshotPrefix))
+}
+
+const mergeHashedTreeEntries = (
+  entries: ReadonlyArray<TreeEntry>,
+  hashedEntries: ReadonlyArray<{ readonly repoPath: string; readonly sha: string }>
+): ReadonlyArray<TreeEntry> => {
+  const fileMap = buildFileMapFromTreeEntries(entries)
+  for (const entry of hashedEntries) {
+    fileMap.set(entry.repoPath, { mode: "100644", type: "blob", sha: entry.sha })
+  }
+  return Array.from(fileMap.entries()).map(([entryPath, entry]) => ({
+    path: entryPath,
+    mode: entry.mode,
+    type: entry.type,
+    sha: entry.sha
+  }))
+}
+
 const addChild = (childrenByDir: Map<string, Array<NamedTreeEntry>>, dirPath: string, child: NamedTreeEntry): void => {
   const current = childrenByDir.get(dirPath) ?? []
   current.push(child)
@@ -671,7 +695,10 @@ export const uploadSnapshot = (
       const gitEnv = buildGitPushEnv(ghEnv, token)
       initializeUploadRepo(repoDir, backupRepo, gitEnv)
       let headSha = fetchRemoteBranchTip(repoDir, backupRepo.defaultBranch, gitEnv)
-      let existingEntries = getTreeEntriesForCommit(backupRepo.fullName, headSha, ghEnv).entries
+      let existingEntries = removeSnapshotTreeEntries(
+        getTreeEntriesForCommit(backupRepo.fullName, headSha, ghEnv).entries,
+        snapshotRef
+      )
       let lastCommitSha = headSha
       let shouldRetry = false
       for (let batchIndex = 0; batchIndex < uploadBatches.length; batchIndex += 1) {
@@ -702,9 +729,7 @@ export const uploadSnapshot = (
         }
         headSha = commitSha
         lastCommitSha = commitSha
-        existingEntries = existingEntries.concat(
-          hashedEntries.map((entry) => ({ path: entry.repoPath, mode: "100644", type: "blob", sha: entry.sha }))
-        )
+        existingEntries = mergeHashedTreeEntries(existingEntries, hashedEntries)
       }
       if (!shouldRetry) {
         return {
