@@ -279,16 +279,10 @@ cd "$REPO_ROOT"
 # REF: issue-192
 if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
   if command -v gh >/dev/null 2>&1; then
-    BACKUP_SCRIPT=""
-    if [ -f "$REPO_ROOT/scripts/session-backup-gist.js" ]; then
-      BACKUP_SCRIPT="$REPO_ROOT/scripts/session-backup-gist.js"
-    elif [ -f /opt/docker-git/scripts/session-backup-gist.js ]; then
-      BACKUP_SCRIPT="/opt/docker-git/scripts/session-backup-gist.js"
-    fi
-    if [ -n "$BACKUP_SCRIPT" ]; then
-      DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 node "$BACKUP_SCRIPT" || echo "[session-backup] Warning: session backup failed (non-fatal)"
+    if command -v docker-git-session-sync >/dev/null 2>&1; then
+      DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 docker-git-session-sync backup --verbose || echo "[session-backup] Warning: session backup failed (non-fatal)"
     else
-      echo "[session-backup] Warning: script not found (expected repo or global path)"
+      echo "[session-backup] Warning: docker-git-session-sync not found (skipping session backup)"
     fi
   else
     echo "[session-backup] Warning: gh CLI not found (skipping session backup)"

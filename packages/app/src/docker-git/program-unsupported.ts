@@ -5,10 +5,6 @@ export type UnsupportedOperationalCommandTag =
   | "ScrapImport"
   | "McpPlaywrightUp"
   | "Apply"
-  | "SessionGistBackup"
-  | "SessionGistList"
-  | "SessionGistView"
-  | "SessionGistDownload"
   | "AuthClaudeLogin"
   | "AuthClaudeStatus"
   | "AuthClaudeLogout"
@@ -31,22 +27,6 @@ export const unsupportedOperationalCommands: Record<
   Apply: {
     command: "Apply",
     message: "Command Apply is not available in API-only host mode."
-  },
-  SessionGistBackup: {
-    command: "session-gists backup",
-    message: "Session gist backup is disabled in API-only host mode."
-  },
-  SessionGistList: {
-    command: "session-gists list",
-    message: "Session gist list is disabled in API-only host mode."
-  },
-  SessionGistView: {
-    command: "session-gists view",
-    message: "Session gist view is disabled in API-only host mode."
-  },
-  SessionGistDownload: {
-    command: "session-gists download",
-    message: "Session gist download is disabled in API-only host mode."
   },
   AuthClaudeLogin: {
     command: "auth claude login",

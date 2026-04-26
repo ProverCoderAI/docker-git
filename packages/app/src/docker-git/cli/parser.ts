@@ -12,7 +12,6 @@ import { parseOpen } from "./parser-open.js"
 import { parseRawOptions } from "./parser-options.js"
 import { parsePanes } from "./parser-panes.js"
 import { parseScrap } from "./parser-scrap.js"
-import { parseSessionGists } from "./parser-session-gists.js"
 import { parseSessions } from "./parser-sessions.js"
 import { parseState } from "./parser-state.js"
 import { usageText } from "./usage.js"
@@ -99,8 +98,6 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("open", () => parseOpen(rest)),
       Match.when("apply", () => parseApply(rest)),
       Match.when("state", () => parseState(rest)),
-      Match.when("session-gists", () => parseSessionGists(rest)),
-      Match.when("gists", () => parseSessionGists(rest)),
       Match.orElse(() => Either.left(unknownCommandError))
     )
 }

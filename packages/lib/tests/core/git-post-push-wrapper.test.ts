@@ -84,7 +84,7 @@ fi
 exit 0
 `
 
-const fakeNodeScript = `#!/usr/bin/env bash
+const fakeSessionSyncScript = `#!/usr/bin/env bash
 set -euo pipefail
 
 if [[ -n "\${FAKE_NODE_CWD_LOG_PATH:-}" ]]; then
@@ -94,7 +94,7 @@ if [[ -n "\${FAKE_NODE_REPO_ROOT_LOG_PATH:-}" ]]; then
   printf '%s\\n' "\${DOCKER_GIT_POST_PUSH_REPO_ROOT:-}" >> "$FAKE_NODE_REPO_ROOT_LOG_PATH"
 fi
 if [[ -n "\${FAKE_NODE_SCRIPT_LOG_PATH:-}" ]]; then
-  printf '%s\\n' "$1" >> "$FAKE_NODE_SCRIPT_LOG_PATH"
+  printf '%s\\n' "$*" >> "$FAKE_NODE_SCRIPT_LOG_PATH"
 fi
 
 exit 0
@@ -242,16 +242,14 @@ const withHarness = <A, E, R>(
       const nodeScriptLogPath = path.join(rootDir, "node-script.log")
 
       yield* _(fs.makeDirectory(path.join(repoDir, ".git"), { recursive: true }))
-      yield* _(fs.makeDirectory(path.join(repoDir, "scripts"), { recursive: true }))
       yield* _(fs.makeDirectory(externalDir, { recursive: true }))
       yield* _(fs.makeDirectory(binDir, { recursive: true }))
       yield* _(fs.makeDirectory(hooksDir, { recursive: true }))
-      yield* _(fs.writeFileString(path.join(repoDir, "scripts", "session-backup-gist.js"), "// test placeholder\n"))
 
       yield* _(writeExecutable(path.join(binDir, "git"), fakeGitScript))
       yield* _(writeExecutable(path.join(binDir, "git-real"), fakeGitScript))
       yield* _(writeExecutable(path.join(binDir, "gh"), fakeGhScript))
-      yield* _(writeExecutable(path.join(binDir, "node"), fakeNodeScript))
+      yield* _(writeExecutable(path.join(binDir, "docker-git-session-sync"), fakeSessionSyncScript))
 
       const postPushScript = extractEmbeddedScript(renderEntrypointGitHooks(), "$POST_PUSH_ACTION")
       const postPushPath = path.join(hooksDir, "post-push")
@@ -294,7 +292,7 @@ describe("git post-push wrapper", () => {
 
         expect(nodeCwd).toEqual([harness.repoDir])
         expect(nodeRepoRoot).toEqual([harness.repoDir])
-        expect(nodeScript).toEqual([`${harness.repoDir}/scripts/session-backup-gist.js`])
+        expect(nodeScript).toEqual(["backup --verbose"])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -310,7 +308,7 @@ describe("git post-push wrapper", () => {
 
         expect(nodeCwd).toEqual([harness.repoDir])
         expect(nodeRepoRoot).toEqual([harness.repoDir])
-        expect(nodeScript).toEqual([`${harness.repoDir}/scripts/session-backup-gist.js`])
+        expect(nodeScript).toEqual(["backup --verbose"])
         expect(gitLog.some((line) => line.startsWith(`${harness.externalDir}\t-C ${harness.repoDir} push`))).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))

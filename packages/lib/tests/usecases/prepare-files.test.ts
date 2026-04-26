@@ -324,21 +324,24 @@ describe("prepareProjectFiles", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("copies docker-git scripts from the workspace root when cwd is a nested package", () =>
+  it.effect("copies docker-git scripts and session sync tool from the workspace root when cwd is a nested package", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const fs = yield* _(FileSystem.FileSystem)
         const path = yield* _(Path.Path)
         const packageDir = path.join(root, "packages", "api")
         const scriptsDir = path.join(root, "scripts")
+        const toolPath = path.join(root, "packages", "docker-git-session-sync", "dist", "docker-git-session-sync.js")
         const outDir = path.join(root, "project-with-scripts")
         const globalConfig = makeGlobalConfig(root, path)
         const projectConfig = makeProjectConfig(outDir, false, path)
 
         yield* _(fs.makeDirectory(packageDir, { recursive: true }))
         yield* _(fs.makeDirectory(scriptsDir, { recursive: true }))
+        yield* _(fs.makeDirectory(path.dirname(toolPath), { recursive: true }))
         yield* _(fs.writeFileString(path.join(root, "bunfig.toml"), "[install]\nlinkWorkspacePackages = true\n"))
-        yield* _(fs.writeFileString(path.join(scriptsDir, "session-backup-gist.js"), "#!/usr/bin/env bun\n"))
+        yield* _(fs.writeFileString(path.join(scriptsDir, "pre-commit-secret-guard.sh"), "#!/usr/bin/env bash\n"))
+        yield* _(fs.writeFileString(toolPath, "#!/usr/bin/env bun\n"))
 
         yield* _(
           withWorkingDirectory(
@@ -350,7 +353,8 @@ describe("prepareProjectFiles", () => {
           )
         )
 
-        expect(yield* _(fs.exists(path.join(outDir, "scripts", "session-backup-gist.js")))).toBe(true)
+        expect(yield* _(fs.exists(path.join(outDir, "scripts", "pre-commit-secret-guard.sh")))).toBe(true)
+        expect(yield* _(fs.exists(path.join(outDir, ".docker-git-tools", "docker-git-session-sync")))).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

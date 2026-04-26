@@ -75,7 +75,7 @@ export const parsePositiveInt = (
 }
 
 // CHANGE: shared helper to extract first arg and rest for subcommand parsing
-// WHY: avoid code duplication in parser-sessions and parser-session-gists
+// WHY: keep parser-sessions action dispatch deterministic
 // QUOTE(ТЗ): "иметь возможность возвращаться ко всем старым сессиям с агентами"
 // REF: issue-143
 // PURITY: CORE

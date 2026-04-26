@@ -11,9 +11,11 @@ ROOT="$(mktemp -d "$ROOT_BASE/local-package-cli.XXXXXX")"
 KEEP="${KEEP:-0}"
 
 PACK_LOG="$ROOT/bun-pack.log"
+SESSION_PACK_LOG="$ROOT/bun-pack-session-sync.log"
 HELP_LOG_BUN="$ROOT/docker-git-help-bun.log"
 TAR_LIST="$ROOT/tar-list.txt"
 PACKED_TARBALL=""
+SESSION_PACKED_TARBALL=""
 PACKAGE_JSON="$REPO_ROOT/packages/app/package.json"
 PACKAGE_JSON_BACKUP="$ROOT/package.json.backup"
 
@@ -28,6 +30,10 @@ on_error() {
   if [[ -f "$PACK_LOG" ]]; then
     echo "--- bun pack log ---" >&2
     cat "$PACK_LOG" >&2 || true
+  fi
+  if [[ -f "$SESSION_PACK_LOG" ]]; then
+    echo "--- bun pack session sync log ---" >&2
+    cat "$SESSION_PACK_LOG" >&2 || true
   fi
   if [[ -f "$HELP_LOG_BUN" ]]; then
     echo "--- bun run docker-git --help log ---" >&2
@@ -46,6 +52,9 @@ cleanup() {
   if [[ -n "$PACKED_TARBALL" ]] && [[ -f "$PACKED_TARBALL" ]]; then
     rm -f "$PACKED_TARBALL" >/dev/null 2>&1 || true
   fi
+  if [[ -n "$SESSION_PACKED_TARBALL" ]] && [[ -f "$SESSION_PACKED_TARBALL" ]]; then
+    rm -f "$SESSION_PACKED_TARBALL" >/dev/null 2>&1 || true
+  fi
   rm -rf "$ROOT" >/dev/null 2>&1 || true
 }
 
@@ -54,8 +63,14 @@ trap cleanup EXIT
 
 dg_prepare_docker_git_cli "$REPO_ROOT" "$ROOT/.e2e-bin"
 
+cd "$REPO_ROOT/packages/docker-git-session-sync"
+bun run build >/dev/null
+SESSION_PACKED_TARBALL="$(bun pm pack --quiet --ignore-scripts --destination "$ROOT" | tee "$SESSION_PACK_LOG" | tail -n 1 | tr -d '\r')"
+[[ -n "$SESSION_PACKED_TARBALL" ]] || fail "bun pm pack did not return session sync tarball path"
+[[ -f "$SESSION_PACKED_TARBALL" ]] || fail "packed session sync tarball not found: $SESSION_PACKED_TARBALL"
+
 cp "$PACKAGE_JSON" "$PACKAGE_JSON_BACKUP"
-bun -e 'import { readFileSync, writeFileSync } from "node:fs"; const path = process.argv[1]; const pkg = JSON.parse(readFileSync(path, "utf8")); delete pkg.devDependencies; writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");' "$PACKAGE_JSON"
+SESSION_PACKED_TARBALL="$SESSION_PACKED_TARBALL" bun -e 'import { readFileSync, writeFileSync } from "node:fs"; const path = process.argv[1]; const pkg = JSON.parse(readFileSync(path, "utf8")); delete pkg.devDependencies; pkg.dependencies = pkg.dependencies ?? {}; pkg.dependencies["@prover-coder-ai/docker-git-session-sync"] = `file:${process.env.SESSION_PACKED_TARBALL}`; writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");' "$PACKAGE_JSON"
 
 cd "$REPO_ROOT/packages/app"
 PACKED_TARBALL="$(bun pm pack --quiet --ignore-scripts --destination "$ROOT" | tee "$PACK_LOG" | tail -n 1 | tr -d '\r')"

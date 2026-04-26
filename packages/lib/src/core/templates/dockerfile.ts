@@ -263,17 +263,20 @@ RUN printf "%s\\n" \
   "AllowUsers ${config.sshUser}" \
   > /etc/ssh/sshd_config.d/${config.sshUser}.conf`
 
-// CHANGE: add docker-git scripts to Docker image at /opt/docker-git/scripts
-// WHY: scripts (session-backup, pre-commit guards, knowledge splitter) must be available
-//      inside the container for git hooks and docker-git module usage
+// CHANGE: add docker-git scripts and session sync tool to Docker image
+// WHY: git hooks need embedded scripts, while session sync is provided by a standalone tool
 // REF: issue-176
 // PURITY: CORE (pure template renderer)
-// INVARIANT: ∀ script ∈ scripts/: accessible(/opt/docker-git/scripts/{script})
+// INVARIANT: scripts are accessible under /opt/docker-git/scripts and session sync under PATH
 const renderDockerfileScripts = (): string =>
-  `# docker-git scripts (hooks, session backup, knowledge guards)
+  `# docker-git scripts (hooks, knowledge guards)
 COPY scripts/ /opt/docker-git/scripts/
 RUN find /opt/docker-git/scripts -type f -name '*.sh' -exec chmod +x {} + \
-  && find /opt/docker-git/scripts -type f -name '*.js' -exec chmod +x {} +`
+  && find /opt/docker-git/scripts -type f -name '*.js' -exec chmod +x {} +
+
+# docker-git standalone tools
+COPY .docker-git-tools/docker-git-session-sync /usr/local/bin/docker-git-session-sync
+RUN chmod +x /usr/local/bin/docker-git-session-sync`
 
 const renderDockerfileWorkspace = (config: TemplateConfig): string =>
   `# Workspace path (supports root-level dirs like /repo)

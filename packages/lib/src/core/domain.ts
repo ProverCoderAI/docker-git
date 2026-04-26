@@ -195,14 +195,6 @@ export interface DownAllCommand {
   readonly _tag: "DownAll"
 }
 
-export type {
-  SessionGistBackupCommand,
-  SessionGistCommand,
-  SessionGistDownloadCommand,
-  SessionGistListCommand,
-  SessionGistViewCommand
-} from "./session-gist-domain.js"
-
 export type ScrapCommand =
   | ScrapExportCommand
   | ScrapImportCommand

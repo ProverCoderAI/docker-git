@@ -1,6 +1,4 @@
 /* jscpd:ignore-start */
-import type { SessionGistCommand } from "./session-gist-domain.js"
-
 export interface SessionsListCommand {
   readonly _tag: "SessionsList"
   readonly projectDir: string
@@ -24,5 +22,4 @@ export type SessionsCommand =
   | SessionsListCommand
   | SessionsKillCommand
   | SessionsLogsCommand
-  | SessionGistCommand
 /* jscpd:ignore-end */

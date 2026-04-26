@@ -37,7 +37,7 @@
     },
     "packages/app": {
       "name": "@prover-coder-ai/docker-git",
-      "version": "1.0.77",
+      "version": "1.0.81",
       "bin": {
         "docker-git": "dist/src/docker-git/main.js",
       },
@@ -56,6 +56,7 @@
         "@effect/workflow": "^0.18.0",
         "@gridland/bun": "0.2.53",
         "@gridland/web": "0.2.53",
+        "@prover-coder-ai/docker-git-session-sync": "workspace:*",
         "effect": "^3.21.0",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
@@ -103,6 +104,25 @@
         "ws": "^8.20.0",
       },
     },
+    "packages/docker-git-session-sync": {
+      "name": "@prover-coder-ai/docker-git-session-sync",
+      "version": "1.0.0",
+      "bin": {
+        "docker-git-session-sync": "dist/docker-git-session-sync.js",
+      },
+      "dependencies": {
+        "@effect/platform-node": "^0.106.0",
+        "effect": "^3.21.0",
+      },
+      "devDependencies": {
+        "@effect/vitest": "^0.29.0",
+        "@types/node": "^24.12.0",
+        "@vitejs/plugin-react": "^6.0.1",
+        "typescript": "^5.9.3",
+        "vite": "^8.0.1",
+        "vitest": "^4.1.0",
+      },
+    },
     "packages/lib": {
       "name": "@effect-template/lib",
       "version": "1.0.0",
@@ -131,6 +151,7 @@
         "@eslint/compat": "2.0.3",
         "@eslint/eslintrc": "3.3.5",
         "@eslint/js": "10.0.1",
+        "@prover-coder-ai/docker-git-session-sync": "workspace:*",
         "@prover-coder-ai/eslint-plugin-suggest-members": "^0.0.25",
         "@ton-ai-core/vibecode-linter": "^1.0.11",
         "@types/node": "^24.12.0",
@@ -489,6 +510,8 @@
     "@prover-coder-ai/dist-deps-prune": ["@prover-coder-ai/dist-deps-prune@1.0.17", "", { "dependencies": { "@effect/platform": "^0.94.5", "@effect/platform-node": "^0.104.1", "@effect/schema": "^0.75.5", "effect": "^3.19.17", "typescript": "^5.9.3" }, "bin": { "dist-deps-prune": "dist/main.js" } }, "sha512-bLSCtn7txAMDiFijYOY+xiXd0CEqLmM6Ti29auqxVaOKGG0+xHAu17MqF8lOr5Xgz4/My9ZrEp9OlyDdQtHS6g=="],
 
     "@prover-coder-ai/docker-git": ["@prover-coder-ai/docker-git@workspace:packages/app"],
+
+    "@prover-coder-ai/docker-git-session-sync": ["@prover-coder-ai/docker-git-session-sync@workspace:packages/docker-git-session-sync"],
 
     "@prover-coder-ai/eslint-plugin-suggest-members": ["@prover-coder-ai/eslint-plugin-suggest-members@0.0.25", "", { "dependencies": { "@effect/platform": "0.94.5", "@effect/platform-node": "0.104.1", "@effect/schema": "0.75.5", "@typescript-eslint/utils": "8.55.0", "effect": "3.21.0" }, "peerDependencies": { "eslint": "10.1.0", "typescript": "5.9.3" } }, "sha512-J0oZtIz6IYeXWBgNLXaX2HyzSOcqTsjE+vzs/MQr7SKASvBYsyA7F34dQsh/8GM/kWBuSltkUsfv2RIcM6+t5Q=="],
 

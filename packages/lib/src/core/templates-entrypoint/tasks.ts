@@ -193,7 +193,7 @@ const renderCloneBody = (config: TemplateConfig): string =>
   ].join("\n")
 
 // CHANGE: provision docker-git scripts into workspace after successful clone
-// WHY: git hooks reference scripts/ relative to repo root (e.g. "bun scripts/session-backup-gist.js");
+// WHY: git hooks reference scripts/ relative to repo root;
 //      symlinking embedded /opt/docker-git/scripts makes them available in any cloned repo
 // REF: issue-176
 // PURITY: SHELL
