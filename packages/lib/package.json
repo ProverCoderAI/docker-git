@@ -50,6 +50,7 @@
     "ts-morph": "^27.0.2"
   },
   "devDependencies": {
+    "@prover-coder-ai/docker-git-session-sync": "workspace:*",
     "@biomejs/biome": "^2.4.8",
     "@effect/eslint-plugin": "^0.3.2",
     "@effect/language-service": "latest",

@@ -278,21 +278,15 @@ cd "$REPO_ROOT"
 #      invokes this after a successful git push
 # REF: issue-192
 if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
-  if command -v gh >/dev/null 2>&1; then
-    BACKUP_SCRIPT=""
-    if [ -f "$REPO_ROOT/scripts/session-backup-gist.js" ]; then
-      BACKUP_SCRIPT="$REPO_ROOT/scripts/session-backup-gist.js"
-    elif [ -f /opt/docker-git/scripts/session-backup-gist.js ]; then
-      BACKUP_SCRIPT="/opt/docker-git/scripts/session-backup-gist.js"
-    fi
-    if [ -n "$BACKUP_SCRIPT" ]; then
-      DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 node "$BACKUP_SCRIPT" || echo "[session-backup] Warning: session backup failed (non-fatal)"
-    else
-      echo "[session-backup] Warning: script not found (expected repo or global path)"
-    fi
-  else
-    echo "[session-backup] Warning: gh CLI not found (skipping session backup)"
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "[session-backup] Error: gh CLI not found"
+    exit 1
   fi
+  if ! command -v docker-git-session-sync >/dev/null 2>&1; then
+    echo "[session-backup] Error: docker-git-session-sync not found"
+    exit 1
+  fi
+  DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 docker-git-session-sync backup --verbose --background --require-comment
 fi
 EOF
 chmod 0755 "$POST_PUSH_ACTION"

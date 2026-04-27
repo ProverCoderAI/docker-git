@@ -7,17 +7,18 @@
   "workspaces": [
     "packages/api",
     "packages/app",
+    "packages/docker-git-session-sync",
     "packages/lib"
   ],
   "scripts": {
     "setup:pre-commit-hook": "bun scripts/setup-pre-commit-hook.js",
-    "build": "bun run --filter @prover-coder-ai/docker-git build",
+    "build": "bun run --filter @prover-coder-ai/docker-git-session-sync build && bun run --filter @prover-coder-ai/docker-git build",
     "api:build": "bun run --filter @effect-template/api build",
     "api:start": "bun run --filter @effect-template/api start",
     "api:dev": "bun run --filter @effect-template/api dev",
     "api:test": "bun run --filter @effect-template/api test",
     "api:typecheck": "bun run --filter @effect-template/api typecheck",
-    "check": "bun run --filter @prover-coder-ai/docker-git check && bun run --filter @effect-template/lib typecheck",
+    "check": "bun run --filter @prover-coder-ai/docker-git-session-sync check && bun run --filter @prover-coder-ai/docker-git check && bun run --filter @effect-template/lib typecheck",
     "check:dist-deps-prune": "bun node_modules/@prover-coder-ai/dist-deps-prune/dist/main.js scan --package ./packages/app/package.json --prune-dev true --silent",
     "changeset": "changeset",
     "changeset-publish": "bun -e \"if (!process.env.NPM_TOKEN) { console.log('Skipping publish: NPM_TOKEN is not set'); process.exit(0); }\" && changeset publish",
@@ -39,8 +40,8 @@
     "lint": "bun run --filter @prover-coder-ai/docker-git lint && bun run --filter @effect-template/lib lint",
     "lint:tests": "bun run --filter @prover-coder-ai/docker-git lint:tests",
     "lint:effect": "bun run --filter @prover-coder-ai/docker-git lint:effect && bun run --filter @effect-template/lib lint:effect",
-    "test": "bun run --filter @prover-coder-ai/docker-git test && bun run --filter @effect-template/lib test",
-    "typecheck": "bun run --filter @prover-coder-ai/docker-git typecheck && bun run --filter @effect-template/lib typecheck",
+    "test": "bun run --filter @prover-coder-ai/docker-git-session-sync test && bun run --filter @prover-coder-ai/docker-git test && bun run --filter @effect-template/lib test",
+    "typecheck": "bun run --filter @prover-coder-ai/docker-git-session-sync typecheck && bun run --filter @prover-coder-ai/docker-git typecheck && bun run --filter @effect-template/lib typecheck",
     "start": "bash -lc 'bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js \"$@\"' --"
   },
   "devDependencies": {

@@ -25,6 +25,13 @@ jobs:
         uses: ./.github/actions/setup
       - name: Build (docker-git package)
         run: bun run --cwd packages/app build
+      - name: Build (session sync package)
+        run: |
+          if [ -f packages/docker-git-session-sync/package.json ]; then
+            bun run --cwd packages/docker-git-session-sync build
+          else
+            echo "packages/docker-git-session-sync is not present; skipping"
+          fi
       - name: Build (api)
         run: bun run --cwd packages/api build
 
@@ -53,6 +60,13 @@ jobs:
         uses: ./.github/actions/setup
       - name: Typecheck (app)
         run: bun run --cwd packages/app check
+      - name: Typecheck (session sync)
+        run: |
+          if [ -f packages/docker-git-session-sync/package.json ]; then
+            bun run --cwd packages/docker-git-session-sync typecheck
+          else
+            echo "packages/docker-git-session-sync is not present; skipping"
+          fi
       - name: Typecheck (lib)
         run: bun run --cwd packages/lib typecheck
       - name: Typecheck (api)
@@ -68,6 +82,14 @@ jobs:
         uses: ./.github/actions/setup
       - name: Lint (app)
         run: bun run --cwd packages/app lint
+      - name: Lint (session sync)
+        run: |
+          if [ -f packages/docker-git-session-sync/package.json ] && \
+            bun -e "const pkg=JSON.parse(await Bun.file('packages/docker-git-session-sync/package.json').text()); process.exit(pkg.scripts?.lint ? 0 : 1)"; then
+            bun run --cwd packages/docker-git-session-sync lint
+          else
+            echo "packages/docker-git-session-sync lint script is not present; skipping"
+          fi
       - name: Lint (lib)
         run: bun run --cwd packages/lib lint
       - name: Lint (api)
@@ -83,6 +105,13 @@ jobs:
         uses: ./.github/actions/setup
       - name: Test (app)
         run: bun run --cwd packages/app test
+      - name: Test (session sync)
+        run: |
+          if [ -f packages/docker-git-session-sync/package.json ]; then
+            bun run --cwd packages/docker-git-session-sync test
+          else
+            echo "packages/docker-git-session-sync is not present; skipping"
+          fi
       - name: Test (lib)
         run: bun run --cwd packages/lib test
       - name: Test (api)
@@ -98,6 +127,14 @@ jobs:
         uses: ./.github/actions/setup
       - name: Lint Effect-TS (app)
         run: bun run --cwd packages/app lint:effect
+      - name: Lint Effect-TS (session sync)
+        run: |
+          if [ -f packages/docker-git-session-sync/package.json ] && \
+            bun -e "const pkg=JSON.parse(await Bun.file('packages/docker-git-session-sync/package.json').text()); process.exit(pkg.scripts?.['lint:effect'] ? 0 : 1)"; then
+            bun run --cwd packages/docker-git-session-sync lint:effect
+          else
+            echo "packages/docker-git-session-sync lint:effect script is not present; skipping"
+          fi
       - name: Lint Effect-TS (lib)
         run: bun run --cwd packages/lib lint:effect
 
