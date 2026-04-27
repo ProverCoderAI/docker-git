@@ -1,4 +1,4 @@
-import { backupSessions, type BackupOptions, type Output } from "./backup.js"
+import { backupSessions, uploadFromContext, type BackupOptions, type Output, type UploadOptions } from "./backup.js"
 import { downloadSnapshot, listSnapshots, viewSnapshot } from "./snapshots.js"
 
 const defaultLimit = 20
@@ -6,6 +6,7 @@ const defaultOutputDir = "./.session-restore"
 
 const usageText = `Usage:
   docker-git-session-sync backup [options]
+  docker-git-session-sync upload --context <path> [options]
   docker-git-session-sync list [options]
   docker-git-session-sync view <snapshot-ref> [options]
   docker-git-session-sync download <snapshot-ref> [options]
@@ -17,13 +18,18 @@ Options:
   --limit <number>        Maximum snapshots to list (default: 20)
   --output <path>         Download directory (default: ./.session-restore)
   --no-comment            Skip posting a PR comment after backup
-  --dry-run               Show what backup would upload
-  --verbose               Enable verbose logging
-  --help                  Show help`
+	  --background            Queue upload in a detached background process
+	  --require-comment       Fail unless the PR git status comment is created
+	  --context <path>        Internal upload context path
+	  --ready-file <path>     Internal background startup handshake path
+	  --dry-run               Show what backup would upload
+	  --verbose               Enable verbose logging
+	  --help                  Show help`
 
 type ParsedCommand =
   | { readonly _tag: "Help" }
   | ({ readonly _tag: "Backup" } & BackupOptions)
+  | ({ readonly _tag: "Upload" } & UploadOptions)
   | { readonly _tag: "List"; readonly limit: number; readonly repo: string | null; readonly verbose: boolean }
   | { readonly _tag: "View"; readonly snapshotRef: string; readonly verbose: boolean }
   | { readonly _tag: "Download"; readonly snapshotRef: string; readonly outputDir: string; readonly verbose: boolean }
@@ -55,13 +61,17 @@ const parseBackup = (args: ReadonlyArray<string>): ParseResult => {
     postComment: boolean
     dryRun: boolean
     verbose: boolean
+    background: boolean
+    requireComment: boolean
   } = {
     sessionDir: null,
     prNumber: null,
     repo: null,
     postComment: true,
     dryRun: false,
-    verbose: false
+    verbose: false,
+    background: false,
+    requireComment: false
   }
   let index = 0
   while (index < args.length) {
@@ -107,6 +117,16 @@ const parseBackup = (args: ReadonlyArray<string>): ParseResult => {
       index += 1
       continue
     }
+    if (arg === "--background") {
+      options.background = true
+      index += 1
+      continue
+    }
+    if (arg === "--require-comment") {
+      options.requireComment = true
+      index += 1
+      continue
+    }
     if (arg === "--verbose") {
       options.verbose = true
       index += 1
@@ -115,6 +135,44 @@ const parseBackup = (args: ReadonlyArray<string>): ParseResult => {
     return { _tag: "Error", message: `unknown backup option ${arg ?? ""}` }
   }
   return { _tag: "Ok", command: { _tag: "Backup", ...options } }
+}
+
+const parseUpload = (args: ReadonlyArray<string>): ParseResult => {
+  let contextPath: string | null = null
+  let readyFilePath: string | null = null
+  let verbose = false
+  let index = 0
+  while (index < args.length) {
+    const arg = args[index]
+    if (arg === "--context") {
+      const value = nextValue(args, index, arg)
+      if (typeof value !== "string") {
+        return value
+      }
+      contextPath = value
+      index += 2
+      continue
+    }
+    if (arg === "--ready-file") {
+      const value = nextValue(args, index, arg)
+      if (typeof value !== "string") {
+        return value
+      }
+      readyFilePath = value
+      index += 2
+      continue
+    }
+    if (arg === "--verbose") {
+      verbose = true
+      index += 1
+      continue
+    }
+    return { _tag: "Error", message: `unknown upload option ${arg ?? ""}` }
+  }
+  if (contextPath === null) {
+    return { _tag: "Error", message: "upload requires --context <path>" }
+  }
+  return { _tag: "Ok", command: { _tag: "Upload", contextPath, readyFilePath, verbose } }
 }
 
 const parseList = (args: ReadonlyArray<string>): ParseResult => {
@@ -213,6 +271,9 @@ export const parseArgs = (args: ReadonlyArray<string>): ParseResult => {
   if (command === "backup") {
     return parseBackup(rest)
   }
+  if (command === "upload") {
+    return parseUpload(rest)
+  }
   if (command === "list") {
     return parseList(rest)
   }
@@ -252,6 +313,9 @@ export const runCli = (
   }
   if (command._tag === "Backup") {
     return backupSessions(command, cwd, output)
+  }
+  if (command._tag === "Upload") {
+    return uploadFromContext(command, cwd, output)
   }
   if (command._tag === "List") {
     return listSnapshots(command, cwd, output)

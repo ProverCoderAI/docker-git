@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { spawnSync } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 
 import {
   buildBlobUrl,
@@ -19,8 +19,18 @@ import {
   summarizeFiles,
   toLogicalRelativePath
 } from "./core.js"
-import { ensureBackupRepo, prepareUploadArtifacts, resolveGhEnvironment, runGitCapture, uploadSnapshot } from "./shell.js"
-import type { GhEnv, Log, SessionFile } from "./types.js"
+import {
+  createPrComment,
+  ensureBackupRepo,
+  gitBlobShaForFile,
+  prepareUploadArtifacts,
+  resolveGhEnvironment,
+  runGitCapture,
+  updatePrComment,
+  uploadSnapshot
+} from "./shell.js"
+import { errorMessage, isRecord, numberField, recordField, stringField } from "./json.js"
+import type { GhEnv, Log, PrComment, SessionFile, SourceInfo, UploadEntry } from "./types.js"
 
 export interface BackupOptions {
   readonly sessionDir: string | null
@@ -28,6 +38,14 @@ export interface BackupOptions {
   readonly repo: string | null
   readonly postComment: boolean
   readonly dryRun: boolean
+  readonly verbose: boolean
+  readonly background: boolean
+  readonly requireComment: boolean
+}
+
+export interface UploadOptions {
+  readonly contextPath: string
+  readonly readyFilePath: string | null
   readonly verbose: boolean
 }
 
@@ -303,22 +321,452 @@ export const collectSessionFiles = (dirPath: string, baseName: string, verbose: 
   return sortSessionFiles(files)
 }
 
-const postPrComment = (
-  repo: string,
-  prNumber: number,
-  comment: string,
+type PrContext = { readonly repo: string; readonly prNumber: number }
+
+type PrCommentContext = {
+  readonly repo: string
+  readonly comment: PrComment
+}
+
+type ResolvedBackupContext = {
+  readonly source: SourceInfo
+  readonly snapshotRef: string
+  readonly gitStatus: string | null
+  readonly prContext: PrContext | null
+}
+
+export type SessionUploadContext = {
+  readonly version: 1
+  readonly cwd: string
+  readonly sessionDir: string | null
+  readonly source: SourceInfo
+  readonly snapshotRef: string
+  readonly gitStatus: string | null
+  readonly prComment: PrCommentContext | null
+  readonly verbose: boolean
+}
+
+const nullableStringField = (value: unknown, key: string): string | null | undefined => {
+  if (!isRecord(value)) {
+    return undefined
+  }
+  const field = value[key]
+  return typeof field === "string" || field === null ? field : undefined
+}
+
+const nullableNumberField = (value: unknown, key: string): number | null | undefined => {
+  if (!isRecord(value)) {
+    return undefined
+  }
+  const field = value[key]
+  return typeof field === "number" || field === null ? field : undefined
+}
+
+const booleanField = (value: unknown, key: string): boolean | null => {
+  if (!isRecord(value)) {
+    return null
+  }
+  const field = value[key]
+  return typeof field === "boolean" ? field : null
+}
+
+const parseSourceInfo = (value: unknown): SourceInfo | null => {
+  const repo = stringField(value, "repo")
+  const branch = stringField(value, "branch")
+  const prNumber = nullableNumberField(value, "prNumber")
+  const commitSha = stringField(value, "commitSha")
+  const createdAt = stringField(value, "createdAt")
+  return repo === null || branch === null || prNumber === undefined || commitSha === null || createdAt === null
+    ? null
+    : { repo, branch, prNumber, commitSha, createdAt }
+}
+
+const parsePrCommentContext = (value: unknown): PrCommentContext | null => {
+  if (value === null) {
+    return null
+  }
+  const repo = stringField(value, "repo")
+  const comment = recordField(value, "comment")
+  const id = numberField(comment, "id")
+  const url = stringField(comment, "url")
+  return repo === null || id === null || url === null ? null : { repo, comment: { id, url } }
+}
+
+export const parseUploadContext = (value: unknown): SessionUploadContext | null => {
+  const version = numberField(value, "version")
+  const cwd = stringField(value, "cwd")
+  const sessionDir = nullableStringField(value, "sessionDir")
+  const source = parseSourceInfo(recordField(value, "source"))
+  const snapshotRef = stringField(value, "snapshotRef")
+  const gitStatus = nullableStringField(value, "gitStatus")
+  const prComment = parsePrCommentContext(isRecord(value) ? value["prComment"] : undefined)
+  const verbose = booleanField(value, "verbose")
+  if (
+    version !== 1 ||
+    cwd === null ||
+    sessionDir === undefined ||
+    source === null ||
+    snapshotRef === null ||
+    gitStatus === undefined ||
+    prComment === null && isRecord(value) && value["prComment"] !== null ||
+    verbose === null
+  ) {
+    return null
+  }
+  return { version, cwd, sessionDir, source, snapshotRef, gitStatus, prComment, verbose }
+}
+
+const resolveBackupContext = (
+  options: BackupOptions,
+  cwd: string,
+  ghEnv: GhEnv,
+  output: Output
+): ResolvedBackupContext | null => {
+  const verbose = options.verbose
+  const repoCandidates = getRepoCandidates(cwd, options.repo, verbose, output)
+  if (repoCandidates.length === 0) {
+    output.err("[session-backup] Could not determine source repository. Use --repo option.")
+    return null
+  }
+  const sourceRepo = repoCandidates[0]
+  if (sourceRepo === undefined) {
+    return null
+  }
+  logVerbose(verbose, output, `Repository: ${sourceRepo}`)
+
+  const branch = runGitCapture(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])
+  if (branch === null || branch.length === 0) {
+    output.err("[session-backup] Could not determine current branch.")
+    return null
+  }
+  logVerbose(verbose, output, `Branch: ${branch}`)
+
+  const commitSha = runGitCapture(cwd, ["rev-parse", "HEAD"])
+  if (commitSha === null || commitSha.length === 0) {
+    output.err("[session-backup] Could not determine current commit.")
+    return null
+  }
+
+  let prContext: PrContext | null = null
+  if (options.prNumber !== null) {
+    if (prIsOpen(sourceRepo, options.prNumber, ghEnv)) {
+      prContext = { repo: sourceRepo, prNumber: options.prNumber }
+    } else {
+      logVerbose(verbose, output, `Skipping PR comment: PR #${options.prNumber} is not open`)
+    }
+  } else if (options.postComment || options.requireComment) {
+    prContext = findPrContext(repoCandidates, branch, verbose, output, ghEnv)
+  }
+
+  if (prContext !== null) {
+    logVerbose(verbose, output, `PR number: ${prContext.prNumber} (${prContext.repo})`)
+  } else if (options.postComment || options.requireComment) {
+    logVerbose(verbose, output, "No PR found for current branch")
+  }
+
+  const source = {
+    repo: sourceRepo,
+    branch,
+    prNumber: prContext?.prNumber ?? null,
+    commitSha,
+    createdAt: new Date().toISOString()
+  }
+  return {
+    source,
+    snapshotRef: buildSnapshotRef(sourceRepo, source.prNumber, branch),
+    gitStatus: getGitStatus(cwd),
+    prContext
+  }
+}
+
+const createQueuedComment = (
+  resolved: ResolvedBackupContext,
   verbose: boolean,
   output: Output,
   ghEnv: GhEnv
-): boolean => {
-  logVerbose(verbose, output, `Posting comment to PR #${prNumber}`)
-  const result = ghPrCommand(["pr", "comment", prNumber.toString(), "--repo", repo, "--body", comment], ghEnv)
-  if (!result.success) {
-    output.err("[session-backup] Failed to post PR comment")
+): PrCommentContext | null => {
+  if (resolved.prContext === null) {
+    return null
+  }
+  logVerbose(verbose, output, `Posting git status comment to PR #${resolved.prContext.prNumber}`)
+  const comment = createPrComment(
+    resolved.prContext.repo,
+    resolved.prContext.prNumber,
+    buildCommentBody({ source: resolved.source, upload: { state: "queued" }, gitStatus: resolved.gitStatus }),
+    ghEnv
+  )
+  if (comment === null) {
+    output.err("[session-backup] Failed to post PR comment with git status")
+    return null
+  }
+  logVerbose(verbose, output, `Comment posted: ${comment.url}`)
+  return { repo: resolved.prContext.repo, comment }
+}
+
+const updateUploadComment = (
+  context: SessionUploadContext,
+  ghEnv: GhEnv,
+  output: Output,
+  upload: Parameters<typeof buildCommentBody>[0]["upload"]
+): void => {
+  if (context.prComment === null) {
+    return
+  }
+  const updated = updatePrComment(
+    context.prComment.repo,
+    context.prComment.comment.id,
+    buildCommentBody({ source: context.source, upload, gitStatus: context.gitStatus }),
+    ghEnv
+  )
+  if (!updated) {
+    output.err("[session-backup] Failed to update PR comment")
+  }
+}
+
+const buildReadmeUploadEntry = (repoPath: string, sourcePath: string): UploadEntry => ({
+  repoPath,
+  sourcePath,
+  type: "readme",
+  size: fs.statSync(sourcePath).size,
+  blobSha: gitBlobShaForFile(sourcePath)
+})
+
+const runSessionUpload = (
+  context: SessionUploadContext,
+  ghEnv: GhEnv,
+  output: Output
+): number => {
+  const verbose = context.verbose
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "session-sync-repo-"))
+  try {
+    const sessionDirs = findSessionDirs(context.sessionDir, verbose, output)
+    if (sessionDirs.length === 0) {
+      logVerbose(verbose, output, "No session directories found")
+      updateUploadComment(context, ghEnv, output, { state: "skipped", message: "No session directories found." })
+      return 0
+    }
+
+    const sessionFiles = sessionDirs.flatMap((dir) => collectSessionFiles(dir.path, dir.name, verbose, output))
+    logVerbose(verbose, output, `Total files to backup: ${sessionFiles.length}`)
+    if (sessionFiles.length === 0) {
+      updateUploadComment(context, ghEnv, output, { state: "skipped", message: "No chat transcripts found." })
+      return 0
+    }
+
+    const backupRepo = ensureBackupRepo(ghEnv, (message) => logVerbose(verbose, output, message))
+    if (backupRepo === null) {
+      throw new Error("Failed to resolve or create the private session backup repository")
+    }
+
+    const prepared = prepareUploadArtifacts(
+      sessionFiles,
+      context.snapshotRef,
+      backupRepo.fullName,
+      backupRepo.defaultBranch,
+      tmpDir,
+      (message) => logVerbose(verbose, output, message)
+    )
+    const summary = summarizeFiles(prepared.manifestFiles)
+    const sessionRoots = sessionDirs.map((dir) => `~/${dir.name}`)
+    const manifestUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, `${context.snapshotRef}/manifest.json`)
+    const readmeRepoPath = `${context.snapshotRef}/README.md`
+    const readmeUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, readmeRepoPath)
+    const manifest = buildManifest({
+      backupRepo,
+      snapshotRef: context.snapshotRef,
+      source: context.source,
+      files: prepared.manifestFiles,
+      createdAt: context.source.createdAt
+    })
+    const readmePath = path.join(tmpDir, "README.md")
+    fs.writeFileSync(
+      readmePath,
+      buildSnapshotReadme({ backupRepo, source: context.source, manifestUrl, summary, sessionRoots }),
+      "utf8"
+    )
+    const uploadEntries = [...prepared.uploadEntries, buildReadmeUploadEntry(readmeRepoPath, readmePath)]
+    logVerbose(verbose, output, `Uploading snapshot to ${backupRepo.fullName}:${context.snapshotRef}`)
+    const uploadResult = uploadSnapshot(backupRepo, context.snapshotRef, manifest, uploadEntries, ghEnv)
+    output.out(`[session-backup] ok: ${context.source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`)
+    printGitStatus(output, context.gitStatus)
+    logVerbose(verbose, output, `[session-backup] Uploaded snapshot to ${backupRepo.fullName}:${context.snapshotRef}`)
+    logVerbose(verbose, output, `[session-backup] Manifest: ${uploadResult.manifestUrl}`)
+    updateUploadComment(context, ghEnv, output, {
+      state: "success",
+      manifestUrl: uploadResult.manifestUrl,
+      readmeUrl,
+      summary
+    })
+    return 0
+  } catch (error) {
+    const message = errorMessage(error)
+    output.err(`[session-backup] ${message}`)
+    updateUploadComment(context, ghEnv, output, { state: "failed", message })
+    return 1
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  }
+}
+
+const writeBackgroundContext = (context: SessionUploadContext): string => {
+  const contextPath = path.join(os.tmpdir(), `docker-git-session-upload-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)
+  fs.writeFileSync(contextPath, `${JSON.stringify(context, null, 2)}\n`, "utf8")
+  return contextPath
+}
+
+const currentEntrypointPath = (): string | null => {
+  const entrypoint = process.argv[1]
+  return entrypoint === undefined || entrypoint.length === 0 ? null : entrypoint
+}
+
+type BackgroundReadyState =
+  | { readonly state: "started" }
+  | { readonly state: "failed"; readonly message: string }
+
+const backgroundReadyTimeoutMs = 10_000
+const backgroundReadyPollMs = 50
+
+const sleepSync = (durationMs: number): void => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, durationMs)
+}
+
+const writeBackgroundReadyState = (readyFilePath: string | null, state: BackgroundReadyState): void => {
+  if (readyFilePath === null) {
+    return
+  }
+  try {
+    fs.writeFileSync(readyFilePath, `${JSON.stringify(state)}\n`, "utf8")
+  } catch {
+    // The parent process also has a timeout fallback; failure to write this
+    // handshake file must not block updating the PR comment from the child.
+  }
+}
+
+const parseBackgroundReadyState = (value: unknown): BackgroundReadyState | null => {
+  const state = stringField(value, "state")
+  if (state === "started") {
+    return { state }
+  }
+  if (state === "failed") {
+    const message = stringField(value, "message")
+    return message === null ? null : { state, message }
+  }
+  return null
+}
+
+const readBackgroundReadyState = (readyFilePath: string): BackgroundReadyState | null => {
+  try {
+    return parseBackgroundReadyState(JSON.parse(fs.readFileSync(readyFilePath, "utf8")))
+  } catch {
+    return null
+  }
+}
+
+const waitForBackgroundReady = (readyFilePath: string): BackgroundReadyState | null => {
+  const deadline = Date.now() + backgroundReadyTimeoutMs
+  while (Date.now() < deadline) {
+    if (fs.existsSync(readyFilePath)) {
+      const state = readBackgroundReadyState(readyFilePath)
+      if (state !== null) {
+        return state
+      }
+    }
+    sleepSync(Math.min(backgroundReadyPollMs, Math.max(1, deadline - Date.now())))
+  }
+  return null
+}
+
+const spawnBackgroundUpload = (context: SessionUploadContext, output: Output): boolean => {
+  const contextPath = writeBackgroundContext(context)
+  const readyFilePath = path.join(os.tmpdir(), `docker-git-session-upload-ready-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)
+  const entrypoint = currentEntrypointPath()
+  const args = entrypoint === null
+    ? ["upload", "--context", contextPath, "--ready-file", readyFilePath]
+    : [entrypoint, "upload", "--context", contextPath, "--ready-file", readyFilePath]
+  if (context.verbose) {
+    args.push("--verbose")
+  }
+  const command = entrypoint === null ? "docker-git-session-sync" : process.execPath
+  try {
+    const child = spawn(command, args, {
+      cwd: context.cwd,
+      detached: true,
+      stdio: "ignore",
+      env: process.env
+    })
+    child.once("error", (error) => {
+      output.err(`[session-backup] Background upload process error: ${errorMessage(error)}`)
+    })
+    const readyState = waitForBackgroundReady(readyFilePath)
+    fs.rmSync(readyFilePath, { force: true })
+    if (readyState === null) {
+      output.err("[session-backup] Background upload did not report readiness")
+      child.unref()
+      return false
+    }
+    if (readyState.state === "failed") {
+      output.err(`[session-backup] Background upload failed to start: ${readyState.message}`)
+      child.unref()
+      return false
+    }
+    child.unref()
+    return true
+  } catch (error) {
+    fs.rmSync(contextPath, { force: true })
+    fs.rmSync(readyFilePath, { force: true })
+    output.err(`[session-backup] Failed to start background upload: ${errorMessage(error)}`)
     return false
   }
-  logVerbose(verbose, output, "Comment posted successfully")
-  return true
+}
+
+const runDryRun = (
+  resolved: ResolvedBackupContext,
+  options: BackupOptions,
+  ghEnv: GhEnv,
+  output: Output
+): number => {
+  const verbose = options.verbose
+  const backupRepo = ensureBackupRepo(ghEnv, (message) => logVerbose(verbose, output, message), false)
+  if (backupRepo === null) {
+    output.err("[session-backup] Failed to resolve the private session backup repository")
+    return 1
+  }
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "session-sync-repo-"))
+  try {
+    const sessionDirs = findSessionDirs(options.sessionDir, verbose, output)
+    const sessionFiles = sessionDirs.flatMap((dir) => collectSessionFiles(dir.path, dir.name, verbose, output))
+    const prepared = prepareUploadArtifacts(
+      sessionFiles,
+      resolved.snapshotRef,
+      backupRepo.fullName,
+      backupRepo.defaultBranch,
+      tmpDir,
+      (message) => logVerbose(verbose, output, message)
+    )
+    const summary = summarizeFiles(prepared.manifestFiles)
+    const manifestUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, `${resolved.snapshotRef}/manifest.json`)
+    const readmeUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, `${resolved.snapshotRef}/README.md`)
+    output.out(`[session-backup] dry-run: ${resolved.source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`)
+    printGitStatus(output, resolved.gitStatus)
+    logVerbose(verbose, output, `[dry-run] Upload target: ${backupRepo.fullName}:${resolved.snapshotRef}`)
+    logVerbose(verbose, output, `[dry-run] README URL: ${readmeUrl}`)
+    logVerbose(verbose, output, `[dry-run] Manifest URL: ${manifestUrl}`)
+    if (options.postComment && resolved.prContext !== null) {
+      logVerbose(verbose, output, `Would post comment to PR #${resolved.prContext.prNumber} in ${resolved.prContext.repo}:`)
+      logVerbose(
+        verbose,
+        output,
+        buildCommentBody({
+          source: resolved.source,
+          upload: { state: "success", manifestUrl, readmeUrl, summary },
+          gitStatus: resolved.gitStatus
+        })
+      )
+    }
+    return 0
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  }
 }
 
 export const backupSessions = (options: BackupOptions, cwd: string, output: Output): number => {
@@ -327,145 +775,73 @@ export const backupSessions = (options: BackupOptions, cwd: string, output: Outp
     return 0
   }
 
+  if (options.requireComment && !options.postComment) {
+    output.err("[session-backup] --require-comment cannot be used with --no-comment")
+    return 1
+  }
+
   const verbose = options.verbose
   const ghEnv = resolveGhEnvironment(cwd, (message) => logVerbose(verbose, output, message))
   logVerbose(verbose, output, "Starting session backup...")
-
-  const repoCandidates = getRepoCandidates(cwd, options.repo, verbose, output)
-  if (repoCandidates.length === 0) {
-    output.err("[session-backup] Could not determine source repository. Use --repo option.")
-    return 1
-  }
-  const sourceRepo = repoCandidates[0]
-  if (sourceRepo === undefined) {
-    return 1
-  }
-  logVerbose(verbose, output, `Repository: ${sourceRepo}`)
-
-  const branch = runGitCapture(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])
-  if (branch === null || branch.length === 0) {
-    output.err("[session-backup] Could not determine current branch.")
-    return 1
-  }
-  logVerbose(verbose, output, `Branch: ${branch}`)
-
-  const commitSha = runGitCapture(cwd, ["rev-parse", "HEAD"])
-  if (commitSha === null || commitSha.length === 0) {
-    output.err("[session-backup] Could not determine current commit.")
+  const resolved = resolveBackupContext(options, cwd, ghEnv, output)
+  if (resolved === null) {
     return 1
   }
 
-  let prContext: { readonly repo: string; readonly prNumber: number } | null = null
-  if (options.prNumber !== null) {
-    if (prIsOpen(sourceRepo, options.prNumber, ghEnv)) {
-      prContext = { repo: sourceRepo, prNumber: options.prNumber }
-    } else {
-      logVerbose(verbose, output, `Skipping PR comment: PR #${options.prNumber} is not open`)
+  if (options.dryRun) {
+    return runDryRun(resolved, options, ghEnv, output)
+  }
+
+  const comment = options.postComment ? createQueuedComment(resolved, verbose, output, ghEnv) : null
+  if (options.requireComment && comment === null) {
+    output.err("[session-backup] Required PR comment was not created")
+    return 1
+  }
+
+  const uploadContext: SessionUploadContext = {
+    version: 1,
+    cwd,
+    sessionDir: options.sessionDir,
+    source: resolved.source,
+    snapshotRef: resolved.snapshotRef,
+    gitStatus: resolved.gitStatus,
+    prComment: comment,
+    verbose
+  }
+
+  if (options.background) {
+    const started = spawnBackgroundUpload(uploadContext, output)
+    if (!started) {
+      updateUploadComment(uploadContext, ghEnv, output, { state: "failed", message: "Failed to start background upload." })
+      return 1
     }
-  } else if (options.postComment) {
-    prContext = findPrContext(repoCandidates, branch, verbose, output, ghEnv)
-  }
-
-  if (prContext !== null) {
-    logVerbose(verbose, output, `PR number: ${prContext.prNumber} (${prContext.repo})`)
-  } else if (options.postComment) {
-    logVerbose(verbose, output, "No PR found for current branch, skipping comment")
-  }
-
-  const sessionDirs = findSessionDirs(options.sessionDir, verbose, output)
-  if (sessionDirs.length === 0) {
-    logVerbose(verbose, output, "No session directories found")
+    output.out(`[session-backup] queued: ${resolved.source.commitSha.slice(0, 12)}`)
+    printGitStatus(output, resolved.gitStatus)
     return 0
   }
 
-  const sessionFiles = sessionDirs.flatMap((dir) => collectSessionFiles(dir.path, dir.name, verbose, output))
-  logVerbose(verbose, output, `Total files to backup: ${sessionFiles.length}`)
+  return runSessionUpload(uploadContext, ghEnv, output)
+}
 
-  const backupRepo = ensureBackupRepo(ghEnv, (message) => logVerbose(verbose, output, message), !options.dryRun)
-  if (backupRepo === null) {
-    output.err("[session-backup] Failed to resolve or create the private session backup repository")
-    return 1
-  }
-
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "session-sync-repo-"))
+export const uploadFromContext = (options: UploadOptions, cwd: string, output: Output): number => {
+  const contextPath = path.resolve(cwd, options.contextPath)
+  const readyFilePath = options.readyFilePath === null ? null : path.resolve(cwd, options.readyFilePath)
   try {
-    const snapshotCreatedAt = new Date().toISOString()
-    const snapshotRef = buildSnapshotRef(sourceRepo, prContext?.prNumber ?? null, branch)
-    const prepared = prepareUploadArtifacts(
-      sessionFiles,
-      snapshotRef,
-      backupRepo.fullName,
-      backupRepo.defaultBranch,
-      tmpDir,
-      (message) => logVerbose(verbose, output, message)
-    )
-    const source = {
-      repo: sourceRepo,
-      branch,
-      prNumber: prContext?.prNumber ?? null,
-      commitSha,
-      createdAt: snapshotCreatedAt
+    const parsed = parseUploadContext(JSON.parse(fs.readFileSync(contextPath, "utf8")))
+    if (parsed === null) {
+      writeBackgroundReadyState(readyFilePath, { state: "failed", message: "Invalid upload context" })
+      output.err("[session-backup] Invalid upload context")
+      return 1
     }
-    const summary = summarizeFiles(prepared.manifestFiles)
-    const sessionRoots = sessionDirs.map((dir) => `~/${dir.name}`)
-    const manifestUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, `${snapshotRef}/manifest.json`)
-    const readmeRepoPath = `${snapshotRef}/README.md`
-    const readmeUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, readmeRepoPath)
-    const gitStatus = getGitStatus(cwd)
-    const manifest = buildManifest({
-      backupRepo,
-      snapshotRef,
-      source,
-      files: prepared.manifestFiles,
-      createdAt: snapshotCreatedAt
-    })
-    const readmePath = path.join(tmpDir, "README.md")
-    fs.writeFileSync(
-      readmePath,
-      buildSnapshotReadme({ backupRepo, source, manifestUrl, summary, sessionRoots }),
-      "utf8"
-    )
-    const uploadEntries = [
-      ...prepared.uploadEntries,
-      {
-        repoPath: readmeRepoPath,
-        sourcePath: readmePath,
-        type: "readme",
-        size: fs.statSync(readmePath).size
-      }
-    ]
-    if (options.dryRun) {
-      output.out(`[session-backup] dry-run: ${source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`)
-      printGitStatus(output, gitStatus)
-      logVerbose(verbose, output, `[dry-run] Upload target: ${backupRepo.fullName}:${snapshotRef}`)
-      logVerbose(verbose, output, `[dry-run] README URL: ${readmeUrl}`)
-      logVerbose(verbose, output, `[dry-run] Manifest URL: ${manifestUrl}`)
-      if (options.postComment && prContext !== null) {
-        logVerbose(verbose, output, `Would post comment to PR #${prContext.prNumber} in ${prContext.repo}:`)
-        logVerbose(verbose, output, buildCommentBody({ source, manifestUrl, readmeUrl, summary, gitStatus }))
-      }
-      return 0
-    }
-
-    logVerbose(verbose, output, `Uploading snapshot to ${backupRepo.fullName}:${snapshotRef}`)
-    const uploadResult = uploadSnapshot(backupRepo, snapshotRef, manifest, uploadEntries, ghEnv)
-    output.out(`[session-backup] ok: ${source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`)
-    printGitStatus(output, gitStatus)
-    logVerbose(verbose, output, `[session-backup] Uploaded snapshot to ${backupRepo.fullName}:${snapshotRef}`)
-    logVerbose(verbose, output, `[session-backup] Manifest: ${uploadResult.manifestUrl}`)
-
-    if (options.postComment && prContext !== null) {
-      postPrComment(
-        prContext.repo,
-        prContext.prNumber,
-        buildCommentBody({ source, manifestUrl: uploadResult.manifestUrl, readmeUrl, summary, gitStatus }),
-        verbose,
-        output,
-        ghEnv
-      )
-    }
-    return 0
+    const context: SessionUploadContext = { ...parsed, verbose: options.verbose || parsed.verbose }
+    writeBackgroundReadyState(readyFilePath, { state: "started" })
+    const ghEnv = resolveGhEnvironment(context.cwd, (message) => logVerbose(context.verbose, output, message))
+    return runSessionUpload(context, ghEnv, output)
+  } catch (error) {
+    writeBackgroundReadyState(readyFilePath, { state: "failed", message: errorMessage(error) })
+    output.err(`[session-backup] ${errorMessage(error)}`)
+    return 1
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true })
+    fs.rmSync(contextPath, { force: true })
   }
 }

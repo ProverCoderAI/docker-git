@@ -97,6 +97,10 @@ if [[ -n "\${FAKE_NODE_SCRIPT_LOG_PATH:-}" ]]; then
   printf '%s\\n' "$*" >> "$FAKE_NODE_SCRIPT_LOG_PATH"
 fi
 
+if [[ -n "\${FAKE_SESSION_SYNC_EXIT_CODE:-}" ]]; then
+  exit "$FAKE_SESSION_SYNC_EXIT_CODE"
+fi
+
 exit 0
 `
 
@@ -292,7 +296,7 @@ describe("git post-push wrapper", () => {
 
         expect(nodeCwd).toEqual([harness.repoDir])
         expect(nodeRepoRoot).toEqual([harness.repoDir])
-        expect(nodeScript).toEqual(["backup --verbose"])
+        expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -308,7 +312,7 @@ describe("git post-push wrapper", () => {
 
         expect(nodeCwd).toEqual([harness.repoDir])
         expect(nodeRepoRoot).toEqual([harness.repoDir])
-        expect(nodeScript).toEqual(["backup --verbose"])
+        expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
         expect(gitLog.some((line) => line.startsWith(`${harness.externalDir}\t-C ${harness.repoDir} push`))).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
@@ -351,6 +355,22 @@ describe("git post-push wrapper", () => {
         expect(nodeCwd).toEqual([])
         expect(nodeRepoRoot).toEqual([])
         expect(nodeScript).toEqual([])
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("propagates post-push failures after a successful push", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(
+          runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"], {
+            env: { FAKE_SESSION_SYNC_EXIT_CODE: "23" },
+            okExitCodes: [23]
+          })
+        )
+
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+
+        expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

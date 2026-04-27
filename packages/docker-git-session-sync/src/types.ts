@@ -21,6 +21,7 @@ export interface UploadEntry {
   readonly sourcePath: string
   readonly type?: string
   readonly size: number
+  readonly blobSha: string
 }
 
 export interface SourceInfo {
@@ -37,12 +38,14 @@ export interface ManifestFile {
   readonly size: number
   readonly repoPath: string
   readonly url: string
+  readonly blobSha?: string
 }
 
 export interface ChunkedManifestPart {
   readonly name: string
   readonly repoPath: string
   readonly url: string
+  readonly blobSha?: string
 }
 
 export interface ChunkedManifestFile {
@@ -51,6 +54,7 @@ export interface ChunkedManifestFile {
   readonly originalSize: number
   readonly chunkManifestPath: string
   readonly chunkManifestUrl: string
+  readonly chunkManifestBlobSha?: string
   readonly parts: ReadonlyArray<ChunkedManifestPart>
 }
 
@@ -76,6 +80,22 @@ export interface PreparedUploadArtifacts {
 export interface FileSummary {
   readonly fileCount: number
   readonly totalBytes: number
+}
+
+export type CommentUploadState =
+  | { readonly state: "queued" }
+  | { readonly state: "skipped"; readonly message: string }
+  | {
+    readonly state: "success"
+    readonly manifestUrl: string
+    readonly readmeUrl: string
+    readonly summary: FileSummary
+  }
+  | { readonly state: "failed"; readonly message: string }
+
+export interface PrComment {
+  readonly id: number
+  readonly url: string
 }
 
 export interface TreeEntry {

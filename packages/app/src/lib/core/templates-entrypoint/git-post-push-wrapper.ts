@@ -137,9 +137,9 @@ docker_git_post_push_action() {
 
   if [[ -x "$DOCKER_GIT_POST_PUSH_ACTION" ]]; then
     if repo_root="$(docker_git_git_resolve_repo_root "$@")" && [[ -n "$repo_root" ]]; then
-      DOCKER_GIT_POST_PUSH_REPO_ROOT="$repo_root" DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 "$DOCKER_GIT_POST_PUSH_ACTION" || true
+      DOCKER_GIT_POST_PUSH_REPO_ROOT="$repo_root" DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 "$DOCKER_GIT_POST_PUSH_ACTION"
     else
-      DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 "$DOCKER_GIT_POST_PUSH_ACTION" || true
+      DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 "$DOCKER_GIT_POST_PUSH_ACTION"
     fi
   fi
 }
@@ -153,7 +153,7 @@ if subcommand="$(docker_git_git_subcommand "$@")" && [[ "$subcommand" == "push" 
   fi
 
   if [[ "$status" -eq 0 ]] && ! docker_git_git_push_is_dry_run "$@"; then
-    docker_git_post_push_action "$@"
+    docker_git_post_push_action "$@" || status=$?
   fi
 
   exit "$status"

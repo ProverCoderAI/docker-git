@@ -3,10 +3,21 @@ import os from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { buildSnapshotRef, isChatTranscriptPath, shouldIgnoreSessionPath } from "../src/core.js"
-import { collectSessionFiles, type Output } from "../src/backup.js"
+import {
+  buildCommentBody,
+  buildSnapshotRef,
+  isChatTranscriptPath,
+  maxRepoFileSize,
+  shouldIgnoreSessionPath
+} from "../src/core.js"
+import { collectSessionFiles, parseUploadContext, uploadFromContext, type Output } from "../src/backup.js"
 import { parseArgs } from "../src/cli.js"
-import { removeSnapshotTreeEntries } from "../src/shell.js"
+import {
+  buildSnapshotDeleteTreeEntries,
+  gitBlobShaForBuffer,
+  prepareUploadArtifacts,
+  removeSnapshotTreeEntries
+} from "../src/shell.js"
 import type { TreeEntry } from "../src/types.js"
 
 const output: Output = {
@@ -81,6 +92,35 @@ describe("snapshot refs", () => {
   })
 })
 
+describe("upload artifacts", () => {
+  it("keeps GitHub API blob payloads below the repository file limit", () => {
+    expect(maxRepoFileSize).toBeLessThanOrEqual(20 * 1000 * 1000)
+  })
+
+  it("stages session contents before hashing and upload", () => {
+    const codexDir = path.join(tmpDir, ".codex")
+    const sessionPath = path.join(codexDir, "sessions", "2026", "04", "27", "rollout.jsonl")
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true })
+    fs.writeFileSync(sessionPath, "before\n")
+
+    const sessionFiles = collectSessionFiles(codexDir, ".codex", false, output)
+    const prepared = prepareUploadArtifacts(
+      sessionFiles,
+      "org/repo/pr-230/current",
+      "backup-owner/docker-git-sessions",
+      "main",
+      tmpDir,
+      () => undefined
+    )
+    fs.writeFileSync(sessionPath, "after\n")
+
+    const entry = prepared.uploadEntries[0]
+    expect(entry?.repoPath).toBe("org/repo/pr-230/current/.codex/sessions/2026/04/27/rollout.jsonl")
+    expect(entry === undefined ? "" : fs.readFileSync(entry.sourcePath, "utf8")).toBe("before\n")
+    expect(entry?.blobSha).toBe(gitBlobShaForBuffer(Buffer.from("before\n")))
+  })
+})
+
 describe("snapshot tree replacement", () => {
   it("removes only files under the exact current snapshot prefix", () => {
     const entries: ReadonlyArray<TreeEntry> = [
@@ -116,6 +156,91 @@ describe("snapshot tree replacement", () => {
       "org/repo/pr-231/current/.codex/sessions/keep.jsonl"
     ])
   })
+
+  it("builds delete entries only for stale current snapshot files", () => {
+    const entries: ReadonlyArray<TreeEntry> = [
+      {
+        path: "org/repo/pr-230/current/.codex/sessions/old.jsonl",
+        mode: "100644",
+        type: "blob",
+        sha: "old"
+      },
+      {
+        path: "org/repo/pr-230/current/.codex/sessions/keep.jsonl",
+        mode: "100644",
+        type: "blob",
+        sha: "keep"
+      },
+      {
+        path: "org/repo/pr-230/current-old/.codex/sessions/old.jsonl",
+        mode: "100644",
+        type: "blob",
+        sha: "neighbor"
+      }
+    ]
+
+    expect(
+      buildSnapshotDeleteTreeEntries(
+        entries,
+        "org/repo/pr-230/current",
+        new Set(["org/repo/pr-230/current/.codex/sessions/keep.jsonl"])
+      )
+    ).toEqual([
+      {
+        path: "org/repo/pr-230/current/.codex/sessions/old.jsonl",
+        mode: "100644",
+        type: "blob",
+        sha: null
+      }
+    ])
+  })
+})
+
+describe("PR comment body", () => {
+  const source = {
+    repo: "org/repo",
+    branch: "issue-230",
+    prNumber: 230,
+    commitSha: "0123456789abcdef",
+    createdAt: "2026-04-27T00:00:00.000Z"
+  }
+
+  it("keeps git status in queued, success, and failure states", () => {
+    const gitStatus = "On branch issue-230\nChanges not staged for commit:\n  modified: src/app.ts"
+    const gitStatusBlock = ["`git status`", "```", gitStatus, "```"].join("\n")
+
+    const queuedBody = buildCommentBody({ source, upload: { state: "queued" }, gitStatus })
+    const successBody = buildCommentBody({
+      source,
+      upload: {
+        state: "success",
+        manifestUrl: "https://example.test/manifest",
+        readmeUrl: "https://example.test/readme",
+        summary: { fileCount: 2, totalBytes: 1234 }
+      },
+      gitStatus
+    })
+    const failureBody = buildCommentBody({
+      source,
+      upload: { state: "failed", message: "upload failed" },
+      gitStatus
+    })
+
+    expect(queuedBody).toContain("Status: queued")
+    expect(queuedBody).toContain(gitStatusBlock)
+    expect(successBody).toContain("Status: success")
+    expect(successBody).toContain("Links: [README](https://example.test/readme) | [Manifest](https://example.test/manifest)")
+    expect(successBody).toContain(gitStatusBlock)
+    expect(failureBody).toContain("Status: failure")
+    expect(failureBody).toContain("Error: upload failed")
+    expect(failureBody).toContain(gitStatusBlock)
+  })
+
+  it("marks unavailable git status explicitly", () => {
+    expect(buildCommentBody({ source, upload: { state: "queued" }, gitStatus: null })).toContain(
+      ["`git status`", "```", "(unavailable)", "```"].join("\n")
+    )
+  })
 })
 
 describe("CLI parser", () => {
@@ -129,13 +254,107 @@ describe("CLI parser", () => {
         repo: "org/repo",
         postComment: false,
         dryRun: false,
-        verbose: false
+        verbose: false,
+        background: false,
+        requireComment: false
       }
     })
+  })
+
+  it("parses background backup options", () => {
+    expect(parseArgs(["backup", "--verbose", "--background", "--require-comment"])).toEqual({
+      _tag: "Ok",
+      command: {
+        _tag: "Backup",
+        sessionDir: null,
+        prNumber: null,
+        repo: null,
+        postComment: true,
+        dryRun: false,
+        verbose: true,
+        background: true,
+        requireComment: true
+      }
+    })
+  })
+
+  it("parses internal upload options", () => {
+    expect(parseArgs(["upload", "--context", "/tmp/session-upload.json", "--verbose"])).toEqual({
+      _tag: "Ok",
+      command: {
+        _tag: "Upload",
+        contextPath: "/tmp/session-upload.json",
+        readyFilePath: null,
+        verbose: true
+      }
+    })
+  })
+
+  it("parses internal upload readiness handshakes", () => {
+    expect(parseArgs(["upload", "--context", "/tmp/session-upload.json", "--ready-file", "/tmp/ready.json", "--verbose"])).toEqual({
+      _tag: "Ok",
+      command: {
+        _tag: "Upload",
+        contextPath: "/tmp/session-upload.json",
+        readyFilePath: "/tmp/ready.json",
+        verbose: true
+      }
+    })
+  })
+
+  it("parses background upload contexts with nested PR comment metadata", () => {
+    const parsed = parseUploadContext({
+      version: 1,
+      cwd: "/workspace",
+      sessionDir: null,
+      source: {
+        repo: "org/repo",
+        branch: "issue-230",
+        prNumber: 230,
+        commitSha: "0123456789abcdef",
+        createdAt: "2026-04-27T00:00:00.000Z"
+      },
+      snapshotRef: "org/repo/pr-230/current",
+      gitStatus: "dirty",
+      prComment: {
+        repo: "org/repo",
+        comment: {
+          id: 1001,
+          url: "https://example.test/comment"
+        }
+      },
+      verbose: true
+    })
+
+    expect(parsed?.prComment?.comment.id).toBe(1001)
   })
 
   it("rejects missing snapshot refs", () => {
     expect(parseArgs(["view"])).toEqual({ _tag: "Error", message: "view requires <snapshot-ref>" })
     expect(parseArgs(["download"])).toEqual({ _tag: "Error", message: "download requires <snapshot-ref>" })
+  })
+})
+
+describe("background upload handshakes", () => {
+  it("reports invalid upload contexts to the parent process", () => {
+    const contextPath = path.join(tmpDir, "bad-context.json")
+    const readyFilePath = path.join(tmpDir, "ready.json")
+    const errors: Array<string> = []
+    fs.writeFileSync(contextPath, "{}\n", "utf8")
+
+    expect(uploadFromContext({
+      contextPath,
+      readyFilePath,
+      verbose: false
+    }, tmpDir, {
+      out: () => undefined,
+      err: (message) => errors.push(message)
+    })).toBe(1)
+
+    expect(JSON.parse(fs.readFileSync(readyFilePath, "utf8"))).toEqual({
+      state: "failed",
+      message: "Invalid upload context"
+    })
+    expect(errors).toContain("[session-backup] Invalid upload context")
   })
 })

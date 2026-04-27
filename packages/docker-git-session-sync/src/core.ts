@@ -2,6 +2,7 @@ import path from "node:path"
 
 import type {
   BackupRepo,
+  CommentUploadState,
   FileSummary,
   SessionFile,
   SnapshotManifest,
@@ -12,7 +13,7 @@ import type {
 export const backupRepoName = "docker-git-sessions"
 export const backupDefaultBranch = "main"
 export const chunkManifestSuffix = ".chunks.json"
-export const maxRepoFileSize = 99 * 1000 * 1000
+export const maxRepoFileSize = 20 * 1000 * 1000
 export const maxPushBatchBytes = 50 * 1000 * 1000
 export const sessionDirNames: ReadonlyArray<string> = [".codex/sessions", ".claude/projects"]
 export const sessionWalkIgnoreDirNames: ReadonlySet<string> = new Set([".git", "node_modules", "tmp"])
@@ -162,17 +163,30 @@ export const buildSnapshotReadme = (input: {
 
 export const buildCommentBody = (input: {
   readonly source: SourceInfo
-  readonly manifestUrl: string
-  readonly readmeUrl: string
-  readonly summary: FileSummary
+  readonly upload: CommentUploadState
   readonly gitStatus: string | null
 }): string => {
   const statusText = input.gitStatus === null ? "(unavailable)" : input.gitStatus
+  const uploadLines = (() => {
+    if (input.upload.state === "queued") {
+      return ["Status: queued"]
+    }
+    if (input.upload.state === "skipped") {
+      return ["Status: skipped", `Message: ${input.upload.message}`]
+    }
+    if (input.upload.state === "failed") {
+      return ["Status: failure", `Error: ${input.upload.message}`]
+    }
+    return [
+      "Status: success",
+      `Files: ${input.upload.summary.fileCount} (${formatBytes(input.upload.summary.totalBytes)})`,
+      `Links: [README](${input.upload.readmeUrl}) | [Manifest](${input.upload.manifestUrl})`
+    ]
+  })()
   return [
     "## AI Session Backup",
     `Commit: ${input.source.commitSha}`,
-    `Files: ${input.summary.fileCount} (${formatBytes(input.summary.totalBytes)})`,
-    `Links: [README](${input.readmeUrl}) | [Manifest](${input.manifestUrl})`,
+    ...uploadLines,
     "",
     "`git status`",
     "```",
