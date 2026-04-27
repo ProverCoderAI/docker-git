@@ -13,12 +13,12 @@ import {
 import { collectSessionFiles, parseUploadContext, uploadFromContext, type Output } from "../src/backup.js"
 import { parseArgs } from "../src/cli.js"
 import {
-  buildSnapshotDeleteTreeEntries,
+  buildUploadTreeChanges,
   gitBlobShaForBuffer,
-  prepareUploadArtifacts,
-  removeSnapshotTreeEntries
+  hasChangedUploadEntries,
+  prepareUploadArtifacts
 } from "../src/shell.js"
-import type { TreeEntry } from "../src/types.js"
+import type { TreeEntry, UploadEntry } from "../src/types.js"
 
 const output: Output = {
   out: () => undefined,
@@ -121,14 +121,20 @@ describe("upload artifacts", () => {
   })
 })
 
-describe("snapshot tree replacement", () => {
-  it("removes only files under the exact current snapshot prefix", () => {
+describe("snapshot tree updates", () => {
+  it("keeps stale remote session files untouched", () => {
     const entries: ReadonlyArray<TreeEntry> = [
       {
         path: "org/repo/pr-230/current/.codex/sessions/old.jsonl",
         mode: "100644",
         type: "blob",
         sha: "old"
+      },
+      {
+        path: "org/repo/pr-230/current/.codex/sessions/keep.jsonl",
+        mode: "100644",
+        type: "blob",
+        sha: "keep"
       },
       {
         path: "org/repo/pr-230/current-old/.codex/sessions/keep.jsonl",
@@ -149,50 +155,18 @@ describe("snapshot tree replacement", () => {
         sha: "keep-other-pr"
       }
     ]
-
-    expect(removeSnapshotTreeEntries(entries, "org/repo/pr-230/current").map((entry) => entry.path)).toEqual([
-      "org/repo/pr-230/current-old/.codex/sessions/keep.jsonl",
-      "org/repo/pr-230/2026-04-26/manifest.json",
-      "org/repo/pr-231/current/.codex/sessions/keep.jsonl"
-    ])
-  })
-
-  it("builds delete entries only for stale current snapshot files", () => {
-    const entries: ReadonlyArray<TreeEntry> = [
+    const desiredEntries: ReadonlyArray<UploadEntry> = [
       {
-        path: "org/repo/pr-230/current/.codex/sessions/old.jsonl",
-        mode: "100644",
-        type: "blob",
-        sha: "old"
-      },
-      {
-        path: "org/repo/pr-230/current/.codex/sessions/keep.jsonl",
-        mode: "100644",
-        type: "blob",
-        sha: "keep"
-      },
-      {
-        path: "org/repo/pr-230/current-old/.codex/sessions/old.jsonl",
-        mode: "100644",
-        type: "blob",
-        sha: "neighbor"
+        repoPath: "org/repo/pr-230/current/.codex/sessions/keep.jsonl",
+        sourcePath: path.join(tmpDir, "unused.jsonl"),
+        type: "file",
+        size: 4,
+        blobSha: "keep"
       }
     ]
 
-    expect(
-      buildSnapshotDeleteTreeEntries(
-        entries,
-        "org/repo/pr-230/current",
-        new Set(["org/repo/pr-230/current/.codex/sessions/keep.jsonl"])
-      )
-    ).toEqual([
-      {
-        path: "org/repo/pr-230/current/.codex/sessions/old.jsonl",
-        mode: "100644",
-        type: "blob",
-        sha: null
-      }
-    ])
+    expect(hasChangedUploadEntries(entries, desiredEntries)).toBe(false)
+    expect(buildUploadTreeChanges("backup-owner/docker-git-sessions", entries, desiredEntries, {})).toEqual([])
   })
 })
 

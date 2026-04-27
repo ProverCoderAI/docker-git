@@ -516,7 +516,7 @@ export const prepareUploadArtifacts = (
   return { uploadEntries, manifestFiles }
 }
 
-type GitTreeChange = {
+export type GitTreeChange = {
   readonly path: string
   readonly mode: "100644"
   readonly type: "blob"
@@ -531,25 +531,6 @@ const buildFileMapFromTreeEntries = (entries: ReadonlyArray<TreeEntry>): Map<str
     }
   }
   return fileMap
-}
-
-export const removeSnapshotTreeEntries = (
-  entries: ReadonlyArray<TreeEntry>,
-  snapshotRef: string
-): ReadonlyArray<TreeEntry> => {
-  const snapshotPrefix = `${snapshotRef}/`
-  return entries.filter((entry) => entry.path !== snapshotRef && !entry.path.startsWith(snapshotPrefix))
-}
-
-export const buildSnapshotDeleteTreeEntries = (
-  entries: ReadonlyArray<TreeEntry>,
-  snapshotRef: string,
-  desiredPaths: ReadonlySet<string>
-): ReadonlyArray<GitTreeChange> => {
-  const snapshotPrefix = `${snapshotRef}/`
-  return entries
-    .filter((entry) => entry.type !== "tree" && entry.path.startsWith(snapshotPrefix) && !desiredPaths.has(entry.path))
-    .map((entry) => ({ path: entry.path, mode: "100644", type: "blob", sha: null }))
 }
 
 const createGitBlob = (repoFullName: string, entry: UploadEntry, ghEnv: GhEnv): string => {
@@ -641,15 +622,13 @@ const updateGitRef = (repoFullName: string, branch: string, commitSha: string, g
 const isRefUpdateConflict = (result: CommandResult): boolean =>
   /409|Conflict|Reference update failed|fast[- ]forward/iu.test(`${result.stderr}\n${result.stdout}`)
 
-const buildUploadTreeChanges = (
+export const buildUploadTreeChanges = (
   repoFullName: string,
-  snapshotRef: string,
   existingEntries: ReadonlyArray<TreeEntry>,
   desiredEntries: ReadonlyArray<UploadEntry>,
   ghEnv: GhEnv
 ): ReadonlyArray<GitTreeChange> => {
   const existingFileMap = buildFileMapFromTreeEntries(existingEntries)
-  const desiredPaths = new Set(desiredEntries.map((entry) => entry.repoPath))
   const changes: Array<GitTreeChange> = []
   for (const entry of desiredEntries) {
     if (existingFileMap.get(entry.repoPath)?.sha === entry.blobSha) {
@@ -662,9 +641,19 @@ const buildUploadTreeChanges = (
       sha: createGitBlob(repoFullName, entry, ghEnv)
     })
   }
-  changes.push(...buildSnapshotDeleteTreeEntries(existingEntries, snapshotRef, desiredPaths))
   return changes
 }
+
+export const hasChangedUploadEntries = (
+  existingEntries: ReadonlyArray<TreeEntry>,
+  desiredEntries: ReadonlyArray<UploadEntry>
+): boolean => {
+  const existingFileMap = buildFileMapFromTreeEntries(existingEntries)
+  return desiredEntries.some((entry) => existingFileMap.get(entry.repoPath)?.sha !== entry.blobSha)
+}
+
+const isContentUploadEntry = (entry: UploadEntry): boolean =>
+  entry.type !== "readme" && entry.type !== "manifest"
 
 export const uploadSnapshot = (
   backupRepo: BackupRepo,
@@ -672,7 +661,7 @@ export const uploadSnapshot = (
   snapshotManifest: SnapshotManifest,
   uploadEntries: ReadonlyArray<UploadEntry>,
   ghEnv: GhEnv
-): { readonly commitSha: string; readonly manifestPath: string; readonly manifestUrl: string } => {
+): { readonly changed: boolean; readonly commitSha: string; readonly manifestPath: string; readonly manifestUrl: string } => {
   const uploadRoot = fs.mkdtempSync(path.join(os.tmpdir(), "session-backup-api-"))
   const manifestPath = `${snapshotRef}/manifest.json`
   const manifestTempPath = path.join(uploadRoot, "manifest.json")
@@ -691,15 +680,23 @@ export const uploadSnapshot = (
       if (currentTree.headSha === undefined) {
         throw new Error(`failed to resolve ${backupRepo.fullName}@${backupRepo.defaultBranch} head`)
       }
+      if (!hasChangedUploadEntries(currentTree.entries, uploadEntries.filter(isContentUploadEntry))) {
+        return {
+          changed: false,
+          commitSha: currentTree.headSha,
+          manifestPath,
+          manifestUrl: buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, manifestPath)
+        }
+      }
       const changes = buildUploadTreeChanges(
         backupRepo.fullName,
-        snapshotRef,
         currentTree.entries,
         desiredEntries,
         ghEnv
       )
       if (changes.length === 0) {
         return {
+          changed: false,
           commitSha: currentTree.headSha,
           manifestPath,
           manifestUrl: buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, manifestPath)
@@ -710,6 +707,7 @@ export const uploadSnapshot = (
       const updateResult = updateGitRef(backupRepo.fullName, backupRepo.defaultBranch, commitSha, ghEnv)
       if (updateResult.success) {
         return {
+          changed: true,
           commitSha,
           manifestPath,
           manifestUrl: buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, manifestPath)

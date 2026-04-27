@@ -587,6 +587,13 @@ const runSessionUpload = (
     const uploadEntries = [...prepared.uploadEntries, buildReadmeUploadEntry(readmeRepoPath, readmePath)]
     logVerbose(verbose, output, `Uploading snapshot to ${backupRepo.fullName}:${context.snapshotRef}`)
     const uploadResult = uploadSnapshot(backupRepo, context.snapshotRef, manifest, uploadEntries, ghEnv)
+    if (!uploadResult.changed) {
+      output.out(`[session-backup] skipped: no new or changed chat transcripts (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`)
+      printGitStatus(output, context.gitStatus)
+      logVerbose(verbose, output, `[session-backup] No backup repo changes for ${backupRepo.fullName}:${context.snapshotRef}`)
+      updateUploadComment(context, ghEnv, output, { state: "skipped", message: "No new or changed chat transcripts." })
+      return 0
+    }
     output.out(`[session-backup] ok: ${context.source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`)
     printGitStatus(output, context.gitStatus)
     logVerbose(verbose, output, `[session-backup] Uploaded snapshot to ${backupRepo.fullName}:${context.snapshotRef}`)
