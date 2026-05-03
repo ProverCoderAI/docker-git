@@ -45,6 +45,12 @@ Optional env:
 - `DOCKER_GIT_PROJECTS_ROOT_VOLUME` (Docker volume name for controller state, default: `docker-git-projects`)
 - `DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN` (optional public ActivityPub origin)
 - `DOCKER_GIT_FEDERATION_ACTOR` (default: `docker-git`)
+- `DOCKER_GIT_EXCHANGE_TARGETS` (optional comma-separated exchange targets, e.g. `https://exchange.lefine.pro` or `code@exchange.lefine.pro`)
+- `DOCKER_GIT_EXCHANGE_PROJECT_REPO_URL` (fallback repo for exchange Tickets without a GitHub URL)
+- `DOCKER_GIT_EXCHANGE_AGENT_PROVIDER` (default: `codex`; also supports `claude`, `opencode`, `custom`)
+- `DOCKER_GIT_EXCHANGE_AGENT_COMMAND` (optional command template; `{{prompt}}` is replaced with the task prompt)
+- `DOCKER_GIT_EXCHANGE_AGENT_TIMEOUT_MS` (default: `3600000`)
+- `DOCKER_GIT_OUTBOX_POLLING_INTERVAL_MS` (default: `5000`)
 
 ## Endpoints
 
@@ -56,6 +62,9 @@ Optional env:
 - `GET /federation/followers`
 - `GET /federation/following`
 - `GET /federation/liked`
+- `POST /federation/exchange/subscriptions` (discover remote actor, persist metadata, send signed `Follow`)
+- `GET /federation/exchange/subscriptions`
+- `POST /federation/exchange/poll` (manual remote outbox poll)
 - `POST /federation/follows` (create ActivityPub `Follow` subscription)
 - `GET /federation/follows`
 - `GET /projects`
@@ -76,6 +85,23 @@ Optional env:
 - `GET /projects/:projectId/agents/:agentId/logs`
 
 ## Subscription workflow (ActivityPub Follow + ForgeFed issues)
+
+Exchange targets must be explicit. Use `https://exchange.lefine.pro`, an actor URL, or a handle like `code@exchange.lefine.pro`; the API resolves the code actor document, stores its `inbox/outbox/followers/publicKey`, sends `Follow`, and polls the stored `outbox`.
+
+```bash
+./ctl request POST /federation/exchange/subscriptions '{
+  "domain":"https://social.provercoder.ai",
+  "target":"https://exchange.lefine.pro",
+  "projectRepoUrl":"https://github.com/ProverCoderAI/docker-git",
+  "agentProvider":"codex"
+}'
+
+./ctl request POST /federation/exchange/poll '{}'
+./ctl request GET /federation/exchange/subscriptions
+./ctl request GET /federation/issues
+```
+
+When a polled `Create(Ticket)` has no GitHub URL in the Ticket payload, `projectRepoUrl` or `DOCKER_GIT_EXCHANGE_PROJECT_REPO_URL` is required for the automatic docker-git project/agent run.
 
 1. Read actor profile (contains `inbox/outbox/followers/following/liked`):
 

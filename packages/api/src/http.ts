@@ -21,6 +21,8 @@ import {
   CreateAgentRequestSchema,
   CreateFollowRequestSchema,
   CreateProjectRequestSchema,
+  ExchangePollRequestSchema,
+  ExchangeSubscribeRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
   ProjectDatabaseProfileRequestSchema,
@@ -52,7 +54,9 @@ import { readContainerTaskLogs, readContainerTaskSnapshot, stopContainerTask } f
 import { latestProjectCursor, listProjectEventsSince } from "./services/events.js"
 import {
   createFollowSubscription,
+  ensureExchangeSubscription,
   ingestFederationInbox,
+  listExchangeSubscriptions,
   listFederationIssues,
   listFollowSubscriptions,
   makeFederationActorDocument,
@@ -60,7 +64,8 @@ import {
   makeFederationFollowersCollection,
   makeFederationFollowingCollection,
   makeFederationLikedCollection,
-  makeFederationOutboxCollection
+  makeFederationOutboxCollection,
+  pollExchangeOutboxes
 } from "./services/federation.js"
 import {
   applyAllProjects,
@@ -201,6 +206,9 @@ const textResponse = (data: string, contentType: string, status = 200) =>
     )
   )
 
+const activityJsonResponse = (data: unknown, status: number) =>
+  textResponse(JSON.stringify(data), "application/activity+json; charset=utf-8", status)
+
 const parseQueryInt = (url: string, key: string, fallback: number): number => {
   const parsed = Number(new URL(url, "http://localhost").searchParams.get(key) ?? "")
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -326,6 +334,12 @@ const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitReq
 const readStateCommitRequest = () => HttpServerRequest.schemaBodyJson(StateCommitRequestSchema)
 const readStateSyncRequest = () => HttpServerRequest.schemaBodyJson(StateSyncRequestSchema)
 const readApplyAllRequest = () => HttpServerRequest.schemaBodyJson(ApplyAllRequestSchema)
+const readExchangeSubscribeRequest = () => HttpServerRequest.schemaBodyJson(ExchangeSubscribeRequestSchema)
+const emptyExchangePollRequest = {}
+const readExchangePollRequest = () =>
+  HttpServerRequest.schemaBodyJson(ExchangePollRequestSchema).pipe(
+    Effect.catchAll(() => Effect.succeed(emptyExchangePollRequest))
+  )
 const emptyUpProjectRequest: UpProjectRequestInput = {}
 const readUpProjectRequest = () =>
   HttpServerRequest.schemaBodyJson(UpProjectRequestSchema).pipe(
@@ -577,7 +591,7 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonResponse(makeFederationActorDocument(context), 200))
+        return yield* _(activityJsonResponse(makeFederationActorDocument(context), 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
@@ -585,7 +599,7 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonResponse(makeFederationOutboxCollection(context), 200))
+        return yield* _(activityJsonResponse(makeFederationOutboxCollection(context), 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
@@ -593,7 +607,7 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonResponse(makeFederationFollowersCollection(context), 200))
+        return yield* _(activityJsonResponse(makeFederationFollowersCollection(context), 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
@@ -601,7 +615,7 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonResponse(makeFederationFollowingCollection(context), 200))
+        return yield* _(activityJsonResponse(makeFederationFollowingCollection(context), 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
@@ -609,7 +623,34 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonResponse(makeFederationLikedCollection(context), 200))
+        return yield* _(activityJsonResponse(makeFederationLikedCollection(context), 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/federation/exchange/subscriptions",
+      Effect.gen(function*(_) {
+        const requestBody = yield* _(readExchangeSubscribeRequest())
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const context = yield* _(resolveFederationContext(request, requestBody.domain))
+        const created = yield* _(ensureExchangeSubscription(requestBody, context))
+        return yield* _(jsonResponse(created, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/federation/exchange/subscriptions",
+      Effect.sync(() => ({ subscriptions: listExchangeSubscriptions() })).pipe(
+        Effect.flatMap((payload) => jsonResponse(payload, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/federation/exchange/poll",
+      Effect.gen(function*(_) {
+        const requestBody = yield* _(readExchangePollRequest())
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const context = yield* _(resolveFederationContext(request))
+        const result = yield* _(pollExchangeOutboxes(requestBody, context))
+        return yield* _(jsonResponse({ result }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(
