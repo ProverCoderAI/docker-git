@@ -2,9 +2,9 @@ import { Effect, Either } from "effect"
 import { Terminal } from "xterm"
 import { FitAddon } from "xterm-addon-fit"
 
-import { deleteTerminalSessionByPath } from "./api.js"
 import type {
   TerminalCleanupArgs,
+  TerminalInputController,
   TerminalLifecycleState,
   TerminalMessageHandlers,
   TerminalPasteGuard,
@@ -19,10 +19,6 @@ import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "./termi
 type TerminalClientMessage =
   | { readonly data: string; readonly type: "input" }
   | { readonly cols: number; readonly rows: number; readonly type: "resize" }
-
-const requestSessionClose = (closePath: string): void => {
-  void Effect.runPromise(deleteTerminalSessionByPath(closePath).pipe(Effect.either, Effect.asVoid))
-}
 
 const runOptionalTerminalOperation = (operation: () => void): boolean =>
   Either.isRight(
@@ -68,6 +64,21 @@ export const createTerminalRuntime = (host: HTMLDivElement): TerminalRuntime => 
   terminal.focus()
   return { fitAddon, terminal }
 }
+
+export const createTerminalInputController = (
+  terminal: Terminal,
+  socketRef: TerminalSocketRef
+): TerminalInputController => ({
+  focus: () => {
+    terminal.focus()
+  },
+  sendInput: (data: string) => {
+    if (data.length === 0) {
+      return
+    }
+    sendTerminalClientMessage(socketRef, { data, type: "input" })
+  }
+})
 
 const createTerminalSocket = (
   session: TerminalSocketConnectArgs["session"],
@@ -223,12 +234,8 @@ export const cleanupTerminalResources = (
   args.removeResize()
   closeSocket(args.socketRef.current)
   args.socketRef.current = null
+  args.runtimeRef.current = null
   args.terminal.dispose()
-  if (!args.connectionRef.current.opened && !args.connectionRef.current.closing) {
-    requestSessionClose(args.session.closePath)
-    args.notifyMessage(args.session.pendingDeleteMessage)
-    args.session.onExit?.()
-  }
 }
 
 const failBeforeAttach = (
@@ -242,7 +249,6 @@ const failBeforeAttach = (
   args.setStatus("error")
   args.notifyMessage(uiMessage)
   args.handlers.connectionRef.current.closing = true
-  requestSessionClose(args.session.closePath)
   if (!args.lifecycle.attachedOnce) {
     args.onAttachFailure()
   }

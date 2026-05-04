@@ -2,6 +2,11 @@ import { describe, expect, it } from "@effect/vitest"
 import { afterEach, beforeEach, vi } from "vitest"
 
 import {
+  resolveTerminalCompactHeaderMode,
+  resolveTerminalTypingMode
+} from "../../src/web/terminal-mobile-layout.js"
+import { shouldShowTerminalTabs } from "../../src/web/terminal-mobile-layout.js"
+import {
   createTerminalPasteGuard,
   extractTerminalImageBase64,
   isTerminalPasteShortcut
@@ -110,5 +115,19 @@ describe("browser terminal helpers", () => {
     pasteGuard.suppressNextNativeImagePaste()
     currentTimeMillis = 2000
     expect(pasteGuard.shouldSuppressTerminalInput("\u0016")).toBe(false)
+  })
+
+  it("uses compact terminal chrome on mobile and only enables typing mode with the keyboard open", () => {
+    expect(resolveTerminalCompactHeaderMode(true)).toBe(true)
+    expect(resolveTerminalCompactHeaderMode(false)).toBe(false)
+    expect(resolveTerminalTypingMode(true, true)).toBe(true)
+    expect(resolveTerminalTypingMode(true, false)).toBe(false)
+    expect(resolveTerminalTypingMode(false, true)).toBe(false)
+  })
+
+  it("hides terminal tabs for a single mobile session and keeps them for multi-session or desktop layouts", () => {
+    expect(shouldShowTerminalTabs(true, 1)).toBe(false)
+    expect(shouldShowTerminalTabs(true, 2)).toBe(true)
+    expect(shouldShowTerminalTabs(false, 1)).toBe(true)
   })
 })

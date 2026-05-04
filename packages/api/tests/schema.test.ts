@@ -407,6 +407,7 @@ describe("api schemas", () => {
   it.effect("decodes terminal session payload", () =>
     Effect.sync(() => {
       const result = Schema.decodeUnknownEither(TerminalSessionSchema)({
+        attachedClients: 2,
         id: "session-1",
         projectId: "project-1",
         sshCommand: "ssh dev@127.0.0.1",
@@ -421,6 +422,7 @@ describe("api schemas", () => {
           throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
         },
         onRight: (value) => {
+          expect(value.attachedClients).toBe(2)
           expect(value.id).toBe("session-1")
           expect(value.projectId).toBe("project-1")
           expect(value.status).toBe("attached")

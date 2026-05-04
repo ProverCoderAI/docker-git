@@ -69,8 +69,6 @@ export type CreateStep =
 
 export const createSteps: ReadonlyArray<CreateStep> = [
   "repoUrl",
-  "repoRef",
-  "outDir",
   "cpuLimit",
   "ramLimit",
   "runUp",

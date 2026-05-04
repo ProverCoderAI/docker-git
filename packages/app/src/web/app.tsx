@@ -11,10 +11,31 @@ import { resolveViewportLayout, type ViewportLayout, type ViewportSize } from ".
 
 const refreshIntervalMs = 15_000
 
-const resolveViewportSize = (): ViewportSize => ({
-  height: typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 900,
-  width: typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1280
-})
+const resolveViewportSize = (): ViewportSize => {
+  const layoutHeight = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 900
+  const layoutWidth = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1280
+  const visualViewport = globalThis.visualViewport
+
+  if (visualViewport === undefined || visualViewport === null) {
+    return {
+      height: layoutHeight,
+      layoutHeight,
+      layoutWidth,
+      offsetLeft: 0,
+      offsetTop: 0,
+      width: layoutWidth
+    }
+  }
+
+  return {
+    height: Math.round(visualViewport.height),
+    layoutHeight,
+    layoutWidth,
+    offsetLeft: Math.round(visualViewport.offsetLeft),
+    offsetTop: Math.round(visualViewport.offsetTop),
+    width: Math.round(visualViewport.width)
+  }
+}
 
 const initialDashboardState = (): DashboardState => ({
   _tag: "Loading",
@@ -103,9 +124,14 @@ const useViewportMode = () => {
     const onResize = () => {
       setViewportSize(resolveViewportSize())
     }
+
     globalThis.addEventListener("resize", onResize)
+    globalThis.visualViewport?.addEventListener("resize", onResize)
+    globalThis.visualViewport?.addEventListener("scroll", onResize)
     return () => {
       globalThis.removeEventListener("resize", onResize)
+      globalThis.visualViewport?.removeEventListener("resize", onResize)
+      globalThis.visualViewport?.removeEventListener("scroll", onResize)
     }
   }, [])
 
@@ -148,10 +174,9 @@ export const App = (): JSX.Element => {
         color: "#f4f7fb",
         fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
         fontSize: viewport.fontSize,
-        height: "100dvh",
-        inset: 0,
+        height: viewport.viewportHeight,
+        minHeight: viewport.viewportHeight,
         overflow: "hidden",
-        position: "fixed",
         width: "100%"
       }}
     >

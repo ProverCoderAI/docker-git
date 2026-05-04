@@ -269,6 +269,7 @@ export const TerminalSessionSchema = Schema.Struct({
   sshCommand: Schema.String,
   status: TerminalSessionStatusSchema,
   createdAt: Schema.String,
+  attachedClients: Schema.optional(Schema.Number),
   startedAt: OptionalString,
   closedAt: OptionalString,
   exitCode: Schema.optional(Schema.Number),

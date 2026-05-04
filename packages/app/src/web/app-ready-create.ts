@@ -2,6 +2,7 @@ import { type Dispatch, type SetStateAction, useEffect } from "react"
 
 import { nextBufferValue } from "../docker-git/menu-buffer-input.js"
 import { advanceCreateFlow, type CreateFlowView, createInitialFlowView } from "../docker-git/menu-create-shared.js"
+import { formatParseError } from "../docker-git/cli/usage.js"
 import { submitCreateInputs } from "./actions-projects.js"
 import { requireGithubAuthConfigured } from "./actions-shared.js"
 import type { BrowserActionContext } from "./actions.js"
@@ -19,7 +20,7 @@ type CreateKeyArgs = {
 }
 
 type CreateSubmitArgs = CreateKeyArgs & {
-  readonly forceWizard?: boolean
+  readonly quickCreate?: boolean
 }
 
 const createCharacterInput = (event: KeyboardEvent): string => event.key.length === 1 ? event.key : ""
@@ -48,7 +49,7 @@ export const submitCreateView = (
     context,
     controllerCwd,
     createView,
-    forceWizard,
+    quickCreate,
     projectsRoot,
     setCreateView
   }: CreateSubmitArgs
@@ -58,10 +59,14 @@ export const submitCreateView = (
   }
 
   const createContext = { cwd: controllerCwd, projectsRoot }
-  const next = forceWizard === true
-    ? advanceCreateFlow(createContext, createView, { forceWizard: true })
-    : advanceCreateFlow(createContext, createView)
+  const next = quickCreate === undefined
+    ? advanceCreateFlow(createContext, createView)
+    : advanceCreateFlow(createContext, createView, { quickCreate })
   if (next === null) {
+    return
+  }
+  if (next._tag === "Error") {
+    context.setMessage(formatParseError(next.error))
     return
   }
   if (next._tag === "Continue") {
@@ -100,7 +105,7 @@ export const handleCreateKey = (
       controllerCwd,
       projectsRoot,
       createView,
-      forceWizard: event.shiftKey,
+      quickCreate: event.shiftKey,
       setCreateView
     })
     return true

@@ -7,6 +7,7 @@ import type { ReadyLayoutProps } from "./app-ready-layout.js"
 import { Box, Text } from "./elements.js"
 import { TerminalPanel } from "./panel-terminal.js"
 import { type BrowserScreen, projectPickerScreen } from "./screen.js"
+import { shouldShowTerminalTabs } from "./terminal-mobile-layout.js"
 import { terminalSessionId } from "./terminal-state.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 
@@ -21,6 +22,7 @@ type TerminalScreenProps = Pick<
   | "onTerminalMessage"
   | "projectBrowser"
   | "terminalSessions"
+  | "viewportLayout"
 >
 
 type TerminalPaneProps =
@@ -32,10 +34,11 @@ type TerminalPaneProps =
     | "onTerminalClose"
     | "onTerminalMessage"
     | "projectBrowser"
+    | "viewportLayout"
   >
   & {
     readonly singleSession: boolean
-    readonly terminalSession: ActiveTerminalSession
+  readonly terminalSession: ActiveTerminalSession
   }
 
 const requestTerminalSessionClose = (closePath: string): void => {
@@ -70,10 +73,12 @@ const terminalTabLabel = (session: ActiveTerminalSession): string => session.bro
 const TerminalTab = (
   {
     active,
+    compactMobile,
     onSelect,
     session
   }: {
     readonly active: boolean
+    readonly compactMobile: boolean
     readonly onSelect: () => void
     readonly session: ActiveTerminalSession
   }
@@ -82,6 +87,8 @@ const TerminalTab = (
     backgroundColor={active ? "#17212b" : "#0f141a"}
     border={true}
     borderColor={active ? "#78f0a3" : "#3a4652"}
+    maxWidth={compactMobile ? "44vw" : "none"}
+    minWidth={0}
     onClick={onSelect}
     padding="6px"
     width="auto"
@@ -95,49 +102,107 @@ const TerminalTab = (
 const TerminalTabs = (
   {
     activeSessionId,
+    compactMobile,
     onOpenProjectTerminalById,
     onSelectTerminal,
     terminalSessions
   }: Pick<TerminalScreenProps, "onOpenProjectTerminalById" | "onSelectTerminal" | "terminalSessions"> & {
     readonly activeSessionId: string | null
+    readonly compactMobile: boolean
   }
-): JSX.Element => (
-  <Box flexShrink={0} flexWrap="wrap" gap={1}>
-    {terminalSessions.map((session) => {
-      const sessionId = terminalSessionId(session)
-      return (
-        <TerminalTab
-          active={sessionId === activeSessionId}
-          key={sessionId}
-          onSelect={() => {
-            onSelectTerminal(sessionId)
-          }}
-          session={session}
-        />
-      )
-    })}
-    {terminalSessions.length === 0
-      ? null
-      : (
-        <Box
-          border={true}
-          borderColor="#3a4652"
-          onClick={() => {
-            const active = terminalSessions.find((session) => terminalSessionId(session) === activeSessionId) ??
-              terminalSessions.at(-1)
-            const projectId = active?.browserProjectId
-            if (projectId !== undefined) {
-              onOpenProjectTerminalById(projectId)
-            }
-          }}
-          padding="6px"
-          width="auto"
-        >
-          <Text bold={true} fg="#78f0a3">+ New terminal</Text>
-        </Box>
-      )}
-  </Box>
-)
+): JSX.Element => {
+  if (compactMobile) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexShrink: 0,
+          gap: "6px",
+          minWidth: 0,
+          overflowX: "auto",
+          overflowY: "hidden",
+          paddingBottom: "4px"
+        }}
+      >
+        {terminalSessions.map((session) => {
+          const sessionId = terminalSessionId(session)
+          return (
+            <TerminalTab
+              active={sessionId === activeSessionId}
+              compactMobile={true}
+              key={sessionId}
+              onSelect={() => {
+                onSelectTerminal(sessionId)
+              }}
+              session={session}
+            />
+          )
+        })}
+        {terminalSessions.length === 0
+          ? null
+          : (
+            <Box
+              border={true}
+              borderColor="#3a4652"
+              onClick={() => {
+                const active = terminalSessions.find((session) => terminalSessionId(session) === activeSessionId) ??
+                  terminalSessions.at(-1)
+                const projectId = active?.browserProjectId
+                const projectKey = active?.browserProjectKey
+                if (projectId !== undefined) {
+                  onOpenProjectTerminalById(projectId, projectKey)
+                }
+              }}
+              padding="6px"
+              width="auto"
+            >
+              <Text bold={true} fg="#78f0a3">+ New</Text>
+            </Box>
+          )}
+      </div>
+    )
+  }
+
+  return (
+    <Box flexShrink={0} flexWrap="wrap" gap={1}>
+      {terminalSessions.map((session) => {
+        const sessionId = terminalSessionId(session)
+        return (
+          <TerminalTab
+            active={sessionId === activeSessionId}
+            compactMobile={false}
+            key={sessionId}
+            onSelect={() => {
+              onSelectTerminal(sessionId)
+            }}
+            session={session}
+          />
+        )
+      })}
+      {terminalSessions.length === 0
+        ? null
+        : (
+          <Box
+            border={true}
+            borderColor="#3a4652"
+            onClick={() => {
+              const active = terminalSessions.find((session) => terminalSessionId(session) === activeSessionId) ??
+                terminalSessions.at(-1)
+              const projectId = active?.browserProjectId
+              const projectKey = active?.browserProjectKey
+              if (projectId !== undefined) {
+                onOpenProjectTerminalById(projectId, projectKey)
+              }
+            }}
+            padding="6px"
+            width="auto"
+          >
+            <Text bold={true} fg="#78f0a3">+ New terminal</Text>
+          </Box>
+        )}
+    </Box>
+  )
+}
 
 const TerminalPane = (
   {
@@ -148,27 +213,37 @@ const TerminalPane = (
     onTerminalMessage,
     projectBrowser,
     singleSession,
-    terminalSession
+    terminalSession,
+    viewportLayout
   }: TerminalPaneProps
 ): JSX.Element => {
   const sessionId = terminalSessionId(terminalSession)
   const browserProjectId = terminalSession.browserProjectId
+  const browserProjectKey = terminalSession.browserProjectKey
   const canOpenBrowser = canOpenProjectBrowser(projectBrowser, browserProjectId)
+  const detachTerminalSession = (): void => {
+    onTerminalClose(sessionId)
+    if (singleSession) {
+      onSetActiveScreen(terminalReturnScreen(terminalSession))
+    }
+  }
   return (
     <div style={activeTerminalPaneStyle}>
       <TerminalPanel
+        keyboardOpen={viewportLayout.keyboardOpen}
+        mobileMode={viewportLayout.mode === "mobile"}
         onAttachFailure={() => {
-          onTerminalClose(sessionId)
-          if (singleSession) {
-            onSetActiveScreen(terminalReturnScreen(terminalSession))
-          }
+          detachTerminalSession()
         }}
-        onClose={() => {
+        onDetach={() => {
+          detachTerminalSession()
+          onTerminalMessage(`Detached SSH terminal: ${terminalSession.session.id}.`)
+        }}
+        onKill={() => {
           requestTerminalSessionClose(terminalSession.closePath)
-          onTerminalClose(sessionId)
-          if (singleSession) {
-            onSetActiveScreen(terminalReturnScreen(terminalSession))
-          }
+          terminalSession.onExit?.()
+          detachTerminalSession()
+          onTerminalMessage(`Killed SSH terminal: ${terminalSession.session.id}.`)
         }}
         onOpenBrowser={browserProjectId === undefined || !canOpenBrowser
           ? undefined
@@ -178,7 +253,7 @@ const TerminalPane = (
         onOpenTerminal={browserProjectId === undefined
           ? undefined
           : () => {
-            onOpenProjectTerminalById(browserProjectId)
+            onOpenProjectTerminalById(browserProjectId, browserProjectKey)
           }}
         onMessage={onTerminalMessage}
         session={terminalSession}
@@ -191,16 +266,22 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
   if (props.terminalSessions.length === 0) {
     return null
   }
+  const mobileMode = props.viewportLayout.mode === "mobile"
   const activeSessionId = resolveActiveTerminalSessionId(props.terminalSessions, props.activeTerminalSessionId)
   const activeSession = props.terminalSessions.find((session) => terminalSessionId(session) === activeSessionId)
   return (
-    <Box flexDirection="column" flexGrow={1} gap={1} minHeight={0} overflow="hidden">
-      <TerminalTabs
-        activeSessionId={activeSessionId}
-        onOpenProjectTerminalById={props.onOpenProjectTerminalById}
-        onSelectTerminal={props.onSelectTerminal}
-        terminalSessions={props.terminalSessions}
-      />
+    <Box flexDirection="column" flexGrow={1} gap={mobileMode ? "4px" : 1} minHeight={0} overflow="hidden">
+      {shouldShowTerminalTabs(mobileMode, props.terminalSessions.length)
+        ? (
+          <TerminalTabs
+            activeSessionId={activeSessionId}
+            compactMobile={mobileMode}
+            onOpenProjectTerminalById={props.onOpenProjectTerminalById}
+            onSelectTerminal={props.onSelectTerminal}
+            terminalSessions={props.terminalSessions}
+          />
+        )
+        : null}
       <Box flexDirection="column" flexGrow={1} minHeight={0} overflow="hidden">
         {activeSession === undefined
           ? null
@@ -215,6 +296,7 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
               projectBrowser={props.projectBrowser}
               singleSession={props.terminalSessions.length === 1}
               terminalSession={activeSession}
+              viewportLayout={props.viewportLayout}
             />
           )}
       </Box>

@@ -74,6 +74,7 @@ import {
   downAllProjects,
   downProject,
   getProject,
+  getProjectItemByKey,
   listProjects,
   readProjectLogs,
   readProjectPs,
@@ -106,7 +107,13 @@ import {
 } from "./services/project-port-forwards.js"
 import { proxyProjectPortForward } from "./services/project-port-proxy.js"
 import { parseProjectPortProxyPath } from "./services/project-port-proxy-core.js"
-import { createTerminalSession, deleteTerminalSession } from "./services/terminal-sessions.js"
+import {
+  createTerminalSession,
+  deleteTerminalSession,
+  getProjectTerminalSession,
+  listProjectTerminalSessions,
+  lookupTerminalSessionById
+} from "./services/terminal-sessions.js"
 import {
   commitStateFromRequest,
   initStateFromRequest,
@@ -119,6 +126,10 @@ import {
 
 const ProjectParamsSchema = Schema.Struct({
   projectId: Schema.String
+})
+
+const ProjectKeyParamsSchema = Schema.Struct({
+  projectKey: Schema.String
 })
 
 const ProjectPortForwardParamsSchema = Schema.Struct({
@@ -138,6 +149,11 @@ const AgentParamsSchema = Schema.Struct({
 
 const TerminalSessionParamsSchema = Schema.Struct({
   projectId: Schema.String,
+  sessionId: Schema.String
+})
+
+const TerminalSessionByProjectKeyParamsSchema = Schema.Struct({
+  projectKey: Schema.String,
   sessionId: Schema.String
 })
 
@@ -311,10 +327,12 @@ const errorResponse = (error: ApiError | unknown) => {
 }
 
 const projectParams = HttpRouter.schemaParams(ProjectParamsSchema)
+const projectKeyParams = HttpRouter.schemaParams(ProjectKeyParamsSchema)
 const projectPortForwardParams = HttpRouter.schemaParams(ProjectPortForwardParamsSchema)
 const projectDatabaseProfileParams = HttpRouter.schemaParams(ProjectDatabaseProfileParamsSchema)
 const agentParams = HttpRouter.schemaParams(AgentParamsSchema)
 const terminalSessionParams = HttpRouter.schemaParams(TerminalSessionParamsSchema)
+const terminalSessionByProjectKeyParams = HttpRouter.schemaParams(TerminalSessionByProjectKeyParamsSchema)
 const containerTaskParams = HttpRouter.schemaParams(ContainerTaskParamsSchema)
 const authTerminalSessionParams = HttpRouter.schemaParams(AuthTerminalSessionParamsSchema)
 
@@ -520,6 +538,14 @@ export const makeRouter = () => {
     HttpRouter.get(
       "/auth/terminal-sessions/:sessionId/ws",
       terminalWebSocketUpgradeResponse.pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/terminal-sessions/:sessionId",
+      Effect.gen(function*(_) {
+        const params = yield* _(authTerminalSessionParams)
+        const session = yield* _(lookupTerminalSessionById(params.sessionId))
+        return yield* _(jsonResponse(session, 200))
+      }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.del(
       "/auth/terminal-sessions/:sessionId",
@@ -955,10 +981,78 @@ export const makeRouter = () => {
       )
     ),
     HttpRouter.post(
+      "/projects/by-key/:projectKey/terminal-sessions",
+      projectKeyParams.pipe(
+        Effect.flatMap(({ projectKey }) =>
+          getProjectItemByKey(projectKey).pipe(
+            Effect.flatMap((project) => createTerminalSession(project.projectDir))
+          )
+        ),
+        Effect.flatMap(({ project, session }) => jsonResponse({ ok: true, project, session }, 201)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/projects/by-key/:projectKey/terminal-sessions",
+      projectKeyParams.pipe(
+        Effect.flatMap(({ projectKey }) =>
+          getProjectItemByKey(projectKey).pipe(
+            Effect.map((project) => ({ sessions: listProjectTerminalSessions(project.projectDir) }))
+          )
+        ),
+        Effect.flatMap((body) => jsonResponse(body, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/projects/by-key/:projectKey/terminal-sessions/:sessionId",
+      terminalSessionByProjectKeyParams.pipe(
+        Effect.flatMap(({ projectKey, sessionId }) =>
+          getProjectItemByKey(projectKey).pipe(
+            Effect.flatMap((project) => getProjectTerminalSession(project.projectDir, sessionId))
+          )
+        ),
+        Effect.flatMap((session) => jsonResponse({ session }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/projects/by-key/:projectKey/terminal-sessions/:sessionId/ws",
+      terminalWebSocketUpgradeResponse.pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.del(
+      "/projects/by-key/:projectKey/terminal-sessions/:sessionId",
+      terminalSessionByProjectKeyParams.pipe(
+        Effect.flatMap(({ projectKey, sessionId }) =>
+          getProjectItemByKey(projectKey).pipe(
+            Effect.flatMap((project) => deleteTerminalSession(project.projectDir, sessionId))
+          )
+        ),
+        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
       "/projects/:projectId/terminal-sessions",
       projectParams.pipe(
         Effect.flatMap(({ projectId }) => createTerminalSession(projectId)),
         Effect.flatMap(({ project, session }) => jsonResponse({ ok: true, project, session }, 201)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/projects/:projectId/terminal-sessions",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => Effect.succeed({ sessions: listProjectTerminalSessions(projectId) })),
+        Effect.flatMap((body) => jsonResponse(body, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/projects/:projectId/terminal-sessions/:sessionId",
+      terminalSessionParams.pipe(
+        Effect.flatMap(({ projectId, sessionId }) => getProjectTerminalSession(projectId, sessionId)),
+        Effect.flatMap((session) => jsonResponse({ session }, 200)),
         Effect.catchAll(errorResponse)
       )
     ),

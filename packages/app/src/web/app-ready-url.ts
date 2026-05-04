@@ -4,7 +4,7 @@ import type { DashboardData } from "./api.js"
 import type { BrowserShortcutArgs } from "./app-ready-shortcut-runtime.js"
 import { browserMenuIndex, browserMenuItems, type BrowserMenuTag } from "./menu.js"
 import { type BrowserScreen, isProjectMenu, menuScreen, outputScreen, screenForMenu } from "./screen.js"
-import type { ActiveTerminalSession } from "./terminal.js"
+import { terminalSessionRoutePath, type ActiveTerminalSession } from "./terminal.js"
 
 type ReadyUrlNavigation = {
   readonly activeScreen: BrowserScreen
@@ -169,12 +169,12 @@ export const readyUrlPath = (
   }: ReadyUrlPathArgs
 ): string | null => {
   if (activeTerminalSession?.browserProjectId !== undefined) {
-    return `/ssh/${
-      encodePathTail(
-        projectToken(selectedProjectSummary, activeTerminalSession.browserProjectId) ??
-          activeTerminalSession.browserProjectId
-      )
-    }`
+    return activeTerminalSession.sessionPath ?? terminalSessionRoutePath(activeTerminalSession.session.id)
+  }
+
+  if (currentMenu === "Select") {
+    const token = projectToken(selectedProjectSummary, selectedProjectId)
+    return token === null ? "/menu/select" : `/ssh/${encodePathTail(token)}`
   }
 
   const slug = menuSlugs[currentMenu]

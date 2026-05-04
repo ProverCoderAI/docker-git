@@ -16,6 +16,7 @@ type ContentPanelProps = {
   readonly authSnapshot: AuthSnapshot | null
   readonly compact: boolean
   readonly controllerCwd: string
+  readonly dashboardRefreshTick: number
   readonly projectsRoot: string
   readonly createView: CreateFlowView
   readonly currentMenu: BrowserMenuTag
@@ -23,9 +24,17 @@ type ContentPanelProps = {
   readonly onActionPromptCancel: () => void
   readonly onActionPromptChange: (key: string, value: string) => void
   readonly onActionPromptSubmit: () => void
+  readonly onAttachProjectTerminalSession: (
+    projectId: string,
+    projectKey: string,
+    projectDisplayName: string,
+    sessionId: string
+  ) => void
   readonly onCreateBufferChange: (buffer: string) => void
   readonly onCreateCancel: () => void
-  readonly onCreateSubmit: (forceWizard?: boolean) => void
+  readonly onCreateSubmit: (quickCreate?: boolean) => void
+  readonly onKillProjectTerminalSession: (projectId: string, projectKey: string, sessionId: string) => void
+  readonly onOpenProjectTerminalById: (projectId: string, projectKey?: string) => void
   readonly onRunAuthAction: (index: number) => void
   readonly onRunProjectAuthAction: (index: number) => void
   readonly project: ProjectDetails | null
@@ -83,13 +92,33 @@ const renderStaticMenuPanel = (currentMenu: StaticMenuTag): JSX.Element => {
 }
 
 const renderSelectContent = (
-  currentMenu: Extract<BrowserMenuTag, "Select">,
-  project: ProjectDetails | null,
-  projectNavigationArmed: boolean,
-  selectedProjectSummary: ProjectSummary | undefined
+  {
+    currentMenu,
+    dashboardRefreshTick,
+    onAttachProjectTerminalSession,
+    onKillProjectTerminalSession,
+    onOpenProjectTerminalById,
+    project,
+    projectNavigationArmed,
+    selectedProjectSummary
+  }: Pick<
+    ContentPanelProps,
+    | "currentMenu"
+    | "dashboardRefreshTick"
+    | "onAttachProjectTerminalSession"
+    | "onKillProjectTerminalSession"
+    | "onOpenProjectTerminalById"
+    | "project"
+    | "projectNavigationArmed"
+    | "selectedProjectSummary"
+  >
 ): JSX.Element => (
   <SelectPanel
     currentMenu={currentMenu}
+    dashboardRefreshTick={dashboardRefreshTick}
+    onAttachProjectTerminalSession={onAttachProjectTerminalSession}
+    onKillProjectTerminalSession={onKillProjectTerminalSession}
+    onOpenProjectTerminalById={onOpenProjectTerminalById}
     project={project}
     projectNavigationArmed={projectNavigationArmed}
     selectedProjectSummary={selectedProjectSummary}
@@ -114,9 +143,13 @@ const renderContentBody = (
     controllerCwd,
     createView,
     currentMenu,
+    dashboardRefreshTick,
+    onAttachProjectTerminalSession,
     onCreateBufferChange,
     onCreateCancel,
     onCreateSubmit,
+    onKillProjectTerminalSession,
+    onOpenProjectTerminalById,
     project,
     projectNavigationArmed,
     projectsRoot,
@@ -125,12 +158,16 @@ const renderContentBody = (
     ContentPanelProps,
     | "compact"
     | "controllerCwd"
+    | "dashboardRefreshTick"
     | "projectsRoot"
     | "createView"
     | "currentMenu"
+    | "onAttachProjectTerminalSession"
     | "onCreateBufferChange"
     | "onCreateCancel"
     | "onCreateSubmit"
+    | "onKillProjectTerminalSession"
+    | "onOpenProjectTerminalById"
     | "project"
     | "projectNavigationArmed"
     | "selectedProjectSummary"
@@ -151,7 +188,19 @@ const renderContentBody = (
         />
       )
     ),
-    Match.when("Select", () => renderSelectContent("Select", project, projectNavigationArmed, selectedProjectSummary)),
+    Match.when(
+      "Select",
+      () => renderSelectContent({
+        currentMenu: "Select",
+        dashboardRefreshTick,
+        onAttachProjectTerminalSession,
+        onKillProjectTerminalSession,
+        onOpenProjectTerminalById,
+        project,
+        projectNavigationArmed,
+        selectedProjectSummary
+      })
+    ),
     Match.when("Delete", () => renderProjectDetailsContent("Delete", project, selectedProjectSummary)),
     Match.when("Down", () => renderProjectDetailsContent("Down", project, selectedProjectSummary)),
     Match.when("Info", () => renderProjectDetailsContent("Info", project, selectedProjectSummary)),
@@ -225,13 +274,17 @@ export const ContentPanel = (
     actionPrompt,
     authSnapshot,
     currentMenu,
+    dashboardRefreshTick,
     githubStatus,
     onActionPromptCancel,
     onActionPromptChange,
     onActionPromptSubmit,
+    onAttachProjectTerminalSession,
     onCreateBufferChange,
     onCreateCancel,
     onCreateSubmit,
+    onKillProjectTerminalSession,
+    onOpenProjectTerminalById,
     onRunAuthAction,
     onRunProjectAuthAction,
     projectAuthSnapshot,
@@ -264,9 +317,13 @@ export const ContentPanel = (
   return renderContentBody({
     ...props,
     currentMenu,
+    dashboardRefreshTick,
+    onAttachProjectTerminalSession,
     onCreateBufferChange,
     onCreateCancel,
     onCreateSubmit,
+    onKillProjectTerminalSession,
+    onOpenProjectTerminalById,
     selectedProjectSummary
   })
 }

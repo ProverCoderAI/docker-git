@@ -5,6 +5,7 @@ import {
   attachTerminalInput,
   cleanupTerminalResources,
   connectTerminalSocket,
+  createTerminalInputController,
   createLifecycleState,
   createTerminalRuntime,
   observeTerminalResize,
@@ -41,6 +42,8 @@ const createTerminalCleanup = (
     },
     removeResize: () => {
       globalThis.removeEventListener("resize", sendResize)
+      globalThis.visualViewport?.removeEventListener("resize", sendResize)
+      globalThis.visualViewport?.removeEventListener("scroll", sendResize)
     }
   })
 }
@@ -55,7 +58,7 @@ const createConnectSocket = (
 }
 
 const mountTerminalSession = (
-  { connectionRef, hostRef, notifyMessage, onAttachFailure, session, setStatus }: TerminalLifecycleArgs
+  { connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus }: TerminalLifecycleArgs
 ): (() => void) | undefined => {
   const host = hostRef.current
   if (host === null) {
@@ -66,6 +69,7 @@ const mountTerminalSession = (
   const lifecycle = createLifecycleState()
   const socketRef: TerminalSocketRef = { current: null }
   const { fitAddon, terminal } = createTerminalRuntime(host)
+  const terminalInputController = createTerminalInputController(terminal, socketRef)
   const pasteGuard = createTerminalPasteGuard()
   const sendResize = () => {
     sendTerminalResize(fitAddon, socketRef, terminal)
@@ -86,11 +90,14 @@ const mountTerminalSession = (
     terminal
   })
 
+  runtimeRef.current = terminalInputController
   globalThis.addEventListener("resize", sendResize)
+  globalThis.visualViewport?.addEventListener("resize", sendResize)
+  globalThis.visualViewport?.addEventListener("scroll", sendResize)
   connectSocket()
 
   return createTerminalCleanup({
-    cleanupArgs: { connectionRef, lifecycle, notifyMessage, resizeObserver, session, socketRef, terminal },
+    cleanupArgs: { connectionRef, lifecycle, notifyMessage, resizeObserver, runtimeRef, session, socketRef, terminal },
     imagePasteDisposable,
     inputDisposable,
     sendResize
@@ -98,7 +105,7 @@ const mountTerminalSession = (
 }
 
 export const useTerminalSessionLifecycle = (
-  { connectionRef, hostRef, notifyMessage, onAttachFailure, session, setStatus }: TerminalLifecycleArgs
+  { connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus }: TerminalLifecycleArgs
 ): void => {
   useEffect(() => {
     return mountTerminalSession({
@@ -106,10 +113,15 @@ export const useTerminalSessionLifecycle = (
       hostRef,
       notifyMessage,
       onAttachFailure,
+      runtimeRef,
       session,
       setStatus
     })
-  }, [connectionRef, hostRef, notifyMessage, onAttachFailure, session, setStatus])
+  }, [connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus])
 }
 
-export { type TerminalConnectionState, type TerminalStatus } from "./terminal-panel-runtime-types.js"
+export {
+  type TerminalConnectionState,
+  type TerminalInputController,
+  type TerminalStatus
+} from "./terminal-panel-runtime-types.js"

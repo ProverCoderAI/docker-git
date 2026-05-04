@@ -4,10 +4,11 @@ import {
   type CreateFlowContext,
   type CreateFlowView,
   renderCreateStepLabel,
+  resolveCreateFlowSteps,
   resolveCreateInputs
 } from "../docker-git/menu-create-shared.js"
-import { createSteps } from "../docker-git/menu-types.js"
-import { Box, Text, TextInput } from "../ui/primitives.js"
+import type { CreateStep } from "../docker-git/menu-types.js"
+import { Box, Button, Text, TextInput } from "../ui/primitives.js"
 import { HelpLines } from "../ui/shared.js"
 
 const renderStepColor = (active: boolean): string => active ? "#56f39a" : "#8fa6c4"
@@ -17,7 +18,8 @@ const createPrompt = (
   createView: CreateFlowView
 ): { readonly label: string; readonly defaults: ReturnType<typeof resolveCreateInputs> } => {
   const defaults = resolveCreateInputs(createContext, createView.values)
-  const step = createSteps[createView.step] ?? createSteps[0] ?? "repoUrl"
+  const steps = resolveCreateFlowSteps(createView.values)
+  const step = steps[createView.step] ?? steps[0] ?? "repoUrl"
   return {
     label: renderCreateStepLabel(step, defaults),
     defaults
@@ -26,7 +28,7 @@ const createPrompt = (
 
 const createHint = (isRepoStep: boolean): string =>
   isRepoStep
-    ? "Paste URL, Enter = quick create, Shift+Enter = advanced, Esc = cancel."
+    ? "Enter = next, Shift+Enter = quick create, Esc = cancel."
     : "Enter = next, Esc = cancel."
 
 const CreatePromptInput = (
@@ -42,7 +44,7 @@ const CreatePromptInput = (
     readonly isRepoStep: boolean
     readonly onBufferChange: (buffer: string) => void
     readonly onCancel: () => void
-    readonly onSubmit: (forceWizard?: boolean) => void
+    readonly onSubmit: (quickCreate?: boolean) => void
     readonly promptLabel: string
   }
 ): JSX.Element => (
@@ -56,7 +58,7 @@ const CreatePromptInput = (
       onSubmit(shift)
     }}
     onEscape={onCancel}
-    placeholder={isRepoStep ? "https://github.com/org/repo/tree/branch" : promptLabel}
+    placeholder={isRepoStep ? "https://github.com/org/repo/tree/branch --force --mcp-playwright" : promptLabel}
     value={createView.buffer}
   />
 )
@@ -77,12 +79,13 @@ export const CreatePanel = (
     readonly projectsRoot: string
     readonly onBufferChange: (buffer: string) => void
     readonly onCancel: () => void
-    readonly onSubmit: (forceWizard?: boolean) => void
+    readonly onSubmit: (quickCreate?: boolean) => void
   }
 ): JSX.Element => {
   const prompt = createPrompt({ cwd: controllerCwd, projectsRoot }, createView)
-  const visibleSteps = compact ? [createSteps[createView.step] ?? "repoUrl"] : createSteps
-  const isRepoStep = (createSteps[createView.step] ?? "repoUrl") === "repoUrl"
+  const steps = resolveCreateFlowSteps(createView.values)
+  const visibleSteps = compact ? [steps[createView.step] ?? "repoUrl"] : steps
+  const isRepoStep = (steps[createView.step] ?? "repoUrl") === "repoUrl"
 
   return (
     <Box flexDirection="column">
@@ -104,6 +107,16 @@ export const CreatePanel = (
           promptLabel={prompt.label}
         />
       </Box>
+      {isRepoStep
+        ? (
+          <Box gap={1} marginTop={1}>
+            <Button label="Quick create" onPress={() => {
+              onSubmit(true)
+            }}
+            />
+          </Box>
+        )
+        : null}
       <CreateHintBlock compact={compact} controllerCwd={controllerCwd} isRepoStep={isRepoStep} />
     </Box>
   )
@@ -119,7 +132,7 @@ const CreateStepsList = (
     readonly compact: boolean
     readonly createView: CreateFlowView
     readonly defaults: ReturnType<typeof resolveCreateInputs>
-    readonly visibleSteps: ReadonlyArray<(typeof createSteps)[number]>
+    readonly visibleSteps: ReadonlyArray<CreateStep>
   }
 ): JSX.Element => (
   <Box flexDirection="column" marginTop={1}>
@@ -145,6 +158,7 @@ const CreateHintBlock = (
 ): JSX.Element => (
   <HelpLines
     lines={[
+      ...(isRepoStep ? ["Repo URL or URL + CLI flags."] : []),
       createHint(isRepoStep),
       ...(compact ? ["↑/↓ = menu, ←/→ = project"] : []),
       `Current cwd: ${controllerCwd}`

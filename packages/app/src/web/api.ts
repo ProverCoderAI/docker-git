@@ -14,7 +14,10 @@ import {
   ProjectEventsPollResponseSchema,
   ProjectPortForwardResponseSchema,
   ProjectPortForwardsResponseSchema,
+  ProjectTerminalSessionResponseSchema,
+  ProjectTerminalSessionsResponseSchema,
   ProjectsResponseSchema,
+  TerminalSessionLookupResponseSchema,
   TerminalSessionResponseSchema
 } from "./api-schema.js"
 import type {
@@ -126,10 +129,10 @@ export const deleteProjectPortForward = (
   targetPort: number
 ) => requestText("DELETE", `/projects/${encodeURIComponent(projectId)}/ports/${targetPort}`).pipe(Effect.asVoid)
 
-export const createProjectTerminalSession = (projectId: string) =>
+export const createProjectTerminalSession = (projectKey: string) =>
   requestJson(
     "POST",
-    `/projects/${encodeURIComponent(projectId)}/terminal-sessions`,
+    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions`,
     TerminalSessionResponseSchema
   ).pipe(
     Effect.map((response) => ({
@@ -152,13 +155,44 @@ export const createAuthTerminalSession = (
   )
 
 export const deleteProjectTerminalSession = (
-  projectId: string,
+  projectKey: string,
   sessionId: string
 ) =>
-  requestText("DELETE", `/projects/${encodeURIComponent(projectId)}/terminal-sessions/${encodeURIComponent(sessionId)}`)
+  requestText(
+    "DELETE",
+    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/${encodeURIComponent(sessionId)}`
+  )
     .pipe(
       Effect.asVoid
     )
+
+export const loadProjectTerminalSessions = (projectKey: string) =>
+  requestJson(
+    "GET",
+    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions`,
+    ProjectTerminalSessionsResponseSchema
+  ).pipe(
+    Effect.map((response) => response.sessions)
+  )
+
+export const loadProjectTerminalSession = (
+  projectKey: string,
+  sessionId: string
+) =>
+  requestJson(
+    "GET",
+    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/${encodeURIComponent(sessionId)}`,
+    ProjectTerminalSessionResponseSchema
+  ).pipe(
+    Effect.map((response) => response.session)
+  )
+
+export const loadTerminalSessionById = (sessionId: string) =>
+  requestJson(
+    "GET",
+    `/terminal-sessions/${encodeURIComponent(sessionId)}`,
+    TerminalSessionLookupResponseSchema
+  )
 
 export const deleteTerminalSessionByPath = (path: string) => requestText("DELETE", path).pipe(Effect.asVoid)
 

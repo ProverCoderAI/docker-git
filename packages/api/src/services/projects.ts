@@ -262,6 +262,24 @@ const findProjectById = (projectId: string) =>
 
 export const getProjectItemById = (projectId: string) => findProjectById(projectId)
 
+const findProjectByKey = (projectKey: string) =>
+  Effect.gen(function*(_) {
+    const projects = yield* _(listProjectItems)
+    const matches = projects.filter((item) => projectShortKey(item.projectDir) === projectKey)
+    if (matches.length === 0) {
+      return yield* _(Effect.fail(new ApiNotFoundError({ message: `Project key not found: ${projectKey}` })))
+    }
+    if (matches.length > 1) {
+      return yield* _(Effect.fail(new ApiConflictError({ message: `Project key is ambiguous: ${projectKey}` })))
+    }
+    const project = matches[0]
+    return project === undefined
+      ? yield* _(Effect.fail(new ApiNotFoundError({ message: `Project key not found: ${projectKey}` })))
+      : project
+  })
+
+export const getProjectItemByKey = (projectKey: string) => findProjectByKey(projectKey)
+
 const resolveCreatedProject = (
   containerName: string,
   repoUrl: string,
@@ -772,3 +790,4 @@ export const readProjectLogs = (
   }).pipe(Effect.mapError(toProjectApiError))
 
 export const resolveProjectById = findProjectById
+export const resolveProjectByKey = findProjectByKey

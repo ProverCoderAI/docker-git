@@ -362,6 +362,7 @@ export type TerminalSession = {
   readonly sshCommand: string
   readonly status: TerminalSessionStatus
   readonly createdAt: string
+  readonly attachedClients?: number | undefined
   readonly startedAt?: string | undefined
   readonly closedAt?: string | undefined
   readonly exitCode?: number | undefined
