@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { advanceCreateFlow, createInitialFlowView, resolveCreateFlowSteps } from "../../src/docker-git/menu-create-shared.js"
+import {
+  advanceCreateFlow,
+  createInitialFlowView,
+  resolveCreateFlowSteps
+} from "../../src/docker-git/menu-create-shared.js"
 
 const expectContinueResult = (
   next: ReturnType<typeof advanceCreateFlow>
@@ -25,6 +29,17 @@ const expectCompleteResult = (
 describe("menu-create-shared", () => {
   const cwd = process.cwd()
   const defaultRoot = `${process.env["HOME"] ?? cwd}/.docker-git/org/repo`
+  const expectRepoFields = (
+    values: {
+      readonly outDir?: string | undefined
+      readonly repoRef?: string | undefined
+      readonly repoUrl?: string | undefined
+    }
+  ) => {
+    expect(values.repoUrl).toBe("https://github.com/org/repo/tree/feature-x")
+    expect(values.repoRef).toBe("feature-x")
+    expect(values.outDir).toBe(defaultRoot)
+  }
 
   it("advances from repo URL into the wizard by default", () => {
     const view = expectContinueResult(advanceCreateFlow(
@@ -33,9 +48,7 @@ describe("menu-create-shared", () => {
     ))
 
     expect(view.step).toBe(1)
-    expect(view.values.repoUrl).toBe("https://github.com/org/repo/tree/feature-x")
-    expect(view.values.repoRef).toBe("feature-x")
-    expect(view.values.outDir).toBe(defaultRoot)
+    expectRepoFields(view.values)
     expect(view.values.runUp).toBeUndefined()
     expect(resolveCreateFlowSteps(view.values)).toEqual([
       "repoUrl",
@@ -54,9 +67,7 @@ describe("menu-create-shared", () => {
       { quickCreate: true }
     ))
 
-    expect(inputs.repoUrl).toBe("https://github.com/org/repo/tree/feature-x")
-    expect(inputs.repoRef).toBe("feature-x")
-    expect(inputs.outDir).toBe(defaultRoot)
+    expectRepoFields(inputs)
     expect(inputs.runUp).toBe(true)
   })
 
@@ -66,9 +77,7 @@ describe("menu-create-shared", () => {
       createInitialFlowView("https://github.com/org/repo/tree/feature-x --force --mcp-playwright --no-up")
     ))
 
-    expect(view.values.repoUrl).toBe("https://github.com/org/repo/tree/feature-x")
-    expect(view.values.repoRef).toBe("feature-x")
-    expect(view.values.outDir).toBe(defaultRoot)
+    expectRepoFields(view.values)
     expect(view.values.force).toBe(true)
     expect(view.values.enableMcpPlaywright).toBe(true)
     expect(view.values.runUp).toBe(false)
@@ -87,9 +96,7 @@ describe("menu-create-shared", () => {
       )
     ))
 
-    expect(inputs.repoUrl).toBe("https://github.com/org/repo/tree/feature-x")
-    expect(inputs.repoRef).toBe("feature-x")
-    expect(inputs.outDir).toBe(defaultRoot)
+    expectRepoFields(inputs)
     expect(inputs.cpuLimit).toBe("25%")
     expect(inputs.ramLimit).toBe("4g")
     expect(inputs.runUp).toBe(false)

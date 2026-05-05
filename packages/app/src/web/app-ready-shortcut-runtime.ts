@@ -21,6 +21,7 @@ type Setter<A> = Dispatch<SetStateAction<A>>
 
 export type BrowserShortcutArgs = {
   readonly activeScreen: BrowserScreen
+  readonly activeTerminalSessionId: string | null
   readonly actionPrompt: ActionPromptState | null
   readonly context: BrowserActionContext
   readonly controllerCwd: string
@@ -50,10 +51,10 @@ type MenuOpenArgs = Pick<
 >
 
 const shouldIgnoreShortcut = (
+  activeTerminalSessionId: string | null,
   actionPrompt: ActionPromptState | null,
-  event: KeyboardEvent,
-  terminalSessions: ReadonlyArray<ActiveTerminalSession>
-): boolean => terminalSessions.length > 0 || isBlockedShortcut(event, actionPrompt !== null)
+  event: KeyboardEvent
+): boolean => activeTerminalSessionId !== null || isBlockedShortcut(event, actionPrompt !== null)
 
 const openSelectedMenuScreen = ({
   context,
@@ -282,7 +283,7 @@ const dispatchActiveScreenShortcut = (event: KeyboardEvent, args: BrowserShortcu
 }
 
 export const dispatchBrowserShortcut = (event: KeyboardEvent, args: BrowserShortcutArgs): void => {
-  if (shouldIgnoreShortcut(args.actionPrompt, event, args.terminalSessions)) {
+  if (shouldIgnoreShortcut(args.activeTerminalSessionId, args.actionPrompt, event)) {
     return
   }
   dispatchActiveScreenShortcut(event, args)

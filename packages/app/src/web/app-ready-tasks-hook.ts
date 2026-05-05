@@ -16,19 +16,29 @@ type TasksPanelAutoloadArgs = {
 export const useProjectTasksState = () => {
   const [projectTasks, setProjectTasks] = useState<ContainerTaskSnapshot | null>(null)
   const [projectTaskLogs, setProjectTaskLogs] = useState("")
+  const [projectTasksIncludeDefault, setProjectTasksIncludeDefault] = useState(false)
 
-  return { projectTaskLogs, projectTasks, setProjectTaskLogs, setProjectTasks }
+  return {
+    projectTaskLogs,
+    projectTasks,
+    projectTasksIncludeDefault,
+    setProjectTaskLogs,
+    setProjectTasks,
+    setProjectTasksIncludeDefault
+  }
 }
 
 export const useProjectTasksReset = (
   selectedProjectId: string | null,
   setProjectTaskLogs: (value: string) => void,
-  setProjectTasks: (value: ContainerTaskSnapshot | null) => void
+  setProjectTasks: (value: ContainerTaskSnapshot | null) => void,
+  setProjectTasksIncludeDefault: (value: boolean) => void
 ) => {
   useEffect(() => {
     setProjectTaskLogs("")
     setProjectTasks(null)
-  }, [selectedProjectId, setProjectTaskLogs, setProjectTasks])
+    setProjectTasksIncludeDefault(false)
+  }, [selectedProjectId, setProjectTaskLogs, setProjectTasks, setProjectTasksIncludeDefault])
 }
 
 export const maybeLoadProjectTasks = (

@@ -15,6 +15,7 @@ type TerminalScreenProps = Pick<
   ReadyLayoutProps,
   | "activeTerminalSessionId"
   | "onOpenProjectBrowserById"
+  | "onOpenProjectTaskManagerById"
   | "onOpenProjectTerminalById"
   | "onSelectTerminal"
   | "onSetActiveScreen"
@@ -29,6 +30,7 @@ type TerminalPaneProps =
   & Pick<
     TerminalScreenProps,
     | "onOpenProjectBrowserById"
+    | "onOpenProjectTaskManagerById"
     | "onOpenProjectTerminalById"
     | "onSetActiveScreen"
     | "onTerminalClose"
@@ -207,6 +209,7 @@ const TerminalTabs = (
 const TerminalPane = (
   {
     onOpenProjectBrowserById,
+    onOpenProjectTaskManagerById,
     onOpenProjectTerminalById,
     onSetActiveScreen,
     onTerminalClose,
@@ -250,6 +253,11 @@ const TerminalPane = (
           : () => {
             onOpenProjectBrowserById(browserProjectId)
           }}
+        onOpenTaskManager={browserProjectId === undefined
+          ? undefined
+          : () => {
+            onOpenProjectTaskManagerById(browserProjectId)
+          }}
         onOpenTerminal={browserProjectId === undefined
           ? undefined
           : () => {
@@ -289,6 +297,7 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
             <TerminalPane
               key={terminalSessionId(activeSession)}
               onOpenProjectBrowserById={props.onOpenProjectBrowserById}
+              onOpenProjectTaskManagerById={props.onOpenProjectTaskManagerById}
               onOpenProjectTerminalById={props.onOpenProjectTerminalById}
               onSetActiveScreen={props.onSetActiveScreen}
               onTerminalClose={props.onTerminalClose}

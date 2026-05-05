@@ -152,7 +152,9 @@ const DatabaseDetails = (props: MainPanelsProps): JSX.Element => (
 
 const TaskDetails = (props: MainPanelsProps): JSX.Element => (
   <TaskPanel
+    includeDefault={props.projectTasksIncludeDefault}
     logs={props.projectTaskLogs}
+    onIncludeDefaultChange={props.onProjectTasksIncludeDefaultChange}
     onLoadLogs={props.onLoadProjectTaskLogs}
     onRefreshTasks={props.onRefreshProjectTasks}
     onStopTask={props.onStopProjectTask}

@@ -42,6 +42,7 @@ type ReadyStateSetters = Pick<
   | "setProjectBrowser"
   | "setProjectTaskLogs"
   | "setProjectTasks"
+  | "setProjectTasksIncludeDefault"
   | "setSelectedMenuIndex"
   | "setSelectedProject"
   | "setSelectedProjectId"
@@ -69,6 +70,7 @@ export type ReadyState = ReadyStateSetters & TerminalWorkspaceReadyState & {
   readonly projectBrowser: ProjectBrowserSession | null
   readonly projectTaskLogs: string
   readonly projectTasks: ContainerTaskSnapshot | null
+  readonly projectTasksIncludeDefault: boolean
   readonly setActionPrompt: Setter<ActionPromptState | null>
   readonly setActiveScreen: Setter<BrowserScreen>
   readonly setCreateView: Setter<CreateFlowView>

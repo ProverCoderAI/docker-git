@@ -5,6 +5,7 @@ import {
   attachProjectTerminalById,
   connectProjectById,
   loadSelectedProjectBrowser,
+  loadProjectTasksById,
   loadSelectedProjectPorts,
   openProjectBrowserById,
   openSelectedProjectBrowser,
@@ -39,7 +40,9 @@ import { useSshLink } from "./app-ready-ssh-link-hook.js"
 import { bindTaskActions } from "./app-ready-task-actions.js"
 import { useProjectTasksReset } from "./app-ready-tasks-hook.js"
 import { useReadyUrlSync } from "./app-ready-url.js"
+import { browserMenuIndex } from "./menu.js"
 import { filterDashboardProjectsByQuery } from "./project-search.js"
+import { projectPickerScreen } from "./screen.js"
 
 type ReadyControllerArgs = {
   readonly dashboard: DashboardData
@@ -99,7 +102,8 @@ const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
   useProjectTasksReset(
     args.state.selectedProjectId,
     args.state.setProjectTaskLogs,
-    args.state.setProjectTasks
+    args.state.setProjectTasks,
+    args.state.setProjectTasksIncludeDefault
   )
 }
 
@@ -127,6 +131,7 @@ const useReadyAutoloadEffects = (args: ReadySideEffectsArgs) => {
 const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
   useBrowserShortcuts({
     activeScreen: args.state.activeScreen,
+    activeTerminalSessionId: args.state.activeTerminalSessionId,
     actionPrompt: args.state.actionPrompt,
     context: args.actionContext,
     controllerCwd: args.dashboard.health.cwd,
@@ -256,6 +261,17 @@ const bindTerminalActions = (
 ) => ({
   onOpenProjectTerminalById: (projectId: string, projectKey?: string) => {
     connectProjectById(projectId, actionContext, projectKey)
+  },
+  onOpenProjectTaskManagerById: (projectId: string) => {
+    state.setSelectedProjectId(projectId)
+    state.setSelectedMenuIndex(browserMenuIndex("Tasks"))
+    state.setProjectNavigationArmed(true)
+    state.setActiveScreen(projectPickerScreen())
+    state.deactivateTerminalWorkspace()
+    state.setProjectTasks(null)
+    state.setProjectTaskLogs("")
+    state.setProjectTasksIncludeDefault(false)
+    loadProjectTasksById(actionContext, projectId, { includeDefault: false })
   },
   onAttachProjectTerminalSession: (
     projectId: string,

@@ -25,6 +25,7 @@ type TerminalPanelProps = {
   readonly onKill: () => void
   readonly onMessage: (message: string) => void
   readonly onOpenBrowser?: (() => void) | undefined
+  readonly onOpenTaskManager?: (() => void) | undefined
   readonly onOpenTerminal?: (() => void) | undefined
   readonly session: ActiveTerminalSession
 }
@@ -56,8 +57,9 @@ const headerStyle: CSSProperties = {
 
 const compactHeaderStyle: CSSProperties = {
   ...headerStyle,
+  flexWrap: "wrap",
   gap: "6px",
-  overflow: "hidden",
+  overflow: "visible",
   padding: "5px 6px"
 }
 
@@ -106,7 +108,7 @@ const headerActionsStyle: CSSProperties = {
 
 const compactHeaderActionsStyle: CSSProperties = {
   ...headerActionsStyle,
-  flexWrap: "nowrap",
+  flexWrap: "wrap",
   gap: "4px"
 }
 
@@ -245,9 +247,13 @@ const TerminalHeaderActions = (
     onDetach,
     onKill,
     onOpenBrowser,
+    onOpenTaskManager,
     onOpenTerminal,
     session
-  }: Pick<TerminalPanelProps, "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTerminal" | "session"> & {
+  }: Pick<
+    TerminalPanelProps,
+    "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
+  > & {
     readonly compactHeaderMode: boolean
   }
 ): JSX.Element => (
@@ -257,6 +263,13 @@ const TerminalHeaderActions = (
       : (
         <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onOpenBrowser}>
           {compactHeaderMode ? "Browser" : "Open browser"}
+        </TerminalActionButton>
+      )}
+    {session.browserProjectId === undefined || onOpenTaskManager === undefined
+      ? null
+      : (
+        <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onOpenTaskManager}>
+          {compactHeaderMode ? "Tasks" : "Task manager"}
         </TerminalActionButton>
       )}
     {session.browserProjectId === undefined || onOpenTerminal === undefined
@@ -281,10 +294,14 @@ const TerminalHeader = (
     onDetach,
     onKill,
     onOpenBrowser,
+    onOpenTaskManager,
     onOpenTerminal,
     session,
     status
-  }: Pick<TerminalPanelProps, "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTerminal" | "session"> & {
+  }: Pick<
+    TerminalPanelProps,
+    "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
+  > & {
     readonly compactHeaderMode: boolean
     readonly status: TerminalStatus
   }
@@ -296,6 +313,7 @@ const TerminalHeader = (
       onDetach={onDetach}
       onKill={onKill}
       onOpenBrowser={onOpenBrowser}
+      onOpenTaskManager={onOpenTaskManager}
       onOpenTerminal={onOpenTerminal}
       session={session}
     />
@@ -409,6 +427,7 @@ export const TerminalPanel = (
     onKill,
     onMessage,
     onOpenBrowser,
+    onOpenTaskManager,
     onOpenTerminal,
     session
   }: TerminalPanelProps
@@ -510,6 +529,7 @@ export const TerminalPanel = (
           onKill()
         }}
         onOpenBrowser={onOpenBrowser}
+        onOpenTaskManager={onOpenTaskManager}
         onOpenTerminal={onOpenTerminal}
         session={session}
         status={status}
