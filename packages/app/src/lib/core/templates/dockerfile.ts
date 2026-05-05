@@ -134,6 +134,8 @@ RUN ARCH="$(uname -m)" \
   && chmod +x /usr/local/bin/gitleaks \
   && gitleaks version`
 
+const dockerGitSessionSyncPackage = "@prover-coder-ai/docker-git-session-sync@latest"
+
 const dockerfilePlaywrightMcpBlock = String.raw`RUN npm install -g @playwright/mcp@latest
 
 # docker-git: wrapper that waits for the guarded CDP endpoint before launching Playwright MCP.
@@ -264,9 +266,9 @@ RUN printf "%s\\n" \
   "AllowUsers ${config.sshUser}" \
   > /etc/ssh/sshd_config.d/${config.sshUser}.conf`
 
-// CHANGE: add docker-git scripts and session sync tool to Docker image
-// WHY: git hooks need embedded scripts, while session sync is provided by a standalone tool
-// REF: issue-176
+// CHANGE: add docker-git scripts and install the published session sync CLI
+// WHY: git hooks need embedded scripts, while session sync should come from npmjs when available
+// REF: issue-176, issue-235
 // PURITY: CORE (pure template renderer)
 // INVARIANT: scripts are accessible under /opt/docker-git/scripts and session sync under PATH
 const renderDockerfileScripts = (): string =>
@@ -276,8 +278,16 @@ RUN find /opt/docker-git/scripts -type f -name '*.sh' -exec chmod +x {} + \
   && find /opt/docker-git/scripts -type f -name '*.js' -exec chmod +x {} +
 
 # docker-git standalone tools
-COPY .docker-git-tools/docker-git-session-sync /usr/local/bin/docker-git-session-sync
-RUN chmod +x /usr/local/bin/docker-git-session-sync`
+ARG DOCKER_GIT_SESSION_SYNC_PACKAGE="${dockerGitSessionSyncPackage}"
+COPY .docker-git-tools/docker-git-session-sync /opt/docker-git/tools/docker-git-session-sync
+RUN set -eu; \
+  if npm install -g "$DOCKER_GIT_SESSION_SYNC_PACKAGE"; then \
+    docker-git-session-sync --help >/dev/null; \
+  else \
+    echo "docker-git: npm install of $DOCKER_GIT_SESSION_SYNC_PACKAGE failed; using local session sync fallback" >&2; \
+    install -m 0755 /opt/docker-git/tools/docker-git-session-sync /usr/local/bin/docker-git-session-sync; \
+    docker-git-session-sync --help >/dev/null; \
+  fi`
 
 const renderDockerfileWorkspace = (config: TemplateConfig): string =>
   `# Workspace path (supports root-level dirs like /repo)

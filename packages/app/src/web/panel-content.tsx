@@ -190,16 +190,17 @@ const renderContentBody = (
     ),
     Match.when(
       "Select",
-      () => renderSelectContent({
-        currentMenu: "Select",
-        dashboardRefreshTick,
-        onAttachProjectTerminalSession,
-        onKillProjectTerminalSession,
-        onOpenProjectTerminalById,
-        project,
-        projectNavigationArmed,
-        selectedProjectSummary
-      })
+      () =>
+        renderSelectContent({
+          currentMenu: "Select",
+          dashboardRefreshTick,
+          onAttachProjectTerminalSession,
+          onKillProjectTerminalSession,
+          onOpenProjectTerminalById,
+          project,
+          projectNavigationArmed,
+          selectedProjectSummary
+        })
     ),
     Match.when("Delete", () => renderProjectDetailsContent("Delete", project, selectedProjectSummary)),
     Match.when("Down", () => renderProjectDetailsContent("Down", project, selectedProjectSummary)),

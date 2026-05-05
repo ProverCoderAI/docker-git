@@ -110,9 +110,11 @@ export const CreatePanel = (
       {isRepoStep
         ? (
           <Box gap={1} marginTop={1}>
-            <Button label="Quick create" onPress={() => {
-              onSubmit(true)
-            }}
+            <Button
+              label="Quick create"
+              onPress={() => {
+                onSubmit(true)
+              }}
             />
           </Box>
         )

@@ -13,7 +13,7 @@ const renderGitignore = (): string =>
   `# docker-git project files
 # NOTE: bootstrap secrets stay local-only and should not be committed.
 
-# docker-git scripts/tools (copied from workspace, rebuilt on each project update)
+# docker-git scripts/tools (scripts plus local session-sync fallback)
 scripts/
 .docker-git-tools/
 
