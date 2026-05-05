@@ -7,10 +7,17 @@ import { Effect } from "effect"
 import {
   runCommandCapture,
   runCommandExitCode,
-  runCommandExitCodeStreaming
+  runCommandExitCodeStreaming,
+  runCommandWithCapturedOutput
 } from "./frontend-lib/shell/command-runner.js"
 
-import { type DockerNetworkIps, parseDockerNetworkIps, uniqueStrings } from "./controller-reachability.js"
+import { type DockerProbeOutcome, renderDockerAccessDeniedMessage } from "./controller-docker-diagnostics.js"
+import {
+  type DockerNetworkIps,
+  parseDockerNetworkIps,
+  resolveConfiguredApiBaseUrl,
+  uniqueStrings
+} from "./controller-reachability.js"
 import {
   computeLocalControllerRevision,
   controllerRevisionEnvKey,
@@ -66,14 +73,6 @@ const currentProcessEnv = (): Readonly<Record<string, string>> =>
     Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )
 
-const renderDockerAccessDeniedMessage = (): string =>
-  [
-    "docker-git host CLI cannot access Docker from the client process.",
-    "Tried direct Docker and passwordless sudo Docker.",
-    "Keep the docker-git backend container running and reach it via DOCKER_GIT_API_URL or the default local API port, grant this user direct Docker access (docker group/rootless Docker), or configure passwordless sudo for docker.",
-    "Probe commands: docker info; sudo -n docker info"
-  ].join("\n")
-
 const runExitCode = (
   command: string,
   args: ReadonlyArray<string>
@@ -89,25 +88,62 @@ const runExitCode = (
     })
   )
 
+type ProbeFailure = {
+  readonly _tag: "ProbeFailure"
+  readonly outcome: DockerProbeOutcome
+}
+
+const captureProbeOutcome = (
+  command: string,
+  args: ReadonlyArray<string>
+): Effect.Effect<DockerProbeOutcome, never, CommandExecutor.CommandExecutor> =>
+  runCommandWithCapturedOutput(
+    { cwd: process.cwd(), command, args },
+    [0],
+    (exitCode, output): ProbeFailure => ({
+      _tag: "ProbeFailure",
+      outcome: { exitCode, stderr: output }
+    })
+  ).pipe(
+    Effect.match({
+      onFailure: (error) =>
+        "outcome" in error
+          ? error.outcome
+          : { exitCode: 127, stderr: String(error) },
+      onSuccess: () => ({ exitCode: 0, stderr: "" })
+    })
+  )
+
 export const resolveDockerCommand = (): Effect.Effect<
   ReadonlyArray<string>,
   ControllerBootstrapError,
   CommandExecutor.CommandExecutor
 > =>
-  runExitCode("docker", ["info"]).pipe(
-    Effect.flatMap((dockerInfoExit) => {
-      if (dockerInfoExit === 0) {
-        return Effect.succeed<ReadonlyArray<string>>(["docker"])
-      }
-      return runExitCode("sudo", ["-n", "docker", "info"]).pipe(
-        Effect.flatMap((sudoDockerInfoExit) =>
-          sudoDockerInfoExit === 0
-            ? Effect.succeed<ReadonlyArray<string>>(["sudo", "-n", "docker"])
-            : Effect.fail(controllerBootstrapError(renderDockerAccessDeniedMessage()))
+  Effect.gen(function*(_) {
+    const directProbe = yield* _(captureProbeOutcome("docker", ["info"]))
+    if (directProbe.exitCode === 0) {
+      return ["docker"] as ReadonlyArray<string>
+    }
+
+    const sudoProbe = yield* _(captureProbeOutcome("sudo", ["-n", "docker", "info"]))
+    if (sudoProbe.exitCode === 0) {
+      return ["sudo", "-n", "docker"] as ReadonlyArray<string>
+    }
+
+    const dockerHostRaw = process.env["DOCKER_HOST"]?.trim() ?? ""
+    return yield* _(
+      Effect.fail(
+        controllerBootstrapError(
+          renderDockerAccessDeniedMessage({
+            directProbe,
+            sudoProbe,
+            apiBaseUrl: resolveConfiguredApiBaseUrl(),
+            dockerHost: dockerHostRaw.length > 0 ? dockerHostRaw : null
+          })
         )
       )
-    })
-  )
+    )
+  })
 
 type DockerInvocation = {
   readonly command: string
