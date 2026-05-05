@@ -1,5 +1,10 @@
 import { Either, Match } from "effect"
-import { type CreateCommand, type ParseError, deriveRepoPathParts, resolveRepoInput } from "./frontend-lib/core/domain.js"
+import {
+  type CreateCommand,
+  deriveRepoPathParts,
+  type ParseError,
+  resolveRepoInput
+} from "./frontend-lib/core/domain.js"
 import { defaultProjectsRoot } from "./frontend-lib/usecases/menu-helpers.js"
 
 import { buildCreateCommand } from "./cli/parser-create.js"
@@ -24,6 +29,12 @@ type AdvanceCreateFlowResult =
   | { readonly _tag: "Continue"; readonly view: CreateFlowView }
   | { readonly _tag: "Error"; readonly error: ParseError }
   | { readonly _tag: "Complete"; readonly inputs: CreateInputs }
+
+type AdvanceCreateFlowHandlers = {
+  readonly onComplete: (inputs: CreateInputs) => void
+  readonly onContinue: (view: CreateFlowView) => void
+  readonly onError: (error: ParseError) => void
+}
 
 type AdvanceCreateFlowOptions = {
   readonly quickCreate?: boolean
@@ -134,59 +145,67 @@ const createParseError = (reason: string): ParseError => ({
   reason
 })
 
+type CreateTokenizeState = {
+  current: string
+  escaping: boolean
+  quote: "'" | "\"" | null
+  readonly tokens: Array<string>
+}
+
+const pushCreateToken = (state: CreateTokenizeState): void => {
+  if (state.current.length > 0) {
+    state.tokens.push(state.current)
+    state.current = ""
+  }
+}
+
+const consumeCreateTokenChar = (state: CreateTokenizeState, char: string): void => {
+  if (state.escaping) {
+    state.current += char
+    state.escaping = false
+    return
+  }
+  if (char === "\\") {
+    state.escaping = true
+    return
+  }
+  if (state.quote !== null) {
+    if (char === state.quote) {
+      state.quote = null
+      return
+    }
+    state.current += char
+    return
+  }
+  if (char === "'" || char === "\"") {
+    state.quote = char
+    return
+  }
+  if (/\s/u.test(char)) {
+    pushCreateToken(state)
+    return
+  }
+  state.current += char
+}
+
 const tokenizeCreateCommandLine = (
   input: string
 ): Either.Either<ReadonlyArray<string>, ParseError> => {
-  const tokens: Array<string> = []
-  let current = ""
-  let quote: "'" | "\"" | null = null
-  let escaping = false
-
-  const pushCurrent = () => {
-    if (current.length > 0) {
-      tokens.push(current)
-      current = ""
-    }
-  }
+  const state: CreateTokenizeState = { current: "", escaping: false, quote: null, tokens: [] }
 
   for (const char of input.trim()) {
-    if (escaping) {
-      current += char
-      escaping = false
-      continue
-    }
-    if (char === "\\") {
-      escaping = true
-      continue
-    }
-    if (quote !== null) {
-      if (char === quote) {
-        quote = null
-      } else {
-        current += char
-      }
-      continue
-    }
-    if (char === "'" || char === "\"") {
-      quote = char
-      continue
-    }
-    if (/\s/u.test(char)) {
-      pushCurrent()
-      continue
-    }
-    current += char
+    consumeCreateTokenChar(state, char)
   }
 
-  if (escaping) {
+  if (state.escaping) {
     return Either.left(createParseError("unterminated escape sequence"))
   }
-  if (quote !== null) {
+  if (state.quote !== null) {
     return Either.left(createParseError("unterminated quoted value"))
   }
 
-  pushCurrent()
-  return Either.right(tokens)
+  pushCreateToken(state)
+  return Either.right(state.tokens)
 }
 
 const unsupportedCreatePrefixes = new Set([
@@ -234,22 +253,40 @@ const normalizeCreateTokens = (
   return Either.right(withoutBinary)
 }
 
+type RawCreateOptions = Parameters<typeof buildCreateCommand>[0]
+
+const cpuLimitCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.cpuLimit === undefined ? {} : { cpuLimit: command.config.cpuLimit ?? "" }
+
+const ramLimitCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.ramLimit === undefined ? {} : { ramLimit: command.config.ramLimit ?? "" }
+
+const runUpCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.up === undefined ? {} : { runUp: command.runUp }
+
+const playwrightCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.enableMcpPlaywright === undefined ? {} : { enableMcpPlaywright: command.config.enableMcpPlaywright }
+
+const forceCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.force === undefined ? {} : { force: command.force }
+
+const forceEnvCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.forceEnv === undefined ? {} : { forceEnv: command.forceEnv }
+
 const createInputsFromCommand = (
   repoUrl: string,
-  raw: Parameters<typeof buildCreateCommand>[0],
+  raw: RawCreateOptions,
   command: CreateCommand
 ): Partial<CreateInputs> => ({
   repoUrl,
   repoRef: command.config.repoRef,
   outDir: command.outDir,
-  ...(raw.cpuLimit !== undefined ? { cpuLimit: command.config.cpuLimit ?? "" } : {}),
-  ...(raw.ramLimit !== undefined ? { ramLimit: command.config.ramLimit ?? "" } : {}),
-  ...(raw.up !== undefined ? { runUp: command.runUp } : {}),
-  ...(raw.enableMcpPlaywright !== undefined
-    ? { enableMcpPlaywright: command.config.enableMcpPlaywright }
-    : {}),
-  ...(raw.force !== undefined ? { force: command.force } : {}),
-  ...(raw.forceEnv !== undefined ? { forceEnv: command.forceEnv } : {})
+  ...cpuLimitCreateInput(raw, command),
+  ...ramLimitCreateInput(raw, command),
+  ...runUpCreateInput(raw, command),
+  ...playwrightCreateInput(raw, command),
+  ...forceCreateInput(raw, command),
+  ...forceEnvCreateInput(raw, command)
 })
 
 const parseRepoStepInput = (
@@ -280,11 +317,11 @@ const parseRepoStepInput = (
 }
 
 const createStepApplied = (): Either.Either<true, ParseError> => {
-  const applied: true = true
+  const applied = true
   return Either.right(applied)
 }
 
-const hasOwn = <K extends keyof CreateInputs>(values: Partial<CreateInputs>, key: K): boolean =>
+const hasOwn = (values: Partial<CreateInputs>, key: keyof CreateInputs): boolean =>
   Object.prototype.hasOwnProperty.call(values, key)
 
 const isCreateStepSatisfied = (
@@ -433,6 +470,24 @@ export const advanceCreateFlow = (
     _tag: "Complete",
     inputs: resolveCreateInputs(context, nextValues)
   }
+}
+
+export const handleAdvanceCreateFlowResult = (
+  next: AdvanceCreateFlowResult | null,
+  handlers: AdvanceCreateFlowHandlers
+): void => {
+  if (next === null) {
+    return
+  }
+  if (next._tag === "Error") {
+    handlers.onError(next.error)
+    return
+  }
+  if (next._tag === "Continue") {
+    handlers.onContinue(next.view)
+    return
+  }
+  handlers.onComplete(next.inputs)
 }
 
 export const createProjectDraftFromInputs = (
