@@ -248,6 +248,31 @@ const TerminalActionButton = (
   </button>
 )
 
+const OptionalTerminalActionButton = (
+  {
+    compactHeaderMode,
+    compactLabel,
+    enabled,
+    label,
+    onClick
+  }: {
+    readonly compactHeaderMode: boolean
+    readonly compactLabel: string
+    readonly enabled: boolean
+    readonly label: string
+    readonly onClick: (() => void) | undefined
+  }
+): JSX.Element | null => {
+  if (!enabled || onClick === undefined) {
+    return null
+  }
+  return (
+    <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onClick}>
+      {compactHeaderMode ? compactLabel : label}
+    </TerminalActionButton>
+  )
+}
+
 const TerminalHeaderActions = (
   {
     compactHeaderMode,
@@ -257,43 +282,49 @@ const TerminalHeaderActions = (
     onOpenTaskManager,
     onOpenTerminal,
     session
-  }: Pick<
-    TerminalPanelProps,
-    "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
-  > & {
-    readonly compactHeaderMode: boolean
-  }
-): JSX.Element => (
-  <div style={compactHeaderMode ? compactHeaderActionsStyle : headerActionsStyle}>
-    {session.browserProjectId === undefined || onOpenBrowser === undefined
-      ? null
-      : (
-        <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onOpenBrowser}>
-          {compactHeaderMode ? "Browser" : "Open browser"}
-        </TerminalActionButton>
-      )}
-    {session.browserProjectId === undefined || onOpenTaskManager === undefined
-      ? null
-      : (
-        <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onOpenTaskManager}>
-          {compactHeaderMode ? "Tasks" : "Task manager"}
-        </TerminalActionButton>
-      )}
-    {session.browserProjectId === undefined || onOpenTerminal === undefined
-      ? null
-      : (
-        <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onOpenTerminal}>
-          {compactHeaderMode ? "New" : "New terminal"}
-        </TerminalActionButton>
-      )}
-    <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onDetach}>
-      Detach
-    </TerminalActionButton>
-    <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onKill}>
-      Kill
-    </TerminalActionButton>
-  </div>
-)
+  }:
+    & Pick<
+      TerminalPanelProps,
+      "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
+    >
+    & {
+      readonly compactHeaderMode: boolean
+    }
+): JSX.Element => {
+  const hasProjectActions = session.browserProjectId !== undefined
+
+  return (
+    <div style={compactHeaderMode ? compactHeaderActionsStyle : headerActionsStyle}>
+      <OptionalTerminalActionButton
+        compactHeaderMode={compactHeaderMode}
+        compactLabel="Browser"
+        enabled={hasProjectActions}
+        label="Open browser"
+        onClick={onOpenBrowser}
+      />
+      <OptionalTerminalActionButton
+        compactHeaderMode={compactHeaderMode}
+        compactLabel="Tasks"
+        enabled={hasProjectActions}
+        label="Task manager"
+        onClick={onOpenTaskManager}
+      />
+      <OptionalTerminalActionButton
+        compactHeaderMode={compactHeaderMode}
+        compactLabel="New"
+        enabled={hasProjectActions}
+        label="New terminal"
+        onClick={onOpenTerminal}
+      />
+      <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onDetach}>
+        Detach
+      </TerminalActionButton>
+      <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onKill}>
+        Kill
+      </TerminalActionButton>
+    </div>
+  )
+}
 
 const TerminalHeader = (
   {
@@ -305,13 +336,15 @@ const TerminalHeader = (
     onOpenTerminal,
     session,
     status
-  }: Pick<
-    TerminalPanelProps,
-    "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
-  > & {
-    readonly compactHeaderMode: boolean
-    readonly status: TerminalStatus
-  }
+  }:
+    & Pick<
+      TerminalPanelProps,
+      "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
+    >
+    & {
+      readonly compactHeaderMode: boolean
+      readonly status: TerminalStatus
+    }
 ): JSX.Element => (
   <div style={compactHeaderMode ? compactHeaderStyle : headerStyle}>
     <TerminalHeaderTitle compactHeaderMode={compactHeaderMode} session={session} status={status} />
