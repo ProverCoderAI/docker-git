@@ -70,6 +70,15 @@ type MenuRenderInput = {
   readonly message: string | null
 }
 
+type CreateRenderInput = {
+  readonly buffer: string
+  readonly defaults: CreateInputs
+  readonly label: string
+  readonly message: string | null
+  readonly stepIndex: number
+  readonly steps: ReadonlyArray<CreateStep>
+}
+
 export const renderMenu = (input: MenuRenderInput): React.ReactElement => {
   const { activeDir, busy, cwd, message, runningDockerGitContainers, selected } = input
   const el = React.createElement
@@ -108,14 +117,8 @@ export const renderMenu = (input: MenuRenderInput): React.ReactElement => {
   )
 }
 
-export const renderCreate = (
-  label: string,
-  buffer: string,
-  message: string | null,
-  stepIndex: number,
-  defaults: CreateInputs,
-  steps: ReadonlyArray<CreateStep>
-): React.ReactElement => {
+export const renderCreate = (input: CreateRenderInput): React.ReactElement => {
+  const { buffer, defaults, label, message, stepIndex, steps } = input
   const el = React.createElement
   const hint = stepIndex === 0
     ? "Enter = next, Shift+Enter = quick create, Esc = cancel."

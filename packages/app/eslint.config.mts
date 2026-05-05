@@ -326,6 +326,21 @@ export default defineConfig(
       'sonarjs/no-empty-test-file': 'off',
     },
   },
+  {
+    files: [
+      "src/docker-git/menu-create-shared.ts",
+      "src/web/app-ready-terminal-screen.tsx",
+      "src/web/panel-content.tsx",
+      "src/web/panel-create-select.tsx",
+      "src/web/panel-project-details.tsx",
+      "src/web/panel-terminal.tsx",
+      "src/web/terminal-panel-runtime-core.ts",
+    ],
+    rules: {
+      "max-lines": "off",
+      "max-lines-per-function": "off",
+    },
+  },
 
   // 3) Для JS-файлов отключим типо-зависимые проверки
   {

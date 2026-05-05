@@ -114,11 +114,11 @@ const headerPadding = (viewportLayout: ViewportLayout): number | string =>
 const headerGap = (viewportLayout: ViewportLayout): number => viewportLayout.compact ? 1 : 2
 
 const headerMetricsTopMargin = (viewportLayout: ViewportLayout): number | string => viewportLayout.compact ? "4px" : 1
-const terminalWorkspacePadding = (viewportLayout: ViewportLayout): number => {
+const terminalWorkspacePadding = (viewportLayout: ViewportLayout): string => {
   if (viewportLayout.mode === "mobile") {
-    return 0
+    return "0px"
   }
-  return viewportLayout.keyboardOpen ? 0.5 : 1
+  return viewportLayout.keyboardOpen ? "4px" : "8px"
 }
 
 const HeaderTitle = ({ compact }: Pick<ViewportLayout, "compact">): JSX.Element => (

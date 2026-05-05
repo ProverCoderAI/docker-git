@@ -1,61 +1,77 @@
-import type { Dispatch, SetStateAction } from "react"
-import { describe, expect, it } from "vitest"
+import type { SetStateAction } from "react"
+import { describe, expect, it, vi } from "vitest"
 
 import {
   type CreateFlowView,
   createInitialFlowView,
   resolveCreateFlowSteps
 } from "../../src/docker-git/menu-create-shared.js"
+import type { BrowserActionContext } from "../../src/web/actions.js"
 import { submitCreateView } from "../../src/web/app-ready-create.js"
-import { makeBrowserActionContext } from "./browser-action-context-fixture.js"
 
-const createBrowserActionContext = () =>
-  makeBrowserActionContext({
-    githubStatus: {
-      summary: "valid",
-      tokens: [{ key: "default", label: "Default", login: null, status: "valid" }]
-    }
-  }).context
+const createSetter = <A>() => vi.fn((_value: SetStateAction<A>) => {})
 
-const createSetCreateViewSpy = () => {
-  let callCount = 0
-  let currentView: CreateFlowView | undefined
-  const setCreateView: Dispatch<SetStateAction<CreateFlowView>> = (value) => {
-    callCount += 1
-    currentView = typeof value === "function"
-      ? value(currentView ?? createInitialFlowView())
-      : value
-  }
-  return {
-    callCount: () => callCount,
-    setCreateView,
-    view: () => currentView
-  }
-}
+const createBrowserActionContext = (): BrowserActionContext => ({
+  addTerminalSession: vi.fn(),
+  databaseConnectionInput: "",
+  databaseLabelInput: "",
+  githubStatus: {
+    summary: "ok",
+    tokens: [{ key: "GITHUB_TOKEN", label: "default", login: "octocat", status: "valid" }]
+  },
+  portForwardInput: "",
+  reloadDashboard: vi.fn(),
+  selectedProjectId: null,
+  selectedProjectKey: null,
+  selectedProjectName: null,
+  setActionPrompt: vi.fn(),
+  setActiveScreen: createSetter(),
+  setAuthSnapshot: createSetter(),
+  setBusyLabel: createSetter(),
+  setDatabaseConnectionInput: createSetter(),
+  setDatabaseForwards: createSetter(),
+  setDatabaseLabelInput: createSetter(),
+  setDatabaseProfiles: createSetter(),
+  setDatabaseSession: createSetter(),
+  setGithubStatus: createSetter(),
+  setMessage: vi.fn(),
+  setOutput: createSetter(),
+  setPortForwardInput: createSetter(),
+  setPortForwards: createSetter(),
+  setProjectAuthSnapshot: createSetter(),
+  setProjectBrowser: createSetter(),
+  setProjectTaskLogs: createSetter(),
+  setProjectTasks: createSetter(),
+  setSelectedMenuIndex: createSetter(),
+  setSelectedProject: createSetter(),
+  setSelectedProjectId: createSetter()
+})
 
-const submitTestCreateView = (buffer: string) => {
+const submitCreateBuffer = (buffer: string) => {
   const context = createBrowserActionContext()
-  const setCreateViewSpy = createSetCreateViewSpy()
+  const setCreateView = createSetter<CreateFlowView>()
+
   submitCreateView({
     context,
     controllerCwd: "/workspace",
     createView: createInitialFlowView(buffer),
     projectsRoot: "/home/dev/.docker-git",
-    setCreateView: setCreateViewSpy.setCreateView
+    setCreateView
   })
-  return { context, setCreateViewSpy }
+
+  return { context, setCreateView }
 }
 
 describe("app-ready-create", () => {
   it("advances to the next create field on Enter for a repo URL", () => {
-    const { context, setCreateViewSpy } = submitTestCreateView("https://github.com/org/repo/tree/feature-x --force")
+    const { context, setCreateView } = submitCreateBuffer("https://github.com/org/repo/tree/feature-x --force")
 
-    expect(setCreateViewSpy.callCount()).toBe(1)
-    const nextView = setCreateViewSpy.view()
-    expect(nextView).toBeDefined()
-    if (nextView === undefined) {
-      throw new Error("Expected create view to advance")
+    expect(setCreateView).toHaveBeenCalledTimes(1)
+    const nextViewAction = setCreateView.mock.calls[0]?.[0]
+    if (nextViewAction === undefined || typeof nextViewAction === "function") {
+      throw new Error("Expected create view object update")
     }
+    const nextView = nextViewAction
     expect(nextView).toMatchObject({
       step: 1,
       values: {
@@ -76,9 +92,9 @@ describe("app-ready-create", () => {
   })
 
   it("shows a parse error instead of submitting on invalid inline flags", () => {
-    const { context, setCreateViewSpy } = submitTestCreateView("https://github.com/org/repo --bogus")
+    const { context, setCreateView } = submitCreateBuffer("https://github.com/org/repo --bogus")
 
-    expect(setCreateViewSpy.callCount()).toBe(0)
+    expect(setCreateView).not.toHaveBeenCalled()
     expect(context.setMessage).toHaveBeenCalledWith("Missing value for option: --bogus")
   })
 })

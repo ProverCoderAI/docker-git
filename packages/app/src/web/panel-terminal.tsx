@@ -79,6 +79,13 @@ const bodyStyleKeyboardOpen: CSSProperties = {
   padding: 0
 }
 
+const terminalBodyStyle = (compactTypingMode: boolean, mobileMode: boolean): CSSProperties => {
+  if (compactTypingMode) {
+    return bodyStyleKeyboardOpen
+  }
+  return mobileMode ? bodyStyleMobile : bodyStyle
+}
+
 const closeButtonStyle: CSSProperties = {
   background: "#171d24",
   border: "1px solid #3a4652",
@@ -335,11 +342,21 @@ const sendTerminalMobileInput = (
   retainTerminalFocus(controller)
 }
 
-const terminalBodyStyle = (mobileMode: boolean, compactTypingMode: boolean): CSSProperties => {
-  if (compactTypingMode) {
-    return bodyStyleKeyboardOpen
+const shouldKeepMobileCtrlArmed = (event: KeyboardEvent): boolean =>
+  event.metaKey || event.altKey || event.ctrlKey || event.isComposing || isModifierOnlyTerminalKey(event.key)
+
+const sendMobileCtrlEventInput = (
+  controller: TerminalInputController | null,
+  event: KeyboardEvent
+): void => {
+  const controlCharacter = terminalControlCharacterForKey(event.key)
+  if (controlCharacter === null) {
+    return
   }
-  return mobileMode ? bodyStyleMobile : bodyStyle
+  event.preventDefault()
+  event.stopPropagation()
+  controller?.sendInput(controlCharacter)
+  retainTerminalFocus(controller)
 }
 
 const MobileTerminalControlButton = (
@@ -498,25 +515,15 @@ export const TerminalPanel = (
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.metaKey || event.altKey || event.ctrlKey || event.isComposing) {
-        return
-      }
       if (event.key === "Escape") {
         setMobileCtrlArmed(false)
         return
       }
-      if (isModifierOnlyTerminalKey(event.key)) {
+      if (shouldKeepMobileCtrlArmed(event)) {
         return
       }
-      const controlCharacter = terminalControlCharacterForKey(event.key)
       setMobileCtrlArmed(false)
-      if (controlCharacter === null) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      runtimeRef.current?.sendInput(controlCharacter)
-      retainTerminalFocus(runtimeRef.current)
+      sendMobileCtrlEventInput(runtimeRef.current, event)
     }
 
     host.addEventListener("keydown", handleKeyDown, true)
@@ -562,7 +569,7 @@ export const TerminalPanel = (
       />
       <div
         ref={hostRef}
-        style={terminalBodyStyle(mobileMode, compactTypingMode)}
+        style={terminalBodyStyle(compactTypingMode, mobileMode)}
       />
       {mobileMode
         ? (

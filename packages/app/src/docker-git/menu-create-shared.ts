@@ -19,34 +19,25 @@ export type CreateFlowContext = {
   readonly projectsRoot?: string | undefined
 }
 
-type TokenQuote = "'" | "\""
-
-type TokenizerState = {
-  current: string
-  escaping: boolean
-  quote: TokenQuote | null
-  readonly tokens: Array<string>
-}
-
 export type CreateFlowView = {
   readonly step: number
   readonly buffer: string
   readonly values: Partial<CreateInputs>
 }
 
-export type AdvanceCreateFlowResult =
+type AdvanceCreateFlowResult =
   | { readonly _tag: "Continue"; readonly view: CreateFlowView }
   | { readonly _tag: "Error"; readonly error: ParseError }
   | { readonly _tag: "Complete"; readonly inputs: CreateInputs }
-
-type AdvanceCreateFlowOptions = {
-  readonly quickCreate?: boolean
-}
 
 type AdvanceCreateFlowHandlers = {
   readonly onComplete: (inputs: CreateInputs) => void
   readonly onContinue: (view: CreateFlowView) => void
   readonly onError: (error: ParseError) => void
+}
+
+type AdvanceCreateFlowOptions = {
+  readonly quickCreate?: boolean
 }
 
 const trimLeftSlash = (value: string): string => {
@@ -154,22 +145,21 @@ const createParseError = (reason: string): ParseError => ({
   reason
 })
 
-const pushCreateToken = (state: TokenizerState): void => {
+type CreateTokenizeState = {
+  current: string
+  escaping: boolean
+  quote: "'" | "\"" | null
+  readonly tokens: Array<string>
+}
+
+const pushCreateToken = (state: CreateTokenizeState): void => {
   if (state.current.length > 0) {
     state.tokens.push(state.current)
     state.current = ""
   }
 }
 
-const consumeQuotedCreateTokenChar = (state: TokenizerState, char: string): void => {
-  if (char === state.quote) {
-    state.quote = null
-    return
-  }
-  state.current += char
-}
-
-const consumeCreateTokenChar = (state: TokenizerState, char: string): void => {
+const consumeCreateTokenChar = (state: CreateTokenizeState, char: string): void => {
   if (state.escaping) {
     state.current += char
     state.escaping = false
@@ -180,7 +170,11 @@ const consumeCreateTokenChar = (state: TokenizerState, char: string): void => {
     return
   }
   if (state.quote !== null) {
-    consumeQuotedCreateTokenChar(state, char)
+    if (char === state.quote) {
+      state.quote = null
+      return
+    }
+    state.current += char
     return
   }
   if (char === "'" || char === "\"") {
@@ -197,7 +191,7 @@ const consumeCreateTokenChar = (state: TokenizerState, char: string): void => {
 const tokenizeCreateCommandLine = (
   input: string
 ): Either.Either<ReadonlyArray<string>, ParseError> => {
-  const state: TokenizerState = { current: "", escaping: false, quote: null, tokens: [] }
+  const state: CreateTokenizeState = { current: "", escaping: false, quote: null, tokens: [] }
 
   for (const char of input.trim()) {
     consumeCreateTokenChar(state, char)
@@ -259,22 +253,40 @@ const normalizeCreateTokens = (
   return Either.right(withoutBinary)
 }
 
+type RawCreateOptions = Parameters<typeof buildCreateCommand>[0]
+
+const cpuLimitCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.cpuLimit === undefined ? {} : { cpuLimit: command.config.cpuLimit ?? "" }
+
+const ramLimitCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.ramLimit === undefined ? {} : { ramLimit: command.config.ramLimit ?? "" }
+
+const runUpCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.up === undefined ? {} : { runUp: command.runUp }
+
+const playwrightCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.enableMcpPlaywright === undefined ? {} : { enableMcpPlaywright: command.config.enableMcpPlaywright }
+
+const forceCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.force === undefined ? {} : { force: command.force }
+
+const forceEnvCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.forceEnv === undefined ? {} : { forceEnv: command.forceEnv }
+
 const createInputsFromCommand = (
   repoUrl: string,
-  raw: Parameters<typeof buildCreateCommand>[0],
+  raw: RawCreateOptions,
   command: CreateCommand
 ): Partial<CreateInputs> => ({
   repoUrl,
   repoRef: command.config.repoRef,
   outDir: command.outDir,
-  ...(raw.cpuLimit === undefined ? {} : { cpuLimit: command.config.cpuLimit ?? "" }),
-  ...(raw.ramLimit === undefined ? {} : { ramLimit: command.config.ramLimit ?? "" }),
-  ...(raw.up === undefined ? {} : { runUp: command.runUp }),
-  ...(raw.enableMcpPlaywright === undefined
-    ? {}
-    : { enableMcpPlaywright: command.config.enableMcpPlaywright }),
-  ...(raw.force === undefined ? {} : { force: command.force }),
-  ...(raw.forceEnv === undefined ? {} : { forceEnv: command.forceEnv })
+  ...cpuLimitCreateInput(raw, command),
+  ...ramLimitCreateInput(raw, command),
+  ...runUpCreateInput(raw, command),
+  ...playwrightCreateInput(raw, command),
+  ...forceCreateInput(raw, command),
+  ...forceEnvCreateInput(raw, command)
 })
 
 const parseRepoStepInput = (
@@ -304,7 +316,10 @@ const parseRepoStepInput = (
   })
 }
 
-const createStepApplied = (): Either.Either<true, ParseError> => Either.right(true)
+const createStepApplied = (): Either.Either<true, ParseError> => {
+  const applied = true
+  return Either.right(applied)
+}
 
 const hasOwn = (values: Partial<CreateInputs>, key: keyof CreateInputs): boolean =>
   Object.prototype.hasOwnProperty.call(values, key)

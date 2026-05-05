@@ -50,19 +50,31 @@ const decodePathTail = (value: string): string =>
     .join("/")
     .trim()
 
-const readSshLinkRequest = (): SshLinkRequest | null => {
-  const url = new URL(globalThis.location.href)
-  if (url.pathname.startsWith(sshPathPrefix)) {
-    const tail = url.pathname.slice(sshPathPrefix.length)
-    if (tail.startsWith("session/")) {
-      const sessionId = decodeURIComponent(tail.slice("session/".length).split("/")[0] ?? "").trim()
-      return sessionId.length === 0 ? null : { kind: "session", sessionId }
-    }
-    const decoded = decodePathTail(tail)
-    return decoded.length === 0 ? null : { kind: "project", token: decoded }
+const readSessionPathRequest = (tail: string): SshLinkRequest | null => {
+  const sessionId = decodeURIComponent(tail.slice("session/".length).split("/")[0] ?? "").trim()
+  return sessionId.length === 0 ? null : { kind: "session", sessionId }
+}
+
+const readSshPathRequest = (url: URL): SshLinkRequest | null => {
+  if (!url.pathname.startsWith(sshPathPrefix)) {
+    return null
   }
+  const tail = url.pathname.slice(sshPathPrefix.length)
+  if (tail.startsWith("session/")) {
+    return readSessionPathRequest(tail)
+  }
+  const decoded = decodePathTail(tail)
+  return decoded.length === 0 ? null : { kind: "project", token: decoded }
+}
+
+const readSshQueryRequest = (url: URL): SshLinkRequest | null => {
   const queryToken = url.searchParams.get("ssh")?.trim() ?? ""
   return queryToken.length === 0 ? null : { kind: "project", token: queryToken }
+}
+
+const readSshLinkRequest = (): SshLinkRequest | null => {
+  const url = new URL(globalThis.location.href)
+  return readSshPathRequest(url) ?? readSshQueryRequest(url)
 }
 
 const findProjectBySshToken = (
@@ -81,6 +93,9 @@ const findLocalTerminalSession = (
   sessions: ReadonlyArray<ActiveTerminalSession>,
   sessionId: string
 ): ActiveTerminalSession | undefined => sessions.find((session) => terminalSessionId(session) === sessionId)
+
+const sshLinkRequestKey = (request: SshLinkRequest): string =>
+  request.kind === "session" ? `session:${request.sessionId}` : `project:${request.token}`
 
 const scheduleTerminalSessionAttach = (args: SshLinkEffectArgs, sessionId: string): void => {
   clearConnectTimer(args.connectTimerRef)
@@ -110,6 +125,31 @@ const scheduleTerminalSessionAttach = (args: SshLinkEffectArgs, sessionId: strin
   }, 0)
 }
 
+const handleProjectSshLink = (args: SshLinkEffectArgs, request: { readonly token: string }): void => {
+  const project = findProjectBySshToken(args.projects, request.token)
+  if (project === undefined) {
+    args.actionContext.setMessage(`Project link was not found: ${request.token}.`)
+    return
+  }
+  clearConnectTimer(args.connectTimerRef)
+  showProjectTerminalScreen(args.actionContext, project.id)
+  args.deactivateTerminalWorkspace()
+}
+
+const handleSessionSshLink = (args: SshLinkEffectArgs, request: { readonly sessionId: string }): void => {
+  const localSession = findLocalTerminalSession(args.terminalSessions, request.sessionId)
+  if (localSession === undefined) {
+    scheduleTerminalSessionAttach(args, request.sessionId)
+    return
+  }
+  clearConnectTimer(args.connectTimerRef)
+  if (localSession.browserProjectId !== undefined) {
+    showProjectTerminalScreen(args.actionContext, localSession.browserProjectId)
+  }
+  args.selectTerminalSession(request.sessionId)
+  args.actionContext.setMessage(`Opened existing SSH terminal: ${request.sessionId}.`)
+}
+
 const handleSshLinkEffect = (args: SshLinkEffectArgs): void => {
   const request = readSshLinkRequest()
   if (request === null) {
@@ -117,35 +157,17 @@ const handleSshLinkEffect = (args: SshLinkEffectArgs): void => {
     args.handledTokenRef.current = null
     return
   }
-  const requestKey = request.kind === "session" ? `session:${request.sessionId}` : `project:${request.token}`
+  const requestKey = sshLinkRequestKey(request)
   if (args.busyLabel !== null || args.handledTokenRef.current === requestKey) {
     return
   }
 
   args.handledTokenRef.current = requestKey
   if (request.kind === "project") {
-    const project = findProjectBySshToken(args.projects, request.token)
-    if (project === undefined) {
-      args.actionContext.setMessage(`Project link was not found: ${request.token}.`)
-      return
-    }
-    clearConnectTimer(args.connectTimerRef)
-    showProjectTerminalScreen(args.actionContext, project.id)
-    args.deactivateTerminalWorkspace()
+    handleProjectSshLink(args, request)
     return
   }
-
-  const localSession = findLocalTerminalSession(args.terminalSessions, request.sessionId)
-  if (localSession !== undefined) {
-    clearConnectTimer(args.connectTimerRef)
-    if (localSession.browserProjectId !== undefined) {
-      showProjectTerminalScreen(args.actionContext, localSession.browserProjectId)
-    }
-    args.selectTerminalSession(request.sessionId)
-    args.actionContext.setMessage(`Opened existing SSH terminal: ${request.sessionId}.`)
-    return
-  }
-  scheduleTerminalSessionAttach(args, request.sessionId)
+  handleSessionSshLink(args, request)
 }
 
 export const useSshLink = ({

@@ -49,19 +49,6 @@ export const setCreateBuffer = (
   setCreateView({ ...createView, buffer })
 }
 
-const showCreateFlowError = (context: BrowserActionContext, error: Parameters<typeof formatParseError>[0]): void => {
-  context.setMessage(formatParseError(error))
-}
-
-const continueBrowserCreateFlow = (
-  context: BrowserActionContext,
-  setCreateView: Setter<CreateFlowView>,
-  view: CreateFlowView
-): void => {
-  setCreateView(view)
-  context.setMessage(null)
-}
-
 export const submitCreateView = (
   {
     context,
@@ -81,15 +68,16 @@ export const submitCreateView = (
     ? advanceCreateFlow(createContext, createView)
     : advanceCreateFlow(createContext, createView, { quickCreate })
   handleAdvanceCreateFlowResult(next, {
+    onError: (error) => {
+      context.setMessage(formatParseError(error))
+    },
+    onContinue: (view) => {
+      setCreateView(view)
+      context.setMessage(null)
+    },
     onComplete: (inputs) => {
       submitCreateInputs(inputs, context)
       setCreateView(resetCreateView())
-    },
-    onContinue: (view) => {
-      continueBrowserCreateFlow(context, setCreateView, view)
-    },
-    onError: (error) => {
-      showCreateFlowError(context, error)
     }
   })
 }

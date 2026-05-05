@@ -21,40 +21,35 @@ const modifierOnlyKeys = new Set([
   "Shift"
 ])
 
+const terminalControlSymbolInputs: Readonly<Record<string, string>> = {
+  "@": "\u0000",
+  "[": "\u001B",
+  "\\": "\u001C",
+  "]": "\u001D",
+  "^": "\u001E",
+  _: "\u001F"
+}
+
 export const mobileTerminalKeyInput = (key: MobileTerminalKey): string => mobileTerminalKeyInputs[key]
 
 export const isModifierOnlyTerminalKey = (key: string): boolean => modifierOnlyKeys.has(key)
 
-const controlCharacterFromKey = (key: string, offset: number): string | null => {
-  const codePoint = key.codePointAt(0)
-  return codePoint === undefined ? null : String.fromCodePoint(codePoint - offset)
+const controlCharacterFromRange = (
+  key: string,
+  first: string,
+  last: string,
+  offset: number
+): string | null => {
+  if (key.length !== 1 || key < first || key > last) {
+    return null
+  }
+  return String.fromCodePoint((key.codePointAt(0) ?? 0) - offset)
 }
 
 export const terminalControlCharacterForKey = (key: string): string | null => {
-  if (key.length === 1 && key >= "a" && key <= "z") {
-    return controlCharacterFromKey(key, 96)
+  const lower = controlCharacterFromRange(key, "a", "z", 96)
+  if (lower !== null) {
+    return lower
   }
-  if (key.length === 1 && key >= "A" && key <= "Z") {
-    return controlCharacterFromKey(key, 64)
-  }
-
-  if (key === "@") {
-    return "\u0000"
-  }
-  if (key === "[") {
-    return "\u001B"
-  }
-  if (key === "\\") {
-    return "\u001C"
-  }
-  if (key === "]") {
-    return "\u001D"
-  }
-  if (key === "^") {
-    return "\u001E"
-  }
-  if (key === "_") {
-    return "\u001F"
-  }
-  return null
+  return controlCharacterFromRange(key, "A", "Z", 64) ?? terminalControlSymbolInputs[key] ?? null
 }
