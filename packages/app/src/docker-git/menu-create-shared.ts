@@ -279,7 +279,10 @@ const parseRepoStepInput = (
   })
 }
 
-const createStepApplied = (): Either.Either<true, ParseError> => Either.right(true as const)
+const createStepApplied = (): Either.Either<true, ParseError> => {
+  const applied: true = true
+  return Either.right(applied)
+}
 
 const hasOwn = <K extends keyof CreateInputs>(values: Partial<CreateInputs>, key: K): boolean =>
   Object.prototype.hasOwnProperty.call(values, key)
