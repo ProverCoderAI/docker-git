@@ -240,6 +240,8 @@ jobs:
       - name: Version packages
         if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           bun run changeset-version
