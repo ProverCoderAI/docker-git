@@ -8,22 +8,22 @@ import {
 
 describe("terminal image path detection", () => {
   it("detects a single absolute image path", () => {
-    expect(detectTerminalImagePaths("see /tmp/issue232-main.png for details")).toEqual([
-      "/tmp/issue232-main.png"
+    expect(detectTerminalImagePaths("see /var/data/issue232-main.png for details")).toEqual([
+      "/var/data/issue232-main.png"
     ])
   })
 
   it("detects multiple distinct image paths", () => {
-    const text = "saved /tmp/a.png and /var/data/b.jpg, also /home/user/c.webp"
+    const text = "saved /var/data/a.png and /var/data/sub/b.jpg, also /home/user/c.webp"
     expect(detectTerminalImagePaths(text)).toEqual([
-      "/tmp/a.png",
-      "/var/data/b.jpg",
+      "/var/data/a.png",
+      "/var/data/sub/b.jpg",
       "/home/user/c.webp"
     ])
   })
 
   it("deduplicates repeated image paths", () => {
-    expect(detectTerminalImagePaths("a /tmp/x.png b /tmp/x.png c")).toEqual(["/tmp/x.png"])
+    expect(detectTerminalImagePaths("a /var/data/x.png b /var/data/x.png c")).toEqual(["/var/data/x.png"])
   })
 
   it("ignores relative paths", () => {
@@ -31,45 +31,48 @@ describe("terminal image path detection", () => {
   })
 
   it("ignores unsupported extensions", () => {
-    expect(detectTerminalImagePaths("/tmp/file.txt /tmp/photo.bmp /tmp/doc.pdf")).toEqual([])
+    expect(detectTerminalImagePaths("/var/data/file.txt /var/data/photo.bmp /var/data/doc.pdf")).toEqual([])
   })
 
   it("trims trailing punctuation from detected paths", () => {
-    expect(detectTerminalImagePaths("look at /tmp/foo.png, then /var/bar.gif.")).toEqual([
-      "/tmp/foo.png",
-      "/var/bar.gif"
+    expect(detectTerminalImagePaths("look at /var/data/foo.png, then /var/data/bar.gif.")).toEqual([
+      "/var/data/foo.png",
+      "/var/data/bar.gif"
     ])
   })
 
   it("recognises uppercase extensions", () => {
-    expect(detectTerminalImagePaths("/tmp/Photo.PNG /tmp/Cover.JPG")).toEqual([
-      "/tmp/Photo.PNG",
-      "/tmp/Cover.JPG"
+    expect(detectTerminalImagePaths("/var/data/Photo.PNG /var/data/Cover.JPG")).toEqual([
+      "/var/data/Photo.PNG",
+      "/var/data/Cover.JPG"
     ])
   })
 
   it("strips ANSI CSI sequences before scanning", () => {
-    const text = `[32m/tmp/colored.png[0m`
-    expect(stripTerminalAnsi(text)).toBe("/tmp/colored.png")
-    expect(detectTerminalImagePaths(text)).toEqual(["/tmp/colored.png"])
+    const escapeChar = String.fromCodePoint(0x1B)
+    const text = `${escapeChar}[32m/var/data/colored.png${escapeChar}[0m`
+    expect(stripTerminalAnsi(text)).toBe("/var/data/colored.png")
+    expect(detectTerminalImagePaths(text)).toEqual(["/var/data/colored.png"])
   })
 
   it("strips ANSI OSC sequences terminated by BEL or ST", () => {
-    const belTerminated = `]0;title/tmp/bel.png`
-    const stTerminated = `]0;title\\/tmp/st.png`
-    expect(stripTerminalAnsi(belTerminated)).toBe("/tmp/bel.png")
-    expect(stripTerminalAnsi(stTerminated)).toBe("/tmp/st.png")
-    expect(detectTerminalImagePaths(belTerminated)).toEqual(["/tmp/bel.png"])
-    expect(detectTerminalImagePaths(stTerminated)).toEqual(["/tmp/st.png"])
+    const escapeChar = String.fromCodePoint(0x1B)
+    const bellChar = String.fromCodePoint(0x07)
+    const belTerminated = `${escapeChar}]0;title${bellChar}/var/data/bel.png`
+    const stTerminated = String.raw`${escapeChar}]0;title${escapeChar}\/var/data/st.png`
+    expect(stripTerminalAnsi(belTerminated)).toBe("/var/data/bel.png")
+    expect(stripTerminalAnsi(stTerminated)).toBe("/var/data/st.png")
+    expect(detectTerminalImagePaths(belTerminated)).toEqual(["/var/data/bel.png"])
+    expect(detectTerminalImagePaths(stTerminated)).toEqual(["/var/data/st.png"])
   })
 
   it("classifies supported image extensions", () => {
-    expect(isSupportedTerminalImagePath("/tmp/a.png")).toBe(true)
-    expect(isSupportedTerminalImagePath("/tmp/a.JPG")).toBe(true)
-    expect(isSupportedTerminalImagePath("/tmp/a.jpeg")).toBe(true)
-    expect(isSupportedTerminalImagePath("/tmp/a.gif")).toBe(true)
-    expect(isSupportedTerminalImagePath("/tmp/a.webp")).toBe(true)
-    expect(isSupportedTerminalImagePath("/tmp/a.bmp")).toBe(false)
-    expect(isSupportedTerminalImagePath("/tmp/a.txt")).toBe(false)
+    expect(isSupportedTerminalImagePath("/var/data/a.png")).toBe(true)
+    expect(isSupportedTerminalImagePath("/var/data/a.JPG")).toBe(true)
+    expect(isSupportedTerminalImagePath("/var/data/a.jpeg")).toBe(true)
+    expect(isSupportedTerminalImagePath("/var/data/a.gif")).toBe(true)
+    expect(isSupportedTerminalImagePath("/var/data/a.webp")).toBe(true)
+    expect(isSupportedTerminalImagePath("/var/data/a.bmp")).toBe(false)
+    expect(isSupportedTerminalImagePath("/var/data/a.txt")).toBe(false)
   })
 })

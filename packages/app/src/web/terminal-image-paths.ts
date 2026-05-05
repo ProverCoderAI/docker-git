@@ -7,13 +7,13 @@ const imagePathPattern = new RegExp(
   "giu"
 )
 
-const escapeChar = String.fromCharCode(0x1b)
-const bellChar = String.fromCharCode(0x07)
+const escapeChar = String.fromCodePoint(0x1B)
+const bellChar = String.fromCodePoint(0x07)
 
 const buildAnsiPattern = (source: string): RegExp => new RegExp(source, "gu")
 
-const ansiCsiPattern = buildAnsiPattern(`${escapeChar}\\[[0-?]*[ -/]*[@-~]`)
-const ansiOscPattern = buildAnsiPattern(`${escapeChar}\\][\\s\\S]*?(?:${bellChar}|${escapeChar}\\\\)`)
+const ansiCsiPattern = buildAnsiPattern(String.raw`${escapeChar}\[[0-?]*[ -/]*[@-~]`)
+const ansiOscPattern = buildAnsiPattern(String.raw`${escapeChar}\][\s\S]*?(?:${bellChar}|${escapeChar}\\)`)
 const ansiOtherEscapePattern = buildAnsiPattern(`${escapeChar}.`)
 
 export const stripTerminalAnsi = (text: string): string =>
