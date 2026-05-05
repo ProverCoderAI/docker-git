@@ -114,8 +114,7 @@ const terminalStatusColor = (status: TerminalSession["status"]): string => {
 
 const sortedTerminalSessions = (
   sessions: ReadonlyArray<TerminalSession>
-): ReadonlyArray<TerminalSession> =>
-  [...sessions].sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+): ReadonlyArray<TerminalSession> => sessions.toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))
 
 const ProjectTerminalSessionRow = (
   {

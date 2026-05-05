@@ -7,7 +7,12 @@ import { formatParseError, usageText } from "./cli/usage.js"
 import type { MenuError } from "./menu-errors.js"
 
 import { nextBufferValue } from "./menu-buffer-input.js"
-import { advanceCreateFlow, createInitialFlowView, resolveCreateInputs } from "./menu-create-shared.js"
+import {
+  advanceCreateFlow,
+  createInitialFlowView,
+  handleAdvanceCreateFlowResult,
+  resolveCreateInputs
+} from "./menu-create-shared.js"
 import { resetToMenu } from "./menu-shared.js"
 import { type CreateInputs, type MenuEnv, type MenuState, type ViewState } from "./menu-types.js"
 
@@ -138,25 +143,24 @@ const handleCreateReturn = (
   quickCreate = false
 ) => {
   const next = advanceCreateFlow(context.state.cwd, context.view, { quickCreate })
-  if (next === null) {
-    return
-  }
-  if (next._tag === "Error") {
-    context.setMessage(formatParseError(next.error))
-    return
-  }
-  if (next._tag === "Continue") {
-    context.setView({ _tag: "Create", ...next.view })
-    context.setMessage(null)
-    return
-  }
-  finalizeCreateFlow({
-    state: context.state,
-    nextValues: next.inputs,
-    setView: context.setView,
-    setMessage: context.setMessage,
-    runner: context.runner,
-    setActiveDir: context.setActiveDir
+  handleAdvanceCreateFlowResult(next, {
+    onComplete: (inputs) => {
+      finalizeCreateFlow({
+        state: context.state,
+        nextValues: inputs,
+        setView: context.setView,
+        setMessage: context.setMessage,
+        runner: context.runner,
+        setActiveDir: context.setActiveDir
+      })
+    },
+    onContinue: (view) => {
+      context.setView({ _tag: "Create", ...view })
+      context.setMessage(null)
+    },
+    onError: (error) => {
+      context.setMessage(formatParseError(error))
+    }
   })
 }
 

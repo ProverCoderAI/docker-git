@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest"
 
 import { defaultTemplateConfig, type TemplateConfig } from "../../src/core/domain.js"
 import { renderDockerCompose } from "../../src/core/templates/docker-compose.js"
+import { renderDockerfile } from "../../src/core/templates/dockerfile.js"
 import { renderEntrypoint } from "../../src/core/templates-entrypoint.js"
 import { renderEntrypointDnsRepair } from "../../src/core/templates-entrypoint/dns-repair.js"
 import { renderEntrypointGitHooks } from "../../src/core/templates-entrypoint/git.js"
@@ -49,6 +50,21 @@ describe("renderEntrypointDnsRepair", () => {
 
     expect(dnsRepairIndex).toBeGreaterThanOrEqual(0)
     expect(packageCacheIndex).toBeGreaterThan(dnsRepairIndex)
+  })
+})
+
+describe("renderDockerfile", () => {
+  it("installs session sync from npmjs with a local fallback", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expectContainsAll(dockerfile, [
+      'ARG DOCKER_GIT_SESSION_SYNC_PACKAGE="@prover-coder-ai/docker-git-session-sync@latest"',
+      'COPY .docker-git-tools/docker-git-session-sync /opt/docker-git/tools/docker-git-session-sync',
+      'npm install -g "$DOCKER_GIT_SESSION_SYNC_PACKAGE"',
+      "docker-git-session-sync --help >/dev/null",
+      "using local session sync fallback",
+      "install -m 0755 /opt/docker-git/tools/docker-git-session-sync /usr/local/bin/docker-git-session-sync"
+    ])
   })
 })
 

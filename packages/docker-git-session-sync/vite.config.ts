@@ -10,6 +10,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         banner: "#!/usr/bin/env bun",
+        codeSplitting: false,
         entryFileNames: "docker-git-session-sync.js",
         format: "es"
       }
@@ -17,6 +18,7 @@ export default defineConfig({
     ssrEmitAssets: false
   },
   ssr: {
+    noExternal: true,
     target: "node"
   }
 })
