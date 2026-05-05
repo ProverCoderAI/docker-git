@@ -11,6 +11,7 @@ import type { ActiveTerminalSession } from "./terminal.js"
 
 type TerminalPanelProps = {
   readonly onAttachFailure: () => void
+  readonly onApplyProject?: (() => void) | undefined
   readonly onClose: () => void
   readonly onMessage: (message: string) => void
   readonly onOpenBrowser?: (() => void) | undefined
@@ -108,16 +109,20 @@ const TerminalActionButton = (
 
 const TerminalHeaderActions = (
   {
+    onApplyProject,
     onClose,
     onOpenBrowser,
     onOpenTerminal,
     session
-  }: Pick<TerminalPanelProps, "onClose" | "onOpenBrowser" | "onOpenTerminal" | "session">
+  }: Pick<TerminalPanelProps, "onApplyProject" | "onClose" | "onOpenBrowser" | "onOpenTerminal" | "session">
 ): JSX.Element => (
   <div style={headerActionsStyle}>
     {session.browserProjectId === undefined || onOpenBrowser === undefined
       ? null
       : <TerminalActionButton onClick={onOpenBrowser}>Open browser</TerminalActionButton>}
+    {session.browserProjectId === undefined || onApplyProject === undefined
+      ? null
+      : <TerminalActionButton onClick={onApplyProject}>Apply</TerminalActionButton>}
     {session.browserProjectId === undefined || onOpenTerminal === undefined
       ? null
       : <TerminalActionButton onClick={onOpenTerminal}>New terminal</TerminalActionButton>}
@@ -127,18 +132,20 @@ const TerminalHeaderActions = (
 
 const TerminalHeader = (
   {
+    onApplyProject,
     onClose,
     onOpenBrowser,
     onOpenTerminal,
     session,
     status
-  }: Pick<TerminalPanelProps, "onClose" | "onOpenBrowser" | "onOpenTerminal" | "session"> & {
+  }: Pick<TerminalPanelProps, "onApplyProject" | "onClose" | "onOpenBrowser" | "onOpenTerminal" | "session"> & {
     readonly status: TerminalStatus
   }
 ): JSX.Element => (
   <div style={headerStyle}>
     <TerminalHeaderTitle session={session} status={status} />
     <TerminalHeaderActions
+      onApplyProject={onApplyProject}
       onClose={onClose}
       onOpenBrowser={onOpenBrowser}
       onOpenTerminal={onOpenTerminal}
@@ -148,7 +155,7 @@ const TerminalHeader = (
 )
 
 export const TerminalPanel = (
-  { onAttachFailure, onClose, onMessage, onOpenBrowser, onOpenTerminal, session }: TerminalPanelProps
+  { onAttachFailure, onApplyProject, onClose, onMessage, onOpenBrowser, onOpenTerminal, session }: TerminalPanelProps
 ): JSX.Element => {
   const connectionRef = useRef<TerminalConnectionState>({ closing: false, opened: false })
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -180,6 +187,7 @@ export const TerminalPanel = (
   return (
     <div style={panelStyle}>
       <TerminalHeader
+        onApplyProject={onApplyProject}
         onClose={() => {
           connectionRef.current.closing = true
           onClose()

@@ -64,6 +64,7 @@ import {
 } from "./services/federation.js"
 import {
   applyAllProjects,
+  applyProjectById,
   createProjectFromRequest,
   deleteProjectById,
   downAllProjects,
@@ -902,6 +903,14 @@ export const makeRouter = () => {
         )
         return yield* _(jsonResponse({ ok: true, project }, 200))
       }).pipe(
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/apply",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => applyProjectById(projectId)),
+        Effect.flatMap((project) => jsonResponse({ ok: true, project }, 200)),
         Effect.catchAll(errorResponse)
       )
     ),

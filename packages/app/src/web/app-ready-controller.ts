@@ -1,6 +1,8 @@
 import { updateActionPromptValue } from "./action-prompt.js"
 import {
   cancelBrowserActionPrompt,
+  applyProjectById,
+  applySelectedProject,
   closeSelectedProjectPort,
   connectProjectById,
   loadSelectedProjectBrowser,
@@ -8,6 +10,7 @@ import {
   openProjectBrowserById,
   openSelectedProjectBrowser,
   openSelectedProjectPort,
+  runApplyAllProjects,
   submitBrowserActionPrompt
 } from "./actions.js"
 import type { DashboardData } from "./api.js"
@@ -248,6 +251,15 @@ const bindBrowserActions = (
 const bindTerminalActions = (
   actionContext: ReturnType<typeof createActionContext>
 ) => ({
+  onApplyProjectById: (projectId: string) => {
+    applyProjectById(projectId, actionContext)
+  },
+  onApplySelectedProject: () => {
+    applySelectedProject(actionContext)
+  },
+  onApplyAllProjects: () => {
+    runApplyAllProjects(actionContext)
+  },
   onOpenProjectTerminalById: (projectId: string) => {
     connectProjectById(projectId, actionContext)
   }

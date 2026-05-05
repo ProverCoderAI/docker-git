@@ -1,5 +1,6 @@
 import {
   type AppError,
+  applyProjectConfig,
   buildCreateCommand,
   defaultTemplateConfig,
   createProject,
@@ -569,6 +570,28 @@ export const applyAllProjects = (activeOnly: boolean) =>
     _tag: "ApplyAll",
     activeOnly
   })
+
+export const applyProjectById = (
+  projectId: string
+) =>
+  Effect.gen(function*(_) {
+    const project = yield* _(findProjectById(projectId))
+    yield* _(markDeployment(projectId, "apply", "docker-git apply"))
+    yield* _(
+      runWithProjectEventLogs(
+        projectId,
+        applyProjectConfig({
+          _tag: "Apply",
+          projectDir: project.projectDir,
+          runUp: true
+        })
+      )
+    )
+    const details = yield* _(runtimeProjectDetails(project))
+    yield* _(recordProjectStartedFromDetails(project, details, "up"))
+    yield* _(markDeployment(projectId, "running", "Apply completed"))
+    return details
+  }).pipe(Effect.mapError(toProjectApiError))
 
 export const downAllProjects = () => downAllDockerGitProjects
 

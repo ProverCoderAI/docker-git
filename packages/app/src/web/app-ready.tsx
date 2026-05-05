@@ -17,6 +17,9 @@ type ReadyLayoutRenderArgs = {
     readonly onActionPromptCancel: () => void
     readonly onActionPromptChange: (key: string, value: string) => void
     readonly onActionPromptSubmit: () => void
+    readonly onApplyAllProjects: () => void
+    readonly onApplyProjectById: (projectId: string) => void
+    readonly onApplySelectedProject: () => void
     readonly onBackScreen: () => void
     readonly onCreateBufferChange: (buffer: string) => void
     readonly onCreateCancel: () => void
@@ -58,6 +61,9 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onActionPromptCancel: actions.onActionPromptCancel,
   onActionPromptChange: actions.onActionPromptChange,
   onActionPromptSubmit: actions.onActionPromptSubmit,
+  onApplyAllProjects: actions.onApplyAllProjects,
+  onApplyProjectById: actions.onApplyProjectById,
+  onApplySelectedProject: actions.onApplySelectedProject,
   onBackScreen: actions.onBackScreen,
   onCloseProjectPortForward: actions.onCloseProjectPortForward,
   onCreateBufferChange: actions.onCreateBufferChange,
