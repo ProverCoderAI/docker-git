@@ -24,6 +24,7 @@ export type ShortcutKeyboardEvent = {
   defaultPrevented: boolean
   readonly key: string
   readonly metaKey: boolean
+  readonly shiftKey: boolean
   readonly target: EventTarget | null
   preventDefault: () => void
 }

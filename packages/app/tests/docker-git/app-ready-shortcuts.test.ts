@@ -20,6 +20,7 @@ const makeEvent = (key: string): ShortcutKeyboardEvent => {
     defaultPrevented: false,
     key,
     metaKey: false,
+    shiftKey: false,
     target: null,
     preventDefault: () => {
       event.defaultPrevented = true
@@ -211,7 +212,7 @@ describe("app-ready-shortcuts", () => {
     const setSelectedProjectId = vi.fn()
     const args = makeShortcutArgs(null, setSelectedProjectId)
 
-    dispatchBrowserShortcut(event as KeyboardEvent, args)
+    dispatchBrowserShortcut(event, args)
 
     expect(setSelectedProjectId).toHaveBeenCalledWith("project-b")
   })
@@ -221,7 +222,7 @@ describe("app-ready-shortcuts", () => {
     const setSelectedProjectId = vi.fn()
     const args = makeShortcutArgs("session-1", setSelectedProjectId)
 
-    dispatchBrowserShortcut(event as KeyboardEvent, args)
+    dispatchBrowserShortcut(event, args)
 
     expect(setSelectedProjectId).not.toHaveBeenCalled()
   })

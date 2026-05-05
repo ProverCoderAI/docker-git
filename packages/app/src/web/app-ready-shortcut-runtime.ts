@@ -13,6 +13,7 @@ import {
   isBlockedShortcut,
   refreshCurrentMenu
 } from "./app-ready-shortcuts.js"
+import type { ShortcutKeyboardEvent } from "./app-ready-shortcuts.js"
 import type { BrowserMenuTag } from "./menu.js"
 import { type BrowserScreen, isProjectMenu, menuScreen, projectPickerScreen, screenForMenu } from "./screen.js"
 import type { ActiveTerminalSession } from "./terminal.js"
@@ -53,7 +54,7 @@ type MenuOpenArgs = Pick<
 const shouldIgnoreShortcut = (
   activeTerminalSessionId: string | null,
   actionPrompt: ActionPromptState | null,
-  event: KeyboardEvent
+  event: ShortcutKeyboardEvent
 ): boolean => activeTerminalSessionId !== null || isBlockedShortcut(event, actionPrompt !== null)
 
 const openSelectedMenuScreen = ({
@@ -79,7 +80,7 @@ const openSelectedMenuScreen = ({
 }
 
 const handleMenuScreenKey = (
-  event: KeyboardEvent,
+  event: ShortcutKeyboardEvent,
   {
     context,
     currentMenu,
@@ -130,7 +131,7 @@ const runProjectPickerAction = (
 }
 
 const handleRefreshShortcut = (
-  event: KeyboardEvent,
+  event: ShortcutKeyboardEvent,
   { context, currentMenu }: Pick<BrowserShortcutArgs, "context" | "currentMenu">
 ): boolean => {
   if (event.key !== "r" && event.key !== "R") {
@@ -142,7 +143,7 @@ const handleRefreshShortcut = (
 }
 
 const handleProjectPickerShortcut = (
-  event: KeyboardEvent,
+  event: ShortcutKeyboardEvent,
   args: Pick<
     BrowserShortcutArgs,
     | "context"
@@ -182,7 +183,7 @@ const handleProjectPickerShortcut = (
 }
 
 const handleBackToMenuShortcut = (
-  event: KeyboardEvent,
+  event: ShortcutKeyboardEvent,
   context: BrowserActionContext,
   setActiveScreen: Setter<BrowserScreen>,
   returnToProjectPicker: boolean
@@ -197,7 +198,7 @@ const handleBackToMenuShortcut = (
 }
 
 const handleOutputShortcut = (
-  event: KeyboardEvent,
+  event: ShortcutKeyboardEvent,
   args: Pick<BrowserShortcutArgs, "context" | "currentMenu" | "setActiveScreen">
 ): void => {
   if (handleBackToMenuShortcut(event, args.context, args.setActiveScreen, isProjectMenu(args.currentMenu))) {
@@ -207,7 +208,7 @@ const handleOutputShortcut = (
 }
 
 const handleContentShortcut = (
-  event: KeyboardEvent,
+  event: ShortcutKeyboardEvent,
   args: Pick<BrowserShortcutArgs, "context" | "currentMenu" | "setActiveScreen">
 ): void => {
   handleBackToMenuShortcut(event, args.context, args.setActiveScreen, false)
@@ -215,7 +216,7 @@ const handleContentShortcut = (
 }
 
 const handleMenuShortcut = (
-  event: KeyboardEvent,
+  event: ShortcutKeyboardEvent,
   args: Pick<
     BrowserShortcutArgs,
     | "context"
@@ -235,7 +236,7 @@ const handleMenuShortcut = (
 }
 
 const handleCreateShortcut = (
-  event: KeyboardEvent,
+  event: ShortcutKeyboardEvent,
   args: Pick<
     BrowserShortcutArgs,
     "context" | "controllerCwd" | "createView" | "projectsRoot" | "setActiveScreen" | "setCreateView"
@@ -253,7 +254,7 @@ const handleCreateShortcut = (
   }
 }
 
-const dispatchActiveScreenShortcut = (event: KeyboardEvent, args: BrowserShortcutArgs): void => {
+const dispatchActiveScreenShortcut = (event: ShortcutKeyboardEvent, args: BrowserShortcutArgs): void => {
   if (args.activeScreen.tag === "Menu") {
     handleMenuShortcut(event, args)
     return
@@ -282,7 +283,7 @@ const dispatchActiveScreenShortcut = (event: KeyboardEvent, args: BrowserShortcu
   handleContentShortcut(event, args)
 }
 
-export const dispatchBrowserShortcut = (event: KeyboardEvent, args: BrowserShortcutArgs): void => {
+export const dispatchBrowserShortcut = (event: ShortcutKeyboardEvent, args: BrowserShortcutArgs): void => {
   if (shouldIgnoreShortcut(args.activeTerminalSessionId, args.actionPrompt, event)) {
     return
   }

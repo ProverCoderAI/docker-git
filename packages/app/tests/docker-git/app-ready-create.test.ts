@@ -6,13 +6,14 @@ import {
   createInitialFlowView,
   resolveCreateFlowSteps
 } from "../../src/docker-git/menu-create-shared.js"
+import type { GithubAuthStatus } from "../../src/web/api.js"
 import { submitCreateView } from "../../src/web/app-ready-create.js"
 import { makeBrowserActionContext } from "./browser-action-context-fixture.js"
 
-const validGithubStatus = {
+const validGithubStatus: GithubAuthStatus = {
   summary: "valid",
   tokens: [{ key: "default", label: "default", login: "octocat", status: "valid" }]
-} as const
+}
 
 const createSetCreateViewSpy = () => {
   const spy = vi.fn<(value: SetStateAction<CreateFlowView>) => void>()
