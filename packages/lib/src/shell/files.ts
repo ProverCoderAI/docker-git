@@ -174,12 +174,13 @@ const sessionSyncToolCandidates = (
     return installed === null ? [workspaceCandidate] : [workspaceCandidate, installed]
   })
 
-// CHANGE: provision standalone session sync tool into the Docker build context
-// WHY: generated containers call docker-git-session-sync directly after git push
-// REF: issue-230
+// CHANGE: provision local session sync fallback into the Docker build context
+// WHY: generated Dockerfiles install the published npm package first, but CI before first publish
+//      and offline rebuilds still need a deterministic executable fallback
+// REF: issue-230, issue-235
 // PURITY: SHELL
 // EFFECT: Effect<void, PlatformError, FileSystem | Path>
-// INVARIANT: target executable exists before Dockerfile COPY is evaluated
+// INVARIANT: fallback executable exists before Dockerfile COPY is evaluated
 // COMPLEXITY: O(k) where k = candidate tool locations
 const provisionDockerGitSessionSyncTool = (
   fs: FileSystem.FileSystem,

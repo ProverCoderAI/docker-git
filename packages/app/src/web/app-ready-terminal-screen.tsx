@@ -38,7 +38,7 @@ type TerminalPaneProps =
   >
   & {
     readonly singleSession: boolean
-  readonly terminalSession: ActiveTerminalSession
+    readonly terminalSession: ActiveTerminalSession
   }
 
 const requestTerminalSessionClose = (closePath: string): void => {

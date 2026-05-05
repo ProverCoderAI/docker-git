@@ -4,7 +4,7 @@ import type { DashboardData } from "./api.js"
 import type { BrowserShortcutArgs } from "./app-ready-shortcut-runtime.js"
 import { browserMenuIndex, browserMenuItems, type BrowserMenuTag } from "./menu.js"
 import { type BrowserScreen, isProjectMenu, menuScreen, outputScreen, screenForMenu } from "./screen.js"
-import { terminalSessionRoutePath, type ActiveTerminalSession } from "./terminal.js"
+import { type ActiveTerminalSession, terminalSessionRoutePath } from "./terminal.js"
 
 type ReadyUrlNavigation = {
   readonly activeScreen: BrowserScreen
@@ -77,6 +77,33 @@ const decodePathTail = (segments: ReadonlyArray<string>): string =>
 
 const projectToken = (project: DashboardData["projects"][number] | undefined, fallback: string | null): string | null =>
   project?.projectKey ?? fallback
+
+const activeTerminalReadyPath = (session: ActiveTerminalSession | null): string | null => {
+  if (session?.browserProjectId === undefined) {
+    return null
+  }
+  return session.sessionPath ?? terminalSessionRoutePath(session.session.id)
+}
+
+const selectReadyPath = (token: string | null): string =>
+  token === null ? "/menu/select" : `/ssh/${encodePathTail(token)}`
+
+const menuActionReadyPath = (
+  activeScreen: BrowserScreen,
+  currentMenu: BrowserMenuTag,
+  token: string | null
+): string => {
+  const slug = menuSlugs[currentMenu]
+  if (activeScreen.tag === "Menu") {
+    return `/menu/${slug}`
+  }
+  if (!isProjectMenu(currentMenu)) {
+    return `/${slug}`
+  }
+  const projectSuffix = token === null ? "" : `/${encodePathTail(token)}`
+  const outputSuffix = activeScreen.tag === "Output" ? "/output" : ""
+  return `/${slug}${projectSuffix}${outputSuffix}`
+}
 
 const resolveProjectId = (
   projects: DashboardData["projects"],
@@ -168,28 +195,16 @@ export const readyUrlPath = (
     selectedProjectSummary
   }: ReadyUrlPathArgs
 ): string | null => {
-  if (activeTerminalSession?.browserProjectId !== undefined) {
-    return activeTerminalSession.sessionPath ?? terminalSessionRoutePath(activeTerminalSession.session.id)
-  }
-
-  if (currentMenu === "Select") {
-    const token = projectToken(selectedProjectSummary, selectedProjectId)
-    return token === null ? "/menu/select" : `/ssh/${encodePathTail(token)}`
-  }
-
-  const slug = menuSlugs[currentMenu]
-  if (activeScreen.tag === "Menu") {
-    return `/menu/${slug}`
-  }
-
-  if (!isProjectMenu(currentMenu)) {
-    return `/${slug}`
+  const terminalPath = activeTerminalReadyPath(activeTerminalSession)
+  if (terminalPath !== null) {
+    return terminalPath
   }
 
   const token = projectToken(selectedProjectSummary, selectedProjectId)
-  const projectSuffix = token === null ? "" : `/${encodePathTail(token)}`
-  const outputSuffix = activeScreen.tag === "Output" ? "/output" : ""
-  return `/${slug}${projectSuffix}${outputSuffix}`
+  if (currentMenu === "Select") {
+    return selectReadyPath(token)
+  }
+  return menuActionReadyPath(activeScreen, currentMenu, token)
 }
 
 const selectedProjectSummary = ({ dashboard, state }: ReadyUrlSyncArgs) =>
