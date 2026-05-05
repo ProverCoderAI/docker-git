@@ -324,7 +324,7 @@ describe("prepareProjectFiles", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("copies docker-git scripts and session sync tool from the workspace root when cwd is a nested package", () =>
+  it.effect("copies docker-git scripts and session sync fallback from the workspace root when cwd is a nested package", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const fs = yield* _(FileSystem.FileSystem)
@@ -355,6 +355,10 @@ describe("prepareProjectFiles", () => {
 
         expect(yield* _(fs.exists(path.join(outDir, "scripts", "pre-commit-secret-guard.sh")))).toBe(true)
         expect(yield* _(fs.exists(path.join(outDir, ".docker-git-tools", "docker-git-session-sync")))).toBe(true)
+        const dockerfile = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
+        expect(dockerfile).toContain('ARG DOCKER_GIT_SESSION_SYNC_PACKAGE="@prover-coder-ai/docker-git-session-sync@latest"')
+        expect(dockerfile).toContain('npm install -g "$DOCKER_GIT_SESSION_SYNC_PACKAGE"')
+        expect(dockerfile).toContain("using local session sync fallback")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
