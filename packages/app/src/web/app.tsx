@@ -16,7 +16,7 @@ const resolveViewportSize = (): ViewportSize => {
   const layoutWidth = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1280
   const visualViewport = globalThis.visualViewport
 
-  if (visualViewport === undefined || visualViewport === null) {
+  if (visualViewport === null) {
     return {
       height: layoutHeight,
       layoutHeight,

@@ -62,7 +62,14 @@ const renderView = (context: RenderContext) => {
     const step = steps[context.view.step] ?? "repoUrl"
     const label = renderCreateStepLabel(step, currentDefaults)
 
-    return renderCreate(label, context.view.buffer, context.message, context.view.step, currentDefaults, steps)
+    return renderCreate({
+      buffer: context.view.buffer,
+      defaults: currentDefaults,
+      label,
+      message: context.message,
+      stepIndex: context.view.step,
+      steps
+    })
   }
 
   if (context.view._tag === "AuthMenu") {

@@ -5,8 +5,8 @@ import {
   attachTerminalInput,
   cleanupTerminalResources,
   connectTerminalSocket,
-  createTerminalInputController,
   createLifecycleState,
+  createTerminalInputController,
   createTerminalRuntime,
   observeTerminalResize,
   sendTerminalResize

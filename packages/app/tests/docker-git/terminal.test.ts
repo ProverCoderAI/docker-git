@@ -2,15 +2,15 @@ import { describe, expect, it } from "@effect/vitest"
 import { afterEach, beforeEach, vi } from "vitest"
 
 import {
-  resolveTerminalCompactHeaderMode,
-  resolveTerminalTypingMode
-} from "../../src/web/terminal-mobile-layout.js"
-import { shouldShowTerminalTabs } from "../../src/web/terminal-mobile-layout.js"
-import {
   createTerminalPasteGuard,
   extractTerminalImageBase64,
   isTerminalPasteShortcut
 } from "../../src/web/terminal-image-paste.js"
+import {
+  resolveTerminalCompactHeaderMode,
+  resolveTerminalTypingMode,
+  shouldShowTerminalTabs
+} from "../../src/web/terminal-mobile-layout.js"
 import { resolveTerminalReconnectDelay } from "../../src/web/terminal-reconnect.js"
 import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "../../src/web/terminal.js"
 import type { TerminalServerMessage } from "../../src/web/terminal.js"

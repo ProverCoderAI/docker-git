@@ -17,10 +17,10 @@ import {
   deleteProject,
   downAllProjects,
   downProject,
-  loadProjectTerminalSession,
   loadProjectDetails,
   loadProjectLogs,
-  loadProjectPs
+  loadProjectPs,
+  loadProjectTerminalSession
 } from "./api.js"
 import type { BrowserMenuTag } from "./menu.js"
 import { openProjectEventStream } from "./project-events.js"
