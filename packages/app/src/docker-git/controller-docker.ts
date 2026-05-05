@@ -122,12 +122,12 @@ export const resolveDockerCommand = (): Effect.Effect<
   Effect.gen(function*(_) {
     const directProbe = yield* _(captureProbeOutcome("docker", ["info"]))
     if (directProbe.exitCode === 0) {
-      return ["docker"] as ReadonlyArray<string>
+      return ["docker"]
     }
 
     const sudoProbe = yield* _(captureProbeOutcome("sudo", ["-n", "docker", "info"]))
     if (sudoProbe.exitCode === 0) {
-      return ["sudo", "-n", "docker"] as ReadonlyArray<string>
+      return ["sudo", "-n", "docker"]
     }
 
     const dockerHostRaw = process.env["DOCKER_HOST"]?.trim() ?? ""
