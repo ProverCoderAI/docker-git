@@ -5,8 +5,8 @@ import {
   attachTerminalInput,
   cleanupTerminalResources,
   connectTerminalSocket,
-  createTerminalInputController,
   createLifecycleState,
+  createTerminalInputController,
   createTerminalRuntime,
   observeTerminalResize,
   sendTerminalResize
@@ -58,7 +58,16 @@ const createConnectSocket = (
 }
 
 const mountTerminalSession = (
-  { connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus }: TerminalLifecycleArgs
+  {
+    connectionRef,
+    hostRef,
+    notifyMessage,
+    onAttachFailure,
+    onImagePaths,
+    runtimeRef,
+    session,
+    setStatus
+  }: TerminalLifecycleArgs
 ): (() => void) | undefined => {
   const host = hostRef.current
   if (host === null) {
@@ -77,7 +86,15 @@ const mountTerminalSession = (
   const resizeObserver = observeTerminalResize(host, sendResize)
   const inputDisposable = attachTerminalInput(terminal, socketRef, pasteGuard)
   const imagePasteDisposable = attachTerminalImagePaste({ host, notifyMessage, pasteGuard, socketRef, terminal })
-  const handlers: TerminalMessageHandlers = { connectionRef, lifecycle, notifyMessage, session, setStatus, terminal }
+  const handlers: TerminalMessageHandlers = {
+    connectionRef,
+    lifecycle,
+    notifyMessage,
+    onImagePaths,
+    session,
+    setStatus,
+    terminal
+  }
   const connectSocket = createConnectSocket({
     handlers,
     lifecycle,
@@ -105,7 +122,16 @@ const mountTerminalSession = (
 }
 
 export const useTerminalSessionLifecycle = (
-  { connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus }: TerminalLifecycleArgs
+  {
+    connectionRef,
+    hostRef,
+    notifyMessage,
+    onAttachFailure,
+    onImagePaths,
+    runtimeRef,
+    session,
+    setStatus
+  }: TerminalLifecycleArgs
 ): void => {
   useEffect(() => {
     return mountTerminalSession({
@@ -113,11 +139,12 @@ export const useTerminalSessionLifecycle = (
       hostRef,
       notifyMessage,
       onAttachFailure,
+      onImagePaths,
       runtimeRef,
       session,
       setStatus
     })
-  }, [connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus])
+  }, [connectionRef, hostRef, notifyMessage, onAttachFailure, onImagePaths, runtimeRef, session, setStatus])
 }
 
 export {

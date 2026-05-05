@@ -35,6 +35,7 @@ export type TerminalMessageHandlers = {
   readonly connectionRef: { current: TerminalConnectionState }
   readonly lifecycle: TerminalLifecycleState
   readonly notifyMessage: (message: string) => void
+  readonly onImagePaths?: ((paths: ReadonlyArray<string>) => void) | undefined
   readonly session: ActiveTerminalSession
   readonly setStatus: (status: TerminalStatus) => void
   readonly terminal: Terminal
@@ -59,6 +60,7 @@ export type TerminalLifecycleArgs = {
   readonly hostRef: { readonly current: HTMLDivElement | null }
   readonly notifyMessage: (message: string) => void
   readonly onAttachFailure: () => void
+  readonly onImagePaths?: ((paths: ReadonlyArray<string>) => void) | undefined
   readonly runtimeRef: { current: TerminalInputController | null }
   readonly session: ActiveTerminalSession
   readonly setStatus: (status: TerminalStatus) => void

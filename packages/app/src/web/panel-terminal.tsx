@@ -2,11 +2,13 @@ import "xterm/css/xterm.css"
 
 import { type CSSProperties, type JSX, useCallback, useEffect, useRef, useState } from "react"
 
+import { appendTerminalImageGalleryEntries, type TerminalImageGalleryEntry } from "./terminal-image-gallery-core.js"
+import { resolveTerminalImageFetchUrl } from "./terminal-image-url.js"
 import {
   isModifierOnlyTerminalKey,
+  type MobileTerminalKey,
   mobileTerminalKeyInput,
-  terminalControlCharacterForKey,
-  type MobileTerminalKey
+  terminalControlCharacterForKey
 } from "./terminal-mobile-controls.js"
 import { resolveTerminalCompactHeaderMode, resolveTerminalTypingMode } from "./terminal-mobile-layout.js"
 import {
@@ -108,6 +110,72 @@ const compactHeaderActionsStyle: CSSProperties = {
   ...headerActionsStyle,
   flexWrap: "nowrap",
   gap: "4px"
+}
+
+const imageGalleryStyle: CSSProperties = {
+  background: "#0d1218",
+  borderTop: "1px solid #3a4652",
+  display: "flex",
+  flexShrink: 0,
+  flexWrap: "wrap",
+  gap: "8px",
+  maxHeight: "180px",
+  overflowY: "auto",
+  padding: "8px"
+}
+
+const imageGalleryItemStyle: CSSProperties = {
+  alignItems: "center",
+  background: "#080a0d",
+  border: "1px solid #3a4652",
+  borderRadius: "6px",
+  cursor: "pointer",
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+  padding: "4px"
+}
+
+const imageGalleryThumbnailStyle: CSSProperties = {
+  borderRadius: "4px",
+  display: "block",
+  maxHeight: "120px",
+  maxWidth: "180px",
+  objectFit: "contain"
+}
+
+const imageGalleryCaptionStyle: CSSProperties = {
+  color: "#8fa6c4",
+  fontSize: "11px",
+  maxWidth: "180px",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+}
+
+const TerminalImageGallery = (
+  { entries }: { readonly entries: ReadonlyArray<TerminalImageGalleryEntry> }
+): JSX.Element | null => {
+  if (entries.length === 0) {
+    return null
+  }
+  return (
+    <div style={imageGalleryStyle}>
+      {entries.map((entry) => (
+        <a
+          href={entry.fetchUrl}
+          key={entry.path}
+          rel="noreferrer"
+          style={imageGalleryItemStyle}
+          target="_blank"
+          title={entry.path}
+        >
+          <img alt={entry.path} src={entry.fetchUrl} style={imageGalleryThumbnailStyle} />
+          <span style={imageGalleryCaptionStyle}>{entry.path}</span>
+        </a>
+      ))}
+    </div>
+  )
 }
 
 const mobileControlsCollapsedStyle: CSSProperties = {
@@ -356,44 +424,60 @@ const MobileTerminalControls = (
 ): JSX.Element => (
   collapsed
     ? (
-      <div style={compactTypingMode ? { ...mobileControlsCollapsedStyle, padding: "6px" } : mobileControlsCollapsedStyle}>
+      <div
+        style={compactTypingMode ? { ...mobileControlsCollapsedStyle, padding: "6px" } : mobileControlsCollapsedStyle}
+      >
         <MobileTerminalControlButton label="Show keys" onClick={onToggleCollapsed} />
       </div>
     )
     : (
       <div style={compactTypingMode ? { ...mobileControlsStyle, gap: "6px", padding: "6px" } : mobileControlsStyle}>
         <div style={mobileControlsRowStyle}>
-          <MobileTerminalControlButton label="Esc" onClick={() => {
-            onKeyPress("escape")
-          }}
+          <MobileTerminalControlButton
+            label="Esc"
+            onClick={() => {
+              onKeyPress("escape")
+            }}
           />
-          <MobileTerminalControlButton label="Tab" onClick={() => {
-            onKeyPress("tab")
-          }}
+          <MobileTerminalControlButton
+            label="Tab"
+            onClick={() => {
+              onKeyPress("tab")
+            }}
           />
           <MobileTerminalControlButton active={ctrlArmed} label="Ctrl" onClick={onToggleCtrl} />
-          <MobileTerminalControlButton label="Ctrl+C" onClick={() => {
-            onKeyPress("ctrl-c")
-          }}
+          <MobileTerminalControlButton
+            label="Ctrl+C"
+            onClick={() => {
+              onKeyPress("ctrl-c")
+            }}
           />
           <MobileTerminalControlButton label="Hide" onClick={onToggleCollapsed} />
         </div>
         <div style={mobileArrowRowStyle}>
-          <MobileTerminalControlButton label="←" onClick={() => {
-            onKeyPress("left")
-          }}
+          <MobileTerminalControlButton
+            label="←"
+            onClick={() => {
+              onKeyPress("left")
+            }}
           />
-          <MobileTerminalControlButton label="↑" onClick={() => {
-            onKeyPress("up")
-          }}
+          <MobileTerminalControlButton
+            label="↑"
+            onClick={() => {
+              onKeyPress("up")
+            }}
           />
-          <MobileTerminalControlButton label="↓" onClick={() => {
-            onKeyPress("down")
-          }}
+          <MobileTerminalControlButton
+            label="↓"
+            onClick={() => {
+              onKeyPress("down")
+            }}
           />
-          <MobileTerminalControlButton label="→" onClick={() => {
-            onKeyPress("right")
-          }}
+          <MobileTerminalControlButton
+            label="→"
+            onClick={() => {
+              onKeyPress("right")
+            }}
           />
         </div>
       </div>
@@ -419,6 +503,18 @@ export const TerminalPanel = (
   const [status, setStatus] = useState<TerminalStatus>("connecting")
   const [mobileControlsCollapsed, setMobileControlsCollapsed] = useState(false)
   const [mobileCtrlArmed, setMobileCtrlArmed] = useState(false)
+  const [imageGallery, setImageGallery] = useState<ReadonlyArray<TerminalImageGalleryEntry>>([])
+  const sessionWebsocketPath = session.websocketPath
+  useEffect(() => {
+    setImageGallery([])
+  }, [sessionWebsocketPath])
+  const handleImagePaths = useCallback((paths: ReadonlyArray<string>) => {
+    const additions = paths.map((path) => ({
+      fetchUrl: resolveTerminalImageFetchUrl(sessionWebsocketPath, path),
+      path
+    }))
+    setImageGallery((current) => appendTerminalImageGalleryEntries(current, additions))
+  }, [sessionWebsocketPath])
   const onAttachFailureRef = useRef(onAttachFailure)
   const onMessageRef = useRef(onMessage)
   useEffect(() => {
@@ -492,6 +588,7 @@ export const TerminalPanel = (
     hostRef,
     notifyMessage,
     onAttachFailure: notifyAttachFailure,
+    onImagePaths: handleImagePaths,
     runtimeRef,
     session,
     setStatus
@@ -516,11 +613,11 @@ export const TerminalPanel = (
       />
       <div
         ref={hostRef}
-        style={compactTypingMode ? bodyStyleKeyboardOpen : mobileMode ? bodyStyleMobile : bodyStyle}
+        style={compactTypingMode ? bodyStyleKeyboardOpen : (mobileMode ? bodyStyleMobile : bodyStyle)}
       />
-      {!mobileMode
-        ? null
-        : (
+      <TerminalImageGallery entries={imageGallery} />
+      {mobileMode
+        ? (
           <MobileTerminalControls
             collapsed={mobileControlsCollapsed}
             compactTypingMode={compactTypingMode}
@@ -536,7 +633,8 @@ export const TerminalPanel = (
               retainTerminalFocus(runtimeRef.current)
             }}
           />
-        )}
+        )
+        : null}
     </div>
   )
 }

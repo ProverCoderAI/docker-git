@@ -2,6 +2,7 @@ import { Effect, Either } from "effect"
 import { Terminal } from "xterm"
 import { FitAddon } from "xterm-addon-fit"
 
+import { detectTerminalImagePaths } from "./terminal-image-paths.js"
 import type {
   TerminalCleanupArgs,
   TerminalInputController,
@@ -188,6 +189,12 @@ const handleTerminalServerMessage = (
   }
   if (message.type === "output") {
     handlers.terminal.write(message.data)
+    if (handlers.onImagePaths !== undefined) {
+      const detected = detectTerminalImagePaths(message.data)
+      if (detected.length > 0) {
+        handlers.onImagePaths(detected)
+      }
+    }
     return
   }
   if (message.type === "error") {
