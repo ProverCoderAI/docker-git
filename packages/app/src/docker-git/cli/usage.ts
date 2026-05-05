@@ -80,6 +80,13 @@ Container runtime env (set via .orch/env/project.env):
   CODEX_SHARE_AUTH=1|0                  Share Codex auth.json across projects (default: 1)
   CODEX_AUTO_UPDATE=1|0                 Auto-update Codex CLI on container start (default: 1)
   CLAUDE_AUTO_SYSTEM_PROMPT=1|0         Auto-attach docker-git managed system prompt to claude (default: 1)
+  CLAUDE_SYSTEM_PROMPT_OVERRIDE=<text>  Custom Claude system prompt body (overrides default Russian template)
+  CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE=<path>  Path to file with custom Claude prompt (takes precedence over OVERRIDE)
+  CODEX_SYSTEM_PROMPT_OVERRIDE=<text>   Custom Codex managed-block content for AGENTS.md
+  CODEX_SYSTEM_PROMPT_OVERRIDE_FILE=<path>  Path to file with custom Codex managed-block content (takes precedence)
+  GEMINI_SYSTEM_PROMPT_OVERRIDE=<text>  Custom Gemini system prompt body
+  GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE=<path>  Path to file with custom Gemini prompt (takes precedence over OVERRIDE)
+  CODEX_EXTRA_SKILLS_PATHS=<spec>[,<spec>...]  Extra skill trees mounted into Codex (format: "prio-name::relative/path"; comma- or newline-separated)
   DOCKER_GIT_ZSH_AUTOSUGGEST=1|0        Enable zsh-autosuggestions (default: 0)
   DOCKER_GIT_ZSH_AUTOSUGGEST_STYLE=...  zsh-autosuggestions highlight style (default: fg=8,italic)
   DOCKER_GIT_ZSH_AUTOSUGGEST_STRATEGY=...  Suggestion sources (default: history completion)

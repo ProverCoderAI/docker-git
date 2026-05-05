@@ -40,12 +40,9 @@ elif [[ "$REPO_REF_VALUE" == refs/pull/*/head ]]; then
   fi
 fi
 
-if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
-  mkdir -p "$(dirname "$CLAUDE_GLOBAL_PROMPT_FILE")"
-  chown 1000:1000 "$(dirname "$CLAUDE_GLOBAL_PROMPT_FILE")" 2>/dev/null || true
-  if [[ ! -f "$CLAUDE_GLOBAL_PROMPT_FILE" ]] || grep -q "^<!-- docker-git-managed:claude-md -->$" "$CLAUDE_GLOBAL_PROMPT_FILE"; then
-    cat <<EOF > "$CLAUDE_GLOBAL_PROMPT_FILE"
-<!-- docker-git-managed:claude-md -->
+CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE="${"$"}{CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE:-}"
+CLAUDE_SYSTEM_PROMPT_OVERRIDE="${"$"}{CLAUDE_SYSTEM_PROMPT_OVERRIDE:-}"
+CLAUDE_DEFAULT_PROMPT_BODY="$(cat <<EOF
 Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, bun, codex, opencode, oh-my-opencode, sshpass, claude, git, node и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
 Рабочая папка проекта (git clone): __TARGET_DIR__
 Доступные workspace пути: __TARGET_DIR__
@@ -54,6 +51,23 @@ $CLAUDE_WORKSPACE_CONTEXT
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
 Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
 Если ты видишь файлы AGENTS.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
+EOF
+)"
+if [[ -n "$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE" && -r "$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE" ]]; then
+  CLAUDE_PROMPT_BODY="$(cat "$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE")"
+elif [[ -n "$CLAUDE_SYSTEM_PROMPT_OVERRIDE" ]]; then
+  CLAUDE_PROMPT_BODY="$CLAUDE_SYSTEM_PROMPT_OVERRIDE"
+else
+  CLAUDE_PROMPT_BODY="$CLAUDE_DEFAULT_PROMPT_BODY"
+fi
+
+if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
+  mkdir -p "$(dirname "$CLAUDE_GLOBAL_PROMPT_FILE")"
+  chown 1000:1000 "$(dirname "$CLAUDE_GLOBAL_PROMPT_FILE")" 2>/dev/null || true
+  if [[ ! -f "$CLAUDE_GLOBAL_PROMPT_FILE" ]] || grep -q "^<!-- docker-git-managed:claude-md -->$" "$CLAUDE_GLOBAL_PROMPT_FILE"; then
+    cat <<EOF > "$CLAUDE_GLOBAL_PROMPT_FILE"
+<!-- docker-git-managed:claude-md -->
+$CLAUDE_PROMPT_BODY
 <!-- /docker-git-managed:claude-md -->
 EOF
     chmod 0644 "$CLAUDE_GLOBAL_PROMPT_FILE" || true
