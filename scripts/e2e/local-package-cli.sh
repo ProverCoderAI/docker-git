@@ -14,6 +14,7 @@ PACK_LOG="$ROOT/bun-pack.log"
 SESSION_PACK_LOG="$ROOT/bun-pack-session-sync.log"
 HELP_LOG_BUN="$ROOT/docker-git-help-bun.log"
 TAR_LIST="$ROOT/tar-list.txt"
+SESSION_TAR_LIST="$ROOT/session-tar-list.txt"
 PACKED_TARBALL=""
 SESSION_PACKED_TARBALL=""
 PACKAGE_JSON="$REPO_ROOT/packages/app/package.json"
@@ -68,6 +69,16 @@ bun run build >/dev/null
 SESSION_PACKED_TARBALL="$(bun pm pack --quiet --ignore-scripts --destination "$ROOT" | tee "$SESSION_PACK_LOG" | tail -n 1 | tr -d '\r')"
 [[ -n "$SESSION_PACKED_TARBALL" ]] || fail "bun pm pack did not return session sync tarball path"
 [[ -f "$SESSION_PACKED_TARBALL" ]] || fail "packed session sync tarball not found: $SESSION_PACKED_TARBALL"
+
+tar -tf "$SESSION_PACKED_TARBALL" >"$SESSION_TAR_LIST"
+grep -Fq -- "package/dist/docker-git-session-sync.js" "$SESSION_TAR_LIST" \
+  || fail "packed session sync tarball does not include dist/docker-git-session-sync.js"
+
+session_entry_tmp="$ROOT/session-entry.js"
+tar -xOf "$SESSION_PACKED_TARBALL" package/dist/docker-git-session-sync.js >"$session_entry_tmp"
+session_first_line="$(head -n 1 "$session_entry_tmp" | tr -d '\r')"
+[[ "$session_first_line" == "#!/usr/bin/env bun" ]] \
+  || fail "packed session sync entrypoint missing shebang: expected '#!/usr/bin/env bun', got '$session_first_line'"
 
 cp "$PACKAGE_JSON" "$PACKAGE_JSON_BACKUP"
 SESSION_PACKED_TARBALL="$SESSION_PACKED_TARBALL" bun -e 'import { readFileSync, writeFileSync } from "node:fs"; const path = process.argv[1]; const pkg = JSON.parse(readFileSync(path, "utf8")); delete pkg.devDependencies; pkg.dependencies = pkg.dependencies ?? {}; pkg.dependencies["@prover-coder-ai/docker-git-session-sync"] = `file:${process.env.SESSION_PACKED_TARBALL}`; writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");' "$PACKAGE_JSON"

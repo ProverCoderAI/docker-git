@@ -32,8 +32,7 @@ type ProjectActiveTerminalSessionArgs = {
   readonly session: TerminalSession
 }
 
-export const terminalSessionRoutePath = (sessionId: string): string =>
-  `/ssh/session/${encodeURIComponent(sessionId)}`
+export const terminalSessionRoutePath = (sessionId: string): string => `/ssh/session/${encodeURIComponent(sessionId)}`
 
 export const buildProjectActiveTerminalSession = (
   { onExit, onReady, projectDisplayName, projectId, projectKey, session }: ProjectActiveTerminalSessionArgs

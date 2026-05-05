@@ -1,8 +1,9 @@
 import { updateActionPromptValue } from "./action-prompt.js"
+import { withBusy } from "./actions-shared.js"
 import {
+  attachProjectTerminalById,
   cancelBrowserActionPrompt,
   closeSelectedProjectPort,
-  attachProjectTerminalById,
   connectProjectById,
   loadSelectedProjectBrowser,
   loadProjectTasksById,
@@ -13,7 +14,6 @@ import {
   submitBrowserActionPrompt
 } from "./actions.js"
 import { deleteProjectTerminalSession } from "./api.js"
-import { withBusy } from "./actions-shared.js"
 import type { DashboardData } from "./api.js"
 import type { createActionContext } from "./app-ready-actions.js"
 import { resolveCurrentMenu, runAuthActionByIndex, runProjectAuthActionByIndex } from "./app-ready-actions.js"

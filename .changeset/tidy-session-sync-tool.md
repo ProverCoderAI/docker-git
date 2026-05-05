@@ -3,4 +3,4 @@
 "@prover-coder-ai/docker-git": patch
 ---
 
-Extract AI agent session synchronization into a standalone docker-git-session-sync package.
+Publish docker-git-session-sync as a public npm CLI and install it for post-push session backup comments, with a local Docker build fallback before first publish.

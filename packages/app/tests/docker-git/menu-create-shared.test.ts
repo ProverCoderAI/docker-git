@@ -26,20 +26,22 @@ const expectCompleteResult = (
   return next.inputs
 }
 
+const expectFeatureRepoDefaults = (
+  value: {
+    readonly outDir?: string
+    readonly repoRef?: string
+    readonly repoUrl?: string
+  },
+  defaultRoot: string
+) => {
+  expect(value.repoUrl).toBe("https://github.com/org/repo/tree/feature-x")
+  expect(value.repoRef).toBe("feature-x")
+  expect(value.outDir).toBe(defaultRoot)
+}
+
 describe("menu-create-shared", () => {
   const cwd = process.cwd()
   const defaultRoot = `${process.env["HOME"] ?? cwd}/.docker-git/org/repo`
-  const expectRepoFields = (
-    values: {
-      readonly outDir?: string | undefined
-      readonly repoRef?: string | undefined
-      readonly repoUrl?: string | undefined
-    }
-  ) => {
-    expect(values.repoUrl).toBe("https://github.com/org/repo/tree/feature-x")
-    expect(values.repoRef).toBe("feature-x")
-    expect(values.outDir).toBe(defaultRoot)
-  }
 
   it("advances from repo URL into the wizard by default", () => {
     const view = expectContinueResult(advanceCreateFlow(
@@ -48,7 +50,7 @@ describe("menu-create-shared", () => {
     ))
 
     expect(view.step).toBe(1)
-    expectRepoFields(view.values)
+    expectFeatureRepoDefaults(view.values, defaultRoot)
     expect(view.values.runUp).toBeUndefined()
     expect(resolveCreateFlowSteps(view.values)).toEqual([
       "repoUrl",
@@ -67,7 +69,7 @@ describe("menu-create-shared", () => {
       { quickCreate: true }
     ))
 
-    expectRepoFields(inputs)
+    expectFeatureRepoDefaults(inputs, defaultRoot)
     expect(inputs.runUp).toBe(true)
   })
 
@@ -77,7 +79,7 @@ describe("menu-create-shared", () => {
       createInitialFlowView("https://github.com/org/repo/tree/feature-x --force --mcp-playwright --no-up")
     ))
 
-    expectRepoFields(view.values)
+    expectFeatureRepoDefaults(view.values, defaultRoot)
     expect(view.values.force).toBe(true)
     expect(view.values.enableMcpPlaywright).toBe(true)
     expect(view.values.runUp).toBe(false)
@@ -96,7 +98,7 @@ describe("menu-create-shared", () => {
       )
     ))
 
-    expectRepoFields(inputs)
+    expectFeatureRepoDefaults(inputs, defaultRoot)
     expect(inputs.cpuLimit).toBe("25%")
     expect(inputs.ramLimit).toBe("4g")
     expect(inputs.runUp).toBe(false)

@@ -4,9 +4,9 @@ import { type CSSProperties, type JSX, useCallback, useEffect, useRef, useState 
 
 import {
   isModifierOnlyTerminalKey,
+  type MobileTerminalKey,
   mobileTerminalKeyInput,
-  terminalControlCharacterForKey,
-  type MobileTerminalKey
+  terminalControlCharacterForKey
 } from "./terminal-mobile-controls.js"
 import { resolveTerminalCompactHeaderMode, resolveTerminalTypingMode } from "./terminal-mobile-layout.js"
 import {
@@ -78,6 +78,13 @@ const bodyStyleMobile: CSSProperties = {
 const bodyStyleKeyboardOpen: CSSProperties = {
   ...bodyStyle,
   padding: 0
+}
+
+const terminalBodyStyle = (compactTypingMode: boolean, mobileMode: boolean): CSSProperties => {
+  if (compactTypingMode) {
+    return bodyStyleKeyboardOpen
+  }
+  return mobileMode ? bodyStyleMobile : bodyStyle
 }
 
 const closeButtonStyle: CSSProperties = {
@@ -280,10 +287,10 @@ const TerminalHeaderActions = (
         </TerminalActionButton>
       )}
     <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onDetach}>
-      {compactHeaderMode ? "Detach" : "Detach"}
+      Detach
     </TerminalActionButton>
     <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onKill}>
-      {compactHeaderMode ? "Kill" : "Kill"}
+      Kill
     </TerminalActionButton>
   </div>
 )
@@ -332,6 +339,23 @@ const sendTerminalMobileInput = (
   retainTerminalFocus(controller)
 }
 
+const shouldKeepMobileCtrlArmed = (event: KeyboardEvent): boolean =>
+  event.metaKey || event.altKey || event.ctrlKey || event.isComposing || isModifierOnlyTerminalKey(event.key)
+
+const sendMobileCtrlEventInput = (
+  controller: TerminalInputController | null,
+  event: KeyboardEvent
+): void => {
+  const controlCharacter = terminalControlCharacterForKey(event.key)
+  if (controlCharacter === null) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  controller?.sendInput(controlCharacter)
+  retainTerminalFocus(controller)
+}
+
 const MobileTerminalControlButton = (
   {
     active = false,
@@ -374,44 +398,60 @@ const MobileTerminalControls = (
 ): JSX.Element => (
   collapsed
     ? (
-      <div style={compactTypingMode ? { ...mobileControlsCollapsedStyle, padding: "6px" } : mobileControlsCollapsedStyle}>
+      <div
+        style={compactTypingMode ? { ...mobileControlsCollapsedStyle, padding: "6px" } : mobileControlsCollapsedStyle}
+      >
         <MobileTerminalControlButton label="Show keys" onClick={onToggleCollapsed} />
       </div>
     )
     : (
       <div style={compactTypingMode ? { ...mobileControlsStyle, gap: "6px", padding: "6px" } : mobileControlsStyle}>
         <div style={mobileControlsRowStyle}>
-          <MobileTerminalControlButton label="Esc" onClick={() => {
-            onKeyPress("escape")
-          }}
+          <MobileTerminalControlButton
+            label="Esc"
+            onClick={() => {
+              onKeyPress("escape")
+            }}
           />
-          <MobileTerminalControlButton label="Tab" onClick={() => {
-            onKeyPress("tab")
-          }}
+          <MobileTerminalControlButton
+            label="Tab"
+            onClick={() => {
+              onKeyPress("tab")
+            }}
           />
           <MobileTerminalControlButton active={ctrlArmed} label="Ctrl" onClick={onToggleCtrl} />
-          <MobileTerminalControlButton label="Ctrl+C" onClick={() => {
-            onKeyPress("ctrl-c")
-          }}
+          <MobileTerminalControlButton
+            label="Ctrl+C"
+            onClick={() => {
+              onKeyPress("ctrl-c")
+            }}
           />
           <MobileTerminalControlButton label="Hide" onClick={onToggleCollapsed} />
         </div>
         <div style={mobileArrowRowStyle}>
-          <MobileTerminalControlButton label="←" onClick={() => {
-            onKeyPress("left")
-          }}
+          <MobileTerminalControlButton
+            label="←"
+            onClick={() => {
+              onKeyPress("left")
+            }}
           />
-          <MobileTerminalControlButton label="↑" onClick={() => {
-            onKeyPress("up")
-          }}
+          <MobileTerminalControlButton
+            label="↑"
+            onClick={() => {
+              onKeyPress("up")
+            }}
           />
-          <MobileTerminalControlButton label="↓" onClick={() => {
-            onKeyPress("down")
-          }}
+          <MobileTerminalControlButton
+            label="↓"
+            onClick={() => {
+              onKeyPress("down")
+            }}
           />
-          <MobileTerminalControlButton label="→" onClick={() => {
-            onKeyPress("right")
-          }}
+          <MobileTerminalControlButton
+            label="→"
+            onClick={() => {
+              onKeyPress("right")
+            }}
           />
         </div>
       </div>
@@ -472,25 +512,15 @@ export const TerminalPanel = (
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.metaKey || event.altKey || event.ctrlKey || event.isComposing) {
-        return
-      }
       if (event.key === "Escape") {
         setMobileCtrlArmed(false)
         return
       }
-      if (isModifierOnlyTerminalKey(event.key)) {
+      if (shouldKeepMobileCtrlArmed(event)) {
         return
       }
-      const controlCharacter = terminalControlCharacterForKey(event.key)
       setMobileCtrlArmed(false)
-      if (controlCharacter === null) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      runtimeRef.current?.sendInput(controlCharacter)
-      retainTerminalFocus(runtimeRef.current)
+      sendMobileCtrlEventInput(runtimeRef.current, event)
     }
 
     host.addEventListener("keydown", handleKeyDown, true)
@@ -536,11 +566,10 @@ export const TerminalPanel = (
       />
       <div
         ref={hostRef}
-        style={compactTypingMode ? bodyStyleKeyboardOpen : mobileMode ? bodyStyleMobile : bodyStyle}
+        style={terminalBodyStyle(compactTypingMode, mobileMode)}
       />
-      {!mobileMode
-        ? null
-        : (
+      {mobileMode
+        ? (
           <MobileTerminalControls
             collapsed={mobileControlsCollapsed}
             compactTypingMode={compactTypingMode}
@@ -556,7 +585,8 @@ export const TerminalPanel = (
               retainTerminalFocus(runtimeRef.current)
             }}
           />
-        )}
+        )
+        : null}
     </div>
   )
 }

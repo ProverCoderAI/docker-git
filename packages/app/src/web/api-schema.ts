@@ -302,9 +302,9 @@ export type {
   ProjectDatabaseProfile,
   ProjectDatabaseSession,
   ProjectDetails,
-  ProjectTerminalSessionLookup,
   ProjectPortForward,
   ProjectSummary,
+  ProjectTerminalSessionLookup,
   TerminalServerMessage,
   TerminalSession
 } from "./api-types.js"
