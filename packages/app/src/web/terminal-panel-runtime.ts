@@ -57,17 +57,15 @@ const createConnectSocket = (
   return connectSocket
 }
 
+const attachGlobalResizeListeners = (sendResize: () => void): void => {
+  globalThis.addEventListener("resize", sendResize)
+  globalThis.visualViewport?.addEventListener("resize", sendResize)
+  globalThis.visualViewport?.addEventListener("scroll", sendResize)
+}
+
 const mountTerminalSession = (
-  {
-    connectionRef,
-    hostRef,
-    notifyMessage,
-    onAttachFailure,
-    onImagePaths,
-    runtimeRef,
-    session,
-    setStatus
-  }: TerminalLifecycleArgs
+  { connectionRef, hostRef, notifyMessage, onAttachFailure, onImagePaths, runtimeRef, session, setStatus }:
+    TerminalLifecycleArgs
 ): (() => void) | undefined => {
   const host = hostRef.current
   if (host === null) {
@@ -108,9 +106,7 @@ const mountTerminalSession = (
   })
 
   runtimeRef.current = terminalInputController
-  globalThis.addEventListener("resize", sendResize)
-  globalThis.visualViewport?.addEventListener("resize", sendResize)
-  globalThis.visualViewport?.addEventListener("scroll", sendResize)
+  attachGlobalResizeListeners(sendResize)
   connectSocket()
 
   return createTerminalCleanup({
@@ -122,16 +118,8 @@ const mountTerminalSession = (
 }
 
 export const useTerminalSessionLifecycle = (
-  {
-    connectionRef,
-    hostRef,
-    notifyMessage,
-    onAttachFailure,
-    onImagePaths,
-    runtimeRef,
-    session,
-    setStatus
-  }: TerminalLifecycleArgs
+  { connectionRef, hostRef, notifyMessage, onAttachFailure, onImagePaths, runtimeRef, session, setStatus }:
+    TerminalLifecycleArgs
 ): void => {
   useEffect(() => {
     return mountTerminalSession({
