@@ -1,4 +1,4 @@
-const supportedExtensions = ["png", "jpg", "jpeg", "gif", "webp"] as const
+const supportedExtensions: ReadonlyArray<string> = ["png", "jpg", "jpeg", "gif", "webp"]
 
 const extensionAlternation = supportedExtensions.join("|")
 
