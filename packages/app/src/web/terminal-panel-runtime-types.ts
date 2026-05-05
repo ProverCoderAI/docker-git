@@ -9,6 +9,11 @@ export type TerminalConnectionState = { closing: boolean; opened: boolean }
 
 export type TerminalRuntime = { readonly fitAddon: FitAddon; readonly terminal: Terminal }
 
+export type TerminalInputController = {
+  readonly focus: () => void
+  readonly sendInput: (data: string) => void
+}
+
 export type TerminalLifecycleState = {
   attachedOnce: boolean
   disposed: boolean
@@ -43,6 +48,7 @@ export type TerminalCleanupArgs = {
   readonly removeInput: () => void
   readonly removeResize: () => void
   readonly resizeObserver: ResizeObserver | null
+  readonly runtimeRef: { current: TerminalInputController | null }
   readonly session: ActiveTerminalSession
   readonly socketRef: TerminalSocketRef
   readonly terminal: Terminal
@@ -53,6 +59,7 @@ export type TerminalLifecycleArgs = {
   readonly hostRef: { readonly current: HTMLDivElement | null }
   readonly notifyMessage: (message: string) => void
   readonly onAttachFailure: () => void
+  readonly runtimeRef: { current: TerminalInputController | null }
   readonly session: ActiveTerminalSession
   readonly setStatus: (status: TerminalStatus) => void
 }

@@ -7,6 +7,8 @@ import {
   CodexAuthLoginRequestSchema,
   CodexAuthLogoutRequestSchema,
   CreateAgentRequestSchema,
+  ExchangePollRequestSchema,
+  ExchangeSubscribeRequestSchema,
   CreateFollowRequestSchema,
   CreateProjectRequestSchema,
   GithubAuthLoginRequestSchema,
@@ -84,6 +86,45 @@ describe("api schemas", () => {
           expect(value.domain).toBe("social.my-domain.tld")
           expect(value.object).toBe("/issues/followers")
           expect(value.to).toHaveLength(1)
+        }
+      })
+    }))
+
+  it.effect("decodes exchange subscribe payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(ExchangeSubscribeRequestSchema)({
+        target: "code@exchange.lefine.pro",
+        domain: "https://docker-git.example",
+        projectRepoUrl: "https://github.com/ProverCoderAI/docker-git",
+        agentProvider: "codex"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.target).toBe("code@exchange.lefine.pro")
+          expect(value.agentProvider).toBe("codex")
+          expect(value.projectRepoUrl).toBe("https://github.com/ProverCoderAI/docker-git")
+        }
+      })
+    }))
+
+  it.effect("decodes exchange poll payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(ExchangePollRequestSchema)({
+        target: "code",
+        runTasks: false
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.target).toBe("code")
+          expect(value.runTasks).toBe(false)
         }
       })
     }))
@@ -366,6 +407,7 @@ describe("api schemas", () => {
   it.effect("decodes terminal session payload", () =>
     Effect.sync(() => {
       const result = Schema.decodeUnknownEither(TerminalSessionSchema)({
+        attachedClients: 2,
         id: "session-1",
         projectId: "project-1",
         sshCommand: "ssh dev@127.0.0.1",
@@ -380,6 +422,7 @@ describe("api schemas", () => {
           throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
         },
         onRight: (value) => {
+          expect(value.attachedClients).toBe(2)
           expect(value.id).toBe("session-1")
           expect(value.projectId).toBe("project-1")
           expect(value.status).toBe("attached")

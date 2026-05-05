@@ -222,6 +222,21 @@ export const CreateFollowRequestSchema = Schema.Struct({
   capability: OptionalString
 })
 
+export const ExchangeSubscribeRequestSchema = Schema.Struct({
+  target: Schema.String,
+  domain: OptionalString,
+  actor: OptionalString,
+  inbox: OptionalString,
+  projectRepoUrl: OptionalString,
+  agentProvider: Schema.optional(AgentProviderSchema),
+  agentCommand: OptionalString
+})
+
+export const ExchangePollRequestSchema = Schema.Struct({
+  target: OptionalString,
+  runTasks: OptionalBoolean
+})
+
 export const AgentSessionSchema = Schema.Struct({
   id: Schema.String,
   projectId: Schema.String,
@@ -254,6 +269,7 @@ export const TerminalSessionSchema = Schema.Struct({
   sshCommand: Schema.String,
   status: TerminalSessionStatusSchema,
   createdAt: Schema.String,
+  attachedClients: Schema.optional(Schema.Number),
   startedAt: OptionalString,
   closedAt: OptionalString,
   exitCode: Schema.optional(Schema.Number),

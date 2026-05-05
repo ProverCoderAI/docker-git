@@ -66,11 +66,13 @@ describe("app ready URL state", () => {
       activeScreen: { tag: "ProjectPicker" },
       activeTerminalSession: {
         browserProjectId: "project-1",
-        closePath: "/projects/project-1/terminal-sessions/session-1",
+        browserProjectKey: "octocat/hello-world",
+        closePath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1",
         exitMessage: "done",
         header: "SSH terminal: octocat/hello-world",
         pendingDeleteMessage: "closed",
         readyMessage: "ready",
+        sessionPath: "/ssh/session/session-1",
         session: {
           createdAt: "2026-04-15T00:00:00.000Z",
           id: "session-1",
@@ -79,8 +81,18 @@ describe("app ready URL state", () => {
           status: "attached"
         },
         subtitle: "ssh dev@127.0.0.1",
-        websocketPath: "/projects/project-1/terminal-sessions/session-1/ws"
+        websocketPath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1/ws"
       },
+      currentMenu: "Select",
+      selectedProjectId: "project-1",
+      selectedProjectSummary
+    })).toBe("/ssh/session/session-1")
+  })
+
+  it("renders SSH project selection as a project terminal list deep link", () => {
+    expect(readyUrlPath({
+      activeScreen: { tag: "ProjectPicker" },
+      activeTerminalSession: null,
       currentMenu: "Select",
       selectedProjectId: "project-1",
       selectedProjectSummary

@@ -1,7 +1,10 @@
-import { Match } from "effect"
-import { deriveRepoPathParts, resolveRepoInput } from "./frontend-lib/core/domain.js"
-import { defaultProjectsRoot, isRepoUrlInput } from "./frontend-lib/usecases/menu-helpers.js"
+import { Either, Match } from "effect"
+import { type CreateCommand, type ParseError, deriveRepoPathParts, resolveRepoInput } from "./frontend-lib/core/domain.js"
+import { defaultProjectsRoot } from "./frontend-lib/usecases/menu-helpers.js"
 
+import { buildCreateCommand } from "./cli/parser-create.js"
+import { parseRawOptions } from "./cli/parser-options.js"
+import { splitPositionalRepo } from "./cli/parser-shared.js"
 import { type CreateInputs, type CreateStep, createSteps } from "./menu-types.js"
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
@@ -19,10 +22,11 @@ export type CreateFlowView = {
 
 type AdvanceCreateFlowResult =
   | { readonly _tag: "Continue"; readonly view: CreateFlowView }
+  | { readonly _tag: "Error"; readonly error: ParseError }
   | { readonly _tag: "Complete"; readonly inputs: CreateInputs }
 
 type AdvanceCreateFlowOptions = {
-  readonly forceWizard?: boolean
+  readonly quickCreate?: boolean
 }
 
 const trimLeftSlash = (value: string): string => {
@@ -124,49 +128,233 @@ const parseYesDefault = (input: string, fallback: boolean): boolean => {
   return fallback
 }
 
+const createParseError = (reason: string): ParseError => ({
+  _tag: "InvalidOption",
+  option: "create",
+  reason
+})
+
+const tokenizeCreateCommandLine = (
+  input: string
+): Either.Either<ReadonlyArray<string>, ParseError> => {
+  const tokens: Array<string> = []
+  let current = ""
+  let quote: "'" | "\"" | null = null
+  let escaping = false
+
+  const pushCurrent = () => {
+    if (current.length > 0) {
+      tokens.push(current)
+      current = ""
+    }
+  }
+
+  for (const char of input.trim()) {
+    if (escaping) {
+      current += char
+      escaping = false
+      continue
+    }
+    if (char === "\\") {
+      escaping = true
+      continue
+    }
+    if (quote !== null) {
+      if (char === quote) {
+        quote = null
+      } else {
+        current += char
+      }
+      continue
+    }
+    if (char === "'" || char === "\"") {
+      quote = char
+      continue
+    }
+    if (/\s/u.test(char)) {
+      pushCurrent()
+      continue
+    }
+    current += char
+  }
+
+  if (escaping) {
+    return Either.left(createParseError("unterminated escape sequence"))
+  }
+  if (quote !== null) {
+    return Either.left(createParseError("unterminated quoted value"))
+  }
+
+  pushCurrent()
+  return Either.right(tokens)
+}
+
+const unsupportedCreatePrefixes = new Set([
+  "apply",
+  "apply-all",
+  "attach",
+  "auth",
+  "browser",
+  "clone",
+  "down-all",
+  "gists",
+  "help",
+  "kill-all",
+  "mcp-playwright",
+  "menu",
+  "open",
+  "panes",
+  "ps",
+  "scrap",
+  "session-gists",
+  "sessions",
+  "state",
+  "status",
+  "stop-all",
+  "tmux",
+  "ui",
+  "update-all",
+  "web"
+])
+
+const normalizeCreateTokens = (
+  tokens: ReadonlyArray<string>
+): Either.Either<ReadonlyArray<string>, ParseError> => {
+  const withoutBinary = tokens[0] === "docker-git" ? tokens.slice(1) : tokens
+  const first = withoutBinary[0]
+  if (first === undefined) {
+    return Either.right(withoutBinary)
+  }
+  if (first === "create" || first === "init") {
+    return Either.right(withoutBinary.slice(1))
+  }
+  if (unsupportedCreatePrefixes.has(first)) {
+    return Either.left(createParseError(`only create/init options are supported here, got command: ${first}`))
+  }
+  return Either.right(withoutBinary)
+}
+
+const createInputsFromCommand = (
+  repoUrl: string,
+  raw: Parameters<typeof buildCreateCommand>[0],
+  command: CreateCommand
+): Partial<CreateInputs> => ({
+  repoUrl,
+  repoRef: command.config.repoRef,
+  outDir: command.outDir,
+  ...(raw.cpuLimit !== undefined ? { cpuLimit: command.config.cpuLimit ?? "" } : {}),
+  ...(raw.ramLimit !== undefined ? { ramLimit: command.config.ramLimit ?? "" } : {}),
+  ...(raw.up !== undefined ? { runUp: command.runUp } : {}),
+  ...(raw.enableMcpPlaywright !== undefined
+    ? { enableMcpPlaywright: command.config.enableMcpPlaywright }
+    : {}),
+  ...(raw.force !== undefined ? { force: command.force } : {}),
+  ...(raw.forceEnv !== undefined ? { forceEnv: command.forceEnv } : {})
+})
+
+const parseRepoStepInput = (
+  context: CreateFlowContext,
+  buffer: string
+): Either.Either<Partial<CreateInputs>, ParseError> => {
+  if (buffer.length === 0) {
+    return Either.right({
+      repoUrl: "",
+      outDir: resolveDefaultOutDir(context, "")
+    })
+  }
+
+  return Either.gen(function*(_) {
+    const tokens = yield* _(tokenizeCreateCommandLine(buffer))
+    const normalizedTokens = yield* _(normalizeCreateTokens(tokens))
+    const { positionalRepoUrl, restArgs } = splitPositionalRepo(normalizedTokens)
+    const raw = yield* _(parseRawOptions(restArgs))
+    const repoUrl = raw.repoUrl ?? positionalRepoUrl ?? ""
+    const command = yield* _(buildCreateCommand({
+      ...raw,
+      ...(repoUrl.length > 0 ? { repoUrl } : {}),
+      ...(raw.outDir === undefined ? { outDir: resolveDefaultOutDir(context, repoUrl) } : {})
+    }))
+
+    return createInputsFromCommand(repoUrl, raw, command)
+  })
+}
+
+const createStepApplied = (): Either.Either<true, ParseError> => Either.right(true)
+
+const hasOwn = <K extends keyof CreateInputs>(values: Partial<CreateInputs>, key: K): boolean =>
+  Object.prototype.hasOwnProperty.call(values, key)
+
+const isCreateStepSatisfied = (
+  step: CreateStep,
+  values: Partial<CreateInputs>
+): boolean =>
+  Match.value(step).pipe(
+    Match.when("repoUrl", () => true),
+    Match.when("repoRef", () => true),
+    Match.when("outDir", () => true),
+    Match.when("cpuLimit", () => hasOwn(values, "cpuLimit")),
+    Match.when("ramLimit", () => hasOwn(values, "ramLimit")),
+    Match.when("runUp", () => hasOwn(values, "runUp")),
+    Match.when("mcpPlaywright", () => hasOwn(values, "enableMcpPlaywright")),
+    Match.when("force", () => hasOwn(values, "force")),
+    Match.exhaustive
+  )
+
+export const resolveCreateFlowSteps = (
+  values: Partial<CreateInputs>
+): ReadonlyArray<CreateStep> => [
+  "repoUrl",
+  ...createSteps
+    .filter((step) => step !== "repoUrl")
+    .filter((step) => !isCreateStepSatisfied(step, values))
+]
+
 const applyCreateStep = (input: {
   readonly step: CreateStep
   readonly buffer: string
   readonly currentDefaults: CreateInputs
   readonly nextValues: Partial<Mutable<CreateInputs>>
   readonly context: CreateFlowContext
-}): boolean =>
+}): Either.Either<true, ParseError> =>
   Match.value(input.step).pipe(
     Match.when("repoUrl", () => {
-      input.nextValues.repoUrl = input.buffer
-      input.nextValues.outDir = resolveDefaultOutDir(input.context, input.buffer)
-      return true
+      const parsed = parseRepoStepInput(input.context, input.buffer)
+      if (Either.isLeft(parsed)) {
+        return Either.left(parsed.left)
+      }
+      Object.assign(input.nextValues, parsed.right)
+      return createStepApplied()
     }),
     Match.when("repoRef", () => {
       input.nextValues.repoRef = input.buffer.length > 0 ? input.buffer : input.currentDefaults.repoRef
-      return true
+      return createStepApplied()
     }),
     Match.when("outDir", () => {
       input.nextValues.outDir = input.buffer.length > 0 ? input.buffer : input.currentDefaults.outDir
-      return true
+      return createStepApplied()
     }),
     Match.when("cpuLimit", () => {
       input.nextValues.cpuLimit = input.buffer.length > 0 ? input.buffer : input.currentDefaults.cpuLimit
-      return true
+      return createStepApplied()
     }),
     Match.when("ramLimit", () => {
       input.nextValues.ramLimit = input.buffer.length > 0 ? input.buffer : input.currentDefaults.ramLimit
-      return true
+      return createStepApplied()
     }),
     Match.when("runUp", () => {
       input.nextValues.runUp = parseYesDefault(input.buffer, input.currentDefaults.runUp)
-      return true
+      return createStepApplied()
     }),
     Match.when("mcpPlaywright", () => {
       input.nextValues.enableMcpPlaywright = parseYesDefault(
         input.buffer,
         input.currentDefaults.enableMcpPlaywright
       )
-      return true
+      return createStepApplied()
     }),
     Match.when("force", () => {
       input.nextValues.force = parseYesDefault(input.buffer, input.currentDefaults.force)
-      return true
+      return createStepApplied()
     }),
     Match.exhaustive
   )
@@ -179,13 +367,10 @@ export const createInitialFlowView = (buffer = ""): CreateFlowView => ({
 
 const shouldQuickCreate = (
   step: CreateStep,
-  buffer: string,
   options: AdvanceCreateFlowOptions
 ): boolean =>
   step === "repoUrl" &&
-  buffer.length > 0 &&
-  isRepoUrlInput(buffer) &&
-  options.forceWizard !== true
+  options.quickCreate === true
 
 const continueCreateFlow = (
   nextStep: number,
@@ -205,7 +390,8 @@ export const advanceCreateFlow = (
   options: AdvanceCreateFlowOptions = {}
 ): AdvanceCreateFlowResult | null => {
   const context = normalizeCreateFlowContext(contextOrCwd)
-  const step = createSteps[view.step]
+  const currentSteps = resolveCreateFlowSteps(view.values)
+  const step = currentSteps[view.step]
   if (step === undefined) {
     return null
   }
@@ -220,19 +406,23 @@ export const advanceCreateFlow = (
     nextValues,
     context
   })
-  if (!updated) {
-    return null
+  if (Either.isLeft(updated)) {
+    return {
+      _tag: "Error",
+      error: updated.left
+    }
   }
 
-  if (shouldQuickCreate(step, buffer, options)) {
+  if (shouldQuickCreate(step, options)) {
     return {
       _tag: "Complete",
       inputs: resolveCreateInputs(context, nextValues)
     }
   }
 
-  const nextStep = view.step + 1
-  if (nextStep < createSteps.length) {
+  const nextSteps = resolveCreateFlowSteps(nextValues)
+  const nextStep = step === "repoUrl" ? 1 : view.step
+  if (nextStep < nextSteps.length) {
     return continueCreateFlow(nextStep, nextValues)
   }
 

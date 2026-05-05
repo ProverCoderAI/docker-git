@@ -1,15 +1,19 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import { vi } from "vitest"
 
 import {
   clearFederationState,
   createFollowSubscription,
+  ensureExchangeSubscription,
   ingestFederationInbox,
   listFederationIssues,
+  listExchangeSubscriptions,
   listFollowSubscriptions,
   makeFederationActorDocument,
   makeFederationContext,
-  makeFederationFollowingCollection
+  makeFederationFollowingCollection,
+  pollExchangeOutboxes
 } from "../src/services/federation.js"
 
 describe("federation service", () => {
@@ -178,5 +182,140 @@ describe("federation service", () => {
       )
 
       expect(duplicateError._tag).toBe("ApiConflictError")
+    }))
+
+  it.effect("ingests ActivityPub Create with ForgeFed Ticket payload", () =>
+    Effect.gen(function*(_) {
+      clearFederationState()
+
+      const result = yield* _(
+        ingestFederationInbox({
+          "@context": [
+            "https://www.w3.org/ns/activitystreams",
+            "https://forgefed.org/ns"
+          ],
+          id: "https://exchange.lefine.pro/outbox/code/111",
+          type: "Create",
+          actor: "https://exchange.lefine.pro/actor/code",
+          object: {
+            "@context": [
+              "https://www.w3.org/ns/activitystreams",
+              "https://forgefed.org/ns"
+            ],
+            type: "Ticket",
+            id: "https://exchange.lefine.pro/orders/111",
+            attributedTo: "https://exchange.lefine.pro/actor/code",
+            summary: "Calculate 2+2 via remote cogni",
+            content: "<p>Calculate 2+2</p>",
+            mediaType: "text/html",
+            source: {
+              content: "Calculate 2+2",
+              mediaType: "text/plain"
+            },
+            workType: "standard"
+          }
+        })
+      )
+
+      expect(result.kind).toBe("issue.create")
+      if (result.kind === "issue.create") {
+        expect(result.issue.issueId).toBe("https://exchange.lefine.pro/orders/111")
+        expect(result.issue.status).toBe("accepted")
+        expect(result.issue.ticket.source).toEqual({
+          content: "Calculate 2+2",
+          mediaType: "text/plain"
+        })
+      }
+    }))
+
+  it.effect("discovers exchange root target and deduplicates polled Create tasks", () =>
+    Effect.gen(function*(_) {
+      clearFederationState()
+
+      const previousFetch = globalThis.fetch
+      const fetchMock = vi.fn((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        const url = typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url
+        const method = init?.method ?? "GET"
+
+        if (method === "GET" && url === "https://exchange.lefine.pro/actor/code") {
+          return Promise.resolve(new Response(JSON.stringify({
+            "@context": ["https://www.w3.org/ns/activitystreams", "https://forgefed.org/ns"],
+            id: "https://exchange.lefine.pro/actor/code",
+            type: "Service",
+            inbox: "https://exchange.lefine.pro/inbox/code",
+            outbox: "https://exchange.lefine.pro/outbox/code",
+            followers: "https://exchange.lefine.pro/actors/code/followers",
+            preferredUsername: "code",
+            publicKey: {
+              id: "https://exchange.lefine.pro/actor/code#main-key",
+              owner: "https://exchange.lefine.pro/actor/code",
+              publicKeyPem: "pem"
+            }
+          }), { status: 200 }))
+        }
+
+        if (method === "GET" && url === "https://exchange.lefine.pro/outbox/code") {
+          return Promise.resolve(new Response(JSON.stringify({
+            "@context": ["https://www.w3.org/ns/activitystreams", "https://forgefed.org/ns"],
+            id: "https://exchange.lefine.pro/outbox/code",
+            type: "OrderedCollection",
+            totalItems: 1,
+            orderedItems: [
+              {
+                "@context": ["https://www.w3.org/ns/activitystreams", "https://forgefed.org/ns"],
+                id: "https://exchange.lefine.pro/outbox/code/111",
+                type: "Create",
+                actor: "https://exchange.lefine.pro/actor/code",
+                object: {
+                  type: "Ticket",
+                  id: "https://exchange.lefine.pro/orders/111",
+                  attributedTo: "https://exchange.lefine.pro/actor/code",
+                  summary: "Calculate 2+2",
+                  content: "<p>Calculate 2+2</p>",
+                  source: {
+                    content: "Calculate 2+2",
+                    mediaType: "text/plain"
+                  }
+                }
+              }
+            ]
+          }), { status: 200 }))
+        }
+
+        return Promise.resolve(new Response("{}", { status: 202 }))
+      })
+
+      globalThis.fetch = fetchMock as typeof fetch
+
+      try {
+        const context = yield* _(
+          makeFederationContext({
+            publicOrigin: "https://docker-git.example",
+            actorUsername: "docker-git"
+          })
+        )
+
+        const created = yield* _(ensureExchangeSubscription({ target: "https://exchange.lefine.pro" }, context))
+        expect(created.subscription.remoteOutbox).toBe("https://exchange.lefine.pro/outbox/code")
+        expect(created.subscription.queue).toBe("code")
+        expect(listExchangeSubscriptions()).toHaveLength(1)
+
+        const firstPoll = yield* _(pollExchangeOutboxes({ runTasks: false }, context))
+        expect(firstPoll.newItems).toBe(1)
+        expect(firstPoll.processedItems).toBe(1)
+
+        const issues = listFederationIssues()
+        expect(issues).toHaveLength(1)
+        expect(issues[0]?.issueId).toBe("https://exchange.lefine.pro/orders/111")
+
+        const secondPoll = yield* _(pollExchangeOutboxes({ runTasks: false }, context))
+        expect(secondPoll.newItems).toBe(0)
+      } finally {
+        globalThis.fetch = previousFetch
+      }
     }))
 })

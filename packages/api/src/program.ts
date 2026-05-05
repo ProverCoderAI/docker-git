@@ -6,7 +6,7 @@ import { createServer } from "node:http"
 import { makeRouter } from "./http.js"
 import { initializeAgentState } from "./services/agents.js"
 import { attachAuthTerminalWebSocketServer } from "./services/auth-terminal-sessions.js"
-import { startOutboxPolling } from "./services/federation.js"
+import { initializeFederationState, startOutboxPolling } from "./services/federation.js"
 import { attachProjectBrowserWebSocketServer } from "./services/project-browser.js"
 import { attachProjectDatabaseWebSocketServer } from "./services/project-databases.js"
 import { attachTerminalWebSocketServer } from "./services/terminal-sessions.js"
@@ -65,6 +65,7 @@ export const program = (() => {
   return Effect.scoped(
     Console.log(`docker-git api boot port=${port}`).pipe(
       Effect.zipRight(initializeAgentState()),
+      Effect.zipRight(initializeFederationState()),
       Effect.zipRight(
         Console.log(`docker-git outbox polling interval=${pollingInterval}ms`)
       ),

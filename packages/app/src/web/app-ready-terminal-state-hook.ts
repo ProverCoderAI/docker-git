@@ -21,6 +21,7 @@ export type TerminalWorkspaceReadyState = {
   readonly activeTerminalSessionId: string | null
   readonly addTerminalSession: (session: ActiveTerminalSession) => void
   readonly closeTerminalSession: (sessionId: string) => void
+  readonly deactivateTerminalWorkspace: () => void
   readonly selectTerminalSession: (sessionId: string) => void
   readonly terminalSessions: ReadonlyArray<ActiveTerminalSession>
 }
@@ -93,6 +94,7 @@ const decodeStoredTerminalSessionCore = (
     return null
   }
   return {
+    attachedClients: typeof value["attachedClients"] === "number" ? value["attachedClients"] : undefined,
     closedAt: readOptionalString(value["closedAt"]),
     createdAt: fields.createdAt,
     exitCode: typeof value["exitCode"] === "number" ? value["exitCode"] : undefined,
@@ -111,6 +113,7 @@ type StoredActiveTerminalSessionFields = {
   readonly header: string | null
   readonly pendingDeleteMessage: string | null
   readonly readyMessage: string | null
+  readonly sessionPath: string | null
   readonly session: ActiveTerminalSession["session"] | null
   readonly subtitle: string | null
   readonly websocketPath: string | null
@@ -122,6 +125,7 @@ const readStoredActiveTerminalSessionFields = (value: JsonObject): StoredActiveT
   header: readString(value["header"]),
   pendingDeleteMessage: readString(value["pendingDeleteMessage"]),
   readyMessage: readString(value["readyMessage"]),
+  sessionPath: readString(value["sessionPath"]),
   session: decodeStoredTerminalSessionCore(value["session"]),
   subtitle: readString(value["subtitle"]),
   websocketPath: readString(value["websocketPath"])
@@ -135,6 +139,7 @@ const hasStoredActiveTerminalSessionFields = (
   readonly header: string
   readonly pendingDeleteMessage: string
   readonly readyMessage: string
+  readonly sessionPath: string | null
   readonly session: ActiveTerminalSession["session"]
   readonly subtitle: string
   readonly websocketPath: string
@@ -160,12 +165,14 @@ const decodeStoredActiveTerminalSession = (value: JsonValue | undefined): Active
   }
   return {
     browserProjectId: readOptionalString(value["browserProjectId"]),
+    browserProjectKey: readOptionalString(value["browserProjectKey"]),
     browserProjectName: readOptionalString(value["browserProjectName"]),
     closePath: fields.closePath,
     exitMessage: fields.exitMessage,
     header: fields.header,
     pendingDeleteMessage: fields.pendingDeleteMessage,
     readyMessage: fields.readyMessage,
+    sessionPath: fields.sessionPath ?? undefined,
     session: fields.session,
     subtitle: fields.subtitle,
     websocketPath: fields.websocketPath
@@ -218,12 +225,14 @@ const readStoredTerminalWorkspace = (): TerminalWorkspaceState => {
 
 const toStoredActiveTerminalSession = (session: ActiveTerminalSession): StoredActiveTerminalSession => ({
   browserProjectId: session.browserProjectId,
+  browserProjectKey: session.browserProjectKey,
   browserProjectName: session.browserProjectName,
   closePath: session.closePath,
   exitMessage: session.exitMessage,
   header: session.header,
   pendingDeleteMessage: session.pendingDeleteMessage,
   readyMessage: session.readyMessage,
+  sessionPath: session.sessionPath,
   session: session.session,
   subtitle: session.subtitle,
   websocketPath: session.websocketPath
@@ -259,6 +268,9 @@ export const useTerminalWorkspaceState = (): TerminalWorkspaceReadyState => {
   const closeTerminalSession = useCallback((sessionId: string) => {
     setTerminalWorkspace((state) => removeTerminalSessionState(state, sessionId, { activateNeighbor: false }))
   }, [])
+  const deactivateTerminalWorkspace = useCallback(() => {
+    setTerminalWorkspace((state) => deactivateTerminalWorkspaceState(state))
+  }, [])
   const selectTerminalSession = useCallback((sessionId: string) => {
     setTerminalWorkspace((state) => selectTerminalSessionState(state, sessionId))
   }, [])
@@ -272,6 +284,7 @@ export const useTerminalWorkspaceState = (): TerminalWorkspaceReadyState => {
     activeTerminalSessionId: terminalWorkspace.activeTerminalSessionId,
     addTerminalSession,
     closeTerminalSession,
+    deactivateTerminalWorkspace,
     selectTerminalSession,
     terminalSessions: terminalWorkspace.terminalSessions
   }

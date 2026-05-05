@@ -13,6 +13,7 @@ type ActionContextArgs = {
   readonly portForwardInput: BrowserActionContext["portForwardInput"]
   readonly refreshDashboard: () => void
   readonly selectedProjectId: string | null
+  readonly selectedProjectKey: string | null
   readonly selectedProjectName: string | null
   readonly setActionPrompt: BrowserActionContext["setActionPrompt"]
   readonly setActiveScreen: BrowserActionContext["setActiveScreen"]
@@ -48,6 +49,7 @@ export const createActionContext = (args: ActionContextArgs): BrowserActionConte
   portForwardInput: args.portForwardInput,
   reloadDashboard: args.refreshDashboard,
   selectedProjectId: args.selectedProjectId,
+  selectedProjectKey: args.selectedProjectKey,
   selectedProjectName: args.selectedProjectName,
   setActionPrompt: args.setActionPrompt,
   setActiveScreen: args.setActiveScreen,

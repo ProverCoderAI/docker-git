@@ -56,6 +56,7 @@ export type BrowserActionContext = {
   readonly portForwardInput: string
   readonly reloadDashboard: () => void
   readonly selectedProjectId: string | null
+  readonly selectedProjectKey: string | null
   readonly selectedProjectName: string | null
   readonly setActionPrompt: Setter<ActionPromptState | null>
   readonly setActiveScreen: Setter<BrowserScreen>
@@ -138,6 +139,16 @@ export const requireSelectedProjectId = (
     return context.selectedProjectId
   }
   context.setMessage("No project selected.")
+  return null
+}
+
+export const requireSelectedProjectKey = (
+  context: BrowserActionContext
+): string | null => {
+  if (context.selectedProjectKey !== null) {
+    return context.selectedProjectKey
+  }
+  context.setMessage("No project key selected.")
   return null
 }
 

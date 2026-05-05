@@ -135,10 +135,14 @@ const finalizeCreateFlow = (input: {
 
 const handleCreateReturn = (
   context: CreateReturnContext,
-  forceWizard = false
+  quickCreate = false
 ) => {
-  const next = advanceCreateFlow(context.state.cwd, context.view, { forceWizard })
+  const next = advanceCreateFlow(context.state.cwd, context.view, { quickCreate })
   if (next === null) {
+    return
+  }
+  if (next._tag === "Error") {
+    context.setMessage(formatParseError(next.error))
     return
   }
   if (next._tag === "Continue") {

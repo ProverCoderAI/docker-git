@@ -15,7 +15,8 @@ import type {
   ProjectDetailsSchema,
   ProjectEventsPollResponseSchema,
   ProjectPortForwardSchema,
-  ProjectSummarySchema
+  ProjectSummarySchema,
+  TerminalSessionLookupResponseSchema
 } from "./api-schema.js"
 
 export type ProjectSummary = Schema.Schema.Type<typeof ProjectSummarySchema>
@@ -26,6 +27,7 @@ export type ProjectBrowserSession = Schema.Schema.Type<typeof ProjectBrowserSess
 export type ProjectDatabaseForward = Schema.Schema.Type<typeof ProjectDatabaseForwardSchema>
 export type ProjectDatabaseProfile = Schema.Schema.Type<typeof ProjectDatabaseProfileSchema>
 export type ProjectDatabaseSession = Schema.Schema.Type<typeof ProjectDatabaseSessionSchema>
+export type ProjectTerminalSessionLookup = Schema.Schema.Type<typeof TerminalSessionLookupResponseSchema>
 export type GithubAuthStatus = Schema.Schema.Type<typeof GithubAuthStatusSchema>
 export type AuthSnapshot = Schema.Schema.Type<typeof AuthSnapshotSchema>
 export type ProjectAuthSnapshot = Schema.Schema.Type<typeof ProjectAuthSnapshotSchema>

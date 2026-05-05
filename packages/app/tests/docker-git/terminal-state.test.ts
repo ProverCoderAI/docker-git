@@ -15,10 +15,16 @@ import {
 } from "../../src/web/terminal-state.js"
 import type { ActiveTerminalSession } from "../../src/web/terminal.js"
 
-const makeSession = (id: string, name = id, projectId = `project-${id}`): ActiveTerminalSession => ({
+const makeSession = (
+  id: string,
+  name = id,
+  projectId = `project-${id}`,
+  projectKey = `project-key-${id}`
+): ActiveTerminalSession => ({
   browserProjectId: projectId,
+  browserProjectKey: projectKey,
   browserProjectName: name,
-  closePath: `/projects/${projectId}/terminal-sessions/${id}`,
+  closePath: `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/${id}`,
   exitMessage: "ended",
   header: `SSH terminal: ${name}`,
   pendingDeleteMessage: "closed",
@@ -31,7 +37,7 @@ const makeSession = (id: string, name = id, projectId = `project-${id}`): Active
     status: "ready"
   },
   subtitle: `ssh dev@${id}`,
-  websocketPath: `/projects/${projectId}/terminal-sessions/${id}/ws`
+  websocketPath: `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/${id}/ws`
 })
 
 const makeAuthSession = (id: string): ActiveTerminalSession => ({

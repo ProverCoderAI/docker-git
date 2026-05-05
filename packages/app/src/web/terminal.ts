@@ -8,6 +8,7 @@ import type { TerminalSession } from "./api-schema.js"
 
 export type ActiveTerminalSession = {
   readonly browserProjectId?: string | undefined
+  readonly browserProjectKey?: string | undefined
   readonly browserProjectName?: string | undefined
   readonly closePath: string
   readonly exitMessage: string
@@ -16,9 +17,45 @@ export type ActiveTerminalSession = {
   readonly onReady?: () => void
   readonly pendingDeleteMessage: string
   readonly readyMessage: string
+  readonly sessionPath?: string | undefined
   readonly session: TerminalSession
   readonly subtitle: string
   readonly websocketPath: string
+}
+
+type ProjectActiveTerminalSessionArgs = {
+  readonly onExit?: () => void
+  readonly onReady?: () => void
+  readonly projectDisplayName: string
+  readonly projectId: string
+  readonly projectKey: string
+  readonly session: TerminalSession
+}
+
+export const terminalSessionRoutePath = (sessionId: string): string =>
+  `/ssh/session/${encodeURIComponent(sessionId)}`
+
+export const buildProjectActiveTerminalSession = (
+  { onExit, onReady, projectDisplayName, projectId, projectKey, session }: ProjectActiveTerminalSessionArgs
+): ActiveTerminalSession => {
+  const encodedProjectKey = encodeURIComponent(projectKey)
+  const encodedSessionId = encodeURIComponent(session.id)
+  return {
+    browserProjectId: projectId,
+    browserProjectKey: projectKey,
+    browserProjectName: projectDisplayName,
+    closePath: `/projects/by-key/${encodedProjectKey}/terminal-sessions/${encodedSessionId}`,
+    exitMessage: "SSH session ended.",
+    header: `SSH terminal: ${projectDisplayName}`,
+    ...(onExit === undefined ? {} : { onExit }),
+    ...(onReady === undefined ? {} : { onReady }),
+    pendingDeleteMessage: `Terminal session was closed before attach: ${projectDisplayName}.`,
+    readyMessage: `SSH connected: ${projectDisplayName}.`,
+    session,
+    sessionPath: terminalSessionRoutePath(session.id),
+    subtitle: session.sshCommand,
+    websocketPath: `/projects/by-key/${encodedProjectKey}/terminal-sessions/${encodedSessionId}/ws`
+  }
 }
 
 const resolveTerminalApiBaseUrl = (): string => {

@@ -14,7 +14,7 @@ import {
   selectTitle
 } from "./menu-render-select.js"
 import type { CreateInputs, SelectProjectRuntime } from "./menu-types.js"
-import { createSteps, menuItems } from "./menu-types.js"
+import { type CreateStep, menuItems } from "./menu-types.js"
 import type { ProjectItem } from "./project-item.js"
 
 // CHANGE: render menu views with Ink without JSX
@@ -37,7 +37,7 @@ const renderMenuHints = (el: typeof React.createElement): React.ReactElement =>
     Box,
     { marginTop: 1, flexDirection: "column" },
     el(Text, { fg: "gray" }, "Hints:"),
-    el(Text, { fg: "gray" }, "  - Paste repo URL to create directly."),
+    el(Text, { fg: "gray" }, "  - Paste repo URL or URL + flags to start create."),
     el(
       Text,
       { fg: "gray" },
@@ -114,13 +114,14 @@ export const renderCreate = (
   buffer: string,
   message: string | null,
   stepIndex: number,
-  defaults: CreateInputs
+  defaults: CreateInputs,
+  steps: ReadonlyArray<CreateStep>
 ): React.ReactElement => {
   const el = React.createElement
   const hint = stepIndex === 0
-    ? "Enter = create with defaults, Shift+Enter = advanced, Esc = cancel."
+    ? "Enter = next, Shift+Enter = quick create, Esc = cancel."
     : "Enter = next, Esc = cancel."
-  const steps = createSteps.map((step, index) =>
+  const stepViews = steps.map((step, index) =>
     el(
       Text,
       { key: step, fg: index === stepIndex ? "green" : "gray" },
@@ -130,7 +131,7 @@ export const renderCreate = (
   return renderLayout(
     "docker-git / Create",
     [
-      el(Box, { flexDirection: "column", marginTop: 1 }, ...steps),
+      el(Box, { flexDirection: "column", marginTop: 1 }, ...stepViews),
       el(
         Box,
         { marginTop: 1 },

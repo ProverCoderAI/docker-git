@@ -4,7 +4,7 @@ import React, { useCallback } from "react"
 import type { GridlandModule } from "@gridland/bun"
 
 import { renderMenuProjectSummaries } from "./menu-api.js"
-import { renderCreateStepLabel, resolveCreateInputs } from "./menu-create-shared.js"
+import { renderCreateStepLabel, resolveCreateFlowSteps, resolveCreateInputs } from "./menu-create-shared.js"
 import type { MenuError } from "./menu-errors.js"
 import { GridlandMenuProvider, runGridlandMenu, useGridlandMenuInput } from "./menu-gridland-runtime.js"
 import {
@@ -27,7 +27,7 @@ import {
   useSigintGuard,
   useStartupSnapshot
 } from "./menu-state.js"
-import { createSteps, type MenuEnv, type MenuState, type ViewState } from "./menu-types.js"
+import { type MenuEnv, type MenuState, type ViewState } from "./menu-types.js"
 
 const gridlandBootstrapError = (message: string): MenuError => ({
   _tag: "TerminalSessionClientError",
@@ -58,10 +58,11 @@ const renderView = (context: RenderContext) => {
 
   if (context.view._tag === "Create") {
     const currentDefaults = resolveCreateInputs(context.state.cwd, context.view.values)
-    const step = createSteps[context.view.step] ?? "repoUrl"
+    const steps = resolveCreateFlowSteps(context.view.values)
+    const step = steps[context.view.step] ?? "repoUrl"
     const label = renderCreateStepLabel(step, currentDefaults)
 
-    return renderCreate(label, context.view.buffer, context.message, context.view.step, currentDefaults)
+    return renderCreate(label, context.view.buffer, context.message, context.view.step, currentDefaults, steps)
   }
 
   if (context.view._tag === "AuthMenu") {

@@ -31,6 +31,7 @@ export type ReadyLayoutProps = {
   readonly authSnapshot: AuthSnapshot | null
   readonly busyLabel: string | null
   readonly controllerCwd: string
+  readonly dashboardRefreshTick: number
   readonly projectsRoot: string
   readonly createView: CreateFlowView
   readonly currentMenu: BrowserMenuTag
@@ -48,10 +49,16 @@ export type ReadyLayoutProps = {
   readonly onApplyAllProjects: () => void
   readonly onApplyProjectById: (projectId: string) => void
   readonly onApplySelectedProject: () => void
+  readonly onAttachProjectTerminalSession: (
+    projectId: string,
+    projectKey: string,
+    projectDisplayName: string,
+    sessionId: string
+  ) => void
   readonly onBackScreen: () => void
   readonly onCreateBufferChange: (buffer: string) => void
   readonly onCreateCancel: () => void
-  readonly onCreateSubmit: (forceWizard?: boolean) => void
+  readonly onCreateSubmit: (quickCreate?: boolean) => void
   readonly onCloseProjectPortForward: (targetPort: number) => void
   readonly onDatabaseConnectionInputChange: (value: string) => void
   readonly onDatabaseLabelInputChange: (value: string) => void
@@ -64,8 +71,9 @@ export type ReadyLayoutProps = {
   readonly onOpenProjectBrowserById: (projectId: string) => void
   readonly onOpenProjectBrowser: () => void
   readonly onOpenProjectDatabaseEditor: () => void
+  readonly onKillProjectTerminalSession: (projectId: string, projectKey: string, sessionId: string) => void
   readonly onOpenProjectPortForward: () => void
-  readonly onOpenProjectTerminalById: (projectId: string) => void
+  readonly onOpenProjectTerminalById: (projectId: string, projectKey?: string) => void
   readonly onPortForwardInputChange: (value: string) => void
   readonly onProjectSearchQueryChange: (value: string) => void
   readonly onRefreshProjectPortForwards: () => void
@@ -106,6 +114,8 @@ const headerPadding = (viewportLayout: ViewportLayout): number | string =>
 const headerGap = (viewportLayout: ViewportLayout): number => viewportLayout.compact ? 1 : 2
 
 const headerMetricsTopMargin = (viewportLayout: ViewportLayout): number | string => viewportLayout.compact ? "4px" : 1
+const terminalWorkspacePadding = (viewportLayout: ViewportLayout): number | string =>
+  viewportLayout.mode === "mobile" ? 0 : viewportLayout.keyboardOpen ? "4px" : 1
 
 const HeaderTitle = ({ compact }: Pick<ViewportLayout, "compact">): JSX.Element => (
   <Box flexWrap="wrap" gap={1} justifyContent="space-between">
@@ -168,7 +178,14 @@ const StatusHeader = (
 export const ReadyLayout = ({ busyLabel, message, ...props }: ReadyLayoutProps): JSX.Element => (
   hasVisibleTerminalWorkspace(props)
     ? (
-      <Box flexDirection="column" height="100%" minHeight={0} overflow="hidden" padding={1} width="100%">
+      <Box
+        flexDirection="column"
+        height="100%"
+        minHeight={0}
+        overflow="hidden"
+        padding={terminalWorkspacePadding(props.viewportLayout)}
+        width="100%"
+      >
         <MainPanels {...props} />
       </Box>
     )

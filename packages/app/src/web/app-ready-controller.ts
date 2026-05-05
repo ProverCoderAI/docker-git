@@ -4,6 +4,7 @@ import {
   applyProjectById,
   applySelectedProject,
   closeSelectedProjectPort,
+  attachProjectTerminalById,
   connectProjectById,
   loadSelectedProjectBrowser,
   loadSelectedProjectPorts,
@@ -13,6 +14,8 @@ import {
   runApplyAllProjects,
   submitBrowserActionPrompt
 } from "./actions.js"
+import { deleteProjectTerminalSession } from "./api.js"
+import { withBusy } from "./actions-shared.js"
 import type { DashboardData } from "./api.js"
 import type { createActionContext } from "./app-ready-actions.js"
 import { resolveCurrentMenu, runAuthActionByIndex, runProjectAuthActionByIndex } from "./app-ready-actions.js"
@@ -156,8 +159,10 @@ const useReadySideEffects = (args: ReadySideEffectsArgs) => {
   useSshLink({
     actionContext: args.actionContext,
     activeTerminalSessionId: args.state.activeTerminalSessionId,
+    addTerminalSession: args.state.addTerminalSession,
     busyLabel: args.state.busyLabel,
     dashboard: args.dashboard,
+    deactivateTerminalWorkspace: args.state.deactivateTerminalWorkspace,
     selectTerminalSession: args.state.selectTerminalSession,
     terminalSessions: args.state.terminalSessions
   })
@@ -185,13 +190,13 @@ const bindCreateActions = (
   onCreateCancel: () => {
     cancelCreate(actionContext, state.setCreateView)
   },
-  onCreateSubmit: (forceWizard = false) => {
+  onCreateSubmit: (quickCreate = false) => {
     submitCreateView({
       context: actionContext,
       controllerCwd: dashboard.health.cwd,
       projectsRoot: dashboard.health.projectsRoot,
       createView: state.createView,
-      forceWizard,
+      quickCreate,
       setCreateView: state.setCreateView
     })
   }
@@ -249,7 +254,8 @@ const bindBrowserActions = (
 })
 
 const bindTerminalActions = (
-  actionContext: ReturnType<typeof createActionContext>
+  actionContext: ReturnType<typeof createActionContext>,
+  state: ReturnType<typeof useReadyState>
 ) => ({
   onApplyProjectById: (projectId: string) => {
     applyProjectById(projectId, actionContext)
@@ -260,8 +266,28 @@ const bindTerminalActions = (
   onApplyAllProjects: () => {
     runApplyAllProjects(actionContext)
   },
-  onOpenProjectTerminalById: (projectId: string) => {
-    connectProjectById(projectId, actionContext)
+  onOpenProjectTerminalById: (projectId: string, projectKey?: string) => {
+    connectProjectById(projectId, actionContext, projectKey)
+  },
+  onAttachProjectTerminalSession: (
+    projectId: string,
+    projectKey: string,
+    projectDisplayName: string,
+    sessionId: string
+  ) => {
+    attachProjectTerminalById(projectId, projectKey, projectDisplayName, sessionId, actionContext)
+  },
+  onKillProjectTerminalSession: (_projectId: string, projectKey: string, sessionId: string) => {
+    withBusy({
+      context: actionContext,
+      effect: deleteProjectTerminalSession(projectKey, sessionId),
+      label: "Killing SSH terminal",
+      onSuccess: () => {
+        state.closeTerminalSession(sessionId)
+        actionContext.reloadDashboard()
+        actionContext.setMessage(`Killed SSH terminal: ${sessionId}.`)
+      }
+    })
   }
 })
 
@@ -279,7 +305,7 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     ...bindActionPromptActions(actionContext, state),
     ...bindPortForwardActions(actionContext, state),
     ...bindBrowserActions(actionContext),
-    ...bindTerminalActions(actionContext),
+    ...bindTerminalActions(actionContext, state),
     ...bindTaskActions(actionContext),
     ...bindProjectSearchActions(dashboard, state),
     ...bindDatabaseActions(actionContext, state),

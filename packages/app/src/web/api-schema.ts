@@ -265,6 +265,20 @@ export const TerminalSessionResponseSchema = Schema.Struct({
   session: TerminalSessionSchema
 })
 
+export const ProjectTerminalSessionsResponseSchema = Schema.Struct({
+  sessions: Schema.Array(TerminalSessionSchema)
+})
+
+export const ProjectTerminalSessionResponseSchema = Schema.Struct({
+  session: TerminalSessionSchema
+})
+
+export const TerminalSessionLookupResponseSchema = Schema.Struct({
+  projectDisplayName: Schema.String,
+  projectKey: Schema.String,
+  session: TerminalSessionSchema
+})
+
 export const AuthTerminalSessionResponseSchema = Schema.Struct({
   ok: Schema.optional(Schema.Boolean),
   session: TerminalSessionSchema
@@ -288,6 +302,7 @@ export type {
   ProjectDatabaseProfile,
   ProjectDatabaseSession,
   ProjectDetails,
+  ProjectTerminalSessionLookup,
   ProjectPortForward,
   ProjectSummary,
   TerminalServerMessage,

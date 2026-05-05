@@ -29,6 +29,7 @@ export const makeBrowserActionContext = (
       portForwardInput: "",
       reloadDashboard,
       selectedProjectId: null,
+      selectedProjectKey: null,
       selectedProjectName: null,
       setActionPrompt: vi.fn(),
       setActiveScreen: vi.fn(),

@@ -98,10 +98,12 @@ describe("web project actions", () => {
       createProjectTerminalSessionMock.mockImplementation(() => Effect.succeed({ project, session }))
       const addTerminalSession = vi.fn()
       const { context, reloadDashboard, setMessage } = makeBrowserActionContext({
-        addTerminalSession
+        addTerminalSession,
+        selectedProjectId: "project-1",
+        selectedProjectKey: "octocat/hello-world"
       })
 
-      connectProjectById("project-1", context)
+      connectProjectById("project-1", context, "octocat/hello-world")
 
       yield* _(waitForAssertion(() => {
         expect(addTerminalSession).toHaveBeenCalledTimes(1)
@@ -111,8 +113,9 @@ describe("web project actions", () => {
       expect(context.setSelectedProject).toHaveBeenCalledWith(project)
       expect(addTerminalSession).toHaveBeenCalledWith({
         browserProjectId: "project-1",
+        browserProjectKey: "octocat/hello-world",
         browserProjectName: "octocat/hello-world",
-        closePath: "/projects/project-1/terminal-sessions/session-1",
+        closePath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1",
         exitMessage: "SSH session ended.",
         header: "SSH terminal: octocat/hello-world",
         onExit: reloadDashboard,
@@ -120,8 +123,9 @@ describe("web project actions", () => {
         pendingDeleteMessage: "Terminal session was closed before attach: octocat/hello-world.",
         readyMessage: "SSH connected: octocat/hello-world.",
         session,
+        sessionPath: "/ssh/session/session-1",
         subtitle: "ssh -p 22 dev@172.18.0.7",
-        websocketPath: "/projects/project-1/terminal-sessions/session-1/ws"
+        websocketPath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1/ws"
       })
       expect(eventStreamCloseMock).toHaveBeenCalledTimes(1)
       expect(setMessage).toHaveBeenLastCalledWith(

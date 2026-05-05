@@ -11,6 +11,7 @@ export const TerminalSessionSchema = Schema.Struct({
     Schema.Literal("failed")
   ),
   createdAt: Schema.String,
+  attachedClients: Schema.optional(Schema.Number),
   startedAt: Schema.optional(Schema.String),
   closedAt: Schema.optional(Schema.String),
   exitCode: Schema.optional(Schema.Number),

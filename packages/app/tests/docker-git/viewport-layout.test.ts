@@ -8,7 +8,12 @@ describe("viewport layout", () => {
       compact: false,
       dense: false,
       fontSize: stableWebFontSize,
-      mode: "desktop"
+      keyboardOpen: false,
+      mode: "desktop",
+      viewportHeight: 900,
+      viewportOffsetLeft: 0,
+      viewportOffsetTop: 0,
+      viewportWidth: 1440
     })
   })
 
@@ -17,7 +22,12 @@ describe("viewport layout", () => {
       compact: true,
       dense: false,
       fontSize: stableWebFontSize,
-      mode: "tablet"
+      keyboardOpen: false,
+      mode: "tablet",
+      viewportHeight: 768,
+      viewportOffsetLeft: 0,
+      viewportOffsetTop: 0,
+      viewportWidth: 1024
     })
   })
 
@@ -26,7 +36,32 @@ describe("viewport layout", () => {
       compact: true,
       dense: true,
       fontSize: stableWebFontSize,
-      mode: "mobile"
+      keyboardOpen: false,
+      mode: "mobile",
+      viewportHeight: 640,
+      viewportOffsetLeft: 0,
+      viewportOffsetTop: 0,
+      viewportWidth: 390
+    })
+  })
+
+  it("detects an open mobile keyboard from visual viewport shrink", () => {
+    expect(resolveViewportLayout({
+      height: 360,
+      layoutHeight: 844,
+      offsetLeft: 0,
+      offsetTop: 18,
+      width: 390
+    })).toEqual({
+      compact: true,
+      dense: true,
+      fontSize: stableWebFontSize,
+      keyboardOpen: true,
+      mode: "mobile",
+      viewportHeight: 360,
+      viewportOffsetLeft: 0,
+      viewportOffsetTop: 18,
+      viewportWidth: 390
     })
   })
 })

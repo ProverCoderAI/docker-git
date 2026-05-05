@@ -7,6 +7,7 @@ import {
   confirmAction,
   projectActionLabel,
   requireSelectedProjectId,
+  requireSelectedProjectKey,
   withBusy,
   withSelectedProjectBusy
 } from "./actions-shared.js"
@@ -18,6 +19,7 @@ import {
   deleteProject,
   downAllProjects,
   downProject,
+  loadProjectTerminalSession,
   loadProjectDetails,
   loadProjectLogs,
   loadProjectPs
@@ -25,6 +27,7 @@ import {
 import type { BrowserMenuTag } from "./menu.js"
 import { openProjectEventStream } from "./project-events.js"
 import { outputScreen } from "./screen.js"
+import { buildProjectActiveTerminalSession } from "./terminal.js"
 
 export { submitCreateInputs } from "./actions-project-create.js"
 
@@ -52,16 +55,37 @@ export const loadSelectedProjectInfo = (
 
 export const connectSelectedProject = (context: BrowserActionContext) => {
   const projectId = requireSelectedProjectId(context)
-  if (projectId === null) {
+  const projectKey = requireSelectedProjectKey(context)
+  if (projectId === null || projectKey === null) {
     return
   }
-  connectProjectById(projectId, context)
+  connectProjectById(projectId, context, projectKey)
+}
+
+const resolveProjectTerminalKey = (
+  projectId: string,
+  context: BrowserActionContext,
+  projectKey?: string
+): string | null => {
+  if (projectKey !== undefined && projectKey.trim().length > 0) {
+    return projectKey
+  }
+  if (context.selectedProjectId === projectId && context.selectedProjectKey !== null) {
+    return context.selectedProjectKey
+  }
+  context.setMessage(`Project key is missing for ${projectId}.`)
+  return null
 }
 
 export const connectProjectById = (
   projectId: string,
-  context: BrowserActionContext
+  context: BrowserActionContext,
+  projectKey?: string
 ) => {
+  const resolvedProjectKey = resolveProjectTerminalKey(projectId, context, projectKey)
+  if (resolvedProjectKey === null) {
+    return
+  }
   context.setSelectedProjectId(projectId)
   context.setOutput("")
   appendOutputLine(context, "[ssh.prepare] Preparing SSH session")
@@ -73,7 +97,7 @@ export const connectProjectById = (
   })
   withBusy({
     context,
-    effect: createProjectTerminalSession(projectId),
+    effect: createProjectTerminalSession(resolvedProjectKey),
     label: "Opening SSH terminal",
     onFailure: (error) => {
       appendOutputLine(context, `[error] ${error}`)
@@ -85,22 +109,14 @@ export const connectProjectById = (
       context.reloadDashboard()
       context.setSelectedProject(project)
       appendOutputLine(context, `SSH command: ${session.sshCommand}`)
-      const encodedProjectId = encodeURIComponent(project.id)
-      const encodedSessionId = encodeURIComponent(session.id)
-      context.addTerminalSession({
-        browserProjectId: project.id,
-        browserProjectName: project.displayName,
-        closePath: `/projects/${encodedProjectId}/terminal-sessions/${encodedSessionId}`,
-        exitMessage: "SSH session ended.",
-        header: `SSH terminal: ${project.displayName}`,
+      context.addTerminalSession(buildProjectActiveTerminalSession({
         onExit: context.reloadDashboard,
         onReady: context.reloadDashboard,
-        pendingDeleteMessage: `Terminal session was closed before attach: ${project.displayName}.`,
-        readyMessage: `SSH connected: ${project.displayName}.`,
-        session,
-        subtitle: session.sshCommand,
-        websocketPath: `/projects/${encodedProjectId}/terminal-sessions/${encodedSessionId}/ws`
-      })
+        projectDisplayName: project.displayName,
+        projectId: project.id,
+        projectKey: project.projectKey,
+        session
+      }))
       context.setMessage(`Project is ready. SSH terminal is connecting for ${project.displayName}.`)
     }
   })
@@ -129,6 +145,36 @@ export const applySelectedProject = (context: BrowserActionContext) => {
     return
   }
   applyProjectById(projectId, context)
+}
+
+export const attachProjectTerminalById = (
+  projectId: string,
+  projectKey: string,
+  projectDisplayName: string,
+  sessionId: string,
+  context: BrowserActionContext
+) => {
+  const resolvedProjectKey = resolveProjectTerminalKey(projectId, context, projectKey)
+  if (resolvedProjectKey === null) {
+    return
+  }
+  context.setSelectedProjectId(projectId)
+  withBusy({
+    context,
+    effect: loadProjectTerminalSession(resolvedProjectKey, sessionId),
+    label: "Attaching SSH terminal",
+    onSuccess: (session) => {
+      context.addTerminalSession(buildProjectActiveTerminalSession({
+        onExit: context.reloadDashboard,
+        onReady: context.reloadDashboard,
+        projectDisplayName,
+        projectId,
+        projectKey: resolvedProjectKey,
+        session
+      }))
+      context.setMessage(`Attached SSH terminal for ${projectDisplayName}.`)
+    }
+  })
 }
 
 const runProjectOutputAction = (
@@ -224,7 +270,7 @@ export const runProjectMenuAction = (
   context: BrowserActionContext
 ) => {
   if (currentMenu === "Create") {
-    context.setMessage("Create mode is active. Paste URL, Enter = quick create, Shift+Enter = advanced.")
+    context.setMessage("Create mode is active. Paste URL or URL + flags, Enter = next, Shift+Enter = quick create.")
     return
   }
   if (currentMenu === "Select") {

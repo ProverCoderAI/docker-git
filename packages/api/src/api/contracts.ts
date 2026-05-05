@@ -362,6 +362,7 @@ export type TerminalSession = {
   readonly sshCommand: string
   readonly status: TerminalSessionStatus
   readonly createdAt: string
+  readonly attachedClients?: number | undefined
   readonly startedAt?: string | undefined
   readonly closedAt?: string | undefined
   readonly exitCode?: number | undefined
@@ -399,21 +400,46 @@ export type ForgeFedTicket = {
   readonly summary: string
   readonly content: string
   readonly mediaType?: string | undefined
-  readonly source?: string | undefined
+  readonly source?: string | ForgeFedTicketSource | undefined
   readonly published?: string | undefined
   readonly updated?: string | undefined
   readonly url?: string | undefined
+  readonly context?: string | undefined
+  readonly workType?: string | undefined
+  readonly attachment?: ReadonlyArray<unknown> | undefined
+  readonly raw?: unknown | undefined
 }
 
-export type FederationIssueStatus = "offered" | "accepted" | "rejected"
+export type ForgeFedTicketSource = {
+  readonly content?: string | undefined
+  readonly mediaType?: string | undefined
+}
+
+export type FederationIssueStatus =
+  | "offered"
+  | "accepted"
+  | "rejected"
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
 
 export type FederationIssueRecord = {
   readonly issueId: string
   readonly offerId?: string | undefined
+  readonly activityId?: string | undefined
+  readonly actor?: string | undefined
   readonly tracker?: string | undefined
   readonly status: FederationIssueStatus
   readonly receivedAt: string
+  readonly updatedAt?: string | undefined
   readonly ticket: ForgeFedTicket
+  readonly projectId?: string | undefined
+  readonly agentId?: string | undefined
+  readonly remoteInbox?: string | undefined
+  readonly remoteOutbox?: string | undefined
+  readonly result?: string | undefined
+  readonly error?: string | undefined
 }
 
 export type CreateFollowRequest = {
@@ -437,6 +463,12 @@ export type ActivityPubFollowActivity = {
   readonly capability?: string | undefined
 }
 
+export type ActivityPubPublicKey = {
+  readonly id: string
+  readonly owner: string
+  readonly publicKeyPem: string
+}
+
 export type ActivityPubPerson = {
   readonly "@context": "https://www.w3.org/ns/activitystreams"
   readonly type: "Person"
@@ -449,10 +481,14 @@ export type ActivityPubPerson = {
   readonly followers: string
   readonly following: string
   readonly liked: string
+  readonly publicKey?: ActivityPubPublicKey | undefined
+  readonly endpoints?: {
+    readonly sharedInbox?: string | undefined
+  } | undefined
 }
 
 export type ActivityPubOrderedCollection = {
-  readonly "@context": "https://www.w3.org/ns/activitystreams"
+  readonly "@context": "https://www.w3.org/ns/activitystreams" | ReadonlyArray<string>
   readonly type: "OrderedCollection"
   readonly id: string
   readonly totalItems: number
@@ -465,6 +501,18 @@ export type FollowSubscription = {
   readonly actor: string
   readonly object: string
   readonly inbox?: string | undefined
+  readonly remoteActor?: string | undefined
+  readonly remoteInbox?: string | undefined
+  readonly remoteOutbox?: string | undefined
+  readonly remoteFollowers?: string | undefined
+  readonly remoteSharedInbox?: string | undefined
+  readonly remotePublicKeyId?: string | undefined
+  readonly remotePublicKeyPem?: string | undefined
+  readonly subscriptionName?: string | undefined
+  readonly queue?: string | undefined
+  readonly projectRepoUrl?: string | undefined
+  readonly agentProvider?: AgentProvider | undefined
+  readonly agentCommand?: string | undefined
   readonly to: ReadonlyArray<string>
   readonly capability?: string | undefined
   status: FollowStatus
@@ -488,6 +536,10 @@ export type FederationInboxResult =
     readonly issue: FederationIssueRecord
   }
   | {
+    readonly kind: "issue.create"
+    readonly issue: FederationIssueRecord
+  }
+  | {
     readonly kind: "follow.accept"
     readonly subscription: FollowSubscription
   }
@@ -495,6 +547,30 @@ export type FederationInboxResult =
     readonly kind: "follow.reject"
     readonly subscription: FollowSubscription
   }
+
+export type ExchangeSubscribeRequest = {
+  readonly target: string
+  readonly domain?: string | undefined
+  readonly actor?: string | undefined
+  readonly inbox?: string | undefined
+  readonly projectRepoUrl?: string | undefined
+  readonly agentProvider?: AgentProvider | undefined
+  readonly agentCommand?: string | undefined
+}
+
+export type ExchangePollRequest = {
+  readonly target?: string | undefined
+  readonly runTasks?: boolean | undefined
+}
+
+export type ExchangePollResult = {
+  readonly polledAt: string
+  readonly subscriptions: number
+  readonly totalItems: number
+  readonly newItems: number
+  readonly processedItems: number
+  readonly failedItems: number
+}
 
 export type ApiEventType =
   | "snapshot"

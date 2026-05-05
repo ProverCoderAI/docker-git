@@ -20,10 +20,16 @@ type ReadyLayoutRenderArgs = {
     readonly onApplyAllProjects: () => void
     readonly onApplyProjectById: (projectId: string) => void
     readonly onApplySelectedProject: () => void
+    readonly onAttachProjectTerminalSession: (
+      projectId: string,
+      projectKey: string,
+      projectDisplayName: string,
+      sessionId: string
+    ) => void
     readonly onBackScreen: () => void
     readonly onCreateBufferChange: (buffer: string) => void
     readonly onCreateCancel: () => void
-    readonly onCreateSubmit: (forceWizard?: boolean) => void
+    readonly onCreateSubmit: (quickCreate?: boolean) => void
     readonly onDatabaseConnectionInputChange: (value: string) => void
     readonly onDatabaseLabelInputChange: (value: string) => void
     readonly onCloseDatabaseForward: ReturnType<typeof useReadyController>["onCloseDatabaseForward"]
@@ -34,8 +40,9 @@ type ReadyLayoutRenderArgs = {
     readonly onOpenProjectBrowser: () => void
     readonly onOpenProjectDatabaseEditor: () => void
     readonly onCloseProjectPortForward: (targetPort: number) => void
+    readonly onKillProjectTerminalSession: (projectId: string, projectKey: string, sessionId: string) => void
     readonly onOpenProjectPortForward: () => void
-    readonly onOpenProjectTerminalById: (projectId: string) => void
+    readonly onOpenProjectTerminalById: (projectId: string, projectKey?: string) => void
     readonly onPortForwardInputChange: (value: string) => void
     readonly onProjectSearchQueryChange: (value: string) => void
     readonly onRefreshProjectPortForwards: () => void
@@ -52,6 +59,7 @@ type ReadyLayoutRenderArgs = {
   }
   readonly currentMenu: ReturnType<typeof useReadyController>["currentMenu"]
   readonly dashboard: DashboardData
+  readonly dashboardRefreshTick: number
   readonly selectedProjectSummary: ReturnType<typeof useReadyController>["selectedProjectSummary"]
   readonly state: ReturnType<typeof useReadyController>["state"]
   readonly viewportLayout: ViewportLayout
@@ -64,6 +72,7 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onApplyAllProjects: actions.onApplyAllProjects,
   onApplyProjectById: actions.onApplyProjectById,
   onApplySelectedProject: actions.onApplySelectedProject,
+  onAttachProjectTerminalSession: actions.onAttachProjectTerminalSession,
   onBackScreen: actions.onBackScreen,
   onCloseProjectPortForward: actions.onCloseProjectPortForward,
   onCreateBufferChange: actions.onCreateBufferChange,
@@ -78,6 +87,7 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onOpenProjectBrowserById: actions.onOpenProjectBrowserById,
   onOpenProjectBrowser: actions.onOpenProjectBrowser,
   onOpenProjectDatabaseEditor: actions.onOpenProjectDatabaseEditor,
+  onKillProjectTerminalSession: actions.onKillProjectTerminalSession,
   onOpenProjectPortForward: actions.onOpenProjectPortForward,
   onOpenProjectTerminalById: actions.onOpenProjectTerminalById,
   onPortForwardInputChange: actions.onPortForwardInputChange,
@@ -135,6 +145,7 @@ const renderReadyLayout = ({
   actions,
   currentMenu,
   dashboard,
+  dashboardRefreshTick,
   selectedProjectSummary,
   state,
   viewportLayout
@@ -143,6 +154,7 @@ const renderReadyLayout = ({
     controllerCwd={dashboard.health.cwd}
     currentMenu={currentMenu}
     dashboard={dashboard}
+    dashboardRefreshTick={dashboardRefreshTick}
     projectsRoot={dashboard.health.projectsRoot}
     selectedProjectSummary={selectedProjectSummary}
     viewportLayout={viewportLayout}
@@ -163,6 +175,7 @@ export const AppReady = ({
     actions: controller,
     currentMenu: controller.currentMenu,
     dashboard,
+    dashboardRefreshTick,
     selectedProjectSummary: controller.selectedProjectSummary,
     state: controller.state,
     viewportLayout

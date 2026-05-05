@@ -19,6 +19,7 @@ export const createReadyActionContext = (
     portForwardInput: state.portForwardInput,
     refreshDashboard,
     selectedProjectId: state.selectedProjectId,
+    selectedProjectKey: selectedProjectSummary?.projectKey ?? null,
     selectedProjectName: selectedProjectSummary?.displayName ?? null,
     setActionPrompt: state.setActionPrompt,
     setActiveScreen: state.setActiveScreen,

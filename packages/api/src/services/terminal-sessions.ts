@@ -15,7 +15,7 @@ import type { Duplex } from "node:stream"
 import { WebSocket, WebSocketServer, type RawData } from "ws"
 
 import type { TerminalSession, TerminalSessionStatus } from "../api/contracts.js"
-import { ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
+import { ApiInternalError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
 import { emitProjectEvent } from "./events.js"
 import {
   createTerminalImagePastePlan,
@@ -47,18 +47,21 @@ type TerminalServerMessage =
 type TerminalRecord = {
   session: TerminalSession
   pty: PtyBridge | null
-  socket: WebSocket | null
+  sockets: Set<WebSocket>
   attachTimeout: ReturnType<typeof setTimeout> | null
   detachTimeout: ReturnType<typeof setTimeout> | null
   outputBuffer: TerminalOutputBuffer
   projectContainerName: string
+  projectDisplayName: string
   projectId: string
+  projectKey: string
   prepared: ReturnType<typeof prepareProjectSsh>
 }
 
 const records = new Map<string, TerminalRecord>()
 const attachTimeoutMs = 30_000
 const terminalWsPathPattern = /^(?:\/api)?\/projects\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
+const terminalWsByKeyPathPattern = /^(?:\/api)?\/projects\/by-key\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
 
 const TerminalClientMessageSchema = Schema.parseJson(
   Schema.Union(
@@ -98,6 +101,19 @@ const updateSession = (
     ...patch
   }
   records.set(record.session.id, record)
+}
+
+const attachedClientCount = (record: TerminalRecord): number => {
+  for (const socket of [...record.sockets]) {
+    if (socket.readyState === WebSocket.CLOSED || socket.readyState === WebSocket.CLOSING) {
+      record.sockets.delete(socket)
+    }
+  }
+  return record.sockets.size
+}
+
+const syncAttachedClientCount = (record: TerminalRecord): void => {
+  updateSession(record, { attachedClients: attachedClientCount(record) })
 }
 
 const toApiInternalError = (error: unknown): ApiInternalError =>
@@ -205,9 +221,15 @@ const sendServerMessage = (socket: WebSocket | null, message: TerminalServerMess
   socket.send(encodeServerMessage(message))
 }
 
+const broadcastServerMessage = (record: TerminalRecord, message: TerminalServerMessage): void => {
+  for (const socket of record.sockets) {
+    sendServerMessage(socket, message)
+  }
+}
+
 const sendTerminalOutput = (record: TerminalRecord, data: string): void => {
   record.outputBuffer = appendTerminalOutput(record.outputBuffer, data)
-  sendServerMessage(record.socket, { type: "output", data })
+  broadcastServerMessage(record, { type: "output", data })
 }
 
 const replayTerminalOutput = (record: TerminalRecord, socket: WebSocket): void => {
@@ -238,6 +260,13 @@ const closeSocket = (socket: WebSocket | null): void => {
   socket.close()
 }
 
+const closeRecordSockets = (record: TerminalRecord): void => {
+  for (const socket of record.sockets) {
+    closeSocket(socket)
+  }
+  record.sockets.clear()
+}
+
 const cleanupRecord = (record: TerminalRecord): void => {
   clearAttachTimeout(record)
   clearDetachTimeout(record)
@@ -245,8 +274,7 @@ const cleanupRecord = (record: TerminalRecord): void => {
     record.pty.kill()
     record.pty = null
   }
-  closeSocket(record.socket)
-  record.socket = null
+  closeRecordSockets(record)
   records.delete(record.session.id)
 }
 
@@ -257,14 +285,14 @@ const finalizeRecord = (
   signal: number | null
 ): void => {
   updateSession(record, {
+    attachedClients: attachedClientCount(record),
     closedAt: nowIso(),
     exitCode: exitCode ?? undefined,
     signal: signal ?? undefined,
     status
   })
-  sendServerMessage(record.socket, { type: "exit", exitCode, signal })
-  closeSocket(record.socket)
-  record.socket = null
+  broadcastServerMessage(record, { type: "exit", exitCode, signal })
+  closeRecordSockets(record)
   record.pty = null
   clearAttachTimeout(record)
   clearDetachTimeout(record)
@@ -461,10 +489,13 @@ const createAttachTimeout = (sessionId: string): ReturnType<typeof setTimeout> =
 
 const registerRecord = (
   projectId: string,
+  projectKey: string,
+  projectDisplayName: string,
   prepared: ReturnType<typeof prepareProjectSsh>,
   projectContainerName: string
 ): TerminalSession => {
   const session: TerminalSession = {
+    attachedClients: 0,
     createdAt: nowIso(),
     id: randomUUID(),
     projectId,
@@ -477,10 +508,12 @@ const registerRecord = (
     outputBuffer: emptyTerminalOutputBuffer,
     prepared,
     projectContainerName,
+    projectDisplayName,
     projectId,
+    projectKey,
     pty: null,
     session,
-    socket: null
+    sockets: new Set<WebSocket>()
   }
   record.attachTimeout = createAttachTimeout(session.id)
   records.set(session.id, record)
@@ -521,7 +554,7 @@ export const createTerminalSession = (
       })
     )
     const prepared = prepareProjectSsh(projectItem)
-    const session = registerRecord(projectId, prepared, projectItem.containerName)
+    const session = registerRecord(projectId, project.projectKey, project.displayName, prepared, projectItem.containerName)
     yield* _(
       Effect.sync(() => {
         emitProjectEvent(projectId, "project.ssh.session", {
@@ -558,7 +591,46 @@ export const deleteTerminalSession = (
 export const listProjectTerminalSessions = (projectId: string): ReadonlyArray<TerminalSession> =>
   [...records.values()]
     .filter((record) => record.projectId === projectId)
-    .map((record) => record.session)
+    .map((record) => {
+      syncAttachedClientCount(record)
+      return record.session
+    })
+
+export const getProjectTerminalSession = (
+  projectId: string,
+  sessionId: string
+): Effect.Effect<TerminalSession, ApiNotFoundError> =>
+  Effect.gen(function*(_) {
+    const record = records.get(sessionId)
+    if (record === undefined || record.projectId !== projectId) {
+      return yield* _(
+        Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
+      )
+    }
+    syncAttachedClientCount(record)
+    return record.session
+  })
+
+export const lookupTerminalSessionById = (
+  sessionId: string
+): Effect.Effect<
+  { readonly projectDisplayName: string; readonly projectKey: string; readonly session: TerminalSession },
+  ApiNotFoundError
+> =>
+  Effect.gen(function*(_) {
+    const record = records.get(sessionId)
+    if (record === undefined) {
+      return yield* _(
+        Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
+      )
+    }
+    syncAttachedClientCount(record)
+    return {
+      projectDisplayName: record.projectDisplayName,
+      projectKey: record.projectKey,
+      session: record.session
+    }
+  })
 
 const handleCloseMessage = (record: TerminalRecord): void => {
   cleanupRecord(record)
@@ -569,17 +641,18 @@ const detachSocketFromRecord = (
   socket: WebSocket
 ): void => {
   const current = records.get(record.session.id)
-  if (current === undefined || current.socket !== socket) {
+  if (current === undefined) {
     return
   }
-  current.socket = null
+  current.sockets.delete(socket)
+  syncAttachedClientCount(current)
   clearDetachTimeout(current)
 }
 
-const handleSocketMessage = (record: TerminalRecord, raw: RawData): void => {
+const handleSocketMessage = (record: TerminalRecord, socket: WebSocket, raw: RawData): void => {
   const message = decodeClientMessage(raw)
   if (message === null) {
-    sendServerMessage(record.socket, { type: "error", message: "Invalid terminal payload." })
+    sendServerMessage(socket, { type: "error", message: "Invalid terminal payload." })
     return
   }
   if (message.type === "input") {
@@ -603,42 +676,54 @@ const attachSocketToRecord = (
   cols: number,
   rows: number
 ): void => {
-  if (record.socket !== null && record.socket.readyState !== WebSocket.CLOSED) {
-    throw new ApiConflictError({ message: `Terminal session already attached: ${record.session.id}` })
-  }
-
   clearAttachTimeout(record)
   clearDetachTimeout(record)
-  record.socket = socket
+  record.sockets.add(socket)
   attachWebSocketHeartbeat(socket)
   startTerminalPty(record, cols, rows)
+  syncAttachedClientCount(record)
   sendServerMessage(socket, { type: "ready", session: record.session })
   replayTerminalOutput(record, socket)
   socket.on("message", (raw: RawData) => {
-    handleSocketMessage(record, raw)
+    handleSocketMessage(record, socket, raw)
   })
   socket.on("close", () => {
     detachSocketFromRecord(record, socket)
   })
 }
 
+type ParsedTerminalPath =
+  | { readonly cols: number; readonly kind: "projectId"; readonly projectId: string; readonly rows: number; readonly sessionId: string }
+  | { readonly cols: number; readonly kind: "projectKey"; readonly projectKey: string; readonly rows: number; readonly sessionId: string }
+
 const parseTerminalPath = (
   request: IncomingMessage
-): { readonly cols: number; readonly projectId: string; readonly rows: number; readonly sessionId: string } | null => {
+): ParsedTerminalPath | null => {
   const url = request.url
   if (url === undefined) {
     return null
   }
   const parsed = new URL(url, "http://localhost")
-  const match = terminalWsPathPattern.exec(parsed.pathname)
-  if (match === null) {
+  const keyMatch = terminalWsByKeyPathPattern.exec(parsed.pathname)
+  if (keyMatch !== null) {
+    return {
+      cols: clampTerminalSize(Number(parsed.searchParams.get("cols") ?? ""), 120),
+      kind: "projectKey",
+      projectKey: decodeURIComponent(keyMatch[1] ?? ""),
+      rows: clampTerminalSize(Number(parsed.searchParams.get("rows") ?? ""), 32),
+      sessionId: decodeURIComponent(keyMatch[2] ?? "")
+    }
+  }
+  const idMatch = terminalWsPathPattern.exec(parsed.pathname)
+  if (idMatch === null) {
     return null
   }
   return {
     cols: clampTerminalSize(Number(parsed.searchParams.get("cols") ?? ""), 120),
-    projectId: decodeURIComponent(match[1] ?? ""),
+    kind: "projectId",
+    projectId: decodeURIComponent(idMatch[1] ?? ""),
     rows: clampTerminalSize(Number(parsed.searchParams.get("rows") ?? ""), 32),
-    sessionId: decodeURIComponent(match[2] ?? "")
+    sessionId: decodeURIComponent(idMatch[2] ?? "")
   }
 }
 
@@ -655,7 +740,12 @@ export const attachTerminalWebSocketServer = (server: HttpServer): void => {
       return
     }
     const record = records.get(parsed.sessionId)
-    if (record === undefined || record.projectId !== parsed.projectId) {
+    const matchesProject = record !== undefined && (
+      parsed.kind === "projectId"
+        ? record.projectId === parsed.projectId
+        : record.projectKey === parsed.projectKey
+    )
+    if (!matchesProject || record === undefined) {
       denyUpgrade(socket)
       return
     }
@@ -681,5 +771,6 @@ export const verifyTerminalSession = (
         Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
       )
     }
+    syncAttachedClientCount(record)
     return record.session
   })

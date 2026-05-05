@@ -6,6 +6,11 @@ import {
   extractTerminalImageBase64,
   isTerminalPasteShortcut
 } from "../../src/web/terminal-image-paste.js"
+import {
+  resolveTerminalCompactHeaderMode,
+  resolveTerminalTypingMode,
+  shouldShowTerminalTabs
+} from "../../src/web/terminal-mobile-layout.js"
 import { resolveTerminalReconnectDelay } from "../../src/web/terminal-reconnect.js"
 import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "../../src/web/terminal.js"
 import type { TerminalServerMessage } from "../../src/web/terminal.js"
@@ -110,5 +115,19 @@ describe("browser terminal helpers", () => {
     pasteGuard.suppressNextNativeImagePaste()
     currentTimeMillis = 2000
     expect(pasteGuard.shouldSuppressTerminalInput("\u0016")).toBe(false)
+  })
+
+  it("uses compact terminal chrome on mobile and only enables typing mode with the keyboard open", () => {
+    expect(resolveTerminalCompactHeaderMode(true)).toBe(true)
+    expect(resolveTerminalCompactHeaderMode(false)).toBe(false)
+    expect(resolveTerminalTypingMode(true, true)).toBe(true)
+    expect(resolveTerminalTypingMode(true, false)).toBe(false)
+    expect(resolveTerminalTypingMode(false, true)).toBe(false)
+  })
+
+  it("hides terminal tabs for a single mobile session and keeps them for multi-session or desktop layouts", () => {
+    expect(shouldShowTerminalTabs(true, 1)).toBe(false)
+    expect(shouldShowTerminalTabs(true, 2)).toBe(true)
+    expect(shouldShowTerminalTabs(false, 1)).toBe(true)
   })
 })
