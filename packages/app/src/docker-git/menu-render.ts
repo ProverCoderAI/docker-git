@@ -13,8 +13,7 @@ import {
   type SelectPurpose,
   selectTitle
 } from "./menu-render-select.js"
-import type { CreateInputs, SelectProjectRuntime } from "./menu-types.js"
-import { type CreateStep, menuItems } from "./menu-types.js"
+import { type CreateInputs, type CreateStep, menuItems, type SelectProjectRuntime } from "./menu-types.js"
 import type { ProjectItem } from "./project-item.js"
 
 // CHANGE: render menu views with Ink without JSX

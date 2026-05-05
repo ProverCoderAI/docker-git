@@ -114,8 +114,12 @@ const headerPadding = (viewportLayout: ViewportLayout): number | string =>
 const headerGap = (viewportLayout: ViewportLayout): number => viewportLayout.compact ? 1 : 2
 
 const headerMetricsTopMargin = (viewportLayout: ViewportLayout): number | string => viewportLayout.compact ? "4px" : 1
-const terminalWorkspacePadding = (viewportLayout: ViewportLayout): number | string =>
-  viewportLayout.mode === "mobile" ? 0 : viewportLayout.keyboardOpen ? "4px" : 1
+const terminalWorkspacePadding = (viewportLayout: ViewportLayout): number => {
+  if (viewportLayout.mode === "mobile") {
+    return 0
+  }
+  return viewportLayout.keyboardOpen ? 0.5 : 1
+}
 
 const HeaderTitle = ({ compact }: Pick<ViewportLayout, "compact">): JSX.Element => (
   <Box flexWrap="wrap" gap={1} justifyContent="space-between">

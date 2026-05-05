@@ -1,13 +1,13 @@
 import { Effect } from "effect"
 import { useEffect, useRef } from "react"
 
-import { loadTerminalSessionById } from "./api.js"
 import type { BrowserActionContext } from "./actions-shared.js"
+import { loadTerminalSessionById } from "./api.js"
 import type { DashboardData } from "./api.js"
 import { browserMenuIndex } from "./menu.js"
 import { projectPickerScreen } from "./screen.js"
 import { terminalSessionId } from "./terminal-state.js"
-import { buildProjectActiveTerminalSession, type ActiveTerminalSession } from "./terminal.js"
+import { type ActiveTerminalSession, buildProjectActiveTerminalSession } from "./terminal.js"
 
 type SshLinkArgs = {
   readonly actionContext: BrowserActionContext
@@ -80,8 +80,7 @@ const showProjectTerminalScreen = (actionContext: BrowserActionContext, projectI
 const findLocalTerminalSession = (
   sessions: ReadonlyArray<ActiveTerminalSession>,
   sessionId: string
-): ActiveTerminalSession | undefined =>
-  sessions.find((session) => terminalSessionId(session) === sessionId)
+): ActiveTerminalSession | undefined => sessions.find((session) => terminalSessionId(session) === sessionId)
 
 const scheduleTerminalSessionAttach = (args: SshLinkEffectArgs, sessionId: string): void => {
   clearConnectTimer(args.connectTimerRef)

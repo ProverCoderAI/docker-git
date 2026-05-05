@@ -14,9 +14,9 @@ import {
   ProjectEventsPollResponseSchema,
   ProjectPortForwardResponseSchema,
   ProjectPortForwardsResponseSchema,
+  ProjectsResponseSchema,
   ProjectTerminalSessionResponseSchema,
   ProjectTerminalSessionsResponseSchema,
-  ProjectsResponseSchema,
   TerminalSessionLookupResponseSchema,
   TerminalSessionResponseSchema
 } from "./api-schema.js"
@@ -43,7 +43,14 @@ export {
   restartProjectDatabaseEditor,
   saveProjectDatabaseProfile
 } from "./api-database.js"
-export { applyProject, createProject, loadProjectDetails, loadProjectLogs, loadProjectPs, upProject } from "./api-project-core.js"
+export {
+  applyProject,
+  createProject,
+  loadProjectDetails,
+  loadProjectLogs,
+  loadProjectPs,
+  upProject
+} from "./api-project-core.js"
 export { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api-tasks.js"
 
 export type * from "./api-types.js"

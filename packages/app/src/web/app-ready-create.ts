@@ -1,8 +1,13 @@
 import { type Dispatch, type SetStateAction, useEffect } from "react"
 
-import { nextBufferValue } from "../docker-git/menu-buffer-input.js"
-import { advanceCreateFlow, type CreateFlowView, createInitialFlowView } from "../docker-git/menu-create-shared.js"
 import { formatParseError } from "../docker-git/cli/usage.js"
+import { nextBufferValue } from "../docker-git/menu-buffer-input.js"
+import {
+  advanceCreateFlow,
+  type CreateFlowView,
+  createInitialFlowView,
+  handleAdvanceCreateFlowResult
+} from "../docker-git/menu-create-shared.js"
 import { submitCreateInputs } from "./actions-projects.js"
 import { requireGithubAuthConfigured } from "./actions-shared.js"
 import type { BrowserActionContext } from "./actions.js"
@@ -44,13 +49,26 @@ export const setCreateBuffer = (
   setCreateView({ ...createView, buffer })
 }
 
+const showCreateFlowError = (context: BrowserActionContext, error: Parameters<typeof formatParseError>[0]): void => {
+  context.setMessage(formatParseError(error))
+}
+
+const continueBrowserCreateFlow = (
+  context: BrowserActionContext,
+  setCreateView: Setter<CreateFlowView>,
+  view: CreateFlowView
+): void => {
+  setCreateView(view)
+  context.setMessage(null)
+}
+
 export const submitCreateView = (
   {
     context,
     controllerCwd,
     createView,
-    quickCreate,
     projectsRoot,
+    quickCreate,
     setCreateView
   }: CreateSubmitArgs
 ): void => {
@@ -62,20 +80,18 @@ export const submitCreateView = (
   const next = quickCreate === undefined
     ? advanceCreateFlow(createContext, createView)
     : advanceCreateFlow(createContext, createView, { quickCreate })
-  if (next === null) {
-    return
-  }
-  if (next._tag === "Error") {
-    context.setMessage(formatParseError(next.error))
-    return
-  }
-  if (next._tag === "Continue") {
-    setCreateView(next.view)
-    context.setMessage(null)
-    return
-  }
-  submitCreateInputs(next.inputs, context)
-  setCreateView(resetCreateView())
+  handleAdvanceCreateFlowResult(next, {
+    onComplete: (inputs) => {
+      submitCreateInputs(inputs, context)
+      setCreateView(resetCreateView())
+    },
+    onContinue: (view) => {
+      continueBrowserCreateFlow(context, setCreateView, view)
+    },
+    onError: (error) => {
+      showCreateFlowError(context, error)
+    }
+  })
 }
 
 export const useCreateMenuReset = (

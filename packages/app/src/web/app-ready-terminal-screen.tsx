@@ -208,8 +208,8 @@ const TerminalTabs = (
 
 const TerminalPane = (
   {
-    onOpenProjectBrowserById,
     onApplyProjectById,
+    onOpenProjectBrowserById,
     onOpenProjectTerminalById,
     onSetActiveScreen,
     onTerminalClose,

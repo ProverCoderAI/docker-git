@@ -4,7 +4,7 @@ import type { DashboardData } from "./api.js"
 import type { BrowserShortcutArgs } from "./app-ready-shortcut-runtime.js"
 import { browserMenuIndex, browserMenuItems, type BrowserMenuTag } from "./menu.js"
 import { type BrowserScreen, isProjectMenu, menuScreen, outputScreen, screenForMenu } from "./screen.js"
-import { terminalSessionRoutePath, type ActiveTerminalSession } from "./terminal.js"
+import { type ActiveTerminalSession, terminalSessionRoutePath } from "./terminal.js"
 
 type ReadyUrlNavigation = {
   readonly activeScreen: BrowserScreen
