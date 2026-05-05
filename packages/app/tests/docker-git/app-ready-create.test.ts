@@ -1,11 +1,15 @@
 import type { SetStateAction } from "react"
 import { describe, expect, it, vi } from "vitest"
 
-import { createInitialFlowView, type CreateFlowView, resolveCreateFlowSteps } from "../../src/docker-git/menu-create-shared.js"
+import {
+  type CreateFlowView,
+  createInitialFlowView,
+  resolveCreateFlowSteps
+} from "../../src/docker-git/menu-create-shared.js"
 import type { BrowserActionContext } from "../../src/web/actions.js"
 import { submitCreateView } from "../../src/web/app-ready-create.js"
 
-const createSetter = <A>() => vi.fn((_value: SetStateAction<A>) => undefined)
+const createSetter = <A>() => vi.fn((_value: SetStateAction<A>) => {})
 
 const createBrowserActionContext = (): BrowserActionContext => ({
   addTerminalSession: vi.fn(),
@@ -43,18 +47,24 @@ const createBrowserActionContext = (): BrowserActionContext => ({
   setSelectedProjectId: createSetter()
 })
 
+const submitCreateBuffer = (buffer: string) => {
+  const context = createBrowserActionContext()
+  const setCreateView = createSetter<CreateFlowView>()
+
+  submitCreateView({
+    context,
+    controllerCwd: "/workspace",
+    createView: createInitialFlowView(buffer),
+    projectsRoot: "/home/dev/.docker-git",
+    setCreateView
+  })
+
+  return { context, setCreateView }
+}
+
 describe("app-ready-create", () => {
   it("advances to the next create field on Enter for a repo URL", () => {
-    const context = createBrowserActionContext()
-    const setCreateView = createSetter<CreateFlowView>()
-
-    submitCreateView({
-      context,
-      controllerCwd: "/workspace",
-      createView: createInitialFlowView("https://github.com/org/repo/tree/feature-x --force"),
-      projectsRoot: "/home/dev/.docker-git",
-      setCreateView
-    })
+    const { context, setCreateView } = submitCreateBuffer("https://github.com/org/repo/tree/feature-x --force")
 
     expect(setCreateView).toHaveBeenCalledTimes(1)
     const nextViewAction = setCreateView.mock.calls[0]?.[0]
@@ -82,16 +92,7 @@ describe("app-ready-create", () => {
   })
 
   it("shows a parse error instead of submitting on invalid inline flags", () => {
-    const context = createBrowserActionContext()
-    const setCreateView = createSetter<CreateFlowView>()
-
-    submitCreateView({
-      context,
-      controllerCwd: "/workspace",
-      createView: createInitialFlowView("https://github.com/org/repo --bogus"),
-      projectsRoot: "/home/dev/.docker-git",
-      setCreateView
-    })
+    const { context, setCreateView } = submitCreateBuffer("https://github.com/org/repo --bogus")
 
     expect(setCreateView).not.toHaveBeenCalled()
     expect(context.setMessage).toHaveBeenCalledWith("Missing value for option: --bogus")
