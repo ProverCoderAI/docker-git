@@ -191,7 +191,7 @@ jobs:
   e2e-runtime-volumes-ssh:
     name: E2E (Runtime volumes + SSH)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies

@@ -15,8 +15,12 @@ import type { Duplex } from "node:stream"
 import { WebSocket, WebSocketServer, type RawData } from "ws"
 
 import type { TerminalSession, TerminalSessionStatus } from "../api/contracts.js"
-import { ApiInternalError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
+import { ApiBadRequestError, ApiInternalError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
 import { emitProjectEvent } from "./events.js"
+import {
+  planTerminalImageFetch,
+  terminalImageFetchMaxBytes
+} from "./terminal-image-fetch-core.js"
 import {
   createTerminalImagePastePlan,
   terminalImagePasteDirectory,
@@ -392,6 +396,91 @@ const writeBufferToProjectContainer = (
     child.stdin.end(buffer)
   })
 
+const readBufferFromProjectContainer = (
+  containerName: string,
+  containerPath: string,
+  maxBytes: number
+): Effect.Effect<Buffer, ApiInternalError | ApiBadRequestError | ApiNotFoundError> =>
+  Effect.async((resume) => {
+    const child = spawn(
+      "docker",
+      [
+        "exec",
+        "-u",
+        "dev",
+        containerName,
+        "cat",
+        "--",
+        containerPath
+      ],
+      {
+        cwd: process.cwd(),
+        stdio: ["ignore", "pipe", "pipe"]
+      }
+    )
+    const stdoutChunks: Array<Buffer> = []
+    const stderrChunks: Array<Buffer> = []
+    let totalBytes = 0
+    let exceededLimit = false
+    let completed = false
+    const resumeOnce = (
+      effect: Effect.Effect<Buffer, ApiInternalError | ApiBadRequestError | ApiNotFoundError>
+    ): void => {
+      if (completed) {
+        return
+      }
+      completed = true
+      resume(effect)
+    }
+    child.stdout.on("data", (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      totalBytes += buffer.length
+      if (totalBytes > maxBytes) {
+        exceededLimit = true
+        try {
+          child.kill()
+        } catch {
+          // ignore — close handler will resume
+        }
+        return
+      }
+      stdoutChunks.push(buffer)
+    })
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      stderrChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    })
+    child.on("error", (error) => {
+      resumeOnce(Effect.fail(new ApiInternalError({
+        message: `Failed to run docker exec for ${containerName}.`,
+        cause: error
+      })))
+    })
+    child.on("close", (exitCode) => {
+      if (exceededLimit) {
+        resumeOnce(Effect.fail(new ApiBadRequestError({
+          message: `Image exceeds maximum size of ${maxBytes} bytes.`
+        })))
+        return
+      }
+      if (exitCode === 0) {
+        resumeOnce(Effect.succeed(Buffer.concat(stdoutChunks)))
+        return
+      }
+      const stderr = Buffer.concat(stderrChunks).toString("utf8").trim()
+      if (/no such file|not a directory|not found/iu.test(stderr)) {
+        resumeOnce(Effect.fail(new ApiNotFoundError({
+          message: `Image not found at ${containerPath}.`
+        })))
+        return
+      }
+      resumeOnce(Effect.fail(new ApiInternalError({
+        message: stderr.length > 0
+          ? `Failed to read image: ${stderr}`
+          : `Failed to read image; docker exec exited with code ${exitCode ?? "unknown"}.`
+      })))
+    })
+  })
+
 const saveTerminalImagePaste = (
   record: TerminalRecord,
   payload: TerminalImagePastePayload
@@ -609,6 +698,33 @@ export const getProjectTerminalSession = (
     }
     syncAttachedClientCount(record)
     return record.session
+  })
+
+export const readProjectTerminalImage = (
+  projectId: string,
+  sessionId: string,
+  imagePath: string
+): Effect.Effect<
+  { readonly bytes: Buffer; readonly mediaType: string },
+  ApiBadRequestError | ApiInternalError | ApiNotFoundError
+> =>
+  Effect.gen(function*(_) {
+    const record = records.get(sessionId)
+    if (record === undefined || record.projectId !== projectId) {
+      return yield* _(
+        Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
+      )
+    }
+    const plan = planTerminalImageFetch(imagePath)
+    if (plan._tag === "InvalidTerminalImageFetch") {
+      return yield* _(Effect.fail(new ApiBadRequestError({ message: plan.message })))
+    }
+    const bytes = yield* _(readBufferFromProjectContainer(
+      record.projectContainerName,
+      plan.containerPath,
+      terminalImageFetchMaxBytes
+    ))
+    return { bytes, mediaType: plan.mediaType }
   })
 
 export const lookupTerminalSessionById = (

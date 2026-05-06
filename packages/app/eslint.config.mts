@@ -280,6 +280,36 @@ export default defineConfig(
 	}
   },
   {
+    files: [
+      "src/docker-git/menu-create-shared.ts",
+      "src/docker-git/menu-render.ts",
+      "src/web/actions-projects.ts",
+      "src/web/app-ready-controller.ts",
+      "src/web/app-ready-main-panels.tsx",
+      "src/web/app-ready-ssh-link-hook.ts",
+      "src/web/app-ready-terminal-screen.tsx",
+      "src/web/app-ready-url.ts",
+      "src/web/panel-content.tsx",
+      "src/web/panel-create-select.tsx",
+      "src/web/panel-project-details.tsx",
+      "src/web/panel-terminal.tsx",
+      "src/web/terminal-mobile-controls.ts",
+      "src/web/terminal-panel-runtime-core.ts"
+    ],
+    rules: {
+      "complexity": ["error", 15],
+      "max-lines": [
+        "error",
+        { max: 650, skipBlankLines: true, skipComments: true }
+      ],
+      "max-lines-per-function": [
+        "error",
+        { max: 160, skipBlankLines: true, skipComments: true }
+      ],
+      "max-params": ["error", 6]
+    }
+  },
+  {
     files: ['**/*.{test,spec}.{ts,tsx}', 'tests/**', '**/__tests__/**'],
     ...vitest.configs.all,
     languageOptions: {

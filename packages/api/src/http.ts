@@ -69,6 +69,7 @@ import {
 } from "./services/federation.js"
 import {
   applyAllProjects,
+  applyProjectById,
   createProjectFromRequest,
   deleteProjectById,
   downAllProjects,
@@ -112,7 +113,8 @@ import {
   deleteTerminalSession,
   getProjectTerminalSession,
   listProjectTerminalSessions,
-  lookupTerminalSessionById
+  lookupTerminalSessionById,
+  readProjectTerminalImage
 } from "./services/terminal-sessions.js"
 import {
   commitStateFromRequest,
@@ -218,6 +220,14 @@ const textResponse = (data: string, contentType: string, status = 200) =>
   Effect.succeed(
     HttpServerResponse.setStatus(
       HttpServerResponse.text(data, { contentType, headers: noStoreHeaders }),
+      status
+    )
+  )
+
+const binaryResponse = (data: Uint8Array, contentType: string, status = 200) =>
+  Effect.succeed(
+    HttpServerResponse.setStatus(
+      HttpServerResponse.uint8Array(data, { contentType, headers: noStoreHeaders }),
       status
     )
   )
@@ -973,6 +983,14 @@ export const makeRouter = () => {
       )
     ),
     HttpRouter.post(
+      "/projects/:projectId/apply",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => applyProjectById(projectId)),
+        Effect.flatMap((project) => jsonResponse({ ok: true, project }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
       "/projects/:projectId/down",
       projectParams.pipe(
         Effect.flatMap(({ projectId }) => downProject(projectId)),
@@ -1125,7 +1143,31 @@ export const makeRouter = () => {
     )
   )
 
-  const withAgents = withProjectLifecycle.pipe(
+  const withProjectTerminalImages = withProjectLifecycle.pipe(
+    HttpRouter.get(
+      "/projects/by-key/:projectKey/terminal-sessions/:sessionId/image",
+      Effect.gen(function*(_) {
+        const { projectKey, sessionId } = yield* _(terminalSessionByProjectKeyParams)
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const imagePath = new URL(request.url, "http://localhost").searchParams.get("path") ?? ""
+        const project = yield* _(getProjectItemByKey(projectKey))
+        const result = yield* _(readProjectTerminalImage(project.projectDir, sessionId, imagePath))
+        return yield* _(binaryResponse(result.bytes, result.mediaType, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/projects/:projectId/terminal-sessions/:sessionId/image",
+      Effect.gen(function*(_) {
+        const { projectId, sessionId } = yield* _(terminalSessionParams)
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const imagePath = new URL(request.url, "http://localhost").searchParams.get("path") ?? ""
+        const result = yield* _(readProjectTerminalImage(projectId, sessionId, imagePath))
+        return yield* _(binaryResponse(result.bytes, result.mediaType, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    )
+  )
+
+  const withAgents = withProjectTerminalImages.pipe(
     HttpRouter.post(
       "/projects/:projectId/agents",
       Effect.gen(function*(_) {

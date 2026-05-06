@@ -1,10 +1,7 @@
 import { updateActionPromptValue } from "./action-prompt.js"
-import { withBusy } from "./actions-shared.js"
 import {
-  attachProjectTerminalById,
   cancelBrowserActionPrompt,
   closeSelectedProjectPort,
-  connectProjectById,
   loadSelectedProjectBrowser,
   loadSelectedProjectPorts,
   openProjectBrowserById,
@@ -12,7 +9,6 @@ import {
   openSelectedProjectPort,
   submitBrowserActionPrompt
 } from "./actions.js"
-import { deleteProjectTerminalSession } from "./api.js"
 import type { DashboardData } from "./api.js"
 import type { createActionContext } from "./app-ready-actions.js"
 import { resolveCurrentMenu, runAuthActionByIndex, runProjectAuthActionByIndex } from "./app-ready-actions.js"
@@ -38,6 +34,7 @@ import { bindScreenActions } from "./app-ready-screen-actions.js"
 import { useSshLink } from "./app-ready-ssh-link-hook.js"
 import { bindTaskActions } from "./app-ready-task-actions.js"
 import { useProjectTasksReset } from "./app-ready-tasks-hook.js"
+import { bindTerminalActions } from "./app-ready-terminal-actions.js"
 import { useReadyUrlSync } from "./app-ready-url.js"
 import { filterDashboardProjectsByQuery } from "./project-search.js"
 
@@ -99,7 +96,8 @@ const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
   useProjectTasksReset(
     args.state.selectedProjectId,
     args.state.setProjectTaskLogs,
-    args.state.setProjectTasks
+    args.state.setProjectTasks,
+    args.state.setProjectTasksIncludeDefault
   )
 }
 
@@ -127,6 +125,7 @@ const useReadyAutoloadEffects = (args: ReadySideEffectsArgs) => {
 const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
   useBrowserShortcuts({
     activeScreen: args.state.activeScreen,
+    activeTerminalSessionId: args.state.activeTerminalSessionId,
     actionPrompt: args.state.actionPrompt,
     context: args.actionContext,
     controllerCwd: args.dashboard.health.cwd,
@@ -247,35 +246,6 @@ const bindBrowserActions = (
   },
   onRefreshProjectBrowser: () => {
     loadSelectedProjectBrowser(actionContext)
-  }
-})
-
-const bindTerminalActions = (
-  actionContext: ReturnType<typeof createActionContext>,
-  state: ReturnType<typeof useReadyState>
-) => ({
-  onOpenProjectTerminalById: (projectId: string, projectKey?: string) => {
-    connectProjectById(projectId, actionContext, projectKey)
-  },
-  onAttachProjectTerminalSession: (
-    projectId: string,
-    projectKey: string,
-    projectDisplayName: string,
-    sessionId: string
-  ) => {
-    attachProjectTerminalById(projectId, projectKey, projectDisplayName, sessionId, actionContext)
-  },
-  onKillProjectTerminalSession: (_projectId: string, projectKey: string, sessionId: string) => {
-    withBusy({
-      context: actionContext,
-      effect: deleteProjectTerminalSession(projectKey, sessionId),
-      label: "Killing SSH terminal",
-      onSuccess: () => {
-        state.closeTerminalSession(sessionId)
-        actionContext.reloadDashboard()
-        actionContext.setMessage(`Killed SSH terminal: ${sessionId}.`)
-      }
-    })
   }
 })
 

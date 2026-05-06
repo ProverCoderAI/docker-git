@@ -11,6 +11,7 @@ type ActionContextArgs = {
   readonly addTerminalSession: BrowserActionContext["addTerminalSession"]
   readonly githubStatus: BrowserActionContext["githubStatus"]
   readonly portForwardInput: BrowserActionContext["portForwardInput"]
+  readonly projectTasksIncludeDefault: BrowserActionContext["projectTasksIncludeDefault"]
   readonly refreshDashboard: () => void
   readonly selectedProjectId: string | null
   readonly selectedProjectKey: string | null
@@ -33,6 +34,7 @@ type ActionContextArgs = {
   readonly setProjectBrowser: BrowserActionContext["setProjectBrowser"]
   readonly setProjectTaskLogs: BrowserActionContext["setProjectTaskLogs"]
   readonly setProjectTasks: BrowserActionContext["setProjectTasks"]
+  readonly setProjectTasksIncludeDefault: BrowserActionContext["setProjectTasksIncludeDefault"]
   readonly setSelectedMenuIndex: BrowserActionContext["setSelectedMenuIndex"]
   readonly setSelectedProject: BrowserActionContext["setSelectedProject"]
   readonly setSelectedProjectId: BrowserActionContext["setSelectedProjectId"]
@@ -47,6 +49,7 @@ export const createActionContext = (args: ActionContextArgs): BrowserActionConte
   databaseLabelInput: args.databaseLabelInput,
   githubStatus: args.githubStatus,
   portForwardInput: args.portForwardInput,
+  projectTasksIncludeDefault: args.projectTasksIncludeDefault,
   reloadDashboard: args.refreshDashboard,
   selectedProjectId: args.selectedProjectId,
   selectedProjectKey: args.selectedProjectKey,
@@ -69,6 +72,7 @@ export const createActionContext = (args: ActionContextArgs): BrowserActionConte
   setProjectBrowser: args.setProjectBrowser,
   setProjectTaskLogs: args.setProjectTaskLogs,
   setProjectTasks: args.setProjectTasks,
+  setProjectTasksIncludeDefault: args.setProjectTasksIncludeDefault,
   setSelectedMenuIndex: args.setSelectedMenuIndex,
   setSelectedProject: args.setSelectedProject,
   setSelectedProjectId: args.setSelectedProjectId

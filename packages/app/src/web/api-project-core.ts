@@ -19,6 +19,15 @@ export const loadProjectLogs = (projectId: string) =>
     Effect.map((response) => response.output)
   )
 
+export const applyProject = (projectId: string) =>
+  requestJson(
+    "POST",
+    `/projects/${encodeURIComponent(projectId)}/apply`,
+    ProjectResponseSchema
+  ).pipe(
+    Effect.map((response) => response.project)
+  )
+
 export const createProject = (draft: CreateProjectDraft) =>
   requestJson(
     "POST",

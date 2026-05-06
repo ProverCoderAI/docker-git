@@ -57,7 +57,7 @@ export const buildProjectActiveTerminalSession = (
   }
 }
 
-const resolveTerminalApiBaseUrl = (): string => {
+export const resolveTerminalApiBaseUrl = (): string => {
   const configured = import.meta.env.VITE_DOCKER_GIT_TERMINAL_API_BASE_URL
   if (configured !== undefined && configured.trim().length > 0) {
     return trimTrailingSlash(configured.trim())
@@ -66,7 +66,7 @@ const resolveTerminalApiBaseUrl = (): string => {
   return resolveApiBaseUrl()
 }
 
-const resolveApiUrl = (): URL => {
+export const resolveTerminalApiOriginUrl = (): URL => {
   const configured = resolveTerminalApiBaseUrl()
   if (configured.startsWith("http://") || configured.startsWith("https://")) {
     return new URL(configured)
@@ -75,7 +75,7 @@ const resolveApiUrl = (): URL => {
 }
 
 export const resolveTerminalWebSocketUrl = (websocketPath: string, cols: number, rows: number): string => {
-  const apiUrl = resolveApiUrl()
+  const apiUrl = resolveTerminalApiOriginUrl()
   apiUrl.protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:"
   apiUrl.pathname = `${apiUrl.pathname.replace(/\/$/u, "")}${websocketPath}`
   apiUrl.searchParams.set("cols", String(cols))
