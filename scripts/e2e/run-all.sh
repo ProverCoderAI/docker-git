@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 cases=("$@")
 if [[ "${#cases[@]}" -eq 0 ]]; then
-  cases=("local-package-cli" "clone-cache" "login-context" "runtime-volumes-ssh" "clone-auto-open-ssh" "opencode-autoconnect")
+  cases=("local-package-cli" "browser-command" "clone-cache" "login-context" "runtime-volumes-ssh" "clone-auto-open-ssh" "opencode-autoconnect")
 fi
 
 for case_name in "${cases[@]}"; do

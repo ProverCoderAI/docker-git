@@ -5,6 +5,7 @@ services:
       dockerfile: packages/api/Dockerfile
       args:
         DOCKER_GIT_CONTROLLER_REV: ${DOCKER_GIT_CONTROLLER_REV:-unknown}
+        UBUNTU_APT_MIRROR: ${UBUNTU_APT_MIRROR:-}
     container_name: ${DOCKER_GIT_API_CONTAINER_NAME:-docker-git-api}
     environment:
       DOCKER_GIT_API_PORT: ${DOCKER_GIT_API_PORT:-3334}
