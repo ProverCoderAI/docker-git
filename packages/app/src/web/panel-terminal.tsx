@@ -21,6 +21,7 @@ type TerminalPanelProps = {
   readonly keyboardOpen: boolean
   readonly mobileMode: boolean
   readonly onAttachFailure: () => void
+  readonly onApplyProject?: (() => void) | undefined
   readonly onDetach: () => void
   readonly onKill: () => void
   readonly onMessage: (message: string) => void
@@ -276,6 +277,7 @@ const OptionalTerminalActionButton = (
 const TerminalHeaderActions = (
   {
     compactHeaderMode,
+    onApplyProject,
     onDetach,
     onKill,
     onOpenBrowser,
@@ -285,7 +287,7 @@ const TerminalHeaderActions = (
   }:
     & Pick<
       TerminalPanelProps,
-      "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
+      "onApplyProject" | "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
     >
     & {
       readonly compactHeaderMode: boolean
@@ -301,6 +303,13 @@ const TerminalHeaderActions = (
         enabled={hasProjectActions}
         label="Open browser"
         onClick={onOpenBrowser}
+      />
+      <OptionalTerminalActionButton
+        compactHeaderMode={compactHeaderMode}
+        compactLabel="Apply"
+        enabled={hasProjectActions}
+        label="Apply"
+        onClick={onApplyProject}
       />
       <OptionalTerminalActionButton
         compactHeaderMode={compactHeaderMode}
@@ -329,6 +338,7 @@ const TerminalHeaderActions = (
 const TerminalHeader = (
   {
     compactHeaderMode,
+    onApplyProject,
     onDetach,
     onKill,
     onOpenBrowser,
@@ -339,7 +349,7 @@ const TerminalHeader = (
   }:
     & Pick<
       TerminalPanelProps,
-      "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
+      "onApplyProject" | "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
     >
     & {
       readonly compactHeaderMode: boolean
@@ -350,6 +360,7 @@ const TerminalHeader = (
     <TerminalHeaderTitle compactHeaderMode={compactHeaderMode} session={session} status={status} />
     <TerminalHeaderActions
       compactHeaderMode={compactHeaderMode}
+      onApplyProject={onApplyProject}
       onDetach={onDetach}
       onKill={onKill}
       onOpenBrowser={onOpenBrowser}
@@ -495,6 +506,7 @@ export const TerminalPanel = (
   {
     keyboardOpen,
     mobileMode,
+    onApplyProject,
     onAttachFailure,
     onDetach,
     onKill,
@@ -583,6 +595,7 @@ export const TerminalPanel = (
     <div style={terminalPanelStyle(mobileMode, keyboardOpen)}>
       <TerminalHeader
         compactHeaderMode={compactHeaderMode}
+        onApplyProject={onApplyProject}
         onDetach={() => {
           connectionRef.current.closing = true
           onDetach()

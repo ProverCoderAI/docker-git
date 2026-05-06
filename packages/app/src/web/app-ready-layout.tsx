@@ -46,6 +46,9 @@ export type ReadyLayoutProps = {
   readonly onActionPromptCancel: () => void
   readonly onActionPromptChange: (key: string, value: string) => void
   readonly onActionPromptSubmit: () => void
+  readonly onApplyAllProjects: () => void
+  readonly onApplyProjectById: (projectId: string) => void
+  readonly onApplySelectedProject: () => void
   readonly onAttachProjectTerminalSession: (
     projectId: string,
     projectKey: string,

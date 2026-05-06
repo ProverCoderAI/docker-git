@@ -1,5 +1,12 @@
 import { withBusy } from "./actions-shared.js"
-import { attachProjectTerminalById, connectProjectById, loadProjectTasksById } from "./actions.js"
+import {
+  applyProjectById,
+  applySelectedProject,
+  attachProjectTerminalById,
+  connectProjectById,
+  loadProjectTasksById,
+  runApplyAllProjects
+} from "./actions.js"
 import { deleteProjectTerminalSession } from "./api.js"
 import type { createActionContext } from "./app-ready-actions.js"
 import type { ReadyState } from "./app-ready-hooks.js"
@@ -10,6 +17,15 @@ export const bindTerminalActions = (
   actionContext: ReturnType<typeof createActionContext>,
   state: ReadyState
 ) => ({
+  onApplyProjectById: (projectId: string) => {
+    applyProjectById(projectId, actionContext)
+  },
+  onApplySelectedProject: () => {
+    applySelectedProject(actionContext)
+  },
+  onApplyAllProjects: () => {
+    runApplyAllProjects(actionContext)
+  },
   onOpenProjectTerminalById: (projectId: string, projectKey?: string) => {
     connectProjectById(projectId, actionContext, projectKey)
   },

@@ -79,10 +79,20 @@ const MainMenuRoute = (
 const ProjectActionBar = (
   {
     currentMenu,
+    onApplyAllProjects,
+    onApplySelectedProject,
     onRunCurrentMenuAction,
     projectBrowser,
     selectedProjectSummary
-  }: Pick<MainPanelsProps, "currentMenu" | "onRunCurrentMenuAction" | "projectBrowser" | "selectedProjectSummary">
+  }: Pick<
+    MainPanelsProps,
+    | "currentMenu"
+    | "onApplyAllProjects"
+    | "onApplySelectedProject"
+    | "onRunCurrentMenuAction"
+    | "projectBrowser"
+    | "selectedProjectSummary"
+  >
 ): JSX.Element => (
   <Box
     alignItems="center"
@@ -97,13 +107,29 @@ const ProjectActionBar = (
     <Text fg="#aab7c4" wrap="truncate">
       {selectedProjectSummary === undefined ? "No project selected." : selectedProjectSummary.displayName}
     </Text>
-    {currentMenu === "Browser" && !canOpenProjectBrowser(projectBrowser, selectedProjectSummary?.id ?? null)
-      ? <Text bold={true} fg="#8fa6c4">{actionLabel(currentMenu)}</Text>
-      : (
-        <Box onClick={onRunCurrentMenuAction} width="auto">
-          <Text bold={true} fg="#78f0a3">{actionLabel(currentMenu)}</Text>
-        </Box>
-      )}
+    <Box flexWrap="wrap" gap={1} justifyContent="flex-end" width="auto">
+      {currentMenu === "Select" && selectedProjectSummary !== undefined
+        ? (
+          <Box onClick={onApplySelectedProject} width="auto">
+            <Text bold={true} fg="#78f0a3">Apply</Text>
+          </Box>
+        )
+        : null}
+      {currentMenu === "Select"
+        ? (
+          <Box onClick={onApplyAllProjects} width="auto">
+            <Text bold={true} fg="#78f0a3">Apply all</Text>
+          </Box>
+        )
+        : null}
+      {currentMenu === "Browser" && !canOpenProjectBrowser(projectBrowser, selectedProjectSummary?.id ?? null)
+        ? <Text bold={true} fg="#8fa6c4">{actionLabel(currentMenu)}</Text>
+        : (
+          <Box onClick={onRunCurrentMenuAction} width="auto">
+            <Text bold={true} fg="#78f0a3">{actionLabel(currentMenu)}</Text>
+          </Box>
+        )}
+    </Box>
   </Box>
 )
 
@@ -261,6 +287,8 @@ const ProjectPickerScreen = (props: MainPanelsProps): JSX.Element => (
       </Box>
       <ProjectActionBar
         currentMenu={props.currentMenu}
+        onApplyAllProjects={props.onApplyAllProjects}
+        onApplySelectedProject={props.onApplySelectedProject}
         onRunCurrentMenuAction={props.onRunCurrentMenuAction}
         projectBrowser={props.projectBrowser}
         selectedProjectSummary={props.selectedProjectSummary}

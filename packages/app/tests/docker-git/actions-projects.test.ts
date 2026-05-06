@@ -1,15 +1,19 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { beforeEach, vi } from "vitest"
+import { afterEach, beforeEach, vi } from "vitest"
 
-import { connectProjectById } from "../../src/web/actions-projects.js"
+import { applyProjectById, connectProjectById, runApplyAllProjects } from "../../src/web/actions-projects.js"
 import type { ProjectDetails, TerminalSession } from "../../src/web/api.js"
 import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
 
+const applyAllProjectsMock = vi.hoisted(() => vi.fn())
+const applyProjectMock = vi.hoisted(() => vi.fn())
 const createProjectTerminalSessionMock = vi.hoisted(() => vi.fn())
 const eventStreamCloseMock = vi.hoisted(() => vi.fn())
 
 vi.mock("../../src/web/api.js", () => ({
+  applyAllProjects: applyAllProjectsMock,
+  applyProject: applyProjectMock,
   createProjectTerminalSession: createProjectTerminalSessionMock,
   deleteProject: vi.fn(),
   downAllProjects: vi.fn(),
@@ -78,8 +82,15 @@ const session: TerminalSession = {
 
 describe("web project actions", () => {
   beforeEach(() => {
+    applyAllProjectsMock.mockReset()
+    applyProjectMock.mockReset()
     createProjectTerminalSessionMock.mockReset()
     eventStreamCloseMock.mockReset()
+    vi.unstubAllGlobals()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it.effect("adds a new SSH terminal session instead of replacing terminal state", () =>
@@ -120,5 +131,39 @@ describe("web project actions", () => {
       expect(setMessage).toHaveBeenLastCalledWith(
         "Project is ready. SSH terminal is connecting for octocat/hello-world."
       )
+    }))
+
+  it.effect("applies a selected project through the project apply endpoint", () =>
+    Effect.gen(function*(_) {
+      applyProjectMock.mockImplementation(() => Effect.succeed(project))
+      const { context, reloadDashboard, setMessage } = makeBrowserActionContext()
+
+      applyProjectById("project-1", context)
+
+      yield* _(waitForAssertion(() => {
+        expect(applyProjectMock).toHaveBeenCalledWith("project-1")
+      }))
+
+      expect(context.setSelectedProjectId).toHaveBeenCalledWith("project-1")
+      expect(context.setSelectedProject).toHaveBeenCalledWith(project)
+      expect(reloadDashboard).toHaveBeenCalledTimes(1)
+      expect(setMessage).toHaveBeenLastCalledWith("Applied octocat/hello-world.")
+    }))
+
+  it.effect("confirms and applies all projects", () =>
+    Effect.gen(function*(_) {
+      const confirmMock = vi.fn(() => true)
+      vi.stubGlobal("confirm", confirmMock)
+      applyAllProjectsMock.mockImplementation(() => Effect.void)
+      const { context, reloadDashboard, setMessage } = makeBrowserActionContext()
+
+      runApplyAllProjects(context)
+
+      yield* _(waitForAssertion(() => {
+        expect(applyAllProjectsMock).toHaveBeenCalledWith(false)
+      }))
+
+      expect(reloadDashboard).toHaveBeenCalledTimes(1)
+      expect(setMessage).toHaveBeenLastCalledWith("Applied docker-git config to all projects.")
     }))
 })

@@ -30,7 +30,14 @@ export {
   saveSelectedDatabaseProfile
 } from "./actions-databases.js"
 export { closeSelectedProjectPort, loadSelectedProjectPorts, openSelectedProjectPort } from "./actions-port-forwards.js"
-export { attachProjectTerminalById, connectProjectById, loadSelectedProjectInfo } from "./actions-projects.js"
+export {
+  applyProjectById,
+  applySelectedProject,
+  attachProjectTerminalById,
+  connectProjectById,
+  loadSelectedProjectInfo,
+  runApplyAllProjects
+} from "./actions-projects.js"
 export {
   loadProjectTasksById,
   loadSelectedProjectTaskLogs,
