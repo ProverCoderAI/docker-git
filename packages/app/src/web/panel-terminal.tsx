@@ -21,6 +21,7 @@ type TerminalPanelProps = {
   readonly keyboardOpen: boolean
   readonly mobileMode: boolean
   readonly onAttachFailure: () => void
+  readonly onApplyProject?: (() => void) | undefined
   readonly onDetach: () => void
   readonly onKill: () => void
   readonly onMessage: (message: string) => void
@@ -249,14 +250,20 @@ const TerminalActionButton = (
 const TerminalHeaderActions = (
   {
     compactHeaderMode,
+    onApplyProject,
     onDetach,
     onKill,
     onOpenBrowser,
     onOpenTerminal,
     session
-  }: Pick<TerminalPanelProps, "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTerminal" | "session"> & {
-    readonly compactHeaderMode: boolean
-  }
+  }:
+    & Pick<
+      TerminalPanelProps,
+      "onApplyProject" | "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTerminal" | "session"
+    >
+    & {
+      readonly compactHeaderMode: boolean
+    }
 ): JSX.Element => (
   <div style={compactHeaderMode ? compactHeaderActionsStyle : headerActionsStyle}>
     {session.browserProjectId === undefined || onOpenBrowser === undefined
@@ -264,6 +271,13 @@ const TerminalHeaderActions = (
       : (
         <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onOpenBrowser}>
           {compactHeaderMode ? "Browser" : "Open browser"}
+        </TerminalActionButton>
+      )}
+    {session.browserProjectId === undefined || onApplyProject === undefined
+      ? null
+      : (
+        <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onApplyProject}>
+          Apply
         </TerminalActionButton>
       )}
     {session.browserProjectId === undefined || onOpenTerminal === undefined
@@ -285,21 +299,28 @@ const TerminalHeaderActions = (
 const TerminalHeader = (
   {
     compactHeaderMode,
+    onApplyProject,
     onDetach,
     onKill,
     onOpenBrowser,
     onOpenTerminal,
     session,
     status
-  }: Pick<TerminalPanelProps, "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTerminal" | "session"> & {
-    readonly compactHeaderMode: boolean
-    readonly status: TerminalStatus
-  }
+  }:
+    & Pick<
+      TerminalPanelProps,
+      "onApplyProject" | "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTerminal" | "session"
+    >
+    & {
+      readonly compactHeaderMode: boolean
+      readonly status: TerminalStatus
+    }
 ): JSX.Element => (
   <div style={compactHeaderMode ? compactHeaderStyle : headerStyle}>
     <TerminalHeaderTitle compactHeaderMode={compactHeaderMode} session={session} status={status} />
     <TerminalHeaderActions
       compactHeaderMode={compactHeaderMode}
+      onApplyProject={onApplyProject}
       onDetach={onDetach}
       onKill={onKill}
       onOpenBrowser={onOpenBrowser}
@@ -444,6 +465,7 @@ export const TerminalPanel = (
   {
     keyboardOpen,
     mobileMode,
+    onApplyProject,
     onAttachFailure,
     onDetach,
     onKill,
@@ -531,6 +553,7 @@ export const TerminalPanel = (
     <div style={terminalPanelStyle(mobileMode, keyboardOpen)}>
       <TerminalHeader
         compactHeaderMode={compactHeaderMode}
+        onApplyProject={onApplyProject}
         onDetach={() => {
           connectionRef.current.closing = true
           onDetach()

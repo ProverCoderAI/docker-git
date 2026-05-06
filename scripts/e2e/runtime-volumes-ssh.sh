@@ -33,15 +33,26 @@ SSH_KEY="$ROOT/dev_ssh_key"
 SSH_PUB_KEY="$ROOT/dev_ssh_key.pub"
 CLONE_LOG="$ROOT/clone.log"
 SSH_LOG="$ROOT/runtime-volumes-ssh.log"
+RUN_SCRIPT="$ROOT/run-runtime-volumes-ssh-clone.sh"
+# Cold controller and project image builds can be slow on GitHub-hosted runners.
+RUNTIME_CLONE_TIMEOUT="${DOCKER_GIT_E2E_RUNTIME_CLONE_TIMEOUT:-3300s}"
 HELPER_IMAGE=""
+FAILURE_DUMPED=0
 
 fail() {
   echo "e2e/runtime-volumes-ssh: $*" >&2
+  if [[ "$FAILURE_DUMPED" == "0" ]]; then
+    on_error "fail"
+  fi
   exit 1
 }
 
 on_error() {
   local line="$1"
+  if [[ "$FAILURE_DUMPED" == "1" ]]; then
+    return
+  fi
+  FAILURE_DUMPED=1
   echo "e2e/runtime-volumes-ssh: failed at line $line" >&2
   docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -n 80 || true
   if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" 2>/dev/null; then
@@ -131,19 +142,36 @@ CODEX_AUTO_UPDATE=0
 CODEX_SHARE_AUTH=1
 EOF_ENV
 
-(
-  cd "$REPO_ROOT"
-  dg_run_docker_git "$REPO_ROOT" clone "$REPO_URL" \
-    --force \
-    --gh-skip \
-    --no-ssh \
-    --authorized-keys "$ROOT/authorized_keys" \
-    --ssh-port "$SSH_PORT" \
-    --out-dir "$OUT_DIR_REL" \
-    --container-name "$CONTAINER_NAME" \
-    --service-name "$SERVICE_NAME" \
-    --volume-name "$VOLUME_NAME"
-) >"$CLONE_LOG" 2>&1
+cat > "$RUN_SCRIPT" <<'EOF_RUN'
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$REPO_ROOT"
+bun packages/app/dist/src/docker-git/main.js clone "$REPO_URL" \
+  --force \
+  --gh-skip \
+  --no-ssh \
+  --authorized-keys "$ROOT/authorized_keys" \
+  --ssh-port "$SSH_PORT" \
+  --out-dir "$OUT_DIR_REL" \
+  --container-name "$CONTAINER_NAME" \
+  --service-name "$SERVICE_NAME" \
+  --volume-name "$VOLUME_NAME"
+EOF_RUN
+chmod +x "$RUN_SCRIPT"
+
+export REPO_ROOT REPO_URL ROOT SSH_PORT OUT_DIR_REL CONTAINER_NAME SERVICE_NAME VOLUME_NAME
+
+set +e
+timeout "$RUNTIME_CLONE_TIMEOUT" "$RUN_SCRIPT" >"$CLONE_LOG" 2>&1
+clone_exit=$?
+set -e
+if [[ "$clone_exit" -eq 124 ]]; then
+  fail "clone command timed out after $RUNTIME_CLONE_TIMEOUT"
+fi
+if [[ "$clone_exit" -ne 0 ]]; then
+  fail "clone command failed with exit code $clone_exit"
+fi
 
 grep -Fq -- "Project created: octocat/hello-world" "$CLONE_LOG" \
   || fail "expected clone log to confirm project creation"

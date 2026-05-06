@@ -1,6 +1,8 @@
 import { updateActionPromptValue } from "./action-prompt.js"
 import { withBusy } from "./actions-shared.js"
 import {
+  applyProjectById,
+  applySelectedProject,
   attachProjectTerminalById,
   cancelBrowserActionPrompt,
   closeSelectedProjectPort,
@@ -10,6 +12,7 @@ import {
   openProjectBrowserById,
   openSelectedProjectBrowser,
   openSelectedProjectPort,
+  runApplyAllProjects,
   submitBrowserActionPrompt
 } from "./actions.js"
 import { deleteProjectTerminalSession } from "./api.js"
@@ -254,6 +257,15 @@ const bindTerminalActions = (
   actionContext: ReturnType<typeof createActionContext>,
   state: ReturnType<typeof useReadyState>
 ) => ({
+  onApplyProjectById: (projectId: string) => {
+    applyProjectById(projectId, actionContext)
+  },
+  onApplySelectedProject: () => {
+    applySelectedProject(actionContext)
+  },
+  onApplyAllProjects: () => {
+    runApplyAllProjects(actionContext)
+  },
   onOpenProjectTerminalById: (projectId: string, projectKey?: string) => {
     connectProjectById(projectId, actionContext, projectKey)
   },
