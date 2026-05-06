@@ -37,7 +37,7 @@
     },
     "packages/app": {
       "name": "@prover-coder-ai/docker-git",
-      "version": "1.0.81",
+      "version": "1.0.82",
       "bin": {
         "docker-git": "dist/src/docker-git/main.js",
       },
@@ -106,13 +106,9 @@
     },
     "packages/docker-git-session-sync": {
       "name": "@prover-coder-ai/docker-git-session-sync",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "bin": {
         "docker-git-session-sync": "dist/docker-git-session-sync.js",
-      },
-      "dependencies": {
-        "@effect/platform-node": "^0.106.0",
-        "effect": "^3.21.0",
       },
       "devDependencies": {
         "@effect/vitest": "^0.29.0",
