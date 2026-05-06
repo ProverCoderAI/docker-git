@@ -11,10 +11,17 @@ import { resolveViewportLayout, type ViewportLayout, type ViewportSize } from ".
 
 const refreshIntervalMs = 15_000
 
+type OptionalVisualViewportGlobal = typeof globalThis & {
+  readonly visualViewport?: VisualViewport | null
+}
+
+const readVisualViewport = (global: OptionalVisualViewportGlobal): VisualViewport | null =>
+  global.visualViewport ?? null
+
 const resolveViewportSize = (): ViewportSize => {
   const layoutHeight = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 900
   const layoutWidth = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1280
-  const visualViewport = globalThis.visualViewport
+  const visualViewport = readVisualViewport(globalThis)
 
   if (visualViewport === null) {
     return {

@@ -13,6 +13,8 @@ import {
 } from "./actions-shared.js"
 import { loadSelectedProjectTasks } from "./actions-tasks.js"
 import {
+  applyAllProjects,
+  applyProject,
   createProjectTerminalSession,
   deleteProject,
   downAllProjects,
@@ -120,6 +122,31 @@ export const connectProjectById = (
   })
 }
 
+export const applyProjectById = (
+  projectId: string,
+  context: BrowserActionContext
+) => {
+  context.setSelectedProjectId(projectId)
+  withBusy({
+    context,
+    effect: applyProject(projectId),
+    label: "Applying project",
+    onSuccess: (project) => {
+      context.reloadDashboard()
+      context.setSelectedProject(project)
+      context.setMessage(`Applied ${project.displayName}.`)
+    }
+  })
+}
+
+export const applySelectedProject = (context: BrowserActionContext) => {
+  const projectId = requireSelectedProjectId(context)
+  if (projectId === null) {
+    return
+  }
+  applyProjectById(projectId, context)
+}
+
 export const attachProjectTerminalById = (
   projectId: string,
   projectKey: string,
@@ -219,6 +246,21 @@ const runDownAllProjects = (context: BrowserActionContext) => {
     onSuccess: () => {
       context.reloadDashboard()
       context.setMessage("All projects were asked to stop.")
+    }
+  })
+}
+
+export const runApplyAllProjects = (context: BrowserActionContext) => {
+  if (!confirmAction("Apply docker-git config to all projects?")) {
+    return
+  }
+  withBusy({
+    context,
+    effect: applyAllProjects(false),
+    label: "Applying all projects",
+    onSuccess: () => {
+      context.reloadDashboard()
+      context.setMessage("Applied docker-git config to all projects.")
     }
   })
 }
