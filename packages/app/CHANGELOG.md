@@ -1,5 +1,12 @@
 # @prover-coder-ai/docker-git
 
+## 1.0.83
+
+### Patch Changes
+
+- Updated dependencies [[`c1e185a`](https://github.com/ProverCoderAI/docker-git/commit/c1e185a6c6ed669988a516d3ff7117e01021cf58)]:
+  - @prover-coder-ai/docker-git-session-sync@1.0.2
+
 ## 1.0.82
 
 ### Patch Changes
