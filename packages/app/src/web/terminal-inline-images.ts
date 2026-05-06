@@ -1,0 +1,148 @@
+import type { IDisposable, ILink, Terminal } from "xterm"
+
+import { detectTerminalImagePathMatches } from "./terminal-image-paths.js"
+import { resolveTerminalImageFetchUrl } from "./terminal-image-url.js"
+import type { TerminalLifecycleState } from "./terminal-panel-runtime-types.js"
+import type { ActiveTerminalSession } from "./terminal.js"
+
+export const terminalInlineImagePreviewLimit = 20
+export const terminalInlineImagePreviewRows = 7
+
+export const terminalInlineImageSpacer = "\r\n".repeat(terminalInlineImagePreviewRows)
+
+const terminalInlineImagePreviewColumns = 28
+
+type TerminalInlineImageEntry = {
+  readonly fetchUrl: string
+  readonly path: string
+}
+
+const openImage = (fetchUrl: string): void => {
+  const imageWindow = window.open(fetchUrl, "_blank", "noopener,noreferrer")
+  if (imageWindow === null) {
+    return
+  }
+  imageWindow.opener = null
+}
+
+const appendDecorationDisposable = (
+  lifecycle: TerminalLifecycleState,
+  disposable: IDisposable
+): void => {
+  lifecycle.inlineImageDisposables.push(disposable)
+  if (lifecycle.inlineImageDisposables.length <= terminalInlineImagePreviewLimit) {
+    return
+  }
+  lifecycle.inlineImageDisposables.shift()?.dispose()
+}
+
+const renderInlineImageElement = (
+  element: HTMLElement,
+  entry: TerminalInlineImageEntry
+): void => {
+  if (element.dataset["path"] === entry.path) {
+    return
+  }
+
+  const link = document.createElement("a")
+  link.href = entry.fetchUrl
+  link.rel = "noreferrer"
+  link.target = "_blank"
+  link.title = entry.path
+  link.style.alignItems = "center"
+  link.style.background = "#0d1218"
+  link.style.border = "1px solid #3a4652"
+  link.style.borderRadius = "6px"
+  link.style.boxSizing = "border-box"
+  link.style.cursor = "pointer"
+  link.style.display = "inline-flex"
+  link.style.height = "calc(100% - 8px)"
+  link.style.justifyContent = "center"
+  link.style.margin = "4px 0"
+  link.style.padding = "4px"
+  link.style.pointerEvents = "auto"
+  link.style.width = "100%"
+
+  const image = document.createElement("img")
+  image.alt = entry.path
+  image.src = entry.fetchUrl
+  image.style.borderRadius = "4px"
+  image.style.display = "block"
+  image.style.maxHeight = "100%"
+  image.style.maxWidth = "100%"
+  image.style.objectFit = "contain"
+
+  link.append(image)
+  element.dataset["path"] = entry.path
+  element.style.pointerEvents = "none"
+  element.replaceChildren(link)
+}
+
+export const appendTerminalInlineImagePreview = (
+  terminal: Terminal,
+  lifecycle: TerminalLifecycleState,
+  entry: TerminalInlineImageEntry
+): boolean => {
+  const marker = terminal.registerMarker(0)
+  const decoration = terminal.registerDecoration({
+    height: terminalInlineImagePreviewRows,
+    layer: "top",
+    marker,
+    width: Math.min(terminalInlineImagePreviewColumns, Math.max(1, terminal.cols))
+  })
+  if (decoration === undefined) {
+    marker.dispose()
+    return false
+  }
+
+  decoration.onRender((element) => {
+    renderInlineImageElement(element, entry)
+  })
+  appendDecorationDisposable(lifecycle, decoration)
+  return true
+}
+
+const imageLink = (
+  session: ActiveTerminalSession,
+  bufferLineNumber: number,
+  match: ReturnType<typeof detectTerminalImagePathMatches>[number]
+): ILink => {
+  const fetchUrl = resolveTerminalImageFetchUrl(session.websocketPath, match.path)
+  return {
+    activate: () => {
+      openImage(fetchUrl)
+    },
+    decorations: {
+      pointerCursor: true,
+      underline: true
+    },
+    range: {
+      end: {
+        x: match.endIndex,
+        y: bufferLineNumber
+      },
+      start: {
+        x: match.startIndex + 1,
+        y: bufferLineNumber
+      }
+    },
+    text: match.path
+  }
+}
+
+export const attachTerminalImageLinks = (
+  terminal: Terminal,
+  session: ActiveTerminalSession
+): IDisposable =>
+  terminal.registerLinkProvider({
+    provideLinks: (bufferLineNumber, callback) => {
+      const line = terminal.buffer.active.getLine(bufferLineNumber - 1)
+      if (line === undefined) {
+        callback([])
+        return
+      }
+      const text = line.translateToString(true)
+      const matches = detectTerminalImagePathMatches(text)
+      callback(matches.map((match) => imageLink(session, bufferLineNumber, match)))
+    }
+  })

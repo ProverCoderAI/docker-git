@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 
 import {
+  detectTerminalImagePathMatches,
   detectTerminalImagePaths,
   isSupportedTerminalImagePath,
   stripTerminalAnsi
@@ -10,6 +11,16 @@ describe("terminal image path detection", () => {
   it("detects a single absolute image path", () => {
     expect(detectTerminalImagePaths("see /var/data/issue232-main.png for details")).toEqual([
       "/var/data/issue232-main.png"
+    ])
+  })
+
+  it("returns match ranges for clickable image paths", () => {
+    expect(detectTerminalImagePathMatches("see /var/data/a.png.")).toEqual([
+      {
+        endIndex: 19,
+        path: "/var/data/a.png",
+        startIndex: 4
+      }
     ])
   })
 

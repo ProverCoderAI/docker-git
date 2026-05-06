@@ -2,8 +2,6 @@ import "xterm/css/xterm.css"
 
 import { type CSSProperties, type JSX, useCallback, useEffect, useRef, useState } from "react"
 
-import { appendTerminalImageGalleryEntries, type TerminalImageGalleryEntry } from "./terminal-image-gallery-core.js"
-import { resolveTerminalImageFetchUrl } from "./terminal-image-url.js"
 import {
   isModifierOnlyTerminalKey,
   type MobileTerminalKey,
@@ -146,72 +144,6 @@ const compactHeaderActionsStyle: CSSProperties = {
   ...headerActionsStyle,
   flexWrap: "wrap",
   gap: "4px"
-}
-
-const imageGalleryStyle: CSSProperties = {
-  background: "#0d1218",
-  borderTop: "1px solid #3a4652",
-  display: "flex",
-  flexShrink: 0,
-  flexWrap: "wrap",
-  gap: "8px",
-  maxHeight: "180px",
-  overflowY: "auto",
-  padding: "8px"
-}
-
-const imageGalleryItemStyle: CSSProperties = {
-  alignItems: "center",
-  background: "#080a0d",
-  border: "1px solid #3a4652",
-  borderRadius: "6px",
-  cursor: "pointer",
-  display: "flex",
-  flexDirection: "column",
-  gap: "4px",
-  padding: "4px"
-}
-
-const imageGalleryThumbnailStyle: CSSProperties = {
-  borderRadius: "4px",
-  display: "block",
-  maxHeight: "120px",
-  maxWidth: "180px",
-  objectFit: "contain"
-}
-
-const imageGalleryCaptionStyle: CSSProperties = {
-  color: "#8fa6c4",
-  fontSize: "11px",
-  maxWidth: "180px",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap"
-}
-
-const TerminalImageGallery = (
-  { entries }: { readonly entries: ReadonlyArray<TerminalImageGalleryEntry> }
-): JSX.Element | null => {
-  if (entries.length === 0) {
-    return null
-  }
-  return (
-    <div style={imageGalleryStyle}>
-      {entries.map((entry) => (
-        <a
-          href={entry.fetchUrl}
-          key={entry.path}
-          rel="noreferrer"
-          style={imageGalleryItemStyle}
-          target="_blank"
-          title={entry.path}
-        >
-          <img alt={entry.path} src={entry.fetchUrl} style={imageGalleryThumbnailStyle} />
-          <span style={imageGalleryCaptionStyle}>{entry.path}</span>
-        </a>
-      ))}
-    </div>
-  )
 }
 
 const mobileControlsCollapsedStyle: CSSProperties = {
@@ -618,18 +550,6 @@ export const TerminalPanel = (
   const [status, setStatus] = useState<TerminalStatus>("connecting")
   const [mobileControlsCollapsed, setMobileControlsCollapsed] = useState(false)
   const [mobileCtrlArmed, setMobileCtrlArmed] = useState(false)
-  const [imageGallery, setImageGallery] = useState<ReadonlyArray<TerminalImageGalleryEntry>>([])
-  const sessionWebsocketPath = session.websocketPath
-  useEffect(() => {
-    setImageGallery([])
-  }, [sessionWebsocketPath])
-  const handleImagePaths = useCallback((paths: ReadonlyArray<string>) => {
-    const additions = paths.map((path) => ({
-      fetchUrl: resolveTerminalImageFetchUrl(sessionWebsocketPath, path),
-      path
-    }))
-    setImageGallery((current) => appendTerminalImageGalleryEntries(current, additions))
-  }, [sessionWebsocketPath])
   const onAttachFailureRef = useRef(onAttachFailure)
   const onMessageRef = useRef(onMessage)
   useEffect(() => {
@@ -694,7 +614,6 @@ export const TerminalPanel = (
     hostRef,
     notifyMessage,
     onAttachFailure: notifyAttachFailure,
-    onImagePaths: handleImagePaths,
     runtimeRef,
     session,
     setStatus
@@ -723,7 +642,6 @@ export const TerminalPanel = (
         <div ref={hostRef} style={terminalHostStyle} />
         {hasBodyContent ? <div style={terminalBodyContentStyle}>{bodyContent}</div> : null}
       </div>
-      {hasBodyContent ? null : <TerminalImageGallery entries={imageGallery} />}
       {mobileMode && !hasBodyContent
         ? (
           <MobileTerminalControls

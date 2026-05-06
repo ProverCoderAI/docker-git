@@ -1,6 +1,7 @@
-import type { Terminal } from "xterm"
+import type { IDisposable, Terminal } from "xterm"
 import type { FitAddon } from "xterm-addon-fit"
 
+import type { TerminalInlineImageOutputSegment } from "./terminal-inline-images-core.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 
 export type TerminalStatus = "attached" | "connecting" | "error" | "exited" | "reconnecting"
@@ -17,6 +18,9 @@ export type TerminalInputController = {
 export type TerminalLifecycleState = {
   attachedOnce: boolean
   disposed: boolean
+  inlineImageDisposables: Array<IDisposable>
+  outputQueue: Array<TerminalInlineImageOutputSegment>
+  outputWriting: boolean
   readyNotified: boolean
   reconnectAttempt: number
   reconnectStartedAtMs: number | null
@@ -35,7 +39,6 @@ export type TerminalMessageHandlers = {
   readonly connectionRef: { current: TerminalConnectionState }
   readonly lifecycle: TerminalLifecycleState
   readonly notifyMessage: (message: string) => void
-  readonly onImagePaths?: ((paths: ReadonlyArray<string>) => void) | undefined
   readonly session: ActiveTerminalSession
   readonly setStatus: (status: TerminalStatus) => void
   readonly terminal: Terminal
@@ -45,6 +48,7 @@ export type TerminalCleanupArgs = {
   readonly connectionRef: { current: TerminalConnectionState }
   readonly lifecycle: TerminalLifecycleState
   readonly notifyMessage: (message: string) => void
+  readonly removeImageLinks: () => void
   readonly removeImagePaste: () => void
   readonly removeInput: () => void
   readonly removeResize: () => void
@@ -60,7 +64,6 @@ export type TerminalLifecycleArgs = {
   readonly hostRef: { readonly current: HTMLDivElement | null }
   readonly notifyMessage: (message: string) => void
   readonly onAttachFailure: () => void
-  readonly onImagePaths?: ((paths: ReadonlyArray<string>) => void) | undefined
   readonly runtimeRef: { current: TerminalInputController | null }
   readonly session: ActiveTerminalSession
   readonly setStatus: (status: TerminalStatus) => void
