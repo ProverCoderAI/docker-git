@@ -638,9 +638,7 @@ export const TerminalPanel = (
         session={session}
         status={status}
       />
-      <div
-        style={terminalBodyFrameStyle(compactTypingMode, mobileMode)}
-      >
+      <div style={terminalBodyFrameStyle(compactTypingMode, mobileMode)}>
         <div ref={hostRef} style={terminalHostStyle} />
         {hasBodyContent ? <div style={terminalBodyContentStyle}>{bodyContent}</div> : null}
       </div>
