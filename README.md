@@ -55,7 +55,7 @@ docker-git apply-all
 docker-git apply-all --active
 ```
 
-- `apply` применяет конфиг к одному проекту. `--no-up` только обновляет файлы без `docker compose up`. В текущем API-only host mode команда ещё недоступна.
+- `apply` применяет конфиг к одному проекту. `--no-up` только обновляет файлы без `docker compose up`.
 - `apply-all` применяет конфиг ко всем проектам. `--active` только к запущенным контейнерам.
 
 

@@ -99,4 +99,37 @@ describe("classifyDockerAccessIssue", () => {
       expect(error.details).toContain("Fallback DOCKER_HOST=unix:///run/user/")
     })
   )
+
+  it.effect("does not probe rootless fallbacks when DOCKER_HOST is explicit", () =>
+    Effect.gen(function*(_) {
+      const executor = makeDockerInfoExecutor()
+      const previousDockerHost = process.env["DOCKER_HOST"]
+      const restoreEnv = Effect.sync(() => {
+        if (previousDockerHost === undefined) {
+          delete process.env["DOCKER_HOST"]
+        } else {
+          process.env["DOCKER_HOST"] = previousDockerHost
+        }
+      })
+
+      yield* _(Effect.sync(() => {
+        process.env["DOCKER_HOST"] = "unix:///explicit-docker.sock"
+      }))
+
+      const error = yield* _(
+        Effect.ensuring(
+          Effect.scoped(
+            ensureDockerDaemonAccess("/tmp").pipe(
+              Effect.provideService(CommandExecutor.CommandExecutor, executor),
+              Effect.flip
+            )
+          ),
+          restoreEnv
+        )
+      )
+
+      expect(error.issue).toBe("PermissionDenied")
+      expect(error.details).not.toContain("Fallback DOCKER_HOST=")
+    })
+  )
 })

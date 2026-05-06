@@ -43,8 +43,8 @@ on_error() {
   local line="$1"
   echo "e2e/opencode-autoconnect: failed at line $line" >&2
   docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -n 50 || true
-  if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" 2>/dev/null; then
-    docker exec -u dev "$CONTAINER_NAME" bash -lc '
+  if dg_project_docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" 2>/dev/null; then
+    dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc '
       echo "--- auth mounts ---"
       ls -la ~/.codex ~/.codex-shared ~/.local/share/opencode 2>/dev/null || true
       echo "--- opencode auth link ---"
@@ -56,9 +56,9 @@ on_error() {
       ls -la ~/.codex-shared/opencode/auth.json 2>/dev/null || true
     ' || true
   fi
-  if [[ -d "$OUT_DIR" ]] && [[ -f "$OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$OUT_DIR" && docker compose ps) || true
-    (cd "$OUT_DIR" && docker compose logs --no-color --tail 200) || true
+  if [[ -d "$OUT_DIR" ]]; then
+    dg_project_compose "$OUT_DIR" ps || true
+    dg_project_compose "$OUT_DIR" logs --no-color --tail 200 || true
   fi
 }
 
@@ -69,10 +69,10 @@ cleanup() {
     echo "e2e/opencode-autoconnect: out dir: $OUT_DIR" >&2
     return
   fi
-  (cd "$REPO_ROOT" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
-  if [[ -d "$OUT_DIR" ]] && [[ -f "$OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$OUT_DIR" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
+  if [[ -d "$OUT_DIR" ]]; then
+    dg_project_compose "$OUT_DIR" down -v --remove-orphans >/dev/null 2>&1 || true
   fi
+  (cd "$REPO_ROOT" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
   rm -rf "$ROOT" >/dev/null 2>&1 || true
 }
 
@@ -160,23 +160,24 @@ while [[ "$clone_attempt" -le "$clone_attempts" ]]; do
 done
 [[ "$clone_exit" -eq 0 ]] || fail "docker-git clone failed after $clone_attempts attempts (last exit: $clone_exit)"
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" || fail "expected repo to be cloned at: $TARGET_DIR"
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" \
+  || fail "expected repo to be cloned at: $TARGET_DIR"
 
 # Basic sanity checks.
-docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"
+dg_project_docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"
 
-docker exec "$CONTAINER_NAME" opencode --version >/dev/null
-docker exec -u dev "$CONTAINER_NAME" oh-my-opencode --version >/dev/null
+dg_project_docker exec "$CONTAINER_NAME" opencode --version >/dev/null
+dg_project_docker exec -u dev "$CONTAINER_NAME" oh-my-opencode --version >/dev/null
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc \
   'test -f ~/.config/opencode/opencode.json && grep -q "oh-my-opencode" ~/.config/opencode/opencode.json'
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc \
   'test "$(readlink ~/.local/share/opencode/auth.json)" = "/home/dev/.codex-shared/opencode/auth.json"'
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.codex-shared/auth.json'
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.codex-shared/auth.json'
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc \
   'bun - <<'\''BUN'\''
 import { readFileSync } from "node:fs"
 
@@ -198,5 +199,5 @@ process.exit(1)
 BUN'
 
 # Exercises Bun-based plugin install path (regression test for BUN_INSTALL env).
-docker exec -u dev "$CONTAINER_NAME" bash -lc \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc \
   'output="$(timeout 300s opencode models openai)" && grep -m 1 -E "^openai/" <<< "$output" >/dev/null'

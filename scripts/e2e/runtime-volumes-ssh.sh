@@ -34,9 +34,9 @@ SSH_PUB_KEY="$ROOT/dev_ssh_key.pub"
 CLONE_LOG="$ROOT/clone.log"
 SSH_LOG="$ROOT/runtime-volumes-ssh.log"
 RUN_SCRIPT="$ROOT/run-runtime-volumes-ssh-clone.sh"
+SSH_PROBE_SCRIPT="$ROOT/run-runtime-volumes-ssh-probe.sh"
 # Cold controller and project image builds can be slow on GitHub-hosted runners.
 RUNTIME_CLONE_TIMEOUT="${DOCKER_GIT_E2E_RUNTIME_CLONE_TIMEOUT:-3300s}"
-HELPER_IMAGE=""
 FAILURE_DUMPED=0
 
 fail() {
@@ -55,9 +55,9 @@ on_error() {
   FAILURE_DUMPED=1
   echo "e2e/runtime-volumes-ssh: failed at line $line" >&2
   docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -n 80 || true
-  if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" 2>/dev/null; then
-    docker inspect "$CONTAINER_NAME" || true
-    docker logs "$CONTAINER_NAME" --tail 200 || true
+  if dg_project_docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" 2>/dev/null; then
+    dg_project_docker inspect "$CONTAINER_NAME" || true
+    dg_project_docker logs "$CONTAINER_NAME" --tail 200 || true
   fi
   if [[ -f "$CLONE_LOG" ]]; then
     echo "--- clone log ---" >&2
@@ -67,9 +67,9 @@ on_error() {
     echo "--- host ssh log ---" >&2
     cat "$SSH_LOG" >&2 || true
   fi
-  if [[ -d "$OUT_DIR" ]] && [[ -f "$OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$OUT_DIR" && docker compose ps) || true
-    (cd "$OUT_DIR" && docker compose logs --no-color --tail 200) || true
+  if [[ -d "$OUT_DIR" ]]; then
+    dg_project_compose "$OUT_DIR" ps || true
+    dg_project_compose "$OUT_DIR" logs --no-color --tail 200 || true
   fi
 }
 
@@ -80,11 +80,11 @@ cleanup() {
     echo "e2e/runtime-volumes-ssh: out dir: $OUT_DIR" >&2
     return
   fi
-  if [[ -d "$OUT_DIR" ]] && [[ -f "$OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$OUT_DIR" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
+  if [[ -d "$OUT_DIR" ]]; then
+    dg_project_compose "$OUT_DIR" down -v --remove-orphans >/dev/null 2>&1 || true
   fi
-  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-  docker volume rm \
+  dg_project_docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  dg_project_docker volume rm \
     "$VOLUME_NAME" \
     "${VOLUME_NAME}-bootstrap" \
     "${SERVICE_NAME}_${VOLUME_NAME}" \
@@ -99,6 +99,7 @@ trap cleanup EXIT
 command -v script >/dev/null 2>&1 || fail "missing 'script' command (util-linux)"
 command -v timeout >/dev/null 2>&1 || fail "missing 'timeout' command"
 command -v ssh-keygen >/dev/null 2>&1 || fail "missing 'ssh-keygen' command"
+REAL_SSH="$(command -v ssh)" || fail "missing 'ssh' command"
 
 mkdir -p "$ROOT/.orch/auth/codex"
 ssh-keygen -q -t ed25519 -N "" -C "docker-git-e2e" -f "$SSH_KEY" >/dev/null
@@ -182,10 +183,10 @@ grep -Fq -- "Project ID: " "$CLONE_LOG" \
 grep -Fq -- "Status: " "$CLONE_LOG" \
   || fail "expected clone log to print current project status"
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" \
   || fail "expected cloned repo at: $TARGET_DIR"
 
-MOUNTS_JSON="$(docker inspect --format '{{json .Mounts}}' "$CONTAINER_NAME")"
+MOUNTS_JSON="$(dg_project_docker inspect --format '{{json .Mounts}}' "$CONTAINER_NAME")"
 MOUNTS_JSON="$MOUNTS_JSON" HOME_VOLUME_NAME="$VOLUME_NAME" bun - <<'BUN'
 const mounts = JSON.parse(process.env.MOUNTS_JSON)
 const byDestination = new Map(mounts.map((mount) => [mount.Destination, mount]))
@@ -218,37 +219,42 @@ expect(!byDestination.has("/home/dev/.codex"), "did not expect a direct bind mou
 expect(!byDestination.has("/home/dev/.ssh/authorized_keys"), "did not expect a direct bind mount for authorized_keys")
 BUN
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/authorized_keys' \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/authorized_keys' \
   || fail "expected authorized_keys to be mirrored into the home volume"
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/env/global.env' \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/env/global.env' \
   || fail "expected global env in docker-git runtime state"
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/env/project.env' \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -f ~/.docker-git/.orch/env/project.env' \
   || fail "expected project env in docker-git runtime state"
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -d ~/.docker-git/.orch/auth/codex' \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -d ~/.docker-git/.orch/auth/codex' \
   || fail "expected bootstrap Codex auth directory inside docker-git runtime state"
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -d ~/.codex-shared' \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc 'test -d ~/.codex-shared' \
   || fail "expected shared Codex auth volume to be mounted"
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc \
   'test -L ~/.codex/auth.json && test "$(readlink ~/.codex/auth.json)" = "/home/dev/.codex-shared/auth.json"' \
   || fail "expected ~/.codex/auth.json to point at the shared Codex volume"
-
-HELPER_IMAGE="$(docker inspect --format '{{.Config.Image}}' "$CONTAINER_NAME")"
 
 wait_for_ssh_ready() {
   local attempts=60
   local attempt=1
 
   while [[ "$attempt" -le "$attempts" ]]; do
-    if docker run --rm --network host \
-      -v "$ROOT":/mnt \
-      --entrypoint bash \
-      "$HELPER_IMAGE" \
-      -lc "ssh -i /mnt/dev_ssh_key -T -o BatchMode=yes -o ConnectTimeout=2 -o ConnectionAttempts=1 -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $SSH_PORT dev@localhost true" \
+    if dg_project_ssh_to_container "$CONTAINER_NAME" "$REAL_SSH" \
+      -i "$SSH_KEY" \
+      -T \
+      -o BatchMode=yes \
+      -o ConnectTimeout=2 \
+      -o ConnectionAttempts=1 \
+      -o LogLevel=ERROR \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null \
+      -p "$SSH_PORT" \
+      dev@localhost \
+      true \
       >/dev/null 2>&1; then
       return 0
     fi
@@ -262,10 +268,25 @@ wait_for_ssh_ready() {
 
 wait_for_ssh_ready || fail "ssh did not become ready on localhost:$SSH_PORT"
 
+cat > "$SSH_PROBE_SCRIPT" <<EOF_SSH_PROBE
+#!/usr/bin/env bash
+set -euo pipefail
+source "$REPO_ROOT/scripts/e2e/_lib.sh"
+dg_project_ssh_to_container "$CONTAINER_NAME" "$REAL_SSH" \\
+  -i "$SSH_KEY" \\
+  -tt \\
+  -Y \\
+  -o LogLevel=ERROR \\
+  -o StrictHostKeyChecking=no \\
+  -o UserKnownHostsFile=/dev/null \\
+  -p "$SSH_PORT" \\
+  dev@localhost \\
+  "bash -lic 'codex --version >/dev/null && exit'"
+EOF_SSH_PROBE
+chmod +x "$SSH_PROBE_SCRIPT"
+
 set +e
-timeout 45s script -q -e -c \
-  "docker run --rm -i -t --network host -v \"$ROOT\":/mnt --entrypoint bash \"$HELPER_IMAGE\" -lc \"ssh -i /mnt/dev_ssh_key -tt -Y -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $SSH_PORT dev@localhost \\\"bash -lic 'codex --version >/dev/null && exit'\\\"\"" \
-  /dev/null >"$SSH_LOG" 2>&1
+timeout 45s script -q -e -c "$SSH_PROBE_SCRIPT" /dev/null >"$SSH_LOG" 2>&1
 ssh_exit=$?
 set -e
 

@@ -182,8 +182,7 @@ const runProjectComposeUp = (
         `docker compose up -d failed in ${projectDir}; falling back to docker compose up -d --build.`
       ).pipe(
         Effect.zipRight(runDockerComposeUp(projectDir))
-      )
-    )
+      ))
   )
 }
 
@@ -261,11 +260,9 @@ export const runDockerComposeUpWithPortCheck = (
     yield* _(ensureComposeNetworkReady(projectDir, resolvedTemplate))
     yield* _(ensureSharedCodexVolumeReady(projectDir, resolvedTemplate))
     yield* _(runProjectComposeUp(projectDir, options.buildMode ?? "build"))
-    if (options.waitForPostStart === false) {
-      yield* _(startProjectPostStartSelfHealInBackground(projectDir, resolvedTemplate))
-    } else {
-      yield* _(runProjectPostStartSelfHeal(projectDir, resolvedTemplate))
-    }
+    yield* (options.waitForPostStart === false
+      ? _(startProjectPostStartSelfHealInBackground(projectDir, resolvedTemplate))
+      : _(runProjectPostStartSelfHeal(projectDir, resolvedTemplate)))
 
     return resolvedTemplate
   })
