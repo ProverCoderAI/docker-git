@@ -723,7 +723,7 @@ export const TerminalPanel = (
         <div ref={hostRef} style={terminalHostStyle} />
         {hasBodyContent ? <div style={terminalBodyContentStyle}>{bodyContent}</div> : null}
       </div>
-      <TerminalImageGallery entries={imageGallery} />
+      {hasBodyContent ? null : <TerminalImageGallery entries={imageGallery} />}
       {mobileMode && !hasBodyContent
         ? (
           <MobileTerminalControls
