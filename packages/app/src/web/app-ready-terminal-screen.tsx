@@ -1,15 +1,18 @@
 import { Effect } from "effect"
-import type { CSSProperties, JSX } from "react"
+import { type CSSProperties, type JSX, useEffect, useState } from "react"
 
 import { deleteTerminalSessionByPath } from "./api.js"
 import { canOpenProjectBrowser } from "./app-ready-browser-openable.js"
 import type { ReadyLayoutProps } from "./app-ready-layout.js"
 import { Box, Text } from "./elements.js"
+import { TaskPanel } from "./panel-tasks.js"
 import { TerminalPanel } from "./panel-terminal.js"
 import { type BrowserScreen, projectPickerScreen } from "./screen.js"
 import { shouldShowTerminalTabs } from "./terminal-mobile-layout.js"
 import { terminalSessionId } from "./terminal-state.js"
 import type { ActiveTerminalSession } from "./terminal.js"
+
+type TerminalWorkspaceView = "terminal" | "tasks"
 
 type TerminalScreenProps = Pick<
   ReadyLayoutProps,
@@ -18,11 +21,20 @@ type TerminalScreenProps = Pick<
   | "onOpenProjectBrowserById"
   | "onOpenProjectTaskManagerById"
   | "onOpenProjectTerminalById"
+  | "onLoadProjectTaskLogs"
+  | "onProjectTasksIncludeDefaultChange"
+  | "onRefreshProjectTasks"
   | "onSelectTerminal"
   | "onSetActiveScreen"
+  | "onStopProjectTask"
   | "onTerminalClose"
   | "onTerminalMessage"
+  | "project"
   | "projectBrowser"
+  | "projectTaskLogs"
+  | "projectTasks"
+  | "projectTasksIncludeDefault"
+  | "selectedProjectSummary"
   | "terminalSessions"
   | "viewportLayout"
 >
@@ -34,13 +46,24 @@ type TerminalPaneProps =
     | "onOpenProjectBrowserById"
     | "onOpenProjectTaskManagerById"
     | "onOpenProjectTerminalById"
+    | "onLoadProjectTaskLogs"
+    | "onProjectTasksIncludeDefaultChange"
+    | "onRefreshProjectTasks"
     | "onSetActiveScreen"
+    | "onStopProjectTask"
     | "onTerminalClose"
     | "onTerminalMessage"
+    | "project"
     | "projectBrowser"
+    | "projectTaskLogs"
+    | "projectTasks"
+    | "projectTasksIncludeDefault"
+    | "selectedProjectSummary"
     | "viewportLayout"
   >
   & {
+    readonly taskManagerOpen: boolean
+    readonly onCloseTaskManager: () => void
     readonly singleSession: boolean
     readonly terminalSession: ActiveTerminalSession
   }
@@ -72,7 +95,82 @@ const activeTerminalPaneStyle: CSSProperties = {
   overflow: "hidden"
 }
 
+const taskManagerBodyStyle: CSSProperties = {
+  background: "#080a0d",
+  boxSizing: "border-box",
+  color: "#d6e5f7",
+  height: "100%",
+  overflow: "auto",
+  padding: "10px"
+}
+
+const taskManagerToolbarStyle: CSSProperties = {
+  alignItems: "center",
+  display: "flex",
+  justifyContent: "flex-end",
+  marginBottom: "10px"
+}
+
+const taskManagerReturnButtonStyle: CSSProperties = {
+  background: "#171d24",
+  border: "1px solid #3a4652",
+  borderRadius: "8px",
+  color: "#d6e5f7",
+  cursor: "pointer",
+  font: "inherit",
+  padding: "6px 10px"
+}
+
 const terminalTabLabel = (session: ActiveTerminalSession): string => session.browserProjectName ?? session.header
+
+const TerminalTaskManagerBody = (
+  {
+    onClose,
+    onLoadProjectTaskLogs,
+    onProjectTasksIncludeDefaultChange,
+    onRefreshProjectTasks,
+    onStopProjectTask,
+    project,
+    projectTaskLogs,
+    projectTasks,
+    projectTasksIncludeDefault,
+    selectedProjectSummary
+  }:
+    & Pick<
+      TerminalScreenProps,
+      | "onLoadProjectTaskLogs"
+      | "onProjectTasksIncludeDefaultChange"
+      | "onRefreshProjectTasks"
+      | "onStopProjectTask"
+      | "project"
+      | "projectTaskLogs"
+      | "projectTasks"
+      | "projectTasksIncludeDefault"
+      | "selectedProjectSummary"
+    >
+    & {
+      readonly onClose: () => void
+    }
+): JSX.Element => (
+  <div style={taskManagerBodyStyle}>
+    <div style={taskManagerToolbarStyle}>
+      <button onClick={onClose} style={taskManagerReturnButtonStyle} type="button">
+        Terminal
+      </button>
+    </div>
+    <TaskPanel
+      includeDefault={projectTasksIncludeDefault}
+      logs={projectTaskLogs}
+      onIncludeDefaultChange={onProjectTasksIncludeDefaultChange}
+      onLoadLogs={onLoadProjectTaskLogs}
+      onRefreshTasks={onRefreshProjectTasks}
+      onStopTask={onStopProjectTask}
+      project={project}
+      selectedProjectSummary={selectedProjectSummary}
+      snapshot={projectTasks}
+    />
+  </div>
+)
 
 const TerminalTab = (
   {
@@ -211,14 +309,25 @@ const TerminalTabs = (
 const TerminalPane = (
   {
     onApplyProjectById,
+    onCloseTaskManager,
+    onLoadProjectTaskLogs,
     onOpenProjectBrowserById,
     onOpenProjectTaskManagerById,
     onOpenProjectTerminalById,
+    onProjectTasksIncludeDefaultChange,
+    onRefreshProjectTasks,
     onSetActiveScreen,
+    onStopProjectTask,
     onTerminalClose,
     onTerminalMessage,
+    project,
     projectBrowser,
+    projectTaskLogs,
+    projectTasks,
+    projectTasksIncludeDefault,
+    selectedProjectSummary,
     singleSession,
+    taskManagerOpen,
     terminalSession,
     viewportLayout
   }: TerminalPaneProps
@@ -227,6 +336,22 @@ const TerminalPane = (
   const browserProjectId = terminalSession.browserProjectId
   const browserProjectKey = terminalSession.browserProjectKey
   const canOpenBrowser = canOpenProjectBrowser(projectBrowser, browserProjectId)
+  const bodyContent = taskManagerOpen && browserProjectId !== undefined
+    ? (
+      <TerminalTaskManagerBody
+        onClose={onCloseTaskManager}
+        onLoadProjectTaskLogs={onLoadProjectTaskLogs}
+        onProjectTasksIncludeDefaultChange={onProjectTasksIncludeDefaultChange}
+        onRefreshProjectTasks={onRefreshProjectTasks}
+        onStopProjectTask={onStopProjectTask}
+        project={project}
+        projectTaskLogs={projectTaskLogs}
+        projectTasks={projectTasks}
+        projectTasksIncludeDefault={projectTasksIncludeDefault}
+        selectedProjectSummary={selectedProjectSummary}
+      />
+    )
+    : undefined
   const detachTerminalSession = (): void => {
     onTerminalClose(sessionId)
     if (singleSession) {
@@ -236,6 +361,7 @@ const TerminalPane = (
   return (
     <div style={activeTerminalPaneStyle}>
       <TerminalPanel
+        bodyContent={bodyContent}
         keyboardOpen={viewportLayout.keyboardOpen}
         mobileMode={viewportLayout.mode === "mobile"}
         onAttachFailure={() => {
@@ -279,12 +405,16 @@ const TerminalPane = (
 }
 
 export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null => {
-  if (props.terminalSessions.length === 0) {
-    return null
-  }
+  const [terminalView, setTerminalView] = useState<TerminalWorkspaceView>("terminal")
   const mobileMode = props.viewportLayout.mode === "mobile"
   const activeSessionId = resolveActiveTerminalSessionId(props.terminalSessions, props.activeTerminalSessionId)
   const activeSession = props.terminalSessions.find((session) => terminalSessionId(session) === activeSessionId)
+  useEffect(() => {
+    setTerminalView("terminal")
+  }, [activeSession?.browserProjectId, activeSessionId])
+  if (props.terminalSessions.length === 0) {
+    return null
+  }
   return (
     <Box flexDirection="column" flexGrow={1} gap={mobileMode ? "4px" : 1} minHeight={0} overflow="hidden">
       {shouldShowTerminalTabs(mobileMode, props.terminalSessions.length)
@@ -305,14 +435,30 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
             <TerminalPane
               key={terminalSessionId(activeSession)}
               onApplyProjectById={props.onApplyProjectById}
+              onCloseTaskManager={() => {
+                setTerminalView("terminal")
+              }}
+              onLoadProjectTaskLogs={props.onLoadProjectTaskLogs}
               onOpenProjectBrowserById={props.onOpenProjectBrowserById}
-              onOpenProjectTaskManagerById={props.onOpenProjectTaskManagerById}
+              onOpenProjectTaskManagerById={(projectId) => {
+                setTerminalView("tasks")
+                props.onOpenProjectTaskManagerById(projectId)
+              }}
               onOpenProjectTerminalById={props.onOpenProjectTerminalById}
+              onProjectTasksIncludeDefaultChange={props.onProjectTasksIncludeDefaultChange}
+              onRefreshProjectTasks={props.onRefreshProjectTasks}
               onSetActiveScreen={props.onSetActiveScreen}
+              onStopProjectTask={props.onStopProjectTask}
               onTerminalClose={props.onTerminalClose}
               onTerminalMessage={props.onTerminalMessage}
+              project={props.project}
               projectBrowser={props.projectBrowser}
+              projectTaskLogs={props.projectTaskLogs}
+              projectTasks={props.projectTasks}
+              projectTasksIncludeDefault={props.projectTasksIncludeDefault}
+              selectedProjectSummary={props.selectedProjectSummary}
               singleSession={props.terminalSessions.length === 1}
+              taskManagerOpen={terminalView === "tasks"}
               terminalSession={activeSession}
               viewportLayout={props.viewportLayout}
             />

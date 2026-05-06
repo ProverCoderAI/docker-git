@@ -29,6 +29,7 @@ type TerminalPanelProps = {
   readonly onOpenTaskManager?: (() => void) | undefined
   readonly onOpenTerminal?: (() => void) | undefined
   readonly session: ActiveTerminalSession
+  readonly bodyContent?: JSX.Element | undefined
 }
 
 const panelStyle: CSSProperties = {
@@ -86,6 +87,31 @@ const terminalBodyStyle = (compactTypingMode: boolean, mobileMode: boolean): CSS
     return bodyStyleKeyboardOpen
   }
   return mobileMode ? bodyStyleMobile : bodyStyle
+}
+
+const terminalBodyFrameStyle = (compactTypingMode: boolean, mobileMode: boolean): CSSProperties => ({
+  ...terminalBodyStyle(compactTypingMode, mobileMode),
+  boxSizing: "border-box",
+  overflow: "hidden",
+  position: "relative"
+})
+
+const terminalHostStyle: CSSProperties = {
+  height: "100%",
+  minHeight: 0,
+  overflow: "hidden"
+}
+
+const terminalBodyContentStyle: CSSProperties = {
+  bottom: 0,
+  height: "100%",
+  left: 0,
+  minHeight: 0,
+  overflow: "auto",
+  position: "absolute",
+  right: 0,
+  top: 0,
+  zIndex: 1
 }
 
 const closeButtonStyle: CSSProperties = {
@@ -504,6 +530,7 @@ const MobileTerminalControls = (
 
 export const TerminalPanel = (
   {
+    bodyContent,
     keyboardOpen,
     mobileMode,
     onApplyProject,
@@ -539,6 +566,7 @@ export const TerminalPanel = (
   }, [])
   const compactHeaderMode = resolveTerminalCompactHeaderMode(mobileMode)
   const compactTypingMode = resolveTerminalTypingMode(mobileMode, keyboardOpen)
+  const hasBodyContent = bodyContent !== undefined
 
   useEffect(() => {
     if (!mobileMode) {
@@ -611,10 +639,12 @@ export const TerminalPanel = (
         status={status}
       />
       <div
-        ref={hostRef}
-        style={terminalBodyStyle(compactTypingMode, mobileMode)}
-      />
-      {mobileMode
+        style={terminalBodyFrameStyle(compactTypingMode, mobileMode)}
+      >
+        <div ref={hostRef} style={terminalHostStyle} />
+        {hasBodyContent ? <div style={terminalBodyContentStyle}>{bodyContent}</div> : null}
+      </div>
+      {mobileMode && !hasBodyContent
         ? (
           <MobileTerminalControls
             collapsed={mobileControlsCollapsed}

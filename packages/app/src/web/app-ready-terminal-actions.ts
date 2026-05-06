@@ -11,7 +11,28 @@ import { deleteProjectTerminalSession } from "./api.js"
 import type { createActionContext } from "./app-ready-actions.js"
 import type { ReadyState } from "./app-ready-hooks.js"
 import { browserMenuIndex } from "./menu.js"
-import { projectPickerScreen } from "./screen.js"
+
+type TerminalTaskManagerState = Pick<
+  ReadyState,
+  | "setProjectTaskLogs"
+  | "setProjectTasks"
+  | "setProjectTasksIncludeDefault"
+  | "setSelectedMenuIndex"
+  | "setSelectedProjectId"
+>
+
+export const openTerminalTaskManager = (
+  actionContext: ReturnType<typeof createActionContext>,
+  state: TerminalTaskManagerState,
+  projectId: string
+): void => {
+  state.setSelectedProjectId(projectId)
+  state.setSelectedMenuIndex(browserMenuIndex("Tasks"))
+  state.setProjectTasks(null)
+  state.setProjectTaskLogs("")
+  state.setProjectTasksIncludeDefault(false)
+  loadProjectTasksById(actionContext, projectId, { includeDefault: false })
+}
 
 export const bindTerminalActions = (
   actionContext: ReturnType<typeof createActionContext>,
@@ -30,15 +51,7 @@ export const bindTerminalActions = (
     connectProjectById(projectId, actionContext, projectKey)
   },
   onOpenProjectTaskManagerById: (projectId: string) => {
-    state.setSelectedProjectId(projectId)
-    state.setSelectedMenuIndex(browserMenuIndex("Tasks"))
-    state.setProjectNavigationArmed(true)
-    state.setActiveScreen(projectPickerScreen())
-    state.deactivateTerminalWorkspace()
-    state.setProjectTasks(null)
-    state.setProjectTaskLogs("")
-    state.setProjectTasksIncludeDefault(false)
-    loadProjectTasksById(actionContext, projectId, { includeDefault: false })
+    openTerminalTaskManager(actionContext, state, projectId)
   },
   onAttachProjectTerminalSession: (
     projectId: string,
