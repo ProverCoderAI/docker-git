@@ -73,6 +73,13 @@ const retryDockerComposeUp = (
     Effect.retry(dockerComposeUpRetrySchedule)
   )
 
+export type DockerComposeUpBuildMode = "build" | "reuse"
+
+const dockerComposeUpArgs = (
+  buildMode: DockerComposeUpBuildMode
+): ReadonlyArray<string> =>
+  buildMode === "reuse" ? ["up", "-d"] : ["up", "-d", "--build"]
+
 // CHANGE: run docker compose up -d --build in the target directory
 // WHY: provide a controlled shell effect for image creation
 // QUOTE(ТЗ): "создавать докер образы"
@@ -84,11 +91,14 @@ const retryDockerComposeUp = (
 // INVARIANT: command output is inherited from the parent process
 // COMPLEXITY: O(command)
 export const runDockerComposeUp = (
-  cwd: string
+  cwd: string,
+  options: {
+    readonly buildMode?: DockerComposeUpBuildMode
+  } = {}
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   retryDockerComposeUp(
     cwd,
-    runCompose(cwd, ["up", "-d", "--build"], [Number(ExitCode(0))])
+    runCompose(cwd, dockerComposeUpArgs(options.buildMode ?? "build"), [Number(ExitCode(0))])
   )
 
 export const dockerComposeUpRecreateArgs: ReadonlyArray<string> = [

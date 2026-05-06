@@ -1,4 +1,4 @@
-import { type AppError, prepareProjectSsh, renderError, waitForProjectSshReady } from "@effect-template/lib"
+import { type AppError, prepareProjectSsh, probeProjectSshReady, renderError, waitForProjectSshReady } from "@effect-template/lib"
 import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
 import { parseInspectNetworkEntry } from "@effect-template/lib/shell/docker-inspect-parse"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
@@ -33,7 +33,7 @@ import {
   type TerminalOutputBuffer
 } from "./terminal-output-buffer.js"
 import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
-import { getProjectItemById, upProject } from "./projects.js"
+import { getProject, getProjectItemById, upProject } from "./projects.js"
 import { attachWebSocketHeartbeat } from "./websocket-heartbeat.js"
 
 type TerminalClientMessage =
@@ -609,49 +609,61 @@ const registerRecord = (
   return session
 }
 
+const emitTerminalStatus = (projectId: string, phase: string, message: string) =>
+  Effect.sync(() => {
+    emitProjectEvent(projectId, "project.deployment.status", { phase, message })
+  })
+
+const emitTerminalSessionCreated = (projectId: string, sessionId: string) =>
+  Effect.sync(() => {
+    emitProjectEvent(projectId, "project.ssh.session", {
+      phase: "created",
+      sessionId
+    })
+  })
+
 export const createTerminalSession = (
   projectId: string
 ) =>
   Effect.gen(function*(_) {
-    yield* _(
-      Effect.sync(() => {
-        emitProjectEvent(projectId, "project.deployment.status", {
-          phase: "ssh.prepare",
-          message: "Preparing SSH session"
-        })
-      })
-    )
-    const project = yield* _(upProject(projectId, undefined, true))
+    yield* _(emitTerminalStatus(projectId, "ssh.prepare", "Preparing SSH session"))
     const loadedProjectItem = yield* _(getProjectItemById(projectId))
     const projectItem = yield* _(resolveControllerReachableProject(loadedProjectItem))
     yield* _(normalizeSshKeyPermissions(projectItem.sshKeyPath))
-    yield* _(
-      Effect.sync(() => {
-        emitProjectEvent(projectId, "project.deployment.status", {
-          phase: "ssh.wait",
-          message: "Waiting for SSH"
-        })
-      })
+    const sshAlreadyReady = yield* _(probeProjectSshReady(projectItem).pipe(Effect.orElseSucceed(() => false)))
+
+    if (sshAlreadyReady) {
+      yield* _(emitTerminalStatus(projectId, "ssh.fast-ready", "SSH is already ready"))
+      const project = yield* _(getProject(projectId))
+      const prepared = prepareProjectSsh(projectItem)
+      const session = registerRecord(
+        projectId,
+        project.projectKey,
+        project.displayName,
+        prepared,
+        projectItem.containerName
+      )
+      yield* _(emitTerminalSessionCreated(projectId, session.id))
+      return { project, session }
+    }
+
+    const project = yield* _(upProject(projectId, undefined, true, { startupMode: "ssh-open" }))
+    const refreshedProjectItem = yield* _(getProjectItemById(projectId))
+    const reachableProjectItem = yield* _(resolveControllerReachableProject(refreshedProjectItem))
+    yield* _(normalizeSshKeyPermissions(reachableProjectItem.sshKeyPath))
+    yield* _(emitTerminalStatus(projectId, "ssh.wait", "Waiting for SSH"))
+    yield* _(waitForProjectSshReady(reachableProjectItem).pipe(Effect.mapError(toApiInternalError)))
+    yield* _(emitTerminalStatus(projectId, "ssh.ready", "SSH is ready"))
+    const prepared = prepareProjectSsh(reachableProjectItem)
+    const session = registerRecord(
+      projectId,
+      project.projectKey,
+      project.displayName,
+      prepared,
+      reachableProjectItem.containerName
     )
-    yield* _(waitForProjectSshReady(projectItem).pipe(Effect.mapError(toApiInternalError)))
-    yield* _(
-      Effect.sync(() => {
-        emitProjectEvent(projectId, "project.deployment.status", {
-          phase: "ssh.ready",
-          message: "SSH is ready"
-        })
-      })
-    )
-    const prepared = prepareProjectSsh(projectItem)
-    const session = registerRecord(projectId, project.projectKey, project.displayName, prepared, projectItem.containerName)
-    yield* _(
-      Effect.sync(() => {
-        emitProjectEvent(projectId, "project.ssh.session", {
-          phase: "created",
-          sessionId: session.id
-        })
-      })
-    )
+    yield* _(emitTerminalSessionCreated(projectId, session.id))
+    yield* _(emitTerminalStatus(projectId, "ssh.post-start", "Post-start self-heal continues in background"))
     return { project, session }
   })
 

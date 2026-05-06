@@ -9,6 +9,7 @@ type ActionContextArgs = {
   readonly databaseConnectionInput: BrowserActionContext["databaseConnectionInput"]
   readonly databaseLabelInput: BrowserActionContext["databaseLabelInput"]
   readonly addTerminalSession: BrowserActionContext["addTerminalSession"]
+  readonly closeTerminalSession: BrowserActionContext["closeTerminalSession"]
   readonly githubStatus: BrowserActionContext["githubStatus"]
   readonly portForwardInput: BrowserActionContext["portForwardInput"]
   readonly projectTasksIncludeDefault: BrowserActionContext["projectTasksIncludeDefault"]
@@ -45,6 +46,7 @@ export const resolveCurrentMenu = (selectedMenuIndex: number): BrowserMenuTag =>
 
 export const createActionContext = (args: ActionContextArgs): BrowserActionContext => ({
   addTerminalSession: args.addTerminalSession,
+  closeTerminalSession: args.closeTerminalSession,
   databaseConnectionInput: args.databaseConnectionInput,
   databaseLabelInput: args.databaseLabelInput,
   githubStatus: args.githubStatus,

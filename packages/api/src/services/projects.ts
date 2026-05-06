@@ -663,6 +663,10 @@ const markDeployment = (projectId: string, phase: string, message: string) =>
     emitProjectEvent(projectId, "project.deployment.status", { phase, message })
   })
 
+type UpProjectOptions = {
+  readonly startupMode?: "default" | "ssh-open"
+}
+
 const syncContainerAuthorizedKeys = (
   project: ProjectItem
 ) =>
@@ -737,16 +741,30 @@ const syncContainerAuthorizedKeys = (
 export const upProject = (
   projectId: string,
   authorizedKeysContents?: string,
-  useManagedAuthorizedKeys?: boolean
+  useManagedAuthorizedKeys?: boolean,
+  options: UpProjectOptions = {}
 ) =>
   Effect.gen(function*(_) {
     const project = yield* _(findProjectById(projectId))
+    const startupMode = options.startupMode ?? "default"
     const resolvedAuthorizedKeysContents = yield* _(
       resolveRequestedAuthorizedKeysContents(authorizedKeysContents, useManagedAuthorizedKeys === true)
     )
     yield* _(seedAuthorizedKeysForCreate(project.projectDir, resolvedAuthorizedKeysContents))
-    yield* _(markDeployment(projectId, "build", "docker compose up -d --build"))
-    yield* _(runDockerComposeUpWithPortCheck(project.projectDir))
+    yield* _(markDeployment(
+      projectId,
+      startupMode === "ssh-open" ? "ssh.compose-up" : "build",
+      startupMode === "ssh-open" ? "docker compose up -d for SSH terminal" : "docker compose up -d --build"
+    ))
+    yield* _(runDockerComposeUpWithPortCheck(
+      project.projectDir,
+      startupMode === "ssh-open"
+        ? {
+          buildMode: "reuse",
+          waitForPostStart: false
+        }
+        : undefined
+    ))
     if ((resolvedAuthorizedKeysContents ?? "").trim().length > 0) {
       yield* _(syncContainerAuthorizedKeys(project))
     }

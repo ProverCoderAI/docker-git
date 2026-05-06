@@ -4,6 +4,7 @@ import { afterEach, beforeEach, vi } from "vitest"
 
 import { applyProjectById, connectProjectById, runApplyAllProjects } from "../../src/web/actions-projects.js"
 import type { ProjectDetails, TerminalSession } from "../../src/web/api.js"
+import type { ActiveTerminalSession } from "../../src/web/terminal.js"
 import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
 
 const applyAllProjectsMock = vi.hoisted(() => vi.fn())
@@ -96,9 +97,11 @@ describe("web project actions", () => {
   it.effect("adds a new SSH terminal session instead of replacing terminal state", () =>
     Effect.gen(function*(_) {
       createProjectTerminalSessionMock.mockImplementation(() => Effect.succeed({ project, session }))
-      const addTerminalSession = vi.fn()
+      const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
+      const closeTerminalSession = vi.fn<(sessionId: string) => void>()
       const { context, reloadDashboard, setMessage } = makeBrowserActionContext({
         addTerminalSession,
+        closeTerminalSession,
         selectedProjectId: "project-1",
         selectedProjectKey: "octocat/hello-world"
       })
@@ -106,12 +109,27 @@ describe("web project actions", () => {
       connectProjectById("project-1", context, "octocat/hello-world")
 
       yield* _(waitForAssertion(() => {
-        expect(addTerminalSession).toHaveBeenCalledTimes(1)
+        expect(addTerminalSession).toHaveBeenCalledTimes(2)
       }))
 
+      const pendingSession = addTerminalSession.mock.calls[0]?.[0]
+      if (pendingSession === undefined) {
+        throw new Error("missing pending terminal session")
+      }
       expect(context.setSelectedProjectId).toHaveBeenCalledWith("project-1")
       expect(context.setSelectedProject).toHaveBeenCalledWith(project)
-      expect(addTerminalSession).toHaveBeenCalledWith({
+      expect(pendingSession).toMatchObject({
+        browserProjectId: "project-1",
+        browserProjectKey: "octocat/hello-world",
+        browserProjectName: "octocat/hello-world",
+        header: "SSH terminal: octocat/hello-world",
+        pendingConnection: {
+          message: "Starting project and waiting for SSH...",
+          phase: "connecting"
+        }
+      })
+      expect(closeTerminalSession).toHaveBeenCalledWith(pendingSession.session.id)
+      expect(addTerminalSession).toHaveBeenLastCalledWith({
         browserProjectId: "project-1",
         browserProjectKey: "octocat/hello-world",
         browserProjectName: "octocat/hello-world",

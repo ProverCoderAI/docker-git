@@ -10,7 +10,7 @@ import { TerminalPanel } from "./panel-terminal.js"
 import { type BrowserScreen, projectPickerScreen } from "./screen.js"
 import { shouldShowTerminalTabs } from "./terminal-mobile-layout.js"
 import { terminalSessionId } from "./terminal-state.js"
-import type { ActiveTerminalSession } from "./terminal.js"
+import { isPendingActiveTerminalSession, type ActiveTerminalSession } from "./terminal.js"
 
 type TerminalWorkspaceView = "terminal" | "tasks"
 
@@ -121,7 +121,39 @@ const taskManagerReturnButtonStyle: CSSProperties = {
   padding: "6px 10px"
 }
 
+const pendingTerminalBodyStyle: CSSProperties = {
+  alignItems: "center",
+  background: "rgba(8, 10, 13, 0.92)",
+  boxSizing: "border-box",
+  color: "#d6e5f7",
+  display: "flex",
+  height: "100%",
+  justifyContent: "center",
+  padding: "20px",
+  textAlign: "center",
+  whiteSpace: "pre-wrap"
+}
+
 const terminalTabLabel = (session: ActiveTerminalSession): string => session.browserProjectName ?? session.header
+
+const PendingTerminalBody = ({ session }: { readonly session: ActiveTerminalSession }): JSX.Element | null => {
+  if (!isPendingActiveTerminalSession(session)) {
+    return null
+  }
+
+  const { pendingConnection } = session
+  const hint = pendingConnection.phase === "error"
+    ? "Close this tab or open a new terminal to retry."
+    : "The terminal workspace is open. SSH will attach as soon as the project is ready."
+  return (
+    <div style={pendingTerminalBodyStyle}>
+      <div>
+        <div>{pendingConnection.message}</div>
+        <div style={{ color: "#8fa6c4", fontSize: "12px", marginTop: "10px" }}>{hint}</div>
+      </div>
+    </div>
+  )
+}
 
 const TerminalTaskManagerBody = (
   {
@@ -336,6 +368,7 @@ const TerminalPane = (
   const browserProjectId = terminalSession.browserProjectId
   const browserProjectKey = terminalSession.browserProjectKey
   const canOpenBrowser = canOpenProjectBrowser(projectBrowser, browserProjectId)
+  const pendingSession = isPendingActiveTerminalSession(terminalSession)
   const bodyContent = taskManagerOpen && browserProjectId !== undefined
     ? (
       <TerminalTaskManagerBody
@@ -351,6 +384,8 @@ const TerminalPane = (
         selectedProjectSummary={selectedProjectSummary}
       />
     )
+    : pendingSession
+      ? <PendingTerminalBody session={terminalSession} />
     : undefined
   const detachTerminalSession = (): void => {
     onTerminalClose(sessionId)
@@ -369,13 +404,15 @@ const TerminalPane = (
         }}
         onDetach={() => {
           detachTerminalSession()
-          onTerminalMessage(`Detached SSH terminal: ${terminalSession.session.id}.`)
+          onTerminalMessage(`${pendingSession ? "Closed pending" : "Detached"} SSH terminal: ${terminalSession.session.id}.`)
         }}
         onKill={() => {
-          requestTerminalSessionClose(terminalSession.closePath)
-          terminalSession.onExit?.()
+          if (!pendingSession) {
+            requestTerminalSessionClose(terminalSession.closePath)
+            terminalSession.onExit?.()
+          }
           detachTerminalSession()
-          onTerminalMessage(`Killed SSH terminal: ${terminalSession.session.id}.`)
+          onTerminalMessage(`${pendingSession ? "Closed pending" : "Killed"} SSH terminal: ${terminalSession.session.id}.`)
         }}
         onOpenBrowser={browserProjectId === undefined || !canOpenBrowser
           ? undefined
