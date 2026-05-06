@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 
 import { splitTerminalInlineImageOutput } from "../../src/web/terminal-inline-images-core.js"
+import { terminalInlineImagePreviewRows, terminalInlineImageSpacer } from "../../src/web/terminal-inline-images.js"
 
 describe("terminal inline image output", () => {
   it("keeps prompt output after a completed image path line in a later segment", () => {
@@ -26,5 +27,10 @@ describe("terminal inline image output", () => {
         text: "saved /var/data/a.png"
       }
     ])
+  })
+
+  it("keeps inline image previews compact in the terminal output stream", () => {
+    expect(terminalInlineImagePreviewRows).toBe(4)
+    expect(terminalInlineImageSpacer).toBe("\r\n\r\n\r\n\r\n")
   })
 })

@@ -6,11 +6,13 @@ import type { TerminalLifecycleState } from "./terminal-panel-runtime-types.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 
 export const terminalInlineImagePreviewLimit = 20
-export const terminalInlineImagePreviewRows = 7
+export const terminalInlineImagePreviewRows = 4
 
 export const terminalInlineImageSpacer = "\r\n".repeat(terminalInlineImagePreviewRows)
 
-const terminalInlineImagePreviewColumns = 28
+const terminalInlineImagePreviewColumns = 16
+const terminalInlineImagePreviewHeightPx = 56
+const terminalInlineImagePreviewWidthPx = 96
 
 type TerminalInlineImageEntry = {
   readonly fetchUrl: string
@@ -56,21 +58,21 @@ const renderInlineImageElement = (
   link.style.boxSizing = "border-box"
   link.style.cursor = "pointer"
   link.style.display = "inline-flex"
-  link.style.height = "calc(100% - 8px)"
+  link.style.height = `min(${terminalInlineImagePreviewHeightPx}px, calc(100% - 8px))`
   link.style.justifyContent = "center"
   link.style.margin = "4px 0"
   link.style.padding = "4px"
   link.style.pointerEvents = "auto"
-  link.style.width = "100%"
+  link.style.width = `min(${terminalInlineImagePreviewWidthPx}px, 100%)`
 
   const image = document.createElement("img")
   image.alt = entry.path
   image.src = entry.fetchUrl
   image.style.borderRadius = "4px"
   image.style.display = "block"
-  image.style.maxHeight = "100%"
-  image.style.maxWidth = "100%"
+  image.style.height = "100%"
   image.style.objectFit = "contain"
+  image.style.width = "100%"
 
   link.append(image)
   element.dataset["path"] = entry.path
