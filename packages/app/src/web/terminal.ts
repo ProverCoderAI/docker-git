@@ -82,6 +82,19 @@ export const buildProjectActiveTerminalSession = (
   }
 }
 
+const resolvePendingProjectMessage = (
+  message: string | undefined,
+  phase: PendingTerminalConnection["phase"]
+): string => {
+  const trimmedMessage = message?.trim() ?? ""
+  if (trimmedMessage.length > 0) {
+    return trimmedMessage
+  }
+  return phase === "error"
+    ? "SSH session startup failed."
+    : "Starting project and waiting for SSH..."
+}
+
 export const buildPendingProjectActiveTerminalSession = (
   {
     createdAt,
@@ -96,11 +109,7 @@ export const buildPendingProjectActiveTerminalSession = (
 ): ActiveTerminalSession => {
   const encodedProjectKey = encodeURIComponent(projectKey)
   const encodedSessionId = encodeURIComponent(pendingSessionId)
-  const resolvedMessage = message?.trim().length
-    ? message.trim()
-    : phase === "error"
-      ? "SSH session startup failed."
-      : "Starting project and waiting for SSH..."
+  const resolvedMessage = resolvePendingProjectMessage(message, phase)
   return {
     browserProjectId: projectId,
     browserProjectKey: projectKey,

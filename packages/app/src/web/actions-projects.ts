@@ -78,10 +78,7 @@ const resolveProjectTerminalKey = (
 }
 
 const createPendingTerminalSessionId = (): string => {
-  const randomUuid = globalThis.crypto?.randomUUID
-  return typeof randomUuid === "function"
-    ? randomUuid.call(globalThis.crypto)
-    : `pending-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return globalThis.crypto.randomUUID()
 }
 
 export const connectProjectById = (

@@ -15,7 +15,7 @@ import {
   type TerminalStatus,
   useTerminalSessionLifecycle
 } from "./terminal-panel-runtime.js"
-import { isPendingActiveTerminalSession, type ActiveTerminalSession } from "./terminal.js"
+import { type ActiveTerminalSession, isPendingActiveTerminalSession } from "./terminal.js"
 
 type TerminalPanelProps = {
   readonly keyboardOpen: boolean

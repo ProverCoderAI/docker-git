@@ -177,7 +177,7 @@ const runProjectComposeUp = (
   }
 
   return runDockerComposeUp(projectDir, { buildMode: "reuse" }).pipe(
-    Effect.catchAll(() =>
+    Effect.catchTag("DockerCommandError", () =>
       Effect.logWarning(
         `docker compose up -d failed in ${projectDir}; falling back to docker compose up -d --build.`
       ).pipe(

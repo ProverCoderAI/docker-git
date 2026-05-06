@@ -10,7 +10,7 @@ import { TerminalPanel } from "./panel-terminal.js"
 import { type BrowserScreen, projectPickerScreen } from "./screen.js"
 import { shouldShowTerminalTabs } from "./terminal-mobile-layout.js"
 import { terminalSessionId } from "./terminal-state.js"
-import { isPendingActiveTerminalSession, type ActiveTerminalSession } from "./terminal.js"
+import { type ActiveTerminalSession, isPendingActiveTerminalSession } from "./terminal.js"
 
 type TerminalWorkspaceView = "terminal" | "tasks"
 
@@ -369,8 +369,9 @@ const TerminalPane = (
   const browserProjectKey = terminalSession.browserProjectKey
   const canOpenBrowser = canOpenProjectBrowser(projectBrowser, browserProjectId)
   const pendingSession = isPendingActiveTerminalSession(terminalSession)
-  const bodyContent = taskManagerOpen && browserProjectId !== undefined
-    ? (
+  let bodyContent: JSX.Element | undefined
+  if (taskManagerOpen && browserProjectId !== undefined) {
+    bodyContent = (
       <TerminalTaskManagerBody
         onClose={onCloseTaskManager}
         onLoadProjectTaskLogs={onLoadProjectTaskLogs}
@@ -384,9 +385,9 @@ const TerminalPane = (
         selectedProjectSummary={selectedProjectSummary}
       />
     )
-    : pendingSession
-      ? <PendingTerminalBody session={terminalSession} />
-    : undefined
+  } else if (pendingSession) {
+    bodyContent = <PendingTerminalBody session={terminalSession} />
+  }
   const detachTerminalSession = (): void => {
     onTerminalClose(sessionId)
     if (singleSession) {
@@ -404,7 +405,9 @@ const TerminalPane = (
         }}
         onDetach={() => {
           detachTerminalSession()
-          onTerminalMessage(`${pendingSession ? "Closed pending" : "Detached"} SSH terminal: ${terminalSession.session.id}.`)
+          onTerminalMessage(
+            `${pendingSession ? "Closed pending" : "Detached"} SSH terminal: ${terminalSession.session.id}.`
+          )
         }}
         onKill={() => {
           if (!pendingSession) {
@@ -412,7 +415,9 @@ const TerminalPane = (
             terminalSession.onExit?.()
           }
           detachTerminalSession()
-          onTerminalMessage(`${pendingSession ? "Closed pending" : "Killed"} SSH terminal: ${terminalSession.session.id}.`)
+          onTerminalMessage(
+            `${pendingSession ? "Closed pending" : "Killed"} SSH terminal: ${terminalSession.session.id}.`
+          )
         }}
         onOpenBrowser={browserProjectId === undefined || !canOpenBrowser
           ? undefined
