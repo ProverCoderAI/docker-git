@@ -39,6 +39,7 @@ type ReadyLayoutRenderArgs = {
     readonly onOpenProjectBrowserById: (projectId: string) => void
     readonly onOpenProjectBrowser: () => void
     readonly onOpenProjectDatabaseEditor: () => void
+    readonly onOpenProjectTaskManagerById: (projectId: string) => void
     readonly onCloseProjectPortForward: (targetPort: number) => void
     readonly onKillProjectTerminalSession: (projectId: string, projectKey: string, sessionId: string) => void
     readonly onOpenProjectPortForward: () => void
@@ -49,6 +50,7 @@ type ReadyLayoutRenderArgs = {
     readonly onRefreshProjectBrowser: () => void
     readonly onRefreshProjectDatabases: () => void
     readonly onRefreshProjectTasks: () => void
+    readonly onProjectTasksIncludeDefaultChange: (includeDefault: boolean) => void
     readonly onRestartProjectDatabaseEditor: () => void
     readonly onRunAuthAction: (index: number) => void
     readonly onRunCurrentMenuAction: () => void
@@ -87,6 +89,7 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onOpenProjectBrowserById: actions.onOpenProjectBrowserById,
   onOpenProjectBrowser: actions.onOpenProjectBrowser,
   onOpenProjectDatabaseEditor: actions.onOpenProjectDatabaseEditor,
+  onOpenProjectTaskManagerById: actions.onOpenProjectTaskManagerById,
   onKillProjectTerminalSession: actions.onKillProjectTerminalSession,
   onOpenProjectPortForward: actions.onOpenProjectPortForward,
   onOpenProjectTerminalById: actions.onOpenProjectTerminalById,
@@ -96,6 +99,7 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onRefreshProjectBrowser: actions.onRefreshProjectBrowser,
   onRefreshProjectDatabases: actions.onRefreshProjectDatabases,
   onRefreshProjectTasks: actions.onRefreshProjectTasks,
+  onProjectTasksIncludeDefaultChange: actions.onProjectTasksIncludeDefaultChange,
   onRestartProjectDatabaseEditor: actions.onRestartProjectDatabaseEditor,
   onRunAuthAction: actions.onRunAuthAction,
   onRunCurrentMenuAction: actions.onRunCurrentMenuAction,
@@ -134,6 +138,7 @@ const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   projectBrowser: state.projectBrowser,
   projectTaskLogs: state.projectTaskLogs,
   projectTasks: state.projectTasks,
+  projectTasksIncludeDefault: state.projectTasksIncludeDefault,
   projectNavigationArmed: state.projectNavigationArmed,
   projectSearchQuery: state.projectSearchQuery,
   selectedMenuIndex: state.selectedMenuIndex,

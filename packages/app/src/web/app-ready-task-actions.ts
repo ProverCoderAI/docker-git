@@ -1,4 +1,9 @@
-import { loadSelectedProjectTaskLogs, loadSelectedProjectTasks, stopSelectedProjectTask } from "./actions.js"
+import {
+  loadSelectedProjectTaskLogs,
+  loadSelectedProjectTasks,
+  setSelectedProjectTasksIncludeDefault,
+  stopSelectedProjectTask
+} from "./actions.js"
 import type { createActionContext } from "./app-ready-actions.js"
 
 export const bindTaskActions = (
@@ -9,6 +14,9 @@ export const bindTaskActions = (
   },
   onRefreshProjectTasks: () => {
     loadSelectedProjectTasks(actionContext)
+  },
+  onProjectTasksIncludeDefaultChange: (includeDefault: boolean) => {
+    setSelectedProjectTasksIncludeDefault(actionContext, includeDefault)
   },
   onStopProjectTask: (pid: number) => {
     stopSelectedProjectTask(actionContext, pid)

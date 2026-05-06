@@ -1,10 +1,12 @@
-import type { JSX } from "react"
+import type { CSSProperties, JSX } from "react"
 
 import { Box, Text } from "../ui/primitives.js"
 import type { ContainerTask, ContainerTaskSnapshot, ProjectDetails, ProjectSummary } from "./api.js"
 
 type TaskPanelProps = {
+  readonly includeDefault: boolean
   readonly logs: string
+  readonly onIncludeDefaultChange: (includeDefault: boolean) => void
   readonly onLoadLogs: (pid: number) => void
   readonly onRefreshTasks: () => void
   readonly onStopTask: (pid: number) => void
@@ -27,6 +29,39 @@ const kindColor = (kind: ContainerTask["kind"]): string => {
 }
 
 const compactCommand = (command: string): string => command.length <= 120 ? command : `${command.slice(0, 117)}...`
+
+const systemToggleStyle: CSSProperties = {
+  alignItems: "center",
+  color: "#d6e5f7",
+  cursor: "pointer",
+  display: "flex",
+  gap: "6px",
+  whiteSpace: "nowrap"
+}
+
+const systemToggleInputStyle: CSSProperties = {
+  accentColor: "#78f0a3",
+  cursor: "pointer"
+}
+
+const TaskSystemToggle = (
+  {
+    includeDefault,
+    onIncludeDefaultChange
+  }: Pick<TaskPanelProps, "includeDefault" | "onIncludeDefaultChange">
+): JSX.Element => (
+  <label style={systemToggleStyle}>
+    <input
+      checked={includeDefault}
+      onChange={(event) => {
+        onIncludeDefaultChange(event.currentTarget.checked)
+      }}
+      style={systemToggleInputStyle}
+      type="checkbox"
+    />
+    <span>Show system</span>
+  </label>
+)
 
 const TaskRow = (
   {
@@ -152,7 +187,9 @@ const taskPanelSummary = (
 
 export const TaskPanel = (
   {
+    includeDefault,
     logs,
+    onIncludeDefaultChange,
     onLoadLogs,
     onRefreshTasks,
     onStopTask,
@@ -166,8 +203,11 @@ export const TaskPanel = (
     <Box flexDirection="column">
       <Box alignItems="center" flexWrap="wrap" gap={1} justifyContent="space-between">
         <Text bold={true} fg="#8be9fd">Container tasks</Text>
-        <Box onClick={onRefreshTasks} width="auto">
-          <Text bold={true} fg="#7fdfff">refresh</Text>
+        <Box alignItems="center" flexWrap="wrap" gap={1} width="auto">
+          <TaskSystemToggle includeDefault={includeDefault} onIncludeDefaultChange={onIncludeDefaultChange} />
+          <Box onClick={onRefreshTasks} width="auto">
+            <Text bold={true} fg="#7fdfff">refresh</Text>
+          </Box>
         </Box>
       </Box>
       <Text fg="#8fa6c4" marginTop={1} wrap="truncate">

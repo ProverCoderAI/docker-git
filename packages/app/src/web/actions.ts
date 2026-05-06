@@ -38,7 +38,13 @@ export {
   loadSelectedProjectInfo,
   runApplyAllProjects
 } from "./actions-projects.js"
-export { loadSelectedProjectTaskLogs, loadSelectedProjectTasks, stopSelectedProjectTask } from "./actions-tasks.js"
+export {
+  loadProjectTasksById,
+  loadSelectedProjectTaskLogs,
+  loadSelectedProjectTasks,
+  setSelectedProjectTasksIncludeDefault,
+  stopSelectedProjectTask
+} from "./actions-tasks.js"
 
 export const runBrowserMenuAction = (
   currentMenu: BrowserMenuTag,
