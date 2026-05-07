@@ -8,7 +8,8 @@ import { clearProjectEvents, listProjectEventsSince } from "../src/services/even
 import {
   createTerminalSession,
   deleteTerminalSession,
-  listProjectTerminalSessions
+  listProjectTerminalSessions,
+  startTerminalSession
 } from "../src/services/terminal-sessions.js"
 
 const prepareProjectSshMock = vi.hoisted(() => vi.fn())
@@ -172,5 +173,27 @@ describe("terminal sessions service", () => {
     expect(result.project).toEqual(projectDetails)
     expect(result.session.projectId).toBe(projectId)
     expect(phases).toEqual(["ssh.prepare", "ssh.wait", "ssh.ready", "ssh.post-start"])
+  })
+
+  it("starts terminal session asynchronously and emits a correlated created event", async () => {
+    probeProjectSshReadyMock.mockImplementation(() => Effect.succeed(true))
+    getProjectMock.mockImplementation(() => Effect.succeed(projectDetails))
+
+    const accepted = await runTestEffect(startTerminalSession(projectId, "request-1"))
+
+    expect(accepted).toEqual({
+      accepted: true,
+      cursor: 0,
+      projectId,
+      requestId: "request-1"
+    })
+
+    await vi.waitFor(() => {
+      const created = listProjectEventsSince(projectId, 0).find((event) => event.type === "project.ssh.session")
+      expect(created?.payload).toMatchObject({
+        phase: "created",
+        requestId: "request-1"
+      })
+    })
   })
 })

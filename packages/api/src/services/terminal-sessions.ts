@@ -16,7 +16,7 @@ import { WebSocket, WebSocketServer, type RawData } from "ws"
 
 import type { TerminalSession, TerminalSessionStatus } from "../api/contracts.js"
 import { ApiBadRequestError, ApiInternalError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
-import { emitProjectEvent } from "./events.js"
+import { emitProjectEvent, latestProjectCursor } from "./events.js"
 import {
   planTerminalImageFetch,
   terminalImageFetchMaxBytes
@@ -614,16 +614,37 @@ const emitTerminalStatus = (projectId: string, phase: string, message: string) =
     emitProjectEvent(projectId, "project.deployment.status", { phase, message })
   })
 
-const emitTerminalSessionCreated = (projectId: string, sessionId: string) =>
+const emitTerminalSessionCreated = (
+  projectId: string,
+  sessionId: string,
+  requestId?: string
+) =>
   Effect.sync(() => {
     emitProjectEvent(projectId, "project.ssh.session", {
       phase: "created",
-      sessionId
+      sessionId,
+      ...(requestId === undefined ? {} : { requestId })
+    })
+  })
+
+const emitTerminalSessionFailure = (
+  projectId: string,
+  requestId: string,
+  message: string
+) =>
+  Effect.sync(() => {
+    emitProjectEvent(projectId, "project.deployment.status", {
+      phase: "ssh.failed",
+      message,
+      requestId
     })
   })
 
 export const createTerminalSession = (
-  projectId: string
+  projectId: string,
+  options: {
+    readonly requestId?: string
+  } = {}
 ) =>
   Effect.gen(function*(_) {
     yield* _(emitTerminalStatus(projectId, "ssh.prepare", "Preparing SSH session"))
@@ -643,7 +664,7 @@ export const createTerminalSession = (
         prepared,
         projectItem.containerName
       )
-      yield* _(emitTerminalSessionCreated(projectId, session.id))
+      yield* _(emitTerminalSessionCreated(projectId, session.id, options.requestId))
       return { project, session }
     }
 
@@ -662,9 +683,47 @@ export const createTerminalSession = (
       prepared,
       reachableProjectItem.containerName
     )
-    yield* _(emitTerminalSessionCreated(projectId, session.id))
+    yield* _(emitTerminalSessionCreated(projectId, session.id, options.requestId))
     yield* _(emitTerminalStatus(projectId, "ssh.post-start", "Post-start self-heal continues in background"))
     return { project, session }
+  })
+
+// CHANGE: start SSH terminal creation asynchronously for web clients behind request timeouts
+// WHY: long-running SSH startup can exceed Cloudflare tunnel request limits before attach is ready
+// QUOTE(ТЗ): "всё равно не работает"
+// REF: user-message-2026-05-07-terminal-524
+// SOURCE: n/a
+// FORMAT THEOREM: ∀r: accepted(r) → ◇(created(r) ∨ failed(r))
+// PURITY: SHELL
+// EFFECT: Effect<StartProjectTerminalSessionAccepted, never, Scope>
+// INVARIANT: the returned cursor is captured before the background job emits startup events
+// COMPLEXITY: O(1)
+export const startTerminalSession = (
+  projectId: string,
+  requestId: string
+) =>
+  Effect.gen(function*(_) {
+    const cursor = latestProjectCursor(projectId)
+    yield* _(
+      createTerminalSession(projectId, { requestId }).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            emitTerminalSessionFailure(
+              projectId,
+              requestId,
+              error instanceof Error ? error.message : describeUnknown(error)
+            ),
+          onSuccess: () => Effect.void
+        }),
+        Effect.forkDaemon
+      )
+    )
+    return {
+      accepted: true,
+      cursor,
+      projectId,
+      requestId
+    }
   })
 
 export const deleteTerminalSession = (

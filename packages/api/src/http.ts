@@ -28,6 +28,7 @@ import {
   ProjectDatabaseProfileRequestSchema,
   ProjectAuthRequestSchema,
   ProjectPortForwardRequestSchema,
+  StartProjectTerminalSessionRequestSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
@@ -114,7 +115,8 @@ import {
   getProjectTerminalSession,
   listProjectTerminalSessions,
   lookupTerminalSessionById,
-  readProjectTerminalImage
+  readProjectTerminalImage,
+  startTerminalSession
 } from "./services/terminal-sessions.js"
 import {
   commitStateFromRequest,
@@ -1143,7 +1145,24 @@ export const makeRouter = () => {
     )
   )
 
-  const withProjectTerminalImages = withProjectLifecycle.pipe(
+  const withProjectTerminalStart = withProjectLifecycle.pipe(
+    HttpRouter.post(
+      "/projects/by-key/:projectKey/terminal-sessions/start",
+      projectKeyParams.pipe(
+        Effect.flatMap(({ projectKey }) =>
+          Effect.gen(function*(_) {
+            const request = yield* _(HttpServerRequest.schemaBodyJson(StartProjectTerminalSessionRequestSchema))
+            const project = yield* _(getProjectItemByKey(projectKey))
+            return yield* _(startTerminalSession(project.projectDir, request.requestId))
+          })
+        ),
+        Effect.flatMap((payload) => jsonResponse(payload, 202)),
+        Effect.catchAll(errorResponse)
+      )
+    )
+  )
+
+  const withProjectTerminalImages = withProjectTerminalStart.pipe(
     HttpRouter.get(
       "/projects/by-key/:projectKey/terminal-sessions/:sessionId/image",
       Effect.gen(function*(_) {

@@ -7,7 +7,7 @@ import type { DashboardData } from "./api.js"
 import { browserMenuIndex } from "./menu.js"
 import { projectPickerScreen } from "./screen.js"
 import { terminalSessionId } from "./terminal-state.js"
-import { type ActiveTerminalSession, buildProjectActiveTerminalSession } from "./terminal.js"
+import { type ActiveTerminalSession, buildProjectActiveTerminalSession, terminalSessionRoutePath } from "./terminal.js"
 
 type SshLinkArgs = {
   readonly actionContext: BrowserActionContext
@@ -97,6 +97,18 @@ const findLocalTerminalSession = (
 const sshLinkRequestKey = (request: SshLinkRequest): string =>
   request.kind === "session" ? `session:${request.sessionId}` : `project:${request.token}`
 
+export const resolveMissingSshSessionFallbackPath = (
+  href: string,
+  sessionId: string,
+  error: string
+): string | null => {
+  if (!error.includes("HTTP 404")) {
+    return null
+  }
+  const url = new URL(href, "http://localhost")
+  return url.pathname === terminalSessionRoutePath(sessionId) ? "/menu/select" : null
+}
+
 const scheduleTerminalSessionAttach = (args: SshLinkEffectArgs, sessionId: string): void => {
   clearConnectTimer(args.connectTimerRef)
   args.connectTimerRef.current = globalThis.setTimeout(() => {
@@ -105,6 +117,16 @@ const scheduleTerminalSessionAttach = (args: SshLinkEffectArgs, sessionId: strin
       loadTerminalSessionById(sessionId).pipe(
         Effect.match({
           onFailure: (error) => {
+            const fallbackPath = resolveMissingSshSessionFallbackPath(globalThis.location.href, sessionId, error)
+            if (fallbackPath !== null) {
+              args.handledTokenRef.current = null
+              args.deactivateTerminalWorkspace()
+              args.actionContext.setSelectedMenuIndex(browserMenuIndex("Select"))
+              args.actionContext.setActiveScreen(projectPickerScreen())
+              globalThis.history.replaceState(globalThis.history.state, "", fallbackPath)
+              args.actionContext.setMessage(`SSH terminal is no longer available: ${sessionId}.`)
+              return
+            }
             args.actionContext.setMessage(error)
           },
           onSuccess: ({ projectDisplayName, projectKey, session }) => {

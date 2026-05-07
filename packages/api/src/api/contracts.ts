@@ -43,6 +43,13 @@ export type CreateProjectAccepted = {
 
 export type CreateProjectResult = ProjectDetails | CreateProjectAccepted
 
+export type StartProjectTerminalSessionAccepted = {
+  readonly accepted: true
+  readonly projectId: string
+  readonly cursor: number
+  readonly requestId: string
+}
+
 export type ProjectPortForwardStatus = "running" | "stopped" | "unknown"
 
 export type ProjectPortForward = {
