@@ -3,7 +3,7 @@ import { Effect } from "effect"
 import { afterEach, beforeEach, vi } from "vitest"
 
 import { applyProjectById, connectProjectById, runApplyAllProjects } from "../../src/web/actions-projects.js"
-import type { ProjectDetails, TerminalSession } from "../../src/web/api.js"
+import type { ProjectDetails, StartProjectTerminalSessionAccepted, TerminalSession } from "../../src/web/api.js"
 import type { ActiveTerminalSession } from "../../src/web/terminal.js"
 import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
 
@@ -84,6 +84,13 @@ const session: TerminalSession = {
   status: "ready"
 }
 
+const startTerminalAccepted = (requestId: string): StartProjectTerminalSessionAccepted => ({
+  accepted: true,
+  cursor: 7,
+  projectId: "project-1",
+  requestId
+})
+
 describe("web project actions", () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -105,12 +112,7 @@ describe("web project actions", () => {
     Effect.gen(function*(_) {
       vi.stubGlobal("crypto", { randomUUID: () => "pending-session-id" })
       startProjectTerminalSessionMock.mockImplementation(() =>
-        Effect.succeed({
-          accepted: true as const,
-          cursor: 7,
-          projectId: "project-1",
-          requestId: "pending-session-id"
-        })
+        Effect.succeed(startTerminalAccepted("pending-session-id"))
       )
       loadProjectTerminalSessionMock.mockImplementation(() => Effect.succeed(session))
       openProjectEventStreamMock.mockImplementation(() => ({ close: eventStreamCloseMock }))
@@ -129,21 +131,12 @@ describe("web project actions", () => {
         expect(openProjectEventStreamMock).toHaveBeenCalledTimes(1)
       }))
 
-      const emitEvent = openProjectEventStreamMock.mock.calls[0]?.[1]?.onEvent as
-        | ((event: {
-          readonly at: string
-          readonly payload: unknown
-          readonly projectId: string
-          readonly seq: number
-          readonly type: string
-        }) => void)
-        | undefined
-
-      if (emitEvent === undefined) {
+      const handlers = openProjectEventStreamMock.mock.calls[0]?.[1]
+      if (handlers === undefined || typeof handlers.onEvent !== "function") {
         throw new Error("missing event handlers")
       }
 
-      emitEvent({
+      handlers.onEvent({
         at: "2026-04-21T10:00:01.000Z",
         payload: {
           phase: "created",
@@ -205,12 +198,7 @@ describe("web project actions", () => {
       const mathRandomMock = vi.spyOn(Math, "random").mockReturnValue(0.5)
       vi.stubGlobal("crypto", {})
       startProjectTerminalSessionMock.mockImplementation((_projectKey, requestId: string) =>
-        Effect.succeed({
-          accepted: true as const,
-          cursor: 7,
-          projectId: "project-1",
-          requestId
-        })
+        Effect.succeed(startTerminalAccepted(requestId))
       )
       openProjectEventStreamMock.mockImplementation(() => ({ close: eventStreamCloseMock }))
       const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
