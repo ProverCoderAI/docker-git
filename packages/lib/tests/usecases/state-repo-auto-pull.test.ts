@@ -21,7 +21,10 @@ import { autoPullState } from "../../src/usecases/state-repo.js"
 // Helpers (same pattern as state-repo-init.test.ts)
 // ---------------------------------------------------------------------------
 
-const seedEnv: Record<string, string> = { GIT_CONFIG_NOSYSTEM: "1" }
+const seedEnv: Record<string, string> = {
+  DOCKER_GIT_SKIP_POST_PUSH_ACTION: "1",
+  GIT_CONFIG_NOSYSTEM: "1"
+}
 
 const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
   Chunk.reduce(chunks, new Uint8Array(), (acc, curr) => {

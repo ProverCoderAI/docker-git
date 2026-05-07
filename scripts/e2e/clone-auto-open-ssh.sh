@@ -56,9 +56,9 @@ on_error() {
   FAILURE_DUMPED=1
   echo "e2e/clone-auto-open-ssh: failed at line $line" >&2
   docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -n 80 || true
-  if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" 2>/dev/null; then
-    docker inspect "$CONTAINER_NAME" || true
-    docker logs "$CONTAINER_NAME" --tail 200 || true
+  if dg_project_docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" 2>/dev/null; then
+    dg_project_docker inspect "$CONTAINER_NAME" || true
+    dg_project_docker logs "$CONTAINER_NAME" --tail 200 || true
   fi
   if [[ -f "$CLONE_LOG" ]]; then
     echo "--- clone log ---" >&2
@@ -72,9 +72,9 @@ on_error() {
     echo "--- ssh session log ---" >&2
     cat "$SSH_SESSION_LOG" >&2 || true
   fi
-  if [[ -d "$OUT_DIR" ]] && [[ -f "$OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$OUT_DIR" && docker compose ps) || true
-    (cd "$OUT_DIR" && docker compose logs --no-color --tail 200) || true
+  if [[ -d "$OUT_DIR" ]]; then
+    dg_project_compose "$OUT_DIR" ps || true
+    dg_project_compose "$OUT_DIR" logs --no-color --tail 200 || true
   fi
 }
 
@@ -85,11 +85,11 @@ cleanup() {
     echo "e2e/clone-auto-open-ssh: out dir: $OUT_DIR" >&2
     return
   fi
-  if [[ -d "$OUT_DIR" ]] && [[ -f "$OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$OUT_DIR" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
+  if [[ -d "$OUT_DIR" ]]; then
+    dg_project_compose "$OUT_DIR" down -v --remove-orphans >/dev/null 2>&1 || true
   fi
-  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-  docker volume rm \
+  dg_project_docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  dg_project_docker volume rm \
     "$VOLUME_NAME" \
     "${VOLUME_NAME}-bootstrap" \
     "${SERVICE_NAME}_${VOLUME_NAME}" \
@@ -151,11 +151,8 @@ container_ip() {
     return 1
   fi
 
-  docker inspect \
-    --format '{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' \
-    "$DOCKER_GIT_E2E_CONTAINER_NAME" 2>/dev/null \
-    | sed '/^$/d' \
-    | head -n 1
+  source "$REPO_ROOT/scripts/e2e/_lib.sh"
+  dg_project_container_ip "$DOCKER_GIT_E2E_CONTAINER_NAME"
 }
 
 run_ssh_via_container_ip() {
@@ -190,7 +187,10 @@ run_ssh_via_container_ip() {
   done
 
   printf "fallback-target: <%s>\n" "$ip" >> "$DOCKER_GIT_E2E_SSH_INVOCATION_LOG"
-  run_ssh "${rewritten[@]}"
+  source "$REPO_ROOT/scripts/e2e/_lib.sh"
+  dg_project_ssh_to_container "$DOCKER_GIT_E2E_CONTAINER_NAME" "$DOCKER_GIT_E2E_REAL_SSH" \
+    "${rewritten[@]}" "$REMOTE_COMMAND" \
+    >> "$DOCKER_GIT_E2E_SSH_SESSION_LOG" 2>&1
 }
 
 set +e
@@ -262,7 +262,7 @@ grep -Eq -- '<dev@(127[.]0[.]0[.]1|localhost)>' "$SSH_INVOCATION_LOG" \
   || fail "expected ssh target to be dev@127.0.0.1 or dev@localhost"
 grep -Fq -- "exit: 0" "$SSH_INVOCATION_LOG" || fail "expected ssh command to succeed"
 
-docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" \
+dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc "test -d '$TARGET_DIR/.git'" \
   || fail "expected cloned repo at: $TARGET_DIR"
 
 grep -Fq -- "Контекст workspace: issue #1 (https://github.com/octocat/Hello-World/issues/1)" "$SSH_SESSION_LOG" \

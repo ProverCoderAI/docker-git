@@ -24,7 +24,10 @@ import { stateInit } from "../../src/usecases/state-repo.js"
 // GIT_CONFIG_NOSYSTEM=1 bypasses system-level git hooks (e.g. the docker-git
 // pre-push hook that blocks pushes to `main`).  Only used in test seeding, not
 // in the code-under-test.
-const seedEnv: Record<string, string> = { GIT_CONFIG_NOSYSTEM: "1" }
+const seedEnv: Record<string, string> = {
+  DOCKER_GIT_SKIP_POST_PUSH_ACTION: "1",
+  GIT_CONFIG_NOSYSTEM: "1"
+}
 
 const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
   Chunk.reduce(chunks, new Uint8Array(), (acc, curr) => {

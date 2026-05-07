@@ -59,6 +59,8 @@ RUN bun run --cwd packages/lib build
 RUN bun run --cwd packages/api build
 
 ENV DOCKER_GIT_API_PORT=3334
+ENV DOCKER_GIT_DOCKER_RUNTIME=isolated
+ENV DOCKER_HOST=unix:///var/run/docker.sock
 EXPOSE 3334
 
-CMD ["bun", "packages/api/dist/src/main.js"]
+CMD ["bash", "packages/api/scripts/start-controller.sh"]

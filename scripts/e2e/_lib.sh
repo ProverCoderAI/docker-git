@@ -18,7 +18,31 @@ dg_install_docker_wrapper() {
   cat > "$bin_dir/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-exec sudo -n docker "$@"
+exec sudo -n env \
+  "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-}" \
+  "DOCKER_GIT_API_BIND_HOST=${DOCKER_GIT_API_BIND_HOST:-}" \
+  "DOCKER_GIT_API_CONTAINER_NAME=${DOCKER_GIT_API_CONTAINER_NAME:-}" \
+  "DOCKER_GIT_API_PORT=${DOCKER_GIT_API_PORT:-}" \
+  "DOCKER_GIT_CONTROLLER_DOCKER_HOST=${DOCKER_GIT_CONTROLLER_DOCKER_HOST:-}" \
+  "DOCKER_GIT_CONTROLLER_REV=${DOCKER_GIT_CONTROLLER_REV:-}" \
+  "DOCKER_GIT_DOCKERD_DEFAULT_CGROUPNS_MODE=${DOCKER_GIT_DOCKERD_DEFAULT_CGROUPNS_MODE:-}" \
+  "DOCKER_GIT_DOCKERD_TCP_HOST=${DOCKER_GIT_DOCKERD_TCP_HOST:-}" \
+  "DOCKER_GIT_DOCKER_DATA_VOLUME=${DOCKER_GIT_DOCKER_DATA_VOLUME:-}" \
+  "DOCKER_GIT_DOCKER_RUNTIME=${DOCKER_GIT_DOCKER_RUNTIME:-}" \
+  "DOCKER_GIT_EXCHANGE_AGENT_COMMAND=${DOCKER_GIT_EXCHANGE_AGENT_COMMAND:-}" \
+  "DOCKER_GIT_EXCHANGE_AGENT_PROVIDER=${DOCKER_GIT_EXCHANGE_AGENT_PROVIDER:-}" \
+  "DOCKER_GIT_EXCHANGE_AGENT_TIMEOUT_MS=${DOCKER_GIT_EXCHANGE_AGENT_TIMEOUT_MS:-}" \
+  "DOCKER_GIT_EXCHANGE_PROJECT_REPO_URL=${DOCKER_GIT_EXCHANGE_PROJECT_REPO_URL:-}" \
+  "DOCKER_GIT_EXCHANGE_TARGETS=${DOCKER_GIT_EXCHANGE_TARGETS:-}" \
+  "DOCKER_GIT_FEDERATION_ACTOR=${DOCKER_GIT_FEDERATION_ACTOR:-}" \
+  "DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN=${DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN:-}" \
+  "DOCKER_GIT_OUTBOX_POLLING_INTERVAL_MS=${DOCKER_GIT_OUTBOX_POLLING_INTERVAL_MS:-}" \
+  "DOCKER_GIT_PROJECTS_ROOT=${DOCKER_GIT_PROJECTS_ROOT:-}" \
+  "DOCKER_GIT_PROJECTS_ROOT_VOLUME=${DOCKER_GIT_PROJECTS_ROOT_VOLUME:-}" \
+  "DOCKER_GIT_PROJECT_DOCKER_HOST=${DOCKER_GIT_PROJECT_DOCKER_HOST:-}" \
+  "DOCKER_GIT_PROJECT_SSH_BIND_HOST=${DOCKER_GIT_PROJECT_SSH_BIND_HOST:-}" \
+  "UBUNTU_APT_MIRROR=${UBUNTU_APT_MIRROR:-}" \
+  docker "$@"
 EOF
   chmod +x "$bin_dir/docker"
 }
@@ -108,6 +132,232 @@ dg_ensure_node_gyp() {
   fi
 
   export PATH="$node_gyp_bin:$PATH"
+}
+
+dg_controller_container_name() {
+  printf '%s\n' "${DOCKER_GIT_API_CONTAINER_NAME:-docker-git-api}"
+}
+
+dg_has_project_docker_access() {
+  local controller
+  controller="$(dg_controller_container_name)"
+
+  docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$controller" \
+    && docker exec "$controller" docker info >/dev/null 2>&1
+}
+
+dg_docker_args_request_tty() {
+  local skip_next=0
+  local arg
+
+  for arg in "$@"; do
+    if [[ "$arg" == "exec" ]]; then
+      continue
+    fi
+
+    if [[ "$skip_next" == "1" ]]; then
+      skip_next=0
+      continue
+    fi
+
+    case "$arg" in
+      --)
+        return 1
+        ;;
+      --tty)
+        return 0
+        ;;
+      --user|--workdir|--env|--env-file|--detach-keys)
+        skip_next=1
+        ;;
+      --user=*|--workdir=*|--env=*|--env-file=*|--detach-keys=*)
+        ;;
+      -u|-w|-e)
+        skip_next=1
+        ;;
+      -*t*)
+        return 0
+        ;;
+      -*)
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+  done
+
+  return 1
+}
+
+# Run Docker commands against the daemon that owns docker-git project
+# containers. In isolated-controller mode this is the daemon inside
+# docker-git-api; in legacy/local mode it falls back to the host daemon.
+dg_project_docker() {
+  local controller
+  controller="$(dg_controller_container_name)"
+
+  if dg_has_project_docker_access; then
+    if [[ "${1:-}" == "exec" ]]; then
+      local exec_flags=(-i)
+      if [[ -t 0 && -t 1 ]] && dg_docker_args_request_tty "$@"; then
+        exec_flags=(-it)
+      fi
+      docker exec "${exec_flags[@]}" "$controller" docker "$@"
+      return
+    fi
+
+    docker exec "$controller" docker "$@"
+    return
+  fi
+
+  docker "$@"
+}
+
+dg_project_compose() {
+  local project_dir="$1"
+  shift
+
+  local controller
+  controller="$(dg_controller_container_name)"
+
+  if dg_has_project_docker_access; then
+    docker exec "$controller" bash -lc 'cd "$1" && shift && exec docker compose "$@"' \
+      bash "$project_dir" "$@"
+    return
+  fi
+
+  (cd "$project_dir" && docker compose "$@")
+}
+
+dg_project_container_ip() {
+  local container="$1"
+
+  dg_project_docker inspect \
+    --format '{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' \
+    "$container" 2>/dev/null \
+    | sed '/^$/d' \
+    | head -n 1
+}
+
+dg_rewrite_ssh_args_for_project_container() {
+  local container_ip="$1"
+  local controller_key_path="$2"
+  shift 2
+
+  local replace_identity=0
+  local replace_port=0
+  local arg
+  for arg in "$@"; do
+    if [[ "$replace_identity" == "1" ]]; then
+      printf '%s\0' "$controller_key_path"
+      replace_identity=0
+      continue
+    fi
+
+    if [[ "$replace_port" == "1" ]]; then
+      printf '%s\0' "22"
+      replace_port=0
+      continue
+    fi
+
+    case "$arg" in
+      -i)
+        printf '%s\0' "-i"
+        replace_identity=1
+        ;;
+      -p)
+        printf '%s\0' "-p"
+        replace_port=1
+        ;;
+      *@127.0.0.1|*@localhost)
+        printf '%s\0' "${arg%@*}@$container_ip"
+        ;;
+      *)
+        printf '%s\0' "$arg"
+        ;;
+    esac
+  done
+}
+
+dg_find_ssh_identity_arg() {
+  local previous=""
+  local arg
+
+  for arg in "$@"; do
+    if [[ "$previous" == "-i" ]]; then
+      printf '%s\n' "$arg"
+      return 0
+    fi
+    previous="$arg"
+  done
+
+  return 1
+}
+
+dg_project_ssh_to_container() {
+  local container="$1"
+  local local_ssh_command="$2"
+  shift 2
+
+  if ! dg_has_project_docker_access; then
+    "$local_ssh_command" "$@"
+    return
+  fi
+
+  local controller
+  controller="$(dg_controller_container_name)"
+
+  local container_ip
+  container_ip="$(dg_project_container_ip "$container")"
+  if [[ -z "$container_ip" ]]; then
+    return 255
+  fi
+
+  local identity_arg=""
+  identity_arg="$(dg_find_ssh_identity_arg "$@" || true)"
+  local controller_key_path="/tmp/docker-git-e2e-ssh-key-$$-$RANDOM"
+  if [[ -n "$identity_arg" ]]; then
+    docker exec -i "$controller" bash -lc 'umask 077; cat > "$1"' bash "$controller_key_path" \
+      < "$identity_arg"
+  fi
+
+  local rewritten=()
+  while IFS= read -r -d '' arg; do
+    rewritten+=("$arg")
+  done < <(dg_rewrite_ssh_args_for_project_container "$container_ip" "$controller_key_path" "$@")
+
+  local exec_flags=(-i)
+  if [[ -t 0 && -t 1 ]]; then
+    exec_flags=(-it)
+  fi
+
+  local ssh_exit=0
+  local controller_key_arg=""
+  if [[ -n "$identity_arg" ]]; then
+    controller_key_arg="$controller_key_path"
+  fi
+
+  if docker exec "${exec_flags[@]}" "$controller" bash -lc '
+    key_path="$1"
+    shift
+    cleanup() {
+      if [[ -n "$key_path" ]]; then
+        rm -f "$key_path" >/dev/null 2>&1 || true
+      fi
+    }
+    trap cleanup EXIT HUP INT TERM
+    ssh "$@"
+  ' bash "$controller_key_arg" "${rewritten[@]}"; then
+    ssh_exit=0
+  else
+    ssh_exit=$?
+  fi
+
+  if [[ -n "$identity_arg" ]]; then
+    docker exec "$controller" rm -f "$controller_key_path" >/dev/null 2>&1 || true
+  fi
+
+  return "$ssh_exit"
 }
 
 dg_prepare_bun_workspace() {

@@ -43,8 +43,8 @@ fail() {
 }
 
 reset_shared_clone_cache_volume() {
-  docker volume create docker-git-shared-cache >/dev/null
-  docker run --rm \
+  dg_project_docker volume create docker-git-shared-cache >/dev/null
+  dg_project_docker run --rm \
     -v docker-git-shared-cache:/target \
     alpine:3.20 \
     sh -euc 'mkdir -p /target && find /target -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'
@@ -59,21 +59,21 @@ on_error() {
   echo "e2e/clone-cache: failed at line $line" >&2
   docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -n 80 || true
   if [[ -n "$ACTIVE_CONTAINER" ]]; then
-    docker logs "$ACTIVE_CONTAINER" --tail 200 || true
+    dg_project_docker logs "$ACTIVE_CONTAINER" --tail 200 || true
   fi
   if [[ -n "$ACTIVE_CLONE_LOG" ]] && [[ -f "$ACTIVE_CLONE_LOG" ]]; then
     echo "--- host clone log ---" >&2
     cat "$ACTIVE_CLONE_LOG" >&2 || true
   fi
-  if [[ -n "$ACTIVE_OUT_DIR" ]] && [[ -f "$ACTIVE_OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$ACTIVE_OUT_DIR" && docker compose ps) || true
-    (cd "$ACTIVE_OUT_DIR" && docker compose logs --no-color --tail 200) || true
+  if [[ -n "$ACTIVE_OUT_DIR" ]]; then
+    dg_project_compose "$ACTIVE_OUT_DIR" ps || true
+    dg_project_compose "$ACTIVE_OUT_DIR" logs --no-color --tail 200 || true
   fi
 }
 
 cleanup_active_case() {
-  if [[ -n "$ACTIVE_OUT_DIR" ]] && [[ -f "$ACTIVE_OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$ACTIVE_OUT_DIR" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
+  if [[ -n "$ACTIVE_OUT_DIR" ]]; then
+    dg_project_compose "$ACTIVE_OUT_DIR" down -v --remove-orphans >/dev/null 2>&1 || true
   fi
   ACTIVE_OUT_DIR=""
   ACTIVE_CONTAINER=""
@@ -100,12 +100,12 @@ wait_for_clone_completion() {
   local attempt=1
 
   while [[ "$attempt" -le "$attempts" ]]; do
-    if docker exec "$container" test -f /run/docker-git/clone.done >/dev/null 2>&1; then
+    if dg_project_docker exec "$container" test -f /run/docker-git/clone.done >/dev/null 2>&1; then
       return 0
     fi
 
-    if docker exec "$container" test -f /run/docker-git/clone.failed >/dev/null 2>&1; then
-      docker logs "$container" >&2 || true
+    if dg_project_docker exec "$container" test -f /run/docker-git/clone.failed >/dev/null 2>&1; then
+      dg_project_docker logs "$container" >&2 || true
       fail "clone failed marker found for container: $container"
     fi
 
@@ -113,7 +113,7 @@ wait_for_clone_completion() {
     attempt="$((attempt + 1))"
   done
 
-  docker logs "$container" >&2 || true
+  dg_project_docker logs "$container" >&2 || true
   fail "clone did not complete in time for container: $container"
 }
 
@@ -166,13 +166,13 @@ EOF_ENV
   fi
 
   wait_for_clone_completion "$container_name"
-  docker logs "$container_name" > "$log_path" 2>&1 || true
+  dg_project_docker logs "$container_name" > "$log_path" 2>&1 || true
 
-  docker exec -u dev "$container_name" bash -lc "test -d '$TARGET_DIR/.git'" \
+  dg_project_docker exec -u dev "$container_name" bash -lc "test -d '$TARGET_DIR/.git'" \
     || fail "expected cloned repo at: $TARGET_DIR"
 
   local branch
-  branch="$(docker exec -u dev "$container_name" bash -lc "cd '$TARGET_DIR' && git rev-parse --abbrev-ref HEAD")"
+  branch="$(dg_project_docker exec -u dev "$container_name" bash -lc "cd '$TARGET_DIR' && git rev-parse --abbrev-ref HEAD")"
   [[ "$branch" == "issue-1" ]] || fail "expected branch issue-1, got: $branch"
 
   if [[ "$expect_cache_use" == "1" ]]; then
@@ -195,6 +195,7 @@ EOF_ENV
 mkdir -p "$ROOT/.orch/auth/codex" "$ROOT/.orch/env"
 : > "$ROOT/authorized_keys"
 
+dg_run_docker_git "$REPO_ROOT" status >/dev/null
 reset_shared_clone_cache_volume
 
 run_clone_case "first" "0"

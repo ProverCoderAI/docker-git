@@ -5,8 +5,9 @@ HTTP API for docker-git orchestration (projects, agents, logs/events, federation
 This is now the intended controller plane:
 - the API runs inside `docker-git-api`
 - `.docker-git` state lives in the Docker volume `docker-git-projects`
-- the API talks to Docker through `/var/run/docker.sock`
+- the API starts an isolated Docker daemon inside the controller by default
 - child project containers no longer depend on host bind mounts for bootstrap auth/env
+- the host `/var/run/docker.sock` is not mounted into the controller or project containers
 
 ## UI wrapper
 
@@ -41,6 +42,12 @@ Optional env:
 
 - `DOCKER_GIT_API_BIND_HOST` (default: `127.0.0.1`)
 - `DOCKER_GIT_API_PORT` (default: `3334`)
+- `DOCKER_GIT_DOCKER_RUNTIME` (default: `isolated`; starts a managed Docker daemon in `docker-git-api`)
+- `DOCKER_GIT_CONTROLLER_DOCKER_HOST` (default: `unix:///var/run/docker.sock`; socket path inside the controller)
+- `DOCKER_GIT_DOCKERD_TCP_HOST` (default: `tcp://0.0.0.0:2375`; reachable only inside Docker networks unless explicitly published)
+- `DOCKER_GIT_DOCKERD_DEFAULT_CGROUPNS_MODE` (default: `host`; keeps nested project containers compatible with cgroup v2 DinD)
+- `DOCKER_GIT_PROJECT_DOCKER_HOST` (default: `tcp://host.docker.internal:2375`; lets project containers use the isolated daemon)
+- `DOCKER_GIT_PROJECT_SSH_BIND_HOST` (default: `0.0.0.0` in controller mode; project SSH binds inside the isolated controller runtime)
 - `DOCKER_GIT_PROJECTS_ROOT` (container path, default: `/home/dev/.docker-git`)
 - `DOCKER_GIT_PROJECTS_ROOT_VOLUME` (Docker volume name for controller state, default: `docker-git-projects`)
 - `DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN` (optional public ActivityPub origin)
