@@ -79,10 +79,6 @@ const resolveProjectTerminalKey = (
   return null
 }
 
-type ProjectCrypto = Crypto & {
-  readonly randomUUID?: () => string
-}
-
 const randomHex = (bytes: number): string => {
   const values = new Uint8Array(bytes)
   globalThis.crypto.getRandomValues(values)
@@ -90,9 +86,8 @@ const randomHex = (bytes: number): string => {
 }
 
 const createPendingTerminalSessionId = (): string => {
-  const crypto = globalThis.crypto as ProjectCrypto
-  if (typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID()
+  if (Reflect.has(globalThis.crypto, "randomUUID")) {
+    return globalThis.crypto.randomUUID()
   }
 
   return `pending-${Date.now().toString(16)}-${randomHex(8)}`
