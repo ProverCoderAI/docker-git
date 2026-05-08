@@ -6,6 +6,8 @@ import { UiProvider } from "../ui/primitives.js"
 import { loadDashboard, resolveApiBaseUrl } from "./api.js"
 import { createDashboardRefreshReducer, type DashboardState } from "./app-dashboard-state.js"
 import { AppReady } from "./app-ready.js"
+import { resolveWebAppRoute } from "./app-terminal-session-core.js"
+import { AppTerminalSession } from "./app-terminal-session.js"
 import { ErrorScreen, LoadingScreen } from "./panels.js"
 import { resolveViewportLayout, type ViewportLayout, type ViewportSize } from "./viewport-layout.js"
 
@@ -170,26 +172,47 @@ const renderDashboardState = (
     Match.exhaustive
   )
 
-export const App = (): JSX.Element => {
+const AppFrame = (
+  { children, viewport }: { readonly children: JSX.Element; readonly viewport: ViewportLayout }
+): JSX.Element => (
+  <div
+    style={{
+      backgroundColor: "#0b0d10",
+      color: "#f4f7fb",
+      fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
+      fontSize: viewport.fontSize,
+      height: viewport.viewportHeight,
+      minHeight: viewport.viewportHeight,
+      overflow: "hidden",
+      width: "100%"
+    }}
+  >
+    <UiProvider primitives={webPrimitives}>
+      {children}
+    </UiProvider>
+  </div>
+)
+
+const AppDashboard = ({ viewport }: { readonly viewport: ViewportLayout }): JSX.Element => {
   const { refresh, state } = useDashboardController()
+
+  return renderDashboardState(state, refresh, viewport)
+}
+
+export const App = (): JSX.Element => {
   const viewport = useViewportMode()
+  const [route] = useState(() => resolveWebAppRoute(globalThis.location.pathname))
 
   return (
-    <div
-      style={{
-        backgroundColor: "#0b0d10",
-        color: "#f4f7fb",
-        fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
-        fontSize: viewport.fontSize,
-        height: viewport.viewportHeight,
-        minHeight: viewport.viewportHeight,
-        overflow: "hidden",
-        width: "100%"
-      }}
-    >
-      <UiProvider primitives={webPrimitives}>
-        {renderDashboardState(state, refresh, viewport)}
-      </UiProvider>
-    </div>
+    <AppFrame viewport={viewport}>
+      {Match.value(route).pipe(
+        Match.when({ tag: "Dashboard" }, () => <AppDashboard viewport={viewport} />),
+        Match.when(
+          { tag: "TerminalSession" },
+          ({ sessionId }) => <AppTerminalSession sessionId={sessionId} viewportLayout={viewport} />
+        ),
+        Match.exhaustive
+      )}
+    </AppFrame>
   )
 }

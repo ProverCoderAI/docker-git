@@ -579,8 +579,8 @@ const startCreateProjectJob = (
 
 export const listProjects = () =>
   listProjectItems.pipe(
-    Effect.map((projects) => projects.map((project) => dbProjectDetails(project))),
-    Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<ProjectDetails>))
+    Effect.map((projects) => projects.map((project) => dbProjectSummary(project))),
+    Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<ProjectSummary>))
   )
 
 export const applyAllProjects = (activeOnly: boolean) =>
