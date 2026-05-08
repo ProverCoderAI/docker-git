@@ -72,25 +72,16 @@ describe("terminal inline image output", () => {
     const cache = new Map<string, string>()
     const blob = new Blob(["image"], { type: "image/png" })
     const imagePath = "/var/data/example.png"
+    const expectedEntry = {
+      _tag: "AvailableTerminalInlineImage",
+      displayUrl: "blob:terminal-image",
+      fetchUrl: "https://api/image",
+      path: imagePath
+    }
 
-    expect(cacheTerminalInlineImageBlob(cache, imagePath, "https://api/image", blob)).toEqual({
-      _tag: "AvailableTerminalInlineImage",
-      displayUrl: "blob:terminal-image",
-      fetchUrl: "https://api/image",
-      path: imagePath
-    })
-    expect(cachedTerminalInlineImageEntry(cache, imagePath, "https://api/image")).toEqual({
-      _tag: "AvailableTerminalInlineImage",
-      displayUrl: "blob:terminal-image",
-      fetchUrl: "https://api/image",
-      path: imagePath
-    })
-    expect(cacheTerminalInlineImageBlob(cache, imagePath, "https://api/image", blob)).toEqual({
-      _tag: "AvailableTerminalInlineImage",
-      displayUrl: "blob:terminal-image",
-      fetchUrl: "https://api/image",
-      path: imagePath
-    })
+    expect(cacheTerminalInlineImageBlob(cache, imagePath, "https://api/image", blob)).toEqual(expectedEntry)
+    expect(cachedTerminalInlineImageEntry(cache, imagePath, "https://api/image")).toEqual(expectedEntry)
+    expect(cacheTerminalInlineImageBlob(cache, imagePath, "https://api/image", blob)).toEqual(expectedEntry)
     expect(createObjectUrl).toHaveBeenCalledTimes(1)
 
     revokeTerminalInlineImageObjectUrlCache(cache)
