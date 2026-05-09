@@ -18,7 +18,7 @@ export { gitlabInvalidTokenMessage } from "./gitlab-token-validation.js"
 
 export const gitlabMissingTokenMessage = [
   "GitLab auth is missing: no GitLab token/key was found for this repository.",
-  "If the repository requires access, run: docker-git auth gitlab login --web"
+  "If the repository requires access, run: docker-git auth gitlab login"
 ].join("\n")
 export const gitlabRepoAccessWarning = "Unable to validate GitLab repository access before start; continuing."
 
@@ -34,12 +34,12 @@ export const gitlabRepoAccessMessage = (repoUrl: string, hasToken: boolean): str
     ? [
       `GitLab access denied for repository: ${repoUrl}`,
       "Reason: the repository does not exist, is private, or the selected token has no rights.",
-      "If you need access, run: docker-git auth gitlab login --web"
+      "If you need access, run: docker-git auth gitlab login"
     ].join("\n")
     : [
       `GitLab repository is not accessible without auth: ${repoUrl}`,
       "Reason: the repository does not exist, is private, or a GitLab token/key is required.",
-      "If you need access, run: docker-git auth gitlab login --web"
+      "If you need access, run: docker-git auth gitlab login"
     ].join("\n")
 
 const findFirstEnvValue = (input: string, keys: ReadonlyArray<string>): string | null => {
@@ -98,6 +98,23 @@ const mapGitlabRepoAccessStatus = (status: number): GitlabRepoAccessStatus => {
   return "unknown"
 }
 
+const probeGitlabRepoAccessWithHeaders = (
+  client: HttpClient.HttpClient,
+  projectPath: string,
+  headers: Record<string, string>
+) =>
+  Effect.gen(function*(_) {
+    const response = yield* _(
+      client.get(`https://gitlab.com/api/v4/projects/${encodeURIComponent(projectPath)}`, {
+        headers: {
+          ...headers,
+          Accept: "application/json"
+        }
+      })
+    )
+    return mapGitlabRepoAccessStatus(response.status)
+  })
+
 export const probeGitlabRepoAccess = (
   repoUrl: string,
   token: string | null
@@ -109,16 +126,19 @@ export const probeGitlabRepoAccess = (
     }
 
     const client = yield* _(HttpClient.HttpClient)
-    const response = yield* _(
-      client.get(`https://gitlab.com/api/v4/projects/${encodeURIComponent(repo.projectPath)}`, {
-        headers: {
-          ...(token === null ? {} : { "PRIVATE-TOKEN": token }),
-          Accept: "application/json"
-        }
-      })
-    )
+    if (token === null) {
+      return yield* _(probeGitlabRepoAccessWithHeaders(client, repo.projectPath, {}))
+    }
 
-    return mapGitlabRepoAccessStatus(response.status)
+    const privateTokenAccess = yield* _(probeGitlabRepoAccessWithHeaders(client, repo.projectPath, {
+      "PRIVATE-TOKEN": token
+    }))
+    if (privateTokenAccess !== "notAccessible") {
+      return privateTokenAccess
+    }
+    return yield* _(probeGitlabRepoAccessWithHeaders(client, repo.projectPath, {
+      Authorization: `Bearer ${token}`
+    }))
   }).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.match({

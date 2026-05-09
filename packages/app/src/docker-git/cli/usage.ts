@@ -105,7 +105,7 @@ Auth actions:
 Auth options:
   --label <label>        Account label (default: default)
   --token <token>        GitHub/GitLab token override (login only; useful for non-interactive/CI)
-  --web                 Force OAuth web flow (login only; ignores --token)
+  --web                 Force OAuth web flow where supported (login only; ignores --token)
   --scopes <scopes>      GitHub scopes (login only, default: repo,workflow,read:org)
   --env-global <path>    Env file path for GitHub/GitLab tokens (default: <projectsRoot>/.orch/env/global.env)
   --codex-auth <path>    Codex auth root path (default: <projectsRoot>/.orch/auth/codex)

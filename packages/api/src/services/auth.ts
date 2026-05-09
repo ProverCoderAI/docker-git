@@ -50,10 +50,10 @@ export const githubAuthRequiredMessage = [
   "GitHub auth is missing: no GitHub token/key was found for this repository.",
   "If the repository requires access, run: docker-git auth github login --web"
 ].join("\n")
-export const gitlabAuthRequiredCommand = "docker-git auth gitlab login --web"
+export const gitlabAuthRequiredCommand = "docker-git auth gitlab login"
 export const gitlabAuthRequiredMessage = [
   "GitLab auth is missing: no GitLab token/key was found for this repository.",
-  "If the repository requires access, run: docker-git auth gitlab login --web"
+  "If the repository requires access, run: docker-git auth gitlab login"
 ].join("\n")
 export const githubAuthEnvGlobalPath = defaultTemplateConfig.envGlobalPath
 export const codexAuthPath = defaultTemplateConfig.codexAuthPath

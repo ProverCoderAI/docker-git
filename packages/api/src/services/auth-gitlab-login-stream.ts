@@ -3,36 +3,51 @@ import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { defaultTemplateConfig } from "@effect-template/lib/core/template-defaults"
-import { buildDockerAuthArgs, resolveDockerVolumeHostPath, runDockerAuthCapture } from "@effect-template/lib/shell/docker-auth"
-import { CommandFailedError } from "@effect-template/lib/shell/errors"
-import { buildDockerAuthSpec, normalizeAccountLabel } from "@effect-template/lib/usecases/auth-helpers"
 import { migrateLegacyOrchLayout } from "@effect-template/lib/usecases/auth-sync"
-import { buildGitlabTokenKey, extractGitlabTokenFromStatusOutput, gitlabLabelFromKey } from "@effect-template/lib/usecases/auth-gitlab"
+import { buildGitlabTokenKey, gitlabLabelFromKey } from "@effect-template/lib/usecases/auth-gitlab"
 import { ensureEnvFile, readEnvText, upsertEnvKey } from "@effect-template/lib/usecases/env-file"
-import { ensureGlabAuthImage, gitlabAuthDir, gitlabAuthRoot, gitlabImageName } from "@effect-template/lib/usecases/gitlab-auth-image"
+import { gitlabAuthRoot } from "@effect-template/lib/usecases/gitlab-auth-image"
 import { resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
 import { autoSyncState } from "@effect-template/lib/usecases/state-repo"
 import { Effect, Logger, Runtime } from "effect"
 import * as Stream from "effect/Stream"
-import { spawn, type ChildProcess } from "node:child_process"
 
 import type { GitlabAuthLoginRequest } from "../api/contracts.js"
 import { ApiBadRequestError, ApiInternalError } from "../api/errors.js"
 
 type GitlabRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
-type GitlabSetupError = CommandFailedError | PlatformError
 
 type PreparedGitlabLogin = {
-  readonly cwd: string
-  readonly args: ReadonlyArray<string>
-  readonly accountPath: string
   readonly envPath: string
   readonly key: string
   readonly label: string
 }
 
+export type GitlabDeviceAuthorization = {
+  readonly deviceCode: string
+  readonly userCode: string
+  readonly verificationUri: string
+  readonly verificationUriComplete: string
+  readonly expiresIn: number
+  readonly interval: number
+}
+
+type GitlabTokenResponse = {
+  readonly accessToken: string
+}
+
+type GitlabTokenPendingResponse = {
+  readonly error: string
+  readonly errorDescription: string | null
+}
+
 const gitlabLoginStreamSuccessMarker = "__DOCKER_GIT_GITLAB_LOGIN_STATUS__:ok"
 const gitlabLoginStreamErrorMarkerPrefix = "__DOCKER_GIT_GITLAB_LOGIN_STATUS__:error:"
+const gitlabDeviceClientId = "41d48f9422ebd655dd9cf2947d6979681dfaddc6d0c56f7628f6ada59559af1e"
+const gitlabDeviceScope = "openid profile read_user write_repository api"
+const gitlabDeviceAuthorizeUrl = "https://gitlab.com/oauth/authorize_device"
+const gitlabDeviceTokenUrl = "https://gitlab.com/oauth/token"
+const gitlabDeviceGrantType = "urn:ietf:params:oauth:grant-type:device_code"
 
 const ensureGitlabOrchLayout = (
   cwd: string,
@@ -47,15 +62,11 @@ const ensureGitlabOrchLayout = (
     claudeAuthPath: ".docker-git/.orch/auth/claude"
   })
 
-const toApiError = (error: GitlabSetupError): ApiBadRequestError | ApiInternalError =>
-  error._tag === "CommandFailedError"
-    ? new ApiBadRequestError({
-      message: `${error.command} failed (exit ${error.exitCode}).`
-    })
-    : new ApiInternalError({
-      message: String(error),
-      cause: error
-    })
+const toApiError = (error: PlatformError): ApiInternalError =>
+  new ApiInternalError({
+    message: String(error),
+    cause: error
+  })
 
 const prepareGitlabLogin = (
   request: GitlabAuthLoginRequest
@@ -72,68 +83,17 @@ const prepareGitlabLogin = (
     )
 
     const envPath = resolvePathFromCwd(path, cwd, defaultTemplateConfig.envGlobalPath)
-    const rootPath = resolvePathFromCwd(path, cwd, gitlabAuthRoot)
-    const label = normalizeAccountLabel(request.label ?? null, "default")
-    const accountPath = path.join(rootPath, label)
+    const authPath = resolvePathFromCwd(path, cwd, gitlabAuthRoot)
     const key = buildGitlabTokenKey(request.label ?? null)
 
-    yield* _(fs.makeDirectory(accountPath, { recursive: true }).pipe(Effect.mapError(toApiError)))
-    yield* _(ensureGlabAuthImage(fs, path, cwd, "glab auth").pipe(Effect.mapError(toApiError)))
-
-    const hostPath = yield* _(resolveDockerVolumeHostPath(cwd, accountPath).pipe(Effect.mapError(toApiError)))
-    const args = buildDockerAuthArgs(
-      buildDockerAuthSpec({
-        cwd,
-        image: gitlabImageName,
-        hostPath,
-        containerPath: gitlabAuthDir,
-        env: ["BROWSER=echo", `GLAB_CONFIG_DIR=${gitlabAuthDir}`],
-        args: [
-          "auth",
-          "login",
-          "--hostname",
-          "gitlab.com",
-          "--web",
-          "--git-protocol",
-          "https"
-        ],
-        interactive: false
-      })
-    )
+    yield* _(fs.makeDirectory(authPath, { recursive: true }).pipe(Effect.mapError(toApiError)))
 
     return {
-      cwd,
-      args,
-      accountPath,
       envPath,
       key,
       label: gitlabLabelFromKey(key)
     }
   })
-
-const resolveGitlabToken = (
-  cwd: string,
-  accountPath: string
-): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  runDockerAuthCapture(
-    buildDockerAuthSpec({
-      cwd,
-      image: gitlabImageName,
-      hostPath: accountPath,
-      containerPath: gitlabAuthDir,
-      env: `GLAB_CONFIG_DIR=${gitlabAuthDir}`,
-      args: ["auth", "status", "--hostname", "gitlab.com", "--show-token"],
-      interactive: false
-    }),
-    [0],
-    (exitCode) => new CommandFailedError({ command: "glab auth status --show-token", exitCode })
-  ).pipe(
-    Effect.map((raw) => extractGitlabTokenFromStatusOutput(raw)),
-    Effect.filterOrFail(
-      (value): value is string => value !== null && value.length > 0,
-      () => new CommandFailedError({ command: "glab auth status --show-token", exitCode: 1 })
-    )
-  )
 
 const persistGitlabToken = (
   fs: FileSystem.FileSystem,
@@ -157,6 +117,15 @@ const normalizeCapturedLogLines = (lines: ReadonlyArray<string>): ReadonlyArray<
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
 
+export const renderGitlabDeviceLoginInstructions = (authorization: GitlabDeviceAuthorization): string =>
+  [
+    "GitLab device login:",
+    `- Open: ${authorization.verificationUri}`,
+    `- Enter code: ${authorization.userCode}`,
+    `- Direct link: ${authorization.verificationUriComplete}`,
+    `Waiting for authorization for up to ${authorization.expiresIn} seconds...`
+  ].join("\n") + "\n"
+
 export const renderGitlabPostLoginOutput = (
   lines: ReadonlyArray<string>,
   status: string
@@ -174,13 +143,145 @@ const toStreamError = (error: unknown): ApiInternalError | ApiBadRequestError =>
       cause: error
     })
 
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  typeof value === "object" && value !== null ? value as Record<string, unknown> : null
+
+const stringField = (record: Record<string, unknown>, key: string): string | null => {
+  const value = record[key]
+  return typeof value === "string" && value.trim().length > 0 ? value : null
+}
+
+const numberField = (record: Record<string, unknown>, key: string, fallback: number): number => {
+  const value = record[key]
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+const parseDeviceAuthorization = (payload: unknown): GitlabDeviceAuthorization => {
+  const record = asRecord(payload)
+  const deviceCode = record === null ? null : stringField(record, "device_code")
+  const userCode = record === null ? null : stringField(record, "user_code")
+  const verificationUri = record === null ? null : stringField(record, "verification_uri")
+  const verificationUriComplete = record === null ? null : stringField(record, "verification_uri_complete")
+
+  if (record === null || deviceCode === null || userCode === null || verificationUri === null || verificationUriComplete === null) {
+    throw new Error("GitLab device authorization response was missing required fields.")
+  }
+
+  return {
+    deviceCode,
+    userCode,
+    verificationUri,
+    verificationUriComplete,
+    expiresIn: numberField(record, "expires_in", 300),
+    interval: numberField(record, "interval", 5)
+  }
+}
+
+const parseTokenResponse = (payload: unknown): GitlabTokenResponse | GitlabTokenPendingResponse => {
+  const record = asRecord(payload)
+  const accessToken = record === null ? null : stringField(record, "access_token")
+  if (accessToken !== null) {
+    return { accessToken }
+  }
+
+  return {
+    error: record === null ? "invalid_response" : (stringField(record, "error") ?? "invalid_response"),
+    errorDescription: record === null ? null : stringField(record, "error_description")
+  }
+}
+
+const formBody = (entries: ReadonlyArray<readonly [string, string]>): URLSearchParams => {
+  const params = new URLSearchParams()
+  for (const [key, value] of entries) {
+    params.set(key, value)
+  }
+  return params
+}
+
+const postGitlabOauthForm = async (url: string, body: URLSearchParams): Promise<unknown> => {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body
+  })
+  const payload = await response.json() as unknown
+  if (response.ok) {
+    return payload
+  }
+  return payload
+}
+
+const requestGitlabDeviceAuthorization = async (): Promise<GitlabDeviceAuthorization> =>
+  parseDeviceAuthorization(
+    await postGitlabOauthForm(
+      gitlabDeviceAuthorizeUrl,
+      formBody([
+        ["client_id", gitlabDeviceClientId],
+        ["scope", gitlabDeviceScope]
+      ])
+    )
+  )
+
+const delay = (ms: number) => new Promise((resolve) => {
+  setTimeout(resolve, ms)
+})
+
+const formatGitlabDeviceError = (response: GitlabTokenPendingResponse): string =>
+  response.errorDescription === null
+    ? response.error
+    : `${response.error}: ${response.errorDescription}`
+
+const pollGitlabDeviceToken = async (
+  authorization: GitlabDeviceAuthorization,
+  shouldStop: () => boolean
+): Promise<string> => {
+  const startedAt = Date.now()
+  const expiresAt = startedAt + authorization.expiresIn * 1000
+  let intervalMs = authorization.interval * 1000
+
+  while (!shouldStop() && Date.now() < expiresAt) {
+    await delay(intervalMs)
+
+    const result = parseTokenResponse(
+      await postGitlabOauthForm(
+        gitlabDeviceTokenUrl,
+        formBody([
+          ["grant_type", gitlabDeviceGrantType],
+          ["device_code", authorization.deviceCode],
+          ["client_id", gitlabDeviceClientId]
+        ])
+      )
+    )
+
+    if ("accessToken" in result) {
+      return result.accessToken
+    }
+
+    if (result.error === "authorization_pending") {
+      continue
+    }
+
+    if (result.error === "slow_down") {
+      intervalMs += 5000
+      continue
+    }
+
+    throw new Error(formatGitlabDeviceError(result))
+  }
+
+  throw new Error("GitLab device login expired before authorization completed.")
+}
+
 const finalizeGitlabLogin = (
-  prepared: PreparedGitlabLogin
+  prepared: PreparedGitlabLogin,
+  token: string
 ): Effect.Effect<void, ApiBadRequestError | ApiInternalError, GitlabRuntime> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
-    const token = yield* _(resolveGitlabToken(prepared.cwd, prepared.accountPath).pipe(Effect.mapError(toApiError)))
     yield* _(ensureEnvFile(fs, path, prepared.envPath).pipe(Effect.mapError(toApiError)))
     yield* _(persistGitlabToken(fs, prepared.envPath, prepared.key, token).pipe(Effect.mapError(toApiError)))
     yield* _(autoSyncState(`chore(state): auth gitlab ${prepared.label}`))
@@ -192,9 +293,9 @@ export const streamGitlabAuthLogin = (
   Effect.gen(function*(_) {
     const prepared = yield* _(prepareGitlabLogin(request))
     const encoder = new TextEncoder()
-    const runPromiseExit = Runtime.runPromiseExit(yield* _(Effect.runtime<GitlabRuntime>()))
+    const runPromise = Runtime.runPromise(yield* _(Effect.runtime<GitlabRuntime>()))
 
-    let child: ChildProcess | null = null
+    let cancelled = false
     const readable = new ReadableStream<Uint8Array>({
       start(controller) {
         const enqueue = (chunk: Buffer | string) => {
@@ -202,62 +303,40 @@ export const streamGitlabAuthLogin = (
           controller.enqueue(encoded)
         }
 
-        enqueue("Starting GitLab auth login in container...\n")
-
-        child = spawn("docker", prepared.args, {
-          cwd: prepared.cwd,
-          stdio: ["ignore", "pipe", "pipe"]
-        })
-
-        child.stdout?.on("data", enqueue)
-        child.stderr?.on("data", enqueue)
-
-        child.on("error", (error) => {
-          controller.error(
-            new ApiInternalError({
-              message: String(error),
-              cause: error
-            })
-          )
-        })
-
-        child.on("close", (code) => {
-          const exitCode = code ?? 1
-          if (exitCode !== 0) {
-            enqueue(finalizeMessage(String(exitCode)))
-            controller.close()
-            return
-          }
-
+        void (async () => {
           const postLoginLogs: Array<string> = []
           const logger = Logger.make(({ message }) => {
             postLoginLogs.push(String(message))
           })
 
-          void runPromiseExit(
-            finalizeGitlabLogin(prepared).pipe(
-              Effect.provide(Logger.replace(Logger.defaultLogger, logger)),
-              Effect.matchEffect({
-                onFailure: (error) =>
-                  Effect.sync(() => {
-                    enqueue(renderGitlabPostLoginOutput([
-                      ...postLoginLogs,
-                      `GitLab login finished in browser, but post-login sync failed: ${error.message}`
-                    ], "post-login"))
-                  }),
-                onSuccess: () =>
-                  Effect.sync(() => {
-                    enqueue(renderGitlabPostLoginOutput(postLoginLogs, "ok"))
-                  })
-              })
+          try {
+            enqueue("Starting GitLab device login...\n")
+            const authorization = await requestGitlabDeviceAuthorization()
+            enqueue(renderGitlabDeviceLoginInstructions(authorization))
+            const token = await pollGitlabDeviceToken(authorization, () => cancelled)
+            await runPromise(
+              finalizeGitlabLogin(prepared, token).pipe(
+                Effect.provide(Logger.replace(Logger.defaultLogger, logger))
+              )
             )
-          ).finally(() => {
+            enqueue(renderGitlabPostLoginOutput(postLoginLogs, "ok"))
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            if (cancelled) {
+              return
+            }
+            const output = renderGitlabPostLoginOutput([
+              ...postLoginLogs,
+              `GitLab device login failed: ${message}`
+            ], "device-login")
+            enqueue(output)
+          } finally {
             controller.close()
-          })
-        })
+          }
+        })()
       },
       cancel() {
-        child?.kill("SIGTERM")
+        cancelled = true
       }
     })
 

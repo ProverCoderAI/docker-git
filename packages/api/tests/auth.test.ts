@@ -338,7 +338,7 @@ describe("api auth", () => {
         expect(failure).toBeInstanceOf(ApiAuthRequiredError)
         if (failure instanceof ApiAuthRequiredError) {
           expect(failure.provider).toBe("gitlab")
-          expect(failure.command).toBe("docker-git auth gitlab login --web")
+          expect(failure.command).toBe("docker-git auth gitlab login")
         }
       })
     ).pipe(Effect.provide(NodeContext.layer)))
@@ -395,7 +395,7 @@ describe("api auth", () => {
         if (failure._tag === "ApiBadRequestError") {
           expect(failure.message).toBe(gitlabRepoAccessMessage(repoUrl, true))
         }
-        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(fetchMock).toHaveBeenCalledTimes(3)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

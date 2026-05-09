@@ -8,7 +8,7 @@ const gitlabTokenValidationUrl = "https://gitlab.com/api/v4/user"
 export const gitlabTokenValidationWarning = "Unable to validate GitLab token before start; continuing."
 export const gitlabInvalidTokenMessage = [
   "GitLab auth is invalid: the stored token is dead, revoked, expired, or malformed.",
-  "To restore access, run: docker-git auth gitlab login --web"
+  "To restore access, run: docker-git auth gitlab login"
 ].join("\n")
 
 type GitlabUser = {
@@ -45,18 +45,15 @@ const mapGitlabTokenValidationStatus = (status: number): GitlabTokenValidationSt
   return status >= 200 && status < 300 ? "valid" : "unknown"
 }
 
-// CHANGE: validate GitLab token and decode the authenticated account username
-// WHY: GitLab auth status and clone preflight must share one live validation boundary
-// REF: issue-252
-// SOURCE: https://docs.gitlab.com/api/users/#get-the-current-user
-// PURITY: SHELL
-export const validateGitlabToken = (token: string): Effect.Effect<GitlabTokenValidationResult> =>
+const requestGitlabUser = (
+  client: HttpClient.HttpClient,
+  headers: Record<string, string>
+) =>
   Effect.gen(function*(_) {
-    const client = yield* _(HttpClient.HttpClient)
     const response = yield* _(
       client.get(gitlabTokenValidationUrl, {
         headers: {
-          "PRIVATE-TOKEN": token,
+          ...headers,
           Accept: "application/json"
         }
       })
@@ -75,6 +72,21 @@ export const validateGitlabToken = (token: string): Effect.Effect<GitlabTokenVal
       status,
       login: decodeGitlabUsername(body)
     } satisfies GitlabTokenValidationResult
+  })
+
+// CHANGE: validate GitLab token and decode the authenticated account username
+// WHY: GitLab auth status and clone preflight must share one live validation boundary
+// REF: issue-252
+// SOURCE: https://docs.gitlab.com/api/users/#get-the-current-user
+// PURITY: SHELL
+export const validateGitlabToken = (token: string): Effect.Effect<GitlabTokenValidationResult> =>
+  Effect.gen(function*(_) {
+    const client = yield* _(HttpClient.HttpClient)
+    const privateTokenResult = yield* _(requestGitlabUser(client, { "PRIVATE-TOKEN": token }))
+    if (privateTokenResult.status !== "invalid") {
+      return privateTokenResult
+    }
+    return yield* _(requestGitlabUser(client, { Authorization: `Bearer ${token}` }))
   }).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.match({
