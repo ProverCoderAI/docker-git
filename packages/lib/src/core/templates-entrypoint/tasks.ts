@@ -109,7 +109,7 @@ ${cloneAuthLabelResolutionTemplate}
 
 ${cloneAuthLabeledTokenTemplate}
   fi
-fi`
+`
 
 const renderCloneAuthRepoUrl = (): string =>
   `  AUTH_REPO_URL="$REPO_URL"
