@@ -84,9 +84,9 @@ docker_git_prompt_apply() {
   docker_git_terminal_sanitize
   local b
   b="$(docker_git_branch)"
-  local short_pwd
-  short_pwd="$(docker_git_short_pwd)"
-  local base="[%*] $short_pwd"
+  local short_path
+  short_path="$(docker_git_short_pwd)"
+  local base="[%*] $short_path"
   if [[ -n "$b" ]]; then
     PROMPT="$base ($b)> "
   else
