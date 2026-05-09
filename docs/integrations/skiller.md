@@ -42,6 +42,8 @@ bun run skiller:check
 
 The docker-git web terminal header includes a `Skiller` button next to `Open browser`. The button calls `POST /skiller/open`, which launches the pinned submodule Electron app as a separate process and writes launcher output to `~/.docker-git/logs/skiller.log`.
 
+The same click opens `/api/skiller/app/` in the browser. docker-git serves Skiller's built renderer from the submodule and proxies `/api/skiller/trpc/*` to the running Skiller tRPC backend, so the user sees the actual Skiller UI instead of an invisible background desktop process.
+
 When the API process has no `$DISPLAY`, the launcher uses `xvfb-run` if it is available so Skiller can still start in a headless controller environment.
 
 ## Updating the Pin
@@ -64,4 +66,4 @@ bun run skiller:check
 
 ## Integration Boundary
 
-This integration makes Skiller part of the docker-git checkout and developer workflow. It launches Skiller from docker-git, but it does not embed Skiller's Electron UI into the docker-git web UI. Any future deeper bridge should adapt Skiller's skills registry, scanner, and marketplace behavior through docker-git API services instead of importing the Electron app into the existing web bundle.
+This integration makes Skiller part of the docker-git checkout and developer workflow. docker-git keeps Skiller as an isolated submodule and does not import Skiller source into the docker-git web bundle. The visible browser view is served from Skiller's own built renderer and backed by Skiller's own tRPC process.

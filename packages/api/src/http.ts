@@ -132,7 +132,7 @@ import {
   readProjectTerminalImage,
   startTerminalSession
 } from "./services/terminal-sessions.js"
-import { openSkiller } from "./services/skiller.js"
+import { openSkiller, parseSkillerRoute, proxySkillerTrpc, serveSkillerApp } from "./services/skiller.js"
 import {
   commitStateFromRequest,
   initStateFromRequest,
@@ -530,6 +530,12 @@ const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
 const projectProxyResponse = Effect.gen(function*(_) {
   const request = yield* _(HttpServerRequest.HttpServerRequest)
   const pathname = new URL(request.url, "http://localhost").pathname
+  const skillerRoute = parseSkillerRoute(pathname)
+  if (skillerRoute !== null) {
+    return skillerRoute._tag === "App"
+      ? yield* _(serveSkillerApp(skillerRoute))
+      : yield* _(proxySkillerTrpc(request, skillerRoute))
+  }
   const browserTarget = parseProjectBrowserProxyPath(pathname)
   if (browserTarget !== null) {
     return yield* _(proxyProjectBrowser(request, browserTarget, resolveRequestOrigin(request)))
