@@ -243,8 +243,13 @@ describe("web project actions", () => {
 
   it.effect("applies a selected project through the project apply endpoint", () =>
     Effect.gen(function*(_) {
+      const confirmMock = vi.fn(() => true)
+      vi.stubGlobal("confirm", confirmMock)
       applyProjectMock.mockImplementation(() => Effect.succeed(project))
-      const { context, reloadDashboard, setMessage } = makeBrowserActionContext()
+      const { context, reloadDashboard, setMessage } = makeBrowserActionContext({
+        selectedProjectId: "project-1",
+        selectedProjectName: "octocat/hello-world"
+      })
 
       applyProjectById("project-1", context)
 
@@ -252,11 +257,35 @@ describe("web project actions", () => {
         expect(applyProjectMock).toHaveBeenCalledWith("project-1")
       }))
 
+      expect(confirmMock).toHaveBeenCalledWith(
+        "Apply docker-git config to octocat/hello-world? "
+          + "This restarts the container and ends active SSH sessions and in-container browsers."
+      )
       expect(context.setSelectedProjectId).toHaveBeenCalledWith("project-1")
       expect(context.setSelectedProject).toHaveBeenCalledWith(project)
       expect(reloadDashboard).toHaveBeenCalledTimes(1)
       expect(setMessage).toHaveBeenLastCalledWith("Applied octocat/hello-world.")
     }))
+
+  it("does not apply a project when the user declines confirmation", () => {
+    const confirmMock = vi.fn(() => false)
+    vi.stubGlobal("confirm", confirmMock)
+    applyProjectMock.mockImplementation(() => Effect.succeed(project))
+    const { context, reloadDashboard } = makeBrowserActionContext({
+      selectedProjectId: "project-1",
+      selectedProjectName: "octocat/hello-world"
+    })
+
+    applyProjectById("project-1", context)
+
+    expect(confirmMock).toHaveBeenCalledWith(
+      "Apply docker-git config to octocat/hello-world? "
+        + "This restarts the container and ends active SSH sessions and in-container browsers."
+    )
+    expect(applyProjectMock).not.toHaveBeenCalled()
+    expect(context.setSelectedProjectId).not.toHaveBeenCalled()
+    expect(reloadDashboard).not.toHaveBeenCalled()
+  })
 
   it.effect("confirms and applies all projects", () =>
     Effect.gen(function*(_) {

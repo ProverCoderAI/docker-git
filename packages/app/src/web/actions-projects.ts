@@ -258,10 +258,19 @@ export const connectProjectById = (
   })
 }
 
+const applyProjectConfirmMessage = (label: string): string =>
+  `Apply docker-git config to ${label}? This restarts the container and ends active SSH sessions and in-container browsers.`
+
 export const applyProjectById = (
   projectId: string,
   context: BrowserActionContext
 ) => {
+  const label = context.selectedProjectId === projectId
+    ? projectActionLabel(context)
+    : projectId
+  if (!confirmAction(applyProjectConfirmMessage(label))) {
+    return
+  }
   context.setSelectedProjectId(projectId)
   withBusy({
     context,
