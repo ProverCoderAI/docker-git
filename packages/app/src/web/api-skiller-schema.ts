@@ -1,9 +1,11 @@
 import * as Schema from "@effect/schema/Schema"
 
 export const SkillerScopeResponseSchema = Schema.Struct({
+  containerCodexSkillsPath: Schema.String,
   containerHomePath: Schema.String,
   containerName: Schema.String,
   containerProjectPath: Schema.String,
+  hostCodexSkillsPath: Schema.String,
   hostHomePath: Schema.String,
   hostProjectPath: Schema.String,
   projectId: Schema.String,

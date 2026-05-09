@@ -9,9 +9,11 @@ const openSkillerMock = vi.hoisted(() => vi.fn())
 const openUrlMock = vi.hoisted(() => vi.fn())
 
 const proofScope = {
+  containerCodexSkillsPath: "/home/dev/.codex/skills",
   containerHomePath: "/home/dev",
   containerName: "dg-project",
   containerProjectPath: "/home/dev/app",
+  hostCodexSkillsPath: "/var/lib/docker/volumes/dg-project-home/_data/.codex/skills",
   hostHomePath: "/var/lib/docker/volumes/dg-project-home/_data",
   hostProjectPath: "/var/lib/docker/volumes/dg-project-home/_data/app",
   projectId: "/home/dev/.docker-git/project",
@@ -23,9 +25,11 @@ const skillerLaunch = (
   overrides: {
     readonly alreadyRunning?: boolean
     readonly scope?: null | {
+      readonly containerCodexSkillsPath: string
       readonly containerHomePath: string
       readonly containerName: string
       readonly containerProjectPath: string
+      readonly hostCodexSkillsPath: string
       readonly hostHomePath: string
       readonly hostProjectPath: string
       readonly projectId: string

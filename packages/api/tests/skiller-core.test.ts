@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 
 import {
+  containerCodexSkillsPath,
   parseDockerMountLines,
   remapContainerPathToMountedHost,
   sameSkillerScope
@@ -17,6 +18,9 @@ describe("skiller container filesystem mapping", () => {
     expect(remapContainerPathToMountedHost(mounts, "/home/dev/app")).toBe(
       "/var/lib/docker/volumes/project-home/_data/app"
     )
+    expect(remapContainerPathToMountedHost(mounts, containerCodexSkillsPath("/home/dev"))).toBe(
+      "/var/lib/docker/volumes/project-home/_data/.codex/skills"
+    )
     expect(remapContainerPathToMountedHost(mounts, "/home/dev/.docker-git/.cache/bun")).toBe(
       "/var/lib/docker/volumes/project-cache/_data/bun"
     )
@@ -25,9 +29,11 @@ describe("skiller container filesystem mapping", () => {
 
   it("treats identical Skiller scopes as reusable and different scopes as isolated", () => {
     const scope = {
+      containerCodexSkillsPath: "/home/dev/.codex/skills",
       containerHomePath: "/home/dev",
       containerName: "dg-project",
       containerProjectPath: "/home/dev/app",
+      hostCodexSkillsPath: "/var/lib/docker/volumes/project-home/_data/.codex/skills",
       hostHomePath: "/var/lib/docker/volumes/project-home/_data",
       hostProjectPath: "/var/lib/docker/volumes/project-home/_data/app",
       projectId: "/home/dev/.docker-git/project",
@@ -37,6 +43,10 @@ describe("skiller container filesystem mapping", () => {
 
     expect(sameSkillerScope(scope, scope)).toBe(true)
     expect(sameSkillerScope(scope, { ...scope, projectKey: "def456" })).toBe(false)
+    expect(sameSkillerScope(scope, {
+      ...scope,
+      hostCodexSkillsPath: "/var/lib/docker/volumes/other-home/_data/.codex/skills"
+    })).toBe(false)
     expect(sameSkillerScope(scope, null)).toBe(false)
     expect(sameSkillerScope(null, null)).toBe(true)
   })

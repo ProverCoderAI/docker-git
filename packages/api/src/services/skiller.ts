@@ -17,6 +17,7 @@ import * as Stream from "effect/Stream"
 
 import { ApiConflictError, ApiInternalError, ApiNotFoundError } from "../api/errors.js"
 import {
+  containerCodexSkillsPath,
   parseDockerMountLines,
   remapContainerPathToMountedHost,
   sameSkillerScope,
@@ -203,11 +204,18 @@ const resolveSkillerScope = (
   Effect.gen(function*(_) {
     const mounts = yield* _(inspectContainerMounts(project.containerName))
     const containerHome = containerHomePath(project.sshUser)
+    const containerCodexSkills = containerCodexSkillsPath(containerHome)
     const hostHomePath = remapContainerPathToMountedHost(mounts, containerHome)
+    const hostCodexSkillsPath = remapContainerPathToMountedHost(mounts, containerCodexSkills)
     const hostProjectPath = remapContainerPathToMountedHost(mounts, project.targetDir)
     if (hostHomePath === null) {
       return yield* _(Effect.fail(new ApiConflictError({
         message: `Skiller cannot find a writable Docker mount for ${containerHome} in ${project.containerName}.`
+      })))
+    }
+    if (hostCodexSkillsPath === null) {
+      return yield* _(Effect.fail(new ApiConflictError({
+        message: `Skiller cannot find a writable Docker mount for ${containerCodexSkills} in ${project.containerName}.`
       })))
     }
     if (hostProjectPath === null) {
@@ -218,9 +226,11 @@ const resolveSkillerScope = (
     yield* _(requireAccessibleDirectory(hostHomePath, "home volume"))
     yield* _(requireAccessibleDirectory(hostProjectPath, "project directory"))
     return {
+      containerCodexSkillsPath: containerCodexSkills,
       containerHomePath: containerHome,
       containerName: project.containerName,
       containerProjectPath: project.targetDir,
+      hostCodexSkillsPath,
       hostHomePath,
       hostProjectPath,
       projectId: project.projectDir,
@@ -318,6 +328,24 @@ const chownIfExists = (path: string, user: SkillerProcessUser): void => {
   }
 }
 
+const prepareSkillerScopeHome = (scope: SkillerContainerScope | null): SkillerProcessUser | null => {
+  const processUser = scopedProcessUser(scope)
+  if (scope === null || processUser === null) {
+    return null
+  }
+  ensureOwnedDirectory(join(scope.hostHomePath, ".agents"), processUser)
+  ensureOwnedDirectory(join(scope.hostHomePath, ".agents", "skills"), processUser)
+  ensureOwnedDirectory(join(scope.hostHomePath, ".codex"), processUser)
+  ensureOwnedDirectory(scope.hostCodexSkillsPath, processUser)
+  ensureOwnedDirectory(join(scope.hostHomePath, ".config"), processUser)
+  ensureOwnedDirectory(join(scope.hostHomePath, ".cache"), processUser)
+  ensureOwnedDirectory(join(scope.hostHomePath, ".local", "share"), processUser)
+  ensureOwnedDirectory(join(scope.hostHomePath, ".skiller"), processUser)
+  chownIfExists(join(scope.hostHomePath, ".codex", "config.toml"), processUser)
+  chownIfExists(join(scope.hostHomePath, ".skiller", "config.toml"), processUser)
+  return processUser
+}
+
 const skillerLaunchCommand = (
   user: SkillerProcessUser | null
 ): readonly [string, ReadonlyArray<string>] =>
@@ -377,16 +405,7 @@ const launchSkillerProcess = (
   scope: SkillerContainerScope | null
 ): SkillerLaunch => {
   mkdirSync(dirname(launchLogPath), { recursive: true })
-  const processUser = scopedProcessUser(scope)
-  if (scope !== null && processUser !== null) {
-    ensureOwnedDirectory(join(scope.hostHomePath, ".agents"), processUser)
-    ensureOwnedDirectory(join(scope.hostHomePath, ".agents", "skills"), processUser)
-    ensureOwnedDirectory(join(scope.hostHomePath, ".config"), processUser)
-    ensureOwnedDirectory(join(scope.hostHomePath, ".cache"), processUser)
-    ensureOwnedDirectory(join(scope.hostHomePath, ".local", "share"), processUser)
-    ensureOwnedDirectory(join(scope.hostHomePath, ".skiller"), processUser)
-    chownIfExists(join(scope.hostHomePath, ".skiller", "config.toml"), processUser)
-  }
+  const processUser = prepareSkillerScopeHome(scope)
   const logFd = openSync(launchLogPath, "a")
   try {
     const [command, args] = skillerLaunchCommand(processUser)
@@ -442,6 +461,15 @@ export const openSkiller = (
     rememberSessionScope(sessionId, scope)
     if (currentProcess !== null && isRunning(currentProcess.process)) {
       if (sameSkillerScope(currentProcess.scope, scope)) {
+        yield* _(Effect.try({
+          catch: (cause) => new ApiInternalError({
+            message: "Failed to prepare selected container home for Skiller.",
+            cause
+          }),
+          try: () => {
+            prepareSkillerScopeHome(scope)
+          }
+        }))
         yield* _(waitForSkillerReady(currentProcess.trpcPort))
         yield* _(registerSkillerProject(currentProcess.trpcPort, scope))
         return toLaunch(currentProcess, true, sessionId)

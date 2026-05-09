@@ -46,6 +46,8 @@ docker-git serves Skiller's built renderer from the submodule and proxies `/api/
 
 For project terminals, docker-git scopes Skiller to the active project container filesystem. The API inspects the selected project container mounts, maps `/home/<sshUser>` and the project `targetDir` to the controller-visible Docker volume path, launches Skiller with `HOME` set to that mapped home directory, and registers the mapped project directory in Skiller. This makes global skill operations target the selected container home and project skill operations target the selected container project directory. If the controller cannot access the Docker volume path, the endpoint fails instead of opening Skiller against the wrong filesystem.
 
+For Codex, Skiller resolves `~/.codex/skills` against the selected container home volume. For example, `/home/dev/.codex/skills` inside the selected container is exposed to the controller as the mapped Docker volume path and is the only Codex global skill tree used for that session. docker-git does not fall back to the controller's own `~/.codex/skills`.
+
 When the API process has no `$DISPLAY`, the launcher uses `xvfb-run` if it is available so Skiller can still start in a headless controller environment.
 
 ## PR #238 Proof
@@ -54,6 +56,7 @@ The latest Playwright proof screenshots are checked in under `docs/screenshots/i
 
 - `pr238-proof-27-terminal-skiller-same-session.png` shows the attached terminal with the `Skiller` button.
 - `pr238-proof-28-skiller-session-scoped-ui.png` shows the real Skiller UI opened from that button.
+- `pr238-proof-29-skiller-codex-container-skill.png` shows a Codex skill discovered from the selected container's `/home/dev/.codex/skills` tree.
 
 ## Updating the Pin
 

@@ -7,9 +7,11 @@ export type DockerContainerMount = {
 }
 
 export type SkillerContainerScope = {
+  readonly containerCodexSkillsPath: string
   readonly containerHomePath: string
   readonly containerName: string
   readonly containerProjectPath: string
+  readonly hostCodexSkillsPath: string
   readonly hostHomePath: string
   readonly hostProjectPath: string
   readonly projectId: string
@@ -40,6 +42,9 @@ export const normalizeContainerPath = (path: string): string => {
   const absolute = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
   return posix.normalize(absolute)
 }
+
+export const containerCodexSkillsPath = (containerHomePath: string): string =>
+  posix.join(normalizeContainerPath(containerHomePath), ".codex", "skills")
 
 const isPathInside = (basePath: string, targetPath: string): boolean =>
   targetPath === basePath || targetPath.startsWith(`${basePath}/`)
@@ -82,6 +87,7 @@ export const sameSkillerScope = (
   }
   return left.projectKey === right.projectKey &&
     left.containerName === right.containerName &&
+    left.hostCodexSkillsPath === right.hostCodexSkillsPath &&
     left.hostHomePath === right.hostHomePath &&
     left.hostProjectPath === right.hostProjectPath
 }
