@@ -6,9 +6,8 @@
 		"declaration": true,
 		"declarationMap": true,
 		"types": ["vitest", "node"],
-		"baseUrl": ".",
 		"paths": {
-			"@/*": ["src/*"]
+			"@/*": ["./src/*"]
 		}
 	},
 	"include": ["src/**/*"],

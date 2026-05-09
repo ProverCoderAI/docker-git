@@ -411,7 +411,7 @@ jobs:
           done <<< "$RELEASE_PACKAGE_PATHS_TO_RELEASE"
       - name: Create GitHub Release
         if: steps.compare_npm.outputs.should_release != 'false' && github.actor != 'github-actions[bot]'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release_version.outputs.tag }}
           generate_release_notes: true

@@ -46,8 +46,8 @@
     "start": "bash -lc 'bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js \"$@\"' --"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.6.0",
-    "@changesets/cli": "^2.30.0",
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.0",
     "@prover-coder-ai/dist-deps-prune": "^1.0.17"
   },
   "trustedDependencies": [
