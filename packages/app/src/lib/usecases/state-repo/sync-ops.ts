@@ -10,6 +10,7 @@ import { defaultSyncMessage } from "./env.js"
 import { git, gitCapture, gitExitCode, successExitCode } from "./git-commands.js"
 import type { GitAuthEnv } from "./github-auth.js"
 import { tryBuildGithubCompareUrl, withGithubAskpassEnv } from "./github-auth.js"
+import { tryBuildGitlabCompareUrl, withGitlabAskpassEnv } from "./gitlab-auth.js"
 
 type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 
@@ -147,7 +148,8 @@ export const runStateSyncOps = (
     }
 
     const prBranch = yield* _(pushToNewBranch(root, baseBranch, originPushTarget, env))
-    const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch)
+    const compareUrl = tryBuildGithubCompareUrl(originUrl, baseBranch, prBranch) ??
+      tryBuildGitlabCompareUrl(originUrl, baseBranch, prBranch)
     yield* _(Effect.logWarning(`State push failed (exit ${pushExit}); pushed changes to branch '${prBranch}'.`))
     yield* _(logOpenPr(originUrl, baseBranch, prBranch, compareUrl))
   }).pipe(Effect.asVoid)
@@ -159,6 +161,17 @@ export const runStateSyncWithToken = (
   message: string | null
 ): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
   withGithubAskpassEnv(
+    token,
+    (env) => runStateSyncOps(root, originUrl, message, env, { originPushUrlOverride: originUrl })
+  )
+
+export const runStateSyncWithGitlabToken = (
+  token: string,
+  root: string,
+  originUrl: string,
+  message: string | null
+): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
+  withGitlabAskpassEnv(
     token,
     (env) => runStateSyncOps(root, originUrl, message, env, { originPushUrlOverride: originUrl })
   )

@@ -102,6 +102,22 @@ if [[ -n "$EFFECTIVE_GITLAB_TOKEN" ]]; then
   printf "export GITLAB_TOKEN=%q\n" "$EFFECTIVE_GITLAB_TOKEN" > /etc/profile.d/gitlab-token.sh
   chmod 0644 /etc/profile.d/gitlab-token.sh
   docker_git_upsert_ssh_env "GITLAB_TOKEN" "$EFFECTIVE_GITLAB_TOKEN"
+
+  EFFECTIVE_GLAB_IS_OAUTH2="${"${"}GLAB_IS_OAUTH2:-}"
+  if [[ -z "$EFFECTIVE_GLAB_IS_OAUTH2" ]]; then
+    if curl -fsS --connect-timeout 3 --max-time 8 -H "PRIVATE-TOKEN: $EFFECTIVE_GITLAB_TOKEN" https://gitlab.com/api/v4/user >/dev/null 2>&1; then
+      EFFECTIVE_GLAB_IS_OAUTH2=""
+    elif curl -fsS --connect-timeout 3 --max-time 8 -H "Authorization: Bearer $EFFECTIVE_GITLAB_TOKEN" https://gitlab.com/api/v4/user >/dev/null 2>&1; then
+      EFFECTIVE_GLAB_IS_OAUTH2="true"
+    fi
+  fi
+
+  if [[ -n "$EFFECTIVE_GLAB_IS_OAUTH2" ]]; then
+    printf "export GLAB_IS_OAUTH2=%q\n" "$EFFECTIVE_GLAB_IS_OAUTH2" > /etc/profile.d/glab-oauth2.sh
+    chmod 0644 /etc/profile.d/glab-oauth2.sh
+    docker_git_upsert_ssh_env "GLAB_IS_OAUTH2" "$EFFECTIVE_GLAB_IS_OAUTH2"
+    export GLAB_IS_OAUTH2="$EFFECTIVE_GLAB_IS_OAUTH2"
+  fi
 fi
 
 if [[ -n "$EFFECTIVE_GIT_AUTH_TOKEN" ]]; then

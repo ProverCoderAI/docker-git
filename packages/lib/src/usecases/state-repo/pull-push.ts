@@ -8,6 +8,7 @@ import { defaultProjectsRoot } from "../menu-helpers.js"
 import { git, gitBaseEnv, gitCapture, gitExitCode, successExitCode } from "./git-commands.js"
 import { resolveStateGithubContext, withGithubAuthHintOnFailure } from "./github-auth-state.js"
 import { isGithubHttpsRemote, withGithubAskpassEnv } from "./github-auth.js"
+import { isGitlabHttpsRemote, resolveGitlabToken, withGitlabAskpassEnv } from "./gitlab-auth.js"
 
 const resolveStateRoot = (path: Path.Path, cwd: string): string => path.resolve(defaultProjectsRoot(cwd))
 
@@ -25,6 +26,7 @@ export const statePull: Effect.Effect<
     return
   }
   const auth = yield* _(resolveStateGithubContext(fs, path, root))
+  const gitlabToken = isGitlabHttpsRemote(auth.originUrl) ? yield* _(resolveGitlabToken(fs, path, root)) : null
   // CHANGE: resolve current branch and pass origin <branch> explicitly
   // WHY: bare `git pull --rebase` can fail or pull the wrong branch in some git configurations
   // QUOTE(ТЗ): "Сделай что бы правильные параметры передавались"
@@ -38,9 +40,15 @@ export const statePull: Effect.Effect<
     )
   )
   const branch = branchRaw === "HEAD" ? "main" : branchRaw
-  const effect = auth.token && auth.token.length > 0 && isGithubHttpsRemote(auth.originUrl)
-    ? withGithubAskpassEnv(auth.token, (env) => git(root, ["pull", "--rebase", "origin", branch], env))
-    : git(root, ["pull", "--rebase", "origin", branch], gitBaseEnv)
+  const effect = (() => {
+    if (auth.token && auth.token.length > 0 && isGithubHttpsRemote(auth.originUrl)) {
+      return withGithubAskpassEnv(auth.token, (env) => git(root, ["pull", "--rebase", "origin", branch], env))
+    }
+    if (gitlabToken && gitlabToken.length > 0) {
+      return withGitlabAskpassEnv(gitlabToken, (env) => git(root, ["pull", "--rebase", "origin", branch], env))
+    }
+    return git(root, ["pull", "--rebase", "origin", branch], gitBaseEnv)
+  })()
   yield* _(withGithubAuthHintOnFailure(effect, auth.authHintNeeded))
 }).pipe(Effect.asVoid)
 
@@ -58,19 +66,37 @@ export const statePush: Effect.Effect<
     return
   }
   const auth = yield* _(resolveStateGithubContext(fs, path, root))
-  const effect = auth.token && auth.token.length > 0 && isGithubHttpsRemote(auth.originUrl)
-    ? withGithubAskpassEnv(
-      auth.token,
-      (env) =>
-        pipe(
-          gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"], env),
-          Effect.map((value) => value.trim()),
-          Effect.map((branch) => (branch === "HEAD" ? "main" : branch)),
-          Effect.flatMap((branch) =>
-            git(root, ["push", "--no-verify", auth.originUrl, `HEAD:refs/heads/${branch}`], env)
+  const gitlabToken = isGitlabHttpsRemote(auth.originUrl) ? yield* _(resolveGitlabToken(fs, path, root)) : null
+  const effect = (() => {
+    if (auth.token && auth.token.length > 0 && isGithubHttpsRemote(auth.originUrl)) {
+      return withGithubAskpassEnv(
+        auth.token,
+        (env) =>
+          pipe(
+            gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"], env),
+            Effect.map((value) => value.trim()),
+            Effect.map((branch) => (branch === "HEAD" ? "main" : branch)),
+            Effect.flatMap((branch) =>
+              git(root, ["push", "--no-verify", auth.originUrl, `HEAD:refs/heads/${branch}`], env)
+            )
           )
-        )
-    )
-    : git(root, ["push", "--no-verify", "-u", "origin", "HEAD"], gitBaseEnv)
+      )
+    }
+    if (gitlabToken && gitlabToken.length > 0) {
+      return withGitlabAskpassEnv(
+        gitlabToken,
+        (env) =>
+          pipe(
+            gitCapture(root, ["rev-parse", "--abbrev-ref", "HEAD"], env),
+            Effect.map((value) => value.trim()),
+            Effect.map((branch) => (branch === "HEAD" ? "main" : branch)),
+            Effect.flatMap((branch) =>
+              git(root, ["push", "--no-verify", auth.originUrl, `HEAD:refs/heads/${branch}`], env)
+            )
+          )
+      )
+    }
+    return git(root, ["push", "--no-verify", "-u", "origin", "HEAD"], gitBaseEnv)
+  })()
   yield* _(withGithubAuthHintOnFailure(effect, auth.authHintNeeded))
 }).pipe(Effect.asVoid)
