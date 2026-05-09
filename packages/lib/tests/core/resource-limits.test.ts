@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest"
 
 import {
   resolveComposeResourceLimits,
+  resolvePlaywrightComposeResourceLimits,
   withDefaultResourceLimitIntent
 } from "../../src/core/resource-limits.js"
 import { defaultTemplateConfig, type TemplateConfig } from "../../src/core/domain.js"
@@ -17,6 +18,8 @@ describe("withDefaultResourceLimitIntent", () => {
 
     expect(resolved.cpuLimit).toBe("30%")
     expect(resolved.ramLimit).toBe("30%")
+    expect(resolved.playwrightCpuLimit).toBe("30%")
+    expect(resolved.playwrightRamLimit).toBe("30%")
   })
 
   it("preserves explicit limit intent", () => {
@@ -28,6 +31,19 @@ describe("withDefaultResourceLimitIntent", () => {
 
     expect(resolved.cpuLimit).toBe("1.25")
     expect(resolved.ramLimit).toBe("3g")
+  })
+
+  it("preserves explicit playwright intent independently of main", () => {
+    const resolved = withDefaultResourceLimitIntent({
+      ...makeTemplate(),
+      cpuLimit: "1.25",
+      ramLimit: "3g",
+      playwrightCpuLimit: "0.5",
+      playwrightRamLimit: "1g"
+    })
+
+    expect(resolved.playwrightCpuLimit).toBe("0.5")
+    expect(resolved.playwrightRamLimit).toBe("1g")
   })
 })
 
@@ -78,5 +94,72 @@ describe("resolveComposeResourceLimits", () => {
 
     expect(resolved.cpuLimit).toBe(1.25)
     expect(resolved.ramLimit).toBe("3g")
+  })
+})
+
+describe("resolvePlaywrightComposeResourceLimits", () => {
+  it("uses dedicated playwright intent when provided", () => {
+    const resolved = resolvePlaywrightComposeResourceLimits(
+      {
+        cpuLimit: "2",
+        ramLimit: "4g",
+        playwrightCpuLimit: "0.5",
+        playwrightRamLimit: "1g"
+      },
+      {
+        cpuCount: 8,
+        totalMemoryBytes: 16 * 1024 ** 3
+      }
+    )
+
+    expect(resolved.cpuLimit).toBe(0.5)
+    expect(resolved.ramLimit).toBe("1g")
+  })
+
+  it("falls back to main intent when playwright intent is missing", () => {
+    const resolved = resolvePlaywrightComposeResourceLimits(
+      {
+        cpuLimit: "1.5",
+        ramLimit: "2g"
+      },
+      {
+        cpuCount: 8,
+        totalMemoryBytes: 16 * 1024 ** 3
+      }
+    )
+
+    expect(resolved.cpuLimit).toBe(1.5)
+    expect(resolved.ramLimit).toBe("2g")
+  })
+
+  it("falls back to default 30% when neither playwright nor main intent is set", () => {
+    const resolved = resolvePlaywrightComposeResourceLimits(
+      {},
+      {
+        cpuCount: 8,
+        totalMemoryBytes: 16 * 1024 ** 3
+      }
+    )
+
+    expect(resolved.cpuLimit).toBe(2.4)
+    expect(resolved.ramLimit).toBe("4915m")
+  })
+
+  it("supports percent intent for playwright independently", () => {
+    const resolved = resolvePlaywrightComposeResourceLimits(
+      {
+        cpuLimit: "60%",
+        ramLimit: "60%",
+        playwrightCpuLimit: "10%",
+        playwrightRamLimit: "10%"
+      },
+      {
+        cpuCount: 8,
+        totalMemoryBytes: 16 * 1024 ** 3
+      }
+    )
+
+    expect(resolved.cpuLimit).toBe(0.8)
+    expect(resolved.ramLimit).toBe("1638m")
   })
 })

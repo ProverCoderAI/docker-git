@@ -1,6 +1,14 @@
 import { Either } from "effect"
 
-import { defaultCpuLimit, defaultRamLimit, type ParseError, type TemplateConfig } from "./domain.js"
+import { type RawOptions } from "./command-options.js"
+import {
+  defaultCpuLimit,
+  defaultPlaywrightCpuLimit,
+  defaultPlaywrightRamLimit,
+  defaultRamLimit,
+  type ParseError,
+  type TemplateConfig
+} from "./domain.js"
 
 const mebibyte = 1024 ** 2
 const minimumResolvedCpuLimit = 0.25
@@ -108,7 +116,9 @@ export const withDefaultResourceLimitIntent = (
 ): TemplateConfig => ({
   ...template,
   cpuLimit: template.cpuLimit ?? defaultCpuLimit,
-  ramLimit: template.ramLimit ?? defaultRamLimit
+  ramLimit: template.ramLimit ?? defaultRamLimit,
+  playwrightCpuLimit: template.playwrightCpuLimit ?? defaultPlaywrightCpuLimit,
+  playwrightRamLimit: template.playwrightRamLimit ?? defaultPlaywrightRamLimit
 })
 
 const resolvePercentCpuLimit = (percent: number, cpuCount: number): number =>
@@ -141,3 +151,37 @@ export const resolveComposeResourceLimits = (
       : resolvePercentRamLimit(ramPercent, hostResources.totalMemoryBytes)
   }
 }
+
+export const resolvePlaywrightComposeResourceLimits = (
+  template: Pick<TemplateConfig, "playwrightCpuLimit" | "playwrightRamLimit" | "cpuLimit" | "ramLimit">,
+  hostResources: HostResources
+): ResolvedComposeResourceLimits =>
+  resolveComposeResourceLimits(
+    {
+      cpuLimit: template.playwrightCpuLimit ?? template.cpuLimit ?? defaultPlaywrightCpuLimit,
+      ramLimit: template.playwrightRamLimit ?? template.ramLimit ?? defaultPlaywrightRamLimit
+    },
+    hostResources
+  )
+
+export type ResolvedResourceLimitsIntent = {
+  readonly cpuLimit: string | undefined
+  readonly ramLimit: string | undefined
+  readonly playwrightCpuLimit: string | undefined
+  readonly playwrightRamLimit: string | undefined
+}
+
+export const resolveResourceLimitsIntent = (
+  raw: RawOptions
+): Either.Either<ResolvedResourceLimitsIntent, ParseError> =>
+  Either.gen(function*(_) {
+    const cpuLimit = yield* _(normalizeCpuLimit(raw.cpuLimit ?? defaultCpuLimit, "--cpu"))
+    const ramLimit = yield* _(normalizeRamLimit(raw.ramLimit ?? defaultRamLimit, "--ram"))
+    const playwrightCpuLimit = yield* _(
+      normalizeCpuLimit(raw.playwrightCpuLimit ?? cpuLimit, "--playwright-cpu")
+    )
+    const playwrightRamLimit = yield* _(
+      normalizeRamLimit(raw.playwrightRamLimit ?? ramLimit, "--playwright-ram")
+    )
+    return { cpuLimit, ramLimit, playwrightCpuLimit, playwrightRamLimit }
+  })

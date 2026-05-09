@@ -297,6 +297,47 @@ describe("renderDockerCompose", () => {
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(2)
   })
 
+  it("applies separate resource limits for the browser sidecar when provided", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        enableMcpPlaywright: true
+      }),
+      {
+        main: { cpuLimit: 2, ramLimit: "4g" },
+        playwright: { cpuLimit: 0.5, ramLimit: "1g" }
+      }
+    )
+    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
+    const browserSection = compose.slice(browserServiceIndex)
+    const mainSection = compose.slice(0, browserServiceIndex)
+
+    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
+    expect(mainSection).toContain("    cpus: 2\n")
+    expect(mainSection).toContain('    mem_limit: "4g"\n')
+    expect(mainSection).toContain('    memswap_limit: "4g"\n')
+    expect(browserSection).toContain("    cpus: 0.5\n")
+    expect(browserSection).toContain('    mem_limit: "1g"\n')
+    expect(browserSection).toContain('    memswap_limit: "1g"\n')
+  })
+
+  it("backward-compatibly applies single resource limit shape to both services", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        enableMcpPlaywright: true
+      }),
+      {
+        cpuLimit: 1.5,
+        ramLimit: "2g"
+      }
+    )
+    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
+    const browserSection = compose.slice(browserServiceIndex)
+
+    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
+    expect(browserSection).toContain("    cpus: 1.5\n")
+    expect(browserSection).toContain('    mem_limit: "2g"\n')
+  })
+
   it("renders explicit anonymous GitHub clone override for public repos", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({

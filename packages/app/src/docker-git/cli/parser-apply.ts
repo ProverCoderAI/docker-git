@@ -22,6 +22,8 @@ export const parseApply = (
     const { projectDir, raw } = yield* _(parseProjectDirWithOptions(args))
     const cpuLimit = yield* _(normalizeCpuLimit(raw.cpuLimit, "--cpu"))
     const ramLimit = yield* _(normalizeRamLimit(raw.ramLimit, "--ram"))
+    const playwrightCpuLimit = yield* _(normalizeCpuLimit(raw.playwrightCpuLimit, "--playwright-cpu"))
+    const playwrightRamLimit = yield* _(normalizeRamLimit(raw.playwrightRamLimit, "--playwright-ram"))
     return {
       _tag: "Apply",
       projectDir,
@@ -31,6 +33,8 @@ export const parseApply = (
       claudeTokenLabel: raw.claudeTokenLabel,
       cpuLimit,
       ramLimit,
+      playwrightCpuLimit,
+      playwrightRamLimit,
       enableMcpPlaywright: raw.enableMcpPlaywright
     }
   })

@@ -41,6 +41,8 @@ export {
   defaultCpuLimit,
   defaultDockerNetworkMode,
   defaultDockerSharedNetworkName,
+  defaultPlaywrightCpuLimit,
+  defaultPlaywrightRamLimit,
   defaultRamLimit,
   defaultTemplateConfig,
   dockerGitSharedCacheVolumeName,
@@ -77,6 +79,8 @@ export interface TemplateConfig {
   readonly geminiHome: string
   readonly cpuLimit?: string | undefined
   readonly ramLimit?: string | undefined
+  readonly playwrightCpuLimit?: string | undefined
+  readonly playwrightRamLimit?: string | undefined
   readonly dockerNetworkMode: DockerNetworkMode
   readonly dockerSharedNetworkName: string
   readonly enableMcpPlaywright: boolean
@@ -165,6 +169,8 @@ export interface ApplyCommand {
   readonly geminiTokenLabel?: string | undefined
   readonly cpuLimit?: string | undefined
   readonly ramLimit?: string | undefined
+  readonly playwrightCpuLimit?: string | undefined
+  readonly playwrightRamLimit?: string | undefined
   readonly enableMcpPlaywright?: boolean | undefined
 }
 
