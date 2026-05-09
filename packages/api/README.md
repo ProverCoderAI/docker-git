@@ -9,6 +9,33 @@ This is now the intended controller plane:
 - child project containers no longer depend on host bind mounts for bootstrap auth/env
 - the host `/var/run/docker.sock` is not mounted into the controller or project containers
 
+## Runtime contract: host-Docker-backed
+
+`docker-git` is host-Docker-backed, not isolated. The controller container
+created from this package binds the host socket
+(`/var/run/docker.sock:/var/run/docker.sock`, see `docker-compose.yml`) and
+uses it to spawn per-project containers. There is no Docker-in-Docker
+runtime; the daemon is always the host's daemon.
+
+The host CLI (`packages/app`) also talks to that same daemon directly when
+it bootstraps the controller. Three failure modes look identical at first
+glance and the CLI now distinguishes them in its error output:
+
+- **Host daemon down** – `docker info` cannot connect. Start the host
+  Docker daemon or set `DOCKER_HOST`.
+- **Host socket permission mismatch** – `docker info` returns
+  `permission denied` on `/var/run/docker.sock`. Fix host group membership
+  (`docker` group / rootless Docker / socket ownership). This is a host
+  configuration problem, not a `docker-git` outage.
+- **Controller container not running / unreachable** – the API at
+  `DOCKER_GIT_API_URL` (default `http://127.0.0.1:3334`) does not answer.
+  Bring the controller up with `docker compose up -d --build` or point the
+  CLI at an existing controller via `DOCKER_GIT_API_URL`.
+
+Diagnostic classification + remediation messages live in
+`packages/app/src/docker-git/controller-docker-diagnostics.ts` and are
+covered by `packages/app/tests/docker-git/controller-docker-diagnostics.test.ts`.
+
 ## UI wrapper
 
 After API startup open:

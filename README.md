@@ -82,3 +82,34 @@ API - Просто апи сервер поднятный над LIB
 
 APP работает только с API, и не имеет доступа к LIB
 API работает только с LIB
+
+## Runtime contract: host-Docker-backed
+
+`docker-git` is host-Docker-backed by design. The controller container
+(`docker-git-api`) talks to the host Docker daemon via the bind-mounted
+`/var/run/docker.sock`, which is how it creates and manages per-project
+containers. There is no isolated Docker-in-Docker runtime.
+
+This means the user that runs the host CLI (`bun run docker-git ...`) needs
+to be able to talk to that same socket directly. Three failure modes can
+look superficially identical and are diagnosed separately by the CLI:
+
+1. **Host Docker daemon is not reachable** – `docker info` fails with
+   "Cannot connect to the Docker daemon". Start Docker (e.g.
+   `sudo systemctl start docker`) or set `DOCKER_HOST` to a reachable
+   endpoint.
+2. **Host Docker socket rejected this user** – `docker info` fails with
+   "permission denied" while talking to `/var/run/docker.sock`. This is a
+   host configuration issue, *not* a `docker-git` outage. Add the user to
+   the `docker` group, switch to rootless Docker, or fix the socket
+   ownership (`root:docker`, mode `660`). After changing groups, log out
+   and back in (or run `newgrp docker`).
+3. **Controller container not running** – the host CLI cannot reach
+   `docker-git-api` on its API port. Bring the controller up via
+   `docker compose up -d --build`, or point the CLI at an existing
+   controller using `DOCKER_GIT_API_URL`.
+
+When the CLI cannot acquire Docker access it now prints a message that
+names the specific failure mode, restates the host-Docker contract, and
+lists remediation steps for that exact mode. Implementation lives in
+`packages/app/src/docker-git/controller-docker-diagnostics.ts`.

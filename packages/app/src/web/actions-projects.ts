@@ -80,13 +80,17 @@ const resolveProjectTerminalKey = (
 }
 
 const randomHex = (bytes: number): string => {
-  const values = new Uint8Array(bytes)
-  globalThis.crypto.getRandomValues(values)
-  return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("")
+  if (typeof globalThis.crypto.getRandomValues === "function") {
+    const values = new Uint8Array(bytes)
+    globalThis.crypto.getRandomValues(values)
+    return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("")
+  }
+
+  return Date.now().toString(16).padStart(bytes * 2, "0").slice(0, bytes * 2)
 }
 
 const createPendingTerminalSessionId = (): string => {
-  if (Reflect.has(globalThis.crypto, "randomUUID")) {
+  if (typeof globalThis.crypto.randomUUID === "function") {
     return globalThis.crypto.randomUUID()
   }
 

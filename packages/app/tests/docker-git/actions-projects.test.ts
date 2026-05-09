@@ -214,12 +214,12 @@ describe("web project actions", () => {
       )
     }))
 
-  it.effect("starts SSH terminal creation when randomUUID is unavailable", () =>
+  it.effect("starts SSH terminal creation from getRandomValues when randomUUID is unavailable", () =>
     Effect.gen(function*(_) {
-      const dateNowMock = vi.spyOn(Date, "now").mockReturnValue(0x12_34)
+      const dateNowMock = vi.spyOn(Date, "now").mockReturnValue(0x1_9A_11_7B_D6_1F)
       vi.stubGlobal("crypto", {
         getRandomValues: (values: Uint8Array): Uint8Array => {
-          values.set([0x80, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00])
+          values.set([0x10, 0x32, 0x54, 0x76, 0x98, 0xBA, 0xDC, 0xFE])
           return values
         }
       })
@@ -235,7 +235,7 @@ describe("web project actions", () => {
       yield* _(connectProjectAndWaitForStream(context))
       expect(startProjectTerminalSessionMock).toHaveBeenCalledTimes(1)
       const requestId = startProjectTerminalSessionMock.mock.calls[0]?.[1]
-      expect(requestId).toBe("pending-1234-8000000080000000")
+      expect(requestId).toBe("pending-19a117bd61f-1032547698badcfe")
       expect(addTerminalSession).toHaveBeenCalledTimes(1)
       expect(openProjectEventStreamMock).toHaveBeenCalledTimes(1)
       dateNowMock.mockRestore()
