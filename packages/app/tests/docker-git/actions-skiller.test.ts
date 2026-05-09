@@ -8,6 +8,17 @@ import { makeBrowserActionContext, waitForAssertion } from "./browser-action-con
 const openSkillerMock = vi.hoisted(() => vi.fn())
 const openUrlMock = vi.hoisted(() => vi.fn())
 
+const proofScope = {
+  containerHomePath: "/home/dev",
+  containerName: "dg-project",
+  containerProjectPath: "/home/dev/app",
+  hostHomePath: "/var/lib/docker/volumes/dg-project-home/_data",
+  hostProjectPath: "/var/lib/docker/volumes/dg-project-home/_data/app",
+  projectId: "/home/dev/.docker-git/project",
+  projectKey: "abc123",
+  sshUser: "dev"
+}
+
 const skillerLaunch = (
   overrides: {
     readonly alreadyRunning?: boolean
@@ -34,6 +45,16 @@ const skillerLaunch = (
   trpcPort: 17_888
 })
 
+const mockScopedSkillerLaunch = (): void => {
+  openUrlMock.mockReturnValue(true)
+  openSkillerMock.mockImplementation(() =>
+    Effect.succeed(skillerLaunch({
+      alreadyRunning: true,
+      scope: proofScope
+    }))
+  )
+}
+
 vi.mock("../../src/web/api.js", () => ({
   openSkiller: openSkillerMock
 }))
@@ -56,7 +77,7 @@ describe("web Skiller actions", () => {
       openSkillerApp(context)
 
       yield* _(waitForAssertion(() => {
-        expect(openSkillerMock).toHaveBeenCalledTimes(1)
+        expect(openSkillerMock).toHaveBeenCalledWith(undefined, undefined)
       }))
       yield* _(waitForAssertion(() => {
         expect(openUrlMock).toHaveBeenCalledWith("/api/skiller/app/")
@@ -70,33 +91,37 @@ describe("web Skiller actions", () => {
 
   it.effect("opens Skiller for the selected project key", () =>
     Effect.gen(function*(_) {
-      openUrlMock.mockReturnValue(true)
-      openSkillerMock.mockImplementation(() =>
-        Effect.succeed(skillerLaunch({
-          alreadyRunning: true,
-          scope: {
-            containerHomePath: "/home/dev",
-            containerName: "dg-project",
-            containerProjectPath: "/home/dev/app",
-            hostHomePath: "/var/lib/docker/volumes/dg-project-home/_data",
-            hostProjectPath: "/var/lib/docker/volumes/dg-project-home/_data/app",
-            projectId: "/home/dev/.docker-git/project",
-            projectKey: "abc123",
-            sshUser: "dev"
-          }
-        }))
-      )
+      mockScopedSkillerLaunch()
       const { context, setMessage } = makeBrowserActionContext({ selectedProjectKey: "abc123" })
 
       openSkillerApp(context)
 
       yield* _(waitForAssertion(() => {
-        expect(openSkillerMock).toHaveBeenCalledWith("abc123")
+        expect(openSkillerMock).toHaveBeenCalledWith("abc123", undefined)
       }))
       yield* _(waitForAssertion(() => {
         expect(setMessage).toHaveBeenCalledWith(
           "Skiller is already running (pid 1234). Log: /home/dev/.docker-git/logs/skiller.log. Container FS: dg-project:/home/dev/app. Opened /api/skiller/app/."
         )
       }))
+    }))
+
+  it.effect("opens the session-scoped Skiller URL immediately from a terminal session", () =>
+    Effect.gen(function*(_) {
+      mockScopedSkillerLaunch()
+      const { context, setMessage } = makeBrowserActionContext()
+
+      openSkillerApp(context, "abc123", "terminal-proof")
+
+      expect(openUrlMock).toHaveBeenCalledWith("/api/ssh/session/terminal-proof/skiller/app/")
+      yield* _(waitForAssertion(() => {
+        expect(openSkillerMock).toHaveBeenCalledWith("abc123", "terminal-proof")
+      }))
+      yield* _(waitForAssertion(() => {
+        expect(setMessage).toHaveBeenCalledWith(
+          "Skiller is already running (pid 1234). Log: /home/dev/.docker-git/logs/skiller.log. Container FS: dg-project:/home/dev/app. Opened /api/ssh/session/terminal-proof/skiller/app/."
+        )
+      }))
+      expect(openUrlMock).toHaveBeenCalledTimes(1)
     }))
 })

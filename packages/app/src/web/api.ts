@@ -111,12 +111,21 @@ export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
     }))
   )
 
-export const openSkiller = (projectKey?: string) =>
+const openSkillerPath = (projectKey: string | undefined, sessionId: string | undefined): string => {
+  if (projectKey !== undefined && sessionId !== undefined) {
+    return `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/${
+      encodeURIComponent(sessionId)
+    }/skiller/open`
+  }
+  return projectKey === undefined
+    ? "/skiller/open"
+    : `/projects/by-key/${encodeURIComponent(projectKey)}/skiller/open`
+}
+
+export const openSkiller = (projectKey?: string, sessionId?: string) =>
   requestJson(
     "POST",
-    projectKey === undefined
-      ? "/skiller/open"
-      : `/projects/by-key/${encodeURIComponent(projectKey)}/skiller/open`,
+    openSkillerPath(projectKey, sessionId),
     SkillerLaunchResponseSchema
   )
 

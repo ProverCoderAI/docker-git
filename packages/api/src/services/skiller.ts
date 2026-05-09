@@ -23,6 +23,7 @@ import {
   type SkillerContainerScope
 } from "./skiller-core.js"
 import { getProjectItemByKey } from "./projects.js"
+import { getProjectTerminalSession } from "./terminal-sessions.js"
 
 export type SkillerLaunch = {
   readonly alreadyRunning: boolean
@@ -52,7 +53,7 @@ type SkillerProcessUser = {
 
 type SkillerRoute =
   | { readonly _tag: "App"; readonly relativePath: string }
-  | { readonly _tag: "Trpc"; readonly upstreamPath: string }
+  | { readonly _tag: "Trpc"; readonly sessionId: string | null; readonly upstreamPath: string }
 
 const submoduleRelativePath = join("third_party", "skiller-desktop-skills-manager")
 const launchLogPath = join(homedir(), ".docker-git", "logs", "skiller.log")
@@ -61,6 +62,7 @@ const skillerTrpcBasePath = "/api/skiller"
 const skillerPreferredTrpcPort = 17888
 
 let currentProcess: SkillerProcess | null = null
+const sessionScopes = new Map<string, SkillerContainerScope | null>()
 
 const isRunning = (process: ChildProcess): boolean =>
   process.exitCode === null && process.signalCode === null && !process.killed
@@ -96,14 +98,24 @@ const resolveSkillerDir = (): Effect.Effect<string, ApiNotFoundError> =>
     return skillerDir
   })
 
-const toLaunch = (process: SkillerProcess, alreadyRunning: boolean): SkillerLaunch => ({
+const sessionSkillerAppPath = (sessionId: string): string =>
+  `/api/ssh/session/${encodeURIComponent(sessionId)}/skiller/app/`
+
+const sessionSkillerTrpcBasePath = (sessionId: string): string =>
+  `/api/ssh/session/${encodeURIComponent(sessionId)}/skiller`
+
+const toLaunch = (
+  process: SkillerProcess,
+  alreadyRunning: boolean,
+  sessionId: string | undefined
+): SkillerLaunch => ({
   alreadyRunning,
-  appPath: process.appPath,
+  appPath: sessionId === undefined ? process.appPath : sessionSkillerAppPath(sessionId),
   logPath: process.logPath,
   pid: process.process.pid ?? null,
   scope: process.scope,
   startedAtIso: process.startedAtIso,
-  trpcBasePath: process.trpcBasePath,
+  trpcBasePath: sessionId === undefined ? process.trpcBasePath : sessionSkillerTrpcBasePath(sessionId),
   trpcPort: process.trpcPort
 })
 
@@ -405,14 +417,21 @@ const launchSkillerProcess = (
       }
     })
     child.unref()
-    return toLaunch(currentProcess, false)
+    return toLaunch(currentProcess, false, undefined)
   } finally {
     closeSync(logFd)
   }
 }
 
+const rememberSessionScope = (sessionId: string | undefined, scope: SkillerContainerScope | null): void => {
+  if (sessionId !== undefined) {
+    sessionScopes.set(sessionId, scope)
+  }
+}
+
 export const openSkiller = (
-  projectKey?: string
+  projectKey?: string,
+  sessionId?: string
 ): Effect.Effect<
   SkillerLaunch,
   ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
@@ -420,11 +439,12 @@ export const openSkiller = (
 > =>
   Effect.gen(function*(_) {
     const scope = yield* _(resolveRequestedSkillerScope(projectKey))
+    rememberSessionScope(sessionId, scope)
     if (currentProcess !== null && isRunning(currentProcess.process)) {
       if (sameSkillerScope(currentProcess.scope, scope)) {
         yield* _(waitForSkillerReady(currentProcess.trpcPort))
         yield* _(registerSkillerProject(currentProcess.trpcPort, scope))
-        return toLaunch(currentProcess, true)
+        return toLaunch(currentProcess, true, sessionId)
       }
       stopSkillerProcess(currentProcess)
       currentProcess = null
@@ -446,11 +466,40 @@ export const openSkiller = (
     }))
     yield* _(waitForSkillerReady(trpcPort))
     yield* _(registerSkillerProject(trpcPort, scope))
-    return launch
+    return sessionId === undefined || currentProcess === null ? launch : toLaunch(currentProcess, false, sessionId)
   })
 
+export const openSkillerForTerminalSession = (
+  projectKey: string,
+  sessionId: string
+): Effect.Effect<
+  SkillerLaunch,
+  ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
+  ListProjectsContext
+> =>
+  getProjectItemByKey(projectKey).pipe(
+    Effect.flatMap((project) =>
+      getProjectTerminalSession(project.projectDir, sessionId).pipe(
+        Effect.as(projectKey)
+      )
+    ),
+    Effect.flatMap((resolvedProjectKey) => openSkiller(resolvedProjectKey, sessionId))
+  )
+
 export const parseSkillerRoute = (pathname: string): SkillerRoute | null => {
-  const normalized = pathname.startsWith("/api/skiller") ? pathname.slice("/api".length) : pathname
+  const normalized = pathname.startsWith("/api/") ? pathname.slice("/api".length) : pathname
+  const sessionMatch = /^\/ssh\/session\/([^/]+)\/skiller(?:\/(app|trpc)(\/.*)?)?$/u.exec(normalized)
+  if (sessionMatch !== null) {
+    const sessionId = decodeURIComponent(sessionMatch[1] ?? "")
+    const routeKind = sessionMatch[2] ?? ""
+    const tail = sessionMatch[3] ?? ""
+    if (routeKind === "app" || routeKind === "") {
+      return { _tag: "App", relativePath: tail.length === 0 ? "/" : tail }
+    }
+    if (routeKind === "trpc") {
+      return { _tag: "Trpc", sessionId, upstreamPath: `/trpc${tail}` }
+    }
+  }
   if (normalized === "/skiller/app" || normalized === "/skiller/app/") {
     return { _tag: "App", relativePath: "/" }
   }
@@ -458,7 +507,7 @@ export const parseSkillerRoute = (pathname: string): SkillerRoute | null => {
     return { _tag: "App", relativePath: normalized.slice("/skiller/app".length) }
   }
   if (normalized === "/skiller/trpc" || normalized.startsWith("/skiller/trpc/")) {
-    return { _tag: "Trpc", upstreamPath: normalized.slice("/skiller".length) || "/trpc" }
+    return { _tag: "Trpc", sessionId: null, upstreamPath: normalized.slice("/skiller".length) || "/trpc" }
   }
   return null
 }
@@ -485,7 +534,14 @@ const contentTypeForPath = (path: string): string => {
 const browserTrpcBaseBootstrap = [
   "<script>",
   "(() => {",
-  "  const apiPrefix = window.location.pathname.startsWith('/api/') ? '/api' : '';",
+  "  const path = window.location.pathname;",
+  "  const sessionMatch = /^(\\/api)?\\/ssh\\/session\\/([^/]+)\\/skiller\\/app(?:\\/|$)/.exec(path);",
+  "  if (sessionMatch) {",
+  "    const apiPrefix = sessionMatch[1] || '';",
+  "    window.__SKILLER_TRPC_BASE_URL__ = `${window.location.origin}${apiPrefix}/ssh/session/${sessionMatch[2]}/skiller`;",
+  "    return;",
+  "  }",
+  "  const apiPrefix = path.startsWith('/api/') ? '/api' : '';",
   "  window.__SKILLER_TRPC_BASE_URL__ = `${window.location.origin}${apiPrefix}/skiller`;",
   "})();",
   "</script>"
@@ -571,6 +627,26 @@ const copyResponseHeaders = (response: Response): Record<string, string> => {
   return headers
 }
 
+const verifySkillerRouteScope = (
+  route: Extract<SkillerRoute, { readonly _tag: "Trpc" }>
+): Effect.Effect<void, ApiConflictError> => {
+  if (route.sessionId === null) {
+    return Effect.void
+  }
+  const scope = sessionScopes.get(route.sessionId)
+  if (scope === undefined) {
+    return Effect.fail(new ApiConflictError({
+      message: `Skiller session is not registered: ${route.sessionId}. Click the terminal Skiller button again.`
+    }))
+  }
+  if (currentProcess === null || !sameSkillerScope(currentProcess.scope, scope)) {
+    return Effect.fail(new ApiConflictError({
+      message: `Skiller is not running for terminal session ${route.sessionId}. Click the terminal Skiller button again.`
+    }))
+  }
+  return Effect.void
+}
+
 export const proxySkillerTrpc = (
   request: HttpServerRequest.HttpServerRequest,
   route: Extract<SkillerRoute, { readonly _tag: "Trpc" }>
@@ -584,6 +660,7 @@ export const proxySkillerTrpc = (
         message: "Skiller is not running. Click the Skiller button first."
       })))
     }
+    yield* _(verifySkillerRouteScope(route))
     const parsed = new URL(request.url, "http://localhost")
     const upstreamUrl = new URL(
       `${route.upstreamPath}${parsed.search}`,

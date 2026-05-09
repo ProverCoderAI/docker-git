@@ -4,7 +4,7 @@ import type { createActionContext } from "./app-ready-actions.js"
 export const bindSkillerActions = (
   actionContext: ReturnType<typeof createActionContext>
 ) => ({
-  onOpenSkiller: (projectKey?: string) => {
-    openSkillerApp(actionContext, projectKey ?? actionContext.selectedProjectKey)
+  onOpenSkiller: (projectKey?: string, sessionId?: string) => {
+    openSkillerApp(actionContext, projectKey ?? actionContext.selectedProjectKey, sessionId)
   }
 })

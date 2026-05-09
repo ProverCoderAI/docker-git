@@ -132,7 +132,13 @@ import {
   readProjectTerminalImage,
   startTerminalSession
 } from "./services/terminal-sessions.js"
-import { openSkiller, parseSkillerRoute, proxySkillerTrpc, serveSkillerApp } from "./services/skiller.js"
+import {
+  openSkiller,
+  openSkillerForTerminalSession,
+  parseSkillerRoute,
+  proxySkillerTrpc,
+  serveSkillerApp
+} from "./services/skiller.js"
 import {
   commitStateFromRequest,
   initStateFromRequest,
@@ -589,6 +595,14 @@ export const makeRouter = () => {
       "/projects/by-key/:projectKey/skiller/open",
       projectKeyParams.pipe(
         Effect.flatMap(({ projectKey }) => openSkiller(projectKey)),
+        Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/by-key/:projectKey/terminal-sessions/:sessionId/skiller/open",
+      terminalSessionByProjectKeyParams.pipe(
+        Effect.flatMap(({ projectKey, sessionId }) => openSkillerForTerminalSession(projectKey, sessionId)),
         Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
         Effect.catchAll(errorResponse)
       )
