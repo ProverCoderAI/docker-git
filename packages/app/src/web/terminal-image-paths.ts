@@ -2,8 +2,9 @@ const supportedExtensions: ReadonlyArray<string> = ["png", "jpg", "jpeg", "gif",
 
 const extensionAlternation = supportedExtensions.join("|")
 
+const absoluteImagePathSource = String.raw`/[^\s"'(<>\[\]{}|\\]+\.(?:${extensionAlternation})`
 const imagePathPattern = new RegExp(
-  String.raw`(?:^|[\s"'(<>\[\]{}|])(/[^\s"'(<>\[\]{}|\\]+\.(?:${extensionAlternation}))(?=$|[\s"')<>\[\]{}|.,;:?!])`,
+  String.raw`(?:^|[\s"'(<>\[\]{}|])((?:file://)?${absoluteImagePathSource})(?=$|[\s"')<>\[\]{}|.,;:?!])`,
   "giu"
 )
 

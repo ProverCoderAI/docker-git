@@ -19,6 +19,7 @@ export type TerminalLifecycleState = {
   attachedOnce: boolean
   disposed: boolean
   inlineImageDisposables: Array<IDisposable>
+  inlineImageObjectUrls: Map<string, string>
   outputQueue: Array<TerminalInlineImageOutputSegment>
   outputWriting: boolean
   readyNotified: boolean

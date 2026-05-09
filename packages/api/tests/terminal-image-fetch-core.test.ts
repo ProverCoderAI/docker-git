@@ -3,10 +3,18 @@ import { describe, expect, it } from "@effect/vitest"
 import { planTerminalImageFetch } from "../src/services/terminal-image-fetch-core.js"
 
 describe("terminal image fetch core", () => {
-  it("accepts an absolute path with a supported image extension", () => {
+  it("continues to accept an absolute path with a supported image extension", () => {
     expect(planTerminalImageFetch("/tmp/issue232-main.png")).toEqual({
       _tag: "ValidTerminalImageFetch",
       containerPath: "/tmp/issue232-main.png",
+      mediaType: "image/png"
+    })
+  })
+
+  it("accepts a file URL and normalizes it to an absolute container path", () => {
+    expect(planTerminalImageFetch("file:///tmp/phantom-e2e.tuhl98/wallet-step-after-password.png")).toEqual({
+      _tag: "ValidTerminalImageFetch",
+      containerPath: "/tmp/phantom-e2e.tuhl98/wallet-step-after-password.png",
       mediaType: "image/png"
     })
   })
@@ -33,6 +41,13 @@ describe("terminal image fetch core", () => {
     })
   })
 
+  it("rejects non-file URLs", () => {
+    expect(planTerminalImageFetch("https://example.com/tmp/photo.png")).toEqual({
+      _tag: "InvalidTerminalImageFetch",
+      message: "Only file:// image URLs are supported."
+    })
+  })
+
   it("rejects whitespace and control characters", () => {
     expect(planTerminalImageFetch("/tmp/has space.png")).toMatchObject({
       _tag: "InvalidTerminalImageFetch"
@@ -48,6 +63,32 @@ describe("terminal image fetch core", () => {
     })
     expect(planTerminalImageFetch("/tmp/./photo.png")).toMatchObject({
       _tag: "InvalidTerminalImageFetch"
+    })
+  })
+
+  it("rejects traversal segments in file URLs before URL normalization", () => {
+    expect(planTerminalImageFetch("file:///tmp/../etc/photo.png")).toMatchObject({
+      _tag: "InvalidTerminalImageFetch",
+      message: "Image path must not contain '.' or '..' segments."
+    })
+    expect(planTerminalImageFetch("file:///tmp/%2E%2E/etc/photo.png")).toMatchObject({
+      _tag: "InvalidTerminalImageFetch",
+      message: "Image path must not contain '.' or '..' segments."
+    })
+  })
+
+  it("rejects unsafe file URL forms", () => {
+    expect(planTerminalImageFetch("file://example.com/tmp/photo.png")).toMatchObject({
+      _tag: "InvalidTerminalImageFetch",
+      message: "Image file URL must point to a local path."
+    })
+    expect(planTerminalImageFetch("file:///tmp/photo.png?download=1")).toMatchObject({
+      _tag: "InvalidTerminalImageFetch",
+      message: "Image file URL must not include query or fragment."
+    })
+    expect(planTerminalImageFetch("file:///tmp/%2Fetc/photo.png")).toMatchObject({
+      _tag: "InvalidTerminalImageFetch",
+      message: "Image file URL must not contain encoded or backslash path separators."
     })
   })
 

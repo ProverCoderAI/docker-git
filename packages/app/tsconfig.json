@@ -7,11 +7,10 @@
 		"types": ["vitest", "vite/client"],
 		"lib": ["ES2023", "DOM", "DOM.Iterable"],
 		"jsx": "react-jsx",
-		"baseUrl": ".",
 		"paths": {
-			"@/*": ["src/*"],
-			"@lib": ["src/lib/index.ts"],
-			"@lib/*": ["src/lib/*.ts"]
+			"@/*": ["./src/*"],
+			"@lib": ["./src/lib/index.ts"],
+			"@lib/*": ["./src/lib/*.ts"]
 		}
 	},
 	"include": [

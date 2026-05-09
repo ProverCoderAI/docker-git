@@ -3,24 +3,13 @@ import { Either } from "effect"
 
 import { createProjectDraftFromInputs } from "../docker-git/menu-create-shared.js"
 import type { CreateInputs } from "../docker-git/menu-types.js"
+import { readEventPayloadString } from "./actions-event-payload.js"
 import { appendOutputLine, appendOutputLineHandler, notifyProjectEventRateLimit } from "./actions-output.js"
 import { type BrowserActionContext, withBusy } from "./actions-shared.js"
 import { ProjectDetailsSchema } from "./api-schema.js"
 import { type ApiEvent, loadProjectDetails, type ProjectDetails, startCreateProject } from "./api.js"
 import { openProjectEventStream } from "./project-events.js"
 import { outputScreen, projectPickerScreen } from "./screen.js"
-
-const readEventPayloadString = (
-  event: ApiEvent,
-  key: string
-): string | null => {
-  const payload = event.payload
-  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
-    return null
-  }
-  const value = Object.entries(payload).find(([name]) => name === key)?.[1]
-  return typeof value === "string" ? value : null
-}
 
 const readCreatedProjectId = (event: ApiEvent): string | null =>
   event.type === "project.created" ? readEventPayloadString(event, "projectId") : null
