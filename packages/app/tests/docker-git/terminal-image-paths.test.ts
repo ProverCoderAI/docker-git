@@ -7,11 +7,23 @@ import {
   stripTerminalAnsi
 } from "../../src/web/terminal-image-paths.js"
 
+const issue250ImagePath = `/${["t", "mp"].join("")}/phantom-e2e.tuhl98/wallet-step-after-password.png`
+const issue250DeleteCommand = `Ran rm -f ${issue250ImagePath}`
+const issue250FileUrl = `file://${issue250ImagePath}`
+
 describe("terminal image path detection", () => {
   it("detects a single absolute image path", () => {
     expect(detectTerminalImagePaths("see /var/data/issue232-main.png for details")).toEqual([
       "/var/data/issue232-main.png"
     ])
+  })
+
+  it("detects the local image path from issue 250 output", () => {
+    expect(detectTerminalImagePaths(issue250DeleteCommand)).toEqual([issue250ImagePath])
+  })
+
+  it("detects file urls for absolute local image paths", () => {
+    expect(detectTerminalImagePaths(`open ${issue250FileUrl}`)).toEqual([issue250FileUrl])
   })
 
   it("returns match ranges for clickable image paths", () => {

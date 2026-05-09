@@ -4,21 +4,17 @@ import { afterEach, beforeEach, vi } from "vitest"
 
 import { applyProjectById, connectProjectById, runApplyAllProjects } from "../../src/web/actions-projects.js"
 import type {
-  ApiEvent,
   ProjectDetails,
+  startProjectTerminalSession,
   StartProjectTerminalSessionAccepted,
   TerminalSession
 } from "../../src/web/api.js"
+import type { openProjectEventStream } from "../../src/web/project-events.js"
 import type { ActiveTerminalSession } from "../../src/web/terminal.js"
 import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
 
-type ProjectEventStreamHandlers = {
-  readonly onEvent?: (event: ApiEvent) => void
-}
-
-type ProjectEventStreamControls = {
-  readonly close: () => void
-}
+type OpenProjectEventStream = typeof openProjectEventStream
+type StartProjectTerminalSession = typeof startProjectTerminalSession
 
 type ConnectProjectFixture = {
   readonly addTerminalSession: ReturnType<typeof vi.fn<(session: ActiveTerminalSession) => void>>
@@ -32,12 +28,8 @@ const applyAllProjectsMock = vi.hoisted(() => vi.fn())
 const applyProjectMock = vi.hoisted(() => vi.fn())
 const eventStreamCloseMock = vi.hoisted(() => vi.fn())
 const loadProjectTerminalSessionMock = vi.hoisted(() => vi.fn())
-const openProjectEventStreamMock = vi.hoisted(() =>
-  vi.fn<(projectId: string, handlers: ProjectEventStreamHandlers) => ProjectEventStreamControls>()
-)
-const startProjectTerminalSessionMock = vi.hoisted(() =>
-  vi.fn<(projectKey: string, requestId: string) => Effect.Effect<StartProjectTerminalSessionAccepted>>()
-)
+const openProjectEventStreamMock = vi.hoisted(() => vi.fn<OpenProjectEventStream>())
+const startProjectTerminalSessionMock = vi.hoisted(() => vi.fn<StartProjectTerminalSession>())
 
 vi.mock("../../src/web/api.js", () => ({
   applyAllProjects: applyAllProjectsMock,
@@ -116,14 +108,21 @@ const startTerminalAccepted = (requestId: string): StartProjectTerminalSessionAc
   requestId
 })
 
+const makeSelectedProjectActionContext = (
+  overrides: Parameters<typeof makeBrowserActionContext>[0] = {}
+) =>
+  makeBrowserActionContext({
+    selectedProjectId: "project-1",
+    selectedProjectKey: "octocat/hello-world",
+    ...overrides
+  })
+
 const connectProjectFixture = (): ConnectProjectFixture => {
   const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
   const closeTerminalSession = vi.fn<(sessionId: string) => void>()
-  const { context, reloadDashboard, setMessage } = makeBrowserActionContext({
+  const { context, reloadDashboard, setMessage } = makeSelectedProjectActionContext({
     addTerminalSession,
-    closeTerminalSession,
-    selectedProjectId: "project-1",
-    selectedProjectKey: "octocat/hello-world"
+    closeTerminalSession
   })
 
   connectProjectById("project-1", context, "octocat/hello-world")
