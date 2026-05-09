@@ -4,7 +4,10 @@ import {
   containerCodexSkillsPath,
   parseDockerMountLines,
   remapContainerPathToMountedHost,
-  sameSkillerScope
+  remapSkillerBrowserContainerPath,
+  remapSkillerBrowserHostPath,
+  sameSkillerScope,
+  skillerBrowserScopeForContainer
 } from "../src/services/skiller-core.js"
 
 describe("skiller container filesystem mapping", () => {
@@ -49,5 +52,33 @@ describe("skiller container filesystem mapping", () => {
     })).toBe(false)
     expect(sameSkillerScope(scope, null)).toBe(false)
     expect(sameSkillerScope(null, null)).toBe(true)
+  })
+
+  it("builds a browser picker scope that remaps selected container paths to host volume paths", () => {
+    const browserScope = skillerBrowserScopeForContainer({
+      containerCodexSkillsPath: "/home/dev/.codex/skills",
+      containerHomePath: "/home/dev",
+      containerName: "dg-project",
+      containerProjectPath: "/home/dev/app",
+      hostCodexSkillsPath: "/var/lib/docker/volumes/project-home/_data/.codex/skills",
+      hostHomePath: "/var/lib/docker/volumes/project-home/_data",
+      hostProjectPath: "/var/lib/docker/volumes/project-home/_data/app",
+      projectId: "/home/dev/.docker-git/project",
+      projectKey: "abc123",
+      sshUser: "dev"
+    }, "terminal-session")
+
+    expect(browserScope.currentProject.containerPath).toBe("/home/dev/app")
+    expect(remapSkillerBrowserContainerPath(browserScope, "/home/dev/app/packages")).toBe(
+      "/var/lib/docker/volumes/project-home/_data/app/packages"
+    )
+    expect(remapSkillerBrowserContainerPath(browserScope, "/home/dev/.codex/skills/demo")).toBe(
+      "/var/lib/docker/volumes/project-home/_data/.codex/skills/demo"
+    )
+    expect(remapSkillerBrowserContainerPath(browserScope, "/tmp/outside")).toBeNull()
+    expect(remapSkillerBrowserHostPath(
+      browserScope,
+      "/var/lib/docker/volumes/project-home/_data/app/packages"
+    )).toBe("/home/dev/app/packages")
   })
 })

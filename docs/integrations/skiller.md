@@ -57,6 +57,7 @@ The latest Playwright proof screenshots are checked in under `docs/screenshots/i
 - `pr238-proof-27-terminal-skiller-same-session.png` shows the attached terminal with the `Skiller` button.
 - `pr238-proof-28-skiller-session-scoped-ui.png` shows the real Skiller UI opened from that button.
 - `pr238-proof-29-skiller-codex-container-skill.png` shows a Codex skill discovered from the selected container's `/home/dev/.codex/skills` tree.
+- `pr238-proof-30-skiller-add-project-folder-browser-picker.png` shows the browser-visible project folder picker opened from `Add project folder...` with selected-container paths.
 
 ## Updating the Pin
 

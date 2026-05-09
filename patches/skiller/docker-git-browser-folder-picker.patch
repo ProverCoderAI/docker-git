@@ -1,0 +1,292 @@
+diff --git a/src/mainview/components/InstallToProjectPicker.tsx b/src/mainview/components/InstallToProjectPicker.tsx
+index cc78676..6b86318 100644
+--- a/src/mainview/components/InstallToProjectPicker.tsx
++++ b/src/mainview/components/InstallToProjectPicker.tsx
+@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
+ import { useQueryClient } from "@tanstack/react-query";
+ import { FolderOpen, FolderPlus } from "lucide-react";
+ import { Button } from "@/mainview/components/ui/button";
+-import { pickFolder } from "@/mainview/lib/native";
++import { displayFolderPath, pickFolder } from "@/mainview/lib/native";
+ import { useAddProject, useProjects } from "@/mainview/hooks/useProjects";
+ 
+ interface Props {
+@@ -83,7 +83,7 @@ export default function InstallToProjectPicker({ skillName, onInstall, onClose }
+                 <div className="min-w-0 flex-1">
+                   <p className="text-sm font-medium truncate">{p.name}</p>
+                   <p className="text-[10px] text-muted-foreground/70 truncate font-mono">
+-                    {p.path}
++                    {displayFolderPath(p.path)}
+                   </p>
+                 </div>
+                 {busyPath === p.path && (
+diff --git a/src/mainview/lib/native.ts b/src/mainview/lib/native.ts
+index 364bf0c..a355f7e 100644
+--- a/src/mainview/lib/native.ts
++++ b/src/mainview/lib/native.ts
+@@ -20,6 +20,8 @@ declare global {
+   interface Window {
+     /** Set by the main process (either host) when tRPC binds a port. */
+     __SKILLER_TRPC_BASE_URL__?: string
++    /** Set by docker-git when Skiller is opened from a terminal session. */
++    __DOCKER_GIT_SKILLER_SCOPE__?: DockerGitSkillerScope
+     /** Electron preload-exposed bridge. Absent under Electrobun or plain Vite. */
+     api?: {
+       platform: NodeJS.Platform
+@@ -32,6 +34,21 @@ declare global {
+   }
+ }
+ 
++type DockerGitPathRoot = {
++  containerPath: string
++  hostPath: string
++  id: 'project' | 'home' | 'codexSkills'
++  label: string
++}
++
++type DockerGitSkillerScope = {
++  containerName: string
++  currentProject: DockerGitPathRoot
++  projectKey: string
++  roots: DockerGitPathRoot[]
++  sessionId: string
++}
++
+ type BunRequests = AppRPCSchema['bun']['requests']
+ export type BunPushMessage = keyof AppRPCSchema['bun']['messages']
+ 
+@@ -275,8 +292,203 @@ export function revealItemInDir(path: string): void {
+   void invoke('reveal_path_in_folder', { path })
+ }
+ 
++function dockerGitSkillerScope(): DockerGitSkillerScope | null {
++  if (typeof window === 'undefined') return null
++  return window.__DOCKER_GIT_SKILLER_SCOPE__ ?? null
++}
++
++function normalizeSlashPath(raw: string): string | null {
++  const trimmed = raw.trim().replace(/\\/gu, '/')
++  if (trimmed.length === 0) return null
++  const absolute = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
++  const parts: string[] = []
++  for (const part of absolute.split('/')) {
++    if (part.length === 0 || part === '.') continue
++    if (part === '..') {
++      parts.pop()
++      continue
++    }
++    parts.push(part)
++  }
++  return `/${parts.join('/')}`
++}
++
++function isPathInside(basePath: string, targetPath: string): boolean {
++  return targetPath === basePath || targetPath.startsWith(`${basePath}/`)
++}
++
++function rootDepth(root: DockerGitPathRoot, key: 'containerPath' | 'hostPath'): number {
++  return root[key].split('/').filter((part) => part.length > 0).length
++}
++
++function sortedRoots(
++  scope: DockerGitSkillerScope,
++  key: 'containerPath' | 'hostPath',
++): DockerGitPathRoot[] {
++  return [...scope.roots].sort((left, right) => rootDepth(right, key) - rootDepth(left, key))
++}
++
++function normalizePickerInput(raw: string, scope: DockerGitSkillerScope): string | null {
++  const trimmed = raw.trim()
++  if (trimmed === '~') return scope.roots.find((root) => root.id === 'home')?.containerPath ?? null
++  if (trimmed.startsWith('~/')) {
++    const home = scope.roots.find((root) => root.id === 'home')?.containerPath
++    return home ? normalizeSlashPath(`${home}/${trimmed.slice(2)}`) : null
++  }
++  if (trimmed.startsWith('/')) return normalizeSlashPath(trimmed)
++  return normalizeSlashPath(`${scope.currentProject.containerPath}/${trimmed}`)
++}
++
++function mapContainerPathToHost(
++  scope: DockerGitSkillerScope,
++  rawPath: string,
++): { error: string; hostPath: null } | { error: null; hostPath: string } {
++  const containerPath = normalizePickerInput(rawPath, scope)
++  if (containerPath === null) {
++    return { error: 'Enter a folder path.', hostPath: null }
++  }
++  const root = sortedRoots(scope, 'containerPath')
++    .find((candidate) => isPathInside(candidate.containerPath, containerPath))
++  if (!root) {
++    return {
++      error: `Choose a path inside ${scope.currentProject.containerPath} or ${scope.roots.find((candidate) => candidate.id === 'home')?.containerPath ?? 'the selected container home'}.`,
++      hostPath: null,
++    }
++  }
++  const relative = containerPath.slice(root.containerPath.length).replace(/^\/+/u, '')
++  return {
++    error: null,
++    hostPath: relative.length === 0 ? root.hostPath : `${root.hostPath}/${relative}`,
++  }
++}
++
++export function displayFolderPath(path: string): string {
++  const scope = dockerGitSkillerScope()
++  if (scope === null) return path
++  const normalizedPath = path.replace(/\\/gu, '/')
++  const root = sortedRoots(scope, 'hostPath')
++    .find((candidate) => isPathInside(candidate.hostPath, normalizedPath))
++  if (!root) return path
++  const relative = normalizedPath.slice(root.hostPath.length).replace(/^\/+/u, '')
++  return relative.length === 0 ? root.containerPath : `${root.containerPath}/${relative}`
++}
++
++function pickerButton(label: string, path: string, onClick: () => void): HTMLButtonElement {
++  const button = document.createElement('button')
++  button.type = 'button'
++  button.className = [
++    'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left',
++    'hover:bg-black/[0.04] dark:hover:bg-white/[0.06]',
++  ].join(' ')
++  button.innerHTML = [
++    '<span class="text-sm font-medium"></span>',
++    '<span class="min-w-0 flex-1 truncate text-right text-[10px] font-mono text-muted-foreground/70"></span>',
++  ].join('')
++  const [nameEl, pathEl] = [...button.children] as HTMLElement[]
++  nameEl.textContent = label
++  pathEl.textContent = path
++  button.addEventListener('click', onClick)
++  return button
++}
++
++function openDockerGitFolderPicker(
++  scope: DockerGitSkillerScope,
++  title: string | undefined,
++): Promise<string | null> {
++  return new Promise((resolve) => {
++    const overlay = document.createElement('div')
++    overlay.className = 'fixed inset-0 z-[1000] flex items-center justify-center bg-black/30 dark:bg-black/50'
++    const panel = document.createElement('div')
++    panel.className = 'w-full max-w-xl rounded-xl border border-border bg-popover p-5 shadow-2xl'
++    panel.addEventListener('click', (event) => event.stopPropagation())
++
++    const heading = document.createElement('div')
++    heading.className = 'mb-4 flex items-start justify-between gap-3'
++    const titleBlock = document.createElement('div')
++    const titleEl = document.createElement('h2')
++    titleEl.className = 'text-sm font-[590] text-foreground'
++    titleEl.textContent = title ?? 'Select project folder'
++    const scopeEl = document.createElement('p')
++    scopeEl.className = 'mt-1 text-[11px] text-muted-foreground'
++    scopeEl.textContent = `${scope.containerName} · ${scope.currentProject.containerPath}`
++    titleBlock.append(titleEl, scopeEl)
++    const closeButton = document.createElement('button')
++    closeButton.type = 'button'
++    closeButton.className = 'text-muted-foreground hover:text-foreground'
++    closeButton.textContent = 'x'
++    heading.append(titleBlock, closeButton)
++
++    const rootsEl = document.createElement('div')
++    rootsEl.className = 'mb-4 space-y-1 rounded-lg border border-border/60 p-1'
++    const input = document.createElement('input')
++    input.type = 'text'
++    input.value = scope.currentProject.containerPath
++    input.className = [
++      'w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm',
++      'placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring',
++    ].join(' ')
++    for (const root of scope.roots) {
++      rootsEl.append(pickerButton(root.label, root.containerPath, () => {
++        input.value = root.containerPath
++        input.focus()
++        input.select()
++      }))
++    }
++
++    const error = document.createElement('p')
++    error.className = 'mt-2 min-h-4 text-xs text-destructive'
++    const footer = document.createElement('div')
++    footer.className = 'mt-4 flex justify-end gap-2'
++    const cancel = document.createElement('button')
++    cancel.type = 'button'
++    cancel.className = 'rounded-md border border-border px-3 py-2 text-sm hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
++    cancel.textContent = 'Cancel'
++    const choose = document.createElement('button')
++    choose.type = 'button'
++    choose.className = 'rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground hover:opacity-90'
++    choose.textContent = 'Choose folder'
++    footer.append(cancel, choose)
++    panel.append(heading, rootsEl, input, error, footer)
++    overlay.append(panel)
++
++    const cleanup = (value: string | null) => {
++      document.removeEventListener('keydown', onKeyDown)
++      overlay.remove()
++      resolve(value)
++    }
++    const submit = () => {
++      const result = mapContainerPathToHost(scope, input.value)
++      if (result.error !== null) {
++        error.textContent = result.error
++        return
++      }
++      cleanup(result.hostPath)
++    }
++    const onKeyDown = (event: KeyboardEvent) => {
++      if (event.key === 'Escape') cleanup(null)
++      if (event.key === 'Enter') submit()
++    }
++
++    overlay.addEventListener('click', () => cleanup(null))
++    closeButton.addEventListener('click', () => cleanup(null))
++    cancel.addEventListener('click', () => cleanup(null))
++    choose.addEventListener('click', submit)
++    input.addEventListener('input', () => {
++      error.textContent = ''
++    })
++    document.addEventListener('keydown', onKeyDown)
++    document.body.append(overlay)
++    input.focus()
++    input.select()
++  })
++}
++
+ export async function pickFolder(options?: {
+   title?: string
+ }): Promise<string | null> {
++  const scope = dockerGitSkillerScope()
++  if (scope !== null) {
++    return openDockerGitFolderPicker(scope, options?.title)
++  }
+   return invoke('pick_folder', options?.title ? { title: options.title } : undefined)
+ }
+diff --git a/src/mainview/pages/Projects.tsx b/src/mainview/pages/Projects.tsx
+index 7db4e58..3de6cce 100644
+--- a/src/mainview/pages/Projects.tsx
++++ b/src/mainview/pages/Projects.tsx
+@@ -15,7 +15,7 @@ import {
+   X,
+ } from "lucide-react";
+ import { Button } from "@/mainview/components/ui/button";
+-import { invoke, pickFolder, revealItemInDir } from "@/mainview/lib/native";
++import { displayFolderPath, invoke, pickFolder, revealItemInDir } from "@/mainview/lib/native";
+ import ImportWizard from "@/mainview/components/ImportWizard";
+ import ProjectSkillDetailModal from "@/mainview/components/ProjectSkillDetailModal";
+ import ResizeHandle from "@/mainview/components/ResizeHandle";
+@@ -608,7 +608,7 @@ function ProjectRow({
+       <div className="min-w-0 flex-1">
+         <p className="text-sm font-medium truncate leading-tight">{project.name}</p>
+         <p className="text-[10px] text-muted-foreground/70 truncate font-mono">
+-          {project.path}
++          {displayFolderPath(project.path)}
+         </p>
+       </div>
+       <button
+@@ -662,7 +662,7 @@ function ProjectDetail({ project }: { project: Project }) {
+             onClick={() => revealItemInDir(project.path)}
+             title={t("projects.revealInFinder")}
+           >
+-            {project.path}
++            {displayFolderPath(project.path)}
+           </button>
+         </div>
+         <div className="flex shrink-0 gap-2">

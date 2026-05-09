@@ -21,6 +21,7 @@ import {
   parseDockerMountLines,
   remapContainerPathToMountedHost,
   sameSkillerScope,
+  skillerBrowserScopeForContainer,
   type SkillerContainerScope
 } from "./skiller-core.js"
 import { getProjectItemByKey } from "./projects.js"
@@ -53,7 +54,7 @@ type SkillerProcessUser = {
 }
 
 type SkillerRoute =
-  | { readonly _tag: "App"; readonly relativePath: string }
+  | { readonly _tag: "App"; readonly relativePath: string; readonly sessionId: string | null }
   | { readonly _tag: "Trpc"; readonly sessionId: string | null; readonly upstreamPath: string }
 
 const submoduleRelativePath = join("third_party", "skiller-desktop-skills-manager")
@@ -279,8 +280,15 @@ const waitForSkillerReady = (trpcPort: number): Effect.Effect<void, ApiInternalE
 
 const launchScript = [
   "set -euo pipefail",
+  "DOCKER_GIT_SKILLER_PATCH=../../patches/skiller/docker-git-browser-folder-picker.patch",
+  "DOCKER_GIT_SKILLER_PATCH_MARKER=out/.docker-git-browser-folder-picker.patch",
+  "if [ -f ../../scripts/skiller-apply-docker-git-patches.mjs ]; then bun ../../scripts/skiller-apply-docker-git-patches.mjs; fi",
   "if [ ! -d node_modules ]; then bun install --frozen-lockfile; fi",
-  "if [ ! -f out/main/index.js ] || [ ! -f out/renderer/index.html ]; then bun run build; fi",
+  "if [ ! -f out/main/index.js ] || [ ! -f out/renderer/index.html ] || { [ -f \"$DOCKER_GIT_SKILLER_PATCH\" ] && [ ! -f \"$DOCKER_GIT_SKILLER_PATCH_MARKER\" ]; } || { [ -f \"$DOCKER_GIT_SKILLER_PATCH\" ] && [ \"$DOCKER_GIT_SKILLER_PATCH\" -nt \"$DOCKER_GIT_SKILLER_PATCH_MARKER\" ]; }; then",
+  "  bun run build",
+  "  mkdir -p out",
+  "  touch \"$DOCKER_GIT_SKILLER_PATCH_MARKER\"",
+  "fi",
   "if [ ! -e out/preload/index.js ]; then ln -sf index.mjs out/preload/index.js; fi",
   "if [ -z \"${DISPLAY:-}\" ] && command -v xvfb-run >/dev/null 2>&1; then",
   "  exec xvfb-run -a ./node_modules/electron/dist/electron --no-sandbox out/main/index.js",
@@ -522,17 +530,17 @@ export const parseSkillerRoute = (pathname: string): SkillerRoute | null => {
     const routeKind = sessionMatch[2] ?? ""
     const tail = sessionMatch[3] ?? ""
     if (routeKind === "app" || routeKind === "") {
-      return { _tag: "App", relativePath: tail.length === 0 ? "/" : tail }
+      return { _tag: "App", relativePath: tail.length === 0 ? "/" : tail, sessionId }
     }
     if (routeKind === "trpc") {
       return { _tag: "Trpc", sessionId, upstreamPath: `/trpc${tail}` }
     }
   }
   if (normalized === "/skiller/app" || normalized === "/skiller/app/") {
-    return { _tag: "App", relativePath: "/" }
+    return { _tag: "App", relativePath: "/", sessionId: null }
   }
   if (normalized.startsWith("/skiller/app/")) {
-    return { _tag: "App", relativePath: normalized.slice("/skiller/app".length) }
+    return { _tag: "App", relativePath: normalized.slice("/skiller/app".length), sessionId: null }
   }
   if (normalized === "/skiller/trpc" || normalized.startsWith("/skiller/trpc/")) {
     return { _tag: "Trpc", sessionId: null, upstreamPath: normalized.slice("/skiller".length) || "/trpc" }
@@ -575,10 +583,35 @@ const browserTrpcBaseBootstrap = [
   "</script>"
 ].join("")
 
-const injectBrowserTrpcBase = (html: string): string =>
-  html.includes("<head>")
-    ? html.replace("<head>", `<head>${browserTrpcBaseBootstrap}`)
-    : `${browserTrpcBaseBootstrap}${html}`
+const scriptJson = (value: unknown): string =>
+  JSON.stringify(value).replaceAll("<", "\\u003c")
+
+const browserDockerGitScopeBootstrap = (
+  route: Extract<SkillerRoute, { readonly _tag: "App" }>
+): string => {
+  if (route.sessionId === null) {
+    return ""
+  }
+  const scope = sessionScopes.get(route.sessionId)
+  if (scope === undefined || scope === null) {
+    return ""
+  }
+  return [
+    "<script>",
+    `window.__DOCKER_GIT_SKILLER_SCOPE__=${scriptJson(skillerBrowserScopeForContainer(scope, route.sessionId))};`,
+    "</script>"
+  ].join("")
+}
+
+const injectBrowserBootstrap = (
+  html: string,
+  route: Extract<SkillerRoute, { readonly _tag: "App" }>
+): string => {
+  const bootstrap = `${browserTrpcBaseBootstrap}${browserDockerGitScopeBootstrap(route)}`
+  return html.includes("<head>")
+    ? html.replace("<head>", `<head>${bootstrap}`)
+    : `${bootstrap}${html}`
+}
 
 const safeRendererPath = (skillerDir: string, relativePath: string): string => {
   const rendererDir = resolve(skillerDir, "out", "renderer")
@@ -611,7 +644,7 @@ export const serveSkillerApp = (
       try: () => readFileSync(filePath)
     }))
     if (filePath.endsWith(".html")) {
-      return HttpServerResponse.text(injectBrowserTrpcBase(content.toString("utf8")), {
+      return HttpServerResponse.text(injectBrowserBootstrap(content.toString("utf8"), route), {
         contentType: "text/html; charset=utf-8",
         headers: { "cache-control": "no-store" }
       })

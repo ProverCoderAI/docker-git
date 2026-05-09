@@ -62,10 +62,12 @@ RUN set -eu; \
     exit 1
 RUN bun run --cwd packages/lib build
 RUN bun run --cwd packages/api build
+RUN bun scripts/skiller-apply-docker-git-patches.mjs
 RUN test -f third_party/skiller-desktop-skills-manager/package.json \
  && cd third_party/skiller-desktop-skills-manager \
  && bun install --frozen-lockfile --silent \
  && bun run build \
+ && touch out/.docker-git-browser-folder-picker.patch \
  && mkdir -p out/preload \
  && ln -sf index.mjs out/preload/index.js
 
