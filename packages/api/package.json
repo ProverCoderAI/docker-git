@@ -20,12 +20,12 @@
   },
   "dependencies": {
     "@effect-template/lib": "workspace:*",
-    "@effect/platform": "^0.96.0",
+    "@effect/platform": "^0.96.1",
     "@effect/platform-node": "^0.106.0",
     "@effect/schema": "^0.75.5",
-    "effect": "^3.21.0",
-    "node-pty": "^1.0.0",
-    "ws": "^8.18.3"
+    "effect": "^3.21.2",
+    "node-pty": "^1.1.0",
+    "ws": "^8.20.0"
   },
   "repository": {
     "type": "git",
@@ -38,13 +38,13 @@
   "devDependencies": {
     "@effect/vitest": "^0.29.0",
     "@eslint/js": "10.0.1",
-    "@types/node": "^24.12.0",
+    "@types/node": "^25.6.2",
     "@types/ws": "^8.18.1",
-    "@typescript-eslint/eslint-plugin": "^8.57.1",
-    "@typescript-eslint/parser": "^8.57.1",
-    "eslint": "^10.1.0",
-    "globals": "^17.4.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.0"
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
+    "eslint": "^10.3.0",
+    "globals": "^17.6.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   }
 }

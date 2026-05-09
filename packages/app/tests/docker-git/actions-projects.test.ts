@@ -3,7 +3,11 @@ import { Effect } from "effect"
 import { afterEach, beforeEach, vi } from "vitest"
 
 import { applyProjectById, connectProjectById, runApplyAllProjects } from "../../src/web/actions-projects.js"
+import type { BrowserActionContext } from "../../src/web/actions-shared.js"
 import type {
+  applyAllProjects,
+  applyProject,
+  loadProjectTerminalSession,
   ProjectDetails,
   startProjectTerminalSession,
   StartProjectTerminalSessionAccepted,
@@ -13,23 +17,12 @@ import type { openProjectEventStream } from "../../src/web/project-events.js"
 import type { ActiveTerminalSession } from "../../src/web/terminal.js"
 import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
 
-type OpenProjectEventStream = typeof openProjectEventStream
-type StartProjectTerminalSession = typeof startProjectTerminalSession
-
-type ConnectProjectFixture = {
-  readonly addTerminalSession: ReturnType<typeof vi.fn<(session: ActiveTerminalSession) => void>>
-  readonly closeTerminalSession: ReturnType<typeof vi.fn<(sessionId: string) => void>>
-  readonly context: ReturnType<typeof makeBrowserActionContext>["context"]
-  readonly reloadDashboard: ReturnType<typeof makeBrowserActionContext>["reloadDashboard"]
-  readonly setMessage: ReturnType<typeof makeBrowserActionContext>["setMessage"]
-}
-
-const applyAllProjectsMock = vi.hoisted(() => vi.fn())
-const applyProjectMock = vi.hoisted(() => vi.fn())
-const eventStreamCloseMock = vi.hoisted(() => vi.fn())
-const loadProjectTerminalSessionMock = vi.hoisted(() => vi.fn())
-const openProjectEventStreamMock = vi.hoisted(() => vi.fn<OpenProjectEventStream>())
-const startProjectTerminalSessionMock = vi.hoisted(() => vi.fn<StartProjectTerminalSession>())
+const applyAllProjectsMock = vi.hoisted(() => vi.fn<typeof applyAllProjects>())
+const applyProjectMock = vi.hoisted(() => vi.fn<typeof applyProject>())
+const eventStreamCloseMock = vi.hoisted(() => vi.fn<() => void>())
+const loadProjectTerminalSessionMock = vi.hoisted(() => vi.fn<typeof loadProjectTerminalSession>())
+const openProjectEventStreamMock = vi.hoisted(() => vi.fn<typeof openProjectEventStream>())
+const startProjectTerminalSessionMock = vi.hoisted(() => vi.fn<typeof startProjectTerminalSession>())
 
 vi.mock("../../src/web/api.js", () => ({
   applyAllProjects: applyAllProjectsMock,
@@ -108,32 +101,28 @@ const startTerminalAccepted = (requestId: string): StartProjectTerminalSessionAc
   requestId
 })
 
-const makeSelectedProjectActionContext = (
-  overrides: Parameters<typeof makeBrowserActionContext>[0] = {}
-) =>
+const makeSelectedProjectContext = (overrides: Partial<BrowserActionContext>) =>
   makeBrowserActionContext({
+    ...overrides,
     selectedProjectId: "project-1",
-    selectedProjectKey: "octocat/hello-world",
-    ...overrides
+    selectedProjectKey: "octocat/hello-world"
   })
 
-const connectProjectFixture = (): ConnectProjectFixture => {
-  const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
-  const closeTerminalSession = vi.fn<(sessionId: string) => void>()
-  const { context, reloadDashboard, setMessage } = makeSelectedProjectActionContext({
-    addTerminalSession,
-    closeTerminalSession
+const connectProjectAndWaitForStream = (context: BrowserActionContext) =>
+  Effect.gen(function*(_) {
+    connectProjectById("project-1", context, "octocat/hello-world")
+
+    yield* _(waitForAssertion(() => {
+      expect(openProjectEventStreamMock).toHaveBeenCalledTimes(1)
+    }))
   })
 
-  connectProjectById("project-1", context, "octocat/hello-world")
-
-  return {
-    addTerminalSession,
-    closeTerminalSession,
-    context,
-    reloadDashboard,
-    setMessage
+const readFirstProjectEventHandler = () => {
+  const handlers = openProjectEventStreamMock.mock.calls[0]?.[1]
+  if (handlers?.onEvent === undefined) {
+    throw new Error("missing event handlers")
   }
+  return handlers.onEvent
 }
 
 describe("web project actions", () => {
@@ -161,18 +150,15 @@ describe("web project actions", () => {
       )
       loadProjectTerminalSessionMock.mockImplementation(() => Effect.succeed(session))
       openProjectEventStreamMock.mockImplementation(() => ({ close: eventStreamCloseMock }))
-      const { addTerminalSession, closeTerminalSession, context, reloadDashboard, setMessage } = connectProjectFixture()
+      const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
+      const closeTerminalSession = vi.fn<(sessionId: string) => void>()
+      const { context, reloadDashboard, setMessage } = makeSelectedProjectContext({
+        addTerminalSession,
+        closeTerminalSession
+      })
 
-      yield* _(waitForAssertion(() => {
-        expect(openProjectEventStreamMock).toHaveBeenCalledTimes(1)
-      }))
-
-      const handlers = openProjectEventStreamMock.mock.calls[0]?.[1]
-      if (handlers === undefined || typeof handlers.onEvent !== "function") {
-        throw new Error("missing event handlers")
-      }
-
-      handlers.onEvent({
+      yield* _(connectProjectAndWaitForStream(context))
+      readFirstProjectEventHandler()({
         at: "2026-04-21T10:00:01.000Z",
         payload: {
           phase: "created",
@@ -232,7 +218,7 @@ describe("web project actions", () => {
     Effect.gen(function*(_) {
       const dateNowMock = vi.spyOn(Date, "now").mockReturnValue(0x1_9A_11_7B_D6_1F)
       vi.stubGlobal("crypto", {
-        getRandomValues: (values: Uint8Array) => {
+        getRandomValues: (values: Uint8Array): Uint8Array => {
           values.set([0x10, 0x32, 0x54, 0x76, 0x98, 0xBA, 0xDC, 0xFE])
           return values
         }
@@ -241,12 +227,13 @@ describe("web project actions", () => {
         Effect.succeed(startTerminalAccepted(requestId))
       )
       openProjectEventStreamMock.mockImplementation(() => ({ close: eventStreamCloseMock }))
-      const { addTerminalSession } = connectProjectFixture()
+      const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
+      const { context } = makeSelectedProjectContext({
+        addTerminalSession
+      })
 
-      yield* _(waitForAssertion(() => {
-        expect(startProjectTerminalSessionMock).toHaveBeenCalledTimes(1)
-      }))
-
+      yield* _(connectProjectAndWaitForStream(context))
+      expect(startProjectTerminalSessionMock).toHaveBeenCalledTimes(1)
       const requestId = startProjectTerminalSessionMock.mock.calls[0]?.[1]
       expect(requestId).toBe("pending-19a117bd61f-1032547698badcfe")
       expect(addTerminalSession).toHaveBeenCalledTimes(1)

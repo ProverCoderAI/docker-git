@@ -258,7 +258,7 @@ describe("projects service", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("lists project inventory from .docker-git with conservative runtime defaults", () =>
+  it.effect("lists lightweight project summaries while getProject returns project details", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const path = yield* _(Path.Path)
@@ -299,19 +299,26 @@ describe("projects service", () => {
         expect(projects).toHaveLength(1)
         expect(projects[0]).toMatchObject({
           id: projectId,
-          projectDir: projectId,
           status: "unknown",
           statusLabel: "unknown",
           sshSessions: 0,
           startedAtIso: null,
           startedAtEpochMs: null
         })
+        expect(projects[0]).not.toHaveProperty("sshCommand")
+        expect(projects[0]).not.toHaveProperty("authorizedKeysPath")
+        expect(projects[0]).not.toHaveProperty("envGlobalPath")
+        expect(projects[0]).not.toHaveProperty("codexHome")
         expect(details).toMatchObject({
           id: projectId,
           projectDir: projectId,
           status: "unknown",
           statusLabel: "unknown"
         })
+        expect(details).toHaveProperty("sshCommand")
+        expect(details).toHaveProperty("authorizedKeysPath")
+        expect(details).toHaveProperty("envGlobalPath")
+        expect(details).toHaveProperty("codexHome")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -368,7 +375,6 @@ describe("projects service", () => {
         expect(projects).toHaveLength(1)
         expect(projects[0]).toMatchObject({
           id: projectId,
-          projectDir: projectId,
           status: "running",
           statusLabel: "last known: running",
           sshSessions: 0,
