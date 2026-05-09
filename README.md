@@ -113,3 +113,21 @@ When the CLI cannot acquire Docker access it now prints a message that
 names the specific failure mode, restates the host-Docker contract, and
 lists remediation steps for that exact mode. Implementation lives in
 `packages/app/src/docker-git/controller-docker-diagnostics.ts`.
+
+## Resource limits
+
+`docker-git` caps host resource consumption at two layers so a runaway
+project (or the controller itself) cannot consume the entire system.
+
+- **Per-project containers** ship with a default limit of `30%` CPU and
+  `30%` RAM (resolved against the host on `apply`). Override via
+  `--cpu` / `--ram` (or per-project `docker-git.json`).
+- **Controller container** (`docker-git-api`) is capped in
+  `docker-compose.yml` and `docker-compose.api.yml`. Override via
+  environment variables before `./ctl up`:
+
+  | Variable                       | Default | Purpose                              |
+  | ------------------------------ | ------- | ------------------------------------ |
+  | `DOCKER_GIT_CONTROLLER_CPUS`   | `2.0`   | Maximum CPU cores for the controller |
+  | `DOCKER_GIT_CONTROLLER_MEMORY` | `4g`    | Memory + swap cap (matched values)   |
+  | `DOCKER_GIT_CONTROLLER_PIDS`   | `4096`  | Maximum PIDs inside the controller   |
