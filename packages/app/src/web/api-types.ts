@@ -23,8 +23,9 @@ import type {
 export type ProjectSummary = Schema.Schema.Type<typeof ProjectSummarySchema>
 export type ProjectDetails = Schema.Schema.Type<typeof ProjectDetailsSchema>
 export type CreateProjectAcceptedResponse = Schema.Schema.Type<typeof CreateProjectAcceptedResponseSchema>
-export type StartProjectTerminalSessionAccepted =
-  Schema.Schema.Type<typeof StartProjectTerminalSessionAcceptedResponseSchema>
+export type StartProjectTerminalSessionAccepted = Schema.Schema.Type<
+  typeof StartProjectTerminalSessionAcceptedResponseSchema
+>
 export type ProjectPortForward = Schema.Schema.Type<typeof ProjectPortForwardSchema>
 export type ProjectBrowserSession = Schema.Schema.Type<typeof ProjectBrowserSessionSchema>
 export type ProjectDatabaseForward = Schema.Schema.Type<typeof ProjectDatabaseForwardSchema>

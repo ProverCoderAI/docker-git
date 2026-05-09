@@ -7,20 +7,9 @@ import { appendOutputLine, appendOutputLineHandler, notifyProjectEventRateLimit 
 import { type BrowserActionContext, withBusy } from "./actions-shared.js"
 import { ProjectDetailsSchema } from "./api-schema.js"
 import { type ApiEvent, loadProjectDetails, type ProjectDetails, startCreateProject } from "./api.js"
+import { readEventPayloadString } from "./project-event-payload.js"
 import { openProjectEventStream } from "./project-events.js"
 import { outputScreen, projectPickerScreen } from "./screen.js"
-
-const readEventPayloadString = (
-  event: ApiEvent,
-  key: string
-): string | null => {
-  const payload = event.payload
-  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
-    return null
-  }
-  const value = Object.entries(payload).find(([name]) => name === key)?.[1]
-  return typeof value === "string" ? value : null
-}
 
 const readCreatedProjectId = (event: ApiEvent): string | null =>
   event.type === "project.created" ? readEventPayloadString(event, "projectId") : null
