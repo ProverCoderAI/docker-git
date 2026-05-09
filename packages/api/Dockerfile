@@ -62,9 +62,12 @@ RUN set -eu; \
     exit 1
 RUN bun run --cwd packages/lib build
 RUN bun run --cwd packages/api build
-RUN bun install --cwd third_party/skiller-desktop-skills-manager --frozen-lockfile --silent \
- && bun run --cwd third_party/skiller-desktop-skills-manager build \
- && ln -sf index.mjs third_party/skiller-desktop-skills-manager/out/preload/index.js
+RUN test -f third_party/skiller-desktop-skills-manager/package.json \
+ && cd third_party/skiller-desktop-skills-manager \
+ && bun install --frozen-lockfile --silent \
+ && bun run build \
+ && mkdir -p out/preload \
+ && ln -sf index.mjs out/preload/index.js
 
 ENV DOCKER_GIT_API_PORT=3334
 ENV DOCKER_GIT_DOCKER_RUNTIME=isolated
