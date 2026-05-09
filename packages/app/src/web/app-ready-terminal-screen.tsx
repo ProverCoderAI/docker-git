@@ -138,6 +138,16 @@ const pendingTerminalBodyStyle: CSSProperties = {
 
 const terminalTabLabel = (session: ActiveTerminalSession): string => session.browserProjectName ?? session.header
 
+const projectSkillerAction = (
+  projectKey: string | undefined,
+  onOpenSkiller: (projectKey?: string) => void
+): (() => void) | undefined =>
+  projectKey === undefined
+    ? undefined
+    : () => {
+      onOpenSkiller(projectKey)
+    }
+
 const PendingTerminalBody = ({ session }: { readonly session: ActiveTerminalSession }): JSX.Element | null => {
   if (!isPendingActiveTerminalSession(session)) {
     return null
@@ -427,7 +437,7 @@ const TerminalPane = (
           : () => {
             onOpenProjectBrowserById(browserProjectId)
           }}
-        onOpenSkiller={onOpenSkiller}
+        onOpenSkiller={projectSkillerAction(browserProjectKey, onOpenSkiller)}
         onApplyProject={browserProjectId === undefined
           ? undefined
           : () => {

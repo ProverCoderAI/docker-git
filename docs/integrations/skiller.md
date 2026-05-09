@@ -40,9 +40,11 @@ bun run skiller:check
 
 ## docker-git Web Launch
 
-The docker-git web terminal header includes a `Skiller` button next to `Open browser`. The button calls `POST /skiller/open`, which launches the pinned submodule Electron app as a separate process and writes launcher output to `~/.docker-git/logs/skiller.log`.
+The docker-git web terminal header includes a `Skiller` button next to `Open browser`. In a project terminal the button calls `POST /projects/by-key/:projectKey/skiller/open`, which launches the pinned submodule Electron app as a separate process and writes launcher output to `~/.docker-git/logs/skiller.log`.
 
 The same click opens `/api/skiller/app/` in the browser. docker-git serves Skiller's built renderer from the submodule and proxies `/api/skiller/trpc/*` to the running Skiller tRPC backend, so the user sees the actual Skiller UI instead of an invisible background desktop process.
+
+For project terminals, docker-git scopes Skiller to the active project container filesystem. The API inspects the selected project container mounts, maps `/home/<sshUser>` and the project `targetDir` to the controller-visible Docker volume path, launches Skiller with `HOME` set to that mapped home directory, and registers the mapped project directory in Skiller. This makes global skill operations target the selected container home and project skill operations target the selected container project directory. If the controller cannot access the Docker volume path, the endpoint fails instead of opening Skiller against the wrong filesystem.
 
 When the API process has no `$DISPLAY`, the launcher uses `xvfb-run` if it is available so Skiller can still start in a headless controller environment.
 

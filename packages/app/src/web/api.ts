@@ -111,7 +111,14 @@ export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
     }))
   )
 
-export const openSkiller = () => requestJson("POST", "/skiller/open", SkillerLaunchResponseSchema)
+export const openSkiller = (projectKey?: string) =>
+  requestJson(
+    "POST",
+    projectKey === undefined
+      ? "/skiller/open"
+      : `/projects/by-key/${encodeURIComponent(projectKey)}/skiller/open`,
+    SkillerLaunchResponseSchema
+  )
 
 export const loadProjectPortForwards = (projectId: string) =>
   requestJson("GET", `/projects/${encodeURIComponent(projectId)}/ports`, ProjectPortForwardsResponseSchema).pipe(

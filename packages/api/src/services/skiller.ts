@@ -1,8 +1,14 @@
 import { spawn, type ChildProcess } from "node:child_process"
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync } from "node:fs"
+import { chownSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync } from "node:fs"
 import { createServer } from "node:net"
 import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
+import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
+import { CommandFailedError } from "@effect-template/lib/shell/errors"
+import type { ProjectItem } from "@effect-template/lib/usecases/projects"
+import type { ListProjectsContext } from "@effect-template/lib/usecases/projects-list"
+import { NodeContext } from "@effect/platform-node"
+import type { PlatformError } from "@effect/platform/Error"
 import type * as HttpServerError from "@effect/platform/HttpServerError"
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest"
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse"
@@ -10,12 +16,20 @@ import { Effect } from "effect"
 import * as Stream from "effect/Stream"
 
 import { ApiConflictError, ApiInternalError, ApiNotFoundError } from "../api/errors.js"
+import {
+  parseDockerMountLines,
+  remapContainerPathToMountedHost,
+  sameSkillerScope,
+  type SkillerContainerScope
+} from "./skiller-core.js"
+import { getProjectItemByKey } from "./projects.js"
 
 export type SkillerLaunch = {
   readonly alreadyRunning: boolean
   readonly appPath: string
   readonly logPath: string
   readonly pid: number | null
+  readonly scope: SkillerContainerScope | null
   readonly startedAtIso: string
   readonly trpcBasePath: string
   readonly trpcPort: number
@@ -25,9 +39,15 @@ type SkillerProcess = {
   readonly appPath: string
   readonly logPath: string
   readonly process: ChildProcess
+  readonly scope: SkillerContainerScope | null
   readonly startedAtIso: string
   readonly trpcBasePath: string
   readonly trpcPort: number
+}
+
+type SkillerProcessUser = {
+  readonly gid: number
+  readonly uid: number
 }
 
 type SkillerRoute =
@@ -81,10 +101,30 @@ const toLaunch = (process: SkillerProcess, alreadyRunning: boolean): SkillerLaun
   appPath: process.appPath,
   logPath: process.logPath,
   pid: process.process.pid ?? null,
+  scope: process.scope,
   startedAtIso: process.startedAtIso,
   trpcBasePath: process.trpcBasePath,
   trpcPort: process.trpcPort
 })
+
+const dockerCapture = (
+  args: ReadonlyArray<string>,
+  command: string
+): Effect.Effect<string, ApiInternalError, never> =>
+  runCommandCapture(
+    {
+      args,
+      command: "docker",
+      cwd: process.cwd()
+    },
+    [0],
+    (exitCode) => new CommandFailedError({ command, exitCode })
+  ).pipe(
+    Effect.mapError((cause: CommandFailedError | PlatformError) =>
+      new ApiInternalError({ message: `Failed to inspect Docker container for Skiller: ${command}`, cause })
+    ),
+    Effect.provide(NodeContext.layer)
+  )
 
 const isPortAvailable = (port: number): Promise<boolean> =>
   new Promise((resolve) => {
@@ -114,6 +154,82 @@ const sleep = (durationMs: number): Promise<void> =>
     setTimeout(resolve, durationMs)
   })
 
+const containerHomePath = (sshUser: string): string => `/home/${sshUser}`
+
+const inspectContainerMounts = (
+  containerName: string
+): Effect.Effect<ReturnType<typeof parseDockerMountLines>, ApiInternalError> =>
+  dockerCapture(
+    [
+      "inspect",
+      "-f",
+      String.raw`{{range .Mounts}}{{println .Source "\t" .Destination "\t" .RW}}{{end}}`,
+      containerName
+    ],
+    "docker inspect mounts"
+  ).pipe(Effect.map(parseDockerMountLines))
+
+const requireAccessibleDirectory = (
+  path: string,
+  label: string
+): Effect.Effect<void, ApiConflictError> =>
+  Effect.try({
+    catch: () => new ApiConflictError({
+      message: `Skiller cannot access the selected container ${label} at ${path}. The docker-git controller must run with Docker data mounted into /var/lib/docker.`
+    }),
+    try: () => {
+      if (!existsSync(path) || !statSync(path).isDirectory()) {
+        throw new Error(`Missing directory: ${path}`)
+      }
+    }
+  })
+
+const resolveSkillerScope = (
+  projectKey: string,
+  project: ProjectItem
+): Effect.Effect<SkillerContainerScope, ApiConflictError | ApiInternalError> =>
+  Effect.gen(function*(_) {
+    const mounts = yield* _(inspectContainerMounts(project.containerName))
+    const containerHome = containerHomePath(project.sshUser)
+    const hostHomePath = remapContainerPathToMountedHost(mounts, containerHome)
+    const hostProjectPath = remapContainerPathToMountedHost(mounts, project.targetDir)
+    if (hostHomePath === null) {
+      return yield* _(Effect.fail(new ApiConflictError({
+        message: `Skiller cannot find a writable Docker mount for ${containerHome} in ${project.containerName}.`
+      })))
+    }
+    if (hostProjectPath === null) {
+      return yield* _(Effect.fail(new ApiConflictError({
+        message: `Skiller cannot find a writable Docker mount for ${project.targetDir} in ${project.containerName}.`
+      })))
+    }
+    yield* _(requireAccessibleDirectory(hostHomePath, "home volume"))
+    yield* _(requireAccessibleDirectory(hostProjectPath, "project directory"))
+    return {
+      containerHomePath: containerHome,
+      containerName: project.containerName,
+      containerProjectPath: project.targetDir,
+      hostHomePath,
+      hostProjectPath,
+      projectId: project.projectDir,
+      projectKey,
+      sshUser: project.sshUser
+    }
+  })
+
+const resolveRequestedSkillerScope = (
+  projectKey: string | undefined
+): Effect.Effect<
+  SkillerContainerScope | null,
+  ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
+  ListProjectsContext
+> =>
+  projectKey === undefined
+    ? Effect.succeed(null)
+    : getProjectItemByKey(projectKey).pipe(
+      Effect.flatMap((project) => resolveSkillerScope(projectKey, project))
+    )
+
 const waitForSkillerReady = (trpcPort: number): Effect.Effect<void, ApiInternalError> =>
   Effect.tryPromise({
     catch: (cause) => new ApiInternalError({
@@ -121,7 +237,7 @@ const waitForSkillerReady = (trpcPort: number): Effect.Effect<void, ApiInternalE
       cause
     }),
     try: async () => {
-      const deadline = Date.now() + 60_000
+      const deadline = Date.now() + 180_000
       let lastError: unknown = null
       while (Date.now() < deadline) {
         try {
@@ -142,25 +258,134 @@ const waitForSkillerReady = (trpcPort: number): Effect.Effect<void, ApiInternalE
 const launchScript = [
   "set -euo pipefail",
   "if [ ! -d node_modules ]; then bun install --frozen-lockfile; fi",
-  "bun run build",
-  "ln -sf index.mjs out/preload/index.js",
+  "if [ ! -f out/main/index.js ] || [ ! -f out/renderer/index.html ]; then bun run build; fi",
+  "if [ ! -e out/preload/index.js ]; then ln -sf index.mjs out/preload/index.js; fi",
   "if [ -z \"${DISPLAY:-}\" ] && command -v xvfb-run >/dev/null 2>&1; then",
   "  exec xvfb-run -a ./node_modules/electron/dist/electron --no-sandbox out/main/index.js",
   "fi",
   "exec ./node_modules/electron/dist/electron --no-sandbox out/main/index.js"
 ].join("\n")
 
-const launchSkillerProcess = (skillerDir: string, trpcPort: number): SkillerLaunch => {
+const skillerHomeEnv = (
+  scope: SkillerContainerScope | null
+): Record<string, string> =>
+  scope === null
+    ? {}
+    : {
+      HOME: scope.hostHomePath,
+      USER: scope.sshUser,
+      XDG_CACHE_HOME: join(scope.hostHomePath, ".cache"),
+      XDG_CONFIG_HOME: join(scope.hostHomePath, ".config"),
+      XDG_DATA_HOME: join(scope.hostHomePath, ".local", "share")
+    }
+
+const scopedProcessUser = (
+  scope: SkillerContainerScope | null
+): SkillerProcessUser | null => {
+  if (scope === null) {
+    return null
+  }
+  const stats = statSync(scope.hostHomePath)
+  return { gid: stats.gid, uid: stats.uid }
+}
+
+const ensureOwnedDirectory = (path: string, user: SkillerProcessUser): void => {
+  mkdirSync(path, { recursive: true })
+  const stats = statSync(path)
+  if (stats.uid !== user.uid || stats.gid !== user.gid) {
+    chownSync(path, user.uid, user.gid)
+  }
+}
+
+const chownIfExists = (path: string, user: SkillerProcessUser): void => {
+  if (existsSync(path)) {
+    const stats = statSync(path)
+    if (stats.uid !== user.uid || stats.gid !== user.gid) {
+      chownSync(path, user.uid, user.gid)
+    }
+  }
+}
+
+const skillerLaunchCommand = (
+  user: SkillerProcessUser | null
+): readonly [string, ReadonlyArray<string>] =>
+  user === null
+    ? ["bash", ["-lc", launchScript]]
+    : [
+      "setpriv",
+      [
+        `--reuid=${user.uid}`,
+        `--regid=${user.gid}`,
+        "--clear-groups",
+        "bash",
+        "-lc",
+        launchScript
+      ]
+    ]
+
+const stopSkillerProcess = (process: SkillerProcess): void => {
+  const pid = process.process.pid
+  if (pid === undefined) {
+    process.process.kill("SIGTERM")
+    return
+  }
+  try {
+    globalThis.process.kill(-pid, "SIGTERM")
+  } catch {
+    process.process.kill("SIGTERM")
+  }
+}
+
+const registerSkillerProject = (
+  trpcPort: number,
+  scope: SkillerContainerScope | null
+): Effect.Effect<void, ApiInternalError> =>
+  scope === null
+    ? Effect.void
+    : Effect.tryPromise({
+      catch: (cause) => new ApiInternalError({
+        message: "Skiller started but docker-git could not register the selected project path.",
+        cause
+      }),
+      try: async () => {
+        const response = await fetch(`http://127.0.0.1:${trpcPort}/trpc/add_project`, {
+          body: JSON.stringify({ path: scope.hostProjectPath }),
+          headers: { "content-type": "application/json" },
+          method: "POST"
+        })
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${await response.text()}`)
+        }
+      }
+    })
+
+const launchSkillerProcess = (
+  skillerDir: string,
+  trpcPort: number,
+  scope: SkillerContainerScope | null
+): SkillerLaunch => {
   mkdirSync(dirname(launchLogPath), { recursive: true })
+  const processUser = scopedProcessUser(scope)
+  if (scope !== null && processUser !== null) {
+    ensureOwnedDirectory(join(scope.hostHomePath, ".agents"), processUser)
+    ensureOwnedDirectory(join(scope.hostHomePath, ".agents", "skills"), processUser)
+    ensureOwnedDirectory(join(scope.hostHomePath, ".config"), processUser)
+    ensureOwnedDirectory(join(scope.hostHomePath, ".cache"), processUser)
+    ensureOwnedDirectory(join(scope.hostHomePath, ".local", "share"), processUser)
+    ensureOwnedDirectory(join(scope.hostHomePath, ".skiller"), processUser)
+    chownIfExists(join(scope.hostHomePath, ".skiller", "config.toml"), processUser)
+  }
   const logFd = openSync(launchLogPath, "a")
   try {
-    const child = spawn("bash", ["-lc", launchScript], {
+    const [command, args] = skillerLaunchCommand(processUser)
+    const child = spawn(command, args, {
       cwd: skillerDir,
       detached: true,
       env: {
         ...process.env,
         AGENTSKILLS_TRPC_PORT: String(trpcPort),
-        ELECTRON_ENABLE_LOGGING: "1"
+        ELECTRON_ENABLE_LOGGING: "1",
+        ...skillerHomeEnv(scope)
       },
       stdio: ["ignore", logFd, logFd]
     })
@@ -169,6 +394,7 @@ const launchSkillerProcess = (skillerDir: string, trpcPort: number): SkillerLaun
       appPath: skillerAppPath,
       logPath: launchLogPath,
       process: child,
+      scope,
       startedAtIso,
       trpcBasePath: skillerTrpcBasePath,
       trpcPort
@@ -185,10 +411,23 @@ const launchSkillerProcess = (skillerDir: string, trpcPort: number): SkillerLaun
   }
 }
 
-export const openSkiller = (): Effect.Effect<SkillerLaunch, ApiInternalError | ApiNotFoundError> =>
+export const openSkiller = (
+  projectKey?: string
+): Effect.Effect<
+  SkillerLaunch,
+  ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
+  ListProjectsContext
+> =>
   Effect.gen(function*(_) {
+    const scope = yield* _(resolveRequestedSkillerScope(projectKey))
     if (currentProcess !== null && isRunning(currentProcess.process)) {
-      return toLaunch(currentProcess, true)
+      if (sameSkillerScope(currentProcess.scope, scope)) {
+        yield* _(waitForSkillerReady(currentProcess.trpcPort))
+        yield* _(registerSkillerProject(currentProcess.trpcPort, scope))
+        return toLaunch(currentProcess, true)
+      }
+      stopSkillerProcess(currentProcess)
+      currentProcess = null
     }
     const skillerDir = yield* _(resolveSkillerDir())
     const trpcPort = yield* _(Effect.tryPromise({
@@ -203,9 +442,10 @@ export const openSkiller = (): Effect.Effect<SkillerLaunch, ApiInternalError | A
         message: "Failed to launch Skiller.",
         cause
       }),
-      try: () => launchSkillerProcess(skillerDir, trpcPort)
+      try: () => launchSkillerProcess(skillerDir, trpcPort, scope)
     }))
     yield* _(waitForSkillerReady(trpcPort))
+    yield* _(registerSkillerProject(trpcPort, scope))
     return launch
   })
 

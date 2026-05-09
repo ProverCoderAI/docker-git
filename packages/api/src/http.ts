@@ -584,6 +584,14 @@ export const makeRouter = () => {
         Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
         Effect.catchAll(errorResponse)
       )
+    ),
+    HttpRouter.post(
+      "/projects/by-key/:projectKey/skiller/open",
+      projectKeyParams.pipe(
+        Effect.flatMap(({ projectKey }) => openSkiller(projectKey)),
+        Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
+        Effect.catchAll(errorResponse)
+      )
     )
   )
 

@@ -345,7 +345,7 @@ const TerminalHeaderActions = (
       <OptionalTerminalActionButton
         compactHeaderMode={compactHeaderMode}
         compactLabel="Skiller"
-        enabled={true}
+        enabled={hasProjectActions}
         label="Skiller"
         onClick={onOpenSkiller}
       />
