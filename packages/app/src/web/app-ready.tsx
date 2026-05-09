@@ -42,6 +42,7 @@ type ReadyLayoutRenderArgs = {
     readonly onOpenProjectBrowser: () => void
     readonly onOpenProjectDatabaseEditor: () => void
     readonly onOpenProjectTaskManagerById: (projectId: string) => void
+    readonly onOpenSkiller: () => void
     readonly onCloseProjectPortForward: (targetPort: number) => void
     readonly onKillProjectTerminalSession: (projectId: string, projectKey: string, sessionId: string) => void
     readonly onOpenProjectPortForward: () => void
@@ -98,6 +99,7 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onOpenProjectBrowser: actions.onOpenProjectBrowser,
   onOpenProjectDatabaseEditor: actions.onOpenProjectDatabaseEditor,
   onOpenProjectTaskManagerById: actions.onOpenProjectTaskManagerById,
+  onOpenSkiller: actions.onOpenSkiller,
   onKillProjectTerminalSession: actions.onKillProjectTerminalSession,
   onOpenProjectPortForward: actions.onOpenProjectPortForward,
   onOpenProjectTerminalById: actions.onOpenProjectTerminalById,

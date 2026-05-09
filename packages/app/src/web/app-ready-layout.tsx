@@ -78,6 +78,7 @@ export type ReadyLayoutProps = {
   readonly onOpenProjectBrowser: () => void
   readonly onOpenProjectDatabaseEditor: () => void
   readonly onOpenProjectTaskManagerById: (projectId: string) => void
+  readonly onOpenSkiller: () => void
   readonly onKillProjectTerminalSession: (projectId: string, projectKey: string, sessionId: string) => void
   readonly onOpenProjectPortForward: () => void
   readonly onOpenProjectTerminalById: (projectId: string, projectKey?: string) => void

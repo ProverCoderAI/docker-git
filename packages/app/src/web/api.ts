@@ -17,6 +17,7 @@ import {
   ProjectsResponseSchema,
   ProjectTerminalSessionResponseSchema,
   ProjectTerminalSessionsResponseSchema,
+  SkillerLaunchResponseSchema,
   StartProjectTerminalSessionAcceptedResponseSchema,
   TerminalSessionLookupResponseSchema,
   TerminalSessionResponseSchema
@@ -109,6 +110,8 @@ export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
       projects: sortDashboardProjects(projectsResponse.projects)
     }))
   )
+
+export const openSkiller = () => requestJson("POST", "/skiller/open", SkillerLaunchResponseSchema)
 
 export const loadProjectPortForwards = (projectId: string) =>
   requestJson("GET", `/projects/${encodeURIComponent(projectId)}/ports`, ProjectPortForwardsResponseSchema).pipe(

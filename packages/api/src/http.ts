@@ -132,6 +132,7 @@ import {
   readProjectTerminalImage,
   startTerminalSession
 } from "./services/terminal-sessions.js"
+import { openSkiller } from "./services/skiller.js"
 import {
   commitStateFromRequest,
   initStateFromRequest,
@@ -570,6 +571,13 @@ export const makeRouter = () => {
         const projectsRoot = defaultProjectsRoot(cwd)
         return yield* _(jsonResponse({ ok: true, revision: controllerRevision, cwd, projectsRoot }, 200))
       }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/skiller/open",
+      openSkiller().pipe(
+        Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
+        Effect.catchAll(errorResponse)
+      )
     )
   )
 

@@ -21,6 +21,7 @@ type TerminalScreenProps = Pick<
   | "onOpenProjectBrowserById"
   | "onOpenProjectTaskManagerById"
   | "onOpenProjectTerminalById"
+  | "onOpenSkiller"
   | "onLoadProjectTaskLogs"
   | "onProjectTasksIncludeDefaultChange"
   | "onRefreshProjectTasks"
@@ -46,6 +47,7 @@ type TerminalPaneProps =
     | "onOpenProjectBrowserById"
     | "onOpenProjectTaskManagerById"
     | "onOpenProjectTerminalById"
+    | "onOpenSkiller"
     | "onLoadProjectTaskLogs"
     | "onProjectTasksIncludeDefaultChange"
     | "onRefreshProjectTasks"
@@ -346,6 +348,7 @@ const TerminalPane = (
     onOpenProjectBrowserById,
     onOpenProjectTaskManagerById,
     onOpenProjectTerminalById,
+    onOpenSkiller,
     onProjectTasksIncludeDefaultChange,
     onRefreshProjectTasks,
     onSetActiveScreen,
@@ -424,6 +427,7 @@ const TerminalPane = (
           : () => {
             onOpenProjectBrowserById(browserProjectId)
           }}
+        onOpenSkiller={onOpenSkiller}
         onApplyProject={browserProjectId === undefined
           ? undefined
           : () => {
@@ -487,6 +491,7 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
                 props.onOpenProjectTaskManagerById(projectId)
               }}
               onOpenProjectTerminalById={props.onOpenProjectTerminalById}
+              onOpenSkiller={props.onOpenSkiller}
               onProjectTasksIncludeDefaultChange={props.onProjectTasksIncludeDefaultChange}
               onRefreshProjectTasks={props.onRefreshProjectTasks}
               onSetActiveScreen={props.onSetActiveScreen}

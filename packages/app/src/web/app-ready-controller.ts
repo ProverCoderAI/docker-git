@@ -34,6 +34,7 @@ import { bindPromptActions } from "./app-ready-prompt-actions.js"
 import { useProjectPromptsReset } from "./app-ready-prompts-hook.js"
 import { bindScreenActions } from "./app-ready-screen-actions.js"
 import { bindSkillActions } from "./app-ready-skill-actions.js"
+import { bindSkillerActions } from "./app-ready-skiller-actions.js"
 import { useProjectSkillsReset } from "./app-ready-skills-hook.js"
 import { useSshLink } from "./app-ready-ssh-link-hook.js"
 import { bindTaskActions } from "./app-ready-task-actions.js"
@@ -272,6 +273,7 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     ...bindSkillActions(actionContext),
     ...bindBrowserActions(actionContext),
     ...bindTerminalActions(actionContext, state),
+    ...bindSkillerActions(actionContext),
     ...bindTaskActions(actionContext),
     ...bindProjectSearchActions(dashboard, state),
     ...bindDatabaseActions(actionContext, state),

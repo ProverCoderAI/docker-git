@@ -43,6 +43,7 @@ export {
   loadSelectedProjectPrompts,
   saveSelectedProjectPrompt
 } from "./actions-prompts.js"
+export { openSkillerApp } from "./actions-skiller.js"
 export { deleteSelectedProjectSkill, loadSelectedProjectSkills, saveSelectedProjectSkill } from "./actions-skills.js"
 export {
   loadProjectTasksById,
