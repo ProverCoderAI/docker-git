@@ -8,6 +8,7 @@ import { parseGitlabRepoUrl } from "../core/repo.js"
 import { normalizeGitTokenLabel } from "../core/token-labels.js"
 import { AuthError } from "../shell/errors.js"
 import { findEnvValue, readEnvText } from "./env-file.js"
+import { getGitlabApi, gitlabBearerTokenHeaders, gitlabPrivateTokenHeaders } from "./gitlab-api.js"
 import {
   gitlabInvalidTokenMessage,
   gitlabTokenValidationWarning,
@@ -103,17 +104,9 @@ const probeGitlabRepoAccessWithHeaders = (
   projectPath: string,
   headers: Record<string, string>
 ) =>
-  Effect.gen(function*(_) {
-    const response = yield* _(
-      client.get(`https://gitlab.com/api/v4/projects/${encodeURIComponent(projectPath)}`, {
-        headers: {
-          ...headers,
-          Accept: "application/json"
-        }
-      })
-    )
-    return mapGitlabRepoAccessStatus(response.status)
-  })
+  getGitlabApi(client, `https://gitlab.com/api/v4/projects/${encodeURIComponent(projectPath)}`, headers).pipe(
+    Effect.map((response) => mapGitlabRepoAccessStatus(response.status))
+  )
 
 export const probeGitlabRepoAccess = (
   repoUrl: string,
@@ -130,15 +123,13 @@ export const probeGitlabRepoAccess = (
       return yield* _(probeGitlabRepoAccessWithHeaders(client, repo.projectPath, {}))
     }
 
-    const privateTokenAccess = yield* _(probeGitlabRepoAccessWithHeaders(client, repo.projectPath, {
-      "PRIVATE-TOKEN": token
-    }))
+    const privateTokenAccess = yield* _(
+      probeGitlabRepoAccessWithHeaders(client, repo.projectPath, gitlabPrivateTokenHeaders(token))
+    )
     if (privateTokenAccess !== "notAccessible") {
       return privateTokenAccess
     }
-    return yield* _(probeGitlabRepoAccessWithHeaders(client, repo.projectPath, {
-      Authorization: `Bearer ${token}`
-    }))
+    return yield* _(probeGitlabRepoAccessWithHeaders(client, repo.projectPath, gitlabBearerTokenHeaders(token)))
   }).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.match({

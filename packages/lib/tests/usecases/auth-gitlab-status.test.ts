@@ -121,7 +121,7 @@ describe("auth gitlab status", () => {
           )
         )
 
-        expect(fetchMock).toHaveBeenCalledTimes(1)
+        expect(fetchMock).toHaveBeenCalledTimes(2)
         expect(logs).toEqual(["GitLab tokens (1):\n- default: invalid"])
       })
     ).pipe(Effect.provide(NodeContext.layer)))

@@ -1,7 +1,13 @@
 import { FetchHttpClient, HttpClient } from "@effect/platform"
-import * as ParseResult from "@effect/schema/ParseResult"
-import * as Schema from "@effect/schema/Schema"
-import { Effect, Either } from "effect"
+import type * as HttpClientError from "@effect/platform/HttpClientError"
+import { Effect } from "effect"
+
+import {
+  decodeGitlabUsername,
+  getGitlabApi,
+  gitlabBearerTokenHeaders,
+  gitlabPrivateTokenHeaders
+} from "./gitlab-api.js"
 
 const gitlabTokenValidationUrl = "https://gitlab.com/api/v4/user"
 
@@ -11,10 +17,6 @@ export const gitlabInvalidTokenMessage = [
   "To restore access, run: docker-git auth gitlab login"
 ].join("\n")
 
-type GitlabUser = {
-  readonly username: string
-}
-
 export type GitlabTokenValidationStatus = "valid" | "invalid" | "unknown"
 
 export type GitlabTokenValidationResult = {
@@ -22,21 +24,10 @@ export type GitlabTokenValidationResult = {
   readonly login: string | null
 }
 
-const GitlabUserSchema: Schema.Schema<GitlabUser> = Schema.Struct({
-  username: Schema.String
-})
-const GitlabUserJsonSchema = Schema.parseJson(GitlabUserSchema)
-
 const unknownGitlabTokenValidationResult = (): GitlabTokenValidationResult => ({
   status: "unknown",
   login: null
 })
-
-const decodeGitlabUsername = (input: string): string | null =>
-  Either.match(ParseResult.decodeUnknownEither(GitlabUserJsonSchema)(input), {
-    onLeft: () => null,
-    onRight: (user) => user.username
-  })
 
 const mapGitlabTokenValidationStatus = (status: number): GitlabTokenValidationStatus => {
   if (status === 401 || status === 403) {
@@ -48,17 +39,9 @@ const mapGitlabTokenValidationStatus = (status: number): GitlabTokenValidationSt
 const requestGitlabUser = (
   client: HttpClient.HttpClient,
   headers: Record<string, string>
-) =>
+): Effect.Effect<GitlabTokenValidationResult, HttpClientError.HttpClientError> =>
   Effect.gen(function*(_) {
-    const response = yield* _(
-      client.get(gitlabTokenValidationUrl, {
-        headers: {
-          ...headers,
-          Accept: "application/json"
-        }
-      })
-    )
-
+    const response = yield* _(getGitlabApi(client, gitlabTokenValidationUrl, headers))
     const status = mapGitlabTokenValidationStatus(response.status)
     if (status !== "valid") {
       return {
@@ -82,11 +65,11 @@ const requestGitlabUser = (
 export const validateGitlabToken = (token: string): Effect.Effect<GitlabTokenValidationResult> =>
   Effect.gen(function*(_) {
     const client = yield* _(HttpClient.HttpClient)
-    const privateTokenResult = yield* _(requestGitlabUser(client, { "PRIVATE-TOKEN": token }))
+    const privateTokenResult = yield* _(requestGitlabUser(client, gitlabPrivateTokenHeaders(token)))
     if (privateTokenResult.status !== "invalid") {
       return privateTokenResult
     }
-    return yield* _(requestGitlabUser(client, { Authorization: `Bearer ${token}` }))
+    return yield* _(requestGitlabUser(client, gitlabBearerTokenHeaders(token)))
   }).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.match({

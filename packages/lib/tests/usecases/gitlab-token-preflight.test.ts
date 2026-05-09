@@ -118,7 +118,7 @@ describe("gitlab token preflight", () => {
 
         expect(error._tag).toBe("AuthError")
         expect(error.message).toBe(gitlabInvalidTokenMessage)
-        expect(fetchMock).toHaveBeenCalledTimes(1)
+        expect(fetchMock).toHaveBeenCalledTimes(2)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -159,7 +159,7 @@ describe("gitlab token preflight", () => {
 
         expect(error._tag).toBe("AuthError")
         expect(error.message).toBe(gitlabRepoAccessMessage(config.repoUrl, true))
-        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(fetchMock).toHaveBeenCalledTimes(3)
         expect(resolveFetchUrl(fetchMock.mock.calls[1]![0])).toBe(
           "https://gitlab.com/api/v4/projects/group%2Fsubgroup%2Frepo"
         )
