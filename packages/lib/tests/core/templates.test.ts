@@ -59,6 +59,9 @@ describe("renderDockerfile", () => {
 
     expectContainsAll(dockerfile, [
       "# Tooling: GitLab CLI (glab)",
+      "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/",
+      "glab_1.93.0_linux_$GLAB_ARCH.deb",
+      "curl -fsSL --retry 5 --retry-all-errors --retry-delay 2",
       "glab --version",
       'ARG DOCKER_GIT_SESSION_SYNC_PACKAGE="@prover-coder-ai/docker-git-session-sync@latest"',
       'COPY .docker-git-tools/docker-git-session-sync /opt/docker-git/tools/docker-git-session-sync',
@@ -67,6 +70,7 @@ describe("renderDockerfile", () => {
       "using local session sync fallback",
       "install -m 0755 /opt/docker-git/tools/docker-git-session-sync /usr/local/bin/docker-git-session-sync"
     ])
+    expect(dockerfile).not.toContain("glab_1.93.0_linux_\\$GLAB_ARCH.deb")
   })
 })
 

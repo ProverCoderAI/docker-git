@@ -13,6 +13,7 @@ export const gitlabImageName = "docker-git-auth-gitlab:latest"
 export const gitlabImageDir = ".docker-git/.orch/auth/gitlab/.image"
 
 const glabVersion = "1.93.0"
+const glabPackageBaseUrl = `https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/${glabVersion}`
 
 export const renderGlabDockerfile = (): string =>
   String.raw`FROM ubuntu:24.04
@@ -29,7 +30,7 @@ RUN apt-get update \
       s390x) GLAB_ARCH="s390x" ;; \
       *) echo "Unsupported glab architecture: $ARCH" >&2; exit 1 ;; \
     esac \
-  && curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/v${glabVersion}/downloads/glab_${glabVersion}_linux_\${GLAB_ARCH}.deb" -o /tmp/glab.deb \
+  && curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "${glabPackageBaseUrl}/glab_${glabVersion}_linux_$GLAB_ARCH.deb" -o /tmp/glab.deb \
   && apt-get install -y --no-install-recommends /tmp/glab.deb \
   && rm -f /tmp/glab.deb \
   && rm -rf /var/lib/apt/lists/*
