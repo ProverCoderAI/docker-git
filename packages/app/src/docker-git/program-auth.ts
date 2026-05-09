@@ -42,21 +42,21 @@ const withControllerReady = <E, R>(effect: Effect.Effect<void, E, R>) =>
 
 const renderAuthPayload = (payload: JsonValue) => Effect.log(renderJsonPayload(payload))
 
-const routedAuthTags: ReadonlySet<RoutedAuthCommand["_tag"]> = new Set([
-  "AuthGithubLogin",
-  "AuthGithubStatus",
-  "AuthGithubLogout",
-  "AuthGitlabLogin",
-  "AuthGitlabStatus",
-  "AuthGitlabLogout",
-  "AuthCodexLogin",
-  "AuthCodexImport",
-  "AuthCodexStatus",
-  "AuthCodexLogout"
-])
+const routedAuthTags: Readonly<Record<string, true>> = {
+  AuthCodexImport: true,
+  AuthCodexLogin: true,
+  AuthCodexLogout: true,
+  AuthCodexStatus: true,
+  AuthGithubLogin: true,
+  AuthGithubLogout: true,
+  AuthGithubStatus: true,
+  AuthGitlabLogin: true,
+  AuthGitlabLogout: true,
+  AuthGitlabStatus: true
+}
 
 export const isRoutedAuthCommand = (command: OperationalCommand): command is RoutedAuthCommand =>
-  routedAuthTags.has(command._tag as RoutedAuthCommand["_tag"])
+  Object.hasOwn(routedAuthTags, command._tag)
 
 const handleGithubLoginCommand = (command: Extract<OperationalCommand, { readonly _tag: "AuthGithubLogin" }>) =>
   withControllerReady(pipe(githubLogin(command), Effect.flatMap((payload) => renderAuthPayload(payload))))
