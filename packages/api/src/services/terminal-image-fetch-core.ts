@@ -103,7 +103,21 @@ const normalizeTerminalImagePath = (path: string): TerminalImagePathNormalizatio
   }
 }
 
-export const planTerminalImageFetch = (path: string): TerminalImageFetchPlan => {
+export type TerminalImageFetchOptions = {
+  readonly baseDir?: string
+}
+
+const isAbsolutePosixPath = (value: string): boolean => value.startsWith("/")
+
+const joinBaseDirAndRelativePath = (baseDir: string, relativePath: string): string => {
+  const trimmedBase = baseDir.replace(/\/+$/u, "")
+  return `${trimmedBase}/${relativePath}`
+}
+
+export const planTerminalImageFetch = (
+  path: string,
+  options: TerminalImageFetchOptions = {}
+): TerminalImageFetchPlan => {
   if (typeof path !== "string" || path.length === 0) {
     return { _tag: "InvalidTerminalImageFetch", message: "Image path is required." }
   }
@@ -111,9 +125,17 @@ export const planTerminalImageFetch = (path: string): TerminalImageFetchPlan => 
   if (normalized._tag === "InvalidTerminalImagePath") {
     return { _tag: "InvalidTerminalImageFetch", message: normalized.message }
   }
-  const containerPath = normalized.path
-  if (!containerPath.startsWith("/")) {
-    return { _tag: "InvalidTerminalImageFetch", message: "Image path must be absolute." }
+  const normalizedPath = normalized.path
+  let containerPath = normalizedPath
+  if (!isAbsolutePosixPath(containerPath)) {
+    const baseDir = options.baseDir
+    if (baseDir === undefined || !isAbsolutePosixPath(baseDir)) {
+      return { _tag: "InvalidTerminalImageFetch", message: "Image path must be absolute." }
+    }
+    if (invalidCharacterPattern.test(baseDir) || traversalPattern.test(baseDir)) {
+      return { _tag: "InvalidTerminalImageFetch", message: "Image base directory is invalid." }
+    }
+    containerPath = joinBaseDirAndRelativePath(baseDir, containerPath)
   }
   if (invalidCharacterPattern.test(containerPath)) {
     return { _tag: "InvalidTerminalImageFetch", message: "Image path contains invalid characters." }
