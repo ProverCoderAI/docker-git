@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 
 import { attachTerminalImagePaste, createTerminalPasteGuard } from "./terminal-image-paste.js"
+import { attachTerminalImageLinks } from "./terminal-inline-images.js"
 import {
   attachTerminalInput,
   cleanupTerminalResources,
@@ -17,23 +18,28 @@ import type {
   TerminalSocketConnectArgs,
   TerminalSocketRef
 } from "./terminal-panel-runtime-types.js"
+import { isPendingActiveTerminalSession } from "./terminal.js"
 
 type TerminalCleanupFactoryArgs = {
   readonly cleanupArgs: Omit<
     Parameters<typeof cleanupTerminalResources>[0],
-    "removeImagePaste" | "removeInput" | "removeResize"
+    "removeImageLinks" | "removeImagePaste" | "removeInput" | "removeResize"
   >
+  readonly imageLinkDisposable: { readonly dispose: () => void }
   readonly imagePasteDisposable: { readonly dispose: () => void }
   readonly inputDisposable: { readonly dispose: () => void }
   readonly sendResize: () => void
 }
 
 const createTerminalCleanup = (
-  { cleanupArgs, imagePasteDisposable, inputDisposable, sendResize }: TerminalCleanupFactoryArgs
+  { cleanupArgs, imageLinkDisposable, imagePasteDisposable, inputDisposable, sendResize }: TerminalCleanupFactoryArgs
 ): () => void =>
 (): void => {
   cleanupTerminalResources({
     ...cleanupArgs,
+    removeImageLinks: () => {
+      imageLinkDisposable.dispose()
+    },
     removeImagePaste: () => {
       imagePasteDisposable.dispose()
     },
@@ -57,10 +63,25 @@ const createConnectSocket = (
   return connectSocket
 }
 
+const attachGlobalResizeListeners = (sendResize: () => void): void => {
+  globalThis.addEventListener("resize", sendResize)
+  globalThis.visualViewport?.addEventListener("resize", sendResize)
+  globalThis.visualViewport?.addEventListener("scroll", sendResize)
+}
+
+const resolveMountHost = (
+  { hostRef, session }: Pick<TerminalLifecycleArgs, "hostRef" | "session">
+): HTMLDivElement | null => {
+  if (isPendingActiveTerminalSession(session)) {
+    return null
+  }
+  return hostRef.current
+}
+
 const mountTerminalSession = (
   { connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus }: TerminalLifecycleArgs
 ): (() => void) | undefined => {
-  const host = hostRef.current
+  const host = resolveMountHost({ hostRef, session })
   if (host === null) {
     return undefined
   }
@@ -77,7 +98,15 @@ const mountTerminalSession = (
   const resizeObserver = observeTerminalResize(host, sendResize)
   const inputDisposable = attachTerminalInput(terminal, socketRef, pasteGuard)
   const imagePasteDisposable = attachTerminalImagePaste({ host, notifyMessage, pasteGuard, socketRef, terminal })
-  const handlers: TerminalMessageHandlers = { connectionRef, lifecycle, notifyMessage, session, setStatus, terminal }
+  const imageLinkDisposable = attachTerminalImageLinks(terminal, session)
+  const handlers: TerminalMessageHandlers = {
+    connectionRef,
+    lifecycle,
+    notifyMessage,
+    session,
+    setStatus,
+    terminal
+  }
   const connectSocket = createConnectSocket({
     handlers,
     lifecycle,
@@ -91,13 +120,12 @@ const mountTerminalSession = (
   })
 
   runtimeRef.current = terminalInputController
-  globalThis.addEventListener("resize", sendResize)
-  globalThis.visualViewport?.addEventListener("resize", sendResize)
-  globalThis.visualViewport?.addEventListener("scroll", sendResize)
+  attachGlobalResizeListeners(sendResize)
   connectSocket()
 
   return createTerminalCleanup({
     cleanupArgs: { connectionRef, lifecycle, notifyMessage, resizeObserver, runtimeRef, session, socketRef, terminal },
+    imageLinkDisposable,
     imagePasteDisposable,
     inputDisposable,
     sendResize

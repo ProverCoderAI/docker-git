@@ -6,6 +6,7 @@ import {
   extractTerminalImageBase64,
   isTerminalPasteShortcut
 } from "../../src/web/terminal-image-paste.js"
+import { resolveTerminalImageBasePath, resolveTerminalImageFetchUrl } from "../../src/web/terminal-image-url.js"
 import {
   resolveTerminalCompactHeaderMode,
   resolveTerminalTypingMode,
@@ -32,6 +33,15 @@ vi.mock("../../src/web/api-http.js", () => ({
   resolveApiBaseUrl: resolveApiBaseUrlMock
 }))
 
+const stubSameOriginLocation = (host: string, httpProtocol: string): void => {
+  resolveApiBaseUrlMock.mockReturnValue("/api")
+  vi.stubGlobal("location", {
+    hostname: host,
+    origin: `${httpProtocol}//${host}:4176`,
+    protocol: httpProtocol
+  })
+}
+
 describe("browser terminal helpers", () => {
   beforeEach(() => {
     resolveApiBaseUrlMock.mockReset()
@@ -54,12 +64,7 @@ describe("browser terminal helpers", () => {
     const httpProtocol = ["ht", "tp:"].join("")
     const wsProtocol = ["ws", "://"].join("")
 
-    resolveApiBaseUrlMock.mockReturnValue("/api")
-    vi.stubGlobal("location", {
-      hostname: host,
-      origin: `${httpProtocol}//${host}:4176`,
-      protocol: httpProtocol
-    })
+    stubSameOriginLocation(host, httpProtocol)
 
     expect(resolveTerminalWebSocketUrl("/projects/proj/terminal-sessions/sess/ws", 80, 24)).toBe([
       wsProtocol,
@@ -129,5 +134,35 @@ describe("browser terminal helpers", () => {
     expect(shouldShowTerminalTabs(true, 1)).toBe(false)
     expect(shouldShowTerminalTabs(true, 2)).toBe(true)
     expect(shouldShowTerminalTabs(false, 1)).toBe(true)
+  })
+
+  it("converts /ws suffix into /image base path", () => {
+    expect(resolveTerminalImageBasePath("/projects/by-key/proj/terminal-sessions/sess/ws")).toBe(
+      "/projects/by-key/proj/terminal-sessions/sess/image"
+    )
+  })
+
+  it("builds an absolute backend image url with path query parameter", () => {
+    resolveApiBaseUrlMock.mockReturnValue("https://controller.example/api")
+
+    expect(
+      resolveTerminalImageFetchUrl(
+        "/projects/by-key/proj%201/terminal-sessions/sess%2F2/ws",
+        "/var/data/sample image.png"
+      )
+    ).toBe(
+      "https://controller.example/api/projects/by-key/proj%201/terminal-sessions/sess%2F2/image?path=%2Fvar%2Fdata%2Fsample+image.png"
+    )
+  })
+
+  it("uses same-origin api proxy for relative image fetch urls", () => {
+    const host = "terminal.example.local"
+    const httpProtocol = ["ht", "tp:"].join("")
+
+    stubSameOriginLocation(host, httpProtocol)
+
+    expect(
+      resolveTerminalImageFetchUrl("/projects/proj/terminal-sessions/sess/ws", "/var/data/file.png")
+    ).toBe(`${httpProtocol}//${host}:4176/api/projects/proj/terminal-sessions/sess/image?path=%2Fvar%2Fdata%2Ffile.png`)
   })
 })

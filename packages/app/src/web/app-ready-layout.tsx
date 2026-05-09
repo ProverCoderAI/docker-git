@@ -46,6 +46,9 @@ export type ReadyLayoutProps = {
   readonly onActionPromptCancel: () => void
   readonly onActionPromptChange: (key: string, value: string) => void
   readonly onActionPromptSubmit: () => void
+  readonly onApplyAllProjects: () => void
+  readonly onApplyProjectById: (projectId: string) => void
+  readonly onApplySelectedProject: () => void
   readonly onAttachProjectTerminalSession: (
     projectId: string,
     projectKey: string,
@@ -68,6 +71,7 @@ export type ReadyLayoutProps = {
   readonly onOpenProjectBrowserById: (projectId: string) => void
   readonly onOpenProjectBrowser: () => void
   readonly onOpenProjectDatabaseEditor: () => void
+  readonly onOpenProjectTaskManagerById: (projectId: string) => void
   readonly onKillProjectTerminalSession: (projectId: string, projectKey: string, sessionId: string) => void
   readonly onOpenProjectPortForward: () => void
   readonly onOpenProjectTerminalById: (projectId: string, projectKey?: string) => void
@@ -77,6 +81,7 @@ export type ReadyLayoutProps = {
   readonly onRefreshProjectBrowser: () => void
   readonly onRefreshProjectDatabases: () => void
   readonly onRefreshProjectTasks: () => void
+  readonly onProjectTasksIncludeDefaultChange: (includeDefault: boolean) => void
   readonly onRestartProjectDatabaseEditor: () => void
   readonly onSaveDatabaseProfile: () => void
   readonly onSetActiveScreen: (screen: BrowserScreen) => void
@@ -97,6 +102,7 @@ export type ReadyLayoutProps = {
   readonly projectBrowser: ProjectBrowserSession | null
   readonly projectTaskLogs: string
   readonly projectTasks: ContainerTaskSnapshot | null
+  readonly projectTasksIncludeDefault: boolean
   readonly selectedMenuIndex: number
   readonly selectedProjectId: string | null
   readonly selectedProjectSummary: DashboardData["projects"][number] | undefined

@@ -52,8 +52,10 @@ export type BrowserActionContext = {
   readonly databaseConnectionInput: string
   readonly databaseLabelInput: string
   readonly addTerminalSession: (session: ActiveTerminalSession) => void
+  readonly closeTerminalSession: (sessionId: string) => void
   readonly githubStatus: GithubAuthStatus | null
   readonly portForwardInput: string
+  readonly projectTasksIncludeDefault: boolean
   readonly reloadDashboard: () => void
   readonly selectedProjectId: string | null
   readonly selectedProjectKey: string | null
@@ -76,6 +78,7 @@ export type BrowserActionContext = {
   readonly setProjectBrowser: Setter<ProjectBrowserSession | null>
   readonly setProjectTaskLogs: Setter<string>
   readonly setProjectTasks: Setter<ContainerTaskSnapshot | null>
+  readonly setProjectTasksIncludeDefault: Setter<boolean>
   readonly setSelectedMenuIndex: Setter<number>
   readonly setSelectedProject: Setter<ProjectDetails | null>
   readonly setSelectedProjectId: Setter<string | null>

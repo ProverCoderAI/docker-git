@@ -30,6 +30,11 @@ import { ensureSharedCodexVolumeReady } from "./shared-volume-seed.js"
 
 const maxPortAttempts = 25
 
+export type RunDockerComposeUpWithPortCheckOptions = {
+  readonly buildMode?: "build" | "reuse"
+  readonly waitForPostStart?: boolean
+}
+
 const syncManagedProjectFiles = (
   projectDir: string,
   template: TemplateConfig
@@ -121,6 +126,66 @@ const ensureClaudeCliReady = (
     })
   )
 
+const ensureBridgeAccess = (
+  projectDir: string,
+  containerName: string
+): Effect.Effect<void, never, CommandExecutor> =>
+  runDockerInspectContainerBridgeIp(projectDir, containerName).pipe(
+    Effect.flatMap((bridgeIp) =>
+      bridgeIp.length > 0
+        ? Effect.void
+        : runDockerNetworkConnectBridge(projectDir, containerName)
+    ),
+    Effect.matchEffect({
+      onFailure: (error) =>
+        Effect.logWarning(
+          `Failed to connect ${containerName} to bridge network: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        ),
+      onSuccess: () => Effect.void
+    })
+  )
+
+const runProjectPostStartSelfHeal = (
+  projectDir: string,
+  template: TemplateConfig
+): Effect.Effect<void, never, CommandExecutor> =>
+  Effect.gen(function*(_) {
+    yield* _(ensureClaudeCliReady(projectDir, template.containerName))
+    yield* _(ensureBridgeAccess(projectDir, template.containerName))
+    if (template.enableMcpPlaywright) {
+      yield* _(ensureBridgeAccess(projectDir, `${template.containerName}-browser`))
+    }
+  })
+
+const startProjectPostStartSelfHealInBackground = (
+  projectDir: string,
+  template: TemplateConfig
+): Effect.Effect<void, never, CommandExecutor> =>
+  Effect.gen(function*(_) {
+    yield* _(Effect.log("Continuing post-start SSH self-heal in background."))
+    yield* _(Effect.forkDaemon(runProjectPostStartSelfHeal(projectDir, template)))
+  })
+
+const runProjectComposeUp = (
+  projectDir: string,
+  buildMode: "build" | "reuse"
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor> => {
+  if (buildMode === "build") {
+    return runDockerComposeUp(projectDir)
+  }
+
+  return runDockerComposeUp(projectDir, { buildMode: "reuse" }).pipe(
+    Effect.catchTag("DockerCommandError", () =>
+      Effect.logWarning(
+        `docker compose up -d failed in ${projectDir}; falling back to docker compose up -d --build.`
+      ).pipe(
+        Effect.zipRight(runDockerComposeUp(projectDir))
+      ))
+  )
+}
+
 // CHANGE: update template port when the preferred SSH port is reserved or busy
 // WHY: keep each project on a unique port even across restarts
 // QUOTE(ТЗ): "Почему контейнер пытается подниматься на существующий порт?"
@@ -169,7 +234,8 @@ const ensureAvailableSshPort = (
 // INVARIANT: docker compose runs after port is validated
 // COMPLEXITY: O(n) where n = maxPortAttempts
 export const runDockerComposeUpWithPortCheck = (
-  projectDir: string
+  projectDir: string,
+  options: RunDockerComposeUpWithPortCheckOptions = {}
 ): Effect.Effect<
   TemplateConfig,
   ConfigNotFoundError | ConfigDecodeError | PortProbeError | FileExistsError | DockerCommandError | PlatformError,
@@ -193,31 +259,10 @@ export const runDockerComposeUpWithPortCheck = (
     yield* _(syncManagedProjectFiles(projectDir, resolvedTemplate))
     yield* _(ensureComposeNetworkReady(projectDir, resolvedTemplate))
     yield* _(ensureSharedCodexVolumeReady(projectDir, resolvedTemplate))
-    yield* _(runDockerComposeUp(projectDir))
-    yield* _(ensureClaudeCliReady(projectDir, resolvedTemplate.containerName))
-
-    const ensureBridgeAccess = (containerName: string) =>
-      runDockerInspectContainerBridgeIp(projectDir, containerName).pipe(
-        Effect.flatMap((bridgeIp) =>
-          bridgeIp.length > 0
-            ? Effect.void
-            : runDockerNetworkConnectBridge(projectDir, containerName)
-        ),
-        Effect.matchEffect({
-          onFailure: (error) =>
-            Effect.logWarning(
-              `Failed to connect ${containerName} to bridge network: ${
-                error instanceof Error ? error.message : String(error)
-              }`
-            ),
-          onSuccess: () => Effect.void
-        })
-      )
-
-    yield* _(ensureBridgeAccess(resolvedTemplate.containerName))
-    if (resolvedTemplate.enableMcpPlaywright) {
-      yield* _(ensureBridgeAccess(`${resolvedTemplate.containerName}-browser`))
-    }
+    yield* _(runProjectComposeUp(projectDir, options.buildMode ?? "build"))
+    yield* (options.waitForPostStart === false
+      ? _(startProjectPostStartSelfHealInBackground(projectDir, resolvedTemplate))
+      : _(runProjectPostStartSelfHeal(projectDir, resolvedTemplate)))
 
     return resolvedTemplate
   })

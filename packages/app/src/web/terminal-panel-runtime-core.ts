@@ -2,6 +2,9 @@ import { Effect, Either } from "effect"
 import { Terminal } from "xterm"
 import { FitAddon } from "xterm-addon-fit"
 
+import { resolveTerminalImageFetchUrl } from "./terminal-image-url.js"
+import { splitTerminalInlineImageOutput, type TerminalInlineImageOutputSegment } from "./terminal-inline-images-core.js"
+import { appendTerminalInlineImagePreview, terminalInlineImageSpacer } from "./terminal-inline-images.js"
 import type {
   TerminalCleanupArgs,
   TerminalInputController,
@@ -35,6 +38,9 @@ const runOptionalTerminalOperation = (operation: () => void): boolean =>
 export const createLifecycleState = (): TerminalLifecycleState => ({
   attachedOnce: false,
   disposed: false,
+  inlineImageDisposables: [],
+  outputQueue: [],
+  outputWriting: false,
   readyNotified: false,
   reconnectAttempt: 0,
   reconnectStartedAtMs: null,
@@ -51,6 +57,7 @@ const clearReconnectTimer = (lifecycle: TerminalLifecycleState): void => {
 
 export const createTerminalRuntime = (host: HTMLDivElement): TerminalRuntime => {
   const terminal = new Terminal({
+    allowProposedApi: true,
     convertEol: false,
     cursorBlink: true,
     fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
@@ -173,6 +180,103 @@ const endTerminalSession = (
   }
 }
 
+const terminalImageEntry = (
+  handlers: TerminalMessageHandlers,
+  path: string
+) => ({
+  fetchUrl: resolveTerminalImageFetchUrl(handlers.session.websocketPath, path),
+  path
+})
+
+const writePreviewSpacer = (
+  handlers: TerminalMessageHandlers,
+  onComplete: () => void
+): void => {
+  handlers.terminal.write(terminalInlineImageSpacer, onComplete)
+}
+
+const writeInlineImagePreview = (
+  handlers: TerminalMessageHandlers,
+  path: string,
+  onComplete: () => void
+): void => {
+  const appended = appendTerminalInlineImagePreview(
+    handlers.terminal,
+    handlers.lifecycle,
+    terminalImageEntry(handlers, path)
+  )
+  if (!appended) {
+    onComplete()
+    return
+  }
+  writePreviewSpacer(handlers, onComplete)
+}
+
+const writeInlineImagePreviews = (
+  handlers: TerminalMessageHandlers,
+  paths: ReadonlyArray<string>,
+  onComplete: () => void
+): void => {
+  let index = 0
+  const writeNext = (): void => {
+    const path = paths[index]
+    if (path === undefined) {
+      onComplete()
+      return
+    }
+    index += 1
+    writeInlineImagePreview(handlers, path, writeNext)
+  }
+  writeNext()
+}
+
+const writeLineBreakBeforePreview = (
+  handlers: TerminalMessageHandlers,
+  segment: TerminalInlineImageOutputSegment,
+  onComplete: () => void
+): void => {
+  if (segment.endedWithLineBreak) {
+    onComplete()
+    return
+  }
+  handlers.terminal.write("\r\n", onComplete)
+}
+
+const flushTerminalOutputQueue = (handlers: TerminalMessageHandlers): void => {
+  if (handlers.lifecycle.outputWriting || handlers.lifecycle.disposed) {
+    return
+  }
+  const segment = handlers.lifecycle.outputQueue.shift()
+  if (segment === undefined) {
+    return
+  }
+
+  handlers.lifecycle.outputWriting = true
+  handlers.terminal.write(segment.text, () => {
+    if (segment.imagePaths.length === 0) {
+      handlers.lifecycle.outputWriting = false
+      flushTerminalOutputQueue(handlers)
+      return
+    }
+    writeLineBreakBeforePreview(handlers, segment, () => {
+      writeInlineImagePreviews(handlers, segment.imagePaths, () => {
+        handlers.lifecycle.outputWriting = false
+        flushTerminalOutputQueue(handlers)
+      })
+    })
+  })
+}
+
+const enqueueTerminalOutput = (
+  handlers: TerminalMessageHandlers,
+  data: string
+): void => {
+  for (const segment of splitTerminalInlineImageOutput(data)) {
+    handlers.lifecycle.outputQueue.push(segment)
+  }
+  flushTerminalOutputQueue(handlers)
+}
+
 const handleTerminalServerMessage = (
   handlers: TerminalMessageHandlers,
   payload: string
@@ -187,7 +291,7 @@ const handleTerminalServerMessage = (
     return
   }
   if (message.type === "output") {
-    handlers.terminal.write(message.data)
+    enqueueTerminalOutput(handlers, message.data)
     return
   }
   if (message.type === "error") {
@@ -228,6 +332,13 @@ export const cleanupTerminalResources = (
 ): void => {
   args.lifecycle.disposed = true
   clearReconnectTimer(args.lifecycle)
+  for (const disposable of args.lifecycle.inlineImageDisposables) {
+    disposable.dispose()
+  }
+  args.lifecycle.inlineImageDisposables = []
+  args.lifecycle.outputQueue = []
+  args.lifecycle.outputWriting = false
+  args.removeImageLinks()
   args.removeImagePaste()
   args.removeInput()
   args.resizeObserver?.disconnect()

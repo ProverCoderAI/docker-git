@@ -14,6 +14,10 @@ chmod 0777 "$ROOT"
 mkdir -p "$ROOT/e2e"
 chmod 0777 "$ROOT/e2e"
 KEEP="${KEEP:-0}"
+# Cold controller and project image builds can be slow on GitHub-hosted runners,
+# but the clone command should still fail before the workflow-level timeout.
+CLONE_COMMAND_TIMEOUT="${DOCKER_GIT_E2E_CLONE_CACHE_TIMEOUT:-1800s}"
+FAILURE_DUMPED=0
 
 dg_ensure_docker "$ROOT/.e2e-bin"
 dg_prepare_docker_git_cli "$REPO_ROOT" "$ROOT/.e2e-bin"
@@ -28,15 +32,19 @@ MIRROR_PREFIX="/home/dev/.docker-git/.cache/git-mirrors"
 
 ACTIVE_OUT_DIR=""
 ACTIVE_CONTAINER=""
+ACTIVE_CLONE_LOG=""
 
 fail() {
   echo "e2e/clone-cache: $*" >&2
+  if [[ "$FAILURE_DUMPED" == "0" ]]; then
+    on_error "fail"
+  fi
   exit 1
 }
 
 reset_shared_clone_cache_volume() {
-  docker volume create docker-git-shared-cache >/dev/null
-  docker run --rm \
+  dg_project_docker volume create docker-git-shared-cache >/dev/null
+  dg_project_docker run --rm \
     -v docker-git-shared-cache:/target \
     alpine:3.20 \
     sh -euc 'mkdir -p /target && find /target -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'
@@ -44,23 +52,32 @@ reset_shared_clone_cache_volume() {
 
 on_error() {
   local line="$1"
+  if [[ "$FAILURE_DUMPED" == "1" ]]; then
+    return
+  fi
+  FAILURE_DUMPED=1
   echo "e2e/clone-cache: failed at line $line" >&2
   docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -n 80 || true
   if [[ -n "$ACTIVE_CONTAINER" ]]; then
-    docker logs "$ACTIVE_CONTAINER" --tail 200 || true
+    dg_project_docker logs "$ACTIVE_CONTAINER" --tail 200 || true
   fi
-  if [[ -n "$ACTIVE_OUT_DIR" ]] && [[ -f "$ACTIVE_OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$ACTIVE_OUT_DIR" && docker compose ps) || true
-    (cd "$ACTIVE_OUT_DIR" && docker compose logs --no-color --tail 200) || true
+  if [[ -n "$ACTIVE_CLONE_LOG" ]] && [[ -f "$ACTIVE_CLONE_LOG" ]]; then
+    echo "--- host clone log ---" >&2
+    cat "$ACTIVE_CLONE_LOG" >&2 || true
+  fi
+  if [[ -n "$ACTIVE_OUT_DIR" ]]; then
+    dg_project_compose "$ACTIVE_OUT_DIR" ps || true
+    dg_project_compose "$ACTIVE_OUT_DIR" logs --no-color --tail 200 || true
   fi
 }
 
 cleanup_active_case() {
-  if [[ -n "$ACTIVE_OUT_DIR" ]] && [[ -f "$ACTIVE_OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$ACTIVE_OUT_DIR" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
+  if [[ -n "$ACTIVE_OUT_DIR" ]]; then
+    dg_project_compose "$ACTIVE_OUT_DIR" down -v --remove-orphans >/dev/null 2>&1 || true
   fi
   ACTIVE_OUT_DIR=""
   ACTIVE_CONTAINER=""
+  ACTIVE_CLONE_LOG=""
 }
 
 cleanup() {
@@ -75,18 +92,20 @@ cleanup() {
 trap 'on_error $LINENO' ERR
 trap cleanup EXIT
 
+command -v timeout >/dev/null 2>&1 || fail "missing 'timeout' command"
+
 wait_for_clone_completion() {
   local container="$1"
   local attempts=120
   local attempt=1
 
   while [[ "$attempt" -le "$attempts" ]]; do
-    if docker exec "$container" test -f /run/docker-git/clone.done >/dev/null 2>&1; then
+    if dg_project_docker exec "$container" test -f /run/docker-git/clone.done >/dev/null 2>&1; then
       return 0
     fi
 
-    if docker exec "$container" test -f /run/docker-git/clone.failed >/dev/null 2>&1; then
-      docker logs "$container" >&2 || true
+    if dg_project_docker exec "$container" test -f /run/docker-git/clone.failed >/dev/null 2>&1; then
+      dg_project_docker logs "$container" >&2 || true
       fail "clone failed marker found for container: $container"
     fi
 
@@ -94,7 +113,7 @@ wait_for_clone_completion() {
     attempt="$((attempt + 1))"
   done
 
-  docker logs "$container" >&2 || true
+  dg_project_docker logs "$container" >&2 || true
   fail "clone did not complete in time for container: $container"
 }
 
@@ -109,6 +128,7 @@ run_clone_case() {
   local volume_name="dg-e2e-cache-${case_name}-${RUN_ID}-home"
   local ssh_port="$(( (RANDOM % 1000) + 22000 ))"
   local log_path="$ROOT/clone-cache-${case_name}.log"
+  local host_log_path="$ROOT/clone-cache-${case_name}-host.log"
 
   mkdir -p "$out_dir/.orch/env"
   chmod 0777 "$out_dir" "$out_dir/.orch" "$out_dir/.orch/env"
@@ -120,10 +140,12 @@ EOF_ENV
 
   ACTIVE_OUT_DIR="$out_dir"
   ACTIVE_CONTAINER="$container_name"
+  ACTIVE_CLONE_LOG="$host_log_path"
 
+  set +e
   (
     cd "$REPO_ROOT"
-    dg_run_docker_git "$REPO_ROOT" clone "$REPO_URL" \
+    timeout "$CLONE_COMMAND_TIMEOUT" bun packages/app/dist/src/docker-git/main.js clone "$REPO_URL" \
       --force \
       --gh-skip \
       --no-ssh \
@@ -133,16 +155,24 @@ EOF_ENV
       --container-name "$container_name" \
       --service-name "$service_name" \
       --volume-name "$volume_name"
-  )
+  ) >"$host_log_path" 2>&1
+  local clone_exit=$?
+  set -e
+  if [[ "$clone_exit" -eq 124 ]]; then
+    fail "clone command timed out after $CLONE_COMMAND_TIMEOUT for case: $case_name"
+  fi
+  if [[ "$clone_exit" -ne 0 ]]; then
+    fail "clone command failed with exit code $clone_exit for case: $case_name"
+  fi
 
   wait_for_clone_completion "$container_name"
-  docker logs "$container_name" > "$log_path" 2>&1 || true
+  dg_project_docker logs "$container_name" > "$log_path" 2>&1 || true
 
-  docker exec -u dev "$container_name" bash -lc "test -d '$TARGET_DIR/.git'" \
+  dg_project_docker exec -u dev "$container_name" bash -lc "test -d '$TARGET_DIR/.git'" \
     || fail "expected cloned repo at: $TARGET_DIR"
 
   local branch
-  branch="$(docker exec -u dev "$container_name" bash -lc "cd '$TARGET_DIR' && git rev-parse --abbrev-ref HEAD")"
+  branch="$(dg_project_docker exec -u dev "$container_name" bash -lc "cd '$TARGET_DIR' && git rev-parse --abbrev-ref HEAD")"
   [[ "$branch" == "issue-1" ]] || fail "expected branch issue-1, got: $branch"
 
   if [[ "$expect_cache_use" == "1" ]]; then
@@ -165,6 +195,7 @@ EOF_ENV
 mkdir -p "$ROOT/.orch/auth/codex" "$ROOT/.orch/env"
 : > "$ROOT/authorized_keys"
 
+dg_run_docker_git "$REPO_ROOT" status >/dev/null
 reset_shared_clone_cache_volume
 
 run_clone_case "first" "0"

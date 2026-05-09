@@ -13,10 +13,12 @@ export const createReadyActionContext = (
 ): ReturnType<typeof createActionContext> =>
   createActionContext({
     addTerminalSession: state.addTerminalSession,
+    closeTerminalSession: state.closeTerminalSession,
     databaseConnectionInput: state.databaseConnectionInput,
     databaseLabelInput: state.databaseLabelInput,
     githubStatus: state.githubStatus,
     portForwardInput: state.portForwardInput,
+    projectTasksIncludeDefault: state.projectTasksIncludeDefault,
     refreshDashboard,
     selectedProjectId: state.selectedProjectId,
     selectedProjectKey: selectedProjectSummary?.projectKey ?? null,
@@ -39,6 +41,7 @@ export const createReadyActionContext = (
     setProjectBrowser: state.setProjectBrowser,
     setProjectTaskLogs: state.setProjectTaskLogs,
     setProjectTasks: state.setProjectTasks,
+    setProjectTasksIncludeDefault: state.setProjectTasksIncludeDefault,
     setSelectedMenuIndex: state.setSelectedMenuIndex,
     setSelectedProject: state.setSelectedProject,
     setSelectedProjectId: state.setSelectedProjectId

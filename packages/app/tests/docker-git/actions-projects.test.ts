@@ -1,22 +1,30 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { beforeEach, vi } from "vitest"
+import { afterEach, beforeEach, vi } from "vitest"
 
-import { connectProjectById } from "../../src/web/actions-projects.js"
-import type { ProjectDetails, TerminalSession } from "../../src/web/api.js"
+import { applyProjectById, connectProjectById, runApplyAllProjects } from "../../src/web/actions-projects.js"
+import type { ProjectDetails, StartProjectTerminalSessionAccepted, TerminalSession } from "../../src/web/api.js"
+import type { ActiveTerminalSession } from "../../src/web/terminal.js"
 import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
 
-const createProjectTerminalSessionMock = vi.hoisted(() => vi.fn())
+const applyAllProjectsMock = vi.hoisted(() => vi.fn())
+const applyProjectMock = vi.hoisted(() => vi.fn())
 const eventStreamCloseMock = vi.hoisted(() => vi.fn())
+const loadProjectTerminalSessionMock = vi.hoisted(() => vi.fn())
+const openProjectEventStreamMock = vi.hoisted(() => vi.fn())
+const startProjectTerminalSessionMock = vi.hoisted(() => vi.fn())
 
 vi.mock("../../src/web/api.js", () => ({
-  createProjectTerminalSession: createProjectTerminalSessionMock,
+  applyAllProjects: applyAllProjectsMock,
+  applyProject: applyProjectMock,
   deleteProject: vi.fn(),
   downAllProjects: vi.fn(),
   downProject: vi.fn(),
   loadProjectDetails: vi.fn(),
   loadProjectLogs: vi.fn(),
-  loadProjectPs: vi.fn()
+  loadProjectPs: vi.fn(),
+  loadProjectTerminalSession: loadProjectTerminalSessionMock,
+  startProjectTerminalSession: startProjectTerminalSessionMock
 }))
 
 vi.mock("../../src/web/actions-browser.js", () => ({
@@ -38,7 +46,7 @@ vi.mock("../../src/web/actions-port-forwards.js", () => ({
 }))
 
 vi.mock("../../src/web/project-events.js", () => ({
-  openProjectEventStream: vi.fn(() => ({ close: eventStreamCloseMock }))
+  openProjectEventStream: openProjectEventStreamMock
 }))
 
 const project: ProjectDetails = {
@@ -76,18 +84,43 @@ const session: TerminalSession = {
   status: "ready"
 }
 
+const startTerminalAccepted = (requestId: string): StartProjectTerminalSessionAccepted => ({
+  accepted: true,
+  cursor: 7,
+  projectId: "project-1",
+  requestId
+})
+
 describe("web project actions", () => {
   beforeEach(() => {
-    createProjectTerminalSessionMock.mockReset()
+    vi.restoreAllMocks()
+    applyAllProjectsMock.mockReset()
+    applyProjectMock.mockReset()
     eventStreamCloseMock.mockReset()
+    loadProjectTerminalSessionMock.mockReset()
+    openProjectEventStreamMock.mockReset()
+    startProjectTerminalSessionMock.mockReset()
+    vi.unstubAllGlobals()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it.effect("adds a new SSH terminal session instead of replacing terminal state", () =>
     Effect.gen(function*(_) {
-      createProjectTerminalSessionMock.mockImplementation(() => Effect.succeed({ project, session }))
-      const addTerminalSession = vi.fn()
+      vi.stubGlobal("crypto", { randomUUID: () => "pending-session-id" })
+      startProjectTerminalSessionMock.mockImplementation(() =>
+        Effect.succeed(startTerminalAccepted("pending-session-id"))
+      )
+      loadProjectTerminalSessionMock.mockImplementation(() => Effect.succeed(session))
+      openProjectEventStreamMock.mockImplementation(() => ({ close: eventStreamCloseMock }))
+      const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
+      const closeTerminalSession = vi.fn<(sessionId: string) => void>()
       const { context, reloadDashboard, setMessage } = makeBrowserActionContext({
         addTerminalSession,
+        closeTerminalSession,
         selectedProjectId: "project-1",
         selectedProjectKey: "octocat/hello-world"
       })
@@ -95,12 +128,49 @@ describe("web project actions", () => {
       connectProjectById("project-1", context, "octocat/hello-world")
 
       yield* _(waitForAssertion(() => {
-        expect(addTerminalSession).toHaveBeenCalledTimes(1)
+        expect(openProjectEventStreamMock).toHaveBeenCalledTimes(1)
       }))
 
+      const handlers = openProjectEventStreamMock.mock.calls[0]?.[1]
+      if (handlers === undefined || typeof handlers.onEvent !== "function") {
+        throw new Error("missing event handlers")
+      }
+
+      handlers.onEvent({
+        at: "2026-04-21T10:00:01.000Z",
+        payload: {
+          phase: "created",
+          requestId: "pending-session-id",
+          sessionId: "session-1"
+        },
+        projectId: "project-1",
+        seq: 8,
+        type: "project.ssh.session"
+      })
+
+      yield* _(waitForAssertion(() => {
+        expect(addTerminalSession).toHaveBeenCalledTimes(2)
+      }))
+
+      const pendingSession = addTerminalSession.mock.calls[0]?.[0]
+      if (pendingSession === undefined) {
+        throw new Error("missing pending terminal session")
+      }
+      expect(startProjectTerminalSessionMock).toHaveBeenCalledWith("octocat/hello-world", "pending-session-id")
+      expect(loadProjectTerminalSessionMock).toHaveBeenCalledWith("octocat/hello-world", "session-1")
       expect(context.setSelectedProjectId).toHaveBeenCalledWith("project-1")
-      expect(context.setSelectedProject).toHaveBeenCalledWith(project)
-      expect(addTerminalSession).toHaveBeenCalledWith({
+      expect(pendingSession).toMatchObject({
+        browserProjectId: "project-1",
+        browserProjectKey: "octocat/hello-world",
+        browserProjectName: "octocat/hello-world",
+        header: "SSH terminal: octocat/hello-world",
+        pendingConnection: {
+          message: "Starting project and waiting for SSH...",
+          phase: "connecting"
+        }
+      })
+      expect(closeTerminalSession).toHaveBeenCalledWith(pendingSession.session.id)
+      expect(addTerminalSession).toHaveBeenLastCalledWith({
         browserProjectId: "project-1",
         browserProjectKey: "octocat/hello-world",
         browserProjectName: "octocat/hello-world",
@@ -120,5 +190,69 @@ describe("web project actions", () => {
       expect(setMessage).toHaveBeenLastCalledWith(
         "Project is ready. SSH terminal is connecting for octocat/hello-world."
       )
+    }))
+
+  it.effect("starts SSH terminal creation when randomUUID is unavailable", () =>
+    Effect.gen(function*(_) {
+      const dateNowMock = vi.spyOn(Date, "now").mockReturnValue(0x1234)
+      const mathRandomMock = vi.spyOn(Math, "random").mockReturnValue(0.5)
+      vi.stubGlobal("crypto", {})
+      startProjectTerminalSessionMock.mockImplementation((_projectKey, requestId: string) =>
+        Effect.succeed(startTerminalAccepted(requestId))
+      )
+      openProjectEventStreamMock.mockImplementation(() => ({ close: eventStreamCloseMock }))
+      const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
+      const { context } = makeBrowserActionContext({
+        addTerminalSession,
+        selectedProjectId: "project-1",
+        selectedProjectKey: "octocat/hello-world"
+      })
+
+      connectProjectById("project-1", context, "octocat/hello-world")
+
+      yield* _(waitForAssertion(() => {
+        expect(startProjectTerminalSessionMock).toHaveBeenCalledTimes(1)
+      }))
+
+      const requestId = startProjectTerminalSessionMock.mock.calls[0]?.[1]
+      expect(requestId).toBe("pending-1234-8000000080000000")
+      expect(addTerminalSession).toHaveBeenCalledTimes(1)
+      expect(openProjectEventStreamMock).toHaveBeenCalledTimes(1)
+      mathRandomMock.mockRestore()
+      dateNowMock.mockRestore()
+    }))
+
+  it.effect("applies a selected project through the project apply endpoint", () =>
+    Effect.gen(function*(_) {
+      applyProjectMock.mockImplementation(() => Effect.succeed(project))
+      const { context, reloadDashboard, setMessage } = makeBrowserActionContext()
+
+      applyProjectById("project-1", context)
+
+      yield* _(waitForAssertion(() => {
+        expect(applyProjectMock).toHaveBeenCalledWith("project-1")
+      }))
+
+      expect(context.setSelectedProjectId).toHaveBeenCalledWith("project-1")
+      expect(context.setSelectedProject).toHaveBeenCalledWith(project)
+      expect(reloadDashboard).toHaveBeenCalledTimes(1)
+      expect(setMessage).toHaveBeenLastCalledWith("Applied octocat/hello-world.")
+    }))
+
+  it.effect("confirms and applies all projects", () =>
+    Effect.gen(function*(_) {
+      const confirmMock = vi.fn(() => true)
+      vi.stubGlobal("confirm", confirmMock)
+      applyAllProjectsMock.mockImplementation(() => Effect.void)
+      const { context, reloadDashboard, setMessage } = makeBrowserActionContext()
+
+      runApplyAllProjects(context)
+
+      yield* _(waitForAssertion(() => {
+        expect(applyAllProjectsMock).toHaveBeenCalledWith(false)
+      }))
+
+      expect(reloadDashboard).toHaveBeenCalledTimes(1)
+      expect(setMessage).toHaveBeenLastCalledWith("Applied docker-git config to all projects.")
     }))
 })

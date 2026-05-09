@@ -164,17 +164,20 @@ ${fragments.maybeGithubAuthSkipEnv}      # Optional anonymous public GitHub clon
 ${fragments.maybeGitTokenLabelEnv}      # Optional token label selector (maps to GITHUB_TOKEN__<LABEL>/GIT_AUTH_TOKEN__<LABEL>)
 ${fragments.maybeCodexAuthLabelEnv}      # Optional Codex account label selector (maps to CODEX_AUTH_LABEL)
 ${fragments.maybeClaudeAuthLabelEnv}${fragments.maybeAgentModeEnv}${fragments.maybeAgentAutoEnv}      # Optional Claude account label selector (maps to CLAUDE_AUTH_LABEL)
+      # Optional isolated Docker daemon endpoint injected by the API controller.
+      DOCKER_GIT_PROJECT_DOCKER_HOST: "\${DOCKER_GIT_PROJECT_DOCKER_HOST:-}"
       TARGET_DIR: "${config.targetDir}"
       CODEX_HOME: "${config.codexHome}"
 ${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    # bootstrap auth/env arrives through docker_git_bootstrap
     ports:
-      - "127.0.0.1:${config.sshPort}:22"
+      - "\${DOCKER_GIT_PROJECT_SSH_BIND_HOST:-127.0.0.1}:${config.sshPort}:22"
 ${renderResourceLimits(resourceLimits)}    volumes:
       - ${config.volumeName}:/home/${config.sshUser}
       - ${sharedCacheVolumeKey}:/home/${config.sshUser}/.docker-git/.cache
       - ${sharedCodexVolumeKey}:${config.codexHome}-shared
 ${fragments.maybeBootstrapMounts}
-      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     dns:
       - 8.8.8.8
       - 8.8.4.4

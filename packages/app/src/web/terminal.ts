@@ -6,6 +6,15 @@ import type { TerminalServerMessage as ParsedTerminalServerMessage } from "../sh
 import { resolveApiBaseUrl, trimTrailingSlash } from "./api-http.js"
 import type { TerminalSession } from "./api-schema.js"
 
+type PendingTerminalConnection = {
+  readonly message: string
+  readonly phase: "connecting" | "error"
+}
+
+export type PendingActiveTerminalSession = ActiveTerminalSession & {
+  readonly pendingConnection: PendingTerminalConnection
+}
+
 export type ActiveTerminalSession = {
   readonly browserProjectId?: string | undefined
   readonly browserProjectKey?: string | undefined
@@ -15,6 +24,7 @@ export type ActiveTerminalSession = {
   readonly header: string
   readonly onExit?: () => void
   readonly onReady?: () => void
+  readonly pendingConnection?: PendingTerminalConnection | undefined
   readonly pendingDeleteMessage: string
   readonly readyMessage: string
   readonly sessionPath?: string | undefined
@@ -32,7 +42,22 @@ type ProjectActiveTerminalSessionArgs = {
   readonly session: TerminalSession
 }
 
+type PendingProjectActiveTerminalSessionArgs = {
+  readonly createdAt?: string
+  readonly onExit?: () => void
+  readonly pendingSessionId: string
+  readonly projectDisplayName: string
+  readonly projectId: string
+  readonly projectKey: string
+  readonly phase?: PendingTerminalConnection["phase"]
+  readonly message?: string
+}
+
 export const terminalSessionRoutePath = (sessionId: string): string => `/ssh/session/${encodeURIComponent(sessionId)}`
+
+export const isPendingActiveTerminalSession = (
+  session: ActiveTerminalSession
+): session is PendingActiveTerminalSession => session.pendingConnection !== undefined
 
 export const buildProjectActiveTerminalSession = (
   { onExit, onReady, projectDisplayName, projectId, projectKey, session }: ProjectActiveTerminalSessionArgs
@@ -57,7 +82,62 @@ export const buildProjectActiveTerminalSession = (
   }
 }
 
-const resolveTerminalApiBaseUrl = (): string => {
+const resolvePendingProjectMessage = (
+  message: string | undefined,
+  phase: PendingTerminalConnection["phase"]
+): string => {
+  const trimmedMessage = message?.trim() ?? ""
+  if (trimmedMessage.length > 0) {
+    return trimmedMessage
+  }
+  return phase === "error"
+    ? "SSH session startup failed."
+    : "Starting project and waiting for SSH..."
+}
+
+export const buildPendingProjectActiveTerminalSession = (
+  {
+    createdAt,
+    message,
+    onExit,
+    pendingSessionId,
+    phase = "connecting",
+    projectDisplayName,
+    projectId,
+    projectKey
+  }: PendingProjectActiveTerminalSessionArgs
+): ActiveTerminalSession => {
+  const encodedProjectKey = encodeURIComponent(projectKey)
+  const encodedSessionId = encodeURIComponent(pendingSessionId)
+  const resolvedMessage = resolvePendingProjectMessage(message, phase)
+  return {
+    browserProjectId: projectId,
+    browserProjectKey: projectKey,
+    browserProjectName: projectDisplayName,
+    closePath: `/projects/by-key/${encodedProjectKey}/terminal-sessions/${encodedSessionId}`,
+    exitMessage: "Pending SSH session closed.",
+    header: `SSH terminal: ${projectDisplayName}`,
+    ...(onExit === undefined ? {} : { onExit }),
+    pendingConnection: {
+      message: resolvedMessage,
+      phase
+    },
+    pendingDeleteMessage: `Pending SSH terminal was closed before attach: ${projectDisplayName}.`,
+    readyMessage: `SSH connected: ${projectDisplayName}.`,
+    session: {
+      createdAt: createdAt ?? new Date().toISOString(),
+      id: pendingSessionId,
+      projectId,
+      sshCommand: "Preparing SSH session...",
+      status: phase === "error" ? "failed" : "ready"
+    },
+    sessionPath: terminalSessionRoutePath(pendingSessionId),
+    subtitle: resolvedMessage,
+    websocketPath: `/projects/by-key/${encodedProjectKey}/terminal-sessions/${encodedSessionId}/ws`
+  }
+}
+
+export const resolveTerminalApiBaseUrl = (): string => {
   const configured = import.meta.env.VITE_DOCKER_GIT_TERMINAL_API_BASE_URL
   if (configured !== undefined && configured.trim().length > 0) {
     return trimTrailingSlash(configured.trim())
@@ -66,7 +146,7 @@ const resolveTerminalApiBaseUrl = (): string => {
   return resolveApiBaseUrl()
 }
 
-const resolveApiUrl = (): URL => {
+export const resolveTerminalApiOriginUrl = (): URL => {
   const configured = resolveTerminalApiBaseUrl()
   if (configured.startsWith("http://") || configured.startsWith("https://")) {
     return new URL(configured)
@@ -75,7 +155,7 @@ const resolveApiUrl = (): URL => {
 }
 
 export const resolveTerminalWebSocketUrl = (websocketPath: string, cols: number, rows: number): string => {
-  const apiUrl = resolveApiUrl()
+  const apiUrl = resolveTerminalApiOriginUrl()
   apiUrl.protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:"
   apiUrl.pathname = `${apiUrl.pathname.replace(/\/$/u, "")}${websocketPath}`
   apiUrl.searchParams.set("cols", String(cols))

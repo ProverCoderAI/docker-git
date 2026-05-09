@@ -74,6 +74,13 @@ export const CreateProjectAcceptedResponseSchema = Schema.Struct({
   cursor: Schema.Number
 })
 
+export const StartProjectTerminalSessionAcceptedResponseSchema = Schema.Struct({
+  accepted: Schema.Literal(true),
+  projectId: Schema.String,
+  cursor: Schema.Number,
+  requestId: Schema.String
+})
+
 const ProjectPublishedStatusSchema = Schema.Union(
   Schema.Literal("running"),
   Schema.Literal("stopped"),
@@ -305,6 +312,7 @@ export type {
   ProjectPortForward,
   ProjectSummary,
   ProjectTerminalSessionLookup,
+  StartProjectTerminalSessionAccepted,
   TerminalServerMessage,
   TerminalSession
 } from "./api-types.js"

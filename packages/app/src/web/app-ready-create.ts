@@ -28,7 +28,14 @@ type CreateSubmitArgs = CreateKeyArgs & {
   readonly quickCreate?: boolean
 }
 
-const createCharacterInput = (event: KeyboardEvent): string => event.key.length === 1 ? event.key : ""
+type CreateKeyboardEvent = {
+  readonly key: string
+  readonly shiftKey: boolean
+  readonly preventDefault: () => void
+}
+
+const createCharacterInput = (event: Pick<CreateKeyboardEvent, "key">): string =>
+  event.key.length === 1 ? event.key : ""
 
 export const resetCreateView = (): CreateFlowView => createInitialFlowView()
 
@@ -94,7 +101,7 @@ export const useCreateMenuReset = (
 }
 
 export const handleCreateKey = (
-  event: KeyboardEvent,
+  event: CreateKeyboardEvent,
   { context, controllerCwd, createView, projectsRoot, setCreateView }: CreateKeyArgs
 ): boolean => {
   if (event.key === "Escape") {

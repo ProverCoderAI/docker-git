@@ -1,6 +1,6 @@
 {
   "name": "@prover-coder-ai/docker-git-session-sync",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Standalone docker-git AI agent session synchronization tool",
   "main": "dist/docker-git-session-sync.js",
   "bin": {
@@ -36,10 +36,6 @@
   },
   "homepage": "https://github.com/ProverCoderAI/docker-git#readme",
   "packageManager": "bun@1.3.11",
-  "dependencies": {
-    "@effect/platform-node": "^0.106.0",
-    "effect": "^3.21.0"
-  },
   "devDependencies": {
     "@effect/vitest": "^0.29.0",
     "@types/node": "^24.12.0",

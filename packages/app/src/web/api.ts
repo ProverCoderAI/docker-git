@@ -17,6 +17,7 @@ import {
   ProjectsResponseSchema,
   ProjectTerminalSessionResponseSchema,
   ProjectTerminalSessionsResponseSchema,
+  StartProjectTerminalSessionAcceptedResponseSchema,
   TerminalSessionLookupResponseSchema,
   TerminalSessionResponseSchema
 } from "./api-schema.js"
@@ -43,7 +44,14 @@ export {
   restartProjectDatabaseEditor,
   saveProjectDatabaseProfile
 } from "./api-database.js"
-export { createProject, loadProjectDetails, loadProjectLogs, loadProjectPs, upProject } from "./api-project-core.js"
+export {
+  applyProject,
+  createProject,
+  loadProjectDetails,
+  loadProjectLogs,
+  loadProjectPs,
+  upProject
+} from "./api-project-core.js"
 export { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api-tasks.js"
 
 export type * from "./api-types.js"
@@ -141,6 +149,17 @@ export const createProjectTerminalSession = (projectKey: string) =>
     }))
   )
 
+export const startProjectTerminalSession = (
+  projectKey: string,
+  requestId: string
+) =>
+  requestJson(
+    "POST",
+    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/start`,
+    StartProjectTerminalSessionAcceptedResponseSchema,
+    { requestId }
+  )
+
 export const createAuthTerminalSession = (
   flow: "ClaudeOauth" | "GeminiOauth",
   label: string | null
@@ -203,6 +222,9 @@ export const deleteProject = (projectId: string) =>
   requestText("DELETE", `/projects/${encodeURIComponent(projectId)}`).pipe(Effect.asVoid)
 
 export const downAllProjects = () => requestText("POST", "/projects/down-all").pipe(Effect.asVoid)
+
+export const applyAllProjects = (activeOnly: boolean) =>
+  requestText("POST", "/projects/apply-all", { activeOnly }).pipe(Effect.asVoid)
 
 export const loadGithubStatus = () =>
   requestJson("GET", "/auth/github/status", GithubStatusResponseSchema).pipe(

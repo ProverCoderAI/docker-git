@@ -91,8 +91,16 @@ fi
 chown -R 1000:1000 /home/${config.sshUser}/.ssh`
 
 export const renderEntrypointDockerSocket = (config: TemplateConfig): string =>
-  `# Ensure docker socket access for ${config.sshUser}
-if [[ -S /var/run/docker.sock ]]; then
+  `# Ensure Docker CLI targets only the explicitly configured daemon.
+if [[ -n "\${DOCKER_GIT_PROJECT_DOCKER_HOST:-}" && -z "\${DOCKER_HOST:-}" ]]; then
+  DOCKER_HOST="$DOCKER_GIT_PROJECT_DOCKER_HOST"
+  export DOCKER_HOST
+fi
+
+if [[ -n "\${DOCKER_HOST:-}" ]]; then
+  printf "export DOCKER_HOST=%q\\n" "$DOCKER_HOST" > /etc/profile.d/docker-host.sh
+  docker_git_upsert_ssh_env "DOCKER_HOST" "$DOCKER_HOST"
+elif [[ -S /var/run/docker.sock ]]; then
   DOCKER_SOCK_GID="$(stat -c "%g" /var/run/docker.sock)"
   DOCKER_GROUP="$(getent group "$DOCKER_SOCK_GID" | cut -d: -f1 || true)"
   if [[ -z "$DOCKER_GROUP" ]]; then
@@ -100,7 +108,8 @@ if [[ -S /var/run/docker.sock ]]; then
     groupadd -g "$DOCKER_SOCK_GID" "$DOCKER_GROUP" || true
   fi
   usermod -aG "$DOCKER_GROUP" ${config.sshUser} || true
-  printf "export DOCKER_HOST=unix:///var/run/docker.sock\n" > /etc/profile.d/docker-host.sh
+  printf "export DOCKER_HOST=unix:///var/run/docker.sock\\n" > /etc/profile.d/docker-host.sh
+  docker_git_upsert_ssh_env "DOCKER_HOST" "unix:///var/run/docker.sock"
 fi`
 
 export const renderEntrypointZshShell = (config: TemplateConfig): string =>

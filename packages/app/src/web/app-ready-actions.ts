@@ -9,8 +9,10 @@ type ActionContextArgs = {
   readonly databaseConnectionInput: BrowserActionContext["databaseConnectionInput"]
   readonly databaseLabelInput: BrowserActionContext["databaseLabelInput"]
   readonly addTerminalSession: BrowserActionContext["addTerminalSession"]
+  readonly closeTerminalSession: BrowserActionContext["closeTerminalSession"]
   readonly githubStatus: BrowserActionContext["githubStatus"]
   readonly portForwardInput: BrowserActionContext["portForwardInput"]
+  readonly projectTasksIncludeDefault: BrowserActionContext["projectTasksIncludeDefault"]
   readonly refreshDashboard: () => void
   readonly selectedProjectId: string | null
   readonly selectedProjectKey: string | null
@@ -33,6 +35,7 @@ type ActionContextArgs = {
   readonly setProjectBrowser: BrowserActionContext["setProjectBrowser"]
   readonly setProjectTaskLogs: BrowserActionContext["setProjectTaskLogs"]
   readonly setProjectTasks: BrowserActionContext["setProjectTasks"]
+  readonly setProjectTasksIncludeDefault: BrowserActionContext["setProjectTasksIncludeDefault"]
   readonly setSelectedMenuIndex: BrowserActionContext["setSelectedMenuIndex"]
   readonly setSelectedProject: BrowserActionContext["setSelectedProject"]
   readonly setSelectedProjectId: BrowserActionContext["setSelectedProjectId"]
@@ -43,10 +46,12 @@ export const resolveCurrentMenu = (selectedMenuIndex: number): BrowserMenuTag =>
 
 export const createActionContext = (args: ActionContextArgs): BrowserActionContext => ({
   addTerminalSession: args.addTerminalSession,
+  closeTerminalSession: args.closeTerminalSession,
   databaseConnectionInput: args.databaseConnectionInput,
   databaseLabelInput: args.databaseLabelInput,
   githubStatus: args.githubStatus,
   portForwardInput: args.portForwardInput,
+  projectTasksIncludeDefault: args.projectTasksIncludeDefault,
   reloadDashboard: args.refreshDashboard,
   selectedProjectId: args.selectedProjectId,
   selectedProjectKey: args.selectedProjectKey,
@@ -69,6 +74,7 @@ export const createActionContext = (args: ActionContextArgs): BrowserActionConte
   setProjectBrowser: args.setProjectBrowser,
   setProjectTaskLogs: args.setProjectTaskLogs,
   setProjectTasks: args.setProjectTasks,
+  setProjectTasksIncludeDefault: args.setProjectTasksIncludeDefault,
   setSelectedMenuIndex: args.setSelectedMenuIndex,
   setSelectedProject: args.setSelectedProject,
   setSelectedProjectId: args.setSelectedProjectId

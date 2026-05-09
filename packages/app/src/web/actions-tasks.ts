@@ -1,8 +1,13 @@
-import type { Effect } from "effect"
+import { Effect } from "effect"
 
-import { type BrowserActionContext, requireSelectedProjectId, withBusy } from "./actions-shared.js"
+import { type BrowserActionContext, confirmAction, requireSelectedProjectId, withBusy } from "./actions-shared.js"
 import { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api.js"
 import type { ContainerTaskSnapshot } from "./api.js"
+
+type LoadSelectedProjectTasksOptions = {
+  readonly includeDefault?: boolean
+  readonly silent?: boolean
+}
 
 const requireProjectIdForTasks = (context: BrowserActionContext): string | null => {
   const projectId = requireSelectedProjectId(context)
@@ -66,16 +71,20 @@ const removeTaskFromSnapshot = (
 
 const stopSelectedProjectTaskEffect = (
   selected: SelectedProjectTaskAction
-): Effect.Effect<void, string> => stopProjectTask(selected.projectId, selected.pid)
+): Effect.Effect<ContainerTaskSnapshot, string> =>
+  stopProjectTask(selected.projectId, selected.pid).pipe(
+    Effect.flatMap(() => loadProjectTasks(selected.projectId, selected.context.projectTasksIncludeDefault))
+  )
 
 const loadSelectedProjectTaskLogsEffect = (
   selected: SelectedProjectTaskAction
 ): Effect.Effect<string, string> => loadProjectTaskLogs(selected.projectId, selected.pid, 200)
 
 const applyStoppedProjectTask = (
-  selected: SelectedProjectTaskAction
+  selected: SelectedProjectTaskAction,
+  snapshot: ContainerTaskSnapshot
 ): void => {
-  selected.context.setProjectTasks((snapshot) => removeTaskFromSnapshot(snapshot, selected.pid))
+  selected.context.setProjectTasks(removeTaskFromSnapshot(snapshot, selected.pid))
   selected.context.setMessage(`Sent SIGTERM to PID ${selected.pid}.`)
 }
 
@@ -87,18 +96,16 @@ const applyLoadedProjectTaskLogs = (
   selected.context.setMessage(`Loaded logs for PID ${selected.pid}.`)
 }
 
-export const loadSelectedProjectTasks = (
+export const loadProjectTasksById = (
   context: BrowserActionContext,
-  options?: { readonly silent?: boolean }
+  projectId: string,
+  options?: LoadSelectedProjectTasksOptions
 ) => {
-  const projectId = requireProjectIdForTasks(context)
-  if (projectId === null) {
-    return
-  }
+  const includeDefault = options?.includeDefault ?? context.projectTasksIncludeDefault
   withBusy({
     context,
-    effect: loadProjectTasks(projectId),
-    label: "Loading container tasks",
+    effect: loadProjectTasks(projectId, includeDefault),
+    label: includeDefault ? "Loading all container tasks" : "Loading container tasks",
     onSuccess: (snapshot) => {
       context.setProjectTasks(snapshot)
       if (options?.silent !== true) {
@@ -108,16 +115,46 @@ export const loadSelectedProjectTasks = (
   })
 }
 
+export const loadSelectedProjectTasks = (
+  context: BrowserActionContext,
+  options?: LoadSelectedProjectTasksOptions
+) => {
+  const projectId = requireProjectIdForTasks(context)
+  if (projectId === null) {
+    return
+  }
+  loadProjectTasksById(context, projectId, options)
+}
+
+export const setSelectedProjectTasksIncludeDefault = (
+  context: BrowserActionContext,
+  includeDefault: boolean
+) => {
+  context.setProjectTasksIncludeDefault(includeDefault)
+  context.setProjectTaskLogs("")
+  const projectId = requireProjectIdForTasks(context)
+  if (projectId === null) {
+    return
+  }
+  loadProjectTasksById(context, projectId, { includeDefault })
+}
+
 export const stopSelectedProjectTask = (
   context: BrowserActionContext,
   pid: number
 ) => {
-  withSelectedProjectTaskBusy({
-    context,
-    effect: stopSelectedProjectTaskEffect,
-    label: "Stopping container task",
-    onSuccess: applyStoppedProjectTask,
-    pid
+  withSelectedProjectTask(context, pid, (selected) => {
+    if (!confirmAction(`Stop PID ${selected.pid}?`)) {
+      return
+    }
+    withBusy({
+      context: selected.context,
+      effect: stopSelectedProjectTaskEffect(selected),
+      label: "Stopping container task",
+      onSuccess: (snapshot) => {
+        applyStoppedProjectTask(selected, snapshot)
+      }
+    })
   })
 }
 
