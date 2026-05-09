@@ -54,9 +54,14 @@ const isDockerComposePsFormatted = (cmd: RecordedCommand): boolean =>
   cmd.command === "docker" &&
   includesArgsInOrder(cmd.args, ["compose", "--ansi", "never", "--progress", "plain", "ps", "--format"])
 
-const isDockerComposeUp = (cmd: RecordedCommand): boolean =>
+const isDockerComposeUpWithBuild = (cmd: RecordedCommand): boolean =>
   cmd.command === "docker" &&
   includesArgsInOrder(cmd.args, ["compose", "--ansi", "never", "--progress", "plain", "up", "-d", "--build"])
+
+const isDockerComposeUpReuse = (cmd: RecordedCommand): boolean =>
+  cmd.command === "docker" &&
+  includesArgsInOrder(cmd.args, ["compose", "--ansi", "never", "--progress", "plain", "up", "-d"]) &&
+  !cmd.args.includes("--build")
 
 const isDockerVolumeCreate = (cmd: RecordedCommand): boolean =>
   cmd.command === "docker" &&
@@ -213,7 +218,42 @@ describe("runDockerComposeUpWithPortCheck", () => {
         expect(recorded.some((entry) => isDockerComposePsFormatted(entry))).toBe(true)
         expect(recorded.some((entry) => isDockerVolumeCreate(entry))).toBe(true)
         expect(recorded.some((entry) => isBootstrapSeed(entry))).toBe(true)
-        expect(recorded.some((entry) => isDockerComposeUp(entry))).toBe(true)
+        expect(recorded.some((entry) => isDockerComposeUpWithBuild(entry))).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("can reuse the existing image path for SSH-open cold start", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const targetDir = "/home/dev/workspaces/org/repo"
+        const globalConfig = makeTemplateConfig(root, outDir, path, targetDir)
+        const projectConfig = makeTemplateConfig(root, outDir, path, targetDir)
+        const recorded: Array<RecordedCommand> = []
+        const executor = makeFakeExecutor(recorded)
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          })
+        )
+
+        yield* _(
+          runDockerComposeUpWithPortCheck(outDir, {
+            buildMode: "reuse",
+            waitForPostStart: false
+          }).pipe(
+            Effect.provideService(CommandExecutor.CommandExecutor, executor)
+          )
+        )
+
+        const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+        expect(composeAfter).toContain(targetDir)
+        expect(recorded.some((entry) => isDockerComposeUpReuse(entry))).toBe(true)
+        expect(recorded.some((entry) => isDockerComposeUpWithBuild(entry))).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

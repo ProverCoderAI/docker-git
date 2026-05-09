@@ -146,6 +146,10 @@ export const UpProjectRequestSchema = Schema.Struct({
   useManagedAuthorizedKeys: OptionalBoolean
 })
 
+export const StartProjectTerminalSessionRequestSchema = Schema.Struct({
+  requestId: Schema.String
+})
+
 export const ProjectPortForwardRequestSchema = Schema.Struct({
   hostPort: Schema.optional(Schema.Number),
   targetPort: Schema.Number

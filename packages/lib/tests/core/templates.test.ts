@@ -207,6 +207,7 @@ describe("renderEntrypoint auth bridge", () => {
       "su - dev -s /bin/bash -c \"bash -lc",
       ". /etc/profile 2>/dev/null || true;",
       String.raw`. \"$AGENT_ENV_FILE\" 2>/dev/null || true;`,
+      "[[ -f /etc/profile.d/docker-host.sh ]] && cat /etc/profile.d/docker-host.sh",
       "AGENT_PROMPT_FILE=\"/run/docker-git/agent-prompt.txt\"",
       "MCP_PLAYWRIGHT_ISOLATED=1 claude --dangerously-skip-permissions -p",
       "CLAUDE_GLOBAL_PROMPT_FILE=\"/home/dev/.claude/CLAUDE.md\"",
@@ -285,9 +286,23 @@ describe("renderDockerCompose", () => {
     expect(compose).toContain("name: dg-test")
     expect(compose).toContain("container_name: dg-test")
     expect(compose).toContain("    env_file:\n      - /workspace/.orch/env/global.env\n      - /workspace/.orch/env/project.env\n")
+    expect(compose).toContain('DOCKER_GIT_PROJECT_DOCKER_HOST: "${DOCKER_GIT_PROJECT_DOCKER_HOST:-}"')
+    expect(compose).toContain('- "${DOCKER_GIT_PROJECT_SSH_BIND_HOST:-127.0.0.1}:2222:22"')
+    expect(compose).toContain('    extra_hosts:\n      - "host.docker.internal:host-gateway"')
     expect(compose).toContain("    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1\n    networks:")
     expect(compose).not.toContain("dg-test-browser")
+    expect(compose).not.toContain("/var/run/docker.sock:/var/run/docker.sock")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
+  })
+
+  it("persists explicit Docker host into login and SSH environments before socket fallback", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expect(entrypoint).toContain('if [[ -n "${DOCKER_GIT_PROJECT_DOCKER_HOST:-}" && -z "${DOCKER_HOST:-}" ]]; then')
+    expect(entrypoint).toContain('printf "export DOCKER_HOST=%q\\n" "$DOCKER_HOST" > /etc/profile.d/docker-host.sh')
+    expect(entrypoint).toContain('docker_git_upsert_ssh_env "DOCKER_HOST" "$DOCKER_HOST"')
+    expect(entrypoint).toContain('elif [[ -S /var/run/docker.sock ]]; then')
+    expect(entrypoint).toContain('docker_git_upsert_ssh_env "DOCKER_HOST" "unix:///var/run/docker.sock"')
   })
 
   it("renders fallback DNS servers for the browser sidecar when Playwright is enabled", () => {

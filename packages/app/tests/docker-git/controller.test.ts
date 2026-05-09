@@ -71,7 +71,7 @@ describe("controller reachability", () => {
 
   it.effect("detects remote Docker hosts", () =>
     Effect.sync(() => {
-      expect(isRemoteDockerHost()).toBe(false)
+      expect(isRemoteDockerHost("")).toBe(false)
       expect(isRemoteDockerHost("unix:///var/run/docker.sock")).toBe(false)
       expect(isRemoteDockerHost("tcp://docker.example.test:2376")).toBe(true)
       expect(isRemoteDockerHost("ssh://docker@example.test")).toBe(true)

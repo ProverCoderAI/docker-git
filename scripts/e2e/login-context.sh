@@ -35,15 +35,15 @@ on_error() {
   local line="$1"
   echo "e2e/login-context: failed at line $line" >&2
   docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -n 80 || true
-  if [[ -n "$ACTIVE_OUT_DIR" ]] && [[ -f "$ACTIVE_OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$ACTIVE_OUT_DIR" && docker compose ps) || true
-    (cd "$ACTIVE_OUT_DIR" && docker compose logs --no-color --tail 200) || true
+  if [[ -n "$ACTIVE_OUT_DIR" ]]; then
+    dg_project_compose "$ACTIVE_OUT_DIR" ps || true
+    dg_project_compose "$ACTIVE_OUT_DIR" logs --no-color --tail 200 || true
   fi
 }
 
 cleanup_active_case() {
-  if [[ -n "$ACTIVE_OUT_DIR" ]] && [[ -f "$ACTIVE_OUT_DIR/docker-compose.yml" ]]; then
-    (cd "$ACTIVE_OUT_DIR" && docker compose down -v --remove-orphans) >/dev/null 2>&1 || true
+  if [[ -n "$ACTIVE_OUT_DIR" ]]; then
+    dg_project_compose "$ACTIVE_OUT_DIR" down -v --remove-orphans >/dev/null 2>&1 || true
   fi
   ACTIVE_OUT_DIR=""
   ACTIVE_CONTAINER=""
@@ -85,6 +85,7 @@ run_case() {
   local volume_name="dg-e2e-login-${case_name}-${RUN_ID}-home"
   local ssh_port="$(( (RANDOM % 1000) + 21000 ))"
   local login_log="/tmp/docker-git-login-context-${RUN_ID}-${case_name}.log"
+  local probe_script="$ROOT/login-context-${case_name}-probe.sh"
 
   mkdir -p "$out_dir/.orch/env"
   chmod 0777 "$out_dir" "$out_dir/.orch" "$out_dir/.orch/env"
@@ -113,9 +114,16 @@ EOF_ENV
   )
 
   rm -f "$login_log"
+  cat > "$probe_script" <<EOF_PROBE
+#!/usr/bin/env bash
+set -euo pipefail
+source "$REPO_ROOT/scripts/e2e/_lib.sh"
+dg_project_docker exec -u dev -it "$container_name" bash -lic 'exit'
+EOF_PROBE
+  chmod +x "$probe_script"
 
   set +e
-  timeout 30s script -q -e -c "docker exec -u dev -it \"$container_name\" bash -lic 'exit'" /dev/null > "$login_log" 2>&1
+  timeout 30s script -q -e -c "$probe_script" /dev/null > "$login_log" 2>&1
   local exec_exit=$?
   set -e
 

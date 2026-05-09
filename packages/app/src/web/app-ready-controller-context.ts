@@ -13,6 +13,7 @@ export const createReadyActionContext = (
 ): ReturnType<typeof createActionContext> =>
   createActionContext({
     addTerminalSession: state.addTerminalSession,
+    closeTerminalSession: state.closeTerminalSession,
     databaseConnectionInput: state.databaseConnectionInput,
     databaseLabelInput: state.databaseLabelInput,
     githubStatus: state.githubStatus,

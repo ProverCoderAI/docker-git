@@ -26,7 +26,12 @@ export type TerminalWorkspaceReadyState = {
   readonly terminalSessions: ReadonlyArray<ActiveTerminalSession>
 }
 
-type StoredActiveTerminalSession = Omit<ActiveTerminalSession, "onExit" | "onReady">
+type StoredActiveTerminalSession =
+  & Omit<ActiveTerminalSession, "onExit" | "onReady" | "pendingConnection">
+  & {
+    readonly pendingConnectionMessage?: string | undefined
+    readonly pendingConnectionPhase?: NonNullable<ActiveTerminalSession["pendingConnection"]>["phase"] | undefined
+  }
 
 type StoredTerminalWorkspaceState = {
   readonly activeTerminalSessionId: string | null
@@ -111,6 +116,8 @@ type StoredActiveTerminalSessionFields = {
   readonly closePath: string | null
   readonly exitMessage: string | null
   readonly header: string | null
+  readonly pendingConnectionMessage: string | null
+  readonly pendingConnectionPhase: string | null
   readonly pendingDeleteMessage: string | null
   readonly readyMessage: string | null
   readonly sessionPath: string | null
@@ -123,6 +130,8 @@ const readStoredActiveTerminalSessionFields = (value: JsonObject): StoredActiveT
   closePath: readString(value["closePath"]),
   exitMessage: readString(value["exitMessage"]),
   header: readString(value["header"]),
+  pendingConnectionMessage: readString(value["pendingConnectionMessage"]),
+  pendingConnectionPhase: readString(value["pendingConnectionPhase"]),
   pendingDeleteMessage: readString(value["pendingDeleteMessage"]),
   readyMessage: readString(value["readyMessage"]),
   sessionPath: readString(value["sessionPath"]),
@@ -131,12 +140,19 @@ const readStoredActiveTerminalSessionFields = (value: JsonObject): StoredActiveT
   websocketPath: readString(value["websocketPath"])
 })
 
+const isStoredPendingConnectionPhase = (
+  value: string | null
+): value is NonNullable<ActiveTerminalSession["pendingConnection"]>["phase"] =>
+  value === "connecting" || value === "error"
+
 const hasStoredActiveTerminalSessionFields = (
   fields: StoredActiveTerminalSessionFields
 ): fields is StoredActiveTerminalSessionFields & {
   readonly closePath: string
   readonly exitMessage: string
   readonly header: string
+  readonly pendingConnectionMessage: string | null
+  readonly pendingConnectionPhase: NonNullable<ActiveTerminalSession["pendingConnection"]>["phase"] | null
   readonly pendingDeleteMessage: string
   readonly readyMessage: string
   readonly sessionPath: string | null
@@ -153,7 +169,8 @@ const hasStoredActiveTerminalSessionFields = (
     fields.session,
     fields.subtitle,
     fields.websocketPath
-  ].every((field) => field !== null)
+  ].every((field) => field !== null) &&
+  (fields.pendingConnectionPhase === null || isStoredPendingConnectionPhase(fields.pendingConnectionPhase))
 
 const decodeStoredActiveTerminalSession = (value: JsonValue | undefined): ActiveTerminalSession | null => {
   if (!isRecord(value)) {
@@ -170,6 +187,14 @@ const decodeStoredActiveTerminalSession = (value: JsonValue | undefined): Active
     closePath: fields.closePath,
     exitMessage: fields.exitMessage,
     header: fields.header,
+    ...(fields.pendingConnectionMessage !== null && fields.pendingConnectionPhase !== null
+      ? {
+        pendingConnection: {
+          message: fields.pendingConnectionMessage,
+          phase: fields.pendingConnectionPhase
+        }
+      }
+      : {}),
     pendingDeleteMessage: fields.pendingDeleteMessage,
     readyMessage: fields.readyMessage,
     sessionPath: fields.sessionPath ?? undefined,
@@ -230,6 +255,8 @@ const toStoredActiveTerminalSession = (session: ActiveTerminalSession): StoredAc
   closePath: session.closePath,
   exitMessage: session.exitMessage,
   header: session.header,
+  pendingConnectionMessage: session.pendingConnection?.message,
+  pendingConnectionPhase: session.pendingConnection?.phase,
   pendingDeleteMessage: session.pendingDeleteMessage,
   readyMessage: session.readyMessage,
   sessionPath: session.sessionPath,

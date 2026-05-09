@@ -188,6 +188,8 @@ describe("prepareProjectFiles", () => {
         expect(entrypointSyntaxExitCode).toBe(0)
         expect(dockerfile).toContain("docker-compose-v2")
         expect(dockerfile).toContain("gitleaks version")
+        expect(dockerfile).toContain("ARG UBUNTU_APT_MIRROR=")
+        expect(dockerfile).toContain('if [ -n "${UBUNTU_APT_MIRROR:-}" ]; then')
         expect(dockerfile).toContain(
           "curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://bun.sh/install -o /tmp/bun-install.sh"
         )

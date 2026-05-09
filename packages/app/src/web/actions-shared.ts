@@ -41,6 +41,7 @@ export type BrowserActionContext = {
   readonly databaseConnectionInput: string
   readonly databaseLabelInput: string
   readonly addTerminalSession: (session: ActiveTerminalSession) => void
+  readonly closeTerminalSession: (sessionId: string) => void
   readonly githubStatus: ApiTypes.GithubAuthStatus | null
   readonly portForwardInput: string
   readonly projectTasksIncludeDefault: boolean

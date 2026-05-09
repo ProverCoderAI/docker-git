@@ -17,6 +17,7 @@ import {
   ProjectsResponseSchema,
   ProjectTerminalSessionResponseSchema,
   ProjectTerminalSessionsResponseSchema,
+  StartProjectTerminalSessionAcceptedResponseSchema,
   TerminalSessionLookupResponseSchema,
   TerminalSessionResponseSchema
 } from "./api-schema.js"
@@ -148,6 +149,17 @@ export const createProjectTerminalSession = (projectKey: string) =>
       project: response.project,
       session: response.session
     }))
+  )
+
+export const startProjectTerminalSession = (
+  projectKey: string,
+  requestId: string
+) =>
+  requestJson(
+    "POST",
+    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/start`,
+    StartProjectTerminalSessionAcceptedResponseSchema,
+    { requestId }
   )
 
 export const createAuthTerminalSession = (

@@ -4,14 +4,17 @@ import { renderDockerfilePrompt } from "../templates-prompt.js"
 const renderDockerfilePrelude = (): string =>
   `FROM ubuntu:24.04
 
+ARG UBUNTU_APT_MIRROR=
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NVM_DIR=/usr/local/nvm
 
 RUN set -eu; \
-  sed -i \
-    -e 's|http://archive.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g' \
-    -e 's|http://security.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g' \
-    /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true; \
+  if [ -n "\${UBUNTU_APT_MIRROR:-}" ]; then \
+    sed -i \
+      -e "s|http://archive.ubuntu.com/ubuntu|\${UBUNTU_APT_MIRROR}|g" \
+      -e "s|http://security.ubuntu.com/ubuntu|\${UBUNTU_APT_MIRROR}|g" \
+      /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true; \
+  fi; \
   for attempt in 1 2 3 4 5; do \
     rm -rf /var/lib/apt/lists/*; \
     if apt-get -o Acquire::Retries=3 -o Acquire::By-Hash=force update; then \

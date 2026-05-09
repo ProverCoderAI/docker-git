@@ -15,7 +15,7 @@ import {
   type TerminalStatus,
   useTerminalSessionLifecycle
 } from "./terminal-panel-runtime.js"
-import type { ActiveTerminalSession } from "./terminal.js"
+import { type ActiveTerminalSession, isPendingActiveTerminalSession } from "./terminal.js"
 
 type TerminalPanelProps = {
   readonly keyboardOpen: boolean
@@ -221,6 +221,9 @@ const compactStatusStyle = (status: TerminalStatus): CSSProperties => ({
   fontSize: "11px",
   whiteSpace: "nowrap"
 })
+
+const resolveInitialTerminalStatus = (session: ActiveTerminalSession): TerminalStatus =>
+  isPendingActiveTerminalSession(session) && session.pendingConnection.phase === "error" ? "error" : "connecting"
 
 const TerminalHeaderTitle = (
   {
@@ -547,7 +550,7 @@ export const TerminalPanel = (
   const connectionRef = useRef<TerminalConnectionState>({ closing: false, opened: false })
   const hostRef = useRef<HTMLDivElement | null>(null)
   const runtimeRef = useRef<TerminalInputController | null>(null)
-  const [status, setStatus] = useState<TerminalStatus>("connecting")
+  const [status, setStatus] = useState<TerminalStatus>(() => resolveInitialTerminalStatus(session))
   const [mobileControlsCollapsed, setMobileControlsCollapsed] = useState(false)
   const [mobileCtrlArmed, setMobileCtrlArmed] = useState(false)
   const onAttachFailureRef = useRef(onAttachFailure)
@@ -558,6 +561,9 @@ export const TerminalPanel = (
   useEffect(() => {
     onMessageRef.current = onMessage
   }, [onMessage])
+  useEffect(() => {
+    setStatus(resolveInitialTerminalStatus(session))
+  }, [session])
   const notifyAttachFailure = useCallback(() => {
     onAttachFailureRef.current()
   }, [])

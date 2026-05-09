@@ -18,6 +18,7 @@ import type {
   TerminalSocketConnectArgs,
   TerminalSocketRef
 } from "./terminal-panel-runtime-types.js"
+import { isPendingActiveTerminalSession } from "./terminal.js"
 
 type TerminalCleanupFactoryArgs = {
   readonly cleanupArgs: Omit<
@@ -68,10 +69,19 @@ const attachGlobalResizeListeners = (sendResize: () => void): void => {
   globalThis.visualViewport?.addEventListener("scroll", sendResize)
 }
 
+const resolveMountHost = (
+  { hostRef, session }: Pick<TerminalLifecycleArgs, "hostRef" | "session">
+): HTMLDivElement | null => {
+  if (isPendingActiveTerminalSession(session)) {
+    return null
+  }
+  return hostRef.current
+}
+
 const mountTerminalSession = (
   { connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus }: TerminalLifecycleArgs
 ): (() => void) | undefined => {
-  const host = hostRef.current
+  const host = resolveMountHost({ hostRef, session })
   if (host === null) {
     return undefined
   }

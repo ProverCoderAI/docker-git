@@ -25,6 +25,7 @@ export const makeBrowserActionContext = (
       databaseConnectionInput: "",
       databaseLabelInput: "",
       addTerminalSession: vi.fn(),
+      closeTerminalSession: vi.fn(),
       githubStatus: null,
       portForwardInput: "",
       projectTasksIncludeDefault: false,

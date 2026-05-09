@@ -36,6 +36,7 @@ rm -f "$AGENT_DONE_PATH" "$AGENT_FAIL_PATH" "$AGENT_PROMPT_FILE"`,
     String.raw`# Collect tokens for agent environment (su - dev does not always inherit profile.d)
 AGENT_ENV_FILE="/run/docker-git/agent-env.sh"
 {
+  [[ -f /etc/profile.d/docker-host.sh ]] && cat /etc/profile.d/docker-host.sh
   [[ -f /etc/profile.d/gh-token.sh ]] && cat /etc/profile.d/gh-token.sh
   [[ -f /etc/profile.d/claude-config.sh ]] && cat /etc/profile.d/claude-config.sh
   [[ -f /etc/profile.d/gemini-config.sh ]] && cat /etc/profile.d/gemini-config.sh
