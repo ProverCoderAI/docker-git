@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-05-08T11:19:39.087Z",
+  "mockServer": "http://127.0.0.1:4517",
+  "terminalOnly": {
+    "url": "/ssh/session/session-1",
+    "requests": [
+      "GET /ssh/session/session-1",
+      "GET /css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap",
+      "GET /assets/index-CAnIq_BE.js",
+      "GET /assets/index-6EdQ78LN.css",
+      "GET /api/terminal-sessions/session-1?_=1778239175378",
+      "GET /s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAOwlBFgg.woff2",
+      "GET /s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1i8q1w.woff2"
+    ],
+    "websockets": [
+      "ws://127.0.0.1:4517/api/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1/ws?cols=145&rows=42"
+    ],
+    "requestedProjectsEndpoint": false,
+    "containsTerminalDomHeader": true,
+    "screenshotIncludesProofBanner": true
+  },
+  "dashboard": {
+    "url": "/menu/select",
+    "requests": [
+      "GET /menu/select",
+      "GET /assets/index-CAnIq_BE.js",
+      "GET /assets/index-6EdQ78LN.css",
+      "GET /api/health?_=1778239177547",
+      "GET /api/projects?_=1778239177553",
+      "GET /api/auth/github/status?_=1778239177566"
+    ],
+    "requestedProjectsEndpoint": true,
+    "containsDashboardText": true
+  }
+}
