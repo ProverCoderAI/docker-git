@@ -1,9 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
 
 import { defaultTemplateConfig } from "../../src/docker-git/frontend-lib/core/domain.js"
 import { expandContainerHome } from "../../src/docker-git/frontend-lib/usecases/scrap-path.js"
-import { expectAttachProjectDirCommand, parseOrThrow } from "./parser-helpers.js"
+import { parseOrThrow } from "./parser-helpers.js"
 
 type GitlabCreateCase = {
   readonly args: ReadonlyArray<string>
@@ -17,6 +16,19 @@ type GitlabCreateCase = {
 }
 
 const expandDefaultTargetDir = (path: string): string => expandContainerHome(defaultTemplateConfig.sshUser, path)
+
+const expectProjectDirCommand = (
+  args: ReadonlyArray<string>,
+  expectedTag: string,
+  expectedProjectDir: string
+) => {
+  const command = parseOrThrow(args)
+  expect(command._tag).toBe(expectedTag)
+  if (!("projectDir" in command)) {
+    throw new Error(`expected ${expectedTag} command with projectDir`)
+  }
+  expect(command.projectDir).toBe(expectedProjectDir)
+}
 
 const gitlabCreateCases: ReadonlyArray<GitlabCreateCase> = [
   {
@@ -66,50 +78,49 @@ const gitlabCreateCases: ReadonlyArray<GitlabCreateCase> = [
 ]
 
 describe("parseArgs GitLab repo URLs", () => {
-  it.effect("parses GitLab clone URLs into repo refs and workspace paths", () =>
-    Effect.sync(() => {
-      for (const testCase of gitlabCreateCases) {
-        const command = parseOrThrow(testCase.args)
-        if (command._tag !== "Create") {
-          throw new Error("expected Create command")
-        }
-        expect(command.config.repoUrl).toBe(testCase.repoUrl)
-        expect(command.config.repoRef).toBe(testCase.repoRef)
-        expect(command.outDir).toBe(testCase.outDir)
-        expect(command.config.targetDir).toBe(testCase.targetDir)
-        if (testCase.containerName) {
-          expect(command.config.containerName).toBe(testCase.containerName)
-        }
-        if (testCase.serviceName) {
-          expect(command.config.serviceName).toBe(testCase.serviceName)
-        }
-        if (testCase.volumeName) {
-          expect(command.config.volumeName).toBe(testCase.volumeName)
-        }
+  it("parses GitLab clone URLs into repo refs and workspace paths", () => {
+    for (const testCase of gitlabCreateCases) {
+      const command = parseOrThrow(testCase.args)
+      if (command._tag !== "Create") {
+        throw new Error("expected Create command")
       }
-    }))
+      expect(command.config.repoUrl).toBe(testCase.repoUrl)
+      expect(command.config.repoRef).toBe(testCase.repoRef)
+      expect(command.outDir).toBe(testCase.outDir)
+      expect(command.config.targetDir).toBe(testCase.targetDir)
+      if (testCase.containerName) {
+        expect(command.config.containerName).toBe(testCase.containerName)
+      }
+      if (testCase.serviceName) {
+        expect(command.config.serviceName).toBe(testCase.serviceName)
+      }
+      if (testCase.volumeName) {
+        expect(command.config.volumeName).toBe(testCase.volumeName)
+      }
+    }
+  })
 
-  it.effect("parses GitLab ssh repo url into project dir", () =>
-    expectAttachProjectDirCommand(
+  it("parses GitLab ssh repo url into project dir", () => {
+    expectProjectDirCommand(
       ["attach", "ssh://git@gitlab.com/group/subgroup/repo.git"],
+      "Attach",
       ".docker-git/group/subgroup/repo"
-    ))
+    )
+  })
 
-  it.effect("parses GitLab https repo url without .git into project dir", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["mcp-playwright", "https://gitlab.com/group/subgroup/repo"])
-      if (command._tag !== "McpPlaywrightUp") {
-        throw new Error("expected McpPlaywrightUp command")
-      }
-      expect(command.projectDir).toBe(".docker-git/group/subgroup/repo")
-    }))
+  it("parses GitLab https repo url without .git into project dir", () => {
+    expectProjectDirCommand(
+      ["mcp-playwright", "https://gitlab.com/group/subgroup/repo"],
+      "McpPlaywrightUp",
+      ".docker-git/group/subgroup/repo"
+    )
+  })
 
-  it.effect("parses GitLab scp-style repo url into project dir", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["apply", "git@gitlab.com:group/subgroup/repo.git"])
-      if (command._tag !== "Apply") {
-        throw new Error("expected Apply command")
-      }
-      expect(command.projectDir).toBe(".docker-git/group/subgroup/repo")
-    }))
+  it("parses GitLab scp-style repo url into project dir", () => {
+    expectProjectDirCommand(
+      ["apply", "git@gitlab.com:group/subgroup/repo.git"],
+      "Apply",
+      ".docker-git/group/subgroup/repo"
+    )
+  })
 })

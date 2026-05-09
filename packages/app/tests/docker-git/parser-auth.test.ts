@@ -3,6 +3,21 @@ import { Effect } from "effect"
 
 import { expectParseErrorTag, parseOrThrow } from "./parser-helpers.js"
 
+type AuthGitlabLoginCommand = Extract<ReturnType<typeof parseOrThrow>, { readonly _tag: "AuthGitlabLogin" }>
+
+const expectGitlabLoginCommand = (
+  args: ReadonlyArray<string>,
+  verify: (command: AuthGitlabLoginCommand) => void
+) =>
+  Effect.sync(() => {
+    const command = parseOrThrow(args)
+    expect(command._tag).toBe("AuthGitlabLogin")
+    if (command._tag !== "AuthGitlabLogin") {
+      throw new Error("expected AuthGitlabLogin command")
+    }
+    verify(command)
+  })
+
 describe("parse auth commands", () => {
   it.effect("parses codex auth import into the controller-owned auth directory", () =>
     Effect.sync(() => {
@@ -15,24 +30,14 @@ describe("parse auth commands", () => {
     }))
 
   it.effect("parses gitlab token login", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["auth", "gitlab", "login", "--label", "Team A", "--token", "glpat-token"])
-      expect(command._tag).toBe("AuthGitlabLogin")
-      if (command._tag !== "AuthGitlabLogin") {
-        throw new Error("expected AuthGitlabLogin command")
-      }
+    expectGitlabLoginCommand(["auth", "gitlab", "login", "--label", "Team A", "--token", "glpat-token"], (command) => {
       expect(command.label).toBe("Team A")
       expect(command.token).toBe("glpat-token")
       expect(command.envGlobalPath).toBe(".docker-git/.orch/env/global.env")
     }))
 
   it.effect("parses gitlab web login without token", () =>
-    Effect.sync(() => {
-      const command = parseOrThrow(["auth", "gitlab", "login", "--web"])
-      expect(command._tag).toBe("AuthGitlabLogin")
-      if (command._tag !== "AuthGitlabLogin") {
-        throw new Error("expected AuthGitlabLogin command")
-      }
+    expectGitlabLoginCommand(["auth", "gitlab", "login", "--web"], (command) => {
       expect(command.token).toBeNull()
     }))
 
