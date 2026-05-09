@@ -1,10 +1,19 @@
+import { FetchHttpClient, HttpClient } from "@effect/platform"
 import { Effect, Either } from "effect"
 import { Terminal } from "xterm"
 import { FitAddon } from "xterm-addon-fit"
 
 import { resolveTerminalImageFetchUrl } from "./terminal-image-url.js"
 import { splitTerminalInlineImageOutput, type TerminalInlineImageOutputSegment } from "./terminal-inline-images-core.js"
-import { appendTerminalInlineImagePreview, terminalInlineImageSpacer } from "./terminal-inline-images.js"
+import {
+  appendTerminalInlineImagePreview,
+  cachedTerminalInlineImageEntry,
+  cacheTerminalInlineImageBlob,
+  revokeTerminalInlineImageObjectUrlCache,
+  terminalInlineImageSpacer,
+  unavailableTerminalInlineImageEntry
+} from "./terminal-inline-images.js"
+import type { TerminalInlineImageEntry } from "./terminal-inline-images.js"
 import type {
   TerminalCleanupArgs,
   TerminalInputController,
@@ -23,6 +32,11 @@ type TerminalClientMessage =
   | { readonly data: string; readonly type: "input" }
   | { readonly cols: number; readonly rows: number; readonly type: "resize" }
 
+type TerminalInlineImageFetchError = {
+  readonly _tag: "TerminalInlineImageFetchError"
+  readonly message: string
+}
+
 const runOptionalTerminalOperation = (operation: () => void): boolean =>
   Either.isRight(
     Effect.runSync(
@@ -39,6 +53,7 @@ export const createLifecycleState = (): TerminalLifecycleState => ({
   attachedOnce: false,
   disposed: false,
   inlineImageDisposables: [],
+  inlineImageObjectUrls: new Map<string, string>(),
   outputQueue: [],
   outputWriting: false,
   readyNotified: false,
@@ -183,10 +198,79 @@ const endTerminalSession = (
 const terminalImageEntry = (
   handlers: TerminalMessageHandlers,
   path: string
-) => ({
-  fetchUrl: resolveTerminalImageFetchUrl(handlers.session.websocketPath, path),
-  path
+): TerminalInlineImageEntry | null => {
+  const fetchUrl = resolveTerminalImageFetchUrl(handlers.session.websocketPath, path)
+  return cachedTerminalInlineImageEntry(handlers.lifecycle.inlineImageObjectUrls, path, fetchUrl)
+}
+
+const terminalInlineImageFetchError = (message: string): TerminalInlineImageFetchError => ({
+  _tag: "TerminalInlineImageFetchError",
+  message
 })
+
+const terminalInlineImageFetchHeaders: Readonly<Record<string, string>> = {
+  accept: "image/*",
+  "cache-control": "no-cache, no-store, max-age=0",
+  pragma: "no-cache"
+}
+
+const imageBlobFromArrayBuffer = (
+  buffer: ArrayBuffer,
+  mediaType: string | undefined
+): Blob => new Blob([buffer], mediaType === undefined ? {} : { type: mediaType })
+
+const fetchTerminalInlineImageBlob = (
+  fetchUrl: string
+): Effect.Effect<Blob, TerminalInlineImageFetchError> =>
+  Effect.gen(function*(_) {
+    const client = yield* _(HttpClient.HttpClient)
+    const response = yield* _(
+      client.get(fetchUrl, { headers: terminalInlineImageFetchHeaders }).pipe(
+        Effect.mapError(() => terminalInlineImageFetchError("Could not fetch terminal image."))
+      )
+    )
+    if (response.status >= 400) {
+      return yield* _(Effect.fail(terminalInlineImageFetchError(`Terminal image returned HTTP ${response.status}.`)))
+    }
+    const buffer = yield* _(
+      response.arrayBuffer.pipe(
+        Effect.mapError(() => terminalInlineImageFetchError("Could not read terminal image response."))
+      )
+    )
+    return imageBlobFromArrayBuffer(buffer, response.headers["content-type"])
+  }).pipe(Effect.provide(FetchHttpClient.layer))
+
+const loadTerminalImageEntry = (
+  handlers: TerminalMessageHandlers,
+  path: string,
+  onComplete: (entry: TerminalInlineImageEntry) => void
+): void => {
+  const fetchUrl = resolveTerminalImageFetchUrl(handlers.session.websocketPath, path)
+  const cached = cachedTerminalInlineImageEntry(handlers.lifecycle.inlineImageObjectUrls, path, fetchUrl)
+  if (cached !== null) {
+    onComplete(cached)
+    return
+  }
+  Effect.runFork(
+    fetchTerminalInlineImageBlob(fetchUrl).pipe(
+      Effect.match({
+        onFailure: () => unavailableTerminalInlineImageEntry(path, fetchUrl),
+        onSuccess: (blob) =>
+          handlers.lifecycle.disposed
+            ? null
+            : cacheTerminalInlineImageBlob(handlers.lifecycle.inlineImageObjectUrls, path, fetchUrl, blob)
+      }),
+      Effect.flatMap((entry) =>
+        Effect.sync(() => {
+          if (entry === null || handlers.lifecycle.disposed) {
+            return
+          }
+          onComplete(entry)
+        })
+      )
+    )
+  )
+}
 
 const writePreviewSpacer = (
   handlers: TerminalMessageHandlers,
@@ -200,10 +284,25 @@ const writeInlineImagePreview = (
   path: string,
   onComplete: () => void
 ): void => {
+  const cached = terminalImageEntry(handlers, path)
+  if (cached !== null) {
+    writeInlineImagePreviewEntry(handlers, cached, onComplete)
+    return
+  }
+  loadTerminalImageEntry(handlers, path, (entry) => {
+    writeInlineImagePreviewEntry(handlers, entry, onComplete)
+  })
+}
+
+const writeInlineImagePreviewEntry = (
+  handlers: TerminalMessageHandlers,
+  entry: TerminalInlineImageEntry,
+  onComplete: () => void
+): void => {
   const appended = appendTerminalInlineImagePreview(
     handlers.terminal,
     handlers.lifecycle,
-    terminalImageEntry(handlers, path)
+    entry
   )
   if (!appended) {
     onComplete()
@@ -336,6 +435,7 @@ export const cleanupTerminalResources = (
     disposable.dispose()
   }
   args.lifecycle.inlineImageDisposables = []
+  revokeTerminalInlineImageObjectUrlCache(args.lifecycle.inlineImageObjectUrls)
   args.lifecycle.outputQueue = []
   args.lifecycle.outputWriting = false
   args.removeImageLinks()
