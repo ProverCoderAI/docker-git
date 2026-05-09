@@ -28,6 +28,17 @@ const invalidArgument = (name: string, reason: string): ParseError => ({
   reason
 })
 
+type ProviderLogoutCommand = Extract<AuthCommand, { readonly _tag: "AuthGithubLogout" | "AuthGitlabLogout" }>
+
+const providerLogoutCommand = (
+  tag: ProviderLogoutCommand["_tag"],
+  options: AuthOptions
+): ProviderLogoutCommand => ({
+  _tag: tag,
+  label: options.label,
+  envGlobalPath: options.envGlobalPath
+})
+
 const defaultEnvGlobalPath = ".docker-git/.orch/env/global.env"
 const defaultCodexAuthPath = ".docker-git/.orch/auth/codex"
 const defaultClaudeAuthPath = ".docker-git/.orch/auth/claude"
@@ -61,12 +72,36 @@ const buildGithubCommand = (action: string, options: AuthOptions): Either.Either
         _tag: "AuthGithubStatus",
         envGlobalPath: options.envGlobalPath
       })),
-    Match.when("logout", () =>
+    Match.when("logout", () => Either.right<AuthCommand>(providerLogoutCommand("AuthGithubLogout", options))),
+    Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
+  )
+
+const buildGitlabLoginCommand = (options: AuthOptions): Either.Either<AuthCommand, ParseError> => {
+  if (options.scopes !== null) {
+    return Either.left(invalidArgument("--scopes", "GitLab auth does not support --scopes"))
+  }
+
+  if (options.authWeb && options.token !== null) {
+    return Either.left(invalidArgument("--token", "cannot be combined with --web"))
+  }
+
+  return Either.right<AuthCommand>({
+    _tag: "AuthGitlabLogin",
+    label: options.label,
+    token: options.authWeb ? null : options.token,
+    envGlobalPath: options.envGlobalPath
+  })
+}
+
+const buildGitlabCommand = (action: string, options: AuthOptions): Either.Either<AuthCommand, ParseError> =>
+  Match.value(action).pipe(
+    Match.when("login", () => buildGitlabLoginCommand(options)),
+    Match.when("status", () =>
       Either.right<AuthCommand>({
-        _tag: "AuthGithubLogout",
-        label: options.label,
+        _tag: "AuthGitlabStatus",
         envGlobalPath: options.envGlobalPath
       })),
+    Match.when("logout", () => Either.right<AuthCommand>(providerLogoutCommand("AuthGitlabLogout", options))),
     Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
   )
 
@@ -164,6 +199,7 @@ const buildAuthCommand = (
   Match.value(provider).pipe(
     Match.when("github", () => buildGithubCommand(action, options)),
     Match.when("gh", () => buildGithubCommand(action, options)),
+    Match.when("gitlab", () => buildGitlabCommand(action, options)),
     Match.when("codex", () => buildCodexCommand(action, options)),
     Match.when("claude", () => buildClaudeCommand(action, options)),
     Match.when("cc", () => buildClaudeCommand(action, options)),

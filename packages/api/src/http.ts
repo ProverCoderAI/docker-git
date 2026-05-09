@@ -23,6 +23,8 @@ import {
   CreateProjectRequestSchema,
   ExchangePollRequestSchema,
   ExchangeSubscribeRequestSchema,
+  GitlabAuthLoginRequestSchema,
+  GitlabAuthLogoutRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
   ProjectDatabaseProfileRequestSchema,
@@ -40,13 +42,17 @@ import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import { resolveWorkspaceRoot } from "@effect-template/lib/shell/workspace-root"
 import {
   importCodexAuth,
+  loginGitlabAuth,
   loginGithubAuth,
   logoutCodexAuth,
+  logoutGitlabAuth,
   logoutGithubAuth,
   readCodexAuthStatus,
+  readGitlabAuthStatus,
   readGithubAuthStatus,
 } from "./services/auth.js"
 import { readAuthMenuSnapshot, runAuthMenuFlow } from "./services/auth-menu.js"
+import { streamGitlabAuthLogin } from "./services/auth-gitlab-login-stream.js"
 import { streamGithubAuthLogin } from "./services/auth-github-login-stream.js"
 import { createAuthTerminalSession, deleteAuthTerminalSession } from "./services/auth-terminal-sessions.js"
 import { streamCodexAuthLogin } from "./services/auth-codex-login-stream.js"
@@ -352,6 +358,8 @@ const readCreateProjectRequest = () => HttpServerRequest.schemaBodyJson(CreatePr
 const readCreateFollowRequest = () => HttpServerRequest.schemaBodyJson(CreateFollowRequestSchema)
 const readGithubAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLoginRequestSchema)
 const readGithubAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLogoutRequestSchema)
+const readGitlabAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GitlabAuthLoginRequestSchema)
+const readGitlabAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GitlabAuthLogoutRequestSchema)
 const readAuthMenuRequest = () => HttpServerRequest.schemaBodyJson(AuthMenuRequestSchema)
 const readAuthTerminalSessionRequest = () => HttpServerRequest.schemaBodyJson(AuthTerminalSessionRequestSchema)
 const readCodexAuthImportRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthImportRequestSchema)
@@ -503,6 +511,13 @@ export const makeRouter = () => {
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
+      "/auth/gitlab/status",
+      Effect.gen(function*(_) {
+        const status = yield* _(readGitlabAuthStatus())
+        return yield* _(jsonResponse({ status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
       "/auth/menu",
       Effect.gen(function*(_) {
         const snapshot = yield* _(readAuthMenuSnapshot())
@@ -528,6 +543,28 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(readGithubAuthLoginRequest())
         const status = yield* _(loginGithubAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/gitlab/login/stream",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGitlabAuthLoginRequest())
+        const outputStream = yield* _(streamGitlabAuthLogin(request))
+        return HttpServerResponse.stream(outputStream, {
+          status: 200,
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "cache-control": "no-cache"
+          }
+        })
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/gitlab/login",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGitlabAuthLoginRequest())
+        const status = yield* _(loginGitlabAuth(request))
         return yield* _(jsonResponse({ ok: true, status }, 201))
       }).pipe(Effect.catchAll(errorResponse))
     ),
@@ -572,6 +609,14 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(readGithubAuthLogoutRequest())
         const status = yield* _(logoutGithubAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/gitlab/logout",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGitlabAuthLogoutRequest())
+        const status = yield* _(logoutGitlabAuth(request))
         return yield* _(jsonResponse({ ok: true, status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),

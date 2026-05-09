@@ -10,6 +10,8 @@ import {
   codexLoginStreamMarkers,
   githubLoginFailureMessage,
   githubLoginStreamMarkers,
+  gitlabLoginFailureMessage,
+  gitlabLoginStreamMarkers,
   makeVisibleAuthStreamWriter
 } from "../shared/auth-stream-markers.js"
 import { request, requestTextStream, requestVoid } from "./api-http.js"
@@ -22,7 +24,10 @@ import type {
   AuthCodexStatusCommand,
   AuthGithubLoginCommand,
   AuthGithubLogoutCommand,
-  AuthGithubStatusCommand
+  AuthGithubStatusCommand,
+  AuthGitlabLoginCommand,
+  AuthGitlabLogoutCommand,
+  AuthGitlabStatusCommand
 } from "./frontend-lib/core/domain.js"
 import { resolvePathFromCwd } from "./frontend-lib/usecases/path-helpers.js"
 import type { ApiAuthRequiredError, ApiRequestError } from "./host-errors.js"
@@ -84,7 +89,7 @@ const requestMarkedAuthStream = (
     )
   })
 
-const githubLoginSuccessPayload = (statusPayload: JsonValue): JsonValue => {
+const authLoginSuccessPayload = (statusPayload: JsonValue): JsonValue => {
   const object = asObject(statusPayload)
   return {
     ok: true,
@@ -106,7 +111,7 @@ const githubWebLogin = (
     githubLoginFailureMessage
   ).pipe(
     Effect.flatMap(() => request("GET", "/auth/github/status")),
-    Effect.map((statusPayload) => githubLoginSuccessPayload(statusPayload))
+    Effect.map((statusPayload) => authLoginSuccessPayload(statusPayload))
   )
 
 export const githubLogin = (
@@ -124,6 +129,39 @@ export const githubStatus = (_command: AuthGithubStatusCommand) => request("GET"
 
 export const githubLogout = (command: AuthGithubLogoutCommand) =>
   requestVoid("POST", "/auth/github/logout", {
+    label: command.label
+  })
+
+const gitlabWebLogin = (
+  command: AuthGitlabLoginCommand
+): Effect.Effect<JsonValue, ApiRequestError | ApiAuthRequiredError, ControllerRuntime> =>
+  requestMarkedAuthStream(
+    "/auth/gitlab/login/stream",
+    {
+      label: command.label,
+      token: null
+    },
+    gitlabLoginStreamMarkers,
+    gitlabLoginFailureMessage
+  ).pipe(
+    Effect.flatMap(() => request("GET", "/auth/gitlab/status")),
+    Effect.map((statusPayload) => authLoginSuccessPayload(statusPayload))
+  )
+
+export const gitlabLogin = (
+  command: AuthGitlabLoginCommand
+): Effect.Effect<JsonValue, ApiRequestError | ApiAuthRequiredError, ControllerRuntime> =>
+  command.token !== null && command.token.trim().length > 0
+    ? request("POST", "/auth/gitlab/login", {
+      label: command.label,
+      token: command.token
+    })
+    : gitlabWebLogin(command)
+
+export const gitlabStatus = (_command: AuthGitlabStatusCommand) => request("GET", "/auth/gitlab/status")
+
+export const gitlabLogout = (command: AuthGitlabLogoutCommand) =>
+  requestVoid("POST", "/auth/gitlab/logout", {
     label: command.label
   })
 

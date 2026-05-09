@@ -33,7 +33,7 @@ import type {
   ProjectSummary
 } from "../api/contracts.js"
 import { ApiAuthRequiredError, ApiConflictError, ApiInternalError, ApiNotFoundError, ApiBadRequestError } from "../api/errors.js"
-import { ensureGithubAuthForCreate } from "./auth.js"
+import { ensureGithubAuthForCreate, ensureGitlabAuthForCreate } from "./auth.js"
 import { clearProjectEvents, emitProjectEvent, latestProjectCursor } from "./events.js"
 import { resolveCreateAuthorizedKeysContents, resolveManagedAuthorizedKeysContents } from "./project-authorized-keys.js"
 import { projectShortKey } from "./project-port-proxy-core.js"
@@ -477,6 +477,7 @@ const prepareCreateProjectRequest = (
 
     yield* _(seedAuthorizedKeysForCreate(command.outDir, resolvedAuthorizedKeysContents))
     yield* _(ensureGithubAuthForCreate(command.config))
+    yield* _(ensureGitlabAuthForCreate(command.config))
 
     return {
       command,

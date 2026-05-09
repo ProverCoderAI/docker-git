@@ -145,6 +145,8 @@ export type GithubRepo = {
   readonly repo: string
 }
 
+export type GitlabRepo = { readonly namespace: string; readonly projectPath: string; readonly repo: string }
+
 const stripQueryHash = (value: string): string => {
   const queryIndex = value.indexOf("?")
   const hashIndex = value.indexOf("#")
@@ -156,11 +158,11 @@ const stripQueryHash = (value: string): string => {
   return value.slice(0, cutIndex)
 }
 
-const splitGithubPath = (input: string): ReadonlyArray<string> | null => {
+const splitRemotePath = (input: string, host: string): ReadonlyArray<string> | null => {
   const trimmed = input.trim()
-  const httpsPrefix = "https://github.com/"
-  const sshPrefix = "ssh://git@github.com/"
-  const gitPrefix = "git@github.com:"
+  const httpsPrefix = `https://${host}/`
+  const sshPrefix = `ssh://git@${host}/`
+  const gitPrefix = `git@${host}:`
   let rest: string | null = null
   if (trimmed.startsWith(httpsPrefix)) {
     rest = trimmed.slice(httpsPrefix.length)
@@ -177,6 +179,16 @@ const splitGithubPath = (input: string): ReadonlyArray<string> | null => {
     return []
   }
   return cleaned.split("/").filter((part) => part.length > 0)
+}
+
+const splitGithubPath = (input: string): ReadonlyArray<string> | null => splitRemotePath(input, "github.com")
+
+const splitGitlabPath = (input: string): ReadonlyArray<string> | null => splitRemotePath(input, "gitlab.com")
+
+const readGitlabProjectPathParts = (parts: ReadonlyArray<string> | null): ReadonlyArray<string> => {
+  if (!parts) return []
+  const separatorIndex = parts.indexOf("-")
+  return separatorIndex >= 2 ? parts.slice(0, separatorIndex) : parts
 }
 
 // CHANGE: parse GitHub owner/repo from common URL formats
@@ -205,6 +217,16 @@ export const parseGithubRepoUrl = (input: string): GithubRepo | null => {
   return { owner, repo }
 }
 
+export const parseGitlabRepoUrl = (input: string): GitlabRepo | null => {
+  const projectPathParts = readGitlabProjectPathParts(splitGitlabPath(input))
+  const repoRaw = readRepoPathPart(projectPathParts.at(-1))
+  const namespace = projectPathParts.slice(0, -1).join("/")
+  if (!repoRaw || namespace.length === 0) return null
+
+  const repo = stripGitSuffix(repoRaw)
+  return { namespace, projectPath: `${namespace}/${repo}`, repo }
+}
+
 export type ResolvedRepoInput = {
   readonly repoUrl: string
   readonly repoRef?: string
@@ -218,7 +240,13 @@ type GithubRefParts = {
   readonly ref: string
 }
 
-const readGithubPart = (value: string | undefined): string | null => {
+type GitlabRefParts = {
+  readonly projectPathParts: ReadonlyArray<string>
+  readonly marker: string
+  readonly ref: string
+}
+
+const readRepoPathPart = (value: string | undefined): string | null => {
   const trimmed = value?.trim() ?? ""
   return trimmed.length > 0 ? trimmed : null
 }
@@ -228,14 +256,34 @@ const parseGithubRefParts = (input: string): GithubRefParts | null => {
   if (!parts || parts.length < 4) {
     return null
   }
-  const owner = readGithubPart(parts[0])
-  const repoRaw = readGithubPart(parts[1])
-  const markerRaw = readGithubPart(parts[2])
-  const ref = readGithubPart(parts[3])
+  const owner = readRepoPathPart(parts[0])
+  const repoRaw = readRepoPathPart(parts[1])
+  const markerRaw = readRepoPathPart(parts[2])
+  const ref = readRepoPathPart(parts[3])
   if (!owner || !repoRaw || !markerRaw || !ref) {
     return null
   }
   return { owner, repoRaw, marker: markerRaw.toLowerCase(), ref }
+}
+
+const parseGitlabRefParts = (input: string): GitlabRefParts | null => {
+  const parts = splitGitlabPath(input)
+  if (!parts) return null
+  const separatorIndex = parts.indexOf("-")
+  const markerRaw = readRepoPathPart(parts[separatorIndex + 1])
+  const ref = readRepoPathPart(parts[separatorIndex + 2])
+  if (separatorIndex < 2 || !markerRaw || !ref) return null
+
+  return { projectPathParts: parts.slice(0, separatorIndex), marker: markerRaw.toLowerCase(), ref }
+}
+
+const normalizeGitlabProjectUrl = (projectPathParts: ReadonlyArray<string>): string | null => {
+  const repoRaw = readRepoPathPart(projectPathParts.at(-1))
+  if (!repoRaw) return null
+
+  const namespaceParts = projectPathParts.slice(0, -1)
+  const repo = stripGitSuffix(repoRaw)
+  return `https://gitlab.com/${[...namespaceParts, repo].join("/")}.git`
 }
 
 const parseGithubPrUrl = (input: string): ResolvedRepoInput | null => {
@@ -273,6 +321,25 @@ const parseGithubTreeUrl = (input: string): ResolvedRepoInput | null => {
   return { repoUrl: `https://github.com/${parsed.owner}/${repo}.git`, repoRef: parsed.ref }
 }
 
+const resolveGitlabRefUrl = (
+  input: string,
+  markers: ReadonlyArray<string>,
+  resolveRef: (ref: string) => string,
+  resolveWorkspaceSuffix?: (ref: string) => string
+): ResolvedRepoInput | null => {
+  const parsed = parseGitlabRefParts(input)
+  if (!parsed || !markers.includes(parsed.marker)) return null
+  const repoUrl = normalizeGitlabProjectUrl(parsed.projectPathParts)
+  if (!repoUrl) return null
+  const workspaceSuffix = resolveWorkspaceSuffix?.(parsed.ref)
+  return workspaceSuffix
+    ? { repoUrl, repoRef: resolveRef(parsed.ref), workspaceSuffix }
+    : { repoUrl, repoRef: resolveRef(parsed.ref) }
+}
+
+const parseGitlabTreeUrl = (input: string): ResolvedRepoInput | null =>
+  resolveGitlabRefUrl(input, ["tree", "blob"], (ref) => ref)
+
 // CHANGE: normalize GitHub issue URLs into repo URLs
 // WHY: allow docker-git clone to accept issue links directly
 // QUOTE(ТЗ): "Сразу на issues"
@@ -298,18 +365,32 @@ const parseGithubIssueUrl = (input: string): ResolvedRepoInput | null => {
   }
 }
 
+const parseGitlabIssueUrl = (input: string): ResolvedRepoInput | null =>
+  resolveGitlabRefUrl(input, ["issues"], (ref) => `issue-${slugify(ref)}`, (ref) => `issue-${slugify(ref)}`)
+
+const parseGitlabMergeRequestUrl = (input: string): ResolvedRepoInput | null =>
+  resolveGitlabRefUrl(
+    input,
+    ["merge_requests"],
+    (ref) => `refs/merge-requests/${ref}/head`,
+    (ref) => `mr-${slugify(ref)}`
+  )
+
 // CHANGE: normalize repo input and PR/issue URLs into repo + ref
-// WHY: allow cloning GitHub PR links and issue links directly
-// QUOTE(ТЗ): "клонировть по cсылке на PR" | "Сразу на issues"
-// REF: user-request-2026-01-28-pr | user-request-2026-02-05-issues
+// WHY: allow cloning GitHub PR links, issue links, and GitLab scoped links directly
+// QUOTE(ТЗ): "клонировть по cсылке на PR" | "Сразу на issues" | "Add support for GitLab repo URLs"
+// REF: user-request-2026-01-28-pr | user-request-2026-02-05-issues | issue-252
 // SOURCE: n/a
 // FORMAT THEOREM: forall url: resolve(url) -> deterministic(url, ref)
 // PURITY: CORE
 // EFFECT: Effect<ResolvedRepoInput, never, never>
-// INVARIANT: PR URL yields repoUrl + refs/pull/<id>/head
+// INVARIANT: PR/MR URL yields repoUrl + provider-specific head ref
 // COMPLEXITY: O(n) where n = |url|
 export const resolveRepoInput = (repoUrl: string): ResolvedRepoInput =>
   parseGithubPrUrl(repoUrl)
     ?? parseGithubTreeUrl(repoUrl)
     ?? parseGithubIssueUrl(repoUrl)
+    ?? parseGitlabMergeRequestUrl(repoUrl)
+    ?? parseGitlabTreeUrl(repoUrl)
+    ?? parseGitlabIssueUrl(repoUrl)
     ?? { repoUrl: repoUrl.trim() }

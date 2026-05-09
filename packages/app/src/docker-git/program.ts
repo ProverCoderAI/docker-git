@@ -5,16 +5,9 @@ import {
   type ApiProjectDetails,
   type ApiProjectSummary,
   applyAllProjects,
-  codexImport,
-  codexLogin,
-  codexLogout,
-  codexStatus,
   commitState,
   createProject,
   downAllProjects,
-  githubLogin,
-  githubLogout,
-  githubStatus,
   initState,
   listProjects,
   pullState,
@@ -24,7 +17,6 @@ import {
   readStatePath,
   readStateStatus,
   renderContainerTaskSnapshot,
-  renderJsonPayload,
   renderProjectSummaryLine,
   stopContainerTask,
   syncState
@@ -38,6 +30,7 @@ import { renderCliError } from "./host-errors.js"
 import { autoOpenProjectSsh } from "./host-ssh.js"
 import { runMenu } from "./menu.js"
 import { openExistingProjectSsh } from "./open-project.js"
+import { dispatchRoutedAuthCommand, isRoutedAuthCommand } from "./program-auth.js"
 import { unsupportedOperationalCommands, type UnsupportedOperationalCommandTag } from "./program-unsupported.js"
 
 type OperationalCommand = Exclude<Command, { readonly _tag: "Help" }>
@@ -130,54 +123,6 @@ const handleApplyAllCommand = (command: Extract<OperationalCommand, { readonly _
     )
   )
 
-const handleGithubLoginCommand = (command: Extract<OperationalCommand, { readonly _tag: "AuthGithubLogin" }>) =>
-  withControllerReady(
-    pipe(githubLogin(command), Effect.flatMap((payload) => Effect.log(renderJsonPayload(payload))))
-  )
-
-const handleGithubStatusCommand = (command: Extract<OperationalCommand, { readonly _tag: "AuthGithubStatus" }>) =>
-  withControllerReady(
-    pipe(githubStatus(command), Effect.flatMap((payload) => Effect.log(renderJsonPayload(payload))))
-  )
-
-const handleGithubLogoutCommand = (
-  command: Extract<OperationalCommand, { readonly _tag: "AuthGithubLogout" }>
-) =>
-  withControllerReady(
-    pipe(
-      githubLogout(command),
-      Effect.zipRight(Effect.log("GitHub auth removed from controller state."))
-    )
-  )
-
-const handleCodexLoginCommand = (
-  command: Extract<OperationalCommand, { readonly _tag: "AuthCodexLogin" }>
-) => withControllerReady(codexLogin(command))
-
-const handleCodexImportCommand = (
-  command: Extract<OperationalCommand, { readonly _tag: "AuthCodexImport" }>
-) =>
-  withControllerReady(
-    pipe(codexImport(command), Effect.flatMap((payload) => Effect.log(renderJsonPayload(payload))))
-  )
-
-const handleCodexStatusCommand = (
-  command: Extract<OperationalCommand, { readonly _tag: "AuthCodexStatus" }>
-) =>
-  withControllerReady(
-    pipe(codexStatus(command), Effect.flatMap((payload) => Effect.log(renderJsonPayload(payload))))
-  )
-
-const handleCodexLogoutCommand = (
-  command: Extract<OperationalCommand, { readonly _tag: "AuthCodexLogout" }>
-) =>
-  withControllerReady(
-    pipe(
-      codexLogout(command),
-      Effect.zipRight(Effect.log("Codex auth removed from controller state."))
-    )
-  )
-
 const logOutput = (output: string) => Effect.log(output)
 
 const handleStatePathCommand = () =>
@@ -241,18 +186,11 @@ type DirectOperationalCommand = Extract<
   { readonly _tag: "Menu" | "Browser" | "Create" | "Open" | "Status" | "DownAll" | "ApplyAll" }
 >
 type RoutedOperationalCommand = Exclude<OperationalCommand, DirectOperationalCommand>
-
 const dispatchRoutedOperationalCommand = (
   command: RoutedOperationalCommand
 ): Effect.Effect<void, CliError, ControllerRuntime> =>
   Match.value(command).pipe(
-    Match.when({ _tag: "AuthGithubLogin" }, handleGithubLoginCommand),
-    Match.when({ _tag: "AuthGithubStatus" }, handleGithubStatusCommand),
-    Match.when({ _tag: "AuthGithubLogout" }, handleGithubLogoutCommand),
-    Match.when({ _tag: "AuthCodexLogin" }, handleCodexLoginCommand),
-    Match.when({ _tag: "AuthCodexImport" }, handleCodexImportCommand),
-    Match.when({ _tag: "AuthCodexStatus" }, handleCodexStatusCommand),
-    Match.when({ _tag: "AuthCodexLogout" }, handleCodexLogoutCommand),
+    Match.when(isRoutedAuthCommand, dispatchRoutedAuthCommand),
     Match.when({ _tag: "StatePath" }, handleStatePathCommand),
     Match.when({ _tag: "StateInit" }, handleStateInitCommand),
     Match.when({ _tag: "StateStatus" }, handleStateStatusCommand),

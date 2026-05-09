@@ -58,6 +58,8 @@ describe("renderDockerfile", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
     expectContainsAll(dockerfile, [
+      "# Tooling: GitLab CLI (glab)",
+      "glab --version",
       'ARG DOCKER_GIT_SESSION_SYNC_PACKAGE="@prover-coder-ai/docker-git-session-sync@latest"',
       'COPY .docker-git-tools/docker-git-session-sync /opt/docker-git/tools/docker-git-session-sync',
       'npm install -g "$DOCKER_GIT_SESSION_SYNC_PACKAGE"',
@@ -113,25 +115,33 @@ describe("renderEntrypoint auth bridge", () => {
     const entrypoint = renderAuthEntrypoint()
 
     expectContainsAll(entrypoint, [
+      "GITLAB_TOKEN=\"${GITLAB_TOKEN:-}\"",
       "GIT_AUTH_TOKEN=\"${GIT_AUTH_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}\"",
       "GITHUB_TOKEN=\"${GITHUB_TOKEN:-${GH_TOKEN:-}}\"",
       "GITHUB_AUTH_SKIP=\"${GITHUB_AUTH_SKIP:-0}\"",
-      "AUTH_LABEL_RAW=\"${GIT_AUTH_LABEL:-${GITHUB_AUTH_LABEL:-}}\"",
+      "AUTH_LABEL_RAW=\"${GIT_AUTH_LABEL:-${GITHUB_AUTH_LABEL:-${GITLAB_AUTH_LABEL:-}}}\"",
+      "if [[ -n \"$AUTH_LABEL_RAW\" ]]; then",
       "LABELED_GITHUB_TOKEN_KEY=\"GITHUB_TOKEN__$RESOLVED_AUTH_LABEL\"",
+      "LABELED_GITLAB_TOKEN_KEY=\"GITLAB_TOKEN__$RESOLVED_AUTH_LABEL\"",
       "LABELED_GIT_TOKEN_KEY=\"GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL\"",
       "if [[ -n \"$EFFECTIVE_GH_TOKEN\" ]]; then",
       String.raw`printf "export GITHUB_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN"`,
       String.raw`printf "export GH_TOKEN=%q\n" "$EFFECTIVE_GH_TOKEN"`,
-      String.raw`printf "export GIT_AUTH_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN"`,
+      String.raw`printf "export GITLAB_TOKEN=%q\n" "$EFFECTIVE_GITLAB_TOKEN"`,
+      String.raw`printf "export GIT_AUTH_TOKEN=%q\n" "$EFFECTIVE_GIT_AUTH_TOKEN"`,
       "docker_git_upsert_ssh_env \"GITHUB_TOKEN\" \"$EFFECTIVE_GITHUB_TOKEN\"",
       "docker_git_upsert_ssh_env \"GH_TOKEN\" \"$EFFECTIVE_GH_TOKEN\"",
-      "docker_git_upsert_ssh_env \"GIT_AUTH_TOKEN\" \"$EFFECTIVE_GITHUB_TOKEN\"",
+      "docker_git_upsert_ssh_env \"GITLAB_TOKEN\" \"$EFFECTIVE_GITLAB_TOKEN\"",
+      "docker_git_upsert_ssh_env \"GIT_AUTH_TOKEN\" \"$EFFECTIVE_GIT_AUTH_TOKEN\"",
       "GIT_CREDENTIAL_HELPER_PATH=\"/usr/local/bin/docker-git-credential-helper\"",
       "token=\"${GITHUB_TOKEN:-}\"",
+      "token=\"${GITLAB_TOKEN:-}\"",
       "token=\"${GH_TOKEN:-}\"",
+      "username=\"oauth2\"",
       String.raw`printf "%s\n" "password=$token"`,
       "git config --global credential.helper"
     ])
+    expect(entrypoint).not.toContain('if [[ "$GITHUB_AUTH_SKIP" != "1" && -n "$AUTH_LABEL_RAW" ]]; then')
   })
 
   it("renders Claude auth and wrapper bootstrap wiring", () => {
@@ -311,6 +321,6 @@ describe("renderDockerCompose", () => {
 
     expect(compose).toContain('GITHUB_AUTH_SKIP: "1"')
     expect(entrypoint).toContain('GITHUB_AUTH_SKIP="${GITHUB_AUTH_SKIP:-0}"')
-    expect(entrypoint).toContain('if [[ "${GITHUB_AUTH_SKIP:-0}" == "1" ]]; then')
+    expect(entrypoint).toContain('if [[ "${GITHUB_AUTH_SKIP:-0}" == "1" && "$REPO_URL" == https://github.com/* ]]; then')
   })
 })

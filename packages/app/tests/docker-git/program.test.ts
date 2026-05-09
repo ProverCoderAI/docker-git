@@ -10,6 +10,7 @@ const runBrowserFrontendCommandMock = vi.hoisted(() => vi.fn(() => Effect.void))
 const runMenuCallMock = vi.hoisted(() => vi.fn(() => {}))
 const readCommandMock = vi.hoisted(() => vi.fn<() => Command>())
 const codexLoginMock = vi.hoisted(() => vi.fn(() => Effect.void))
+const gitlabLoginMock = vi.hoisted(() => vi.fn(() => Effect.succeed({ ok: true })))
 const readStatePullMock = vi.hoisted(() => vi.fn(() => Effect.succeed("State pull completed.")))
 
 const menuCommand: Extract<Command, { readonly _tag: "Menu" }> = { _tag: "Menu" }
@@ -18,6 +19,12 @@ const codexLoginCommand: Extract<Command, { readonly _tag: "AuthCodexLogin" }> =
   _tag: "AuthCodexLogin",
   label: null,
   codexAuthPath: ".docker-git/.orch/auth/codex"
+}
+const gitlabLoginCommand: Extract<Command, { readonly _tag: "AuthGitlabLogin" }> = {
+  _tag: "AuthGitlabLogin",
+  label: null,
+  token: "glpat-token",
+  envGlobalPath: ".docker-git/.orch/env/global.env"
 }
 const statePullCommand: Extract<Command, { readonly _tag: "StatePull" }> = { _tag: "StatePull" }
 
@@ -42,6 +49,9 @@ vi.mock("../../src/docker-git/api-client.js", () => ({
   codexStatus: vi.fn(() => Effect.succeed({ ok: true })),
   createProject: vi.fn(() => Effect.succeed(null)),
   downAllProjects: vi.fn(() => Effect.void),
+  gitlabLogin: gitlabLoginMock,
+  gitlabLogout: vi.fn(() => Effect.void),
+  gitlabStatus: vi.fn(() => Effect.succeed({ ok: true })),
   githubLogin: vi.fn(() => Effect.succeed({ ok: true })),
   githubLogout: vi.fn(() => Effect.void),
   githubStatus: vi.fn(() => Effect.succeed({ ok: true })),
@@ -83,6 +93,8 @@ describe("program menu dispatch", () => {
     readCommandMock.mockReturnValue(menuCommand)
     codexLoginMock.mockReset()
     codexLoginMock.mockImplementation(() => Effect.void)
+    gitlabLoginMock.mockReset()
+    gitlabLoginMock.mockImplementation(() => Effect.succeed({ ok: true }))
     readStatePullMock.mockReset()
     readStatePullMock.mockImplementation(() => Effect.succeed("State pull completed."))
     process.exitCode = 0
@@ -125,6 +137,16 @@ describe("program menu dispatch", () => {
 
       expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
       expect(codexLoginMock).toHaveBeenCalledTimes(1)
+      expect(process.exitCode ?? 0).toBe(0)
+    }))
+
+  it.effect("routes gitlab login through the controller API", () =>
+    Effect.gen(function*(_) {
+      readCommandMock.mockReturnValue(gitlabLoginCommand)
+      yield* _(runProgram())
+
+      expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
+      expect(gitlabLoginMock).toHaveBeenCalledTimes(1)
       expect(process.exitCode ?? 0).toBe(0)
     }))
 })

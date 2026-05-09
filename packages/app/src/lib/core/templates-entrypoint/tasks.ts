@@ -1,4 +1,3 @@
-/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 import { renderAgentLaunch } from "./agent.js"
 
@@ -45,46 +44,70 @@ else
   fi
   chown -R 1000:1000 /home/${config.sshUser}`
 
+const cloneAuthLabelResolutionTemplate = `    RESOLVED_GIT_AUTH_LABEL=""
+    GIT_TOKEN_LABEL_RAW="\${GIT_AUTH_LABEL:-\${GITHUB_AUTH_LABEL:-\${GITLAB_AUTH_LABEL:-}}}"
+
+    if [[ -z "$GIT_TOKEN_LABEL_RAW" && "$REPO_URL" == https://github.com/* ]]; then
+      GIT_TOKEN_LABEL_RAW="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##' | cut -d/ -f1)"
+    fi
+    if [[ -z "$GIT_TOKEN_LABEL_RAW" && "$REPO_URL" == https://gitlab.com/* ]]; then
+      GIT_TOKEN_LABEL_RAW="$(printf "%s" "$REPO_URL" | sed -E 's#^https://gitlab.com/##; s#[.]git$##; s#/*$##' | cut -d/ -f1)"
+    fi
+
+    if [[ -n "$GIT_TOKEN_LABEL_RAW" ]]; then
+      RESOLVED_GIT_AUTH_LABEL="$(printf "%s" "$GIT_TOKEN_LABEL_RAW" | tr '[:lower:]' '[:upper:]' | sed -E 's/[^A-Z0-9]+/_/g; s/^_+//; s/_+$//')"
+      if [[ "$RESOLVED_GIT_AUTH_LABEL" == "DEFAULT" ]]; then
+        RESOLVED_GIT_AUTH_LABEL=""
+      fi
+    fi`
+
+const cloneAuthLabeledTokenTemplate = `    if [[ -n "$RESOLVED_GIT_AUTH_LABEL" ]]; then
+      LABELED_GIT_TOKEN_KEY="GIT_AUTH_TOKEN__$RESOLVED_GIT_AUTH_LABEL"
+      LABELED_GITHUB_TOKEN_KEY="GITHUB_TOKEN__$RESOLVED_GIT_AUTH_LABEL"
+      LABELED_GITLAB_TOKEN_KEY="GITLAB_TOKEN__$RESOLVED_GIT_AUTH_LABEL"
+      LABELED_GIT_USER_KEY="GIT_AUTH_USER__$RESOLVED_GIT_AUTH_LABEL"
+
+      LABELED_GIT_TOKEN="\${!LABELED_GIT_TOKEN_KEY-}"
+      LABELED_GITHUB_TOKEN="\${!LABELED_GITHUB_TOKEN_KEY-}"
+      LABELED_GITLAB_TOKEN="\${!LABELED_GITLAB_TOKEN_KEY-}"
+      LABELED_GIT_USER="\${!LABELED_GIT_USER_KEY-}"
+
+      if [[ -n "$LABELED_GIT_TOKEN" ]]; then
+        RESOLVED_GIT_AUTH_TOKEN="$LABELED_GIT_TOKEN"
+      elif [[ "$REPO_URL" == https://gitlab.com/* && -n "$LABELED_GITLAB_TOKEN" ]]; then
+        RESOLVED_GIT_AUTH_TOKEN="$LABELED_GITLAB_TOKEN"
+      elif [[ -n "$LABELED_GITHUB_TOKEN" ]]; then
+        RESOLVED_GIT_AUTH_TOKEN="$LABELED_GITHUB_TOKEN"
+      fi
+
+      if [[ -n "$LABELED_GIT_USER" ]]; then
+        RESOLVED_GIT_AUTH_USER="$LABELED_GIT_USER"
+      fi
+    fi
+
+    if [[ -z "$RESOLVED_GIT_AUTH_USER" ]]; then
+      if [[ "$REPO_URL" == https://gitlab.com/* ]]; then
+        RESOLVED_GIT_AUTH_USER="oauth2"
+      else
+        RESOLVED_GIT_AUTH_USER="x-access-token"
+      fi
+    fi
+`
+
 const renderCloneAuthSelection = (): string =>
-  `  if [[ "\${GITHUB_AUTH_SKIP:-0}" == "1" ]]; then
+  `  if [[ "\${GITHUB_AUTH_SKIP:-0}" == "1" && "$REPO_URL" == https://github.com/* ]]; then
     RESOLVED_GIT_AUTH_USER=""
     RESOLVED_GIT_AUTH_TOKEN=""
     RESOLVED_GIT_AUTH_LABEL=""
   else
     RESOLVED_GIT_AUTH_USER="$GIT_AUTH_USER"
-  RESOLVED_GIT_AUTH_TOKEN="$GIT_AUTH_TOKEN"
-  RESOLVED_GIT_AUTH_LABEL=""
-  GIT_TOKEN_LABEL_RAW="\${GIT_AUTH_LABEL:-\${GITHUB_AUTH_LABEL:-}}"
-
-  if [[ -z "$GIT_TOKEN_LABEL_RAW" && "$REPO_URL" == https://github.com/* ]]; then
-    GIT_TOKEN_LABEL_RAW="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##' | cut -d/ -f1)"
-  fi
-
-  if [[ -n "$GIT_TOKEN_LABEL_RAW" ]]; then
-    RESOLVED_GIT_AUTH_LABEL="$(printf "%s" "$GIT_TOKEN_LABEL_RAW" | tr '[:lower:]' '[:upper:]' | sed -E 's/[^A-Z0-9]+/_/g; s/^_+//; s/_+$//')"
-    if [[ "$RESOLVED_GIT_AUTH_LABEL" == "DEFAULT" ]]; then
-      RESOLVED_GIT_AUTH_LABEL=""
+    RESOLVED_GIT_AUTH_TOKEN="$GIT_AUTH_TOKEN"
+    if [[ "$REPO_URL" == https://gitlab.com/* && -n "\${GITLAB_TOKEN:-}" ]]; then
+      RESOLVED_GIT_AUTH_TOKEN="$GITLAB_TOKEN"
     fi
-  fi
+${cloneAuthLabelResolutionTemplate}
 
-  if [[ -n "$RESOLVED_GIT_AUTH_LABEL" ]]; then
-    LABELED_GIT_TOKEN_KEY="GIT_AUTH_TOKEN__$RESOLVED_GIT_AUTH_LABEL"
-    LABELED_GITHUB_TOKEN_KEY="GITHUB_TOKEN__$RESOLVED_GIT_AUTH_LABEL"
-    LABELED_GIT_USER_KEY="GIT_AUTH_USER__$RESOLVED_GIT_AUTH_LABEL"
-
-    LABELED_GIT_TOKEN="\${!LABELED_GIT_TOKEN_KEY-}"
-    LABELED_GITHUB_TOKEN="\${!LABELED_GITHUB_TOKEN_KEY-}"
-    LABELED_GIT_USER="\${!LABELED_GIT_USER_KEY-}"
-
-    if [[ -n "$LABELED_GIT_TOKEN" ]]; then
-      RESOLVED_GIT_AUTH_TOKEN="$LABELED_GIT_TOKEN"
-    elif [[ -n "$LABELED_GITHUB_TOKEN" ]]; then
-      RESOLVED_GIT_AUTH_TOKEN="$LABELED_GITHUB_TOKEN"
-    fi
-
-    if [[ -n "$LABELED_GIT_USER" ]]; then
-      RESOLVED_GIT_AUTH_USER="$LABELED_GIT_USER"
-    fi
+${cloneAuthLabeledTokenTemplate}
   fi
 fi`
 
@@ -133,9 +156,9 @@ const renderCloneBodyStart = (config: TemplateConfig): string =>
   ].join("\n\n")
 
 const renderCloneBodyRef = (config: TemplateConfig): string =>
-  `  if [[ -n "$REPO_REF" ]]; then
-    if [[ "$REPO_REF" == refs/pull/* ]]; then
-      REF_BRANCH="pr-$(printf "%s" "$REPO_REF" | tr '/:' '--')"
+  String.raw`  if [[ -n "$REPO_REF" ]]; then
+    if [[ "$REPO_REF" == refs/pull/* || "$REPO_REF" == refs/merge-requests/* ]]; then
+      REF_BRANCH="$(printf "%s" "$REPO_REF" | sed -E 's#^refs/pull/([^/]+)/head$#pr-\1#; s#^refs/merge-requests/([^/]+)/head$#mr-\1#')"
       if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$AUTH_REPO_URL' '$TARGET_DIR'"; then
         echo "[clone] git clone failed for $REPO_URL"
         CLONE_OK=0
@@ -234,4 +257,3 @@ fi
 
 ${renderAgentLaunch(config)}
 ) &`
-/* jscpd:ignore-end */

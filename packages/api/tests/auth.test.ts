@@ -8,13 +8,16 @@ import * as Scope from "effect/Scope"
 import { vi } from "vitest"
 
 import { githubRepoAccessMessage } from "@effect-template/lib/usecases/github-token-preflight"
+import { gitlabRepoAccessMessage } from "@effect-template/lib/usecases/gitlab-token-preflight"
 
 import { ApiAuthRequiredError } from "../src/api/errors.js"
 import {
   ensureGithubAuthForCreate,
+  ensureGitlabAuthForCreate,
   importCodexAuth,
   logoutCodexAuth,
   readCodexAuthStatus,
+  readGitlabAuthStatus,
   readGithubAuthStatus
 } from "../src/services/auth.js"
 import { createProjectFromRequest } from "../src/services/projects.js"
@@ -177,6 +180,49 @@ describe("api auth", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("reads GitLab auth status from the controller env file", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const envDir = path.join(projectsRoot, ".orch", "env")
+        const envPath = path.join(envDir, "global.env")
+
+        yield* _(fs.makeDirectory(envDir, { recursive: true }))
+        yield* _(fs.writeFileString(envPath, "GITLAB_TOKEN=live-token\n"))
+
+        const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
+          Effect.runPromise(
+            Effect.succeed(
+              new Response(JSON.stringify({ username: "gitlab-user" }), {
+                status: 200,
+                headers: {
+                  "content-type": "application/json"
+                }
+              })
+            )
+          )
+        )
+
+        const status = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              withPatchedFetch(fetchMock, readGitlabAuthStatus())
+            )
+          )
+        )
+
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        expect(status.summary).toBe("GitLab tokens (1):")
+        expect(status.tokens).toHaveLength(1)
+        expect(status.tokens[0]?.status).toBe("valid")
+        expect(status.tokens[0]?.login).toBe("gitlab-user")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("skips API GitHub auth gate when anonymous clone override is enabled", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
@@ -258,6 +304,96 @@ describe("api auth", () => {
         expect(failure._tag).toBe("ApiBadRequestError")
         if (failure._tag === "ApiBadRequestError") {
           expect(failure.message).toBe(githubRepoAccessMessage(repoUrl, true))
+        }
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("returns auth required for GitLab create when no token is stored", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const envDir = path.join(projectsRoot, ".orch", "env")
+        const envPath = path.join(envDir, "global.env")
+
+        yield* _(fs.makeDirectory(envDir, { recursive: true }))
+        yield* _(fs.writeFileString(envPath, "# docker-git env\n"))
+
+        const failure = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              ensureGitlabAuthForCreate({
+                repoUrl: "https://gitlab.com/group/repo.git",
+                gitTokenLabel: undefined,
+                envGlobalPath: ".docker-git/.orch/env/global.env"
+              }).pipe(Effect.flip)
+            )
+          )
+        )
+
+        expect(failure).toBeInstanceOf(ApiAuthRequiredError)
+        if (failure instanceof ApiAuthRequiredError) {
+          expect(failure.provider).toBe("gitlab")
+          expect(failure.command).toBe("docker-git auth gitlab login --web")
+        }
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("returns bad request when the selected GitLab token cannot access the repository", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const envDir = path.join(projectsRoot, ".orch", "env")
+        const envPath = path.join(envDir, "global.env")
+        const repoUrl = "https://gitlab.com/group/private-repo.git"
+        const fetchMock = vi.fn<typeof globalThis.fetch>((input) => {
+          const url = resolveFetchUrl(input)
+
+          if (url === "https://gitlab.com/api/v4/user") {
+            return Effect.runPromise(
+              Effect.succeed(
+                new Response(JSON.stringify({ username: "gitlab-user" }), {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json"
+                  }
+                })
+              )
+            )
+          }
+
+          return Effect.runPromise(Effect.succeed(new Response(null, { status: 404 })))
+        })
+
+        yield* _(fs.makeDirectory(envDir, { recursive: true }))
+        yield* _(fs.writeFileString(envPath, "GITLAB_TOKEN=live-token\n"))
+
+        const failure = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              withPatchedFetch(
+                fetchMock,
+                ensureGitlabAuthForCreate({
+                  repoUrl,
+                  gitTokenLabel: undefined,
+                  envGlobalPath: ".docker-git/.orch/env/global.env"
+                }).pipe(Effect.flip)
+              )
+            )
+          )
+        )
+
+        expect(failure._tag).toBe("ApiBadRequestError")
+        if (failure._tag === "ApiBadRequestError") {
+          expect(failure.message).toBe(gitlabRepoAccessMessage(repoUrl, true))
         }
         expect(fetchMock).toHaveBeenCalledTimes(2)
       })

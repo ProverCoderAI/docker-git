@@ -17,6 +17,24 @@ export interface AuthGithubLogoutCommand {
   readonly envGlobalPath: string
 }
 
+export interface AuthGitlabLoginCommand {
+  readonly _tag: "AuthGitlabLogin"
+  readonly label: string | null
+  readonly token: string | null
+  readonly envGlobalPath: string
+}
+
+export interface AuthGitlabStatusCommand {
+  readonly _tag: "AuthGitlabStatus"
+  readonly envGlobalPath: string
+}
+
+export interface AuthGitlabLogoutCommand {
+  readonly _tag: "AuthGitlabLogout"
+  readonly label: string | null
+  readonly envGlobalPath: string
+}
+
 export interface AuthCodexLoginCommand {
   readonly _tag: "AuthCodexLogin"
   readonly label: string | null
@@ -92,6 +110,9 @@ export type AuthCommand =
   | AuthGithubLoginCommand
   | AuthGithubStatusCommand
   | AuthGithubLogoutCommand
+  | AuthGitlabLoginCommand
+  | AuthGitlabStatusCommand
+  | AuthGitlabLogoutCommand
   | AuthCodexLoginCommand
   | AuthCodexStatusCommand
   | AuthCodexLogoutCommand

@@ -6,6 +6,8 @@ import {
   authStreamVisibleLines,
   githubLoginFailureMessage,
   githubLoginStreamMarkers,
+  gitlabLoginFailureMessage,
+  gitlabLoginStreamMarkers,
   makeVisibleAuthStreamWriter
 } from "../../src/shared/auth-stream-markers.js"
 
@@ -30,6 +32,18 @@ describe("auth stream markers", () => {
 
     expect(authStreamMarkerExitCode(output, githubLoginStreamMarkers)).toBe("2")
     expect(githubLoginFailureMessage(output, "2")).toBe("failed to authenticate")
+  })
+
+  it("detects GitLab stream markers and failure messages", () => {
+    const output = [
+      "GitLab login failed",
+      `${gitlabLoginStreamMarkers.errorPrefix}post-login`
+    ].join("\n")
+
+    expect(authStreamSucceeded(`${gitlabLoginStreamMarkers.success}\n`, gitlabLoginStreamMarkers)).toBe(true)
+    expect(authStreamMarkerExitCode(output, gitlabLoginStreamMarkers)).toBe("post-login")
+    expect(gitlabLoginFailureMessage(output, "post-login")).toBe("GitLab login failed")
+    expect(authStreamVisibleLines(output, gitlabLoginStreamMarkers)).toEqual(["GitLab login failed"])
   })
 
   it("filters marker lines from chunked visible output", () => {

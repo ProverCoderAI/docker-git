@@ -17,7 +17,10 @@ export type {
   AuthGeminiStatusCommand,
   AuthGithubLoginCommand,
   AuthGithubLogoutCommand,
-  AuthGithubStatusCommand
+  AuthGithubStatusCommand,
+  AuthGitlabLoginCommand,
+  AuthGitlabLogoutCommand,
+  AuthGitlabStatusCommand
 } from "./auth-domain.js"
 export type { MenuAction, ParseError } from "./menu.js"
 export { parseMenuSelection } from "./menu.js"

@@ -30,26 +30,26 @@ export const unsupportedOperationalCommands: Record<
   },
   AuthClaudeLogin: {
     command: "auth claude login",
-    message: "Only GitHub auth is routed through the controller in host API mode."
+    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
   },
   AuthClaudeStatus: {
     command: "auth claude status",
-    message: "Only GitHub auth is routed through the controller in host API mode."
+    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
   },
   AuthClaudeLogout: {
     command: "auth claude logout",
-    message: "Only GitHub auth is routed through the controller in host API mode."
+    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
   },
   AuthGeminiLogin: {
     command: "auth gemini login",
-    message: "Only GitHub auth is routed through the controller in host API mode."
+    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
   },
   AuthGeminiStatus: {
     command: "auth gemini status",
-    message: "Only GitHub auth is routed through the controller in host API mode."
+    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
   },
   AuthGeminiLogout: {
     command: "auth gemini logout",
-    message: "Only GitHub auth is routed through the controller in host API mode."
+    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
   }
 }

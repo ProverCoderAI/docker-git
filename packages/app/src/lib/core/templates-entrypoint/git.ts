@@ -1,19 +1,20 @@
-/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
-import { renderEntrypointGitPostPushWrapperInstall } from "./git-post-push-wrapper.js"
 
 const renderAuthLabelResolution = (): string =>
-  String.raw`# 2) Ensure GitHub auth vars are available for SSH sessions.
+  String.raw`# 2) Ensure GitHub/GitLab auth vars are available for SSH sessions.
 # Prefer a label-selected token (same selection model as clone/create) when present.
 GITHUB_AUTH_SKIP="${"${"}GITHUB_AUTH_SKIP:-0}"
 RESOLVED_AUTH_LABEL=""
-AUTH_LABEL_RAW="${"${"}GIT_AUTH_LABEL:-${"${"}GITHUB_AUTH_LABEL:-}}"
+AUTH_LABEL_RAW="${"${"}GIT_AUTH_LABEL:-${"${"}GITHUB_AUTH_LABEL:-${"${"}GITLAB_AUTH_LABEL:-}}}"
 
 if [[ "$GITHUB_AUTH_SKIP" != "1" && -z "$AUTH_LABEL_RAW" && "$REPO_URL" == https://github.com/* ]]; then
   AUTH_LABEL_RAW="$(printf "%s" "$REPO_URL" | sed -E 's#^https://github.com/##; s#[.]git$##; s#/*$##' | cut -d/ -f1)"
 fi
+if [[ -z "$AUTH_LABEL_RAW" && "$REPO_URL" == https://gitlab.com/* ]]; then
+  AUTH_LABEL_RAW="$(printf "%s" "$REPO_URL" | sed -E 's#^https://gitlab.com/##; s#[.]git$##; s#/*$##' | cut -d/ -f1)"
+fi
 
-if [[ "$GITHUB_AUTH_SKIP" != "1" && -n "$AUTH_LABEL_RAW" ]]; then
+if [[ -n "$AUTH_LABEL_RAW" ]]; then
   RESOLVED_AUTH_LABEL="$(printf "%s" "$AUTH_LABEL_RAW" | tr '[:lower:]' '[:upper:]' | sed -E 's/[^A-Z0-9]+/_/g; s/^_+//; s/_+$//')"
   if [[ "$RESOLVED_AUTH_LABEL" == "DEFAULT" ]]; then
     RESOLVED_AUTH_LABEL=""
@@ -22,6 +23,7 @@ fi`
 
 const renderEffectiveTokenResolution = (): string =>
   String.raw`EFFECTIVE_GITHUB_TOKEN=""
+EFFECTIVE_GITLAB_TOKEN=""
 if [[ "$GITHUB_AUTH_SKIP" != "1" ]]; then
   EFFECTIVE_GITHUB_TOKEN="$GITHUB_TOKEN"
   if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
@@ -30,16 +32,31 @@ if [[ "$GITHUB_AUTH_SKIP" != "1" ]]; then
   if [[ -z "$EFFECTIVE_GITHUB_TOKEN" ]]; then
     EFFECTIVE_GITHUB_TOKEN="$GIT_AUTH_TOKEN"
   fi
+fi
 
-  if [[ -n "$RESOLVED_AUTH_LABEL" ]]; then
-    LABELED_GIT_TOKEN_KEY="GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL"
-    LABELED_GITHUB_TOKEN_KEY="GITHUB_TOKEN__$RESOLVED_AUTH_LABEL"
-    LABELED_GH_TOKEN_KEY="GH_TOKEN__$RESOLVED_AUTH_LABEL"
+EFFECTIVE_GITLAB_TOKEN="$GITLAB_TOKEN"
+if [[ -z "$EFFECTIVE_GITLAB_TOKEN" && "$REPO_URL" == https://gitlab.com/* ]]; then
+  EFFECTIVE_GITLAB_TOKEN="$GIT_AUTH_TOKEN"
+fi
 
-    LABELED_GIT_TOKEN="${"${"}!LABELED_GIT_TOKEN_KEY-}"
-    LABELED_GITHUB_TOKEN="${"${"}!LABELED_GITHUB_TOKEN_KEY-}"
-    LABELED_GH_TOKEN="${"${"}!LABELED_GH_TOKEN_KEY-}"
+if [[ -n "$RESOLVED_AUTH_LABEL" ]]; then
+  LABELED_GIT_TOKEN_KEY="GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL"
+  LABELED_GITHUB_TOKEN_KEY="GITHUB_TOKEN__$RESOLVED_AUTH_LABEL"
+  LABELED_GH_TOKEN_KEY="GH_TOKEN__$RESOLVED_AUTH_LABEL"
+  LABELED_GITLAB_TOKEN_KEY="GITLAB_TOKEN__$RESOLVED_AUTH_LABEL"
 
+  LABELED_GIT_TOKEN="${"${"}!LABELED_GIT_TOKEN_KEY-}"
+  LABELED_GITHUB_TOKEN="${"${"}!LABELED_GITHUB_TOKEN_KEY-}"
+  LABELED_GH_TOKEN="${"${"}!LABELED_GH_TOKEN_KEY-}"
+  LABELED_GITLAB_TOKEN="${"${"}!LABELED_GITLAB_TOKEN_KEY-}"
+
+  if [[ "$REPO_URL" == https://gitlab.com/* ]]; then
+    if [[ -n "$LABELED_GIT_TOKEN" ]]; then
+      EFFECTIVE_GITLAB_TOKEN="$LABELED_GIT_TOKEN"
+    elif [[ -n "$LABELED_GITLAB_TOKEN" ]]; then
+      EFFECTIVE_GITLAB_TOKEN="$LABELED_GITLAB_TOKEN"
+    fi
+  elif [[ "$GITHUB_AUTH_SKIP" != "1" ]]; then
     if [[ -n "$LABELED_GIT_TOKEN" ]]; then
       EFFECTIVE_GITHUB_TOKEN="$LABELED_GIT_TOKEN"
     elif [[ -n "$LABELED_GITHUB_TOKEN" ]]; then
@@ -52,15 +69,17 @@ fi`
 
 const renderAuthBridgeFinalize = (config: TemplateConfig): string =>
   String.raw`EFFECTIVE_GH_TOKEN="$EFFECTIVE_GITHUB_TOKEN"
+EFFECTIVE_GIT_AUTH_TOKEN="$EFFECTIVE_GITHUB_TOKEN"
+if [[ "$REPO_URL" == https://gitlab.com/* ]]; then
+  EFFECTIVE_GIT_AUTH_TOKEN="$EFFECTIVE_GITLAB_TOKEN"
+fi
 
 if [[ -n "$EFFECTIVE_GH_TOKEN" ]]; then
   printf "export GH_TOKEN=%q\n" "$EFFECTIVE_GH_TOKEN" > /etc/profile.d/gh-token.sh
   printf "export GITHUB_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN" >> /etc/profile.d/gh-token.sh
-  printf "export GIT_AUTH_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN" >> /etc/profile.d/gh-token.sh
   chmod 0644 /etc/profile.d/gh-token.sh
   docker_git_upsert_ssh_env "GH_TOKEN" "$EFFECTIVE_GH_TOKEN"
   docker_git_upsert_ssh_env "GITHUB_TOKEN" "$EFFECTIVE_GITHUB_TOKEN"
-  docker_git_upsert_ssh_env "GIT_AUTH_TOKEN" "$EFFECTIVE_GITHUB_TOKEN"
 
   SAFE_GH_TOKEN="$(printf "%q" "$EFFECTIVE_GH_TOKEN")"
   # Keep git+https auth in sync with gh auth so push/pull works without manual setup.
@@ -77,6 +96,18 @@ if [[ -n "$EFFECTIVE_GH_TOKEN" ]]; then
   if [[ -z "$GIT_USER_EMAIL" && -n "$GH_LOGIN" && -n "$GH_ID" ]]; then
     GIT_USER_EMAIL="${"${"}GH_ID}+${"${"}GH_LOGIN}@users.noreply.github.com"
   fi
+fi
+
+if [[ -n "$EFFECTIVE_GITLAB_TOKEN" ]]; then
+  printf "export GITLAB_TOKEN=%q\n" "$EFFECTIVE_GITLAB_TOKEN" > /etc/profile.d/gitlab-token.sh
+  chmod 0644 /etc/profile.d/gitlab-token.sh
+  docker_git_upsert_ssh_env "GITLAB_TOKEN" "$EFFECTIVE_GITLAB_TOKEN"
+fi
+
+if [[ -n "$EFFECTIVE_GIT_AUTH_TOKEN" ]]; then
+  printf "export GIT_AUTH_TOKEN=%q\n" "$EFFECTIVE_GIT_AUTH_TOKEN" > /etc/profile.d/git-auth-token.sh
+  chmod 0644 /etc/profile.d/git-auth-token.sh
+  docker_git_upsert_ssh_env "GIT_AUTH_TOKEN" "$EFFECTIVE_GIT_AUTH_TOKEN"
 fi`
 
 const renderEntrypointAuthEnvBridge = (config: TemplateConfig): string =>
@@ -97,16 +128,45 @@ if [[ "$#" -lt 1 || "$1" != "get" ]]; then
   exit 0
 fi
 
-token="${"${"}GITHUB_TOKEN:-}"
+protocol=""
+host=""
+while IFS= read -r line; do
+  case "$line" in
+    protocol=*) protocol="${"${"}line#protocol=}" ;;
+    host=*) host="${"${"}line#host=}" ;;
+    "") break ;;
+  esac
+done
+
+token=""
+username="${"${"}GIT_AUTH_USER:-}"
+if [[ "$protocol" == "https" && "$host" == "gitlab.com" ]]; then
+  token="${"${"}GITLAB_TOKEN:-}"
+  if [[ -z "$username" ]]; then
+    username="oauth2"
+  fi
+elif [[ "$protocol" == "https" && "$host" == "github.com" ]]; then
+  token="${"${"}GITHUB_TOKEN:-}"
+  if [[ -z "$token" ]]; then
+    token="${"${"}GH_TOKEN:-}"
+  fi
+  if [[ -z "$username" ]]; then
+    username="x-access-token"
+  fi
+fi
+
 if [[ -z "$token" ]]; then
-  token="${"${"}GH_TOKEN:-}"
+  token="${"${"}GIT_AUTH_TOKEN:-}"
+fi
+if [[ -z "$username" ]]; then
+  username="x-access-token"
 fi
 
 if [[ -z "$token" ]]; then
   exit 0
 fi
 
-printf "%s\n" "username=x-access-token"
+printf "%s\n" "username=$username"
 printf "%s\n" "password=$token"
 EOF
 chmod 0755 "$GIT_CREDENTIAL_HELPER_PATH"
@@ -131,171 +191,4 @@ export const renderEntrypointGitConfig = (config: TemplateConfig): string =>
     renderEntrypointGitIdentity(config)
   ].join("\n\n")
 
-const entrypointGitHooksTemplate = String
-  .raw`# 3) Install global git hooks to protect main/master + managed AGENTS context
-HOOKS_DIR="/opt/docker-git/hooks"
-PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"
-POST_PUSH_ACTION="$HOOKS_DIR/post-push"
-mkdir -p "$HOOKS_DIR"
-
-cat <<'EOF' > "$PRE_PUSH_HOOK"
-#!/usr/bin/env bash
-set -euo pipefail
-
-protected_branches=("refs/heads/main" "refs/heads/master")
-allow_delete="${"${"}DOCKER_GIT_ALLOW_DELETE:-}"
-zero_sha="0000000000000000000000000000000000000000"
-issue_managed_start='<!-- docker-git:issue-managed:start -->'
-issue_managed_end='<!-- docker-git:issue-managed:end -->'
-
-extract_issue_block() {
-  local ref="$1"
-
-  if ! git cat-file -e "$ref" 2>/dev/null; then
-    return 0
-  fi
-
-  local awk_status=0
-  if ! git cat-file -p "$ref" | awk -v start="$issue_managed_start" -v end="$issue_managed_end" '
-    BEGIN { in_block = 0; found = 0 }
-    $0 == start { in_block = 1; found = 1 }
-    in_block == 1 { print }
-    $0 == end && in_block == 1 { in_block = 0; exit }
-    END {
-      if (found == 0) exit 3
-      if (in_block == 1) exit 2
-    }
-  '; then
-    awk_status=$?
-    if [[ "$awk_status" -eq 3 ]]; then
-      return 0
-    fi
-    return "$awk_status"
-  fi
-}
-
-commit_changes_issue_block() {
-  local commit="$1"
-  local parent=""
-  local commit_block=""
-  local parent_block=""
-
-  if ! git diff-tree --no-commit-id --name-only -r "$commit" -- AGENTS.md | grep -qx "AGENTS.md"; then
-    return 1
-  fi
-
-  if ! commit_block="$(extract_issue_block "$commit:AGENTS.md")"; then
-    return 2
-  fi
-
-  parent="$(git rev-list --parents -n 1 "$commit" | awk '{print $2}')"
-  if [[ -n "$parent" ]]; then
-    if ! parent_block="$(extract_issue_block "$parent:AGENTS.md")"; then
-      return 2
-    fi
-  fi
-
-  if [[ "$commit_block" != "$parent_block" ]]; then
-    return 0
-  fi
-  return 1
-}
-
-check_issue_managed_block_range() {
-  local local_sha="$1"
-  local remote_sha="$2"
-  local commits=""
-  local commit=""
-  local guard_status=0
-
-  if [[ "$local_sha" == "$zero_sha" ]]; then
-    return 0
-  fi
-
-  if [[ "$remote_sha" == "$zero_sha" ]]; then
-    commits="$(git rev-list "$local_sha" --not --remotes 2>/dev/null || true)"
-    if [[ -z "$commits" ]]; then
-      commits="$local_sha"
-    fi
-  else
-    commits="$(git rev-list "$remote_sha..$local_sha" 2>/dev/null || true)"
-  fi
-
-  for commit in $commits; do
-    commit_changes_issue_block "$commit"
-    guard_status=$?
-    if [[ "$guard_status" -eq 0 ]]; then
-      echo "docker-git: push contains commit updating managed issue block in AGENTS.md: $commit"
-      echo "docker-git: this block is runtime context and must stay outside repository history."
-      return 1
-    fi
-    if [[ "$guard_status" -eq 2 ]]; then
-      echo "docker-git: failed to parse managed issue block in AGENTS.md for commit $commit"
-      echo "docker-git: push blocked to prevent committing runtime workspace metadata."
-      return 1
-    fi
-  done
-
-  return 0
-}
-
-while read -r local_ref local_sha remote_ref remote_sha; do
-  if [[ -z "$remote_ref" ]]; then
-    continue
-  fi
-  for protected in "${"${"}protected_branches[@]}"; do
-    if [[ "$remote_ref" == "$protected" || "$local_ref" == "$protected" ]]; then
-      echo "docker-git: push to protected branch '${"${"}protected##*/}' is disabled."
-      echo "docker-git: create a new branch: git checkout -b <name>"
-      exit 1
-    fi
-  done
-  if ! check_issue_managed_block_range "$local_sha" "$remote_sha"; then
-    exit 1
-  fi
-  if [[ "$local_sha" == "$zero_sha" && "$remote_ref" == refs/heads/* ]]; then
-    if [[ "$allow_delete" != "1" ]]; then
-      echo "docker-git: deleting remote branches is disabled (set DOCKER_GIT_ALLOW_DELETE=1 to override)."
-      exit 1
-    fi
-  fi
-done
-EOF
-chmod 0755 "$PRE_PUSH_HOOK"
-
-cat <<'EOF' > "$POST_PUSH_ACTION"
-#!/usr/bin/env bash
-set -euo pipefail
-
-# 5) Run session backup after successful push
-REPO_ROOT="${"${"}DOCKER_GIT_POST_PUSH_REPO_ROOT:-}"
-if [[ -z "$REPO_ROOT" || ! -d "$REPO_ROOT" ]]; then
-  REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-fi
-cd "$REPO_ROOT"
-
-# CHANGE: keep post-push backup logic in a reusable action script
-# WHY: git has no client-side post-push hook, so the global git wrapper
-#      invokes this after a successful git push
-# REF: issue-192
-if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
-  if ! command -v gh >/dev/null 2>&1; then
-    echo "[session-backup] Error: gh CLI not found"
-    exit 1
-  fi
-  if ! command -v docker-git-session-sync >/dev/null 2>&1; then
-    echo "[session-backup] Error: docker-git-session-sync not found"
-    exit 1
-  fi
-  DOCKER_GIT_SKIP_POST_PUSH_ACTION=1 docker-git-session-sync backup --verbose --background --require-comment
-fi
-EOF
-chmod 0755 "$POST_PUSH_ACTION"
-
-${renderEntrypointGitPostPushWrapperInstall()}
-
-git config --system core.hooksPath "$HOOKS_DIR" || true
-git config --global core.hooksPath "$HOOKS_DIR" || true`
-
-export const renderEntrypointGitHooks = (): string => entrypointGitHooksTemplate
-/* jscpd:ignore-end */
+export { renderEntrypointGitHooks } from "./git-hooks.js"
