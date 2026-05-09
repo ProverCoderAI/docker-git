@@ -152,10 +152,27 @@ export type GithubAuthStatus = {
   readonly tokens: ReadonlyArray<GithubAuthTokenStatus>
 }
 
+export type GitlabAuthTokenStatus = {
+  readonly key: string
+  readonly label: string
+  readonly status: "valid" | "invalid" | "unknown"
+  readonly login: string | null
+}
+
+export type GitlabAuthStatus = {
+  readonly summary: string
+  readonly tokens: ReadonlyArray<GitlabAuthTokenStatus>
+}
+
 export type GithubAuthLoginRequest = {
   readonly label?: string | null | undefined
   readonly token?: string | null | undefined
   readonly scopes?: string | null | undefined
+}
+
+export type GitlabAuthLoginRequest = {
+  readonly label?: string | null | undefined
+  readonly token?: string | null | undefined
 }
 
 export type AuthMenuFlow =
@@ -194,6 +211,10 @@ export type AuthTerminalSessionRequest = {
 }
 
 export type GithubAuthLogoutRequest = {
+  readonly label?: string | null | undefined
+}
+
+export type GitlabAuthLogoutRequest = {
   readonly label?: string | null | undefined
 }
 

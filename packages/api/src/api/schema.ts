@@ -46,6 +46,11 @@ export const GithubAuthLoginRequestSchema = Schema.Struct({
   scopes: OptionalNullableString
 })
 
+export const GitlabAuthLoginRequestSchema = Schema.Struct({
+  label: OptionalNullableString,
+  token: OptionalNullableString
+})
+
 export const AuthMenuFlowSchema = Schema.Literal(
   "GithubRemove",
   "GitSet",
@@ -71,6 +76,10 @@ export const AuthTerminalSessionRequestSchema = Schema.Struct({
 })
 
 export const GithubAuthLogoutRequestSchema = Schema.Struct({
+  label: OptionalNullableString
+})
+
+export const GitlabAuthLogoutRequestSchema = Schema.Struct({
   label: OptionalNullableString
 })
 
@@ -282,9 +291,11 @@ export const TerminalSessionSchema = Schema.Struct({
 
 export type CreateProjectRequestInput = Schema.Schema.Type<typeof CreateProjectRequestSchema>
 export type GithubAuthLoginRequestInput = Schema.Schema.Type<typeof GithubAuthLoginRequestSchema>
+export type GitlabAuthLoginRequestInput = Schema.Schema.Type<typeof GitlabAuthLoginRequestSchema>
 export type AuthMenuRequestInput = Schema.Schema.Type<typeof AuthMenuRequestSchema>
 export type AuthTerminalSessionRequestInput = Schema.Schema.Type<typeof AuthTerminalSessionRequestSchema>
 export type GithubAuthLogoutRequestInput = Schema.Schema.Type<typeof GithubAuthLogoutRequestSchema>
+export type GitlabAuthLogoutRequestInput = Schema.Schema.Type<typeof GitlabAuthLogoutRequestSchema>
 export type CodexAuthImportRequestInput = Schema.Schema.Type<typeof CodexAuthImportRequestSchema>
 export type CodexAuthLoginRequestInput = Schema.Schema.Type<typeof CodexAuthLoginRequestSchema>
 export type CodexAuthLogoutRequestInput = Schema.Schema.Type<typeof CodexAuthLogoutRequestSchema>

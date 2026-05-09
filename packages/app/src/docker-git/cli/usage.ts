@@ -34,7 +34,7 @@ Commands:
   ps, status          Show docker compose status for all docker-git projects
   apply-all           Apply docker-git config and refresh all containers (docker compose up); use --active to restrict to running containers only
   down-all            Stop all docker-git containers (docker compose down)
-  auth                Manage GitHub/Codex/Claude Code auth for docker-git
+  auth                Manage GitHub/GitLab/Codex/Claude Code auth for docker-git
   state               Manage docker-git state directory via git (sync across machines)
 
 Options:
@@ -60,7 +60,7 @@ Options:
   --project-dir <path>      Project directory for open/attach (default: .)
   --archive <path>          Scrap snapshot directory (default: .orch/scrap/session)
   --mode <session>          Scrap mode (default: session)
-  --git-token <label>       Token label for clone/create (maps to GITHUB_TOKEN__<LABEL>, example: agiens)
+  --git-token <label>       Token label for clone/create (maps to GITHUB_TOKEN__<LABEL>, GITLAB_TOKEN__<LABEL>, or GIT_AUTH_TOKEN__<LABEL>, example: agiens)
   --gh-skip                 Skip GitHub auth for public clone/create and force anonymous HTTPS clone
   --codex-token <label>     Codex auth label for clone/create (maps to CODEX_AUTH_LABEL, example: agien)
   --claude-token <label>    Claude auth label for clone/create (maps to CLAUDE_AUTH_LABEL, example: agien)
@@ -92,6 +92,7 @@ Container runtime env (set via .orch/env/project.env):
 
 Auth providers:
   github, gh         GitHub CLI auth (tokens saved to env file)
+  gitlab             GitLab CLI auth (tokens saved to env file)
   codex             Codex CLI auth (stored under .orch/auth/codex)
   claude, cc        Claude Code CLI auth (OAuth cache stored under .orch/auth/claude)
 
@@ -103,10 +104,10 @@ Auth actions:
 
 Auth options:
   --label <label>        Account label (default: default)
-  --token <token>        GitHub token override (login only; useful for non-interactive/CI)
-  --web                 Force OAuth web flow (login only; ignores --token)
+  --token <token>        GitHub/GitLab token override (login only; useful for non-interactive/CI)
+  --web                 Force OAuth web flow where supported (login only; ignores --token)
   --scopes <scopes>      GitHub scopes (login only, default: repo,workflow,read:org)
-  --env-global <path>    Env file path for GitHub tokens (default: <projectsRoot>/.orch/env/global.env)
+  --env-global <path>    Env file path for GitHub/GitLab tokens (default: <projectsRoot>/.orch/env/global.env)
   --codex-auth <path>    Codex auth root path (default: <projectsRoot>/.orch/auth/codex)
 
 State actions:

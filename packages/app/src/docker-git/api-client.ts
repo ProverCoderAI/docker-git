@@ -29,7 +29,10 @@ export {
   codexStatus,
   githubLogin,
   githubLogout,
-  githubStatus
+  githubStatus,
+  gitlabLogin,
+  gitlabLogout,
+  gitlabStatus
 } from "./api-client-auth.js"
 export {
   type ApiContainerTask,

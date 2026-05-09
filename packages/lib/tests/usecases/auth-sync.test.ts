@@ -42,6 +42,7 @@ describe("syncGithubAuthKeys", () => {
       "# KEY=value",
       "GITHUB_TOKEN=token_new",
       "GITHUB_TOKEN__WORK=token_work",
+      "GITLAB_TOKEN__WORK=gitlab_token_work",
       "SOME_SOURCE_ONLY=value",
       ""
     ].join("\n")
@@ -50,6 +51,7 @@ describe("syncGithubAuthKeys", () => {
       "# KEY=value",
       "GITHUB_TOKEN=token_old",
       "GH_TOKEN=legacy_old",
+      "GITLAB_TOKEN=gitlab_old",
       "CUSTOM_FLAG=1",
       ""
     ].join("\n")
@@ -58,7 +60,9 @@ describe("syncGithubAuthKeys", () => {
 
     expect(next).toContain("GITHUB_TOKEN=token_new")
     expect(next).toContain("GITHUB_TOKEN__WORK=token_work")
+    expect(next).toContain("GITLAB_TOKEN__WORK=gitlab_token_work")
     expect(next).not.toContain("GH_TOKEN=legacy_old")
+    expect(next).not.toContain("GITLAB_TOKEN=gitlab_old")
     expect(next).toContain("CUSTOM_FLAG=1")
   })
 

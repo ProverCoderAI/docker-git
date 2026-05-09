@@ -1,4 +1,3 @@
-/* jscpd:ignore-start */
 import type { TemplateConfig } from "../domain.js"
 import { renderInputRc } from "../templates-prompt.js"
 
@@ -18,10 +17,15 @@ fi
 CLAUDE_AUTH_LABEL="\${CLAUDE_AUTH_LABEL:-}"
 CODEX_AUTH_LABEL="\${CODEX_AUTH_LABEL:-}"
 GEMINI_AUTH_LABEL="\${GEMINI_AUTH_LABEL:-}"
-GIT_AUTH_USER="\${GIT_AUTH_USER:-\${GITHUB_USER:-x-access-token}}"
+GIT_AUTH_USER="\${GIT_AUTH_USER:-\${GITHUB_USER:-}}"
+GITLAB_TOKEN="\${GITLAB_TOKEN:-}"
 GIT_AUTH_TOKEN="\${GIT_AUTH_TOKEN:-\${GITHUB_TOKEN:-\${GH_TOKEN:-}}}"
-GH_TOKEN="\${GH_TOKEN:-\${GIT_AUTH_TOKEN:-}}"
+GH_TOKEN="\${GH_TOKEN:-\${GITHUB_TOKEN:-}}"
 GITHUB_TOKEN="\${GITHUB_TOKEN:-\${GH_TOKEN:-}}"
+if [[ -z "$GITHUB_TOKEN" && -z "$GITLAB_TOKEN" ]]; then
+  GH_TOKEN="\${GH_TOKEN:-\${GIT_AUTH_TOKEN:-}}"
+  GITHUB_TOKEN="\${GITHUB_TOKEN:-\${GH_TOKEN:-}}"
+fi
 GIT_USER_NAME="\${GIT_USER_NAME:-}"
 GIT_USER_EMAIL="\${GIT_USER_EMAIL:-}"
 CODEX_AUTO_UPDATE="\${CODEX_AUTO_UPDATE:-1}"
@@ -176,4 +180,3 @@ chmod 0644 "$DOCKER_GIT_SSHD_CONF" || true`
 
 export const renderEntrypointSshd = (): string =>
   `# 5) Run sshd in foreground (log to stderr for CI/debuggability)\nexec /usr/sbin/sshd -D -e`
-/* jscpd:ignore-end */
