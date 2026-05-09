@@ -12,6 +12,8 @@ import { ContentPanel } from "./panel-content.js"
 import { DatabasePanel } from "./panel-databases.js"
 import { PortForwardPanel } from "./panel-port-forwards.js"
 import { ProjectDetailsPanel } from "./panel-project-details.js"
+import { ProjectPromptsPanel } from "./panel-project-prompts.js"
+import { ProjectSkillsPanel } from "./panel-project-skills.js"
 import { TaskPanel } from "./panel-tasks.js"
 import { OutputPanel, ProjectListPanel } from "./panels.js"
 import { visibleTerminalWorkspaceState } from "./terminal-state.js"
@@ -30,8 +32,10 @@ const actionLabels: Record<MainPanelsProps["currentMenu"], string> = {
   Logs: "Load logs",
   Ports: "Open port",
   ProjectAuth: "Open project auth",
+  Prompts: "Refresh prompts",
   Quit: "Run",
   Select: "Open SSH",
+  Skills: "Refresh skills",
   Status: "Load status",
   Tasks: "Refresh tasks"
 }
@@ -176,6 +180,26 @@ const DatabaseDetails = (props: MainPanelsProps): JSX.Element => (
   />
 )
 
+const ProjectPromptsDetails = (props: MainPanelsProps): JSX.Element => (
+  <ProjectPromptsPanel
+    onDeletePrompt={props.onDeleteProjectPrompt}
+    onRefreshPrompts={props.onRefreshProjectPrompts}
+    onSavePrompt={props.onSaveProjectPrompt}
+    selectedProjectSummary={props.selectedProjectSummary}
+    snapshot={props.projectPrompts}
+  />
+)
+
+const ProjectSkillsDetails = (props: MainPanelsProps): JSX.Element => (
+  <ProjectSkillsPanel
+    onDeleteSkill={props.onDeleteProjectSkill}
+    onRefreshSkills={props.onRefreshProjectSkills}
+    onSaveSkill={props.onSaveProjectSkill}
+    selectedProjectSummary={props.selectedProjectSummary}
+    snapshot={props.projectSkills}
+  />
+)
+
 const TaskDetails = (props: MainPanelsProps): JSX.Element => (
   <TaskPanel
     includeDefault={props.projectTasksIncludeDefault}
@@ -239,6 +263,12 @@ const ProjectPickerDetails = (props: MainPanelsProps): JSX.Element => {
   }
   if (props.currentMenu === "Tasks") {
     return <TaskDetails {...props} />
+  }
+  if (props.currentMenu === "Prompts") {
+    return <ProjectPromptsDetails {...props} />
+  }
+  if (props.currentMenu === "Skills") {
+    return <ProjectSkillsDetails {...props} />
   }
   if (props.currentMenu === "ProjectAuth" || props.currentMenu === "Logs" || props.currentMenu === "Status") {
     return <ProjectInfoDetails {...props} />

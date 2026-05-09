@@ -4,6 +4,21 @@ import { TerminalSessionSchema } from "../shared/terminal-session-schema.js"
 
 export { ApiEventSchema, ProjectEventsPollResponseSchema } from "./api-events-schema.js"
 export {
+  ProjectPromptFileSchema,
+  ProjectPromptKindSchema,
+  ProjectPromptsResponseSchema,
+  ProjectPromptsSnapshotSchema,
+  ProjectPromptUpdateResponseSchema
+} from "./api-prompts-schema.js"
+export {
+  ProjectSkillFileSchema,
+  ProjectSkillScopeInfoSchema,
+  ProjectSkillScopeSchema,
+  ProjectSkillsResponseSchema,
+  ProjectSkillsSnapshotSchema,
+  ProjectSkillUpdateResponseSchema
+} from "./api-skills-schema.js"
+export {
   ContainerTaskKindSchema,
   ContainerTaskSchema,
   ContainerTaskSnapshotResponseSchema,
@@ -303,6 +318,13 @@ export type {
   ProjectDatabaseSession,
   ProjectDetails,
   ProjectPortForward,
+  ProjectPromptFile,
+  ProjectPromptKind,
+  ProjectPromptsSnapshot,
+  ProjectSkillFile,
+  ProjectSkillScope,
+  ProjectSkillScopeInfo,
+  ProjectSkillsSnapshot,
   ProjectSummary,
   ProjectTerminalSessionLookup,
   TerminalServerMessage,

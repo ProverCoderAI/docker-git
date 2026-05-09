@@ -103,6 +103,27 @@ export const ProjectAuthRequestSchema = Schema.Struct({
   label: OptionalNullableString
 })
 
+export const ProjectPromptKindSchema = Schema.Literal("claude", "codex", "gemini")
+
+export const ProjectPromptUpdateRequestSchema = Schema.Struct({
+  content: Schema.String
+})
+
+export const ProjectSkillScopeSchema = Schema.Literal(
+  "skills",
+  "agents/skills",
+  "agents/.skills",
+  "claude/skills",
+  "codex/skills",
+  "gemini/skills"
+)
+
+export const ProjectSkillUpdateRequestSchema = Schema.Struct({
+  scope: ProjectSkillScopeSchema,
+  name: Schema.String,
+  content: Schema.String
+})
+
 export const StateInitRequestSchema = Schema.Struct({
   repoUrl: Schema.String,
   repoRef: OptionalString
@@ -285,6 +306,10 @@ export type CodexAuthImportRequestInput = Schema.Schema.Type<typeof CodexAuthImp
 export type CodexAuthLoginRequestInput = Schema.Schema.Type<typeof CodexAuthLoginRequestSchema>
 export type CodexAuthLogoutRequestInput = Schema.Schema.Type<typeof CodexAuthLogoutRequestSchema>
 export type ProjectAuthRequestInput = Schema.Schema.Type<typeof ProjectAuthRequestSchema>
+export type ProjectPromptKindInput = Schema.Schema.Type<typeof ProjectPromptKindSchema>
+export type ProjectPromptUpdateRequestInput = Schema.Schema.Type<typeof ProjectPromptUpdateRequestSchema>
+export type ProjectSkillScopeInput = Schema.Schema.Type<typeof ProjectSkillScopeSchema>
+export type ProjectSkillUpdateRequestInput = Schema.Schema.Type<typeof ProjectSkillUpdateRequestSchema>
 export type StateInitRequestInput = Schema.Schema.Type<typeof StateInitRequestSchema>
 export type StateCommitRequestInput = Schema.Schema.Type<typeof StateCommitRequestSchema>
 export type StateSyncRequestInput = Schema.Schema.Type<typeof StateSyncRequestSchema>

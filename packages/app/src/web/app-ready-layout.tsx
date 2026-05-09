@@ -13,7 +13,11 @@ import type {
   ProjectDatabaseProfile,
   ProjectDatabaseSession,
   ProjectDetails,
-  ProjectPortForward
+  ProjectPortForward,
+  ProjectPromptKind,
+  ProjectPromptsSnapshot,
+  ProjectSkillScope,
+  ProjectSkillsSnapshot
 } from "./api.js"
 import { MainPanels } from "./app-ready-main-panels.js"
 import { Box, Text } from "./elements.js"
@@ -63,6 +67,8 @@ export type ReadyLayoutProps = {
   readonly onDatabaseConnectionInputChange: (value: string) => void
   readonly onDatabaseLabelInputChange: (value: string) => void
   readonly onDeleteDatabaseProfile: (profile: ProjectDatabaseProfile) => void
+  readonly onDeleteProjectPrompt: (kind: ProjectPromptKind) => void
+  readonly onDeleteProjectSkill: (scope: ProjectSkillScope, name: string) => void
   readonly onCloseDatabaseForward: (profile: ProjectDatabaseProfile) => void
   readonly onExposeDatabaseProfile: (profile: ProjectDatabaseProfile) => void
   readonly onRunAuthAction: (index: number) => void
@@ -80,10 +86,14 @@ export type ReadyLayoutProps = {
   readonly onRefreshProjectPortForwards: () => void
   readonly onRefreshProjectBrowser: () => void
   readonly onRefreshProjectDatabases: () => void
+  readonly onRefreshProjectPrompts: () => void
+  readonly onRefreshProjectSkills: () => void
   readonly onRefreshProjectTasks: () => void
   readonly onProjectTasksIncludeDefaultChange: (includeDefault: boolean) => void
   readonly onRestartProjectDatabaseEditor: () => void
   readonly onSaveDatabaseProfile: () => void
+  readonly onSaveProjectPrompt: (kind: ProjectPromptKind, content: string) => void
+  readonly onSaveProjectSkill: (scope: ProjectSkillScope, name: string, content: string) => void
   readonly onSetActiveScreen: (screen: BrowserScreen) => void
   readonly onSelectMenu: (index: number) => void
   readonly onSelectProject: (projectId: string) => void
@@ -100,6 +110,8 @@ export type ReadyLayoutProps = {
   readonly projectNavigationArmed: boolean
   readonly projectAuthSnapshot: ProjectAuthSnapshot | null
   readonly projectBrowser: ProjectBrowserSession | null
+  readonly projectPrompts: ProjectPromptsSnapshot | null
+  readonly projectSkills: ProjectSkillsSnapshot | null
   readonly projectTaskLogs: string
   readonly projectTasks: ContainerTaskSnapshot | null
   readonly projectTasksIncludeDefault: boolean

@@ -30,7 +30,11 @@ import {
 } from "./app-ready-hooks.js"
 import { useProjectPortForwardsReset } from "./app-ready-port-forwards-hook.js"
 import { bindProjectSearchActions } from "./app-ready-project-search-actions.js"
+import { bindPromptActions } from "./app-ready-prompt-actions.js"
+import { useProjectPromptsReset } from "./app-ready-prompts-hook.js"
 import { bindScreenActions } from "./app-ready-screen-actions.js"
+import { bindSkillActions } from "./app-ready-skill-actions.js"
+import { useProjectSkillsReset } from "./app-ready-skills-hook.js"
 import { useSshLink } from "./app-ready-ssh-link-hook.js"
 import { bindTaskActions } from "./app-ready-task-actions.js"
 import { useProjectTasksReset } from "./app-ready-tasks-hook.js"
@@ -93,6 +97,8 @@ const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
     args.state.setPortForwardInput,
     args.state.setPortForwards
   )
+  useProjectPromptsReset(args.state.selectedProjectId, args.state.setProjectPrompts)
+  useProjectSkillsReset(args.state.selectedProjectId, args.state.setProjectSkills)
   useProjectTasksReset(
     args.state.selectedProjectId,
     args.state.setProjectTaskLogs,
@@ -262,6 +268,8 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     ...bindCreateActions(actionContext, dashboard, state),
     ...bindActionPromptActions(actionContext, state),
     ...bindPortForwardActions(actionContext, state),
+    ...bindPromptActions(actionContext),
+    ...bindSkillActions(actionContext),
     ...bindBrowserActions(actionContext),
     ...bindTerminalActions(actionContext, state),
     ...bindTaskActions(actionContext),

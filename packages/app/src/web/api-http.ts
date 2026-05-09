@@ -9,7 +9,7 @@ import { readHttpResponseTextStream } from "../shared/http-response-stream.js"
 
 const defaultApiBaseUrl = "/api"
 
-type ApiHttpMethod = "GET" | "POST" | "DELETE"
+type ApiHttpMethod = "GET" | "POST" | "PUT" | "DELETE"
 
 type TextStreamRequest = {
   readonly body: JsonRequest | undefined
@@ -55,6 +55,9 @@ const executeRequest = (
   }
   if (method === "DELETE") {
     return client.del(url, { body: toRequestBody(body), headers: jsonHeaders })
+  }
+  if (method === "PUT") {
+    return client.put(url, { body: toRequestBody(body), headers: jsonHeaders })
   }
   return client.post(url, { body: toRequestBody(body), headers: jsonHeaders })
 }

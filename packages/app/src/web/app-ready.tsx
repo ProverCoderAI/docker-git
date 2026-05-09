@@ -34,6 +34,8 @@ type ReadyLayoutRenderArgs = {
     readonly onDatabaseLabelInputChange: (value: string) => void
     readonly onCloseDatabaseForward: ReturnType<typeof useReadyController>["onCloseDatabaseForward"]
     readonly onDeleteDatabaseProfile: ReturnType<typeof useReadyController>["onDeleteDatabaseProfile"]
+    readonly onDeleteProjectPrompt: ReturnType<typeof useReadyController>["onDeleteProjectPrompt"]
+    readonly onDeleteProjectSkill: ReturnType<typeof useReadyController>["onDeleteProjectSkill"]
     readonly onExposeDatabaseProfile: ReturnType<typeof useReadyController>["onExposeDatabaseProfile"]
     readonly onOpenMenuScreen: (index: number) => void
     readonly onOpenProjectBrowserById: (projectId: string) => void
@@ -49,6 +51,8 @@ type ReadyLayoutRenderArgs = {
     readonly onRefreshProjectPortForwards: () => void
     readonly onRefreshProjectBrowser: () => void
     readonly onRefreshProjectDatabases: () => void
+    readonly onRefreshProjectPrompts: () => void
+    readonly onRefreshProjectSkills: () => void
     readonly onRefreshProjectTasks: () => void
     readonly onProjectTasksIncludeDefaultChange: (includeDefault: boolean) => void
     readonly onRestartProjectDatabaseEditor: () => void
@@ -56,6 +60,8 @@ type ReadyLayoutRenderArgs = {
     readonly onRunCurrentMenuAction: () => void
     readonly onRunProjectAuthAction: (index: number) => void
     readonly onSaveDatabaseProfile: () => void
+    readonly onSaveProjectPrompt: ReturnType<typeof useReadyController>["onSaveProjectPrompt"]
+    readonly onSaveProjectSkill: ReturnType<typeof useReadyController>["onSaveProjectSkill"]
     readonly onLoadProjectTaskLogs: (pid: number) => void
     readonly onStopProjectTask: (pid: number) => void
   }
@@ -84,6 +90,8 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onDatabaseConnectionInputChange: actions.onDatabaseConnectionInputChange,
   onDatabaseLabelInputChange: actions.onDatabaseLabelInputChange,
   onDeleteDatabaseProfile: actions.onDeleteDatabaseProfile,
+  onDeleteProjectPrompt: actions.onDeleteProjectPrompt,
+  onDeleteProjectSkill: actions.onDeleteProjectSkill,
   onExposeDatabaseProfile: actions.onExposeDatabaseProfile,
   onOpenMenuScreen: actions.onOpenMenuScreen,
   onOpenProjectBrowserById: actions.onOpenProjectBrowserById,
@@ -98,6 +106,8 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onRefreshProjectPortForwards: actions.onRefreshProjectPortForwards,
   onRefreshProjectBrowser: actions.onRefreshProjectBrowser,
   onRefreshProjectDatabases: actions.onRefreshProjectDatabases,
+  onRefreshProjectPrompts: actions.onRefreshProjectPrompts,
+  onRefreshProjectSkills: actions.onRefreshProjectSkills,
   onRefreshProjectTasks: actions.onRefreshProjectTasks,
   onProjectTasksIncludeDefaultChange: actions.onProjectTasksIncludeDefaultChange,
   onRestartProjectDatabaseEditor: actions.onRestartProjectDatabaseEditor,
@@ -105,6 +115,8 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onRunCurrentMenuAction: actions.onRunCurrentMenuAction,
   onRunProjectAuthAction: actions.onRunProjectAuthAction,
   onSaveDatabaseProfile: actions.onSaveDatabaseProfile,
+  onSaveProjectPrompt: actions.onSaveProjectPrompt,
+  onSaveProjectSkill: actions.onSaveProjectSkill,
   onLoadProjectTaskLogs: actions.onLoadProjectTaskLogs,
   onStopProjectTask: actions.onStopProjectTask
 })
@@ -136,6 +148,8 @@ const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   project: state.project,
   projectAuthSnapshot: state.projectAuthSnapshot,
   projectBrowser: state.projectBrowser,
+  projectPrompts: state.projectPrompts,
+  projectSkills: state.projectSkills,
   projectTaskLogs: state.projectTaskLogs,
   projectTasks: state.projectTasks,
   projectTasksIncludeDefault: state.projectTasksIncludeDefault,

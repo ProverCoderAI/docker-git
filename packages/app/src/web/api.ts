@@ -51,6 +51,8 @@ export {
   loadProjectPs,
   upProject
 } from "./api-project-core.js"
+export { deleteProjectPrompt, loadProjectPrompts, writeProjectPrompt } from "./api-prompts.js"
+export { deleteProjectSkill, loadProjectSkills, projectSkillScopeToId, writeProjectSkill } from "./api-skills.js"
 export { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api-tasks.js"
 
 export type * from "./api-types.js"

@@ -54,7 +54,9 @@ type StaticMenuTag = Exclude<
   | "Info"
   | "Ports"
   | "ProjectAuth"
+  | "Prompts"
   | "Select"
+  | "Skills"
   | "Tasks"
 >
 
