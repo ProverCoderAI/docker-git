@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url"
+
 export type TerminalImageFetchPlan =
   | {
     readonly _tag: "InvalidTerminalImageFetch"
@@ -23,6 +25,21 @@ const controlCharRange = `${String.fromCodePoint(0)}-${String.fromCodePoint(0x1F
 const deleteChar = String.fromCodePoint(0x7F)
 const invalidCharacterPattern = new RegExp(String.raw`[\s${controlCharRange}${deleteChar}]`, "u")
 const traversalPattern = /(?:^|\/)(?:\.|\.\.)(?=\/|$)/u
+const urlSchemePattern = /^[A-Za-z][A-Za-z0-9+.-]*:/u
+const fileUrlPattern = /^file:\/\//iu
+const encodedPathSeparatorPattern = /%(?:2f|5c)/iu
+const fileUrlBackslashPattern = /\\/u
+const fileUrlTraversalPattern = /(?:^|[\\/])(?:\.|%2e)(?:(?:\.|%2e))?(?=[\\/]|$)/iu
+
+type TerminalImagePathNormalization =
+  | {
+    readonly _tag: "InvalidTerminalImagePath"
+    readonly message: string
+  }
+  | {
+    readonly _tag: "ValidTerminalImagePath"
+    readonly path: string
+  }
 
 const lowercaseExtension = (path: string): string | null => {
   const lastDot = path.lastIndexOf(".")
@@ -32,20 +49,79 @@ const lowercaseExtension = (path: string): string | null => {
   return path.slice(lastDot + 1).toLowerCase()
 }
 
+const rawFileUrlPathname = (path: string): string => {
+  const withoutScheme = path.slice("file://".length)
+  const pathStart = withoutScheme.indexOf("/")
+  if (pathStart < 0) {
+    return ""
+  }
+  const pathAndSuffix = withoutScheme.slice(pathStart)
+  const queryStart = pathAndSuffix.indexOf("?")
+  const hashStart = pathAndSuffix.indexOf("#")
+  if (queryStart < 0 && hashStart < 0) {
+    return pathAndSuffix
+  }
+  if (queryStart < 0) {
+    return pathAndSuffix.slice(0, hashStart)
+  }
+  if (hashStart < 0) {
+    return pathAndSuffix.slice(0, queryStart)
+  }
+  return pathAndSuffix.slice(0, Math.min(queryStart, hashStart))
+}
+
+const normalizeTerminalImagePath = (path: string): TerminalImagePathNormalization => {
+  if (!urlSchemePattern.test(path)) {
+    return { _tag: "ValidTerminalImagePath", path }
+  }
+  if (!fileUrlPattern.test(path)) {
+    return { _tag: "InvalidTerminalImagePath", message: "Only file:// image URLs are supported." }
+  }
+
+  const rawPathname = rawFileUrlPathname(path)
+  if (fileUrlTraversalPattern.test(rawPathname)) {
+    return { _tag: "InvalidTerminalImagePath", message: "Image path must not contain '.' or '..' segments." }
+  }
+  if (encodedPathSeparatorPattern.test(rawPathname) || fileUrlBackslashPattern.test(rawPathname)) {
+    return {
+      _tag: "InvalidTerminalImagePath",
+      message: "Image file URL must not contain encoded or backslash path separators."
+    }
+  }
+
+  try {
+    const url = new URL(path)
+    if (url.protocol !== "file:" || (url.hostname !== "" && url.hostname !== "localhost")) {
+      return { _tag: "InvalidTerminalImagePath", message: "Image file URL must point to a local path." }
+    }
+    if (url.search.length > 0 || url.hash.length > 0) {
+      return { _tag: "InvalidTerminalImagePath", message: "Image file URL must not include query or fragment." }
+    }
+    return { _tag: "ValidTerminalImagePath", path: fileURLToPath(url, { windows: false }) }
+  } catch {
+    return { _tag: "InvalidTerminalImagePath", message: "Image file URL is invalid." }
+  }
+}
+
 export const planTerminalImageFetch = (path: string): TerminalImageFetchPlan => {
   if (typeof path !== "string" || path.length === 0) {
     return { _tag: "InvalidTerminalImageFetch", message: "Image path is required." }
   }
-  if (!path.startsWith("/")) {
+  const normalized = normalizeTerminalImagePath(path)
+  if (normalized._tag === "InvalidTerminalImagePath") {
+    return { _tag: "InvalidTerminalImageFetch", message: normalized.message }
+  }
+  const containerPath = normalized.path
+  if (!containerPath.startsWith("/")) {
     return { _tag: "InvalidTerminalImageFetch", message: "Image path must be absolute." }
   }
-  if (invalidCharacterPattern.test(path)) {
+  if (invalidCharacterPattern.test(containerPath)) {
     return { _tag: "InvalidTerminalImageFetch", message: "Image path contains invalid characters." }
   }
-  if (traversalPattern.test(path)) {
+  if (traversalPattern.test(containerPath)) {
     return { _tag: "InvalidTerminalImageFetch", message: "Image path must not contain '.' or '..' segments." }
   }
-  const extension = lowercaseExtension(path)
+  const extension = lowercaseExtension(containerPath)
   if (extension === null) {
     return { _tag: "InvalidTerminalImageFetch", message: "Image path must include a file extension." }
   }
@@ -53,5 +129,5 @@ export const planTerminalImageFetch = (path: string): TerminalImageFetchPlan => 
   if (mediaType === undefined) {
     return { _tag: "InvalidTerminalImageFetch", message: `Unsupported image extension: .${extension}` }
   }
-  return { _tag: "ValidTerminalImageFetch", containerPath: path, mediaType }
+  return { _tag: "ValidTerminalImageFetch", containerPath, mediaType }
 }
