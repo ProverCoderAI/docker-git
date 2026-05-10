@@ -53,9 +53,14 @@ type SkillerProcessUser = {
   readonly uid: number
 }
 
-type SkillerRoute =
+export type SkillerRoute =
   | { readonly _tag: "App"; readonly relativePath: string; readonly sessionId: string | null }
   | { readonly _tag: "Trpc"; readonly sessionId: string | null; readonly upstreamPath: string }
+
+type SkillerBrowserScopeSelection = {
+  readonly scope: SkillerContainerScope
+  readonly sessionId: string | null
+}
 
 const submoduleRelativePath = join("third_party", "skiller-desktop-skills-manager")
 const launchLogPath = join(homedir(), ".docker-git", "logs", "skiller.log")
@@ -586,19 +591,39 @@ const browserTrpcBaseBootstrap = [
 const scriptJson = (value: unknown): string =>
   JSON.stringify(value).replaceAll("<", "\\u003c")
 
+export const resolveSkillerBrowserScopeSelection = (
+  route: Extract<SkillerRoute, { readonly _tag: "App" }>,
+  currentScope: SkillerContainerScope | null,
+  sessionScopeForId: (sessionId: string) => SkillerContainerScope | null | undefined
+): SkillerBrowserScopeSelection | null => {
+  if (route.sessionId === null) {
+    return currentScope === null
+      ? null
+      : { scope: currentScope, sessionId: null }
+  }
+  const sessionScope = sessionScopeForId(route.sessionId)
+  return sessionScope === undefined || sessionScope === null
+    ? null
+    : { scope: sessionScope, sessionId: route.sessionId }
+}
+
 const browserDockerGitScopeBootstrap = (
   route: Extract<SkillerRoute, { readonly _tag: "App" }>
 ): string => {
-  if (route.sessionId === null) {
-    return ""
-  }
-  const scope = sessionScopes.get(route.sessionId)
-  if (scope === undefined || scope === null) {
+  const currentScope = currentProcess !== null && isRunning(currentProcess.process)
+    ? currentProcess.scope
+    : null
+  const selection = resolveSkillerBrowserScopeSelection(
+    route,
+    currentScope,
+    (sessionId) => sessionScopes.get(sessionId)
+  )
+  if (selection === null) {
     return ""
   }
   return [
     "<script>",
-    `window.__DOCKER_GIT_SKILLER_SCOPE__=${scriptJson(skillerBrowserScopeForContainer(scope, route.sessionId))};`,
+    `window.__DOCKER_GIT_SKILLER_SCOPE__=${scriptJson(skillerBrowserScopeForContainer(selection.scope, selection.sessionId))};`,
     "</script>"
   ].join("")
 }

@@ -31,7 +31,7 @@ export type SkillerBrowserScope = {
   readonly currentProject: SkillerBrowserPathRoot
   readonly projectKey: string
   readonly roots: ReadonlyArray<SkillerBrowserPathRoot>
-  readonly sessionId: string
+  readonly sessionId: string | null
 }
 
 export const parseDockerMountLines = (output: string): ReadonlyArray<DockerContainerMount> =>
@@ -142,7 +142,7 @@ const rootDepth = (root: Pick<SkillerBrowserPathRoot, "containerPath" | "hostPat
 
 export const skillerBrowserScopeForContainer = (
   scope: SkillerContainerScope,
-  sessionId: string
+  sessionId: string | null
 ): SkillerBrowserScope => {
   const roots = skillerBrowserRoots(scope)
   return {

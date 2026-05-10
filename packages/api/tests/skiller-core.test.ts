@@ -68,6 +68,18 @@ describe("skiller container filesystem mapping", () => {
       sshUser: "dev"
     }, "terminal-session")
 
+    expect(skillerBrowserScopeForContainer({
+      containerCodexSkillsPath: "/home/dev/.codex/skills",
+      containerHomePath: "/home/dev",
+      containerName: "dg-project",
+      containerProjectPath: "/home/dev/app",
+      hostCodexSkillsPath: "/var/lib/docker/volumes/project-home/_data/.codex/skills",
+      hostHomePath: "/var/lib/docker/volumes/project-home/_data",
+      hostProjectPath: "/var/lib/docker/volumes/project-home/_data/app",
+      projectId: "/home/dev/.docker-git/project",
+      projectKey: "abc123",
+      sshUser: "dev"
+    }, null).sessionId).toBeNull()
     expect(browserScope.currentProject.containerPath).toBe("/home/dev/app")
     expect(remapSkillerBrowserContainerPath(browserScope, "/home/dev/app/packages")).toBe(
       "/var/lib/docker/volumes/project-home/_data/app/packages"
