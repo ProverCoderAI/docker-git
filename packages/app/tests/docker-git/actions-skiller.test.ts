@@ -24,6 +24,7 @@ const proofScope = {
 const skillerLaunch = (
   overrides: {
     readonly alreadyRunning?: boolean
+    readonly appPath?: string
     readonly scope?: null | {
       readonly containerCodexSkillsPath: string
       readonly containerHomePath: string
@@ -36,16 +37,17 @@ const skillerLaunch = (
       readonly projectKey: string
       readonly sshUser: string
     }
+    readonly trpcBasePath?: string
   } = {}
 ) => ({
   alreadyRunning: overrides.alreadyRunning ?? false,
-  appPath: "/api/skiller/app/",
+  appPath: overrides.appPath ?? "/api/skiller/app/",
   logPath: "/home/dev/.docker-git/logs/skiller.log",
   ok: true,
   pid: 1234,
   scope: overrides.scope ?? null,
   startedAtIso: "2026-05-09T17:30:00.000Z",
-  trpcBasePath: "/api/skiller",
+  trpcBasePath: overrides.trpcBasePath ?? "/api/skiller",
   trpcPort: 17_888
 })
 
@@ -110,18 +112,35 @@ describe("web Skiller actions", () => {
       }))
     }))
 
-  it.effect("opens the session-scoped Skiller URL immediately from a terminal session", () =>
+  it.effect("opens the session-scoped Skiller URL after the backend registers the scope", () =>
     Effect.gen(function*(_) {
-      mockScopedSkillerLaunch()
+      let completeLaunch = (_launch: ReturnType<typeof skillerLaunch>): void => {
+        throw new Error("Expected Skiller launch effect to be subscribed.")
+      }
+      openUrlMock.mockReturnValue(true)
+      openSkillerMock.mockImplementation(() =>
+        Effect.async<ReturnType<typeof skillerLaunch>>((resume) => {
+          completeLaunch = (launch) => {
+            resume(Effect.succeed(launch))
+          }
+        })
+      )
       const { context, setMessage } = makeBrowserActionContext()
 
       openSkillerApp(context, "abc123", "terminal-proof")
 
-      expect(openUrlMock).toHaveBeenCalledWith("/api/ssh/session/terminal-proof/skiller/app/")
+      expect(openUrlMock).not.toHaveBeenCalled()
       yield* _(waitForAssertion(() => {
         expect(openSkillerMock).toHaveBeenCalledWith("abc123", "terminal-proof")
       }))
+      completeLaunch(skillerLaunch({
+        alreadyRunning: true,
+        appPath: "/api/ssh/session/terminal-proof/skiller/app/",
+        scope: proofScope,
+        trpcBasePath: "/api/ssh/session/terminal-proof/skiller"
+      }))
       yield* _(waitForAssertion(() => {
+        expect(openUrlMock).toHaveBeenCalledWith("/api/ssh/session/terminal-proof/skiller/app/")
         expect(setMessage).toHaveBeenCalledWith(
           "Skiller is already running (pid 1234). Log: /home/dev/.docker-git/logs/skiller.log. Container FS: dg-project:/home/dev/app. Opened /api/ssh/session/terminal-proof/skiller/app/."
         )

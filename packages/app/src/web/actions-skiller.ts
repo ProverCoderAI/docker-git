@@ -14,9 +14,6 @@ type SkillerLaunch = {
   readonly trpcBasePath: string
 }
 
-const skillerAppPathForSession = (sessionId: string): string =>
-  `/api/ssh/session/${encodeURIComponent(sessionId)}/skiller/app/`
-
 const skillerLaunchMessage = (launch: SkillerLaunch, openedPath: string, opened: boolean): string => {
   const pid = launch.pid === null ? "unknown pid" : `pid ${launch.pid}`
   const state = launch.alreadyRunning
@@ -36,15 +33,13 @@ export const openSkillerApp = (
   sessionId?: string
 ): void => {
   const resolvedProjectKey = projectKey ?? undefined
-  const immediateAppPath = sessionId === undefined ? null : skillerAppPathForSession(sessionId)
-  const immediateOpenResult = immediateAppPath === null ? null : openUrl(immediateAppPath)
   withBusy({
     context,
     effect: openSkiller(resolvedProjectKey, sessionId),
     label: "Opening Skiller",
     onSuccess: (launch) => {
-      const openedPath = immediateAppPath ?? launch.appPath
-      const opened = immediateOpenResult ?? openUrl(openedPath)
+      const openedPath = launch.appPath
+      const opened = openUrl(openedPath)
       context.setMessage(skillerLaunchMessage(launch, openedPath, opened))
     }
   })

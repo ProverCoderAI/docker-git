@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest"
 import {
   parseSkillerRoute,
   resolveSkillerBrowserScopeSelection,
+  resolveSkillerRouteScopeSelection,
   type SkillerRoute
 } from "../src/services/skiller.js"
 import type { SkillerContainerScope } from "../src/services/skiller-core.js"
@@ -71,6 +72,32 @@ describe("skiller routes", () => {
     )).toEqual({
       scope: terminalScope,
       sessionId: "terminal-proof"
+    })
+  })
+
+  it("falls back to the current project scope for stale session app routes", () => {
+    const currentScope = scope("current-scope")
+
+    expect(resolveSkillerBrowserScopeSelection(
+      appRoute("/api/ssh/session/stale-session/skiller/app/"),
+      currentScope,
+      () => undefined
+    )).toEqual({
+      scope: currentScope,
+      sessionId: "stale-session"
+    })
+  })
+
+  it("falls back to the current project scope for stale session trpc routes", () => {
+    const currentScope = scope("current-scope")
+
+    expect(resolveSkillerRouteScopeSelection(
+      "stale-session",
+      currentScope,
+      () => undefined
+    )).toEqual({
+      scope: currentScope,
+      sessionId: "stale-session"
     })
   })
 

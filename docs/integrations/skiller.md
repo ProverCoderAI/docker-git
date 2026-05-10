@@ -40,7 +40,7 @@ bun run skiller:check
 
 ## docker-git Web Launch
 
-The docker-git web terminal header includes a `Skiller` button next to `Open browser`. In a project terminal the button opens `/api/ssh/session/:sessionId/skiller/app/` immediately, using the same terminal session id that is present in `/ssh/session/:sessionId`. It also calls `POST /projects/by-key/:projectKey/terminal-sessions/:sessionId/skiller/open`, which launches the pinned submodule Electron app as a separate process and writes launcher output to `~/.docker-git/logs/skiller.log`.
+The docker-git web terminal header includes a `Skiller` button next to `Open browser`. In a project terminal the button calls `POST /projects/by-key/:projectKey/terminal-sessions/:sessionId/skiller/open` first, which launches the pinned submodule Electron app as a separate process, registers the terminal session filesystem scope, and writes launcher output to `~/.docker-git/logs/skiller.log`. After that response succeeds, the browser opens the returned `/api/ssh/session/:sessionId/skiller/app/` URL using the same terminal session id that is present in `/ssh/session/:sessionId`.
 
 docker-git serves Skiller's built renderer from the submodule and proxies `/api/ssh/session/:sessionId/skiller/trpc/*` to the running Skiller tRPC backend, so the user sees the actual Skiller UI instead of an invisible background desktop process. The session id is part of the URL so a Skiller tab can be tied back to the terminal container that opened it.
 
@@ -60,6 +60,7 @@ The latest Playwright proof screenshots are checked in under `docs/screenshots/i
 - `pr238-proof-30-skiller-add-project-folder-browser-picker.png` shows the browser-visible project folder picker opened from `Add project folder...` with selected-container paths.
 - `pr238-proof-31-skiller-project-scoped-folder-picker-working.png` shows `/api/skiller/app/` opened from a project-scoped Skiller process with `Add project folder...` resolving to the selected container paths.
 - `pr238-proof-32-docker-git-browser-live-command.png` shows the live `docker-git browser` frontend served through the same controller used for the proof.
+- `pr238-proof-33-skiller-session-folder-picker-mcp.png` shows the terminal session-scoped Skiller URL opened from the real `Skiller` button and the `Add project folder...` picker resolving to `dg-skiller-button-demo:/home/dev/app`.
 
 ## Updating the Pin
 

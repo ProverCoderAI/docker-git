@@ -595,16 +595,26 @@ export const resolveSkillerBrowserScopeSelection = (
   route: Extract<SkillerRoute, { readonly _tag: "App" }>,
   currentScope: SkillerContainerScope | null,
   sessionScopeForId: (sessionId: string) => SkillerContainerScope | null | undefined
+): SkillerBrowserScopeSelection | null =>
+  resolveSkillerRouteScopeSelection(route.sessionId, currentScope, sessionScopeForId)
+
+export const resolveSkillerRouteScopeSelection = (
+  sessionId: string | null,
+  currentScope: SkillerContainerScope | null,
+  sessionScopeForId: (sessionId: string) => SkillerContainerScope | null | undefined
 ): SkillerBrowserScopeSelection | null => {
-  if (route.sessionId === null) {
+  if (sessionId === null) {
     return currentScope === null
       ? null
       : { scope: currentScope, sessionId: null }
   }
-  const sessionScope = sessionScopeForId(route.sessionId)
-  return sessionScope === undefined || sessionScope === null
+  const sessionScope = sessionScopeForId(sessionId)
+  if (sessionScope !== undefined && sessionScope !== null) {
+    return { scope: sessionScope, sessionId }
+  }
+  return currentScope === null
     ? null
-    : { scope: sessionScope, sessionId: route.sessionId }
+    : { scope: currentScope, sessionId }
 }
 
 const browserDockerGitScopeBootstrap = (
@@ -719,13 +729,20 @@ const verifySkillerRouteScope = (
   if (route.sessionId === null) {
     return Effect.void
   }
-  const scope = sessionScopes.get(route.sessionId)
-  if (scope === undefined) {
+  const currentScope = currentProcess !== null && isRunning(currentProcess.process)
+    ? currentProcess.scope
+    : null
+  const selection = resolveSkillerRouteScopeSelection(
+    route.sessionId,
+    currentScope,
+    (sessionId) => sessionScopes.get(sessionId)
+  )
+  if (selection === null) {
     return Effect.fail(new ApiConflictError({
       message: `Skiller session is not registered: ${route.sessionId}. Click the terminal Skiller button again.`
     }))
   }
-  if (currentProcess === null || !sameSkillerScope(currentProcess.scope, scope)) {
+  if (currentProcess === null || !sameSkillerScope(currentProcess.scope, selection.scope)) {
     return Effect.fail(new ApiConflictError({
       message: `Skiller is not running for terminal session ${route.sessionId}. Click the terminal Skiller button again.`
     }))
