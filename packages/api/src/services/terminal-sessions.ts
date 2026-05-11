@@ -59,6 +59,7 @@ type TerminalRecord = {
   projectDisplayName: string
   projectId: string
   projectKey: string
+  projectTargetDir: string
   prepared: ReturnType<typeof prepareProjectSsh>
 }
 
@@ -581,7 +582,8 @@ const registerRecord = (
   projectKey: string,
   projectDisplayName: string,
   prepared: ReturnType<typeof prepareProjectSsh>,
-  projectContainerName: string
+  projectContainerName: string,
+  projectTargetDir: string
 ): TerminalSession => {
   const session: TerminalSession = {
     attachedClients: 0,
@@ -600,6 +602,7 @@ const registerRecord = (
     projectDisplayName,
     projectId,
     projectKey,
+    projectTargetDir,
     pty: null,
     session,
     sockets: new Set<WebSocket>()
@@ -662,7 +665,8 @@ export const createTerminalSession = (
         project.projectKey,
         project.displayName,
         prepared,
-        projectItem.containerName
+        projectItem.containerName,
+        projectItem.targetDir
       )
       yield* _(emitTerminalSessionCreated(projectId, session.id, options.requestId))
       return { project, session }
@@ -681,7 +685,8 @@ export const createTerminalSession = (
       project.projectKey,
       project.displayName,
       prepared,
-      reachableProjectItem.containerName
+      reachableProjectItem.containerName,
+      reachableProjectItem.targetDir
     )
     yield* _(emitTerminalSessionCreated(projectId, session.id, options.requestId))
     yield* _(emitTerminalStatus(projectId, "ssh.post-start", "Post-start self-heal continues in background"))
@@ -786,7 +791,7 @@ export const readProjectTerminalImage = (
         Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
       )
     }
-    const plan = planTerminalImageFetch(imagePath)
+    const plan = planTerminalImageFetch(imagePath, { baseDir: record.projectTargetDir })
     if (plan._tag === "InvalidTerminalImageFetch") {
       return yield* _(Effect.fail(new ApiBadRequestError({ message: plan.message })))
     }
