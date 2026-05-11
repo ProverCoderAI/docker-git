@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Deferred, Effect, Exit, Fiber } from "effect"
 
-import { awaitTerminalFontReadiness } from "../../src/web/terminal-font-readiness.js"
+import { awaitTerminalFontReadiness, type DelayScheduler } from "../../src/web/terminal-font-readiness.js"
 
 type DeferredHandle<A> = {
   readonly deferred: Deferred.Deferred<A, Error>
@@ -51,8 +51,9 @@ const createFontsMock = (
     rejectReady: () => Deferred.fail(readyHandle.deferred, new Error("fonts ready failed")).pipe(Effect.asVoid),
     resolveLoads: () =>
       Effect.gen(function*(_) {
+        const emptyResult: ReadonlyArray<object> = []
         for (const handle of loadHandles) {
-          yield* _(Deferred.succeed(handle.deferred, [] as ReadonlyArray<object>))
+          yield* _(Deferred.succeed(handle.deferred, emptyResult))
         }
       }),
     resolveReady: () => Deferred.succeed(readyHandle.deferred, {}).pipe(Effect.asVoid)
@@ -65,34 +66,35 @@ const makeFontsMock = (): Effect.Effect<FontFaceSetMock> =>
     return createFontsMock(readyHandle, () => makeDeferredHandle<ReadonlyArray<object>>())
   })
 
-type TimersMock = {
-  readonly cleared: ReadonlyArray<object>
-  readonly clearTimeoutImpl: typeof globalThis.clearTimeout
+type SchedulerMock = {
+  readonly cancelCount: () => number
   readonly fire: () => void
-  readonly setTimeoutImpl: typeof globalThis.setTimeout
+  readonly scheduler: DelayScheduler
 }
 
-const createTimers = (): TimersMock => {
+const createScheduler = (): SchedulerMock => {
   const handlers: Array<{ readonly callback: () => void; readonly id: object }> = []
-  const cleared: Array<object> = []
-  return {
-    cleared,
-    clearTimeoutImpl: ((id: object) => {
-      cleared.push(id)
-      const index = handlers.findIndex((handler) => handler.id === id)
-      if (index !== -1) {
-        handlers.splice(index, 1)
+  let cancelCount = 0
+  const scheduler: DelayScheduler = {
+    schedule: (callback) => {
+      const id = {}
+      handlers.push({ callback, id })
+      return () => {
+        cancelCount += 1
+        const index = handlers.findIndex((handler) => handler.id === id)
+        if (index !== -1) {
+          handlers.splice(index, 1)
+        }
       }
-    }) as typeof globalThis.clearTimeout,
+    }
+  }
+  return {
+    cancelCount: () => cancelCount,
     fire: () => {
       const next = handlers.shift()
       next?.callback()
     },
-    setTimeoutImpl: ((callback: () => void) => {
-      const id = {}
-      handlers.push({ callback, id })
-      return id as ReturnType<typeof globalThis.setTimeout>
-    }) as typeof globalThis.setTimeout
+    scheduler
   }
 }
 
@@ -105,7 +107,7 @@ const yieldThrice = Effect.gen(function*(_) {
 type FontReadinessFixture = {
   readonly fiber: Fiber.RuntimeFiber<void>
   readonly fonts: FontFaceSetMock
-  readonly timers: TimersMock
+  readonly timers: SchedulerMock
 }
 
 const startFontReadinessFixture = (
@@ -114,12 +116,11 @@ const startFontReadinessFixture = (
 ): Effect.Effect<FontReadinessFixture> =>
   Effect.gen(function*(_) {
     const fonts = yield* _(makeFontsMock())
-    const timers = createTimers()
+    const timers = createScheduler()
     const baseArgs = {
-      clearTimeoutImpl: timers.clearTimeoutImpl,
       descriptors,
       fonts,
-      setTimeoutImpl: timers.setTimeoutImpl
+      scheduler: timers.scheduler
     }
     const args = timeoutMs === undefined ? baseArgs : { ...baseArgs, timeoutMs }
     const fiber = yield* _(Effect.fork(awaitTerminalFontReadiness(args)))
@@ -144,7 +145,7 @@ describe("terminal font readiness", () => {
       yield* _(fonts.resolveReady())
       yield* _(fonts.resolveLoads())
       yield* _(Fiber.join(fiber))
-      expect(timers.cleared.length).toBe(1)
+      expect(timers.cancelCount()).toBe(1)
     }))
 
   it.effect("swallows load failures so callers still proceed", () =>

@@ -7,11 +7,14 @@ export type FontReadinessTarget = {
   readonly ready: PromiseLike<object>
 }
 
+export type DelayScheduler = {
+  readonly schedule: (callback: () => void, delayMs: number) => () => void
+}
+
 export type TerminalFontReadinessArgs = {
-  readonly clearTimeoutImpl?: typeof globalThis.clearTimeout
   readonly descriptors: ReadonlyArray<string>
   readonly fonts: FontReadinessTarget | undefined
-  readonly setTimeoutImpl?: typeof globalThis.setTimeout
+  readonly scheduler?: DelayScheduler
   readonly timeoutMs?: number
 }
 
@@ -45,28 +48,29 @@ const ensureFontsLoaded = (
     { concurrency: "unbounded" }
   ).pipe(Effect.asVoid)
 
-type DelayTimers = {
-  readonly clearTimeoutImpl: typeof globalThis.clearTimeout
-  readonly setTimeoutImpl: typeof globalThis.setTimeout
-}
-
 const delayedFallback = (
   timeoutMs: number,
-  timers: DelayTimers
+  scheduler: DelayScheduler
 ): Effect.Effect<void> =>
   Effect.async((resume: (effect: Effect.Effect<void>) => void) => {
-    const handle = timers.setTimeoutImpl(() => {
+    const cancel = scheduler.schedule(() => {
       resume(Effect.void)
     }, timeoutMs)
     return Effect.sync(() => {
-      timers.clearTimeoutImpl(handle)
+      cancel()
     })
   })
 
-const resolveTimers = (args: TerminalFontReadinessArgs): DelayTimers => ({
-  clearTimeoutImpl: args.clearTimeoutImpl ?? globalThis.clearTimeout,
-  setTimeoutImpl: args.setTimeoutImpl ?? globalThis.setTimeout
-})
+const defaultScheduler: DelayScheduler = {
+  schedule: (callback, delayMs) => {
+    const handle = globalThis.setTimeout(callback, delayMs)
+    return () => {
+      globalThis.clearTimeout(handle)
+    }
+  }
+}
+
+const resolveScheduler = (args: TerminalFontReadinessArgs): DelayScheduler => args.scheduler ?? defaultScheduler
 
 const fontReadinessEffect = (
   fonts: FontReadinessTarget,
@@ -77,7 +81,7 @@ const fontReadinessEffect = (
   if (timeoutMs <= 0) {
     return work
   }
-  return Effect.race(work, delayedFallback(timeoutMs, resolveTimers(args)))
+  return Effect.race(work, delayedFallback(timeoutMs, resolveScheduler(args)))
 }
 
 export const awaitTerminalFontReadiness = (
@@ -89,7 +93,11 @@ export const awaitTerminalFontReadiness = (
   return fontReadinessEffect(args.fonts, args)
 }
 
+type GlobalThisWithDocument = {
+  readonly document?: { readonly fonts: FontReadinessTarget }
+}
+
 export const resolveDocumentFontFaceSet = (): FontReadinessTarget | undefined => {
-  const documentRef = (globalThis as { readonly document?: { readonly fonts?: FontReadinessTarget } }).document
-  return documentRef?.fonts
+  const globals: GlobalThisWithDocument = globalThis
+  return globals.document?.fonts
 }
