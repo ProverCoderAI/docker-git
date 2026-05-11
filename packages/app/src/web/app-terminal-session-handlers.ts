@@ -57,17 +57,14 @@ const browserStatusMessage = (browser: ProjectBrowserSession): string => {
 const runOpenBrowser = (projectId: string, setMessage: StateMessageUpdater): void => {
   void Effect.runPromise(
     loadProjectBrowser(projectId).pipe(
-      Effect.tap((browser) =>
-        Effect.sync(() => {
-          setMessage(browserStatusMessage(browser))
-        })
-      ),
-      Effect.catchAll((error) =>
-        Effect.sync(() => {
+      Effect.match({
+        onFailure: (error) => {
           setMessage(`Failed to open browser: ${error}`)
-        })
-      ),
-      Effect.asVoid
+        },
+        onSuccess: (browser) => {
+          setMessage(browserStatusMessage(browser))
+        }
+      })
     )
   )
 }
@@ -82,17 +79,14 @@ const runApplyProject = (
   }
   void Effect.runPromise(
     applyProject(projectId).pipe(
-      Effect.tap((applied) =>
-        Effect.sync(() => {
-          setMessage(`Applied ${applied.displayName}.`)
-        })
-      ),
-      Effect.catchAll((error) =>
-        Effect.sync(() => {
+      Effect.match({
+        onFailure: (error) => {
           setMessage(`Apply failed: ${error}`)
-        })
-      ),
-      Effect.asVoid
+        },
+        onSuccess: (applied) => {
+          setMessage(`Applied ${applied.displayName}.`)
+        }
+      })
     )
   )
 }
@@ -107,17 +101,14 @@ const handleTerminalCreated = (sessionId: string, setMessage: StateMessageUpdate
 const runOpenTerminal = (projectKey: string, setMessage: StateMessageUpdater): void => {
   void Effect.runPromise(
     createProjectTerminalSession(projectKey).pipe(
-      Effect.tap((created) =>
-        Effect.sync(() => {
-          handleTerminalCreated(created.session.id, setMessage)
-        })
-      ),
-      Effect.catchAll((error) =>
-        Effect.sync(() => {
+      Effect.match({
+        onFailure: (error) => {
           setMessage(`Failed to open new terminal: ${error}`)
-        })
-      ),
-      Effect.asVoid
+        },
+        onSuccess: (created) => {
+          handleTerminalCreated(created.session.id, setMessage)
+        }
+      })
     )
   )
 }
@@ -155,17 +146,14 @@ const runRefreshTasks = (
 ): void => {
   void Effect.runPromise(
     loadProjectTasks(projectId, include).pipe(
-      Effect.tap((next) =>
-        Effect.sync(() => {
-          setSnapshot(next)
-        })
-      ),
-      Effect.catchAll((error) =>
-        Effect.sync(() => {
+      Effect.match({
+        onFailure: (error) => {
           setMessage(`Failed to load tasks: ${error}`)
-        })
-      ),
-      Effect.asVoid
+        },
+        onSuccess: (next) => {
+          setSnapshot(next)
+        }
+      })
     )
   )
 }
@@ -178,13 +166,14 @@ const runStopTask = (
 ): void => {
   void Effect.runPromise(
     stopProjectTask(projectId, pid).pipe(
-      Effect.tap(() => Effect.sync(onAfterStop)),
-      Effect.catchAll((error) =>
-        Effect.sync(() => {
+      Effect.match({
+        onFailure: (error) => {
           setMessage(`Failed to stop task ${pid}: ${error}`)
-        })
-      ),
-      Effect.asVoid
+        },
+        onSuccess: () => {
+          onAfterStop()
+        }
+      })
     )
   )
 }
@@ -197,17 +186,14 @@ const runLoadLogs = (
 ): void => {
   void Effect.runPromise(
     loadProjectTaskLogs(projectId, pid).pipe(
-      Effect.tap((output) =>
-        Effect.sync(() => {
-          setLogs(output)
-        })
-      ),
-      Effect.catchAll((error) =>
-        Effect.sync(() => {
+      Effect.match({
+        onFailure: (error) => {
           setMessage(`Failed to load logs for ${pid}: ${error}`)
-        })
-      ),
-      Effect.asVoid
+        },
+        onSuccess: (output) => {
+          setLogs(output)
+        }
+      })
     )
   )
 }
