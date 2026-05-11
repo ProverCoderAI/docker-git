@@ -78,6 +78,27 @@ const resolveMountHost = (
   return hostRef.current
 }
 
+type TerminalMountContext = {
+  readonly lifecycle: ReturnType<typeof createLifecycleState>
+  readonly sendResize: () => void
+  readonly socketRef: TerminalSocketRef
+  readonly terminal: ReturnType<typeof createTerminalRuntime>["terminal"]
+}
+
+const initialiseMountContext = (host: HTMLDivElement): TerminalMountContext => {
+  const lifecycle = createLifecycleState()
+  const socketRef: TerminalSocketRef = { current: null }
+  const sendResizeRef: { current: () => void } = { current: () => {} }
+  const { fitAddon, terminal } = createTerminalRuntime(host, () => {
+    sendResizeRef.current()
+  })
+  const sendResize = (): void => {
+    sendTerminalResize(fitAddon, socketRef, terminal)
+  }
+  sendResizeRef.current = sendResize
+  return { lifecycle, sendResize, socketRef, terminal }
+}
+
 const mountTerminalSession = (
   { connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus }: TerminalLifecycleArgs
 ): (() => void) | undefined => {
@@ -87,14 +108,8 @@ const mountTerminalSession = (
   }
 
   connectionRef.current = { closing: false, opened: false }
-  const lifecycle = createLifecycleState()
-  const socketRef: TerminalSocketRef = { current: null }
-  const { fitAddon, terminal } = createTerminalRuntime(host)
-  const terminalInputController = createTerminalInputController(terminal, socketRef)
+  const { lifecycle, sendResize, socketRef, terminal } = initialiseMountContext(host)
   const pasteGuard = createTerminalPasteGuard()
-  const sendResize = () => {
-    sendTerminalResize(fitAddon, socketRef, terminal)
-  }
   const resizeObserver = observeTerminalResize(host, sendResize)
   const inputDisposable = attachTerminalInput(terminal, socketRef, pasteGuard)
   const imagePasteDisposable = attachTerminalImagePaste({ host, notifyMessage, pasteGuard, socketRef, terminal })
@@ -119,7 +134,7 @@ const mountTerminalSession = (
     terminal
   })
 
-  runtimeRef.current = terminalInputController
+  runtimeRef.current = createTerminalInputController(terminal, socketRef)
   attachGlobalResizeListeners(sendResize)
   connectSocket()
 

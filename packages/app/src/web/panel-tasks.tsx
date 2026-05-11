@@ -53,6 +53,8 @@ const TaskSystemToggle = (
   <label style={systemToggleStyle}>
     <input
       checked={includeDefault}
+      id="task-panel-show-system"
+      name="task-panel-show-system"
       onChange={(event) => {
         onIncludeDefaultChange(event.currentTarget.checked)
       }}

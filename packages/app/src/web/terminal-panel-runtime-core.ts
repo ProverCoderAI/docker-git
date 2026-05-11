@@ -3,6 +3,7 @@ import { Effect, Either } from "effect"
 import { Terminal } from "xterm"
 import { FitAddon } from "xterm-addon-fit"
 
+import { awaitTerminalFontReadiness, resolveDocumentFontFaceSet } from "./terminal-font-readiness.js"
 import { resolveTerminalImageFetchUrl } from "./terminal-image-url.js"
 import { splitTerminalInlineImageOutput, type TerminalInlineImageOutputSegment } from "./terminal-inline-images-core.js"
 import {
@@ -28,6 +29,11 @@ import type {
 import { installTerminalQuerySuppression } from "./terminal-query-suppression.js"
 import { resolveTerminalReconnectDelay, terminalReconnectGraceMs } from "./terminal-reconnect.js"
 import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "./terminal.js"
+
+const terminalFontDescriptors: ReadonlyArray<string> = [
+  "14px 'IBM Plex Mono'",
+  "bold 14px 'IBM Plex Mono'"
+]
 
 type TerminalClientMessage =
   | { readonly data: string; readonly type: "input" }
@@ -71,7 +77,36 @@ const clearReconnectTimer = (lifecycle: TerminalLifecycleState): void => {
   }
 }
 
-export const createTerminalRuntime = (host: HTMLDivElement): TerminalRuntime => {
+const refitWhenFontsLoaded = (
+  fitAddon: FitAddon,
+  terminal: Terminal,
+  onResize: (() => void) | undefined
+): void => {
+  const fonts = resolveDocumentFontFaceSet()
+  if (fonts === undefined) {
+    return
+  }
+  Effect.runFork(
+    awaitTerminalFontReadiness({ descriptors: terminalFontDescriptors, fonts }).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          runOptionalTerminalOperation(() => {
+            fitAddon.fit()
+          })
+          runOptionalTerminalOperation(() => {
+            terminal.refresh(0, terminal.rows - 1)
+          })
+          onResize?.()
+        })
+      )
+    )
+  )
+}
+
+export const createTerminalRuntime = (
+  host: HTMLDivElement,
+  onFontMetricsSettled?: () => void
+): TerminalRuntime => {
   const terminal = new Terminal({
     allowProposedApi: true,
     convertEol: false,
@@ -86,6 +121,7 @@ export const createTerminalRuntime = (host: HTMLDivElement): TerminalRuntime => 
   terminal.open(host)
   fitAddon.fit()
   terminal.focus()
+  refitWhenFontsLoaded(fitAddon, terminal, onFontMetricsSettled)
   return { fitAddon, terminal }
 }
 
