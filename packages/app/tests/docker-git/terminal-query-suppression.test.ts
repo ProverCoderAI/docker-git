@@ -71,13 +71,13 @@ describe("terminal query suppression", () => {
 
   it("registers OSC color suppression handlers for 4, 10, 11, and 12", () => {
     const mock = createMockTerminal()
-    installTerminalQuerySuppression(mock.terminal as never)
+    installTerminalQuerySuppression(mock.terminal)
     expect(mock.osc.map((handler) => handler.identifier)).toEqual([4, 10, 11, 12])
   })
 
   it("registers CSI handlers for DA1, DA2, DA3, and CPR", () => {
     const mock = createMockTerminal()
-    installTerminalQuerySuppression(mock.terminal as never)
+    installTerminalQuerySuppression(mock.terminal)
     expect(mock.csi.map((handler) => handler.identifier)).toEqual([
       { final: "c" },
       { final: "c", prefix: ">" },
@@ -89,7 +89,7 @@ describe("terminal query suppression", () => {
 
   it("consumes OSC color query sequences and lets explicit set commands fall through", () => {
     const mock = createMockTerminal()
-    installTerminalQuerySuppression(mock.terminal as never)
+    installTerminalQuerySuppression(mock.terminal)
     const fgHandler = mock.osc.find((handler) => handler.identifier === 10)
     expect(fgHandler).toBeDefined()
     expect(fgHandler?.callback("?")).toBe(true)
@@ -98,7 +98,7 @@ describe("terminal query suppression", () => {
 
   it("always consumes CSI device attribute and cursor position queries", () => {
     const mock = createMockTerminal()
-    installTerminalQuerySuppression(mock.terminal as never)
+    installTerminalQuerySuppression(mock.terminal)
     for (const handler of mock.csi) {
       expect(handler.callback()).toBe(true)
     }
@@ -106,7 +106,7 @@ describe("terminal query suppression", () => {
 
   it("disposes every registered handler when the suppression is disposed", () => {
     const mock = createMockTerminal()
-    const suppression = installTerminalQuerySuppression(mock.terminal as never)
+    const suppression = installTerminalQuerySuppression(mock.terminal)
     suppression.dispose()
     expect(mock.disposedCount.value).toBe(mock.osc.length + mock.csi.length)
   })
