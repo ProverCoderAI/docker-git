@@ -7,7 +7,43 @@ export const hasApplyOverrides = (command: ApplyCommand): boolean =>
   command.claudeTokenLabel !== undefined ||
   command.cpuLimit !== undefined ||
   command.ramLimit !== undefined ||
+  command.playwrightCpuLimit !== undefined ||
+  command.playwrightRamLimit !== undefined ||
   command.enableMcpPlaywright !== undefined
+
+const applyTokenOverrides = (template: TemplateConfig, command: ApplyCommand): TemplateConfig => {
+  let next = template
+  if (command.gitTokenLabel !== undefined) {
+    next = { ...next, gitTokenLabel: normalizeGitTokenLabel(command.gitTokenLabel) }
+  }
+  if (command.codexTokenLabel !== undefined) {
+    next = { ...next, codexAuthLabel: normalizeAuthLabel(command.codexTokenLabel) }
+  }
+  if (command.claudeTokenLabel !== undefined) {
+    next = { ...next, claudeAuthLabel: normalizeAuthLabel(command.claudeTokenLabel) }
+  }
+  return next
+}
+
+const applyResourceOverrides = (template: TemplateConfig, command: ApplyCommand): TemplateConfig => {
+  let next = template
+  if (command.cpuLimit !== undefined) {
+    next = { ...next, cpuLimit: command.cpuLimit }
+  }
+  if (command.ramLimit !== undefined) {
+    next = { ...next, ramLimit: command.ramLimit }
+  }
+  if (command.playwrightCpuLimit !== undefined) {
+    next = { ...next, playwrightCpuLimit: command.playwrightCpuLimit }
+  }
+  if (command.playwrightRamLimit !== undefined) {
+    next = { ...next, playwrightRamLimit: command.playwrightRamLimit }
+  }
+  if (command.enableMcpPlaywright !== undefined) {
+    next = { ...next, enableMcpPlaywright: command.enableMcpPlaywright }
+  }
+  return next
+}
 
 export const applyTemplateOverrides = (
   template: TemplateConfig,
@@ -16,45 +52,5 @@ export const applyTemplateOverrides = (
   if (command === undefined) {
     return template
   }
-
-  let nextTemplate = template
-
-  if (command.gitTokenLabel !== undefined) {
-    nextTemplate = {
-      ...nextTemplate,
-      gitTokenLabel: normalizeGitTokenLabel(command.gitTokenLabel)
-    }
-  }
-  if (command.codexTokenLabel !== undefined) {
-    nextTemplate = {
-      ...nextTemplate,
-      codexAuthLabel: normalizeAuthLabel(command.codexTokenLabel)
-    }
-  }
-  if (command.claudeTokenLabel !== undefined) {
-    nextTemplate = {
-      ...nextTemplate,
-      claudeAuthLabel: normalizeAuthLabel(command.claudeTokenLabel)
-    }
-  }
-  if (command.cpuLimit !== undefined) {
-    nextTemplate = {
-      ...nextTemplate,
-      cpuLimit: command.cpuLimit
-    }
-  }
-  if (command.ramLimit !== undefined) {
-    nextTemplate = {
-      ...nextTemplate,
-      ramLimit: command.ramLimit
-    }
-  }
-  if (command.enableMcpPlaywright !== undefined) {
-    nextTemplate = {
-      ...nextTemplate,
-      enableMcpPlaywright: command.enableMcpPlaywright
-    }
-  }
-
-  return nextTemplate
+  return applyResourceOverrides(applyTokenOverrides(template, command), command)
 }

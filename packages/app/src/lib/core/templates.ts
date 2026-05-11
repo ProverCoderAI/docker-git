@@ -2,7 +2,7 @@
 import type { TemplateConfig } from "./domain.js"
 import type { ResolvedComposeResourceLimits } from "./resource-limits.js"
 import { renderEntrypoint } from "./templates-entrypoint.js"
-import { renderDockerCompose } from "./templates/docker-compose.js"
+import { type ComposeResourceLimits, renderDockerCompose } from "./templates/docker-compose.js"
 import { renderDockerfile } from "./templates/dockerfile.js"
 import { renderPlaywrightBrowserDockerfile, renderPlaywrightStartExtra } from "./templates/playwright.js"
 
@@ -46,7 +46,7 @@ const renderConfigJson = (config: TemplateConfig): string =>
 
 export const planFiles = (
   config: TemplateConfig,
-  composeResourceLimits?: ResolvedComposeResourceLimits
+  composeResourceLimits?: ResolvedComposeResourceLimits | ComposeResourceLimits
 ): ReadonlyArray<FileSpec> => {
   const maybePlaywrightFiles = config.enableMcpPlaywright
     ? ([
