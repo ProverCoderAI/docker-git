@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Terminal Query Suppression Verification</title>
+  <link rel="stylesheet" href="/node_modules/xterm/css/xterm.css" />
+</head>
+<body>
+  <div id="before-host" style="background:#080a0d;padding:8px;border:1px solid #333"></div>
+  <h3 style="color:#fff">After suppression installed</h3>
+  <div id="after-host" style="background:#080a0d;padding:8px;border:1px solid #333"></div>
+  <pre id="result" style="color:#fff;background:#222;padding:8px"></pre>
+  <script type="module">
+    import { Terminal } from "/node_modules/xterm/lib/xterm.js"
+    import { installTerminalQuerySuppression } from "/packages/app/src/web/terminal-query-suppression.ts"
+
+    const collect = (terminal) => {
+      const collected = []
+      terminal.onData((data) => { collected.push(data) })
+      return collected
+    }
+
+    const beforeTerminal = new Terminal()
+    beforeTerminal.open(document.getElementById("before-host"))
+    const beforeData = collect(beforeTerminal)
+
+    const afterTerminal = new Terminal()
+    afterTerminal.open(document.getElementById("after-host"))
+    installTerminalQuerySuppression(afterTerminal)
+    const afterData = collect(afterTerminal)
+
+    const queries = [
+      "\x1b]10;?\x1b\\",
+      "\x1b]11;?\x1b\\",
+      "\x1b]12;?\x1b\\",
+      "\x1b]4;1;?\x1b\\",
+      "\x1b[c",
+      "\x1b[>c",
+      "\x1b[=c",
+      "\x1b[6n"
+    ]
+
+    let done = 0
+    queries.forEach((q) => {
+      beforeTerminal.write(q, () => { done++; render() })
+      afterTerminal.write(q, () => { done++; render() })
+    })
+
+    function render() {
+      if (done < queries.length * 2) return
+      const summary = {
+        before: beforeData.map((s) => Array.from(s).map((c) => c.charCodeAt(0).toString(16)).join(" ")),
+        after: afterData.map((s) => Array.from(s).map((c) => c.charCodeAt(0).toString(16)).join(" "))
+      }
+      document.getElementById("result").textContent = JSON.stringify(summary, null, 2)
+    }
+  </script>
+</body>
+</html>
