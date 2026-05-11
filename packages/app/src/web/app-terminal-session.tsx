@@ -1,10 +1,29 @@
 import { Effect, Match } from "effect"
-import { type CSSProperties, type Dispatch, type JSX, type SetStateAction, useEffect, useState } from "react"
+import { type Dispatch, type JSX, type SetStateAction, useCallback, useEffect, useState } from "react"
 
-import { deleteTerminalSessionByPath, loadTerminalSessionById, resolveApiBaseUrl } from "./api.js"
+import {
+  deleteTerminalSessionByPath,
+  loadProjectDetails,
+  loadTerminalSessionById,
+  type ProjectDetails,
+  resolveApiBaseUrl
+} from "./api.js"
 import { buildTerminalOnlyActiveSession } from "./app-terminal-session-core.js"
-import { Box, Text } from "./elements.js"
-import { TerminalPanel } from "./panel-terminal.js"
+import {
+  type ProjectHandlers,
+  type TaskHandlers,
+  useProjectActionHandlers,
+  useTaskManagerHandlers
+} from "./app-terminal-session-handlers.js"
+import {
+  renderTaskManagerBody,
+  TerminalOnlyClosed,
+  terminalOnlyContainerStyle,
+  TerminalOnlyError,
+  TerminalOnlyLoading,
+  TerminalOnlyMessage,
+  TerminalOnlyTerminalPanel
+} from "./app-terminal-session-ui.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 import type { ViewportLayout } from "./viewport-layout.js"
 
@@ -20,29 +39,6 @@ type TerminalOnlyState =
   | { readonly _tag: "Error"; readonly apiBaseUrl: string; readonly message: string }
 
 type TerminalOnlyStateSetter = Dispatch<SetStateAction<TerminalOnlyState>>
-
-const terminalOnlyContainerStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  minHeight: 0,
-  overflow: "hidden",
-  padding: "8px",
-  width: "100%"
-}
-
-const terminalOnlyMessageStyle: CSSProperties = {
-  background: "#101419",
-  border: "1px solid #3a4652",
-  borderRadius: "8px",
-  color: "#f6d27b",
-  flexShrink: 0,
-  marginBottom: "8px",
-  overflow: "hidden",
-  padding: "8px",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap"
-}
 
 const terminalOnlyLoadingState = (sessionId: string): TerminalOnlyState => ({
   _tag: "Loading",
@@ -60,9 +56,7 @@ const terminalOnlyClosedState = (message: string): TerminalOnlyState => ({
   message
 })
 
-const loadTerminalOnlyState = (
-  sessionId: string
-): Effect.Effect<TerminalOnlyState> =>
+const loadTerminalOnlyState = (sessionId: string): Effect.Effect<TerminalOnlyState> =>
   loadTerminalSessionById(sessionId).pipe(
     Effect.match({
       onFailure: (message) => terminalOnlyErrorState(message),
@@ -78,89 +72,121 @@ const closeTerminalSession = (session: ActiveTerminalSession): void => {
   void Effect.runPromise(deleteTerminalSessionByPath(session.closePath).pipe(Effect.either, Effect.asVoid))
 }
 
-const updateReadyMessage = (
-  setState: TerminalOnlyStateSetter,
-  message: string | null
-): void => {
-  setState((current) =>
-    current._tag === "Ready"
-      ? {
-        ...current,
-        message
-      }
-      : current
-  )
+const updateReadyMessage = (setState: TerminalOnlyStateSetter, message: string | null): void => {
+  setState((current) => current._tag === "Ready" ? { ...current, message } : current)
 }
 
-const TerminalOnlyMessage = ({ message }: { readonly message: string | null }): JSX.Element | null =>
-  message === null ? null : <div style={terminalOnlyMessageStyle}>{message}</div>
+const useLoadedProjectDetails = (projectId: string | undefined): ProjectDetails | null => {
+  const [project, setProject] = useState<ProjectDetails | null>(null)
+  useEffect(() => {
+    if (projectId === undefined) {
+      return
+    }
+    let cancelled = false
+    void Effect.runPromise(
+      loadProjectDetails(projectId).pipe(
+        Effect.tap((details) =>
+          Effect.sync(() => {
+            if (!cancelled) {
+              setProject(details)
+            }
+          })
+        ),
+        Effect.catchAll(() => Effect.sync(() => {})),
+        Effect.asVoid
+      )
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
+  return project
+}
+
+type TerminalOnlyReadyArgs = {
+  readonly session: ActiveTerminalSession
+  readonly setState: TerminalOnlyStateSetter
+  readonly state: Extract<TerminalOnlyState, { readonly _tag: "Ready" }>
+  readonly viewportLayout: ViewportLayout
+}
+
+const useTerminalOnlyReadyState = (
+  session: ActiveTerminalSession,
+  setState: TerminalOnlyStateSetter
+): {
+  readonly handlers: ProjectHandlers
+  readonly project: ProjectDetails | null
+  readonly setMessage: (message: string | null) => void
+  readonly tasks: TaskHandlers
+  readonly taskManagerOpen: boolean
+  readonly setTaskManagerOpen: Dispatch<SetStateAction<boolean>>
+} => {
+  const projectId = session.browserProjectId
+  const projectKey = session.browserProjectKey
+  const projectLabel = session.browserProjectName ?? projectId ?? "this project"
+  const project = useLoadedProjectDetails(projectId)
+  const [taskManagerOpen, setTaskManagerOpen] = useState(false)
+  const setMessage = useCallback(
+    (message: string | null) => {
+      updateReadyMessage(setState, message)
+    },
+    [setState]
+  )
+  const tasks = useTaskManagerHandlers({ projectId, setMessage })
+  const handlers = useProjectActionHandlers({
+    onOpenTaskManagerRequest: () => {
+      setTaskManagerOpen(true)
+      tasks.refreshTasks(tasks.taskIncludeDefault)
+    },
+    projectId,
+    projectKey,
+    projectLabel,
+    setMessage
+  })
+  return { handlers, project, setMessage, setTaskManagerOpen, taskManagerOpen, tasks }
+}
 
 const TerminalOnlyReady = (
-  {
+  { session, setState, state, viewportLayout }: TerminalOnlyReadyArgs
+): JSX.Element => {
+  const { handlers, project, setMessage, setTaskManagerOpen, taskManagerOpen, tasks } = useTerminalOnlyReadyState(
     session,
-    setState,
-    state,
-    viewportLayout
-  }: {
-    readonly session: ActiveTerminalSession
-    readonly setState: TerminalOnlyStateSetter
-    readonly state: Extract<TerminalOnlyState, { readonly _tag: "Ready" }>
-    readonly viewportLayout: ViewportLayout
-  }
-): JSX.Element => (
-  <div style={terminalOnlyContainerStyle}>
-    <TerminalOnlyMessage message={state.message} />
-    <TerminalPanel
-      keyboardOpen={viewportLayout.keyboardOpen}
-      mobileMode={viewportLayout.mode === "mobile"}
-      onAttachFailure={() => {
-        setState(terminalOnlyErrorState(`Terminal websocket closed before attach: ${session.session.id}.`))
-      }}
-      onDetach={() => {
-        setState(terminalOnlyClosedState(`Detached SSH terminal: ${session.session.id}.`))
-      }}
-      onKill={() => {
-        closeTerminalSession(session)
-        setState(terminalOnlyClosedState(`Killed SSH terminal: ${session.session.id}.`))
-      }}
-      onMessage={(message) => {
-        updateReadyMessage(setState, message)
-      }}
-      session={session}
-    />
-  </div>
-)
-
-const TerminalOnlyClosed = ({ message }: { readonly message: string }): JSX.Element => (
-  <Box alignItems="center" height="100%" justifyContent="center" padding={2} width="100%">
-    <Box border={true} borderColor="#3a4652" borderStyle="rounded" flexDirection="column" padding={2}>
-      <Text bold={true} fg="#f5fbff">SSH terminal</Text>
-      <Text fg="#f6d27b">{message}</Text>
-    </Box>
-  </Box>
-)
-
-const TerminalOnlyLoading = ({ sessionId }: { readonly sessionId: string }): JSX.Element => (
-  <Box alignItems="center" height="100%" justifyContent="center" padding={2} width="100%">
-    <Box border={true} borderColor="#3a4652" borderStyle="rounded" flexDirection="column" padding={2}>
-      <Text bold={true} fg="#f5fbff">SSH terminal</Text>
-      <Text fg="#7fdfff">session: {sessionId}</Text>
-      <Text fg="#a8c0dc">Attaching terminal...</Text>
-    </Box>
-  </Box>
-)
-
-const TerminalOnlyError = (
-  { apiBaseUrl, message }: { readonly apiBaseUrl: string; readonly message: string }
-): JSX.Element => (
-  <Box height="100%" justifyContent="center" padding={2} width="100%">
-    <Box border={true} borderColor="#ff6b7d" borderStyle="rounded" flexDirection="column" padding={2}>
-      <Text bold={true} fg="#ffd8de">SSH terminal unavailable</Text>
-      <Text fg="#ffd166">target: {apiBaseUrl}</Text>
-      <Text fg="#f2b7bf">{message}</Text>
-    </Box>
-  </Box>
-)
+    setState
+  )
+  const bodyContent = renderTaskManagerBody({
+    onCloseTaskManager: () => {
+      setTaskManagerOpen(false)
+    },
+    project,
+    projectId: session.browserProjectId,
+    taskManagerOpen,
+    tasks
+  })
+  return (
+    <div style={terminalOnlyContainerStyle}>
+      <TerminalOnlyMessage message={state.message} />
+      <TerminalOnlyTerminalPanel
+        bodyContent={bodyContent}
+        callbacks={{
+          onAttachFailure: () => {
+            setState(terminalOnlyErrorState(`Terminal websocket closed before attach: ${session.session.id}.`))
+          },
+          onDetach: () => {
+            setState(terminalOnlyClosedState(`Detached SSH terminal: ${session.session.id}.`))
+          },
+          onKill: () => {
+            closeTerminalSession(session)
+            setState(terminalOnlyClosedState(`Killed SSH terminal: ${session.session.id}.`))
+          },
+          onMessage: setMessage
+        }}
+        handlers={handlers}
+        session={session}
+        viewportLayout={viewportLayout}
+      />
+    </div>
+  )
+}
 
 const renderTerminalOnlyState = (
   state: TerminalOnlyState,
