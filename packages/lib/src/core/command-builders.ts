@@ -8,15 +8,13 @@ import { type RawOptions } from "./command-options.js"
 import {
   type AgentMode,
   type CreateCommand,
-  defaultCpuLimit,
-  defaultRamLimit,
   defaultTemplateConfig,
   deriveRepoPathParts,
   deriveRepoSlug,
   type ParseError,
   resolveRepoInput
 } from "./domain.js"
-import { normalizeCpuLimit, normalizeRamLimit } from "./resource-limits.js"
+import { resolveResourceLimitsIntent } from "./resource-limits.js"
 import { trimRightChar } from "./strings.js"
 import { normalizeAuthLabel, normalizeGitTokenLabel } from "./token-labels.js"
 
@@ -193,6 +191,8 @@ type BuildTemplateConfigInput = {
   readonly paths: PathConfig
   readonly cpuLimit: string | undefined
   readonly ramLimit: string | undefined
+  readonly playwrightCpuLimit: string | undefined
+  readonly playwrightRamLimit: string | undefined
   readonly dockerNetworkMode: CreateCommand["config"]["dockerNetworkMode"]
   readonly dockerSharedNetworkName: string
   readonly gitTokenLabel: string | undefined
@@ -205,53 +205,64 @@ type BuildTemplateConfigInput = {
   readonly clonedOnHostname: string
 }
 
-const buildTemplateConfig = ({
-  agentAuto,
-  agentMode,
-  claudeAuthLabel,
-  clonedOnHostname,
-  codexAuthLabel,
-  cpuLimit,
-  dockerNetworkMode,
-  dockerSharedNetworkName,
-  enableMcpPlaywright,
-  gitTokenLabel,
-  names,
-  paths,
-  ramLimit,
-  repo,
-  skipGithubAuth
-}: BuildTemplateConfigInput): CreateCommand["config"] => ({
-  containerName: names.containerName,
-  serviceName: names.serviceName,
-  sshUser: repo.sshUser,
-  sshPort: repo.sshPort,
-  repoUrl: repo.repoUrl,
-  repoRef: repo.repoRef,
-  gitTokenLabel,
-  skipGithubAuth,
-  codexAuthLabel,
-  claudeAuthLabel,
-  targetDir: repo.targetDir,
-  volumeName: names.volumeName,
-  dockerGitPath: paths.dockerGitPath,
-  authorizedKeysPath: paths.authorizedKeysPath,
-  envGlobalPath: paths.envGlobalPath,
-  envProjectPath: paths.envProjectPath,
-  codexAuthPath: paths.codexAuthPath,
-  codexSharedAuthPath: paths.codexSharedAuthPath,
-  codexHome: paths.codexHome,
-  geminiAuthPath: paths.geminiAuthPath,
-  geminiHome: paths.geminiHome,
-  cpuLimit,
-  ramLimit,
-  dockerNetworkMode,
-  dockerSharedNetworkName,
-  enableMcpPlaywright,
+const buildTemplateConfigBase = (
+  input: Pick<BuildTemplateConfigInput, "repo" | "names" | "paths">
+): Pick<
+  CreateCommand["config"],
+  | "containerName"
+  | "serviceName"
+  | "sshUser"
+  | "sshPort"
+  | "repoUrl"
+  | "repoRef"
+  | "targetDir"
+  | "volumeName"
+  | "dockerGitPath"
+  | "authorizedKeysPath"
+  | "envGlobalPath"
+  | "envProjectPath"
+  | "codexAuthPath"
+  | "codexSharedAuthPath"
+  | "codexHome"
+  | "geminiAuthPath"
+  | "geminiHome"
+> => ({
+  containerName: input.names.containerName,
+  serviceName: input.names.serviceName,
+  sshUser: input.repo.sshUser,
+  sshPort: input.repo.sshPort,
+  repoUrl: input.repo.repoUrl,
+  repoRef: input.repo.repoRef,
+  targetDir: input.repo.targetDir,
+  volumeName: input.names.volumeName,
+  dockerGitPath: input.paths.dockerGitPath,
+  authorizedKeysPath: input.paths.authorizedKeysPath,
+  envGlobalPath: input.paths.envGlobalPath,
+  envProjectPath: input.paths.envProjectPath,
+  codexAuthPath: input.paths.codexAuthPath,
+  codexSharedAuthPath: input.paths.codexSharedAuthPath,
+  codexHome: input.paths.codexHome,
+  geminiAuthPath: input.paths.geminiAuthPath,
+  geminiHome: input.paths.geminiHome
+})
+
+const buildTemplateConfig = (input: BuildTemplateConfigInput): CreateCommand["config"] => ({
+  ...buildTemplateConfigBase(input),
+  gitTokenLabel: input.gitTokenLabel,
+  skipGithubAuth: input.skipGithubAuth,
+  codexAuthLabel: input.codexAuthLabel,
+  claudeAuthLabel: input.claudeAuthLabel,
+  cpuLimit: input.cpuLimit,
+  ramLimit: input.ramLimit,
+  playwrightCpuLimit: input.playwrightCpuLimit,
+  playwrightRamLimit: input.playwrightRamLimit,
+  dockerNetworkMode: input.dockerNetworkMode,
+  dockerSharedNetworkName: input.dockerSharedNetworkName,
+  enableMcpPlaywright: input.enableMcpPlaywright,
   bunVersion: defaultTemplateConfig.bunVersion,
-  agentMode,
-  agentAuto,
-  clonedOnHostname
+  agentMode: input.agentMode,
+  agentAuto: input.agentAuto,
+  clonedOnHostname: input.clonedOnHostname
 })
 
 // CHANGE: build a typed create command from raw options (CLI or API)
@@ -275,8 +286,7 @@ export const buildCreateCommand = (
     const gitTokenLabel = normalizeGitTokenLabel(raw.gitTokenLabel)
     const codexAuthLabel = normalizeAuthLabel(raw.codexTokenLabel)
     const claudeAuthLabel = normalizeAuthLabel(raw.claudeTokenLabel)
-    const cpuLimit = yield* _(normalizeCpuLimit(raw.cpuLimit ?? defaultCpuLimit, "--cpu"))
-    const ramLimit = yield* _(normalizeRamLimit(raw.ramLimit ?? defaultRamLimit, "--ram"))
+    const limits = yield* _(resolveResourceLimitsIntent(raw))
     const dockerNetworkMode = yield* _(parseDockerNetworkMode(raw.dockerNetworkMode))
     const dockerSharedNetworkName = yield* _(
       nonEmpty("--shared-network", raw.dockerSharedNetworkName, defaultTemplateConfig.dockerSharedNetworkName)
@@ -295,8 +305,10 @@ export const buildCreateCommand = (
         repo,
         names,
         paths,
-        cpuLimit,
-        ramLimit,
+        cpuLimit: limits.cpuLimit,
+        ramLimit: limits.ramLimit,
+        playwrightCpuLimit: limits.playwrightCpuLimit,
+        playwrightRamLimit: limits.playwrightRamLimit,
         dockerNetworkMode,
         dockerSharedNetworkName,
         gitTokenLabel,
