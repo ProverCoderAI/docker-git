@@ -198,6 +198,15 @@ const renderDockerfileBun = (config: TemplateConfig): string =>
     .filter((chunk) => chunk.trim().length > 0)
     .join("\n")
 
+// CHANGE: normalize inherited box image HOME/PATH/WORKDIR after the SSH user rewrite
+// WHY: box-js publishes HOME=/home/box; docker exec -u dev inherits image env, so user-relative paths must be re-bound to the mounted /home/dev volume
+// QUOTE(ТЗ): "юзать готовый репозиторий"
+// REF: issue-267
+// SOURCE: n/a
+// FORMAT THEOREM: forall u = config.sshUser: HOME(rendered) = /home/u and WORKDIR(rendered) = /home/u
+// PURITY: CORE
+// INVARIANT: tilde-expanded runtime paths for the SSH user resolve inside the configured home volume
+// COMPLEXITY: O(1)/O(1)
 const renderDockerfileUsers = (config: TemplateConfig): string =>
   `# Create non-root user for SSH (align UID/GID with host user 1000)
 RUN for BASE_USER in box ubuntu; do \
@@ -216,6 +225,9 @@ RUN if id -u ${config.sshUser} >/dev/null 2>&1; then \
       groupadd -g 1000 ${config.sshUser} || true; \
       useradd -m -s /usr/bin/zsh -u 1000 -g 1000 -o ${config.sshUser}; \
     fi
+ENV HOME=/home/${config.sshUser}
+ENV PATH=/usr/local/bun/bin:/home/${config.sshUser}/.deno/bin:/home/${config.sshUser}/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WORKDIR /home/${config.sshUser}
 RUN printf "%s\\n" "${config.sshUser} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${config.sshUser} \
   && chmod 0440 /etc/sudoers.d/${config.sshUser}
 

@@ -75,6 +75,16 @@ describe("renderDockerfile", () => {
     expect(dockerfile).toContain('usermod -l dev -d /home/dev -m -s /usr/bin/zsh "$BASE_USER" || true')
   })
 
+  it("normalizes inherited box image HOME and workdir to the configured SSH user", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expectContainsAll(dockerfile, [
+      "ENV HOME=/home/dev",
+      "ENV PATH=/usr/local/bun/bin:/home/dev/.deno/bin:/home/dev/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "WORKDIR /home/dev"
+    ])
+  })
+
   it("installs session sync from npmjs with a local fallback", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
