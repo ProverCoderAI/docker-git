@@ -10,7 +10,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build && chmod +x dist/docker-git-session-sync.js",
+    "build": "vite build && bun ../../scripts/mark-executable.mjs dist/docker-git-session-sync.js",
     "check": "bun run typecheck",
     "prepack": "bun run build",
     "test": "vitest run --passWithNoTests",
