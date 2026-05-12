@@ -150,6 +150,7 @@ const makeTemplateConfig = (
   dockerNetworkMode: "project",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: false,
+  gpu: "none",
   bunVersion: "1.3.11"
 })
 

@@ -22,6 +22,7 @@ const expectCreateDefaults = (command: CreateCommand) => {
   expect(command.config.skipGithubAuth).toBe(false)
   expect(command.config.cpuLimit).toBe("30%")
   expect(command.config.ramLimit).toBe("30%")
+  expect(command.config.gpu).toBe("none")
   expect(command.config.dockerNetworkMode).toBe("shared")
   expect(command.config.dockerSharedNetworkName).toBe("docker-git-shared")
 }
@@ -56,6 +57,14 @@ describe("parseArgs", () => {
       (command) => {
         expect(command.config.cpuLimit).toBe("1.5")
         expect(command.config.ramLimit).toBe("4g")
+      }
+    ))
+
+  it.effect("parses create GPU mode", () =>
+    expectCreateCommand(
+      ["create", "--repo-url", "https://github.com/org/repo.git", "--gpu", "all"],
+      (command) => {
+        expect(command.config.gpu).toBe("all")
       }
     ))
 
@@ -284,6 +293,7 @@ describe("parseArgs", () => {
         "--claude-token=Team B",
         "--cpu=2",
         "--ram=4g",
+        "--gpu=all",
         "--mcp-playwright",
         "--no-up"
       ])
@@ -296,6 +306,7 @@ describe("parseArgs", () => {
       expect(command.claudeTokenLabel).toBe("Team B")
       expect(command.cpuLimit).toBe("2")
       expect(command.ramLimit).toBe("4g")
+      expect(command.gpu).toBe("all")
       expect(command.enableMcpPlaywright).toBe(true)
     }))
 

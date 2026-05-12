@@ -56,6 +56,7 @@ Options:
   --ram <value>             RAM limit: percent or size (examples: 30%, 512m, 4g; default: 30%)
   --playwright-cpu <value>  CPU limit for the MCP Playwright browser sidecar (default: 30% or --cpu when set)
   --playwright-ram <value>  RAM limit for the MCP Playwright browser sidecar (default: 30% or --ram when set)
+  --gpu <mode>              GPU mode for the workspace container: none|all (default: none)
   --network-mode <mode>     Compose network mode: shared|project (default: shared)
   --shared-network <name>   Shared Docker network name when network-mode=shared (default: docker-git-shared)
   --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>[/issue-<id>|/pr-<id>])

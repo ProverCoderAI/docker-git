@@ -54,6 +54,9 @@ const TemplateConfigInputSchema = Schema.Struct({
   ramLimit: Schema.optionalWith(Schema.String, {
     default: () => defaultTemplateConfig.ramLimit
   }),
+  gpu: Schema.optionalWith(Schema.Literal("none", "all"), {
+    default: () => defaultTemplateConfig.gpu
+  }),
   dockerNetworkMode: Schema.optionalWith(Schema.Literal("shared", "project"), {
     default: () => defaultTemplateConfig.dockerNetworkMode
   }),

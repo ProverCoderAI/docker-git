@@ -57,6 +57,7 @@ export const ProjectDetailsSchema = Schema.Struct({
   serviceName: Schema.String,
   sshUser: Schema.String,
   sshPort: Schema.Number,
+  gpu: Schema.Union(Schema.Literal("none"), Schema.Literal("all")),
   targetDir: Schema.String,
   projectDir: Schema.String,
   sshCommand: Schema.String,

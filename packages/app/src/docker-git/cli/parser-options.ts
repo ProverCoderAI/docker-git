@@ -24,6 +24,7 @@ interface ValueOptionSpec {
     | "ramLimit"
     | "playwrightCpuLimit"
     | "playwrightRamLimit"
+    | "gpu"
     | "dockerNetworkMode"
     | "dockerSharedNetworkName"
     | "archivePath"
@@ -66,6 +67,7 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--playwright-cpus", key: "playwrightCpuLimit" },
   { flag: "--playwright-ram", key: "playwrightRamLimit" },
   { flag: "--playwright-memory", key: "playwrightRamLimit" },
+  { flag: "--gpu", key: "gpu" },
   { flag: "--network-mode", key: "dockerNetworkMode" },
   { flag: "--shared-network", key: "dockerSharedNetworkName" },
   { flag: "--archive", key: "archivePath" },
@@ -126,6 +128,7 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   ramLimit: (raw, value) => ({ ...raw, ramLimit: value }),
   playwrightCpuLimit: (raw, value) => ({ ...raw, playwrightCpuLimit: value }),
   playwrightRamLimit: (raw, value) => ({ ...raw, playwrightRamLimit: value }),
+  gpu: (raw, value) => ({ ...raw, gpu: value }),
   dockerNetworkMode: (raw, value) => ({ ...raw, dockerNetworkMode: value }),
   dockerSharedNetworkName: (raw, value) => ({ ...raw, dockerSharedNetworkName: value }),
   archivePath: (raw, value) => ({ ...raw, archivePath: value }),

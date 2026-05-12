@@ -10,6 +10,7 @@ export const hasApplyOverrides = (command: ApplyCommand): boolean =>
   command.ramLimit !== undefined ||
   command.playwrightCpuLimit !== undefined ||
   command.playwrightRamLimit !== undefined ||
+  command.gpu !== undefined ||
   command.enableMcpPlaywright !== undefined
 
 const applyTokenOverrides = (template: TemplateConfig, command: ApplyCommand): TemplateConfig => {
@@ -39,6 +40,9 @@ const applyResourceOverrides = (template: TemplateConfig, command: ApplyCommand)
   }
   if (command.playwrightRamLimit !== undefined) {
     next = { ...next, playwrightRamLimit: command.playwrightRamLimit }
+  }
+  if (command.gpu !== undefined) {
+    next = { ...next, gpu: command.gpu }
   }
   if (command.enableMcpPlaywright !== undefined) {
     next = { ...next, enableMcpPlaywright: command.enableMcpPlaywright }

@@ -1,7 +1,10 @@
 import { Either, Match } from "effect"
 import {
   type CreateCommand,
+  defaultTemplateConfig,
   deriveRepoPathParts,
+  type GpuMode,
+  isGpuMode,
   type ParseError,
   resolveRepoInput
 } from "./frontend-lib/core/domain.js"
@@ -75,6 +78,7 @@ export const renderCreateStepLabel = (step: CreateStep, defaults: CreateInputs):
     Match.when("outDir", () => `Output dir [${defaults.outDir}]`),
     Match.when("cpuLimit", () => `CPU limit [${defaults.cpuLimit || "30%"}]`),
     Match.when("ramLimit", () => `RAM limit [${defaults.ramLimit || "30%"}]`),
+    Match.when("gpu", () => `GPU access [${defaults.gpu}]`),
     Match.when("runUp", () => `Run docker compose up now? [${defaults.runUp ? "Y" : "n"}]`),
     Match.when(
       "mcpPlaywright",
@@ -121,11 +125,32 @@ export const resolveCreateInputs = (
     outDir,
     cpuLimit: values.cpuLimit ?? "",
     ramLimit: values.ramLimit ?? "",
+    gpu: values.gpu ?? defaultTemplateConfig.gpu,
     runUp: values.runUp !== false,
     enableMcpPlaywright: values.enableMcpPlaywright === true,
     force: values.force === true,
     forceEnv: values.forceEnv === true
   }
+}
+
+const parseGpuInput = (
+  input: string,
+  fallback: GpuMode
+): Either.Either<GpuMode, ParseError> => {
+  const normalized = input.trim().toLowerCase()
+  if (normalized.length === 0) {
+    return Either.right(fallback)
+  }
+  if (normalized === "y" || normalized === "yes") {
+    return Either.right("all")
+  }
+  if (normalized === "n" || normalized === "no") {
+    return Either.right("none")
+  }
+  if (isGpuMode(normalized)) {
+    return Either.right(normalized)
+  }
+  return Either.left(createParseError("gpu must be one of: none, all, yes, no"))
 }
 
 const parseYesDefault = (input: string, fallback: boolean): boolean => {
@@ -261,6 +286,9 @@ const cpuLimitCreateInput = (raw: RawCreateOptions, command: CreateCommand): Par
 const ramLimitCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
   raw.ramLimit === undefined ? {} : { ramLimit: command.config.ramLimit ?? "" }
 
+const gpuCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.gpu === undefined ? {} : { gpu: command.config.gpu }
+
 const runUpCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
   raw.up === undefined ? {} : { runUp: command.runUp }
 
@@ -283,6 +311,7 @@ const createInputsFromCommand = (
   outDir: command.outDir,
   ...cpuLimitCreateInput(raw, command),
   ...ramLimitCreateInput(raw, command),
+  ...gpuCreateInput(raw, command),
   ...runUpCreateInput(raw, command),
   ...playwrightCreateInput(raw, command),
   ...forceCreateInput(raw, command),
@@ -334,6 +363,7 @@ const isCreateStepSatisfied = (
     Match.when("outDir", () => true),
     Match.when("cpuLimit", () => hasOwn(values, "cpuLimit")),
     Match.when("ramLimit", () => hasOwn(values, "ramLimit")),
+    Match.when("gpu", () => hasOwn(values, "gpu")),
     Match.when("runUp", () => hasOwn(values, "runUp")),
     Match.when("mcpPlaywright", () => hasOwn(values, "enableMcpPlaywright")),
     Match.when("force", () => hasOwn(values, "force")),
@@ -379,6 +409,14 @@ const applyCreateStep = (input: {
     }),
     Match.when("ramLimit", () => {
       input.nextValues.ramLimit = input.buffer.length > 0 ? input.buffer : input.currentDefaults.ramLimit
+      return createStepApplied()
+    }),
+    Match.when("gpu", () => {
+      const gpu = parseGpuInput(input.buffer, input.currentDefaults.gpu)
+      if (Either.isLeft(gpu)) {
+        return Either.left(gpu.left)
+      }
+      input.nextValues.gpu = gpu.right
       return createStepApplied()
     }),
     Match.when("runUp", () => {
@@ -498,6 +536,7 @@ export const createProjectDraftFromInputs = (
   readonly outDir: string
   readonly cpuLimit: string
   readonly ramLimit: string
+  readonly gpu: GpuMode
   readonly up: boolean
   readonly enableMcpPlaywright: boolean
   readonly force: boolean
@@ -508,6 +547,7 @@ export const createProjectDraftFromInputs = (
   outDir: input.outDir,
   cpuLimit: input.cpuLimit,
   ramLimit: input.ramLimit,
+  gpu: input.gpu,
   up: input.runUp,
   enableMcpPlaywright: input.enableMcpPlaywright,
   force: input.force,

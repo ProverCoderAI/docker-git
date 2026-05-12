@@ -30,6 +30,7 @@ export interface RawOptions {
   readonly ramLimit?: string
   readonly playwrightCpuLimit?: string
   readonly playwrightRamLimit?: string
+  readonly gpu?: string
   readonly dockerNetworkMode?: string
   readonly dockerSharedNetworkName?: string
   readonly enableMcpPlaywright?: boolean

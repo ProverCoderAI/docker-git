@@ -42,6 +42,7 @@ const makeConfig = (root: string, path: Path.Path): TemplateConfig => ({
   dockerNetworkMode: "shared",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: false,
+  gpu: "none",
   bunVersion: "1.3.11",
   agentAuto: true
 })

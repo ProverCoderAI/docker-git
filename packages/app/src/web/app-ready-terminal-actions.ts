@@ -38,11 +38,11 @@ export const bindTerminalActions = (
   actionContext: ReturnType<typeof createActionContext>,
   state: ReadyState
 ) => ({
-  onApplyProjectById: (projectId: string) => {
-    applyProjectById(projectId, actionContext)
+  onApplyProjectById: (projectId: string, gpu?: "none" | "all") => {
+    applyProjectById(projectId, actionContext, gpu)
   },
-  onApplySelectedProject: () => {
-    applySelectedProject(actionContext)
+  onApplySelectedProject: (gpu?: "none" | "all") => {
+    applySelectedProject(actionContext, gpu)
   },
   onApplyAllProjects: () => {
     runApplyAllProjects(actionContext)

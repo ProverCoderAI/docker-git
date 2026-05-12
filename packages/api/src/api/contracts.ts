@@ -24,6 +24,7 @@ export type ProjectDetails = ProjectSummary & {
   readonly serviceName: string
   readonly sshUser: string
   readonly sshPort: number
+  readonly gpu: "none" | "all"
   readonly targetDir: string
   readonly projectDir: string
   readonly sshCommand: string
@@ -355,6 +356,10 @@ export type UpProjectRequest = {
   readonly useManagedAuthorizedKeys?: boolean | undefined
 }
 
+export type ApplyProjectRequest = {
+  readonly gpu?: "none" | "all" | undefined
+}
+
 export type ApiAuthRequired = {
   readonly provider: "github"
   readonly message: string
@@ -380,6 +385,7 @@ export type CreateProjectRequest = {
   readonly codexHome?: string | undefined
   readonly cpuLimit?: string | undefined
   readonly ramLimit?: string | undefined
+  readonly gpu?: "none" | "all" | undefined
   readonly dockerNetworkMode?: string | undefined
   readonly dockerSharedNetworkName?: string | undefined
   readonly enableMcpPlaywright?: boolean | undefined

@@ -49,6 +49,7 @@ const makeTemplateConfig = (
   dockerNetworkMode: "shared",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: false,
+  gpu: "none",
   bunVersion: "1.3.11"
 })
 
@@ -224,7 +225,8 @@ describe("applyProjectFiles", () => {
             claudeTokenLabel: "Team B",
             cpuLimit: "2",
             ramLimit: "4g",
-            enableMcpPlaywright: true
+            enableMcpPlaywright: true,
+            gpu: "none",
           })
         )
         expect(appliedTemplate.gitTokenLabel).toBe("AGIEN_MAIN")

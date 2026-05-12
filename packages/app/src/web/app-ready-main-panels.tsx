@@ -86,6 +86,7 @@ const ProjectActionBar = (
     onApplyAllProjects,
     onApplySelectedProject,
     onRunCurrentMenuAction,
+    project,
     projectBrowser,
     selectedProjectSummary
   }: Pick<
@@ -94,48 +95,80 @@ const ProjectActionBar = (
     | "onApplyAllProjects"
     | "onApplySelectedProject"
     | "onRunCurrentMenuAction"
+    | "project"
     | "projectBrowser"
     | "selectedProjectSummary"
   >
-): JSX.Element => (
-  <Box
-    alignItems="center"
-    border={true}
-    borderColor="#3a4652"
-    flexShrink={0}
-    flexWrap="wrap"
-    gap={1}
-    justifyContent="space-between"
-    padding={1}
-  >
-    <Text fg="#aab7c4" wrap="truncate">
-      {selectedProjectSummary === undefined ? "No project selected." : selectedProjectSummary.displayName}
-    </Text>
-    <Box flexWrap="wrap" gap={1} justifyContent="flex-end" width="auto">
-      {currentMenu === "Select" && selectedProjectSummary !== undefined
-        ? (
-          <Box onClick={onApplySelectedProject} width="auto">
-            <Text bold={true} fg="#78f0a3">Apply</Text>
-          </Box>
-        )
-        : null}
-      {currentMenu === "Select"
-        ? (
-          <Box onClick={onApplyAllProjects} width="auto">
-            <Text bold={true} fg="#78f0a3">Apply all</Text>
-          </Box>
-        )
-        : null}
-      {currentMenu === "Browser" && !canOpenProjectBrowser(projectBrowser, selectedProjectSummary?.id ?? null)
-        ? <Text bold={true} fg="#8fa6c4">{actionLabel(currentMenu)}</Text>
-        : (
-          <Box onClick={onRunCurrentMenuAction} width="auto">
-            <Text bold={true} fg="#78f0a3">{actionLabel(currentMenu)}</Text>
-          </Box>
-        )}
+): JSX.Element => {
+  const selectedGpu = selectedProjectSummary !== undefined && project !== null && project.id === selectedProjectSummary.id
+    ? project.gpu
+    : null
+
+  return (
+    <Box
+      alignItems="center"
+      border={true}
+      borderColor="#3a4652"
+      flexShrink={0}
+      flexWrap="wrap"
+      gap={1}
+      justifyContent="space-between"
+      padding={1}
+    >
+      <Box flexDirection="column" width="auto">
+        <Text fg="#aab7c4" wrap="truncate">
+          {selectedProjectSummary === undefined ? "No project selected." : selectedProjectSummary.displayName}
+        </Text>
+        {currentMenu === "Select" && selectedProjectSummary !== undefined
+          ? <Text fg="#8fa6c4">GPU: {selectedGpu ?? "unknown"}</Text>
+          : null}
+      </Box>
+      <Box flexWrap="wrap" gap={1} justifyContent="flex-end" width="auto">
+        {currentMenu === "Select" && selectedProjectSummary !== undefined
+          ? (
+            <Box onClick={() => {
+              onApplySelectedProject("all")
+            }} width="auto">
+              <Text bold={true} fg={selectedGpu === "all" ? "#56f39a" : "#78f0a3"}>GPU on</Text>
+            </Box>
+          )
+          : null}
+        {currentMenu === "Select" && selectedProjectSummary !== undefined
+          ? (
+            <Box onClick={() => {
+              onApplySelectedProject("none")
+            }} width="auto">
+              <Text bold={true} fg={selectedGpu === "none" ? "#ffd166" : "#ffb86b"}>GPU off</Text>
+            </Box>
+          )
+          : null}
+        {currentMenu === "Select" && selectedProjectSummary !== undefined
+          ? (
+            <Box onClick={() => {
+              onApplySelectedProject()
+            }} width="auto">
+              <Text bold={true} fg="#78f0a3">Apply</Text>
+            </Box>
+          )
+          : null}
+        {currentMenu === "Select"
+          ? (
+            <Box onClick={onApplyAllProjects} width="auto">
+              <Text bold={true} fg="#78f0a3">Apply all</Text>
+            </Box>
+          )
+          : null}
+        {currentMenu === "Browser" && !canOpenProjectBrowser(projectBrowser, selectedProjectSummary?.id ?? null)
+          ? <Text bold={true} fg="#8fa6c4">{actionLabel(currentMenu)}</Text>
+          : (
+            <Box onClick={onRunCurrentMenuAction} width="auto">
+              <Text bold={true} fg="#78f0a3">{actionLabel(currentMenu)}</Text>
+            </Box>
+          )}
+      </Box>
     </Box>
-  </Box>
-)
+  )
+}
 
 const PortForwardDetails = (props: MainPanelsProps): JSX.Element => (
   <PortForwardPanel
@@ -320,6 +353,7 @@ const ProjectPickerScreen = (props: MainPanelsProps): JSX.Element => (
         onApplyAllProjects={props.onApplyAllProjects}
         onApplySelectedProject={props.onApplySelectedProject}
         onRunCurrentMenuAction={props.onRunCurrentMenuAction}
+        project={props.project}
         projectBrowser={props.projectBrowser}
         selectedProjectSummary={props.selectedProjectSummary}
       />

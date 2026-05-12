@@ -23,6 +23,7 @@ export const CreateProjectRequestSchema = Schema.Struct({
   codexHome: OptionalString,
   cpuLimit: OptionalString,
   ramLimit: OptionalString,
+  gpu: Schema.optional(Schema.Literal("none", "all")),
   dockerNetworkMode: OptionalString,
   dockerSharedNetworkName: OptionalString,
   enableMcpPlaywright: OptionalBoolean,
@@ -148,6 +149,10 @@ export const StateSyncRequestSchema = Schema.Struct({
 
 export const ApplyAllRequestSchema = Schema.Struct({
   activeOnly: OptionalBoolean
+})
+
+export const ApplyProjectRequestSchema = Schema.Struct({
+  gpu: Schema.optional(Schema.Literal("none", "all"))
 })
 
 export const UpProjectRequestSchema = Schema.Struct({

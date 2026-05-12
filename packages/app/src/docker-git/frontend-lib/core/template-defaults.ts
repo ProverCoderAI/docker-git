@@ -24,6 +24,7 @@ type DefaultTemplateConfig = Pick<
   | "ramLimit"
   | "playwrightCpuLimit"
   | "playwrightRamLimit"
+  | "gpu"
   | "dockerNetworkMode"
   | "dockerSharedNetworkName"
   | "enableMcpPlaywright"
@@ -66,6 +67,7 @@ export const defaultTemplateConfig = {
   ramLimit: defaultRamLimit,
   playwrightCpuLimit: defaultPlaywrightCpuLimit,
   playwrightRamLimit: defaultPlaywrightRamLimit,
+  gpu: "none",
   dockerNetworkMode: defaultDockerNetworkMode,
   dockerSharedNetworkName: defaultDockerSharedNetworkName,
   enableMcpPlaywright: false,

@@ -146,6 +146,7 @@ const makeTemplate = (
   dockerNetworkMode: "shared",
   dockerSharedNetworkName: "docker-git-shared",
   enableMcpPlaywright: true,
+  gpu: "none",
   pnpmVersion: "10.27.0",
   ...overrides
 })

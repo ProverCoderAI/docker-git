@@ -22,6 +22,7 @@ const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateCo
   codexAuthPath: "/workspace/.orch/auth/codex",
   codexSharedAuthPath: "/workspace/.orch/auth/codex-shared",
   geminiAuthPath: "/workspace/.orch/auth/gemini",
+  gpu: "none",
   ...overrides
 })
 
@@ -117,7 +118,8 @@ describe("renderEntrypoint auth bridge", () => {
   const renderAuthEntrypoint = (): string =>
     renderEntrypoint(
       makeTemplateConfig({
-        enableMcpPlaywright: false
+        enableMcpPlaywright: false,
+        gpu: "none",
       })
     )
 
@@ -327,9 +329,25 @@ describe("renderDockerCompose", () => {
     expect(compose).toContain('- "${DOCKER_GIT_PROJECT_SSH_BIND_HOST:-127.0.0.1}:2222:22"')
     expect(compose).toContain('    extra_hosts:\n      - "host.docker.internal:host-gateway"')
     expect(compose).toContain("    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1\n    networks:")
+    expect(compose).not.toContain("    gpus: all\n")
     expect(compose).not.toContain("dg-test-browser")
     expect(compose).not.toContain("/var/run/docker.sock:/var/run/docker.sock")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
+  })
+
+  it("renders GPU access only on the main service when explicitly enabled", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        enableMcpPlaywright: true,
+        gpu: "all"
+      })
+    )
+    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
+
+    expect(compose).toContain("    gpus: all\n")
+    expect((compose.match(/\n    gpus: all\n/g) ?? []).length).toBe(1)
+    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
+    expect(compose.slice(browserServiceIndex)).not.toContain("    gpus: all\n")
   })
 
   it("persists explicit Docker host into login and SSH environments before socket fallback", () => {
@@ -345,7 +363,8 @@ describe("renderDockerCompose", () => {
   it("renders fallback DNS servers for the browser sidecar when Playwright is enabled", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({
-        enableMcpPlaywright: true
+        enableMcpPlaywright: true,
+        gpu: "none",
       }),
       {
         cpuLimit: 1.5,
@@ -371,7 +390,8 @@ describe("renderDockerCompose", () => {
   it("applies separate resource limits for the browser sidecar when provided", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({
-        enableMcpPlaywright: true
+        enableMcpPlaywright: true,
+        gpu: "none",
       }),
       {
         main: { cpuLimit: 2, ramLimit: "4g" },
@@ -394,7 +414,8 @@ describe("renderDockerCompose", () => {
   it("backward-compatibly applies single resource limit shape to both services", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({
-        enableMcpPlaywright: true
+        enableMcpPlaywright: true,
+        gpu: "none",
       }),
       {
         cpuLimit: 1.5,

@@ -74,6 +74,11 @@ const renderResourceLimits = (resourceLimits: ResolvedComposeResourceLimits | un
     ? ""
     : `    cpus: ${resourceLimits.cpuLimit}\n    mem_limit: "${resourceLimits.ramLimit}"\n    memswap_limit: "${resourceLimits.ramLimit}"\n`
 
+const renderGpu = (gpu: TemplateConfig["gpu"]): string =>
+  gpu === "all"
+    ? "    gpus: all\n"
+    : ""
+
 const renderBootstrapMounts = (): string => `      - ${bootstrapVolumeKey}:/opt/docker-git/bootstrap/source:ro`
 
 const renderEnvFiles = (config: TemplateConfig): string =>
@@ -175,7 +180,7 @@ const renderComposeServices = (
     build: .
     container_name: ${config.containerName}
     restart: unless-stopped
-${renderEnvFiles(config)}    # runtime auth/env must be loaded into the container process, not only bootstrap scripts
+${renderGpu(config.gpu)}${renderEnvFiles(config)}    # runtime auth/env must be loaded into the container process, not only bootstrap scripts
     environment:
       REPO_URL: "${config.repoUrl}"
       REPO_REF: "${config.repoRef}"

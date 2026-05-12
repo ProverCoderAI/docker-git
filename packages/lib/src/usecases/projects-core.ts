@@ -43,6 +43,7 @@ export type ProjectItem = {
   readonly serviceName: string
   readonly sshUser: string
   readonly sshPort: number
+  readonly gpu: "none" | "all"
   readonly targetDir: string
   readonly sshCommand: string
   readonly ipAddress?: string | undefined
@@ -205,6 +206,7 @@ export const loadProjectItem = (
       serviceName: template.serviceName,
       sshUser: template.sshUser,
       sshPort: template.sshPort,
+      gpu: template.gpu,
       targetDir: template.targetDir,
       sshCommand,
       sshKeyPath: sshKey,

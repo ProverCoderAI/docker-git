@@ -3,7 +3,7 @@ import { hostname } from "node:os"
 
 import { expandContainerHome } from "../usecases/scrap-path.js"
 import { resolveAutoAgentFlags } from "./auto-agent-flags.js"
-import { nonEmpty, parseDockerNetworkMode, parseSshPort } from "./command-builders-shared.js"
+import { nonEmpty, parseDockerNetworkMode, parseGpuMode, parseSshPort } from "./command-builders-shared.js"
 import { type RawOptions } from "./command-options.js"
 import {
   type AgentMode,
@@ -193,6 +193,7 @@ type BuildTemplateConfigInput = {
   readonly ramLimit: string | undefined
   readonly playwrightCpuLimit: string | undefined
   readonly playwrightRamLimit: string | undefined
+  readonly gpu: CreateCommand["config"]["gpu"]
   readonly dockerNetworkMode: CreateCommand["config"]["dockerNetworkMode"]
   readonly dockerSharedNetworkName: string
   readonly gitTokenLabel: string | undefined
@@ -256,6 +257,7 @@ const buildTemplateConfig = (input: BuildTemplateConfigInput): CreateCommand["co
   ramLimit: input.ramLimit,
   playwrightCpuLimit: input.playwrightCpuLimit,
   playwrightRamLimit: input.playwrightRamLimit,
+  gpu: input.gpu,
   dockerNetworkMode: input.dockerNetworkMode,
   dockerSharedNetworkName: input.dockerSharedNetworkName,
   enableMcpPlaywright: input.enableMcpPlaywright,
@@ -287,6 +289,7 @@ export const buildCreateCommand = (
     const codexAuthLabel = normalizeAuthLabel(raw.codexTokenLabel)
     const claudeAuthLabel = normalizeAuthLabel(raw.claudeTokenLabel)
     const limits = yield* _(resolveResourceLimitsIntent(raw))
+    const gpu = yield* _(parseGpuMode(raw.gpu))
     const dockerNetworkMode = yield* _(parseDockerNetworkMode(raw.dockerNetworkMode))
     const dockerSharedNetworkName = yield* _(
       nonEmpty("--shared-network", raw.dockerSharedNetworkName, defaultTemplateConfig.dockerSharedNetworkName)
@@ -309,6 +312,7 @@ export const buildCreateCommand = (
         ramLimit: limits.ramLimit,
         playwrightCpuLimit: limits.playwrightCpuLimit,
         playwrightRamLimit: limits.playwrightRamLimit,
+        gpu,
         dockerNetworkMode,
         dockerSharedNetworkName,
         gitTokenLabel,

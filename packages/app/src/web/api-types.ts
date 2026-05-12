@@ -65,6 +65,7 @@ export type CreateProjectDraft = {
   readonly outDir: string
   readonly cpuLimit: string
   readonly ramLimit: string
+  readonly gpu: "none" | "all"
   readonly enableMcpPlaywright: boolean
   readonly force: boolean
   readonly forceEnv: boolean

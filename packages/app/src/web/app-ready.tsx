@@ -18,8 +18,8 @@ type ReadyLayoutRenderArgs = {
     readonly onActionPromptChange: (key: string, value: string) => void
     readonly onActionPromptSubmit: () => void
     readonly onApplyAllProjects: () => void
-    readonly onApplyProjectById: (projectId: string) => void
-    readonly onApplySelectedProject: () => void
+    readonly onApplyProjectById: (projectId: string, gpu?: "none" | "all") => void
+    readonly onApplySelectedProject: (gpu?: "none" | "all") => void
     readonly onAttachProjectTerminalSession: (
       projectId: string,
       projectKey: string,

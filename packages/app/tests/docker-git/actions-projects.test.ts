@@ -69,6 +69,7 @@ const project: ProjectDetails = {
   displayName: "octocat/hello-world",
   envGlobalPath: "/home/dev/.docker-git/.orch/env/global.env",
   envProjectPath: "/home/dev/.docker-git/project/.orch/env/project.env",
+  gpu: "none",
   id: "project-1",
   projectDir: "/home/dev/.docker-git/octocat/hello-world",
   projectKey: "octocat/hello-world",
