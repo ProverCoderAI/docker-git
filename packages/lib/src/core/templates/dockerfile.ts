@@ -182,7 +182,7 @@ EOF
 RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
 
 const renderDockerfileBunProfile = (): string =>
-  `RUN printf "export PATH=/usr/local/bun/bin:$PATH\\n" \
+  `RUN printf "export PATH=/usr/local/bun/bin:\\$PATH\\n" \
   > /etc/profile.d/bun.sh && chmod 0644 /etc/profile.d/bun.sh`
 
 const renderDockerfileBun = (config: TemplateConfig): string =>
@@ -198,14 +198,14 @@ const renderDockerfileBun = (config: TemplateConfig): string =>
     .filter((chunk) => chunk.trim().length > 0)
     .join("\n")
 
-// CHANGE: normalize inherited box image HOME/PATH/WORKDIR after the SSH user rewrite
-// WHY: box-js publishes HOME=/home/box; docker exec -u dev inherits image env, so user-relative paths must be re-bound to the mounted /home/dev volume
+// CHANGE: normalize inherited box image HOME/PATH/WORKDIR and moved login files after the SSH user rewrite
+// WHY: box-js publishes HOME=/home/box and login rc files may contain absolute /home/box references; runtime user paths must be re-bound to the mounted /home/dev volume
 // QUOTE(ТЗ): "юзать готовый репозиторий"
 // REF: issue-267
 // SOURCE: n/a
-// FORMAT THEOREM: forall u = config.sshUser: HOME(rendered) = /home/u and WORKDIR(rendered) = /home/u
+// FORMAT THEOREM: forall u = config.sshUser: HOME(rendered) = /home/u and forall p in login_rc(u): not contains(p, "/home/box")
 // PURITY: CORE
-// INVARIANT: tilde-expanded runtime paths for the SSH user resolve inside the configured home volume
+// INVARIANT: tilde-expanded and login-shell runtime paths for the SSH user resolve inside the configured home volume
 // COMPLEXITY: O(1)/O(1)
 const renderDockerfileUsers = (config: TemplateConfig): string =>
   `# Create non-root user for SSH (align UID/GID with host user 1000)
@@ -224,6 +224,12 @@ RUN if id -u ${config.sshUser} >/dev/null 2>&1; then \
     else \
       groupadd -g 1000 ${config.sshUser} || true; \
       useradd -m -s /usr/bin/zsh -u 1000 -g 1000 -o ${config.sshUser}; \
+    fi
+RUN set -eu; \
+    if [ -d /home/${config.sshUser} ]; then \
+      find /home/${config.sshUser} -maxdepth 2 -type f \
+        \\( -name ".profile" -o -name ".bash_profile" -o -name ".bashrc" -o -name ".zprofile" -o -name ".zshenv" -o -name ".zshrc" \\) \
+        -exec sed -i -e "s|/home/box|/home/${config.sshUser}|g" -e "s|/home/ubuntu|/home/${config.sshUser}|g" {} +; \
     fi
 ENV HOME=/home/${config.sshUser}
 ENV PATH=/usr/local/bun/bin:/home/${config.sshUser}/.deno/bin:/home/${config.sshUser}/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

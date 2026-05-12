@@ -85,6 +85,23 @@ describe("renderDockerfile", () => {
     ])
   })
 
+  it("rewrites inherited login rc files away from the base image home", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expectContainsAll(dockerfile, [
+      "find /home/dev -maxdepth 2 -type f",
+      '-name ".profile" -o -name ".bash_profile" -o -name ".bashrc" -o -name ".zprofile" -o -name ".zshenv" -o -name ".zshrc"',
+      '-exec sed -i -e "s|/home/box|/home/dev|g" -e "s|/home/ubuntu|/home/dev|g" {} +;'
+    ])
+  })
+
+  it("keeps the runtime PATH extension relative to the login shell environment", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expect(dockerfile).toContain('RUN printf "export PATH=/usr/local/bun/bin:\\$PATH\\n"')
+    expect(dockerfile).not.toContain('RUN printf "export PATH=/usr/local/bun/bin:$PATH\\n"')
+  })
+
   it("installs session sync from npmjs with a local fallback", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
