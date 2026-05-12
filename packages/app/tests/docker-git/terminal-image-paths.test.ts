@@ -98,4 +98,37 @@ describe("terminal image path detection", () => {
     expect(isSupportedTerminalImagePath("/var/data/a.bmp")).toBe(false)
     expect(isSupportedTerminalImagePath("/var/data/a.txt")).toBe(false)
   })
+
+  it("detects relative image paths under a tree pointer (issue 261 viewed image format)", () => {
+    const text = "  └ app/docs/screenshots/issue-237/proof/pr238-proof-06-skiller-submodule-status.png"
+    expect(detectTerminalImagePaths(text)).toEqual([
+      "app/docs/screenshots/issue-237/proof/pr238-proof-06-skiller-submodule-status.png"
+    ])
+  })
+
+  it("detects relative image paths under the alternative branch tree pointer", () => {
+    expect(detectTerminalImagePaths("  ├ assets/cover.jpg")).toEqual(["assets/cover.jpg"])
+  })
+
+  it("detects multiple viewed images across separate lines", () => {
+    const text = [
+      "• Viewed Image",
+      "  └ app/docs/screenshots/issue-237/proof/pr238-proof-06-skiller-submodule-status.png",
+      "",
+      "• Viewed Image",
+      "  └ app/docs/screenshots/issue-237/proof/pr238-proof-09-skiller-submodule-checks.png"
+    ].join("\n")
+    expect(detectTerminalImagePaths(text)).toEqual([
+      "app/docs/screenshots/issue-237/proof/pr238-proof-06-skiller-submodule-status.png",
+      "app/docs/screenshots/issue-237/proof/pr238-proof-09-skiller-submodule-checks.png"
+    ])
+  })
+
+  it("does not duplicate absolute paths preceded by a tree pointer", () => {
+    expect(detectTerminalImagePaths("  └ /var/data/foo.png")).toEqual(["/var/data/foo.png"])
+  })
+
+  it("ignores tree pointers that do not precede an image", () => {
+    expect(detectTerminalImagePaths("  └ Viewed File: notes.txt")).toEqual([])
+  })
 })

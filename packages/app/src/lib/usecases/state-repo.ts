@@ -9,6 +9,12 @@ import { CommandFailedError } from "../shell/errors.js"
 import { defaultProjectsRoot } from "./menu-helpers.js"
 import { adoptRemoteHistoryIfOrphan } from "./state-repo/adopt-remote.js"
 import {
+  resolveGitlabTokenForOrigin,
+  selectStateInitEffect,
+  selectStatePullEffect,
+  selectStateSyncEffect
+} from "./state-repo/auth-effects.js"
+import {
   autoPullEnvKey,
   autoSyncEnvKey,
   autoSyncStrictEnvKey,
@@ -31,9 +37,8 @@ import {
   shouldLogGithubAuthHintForStateSyncFailure
 } from "./state-repo/github-auth-state.js"
 import type { GitAuthEnv } from "./state-repo/github-auth.js"
-import { isGithubHttpsRemote, resolveGithubToken, withGithubAskpassEnv } from "./state-repo/github-auth.js"
+import { resolveGithubToken } from "./state-repo/github-auth.js"
 import { ensureStateGitignore } from "./state-repo/gitignore.js"
-import { runStateSyncOps, runStateSyncWithToken } from "./state-repo/sync-ops.js"
 
 type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 const resolveStateRoot = (path: Path.Path, cwd: string): string => path.resolve(defaultProjectsRoot(cwd))
@@ -84,14 +89,13 @@ export const stateSync = (
       gitCapture(root, ["remote", "get-url", "origin"], gitBaseEnv).pipe(Effect.map((value) => value.trim()))
     )
     const originUrl = yield* _(normalizeOriginUrlIfNeeded(root, rawOriginUrl))
-    const token = yield* _(resolveGithubToken(fs, path, root))
-    const syncEffect = token && token.length > 0 && isGithubHttpsRemote(originUrl)
-      ? runStateSyncWithToken(token, root, originUrl, message)
-      : runStateSyncOps(root, originUrl, message, gitBaseEnv)
+    const githubToken = yield* _(resolveGithubToken(fs, path, root))
+    const gitlabToken = yield* _(resolveGitlabTokenForOrigin(fs, path, root, originUrl))
+    const syncEffect = selectStateSyncEffect(root, originUrl, message, githubToken, gitlabToken)
     yield* _(
       syncEffect.pipe(
         Effect.tapError((error) =>
-          shouldLogGithubAuthHintForStateSyncFailure(originUrl, token, error)
+          shouldLogGithubAuthHintForStateSyncFailure(originUrl, githubToken, error)
             ? Effect.logWarning(githubAuthLoginHint)
             : Effect.void
         )
@@ -195,7 +199,8 @@ const statePullInternal = (
       gitCapture(root, ["remote", "get-url", "origin"], gitBaseEnv).pipe(Effect.map((value) => value.trim()))
     )
     const originUrl = yield* _(normalizeOriginUrlIfNeeded(root, rawOriginUrl))
-    const token = yield* _(resolveGithubToken(fs, path, root))
+    const githubToken = yield* _(resolveGithubToken(fs, path, root))
+    const gitlabToken = yield* _(resolveGitlabTokenForOrigin(fs, path, root, originUrl))
     // CHANGE: resolve current branch and pass origin <branch> explicitly
     // WHY: bare `git pull --rebase` can fail or pull the wrong branch in some git configurations
     // QUOTE(ТЗ): "Сделай что бы правильные параметры передавались"
@@ -208,9 +213,7 @@ const statePullInternal = (
       )
     )
     const branch = branchRaw === "HEAD" ? "main" : branchRaw
-    const effect = token && token.length > 0 && isGithubHttpsRemote(originUrl)
-      ? withGithubAskpassEnv(token, (env) => git(root, ["pull", "--rebase", "origin", branch], env))
-      : git(root, ["pull", "--rebase", "origin", branch], gitBaseEnv)
+    const effect = selectStatePullEffect(root, originUrl, branch, githubToken, gitlabToken)
     yield* _(effect)
   }).pipe(Effect.asVoid)
 
@@ -322,9 +325,7 @@ export const stateInit = (
     }).pipe(Effect.asVoid)
 
   const token = input.token?.trim() ?? ""
-  return token.length > 0 && isGithubHttpsRemote(input.repoUrl)
-    ? withGithubAskpassEnv(token, doInit)
-    : doInit(gitBaseEnv)
+  return selectStateInitEffect(input.repoUrl, token, doInit)
 }
 
 export { stateCommit, stateStatus } from "./state-repo/local-ops.js"

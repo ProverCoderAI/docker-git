@@ -46,6 +46,11 @@ export const GithubAuthLoginRequestSchema = Schema.Struct({
   scopes: OptionalNullableString
 })
 
+export const GitlabAuthLoginRequestSchema = Schema.Struct({
+  label: OptionalNullableString,
+  token: OptionalNullableString
+})
+
 export const AuthMenuFlowSchema = Schema.Literal(
   "GithubRemove",
   "GitSet",
@@ -71,6 +76,10 @@ export const AuthTerminalSessionRequestSchema = Schema.Struct({
 })
 
 export const GithubAuthLogoutRequestSchema = Schema.Struct({
+  label: OptionalNullableString
+})
+
+export const GitlabAuthLogoutRequestSchema = Schema.Struct({
   label: OptionalNullableString
 })
 
@@ -101,6 +110,27 @@ export const ProjectAuthFlowSchema = Schema.Literal(
 export const ProjectAuthRequestSchema = Schema.Struct({
   flow: ProjectAuthFlowSchema,
   label: OptionalNullableString
+})
+
+export const ProjectPromptKindSchema = Schema.Literal("claude", "codex", "gemini")
+
+export const ProjectPromptUpdateRequestSchema = Schema.Struct({
+  content: Schema.String
+})
+
+export const ProjectSkillScopeSchema = Schema.Literal(
+  "skills",
+  "agents/skills",
+  "agents/.skills",
+  "claude/skills",
+  "codex/skills",
+  "gemini/skills"
+)
+
+export const ProjectSkillUpdateRequestSchema = Schema.Struct({
+  scope: ProjectSkillScopeSchema,
+  name: Schema.String,
+  content: Schema.String
 })
 
 export const StateInitRequestSchema = Schema.Struct({
@@ -282,13 +312,19 @@ export const TerminalSessionSchema = Schema.Struct({
 
 export type CreateProjectRequestInput = Schema.Schema.Type<typeof CreateProjectRequestSchema>
 export type GithubAuthLoginRequestInput = Schema.Schema.Type<typeof GithubAuthLoginRequestSchema>
+export type GitlabAuthLoginRequestInput = Schema.Schema.Type<typeof GitlabAuthLoginRequestSchema>
 export type AuthMenuRequestInput = Schema.Schema.Type<typeof AuthMenuRequestSchema>
 export type AuthTerminalSessionRequestInput = Schema.Schema.Type<typeof AuthTerminalSessionRequestSchema>
 export type GithubAuthLogoutRequestInput = Schema.Schema.Type<typeof GithubAuthLogoutRequestSchema>
+export type GitlabAuthLogoutRequestInput = Schema.Schema.Type<typeof GitlabAuthLogoutRequestSchema>
 export type CodexAuthImportRequestInput = Schema.Schema.Type<typeof CodexAuthImportRequestSchema>
 export type CodexAuthLoginRequestInput = Schema.Schema.Type<typeof CodexAuthLoginRequestSchema>
 export type CodexAuthLogoutRequestInput = Schema.Schema.Type<typeof CodexAuthLogoutRequestSchema>
 export type ProjectAuthRequestInput = Schema.Schema.Type<typeof ProjectAuthRequestSchema>
+export type ProjectPromptKindInput = Schema.Schema.Type<typeof ProjectPromptKindSchema>
+export type ProjectPromptUpdateRequestInput = Schema.Schema.Type<typeof ProjectPromptUpdateRequestSchema>
+export type ProjectSkillScopeInput = Schema.Schema.Type<typeof ProjectSkillScopeSchema>
+export type ProjectSkillUpdateRequestInput = Schema.Schema.Type<typeof ProjectSkillUpdateRequestSchema>
 export type StateInitRequestInput = Schema.Schema.Type<typeof StateInitRequestSchema>
 export type StateCommitRequestInput = Schema.Schema.Type<typeof StateCommitRequestSchema>
 export type StateSyncRequestInput = Schema.Schema.Type<typeof StateSyncRequestSchema>

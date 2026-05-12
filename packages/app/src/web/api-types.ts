@@ -15,6 +15,13 @@ import type {
   ProjectDetailsSchema,
   ProjectEventsPollResponseSchema,
   ProjectPortForwardSchema,
+  ProjectPromptFileSchema,
+  ProjectPromptKindSchema,
+  ProjectPromptsSnapshotSchema,
+  ProjectSkillFileSchema,
+  ProjectSkillScopeInfoSchema,
+  ProjectSkillScopeSchema,
+  ProjectSkillsSnapshotSchema,
   ProjectSummarySchema,
   StartProjectTerminalSessionAcceptedResponseSchema,
   TerminalSessionLookupResponseSchema
@@ -35,6 +42,13 @@ export type ProjectTerminalSessionLookup = Schema.Schema.Type<typeof TerminalSes
 export type GithubAuthStatus = Schema.Schema.Type<typeof GithubAuthStatusSchema>
 export type AuthSnapshot = Schema.Schema.Type<typeof AuthSnapshotSchema>
 export type ProjectAuthSnapshot = Schema.Schema.Type<typeof ProjectAuthSnapshotSchema>
+export type ProjectPromptKind = Schema.Schema.Type<typeof ProjectPromptKindSchema>
+export type ProjectPromptFile = Schema.Schema.Type<typeof ProjectPromptFileSchema>
+export type ProjectPromptsSnapshot = Schema.Schema.Type<typeof ProjectPromptsSnapshotSchema>
+export type ProjectSkillScope = Schema.Schema.Type<typeof ProjectSkillScopeSchema>
+export type ProjectSkillFile = Schema.Schema.Type<typeof ProjectSkillFileSchema>
+export type ProjectSkillScopeInfo = Schema.Schema.Type<typeof ProjectSkillScopeInfoSchema>
+export type ProjectSkillsSnapshot = Schema.Schema.Type<typeof ProjectSkillsSnapshotSchema>
 export type ApiEvent = Schema.Schema.Type<typeof ProjectEventsPollResponseSchema>["events"][number]
 export type ContainerTask = Schema.Schema.Type<typeof ContainerTaskSchema>
 export type ContainerTaskSnapshot = Schema.Schema.Type<typeof ContainerTaskSnapshotSchema>

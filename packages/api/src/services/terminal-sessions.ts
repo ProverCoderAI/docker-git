@@ -10,7 +10,9 @@ import { Effect, Either } from "effect"
 import { Buffer } from "node:buffer"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
+import { existsSync } from "node:fs"
 import type { IncomingMessage, Server as HttpServer } from "node:http"
+import os from "node:os"
 import type { Duplex } from "node:stream"
 import { WebSocket, WebSocketServer, type RawData } from "ws"
 
@@ -59,6 +61,7 @@ type TerminalRecord = {
   projectDisplayName: string
   projectId: string
   projectKey: string
+  projectTargetDir: string
   prepared: ReturnType<typeof prepareProjectSsh>
 }
 
@@ -140,7 +143,13 @@ type ContainerNetworkEntry = {
   readonly name: string
 }
 
-const dockerGitApiContainerName = (): string => process.env["DOCKER_GIT_API_CONTAINER_NAME"]?.trim() || "docker-git-api"
+const dockerGitApiContainerName = (): string =>
+  process.env["DOCKER_GIT_API_CONTAINER_NAME"]?.trim() || os.hostname().trim() || "docker-git-api"
+
+const isContainerizedController = (): boolean => {
+  const configuredName = process.env["DOCKER_GIT_API_CONTAINER_NAME"]?.trim()
+  return (configuredName !== undefined && configuredName.length > 0) || existsSync("/.dockerenv")
+}
 
 const parseContainerNetworkEntries = (output: string): ReadonlyArray<ContainerNetworkEntry> =>
   output
@@ -150,9 +159,23 @@ const parseContainerNetworkEntries = (output: string): ReadonlyArray<ContainerNe
     .map(([name, ipAddress]) => ({ name, ipAddress }))
 
 const selectReachableProjectNetwork = (
+  projectEntries: ReadonlyArray<ContainerNetworkEntry>,
+  controllerEntries: ReadonlyArray<ContainerNetworkEntry>
+): ContainerNetworkEntry | null =>
+  projectEntries.find((entry) =>
+    entry.name !== "bridge" && controllerEntries.some((controllerEntry) => controllerEntry.name === entry.name)
+  ) ??
+    projectEntries.find((entry) =>
+      controllerEntries.some((controllerEntry) => controllerEntry.name === entry.name)
+    ) ??
+    null
+
+const selectFallbackProjectNetwork = (
   entries: ReadonlyArray<ContainerNetworkEntry>
 ): ContainerNetworkEntry | null =>
-  entries.find((entry) => entry.name !== "bridge") ?? entries[0] ?? null
+  isContainerizedController()
+    ? entries.find((entry) => entry.name === "bridge") ?? entries[0] ?? null
+    : null
 
 const inspectContainerNetworks = (
   containerName: string
@@ -177,7 +200,7 @@ const connectContainerToNetwork = (
   containerName: string
 ) =>
   networkName === "bridge"
-    ? Effect.void
+    ? Effect.succeed(true)
     : runCommandCapture(
       {
         cwd: process.cwd(),
@@ -187,23 +210,36 @@ const connectContainerToNetwork = (
       [0],
       (exitCode) => new CommandFailedError({ command: `docker network connect ${networkName}`, exitCode })
     ).pipe(
-      Effect.asVoid,
-      Effect.orElseSucceed(() => void 0)
+      Effect.as(true),
+      Effect.orElseSucceed(() => false)
     )
 
 const resolveControllerReachableProject = (
   projectItem: ProjectItem
 ) =>
   Effect.gen(function*(_) {
+    const controllerContainer = dockerGitApiContainerName()
     const networkEntries = yield* _(inspectContainerNetworks(projectItem.containerName).pipe(Effect.orElseSucceed(() => [])))
+    const controllerNetworks = yield* _(inspectContainerNetworks(controllerContainer).pipe(Effect.orElseSucceed(() => [])))
+    const alreadyReachable = selectReachableProjectNetwork(networkEntries, controllerNetworks)
+    if (alreadyReachable !== null) {
+      return {
+        ...projectItem,
+        ipAddress: alreadyReachable.ipAddress
+      }
+    }
     yield* _(
       Effect.forEach(
         networkEntries.filter((entry) => entry.name !== "bridge"),
-        (entry) => connectContainerToNetwork(entry.name, dockerGitApiContainerName()),
+        (entry) => connectContainerToNetwork(entry.name, controllerContainer),
         { discard: true }
       )
     )
-    const preferredNetwork = selectReachableProjectNetwork(networkEntries)
+    const refreshedControllerNetworks = yield* _(
+      inspectContainerNetworks(controllerContainer).pipe(Effect.orElseSucceed(() => []))
+    )
+    const preferredNetwork = selectReachableProjectNetwork(networkEntries, refreshedControllerNetworks) ??
+      selectFallbackProjectNetwork(networkEntries)
     if (preferredNetwork === null) {
       return projectItem
     }
@@ -581,7 +617,8 @@ const registerRecord = (
   projectKey: string,
   projectDisplayName: string,
   prepared: ReturnType<typeof prepareProjectSsh>,
-  projectContainerName: string
+  projectContainerName: string,
+  projectTargetDir: string
 ): TerminalSession => {
   const session: TerminalSession = {
     attachedClients: 0,
@@ -600,6 +637,7 @@ const registerRecord = (
     projectDisplayName,
     projectId,
     projectKey,
+    projectTargetDir,
     pty: null,
     session,
     sockets: new Set<WebSocket>()
@@ -662,7 +700,8 @@ export const createTerminalSession = (
         project.projectKey,
         project.displayName,
         prepared,
-        projectItem.containerName
+        projectItem.containerName,
+        projectItem.targetDir
       )
       yield* _(emitTerminalSessionCreated(projectId, session.id, options.requestId))
       return { project, session }
@@ -681,7 +720,8 @@ export const createTerminalSession = (
       project.projectKey,
       project.displayName,
       prepared,
-      reachableProjectItem.containerName
+      reachableProjectItem.containerName,
+      reachableProjectItem.targetDir
     )
     yield* _(emitTerminalSessionCreated(projectId, session.id, options.requestId))
     yield* _(emitTerminalStatus(projectId, "ssh.post-start", "Post-start self-heal continues in background"))
@@ -786,7 +826,7 @@ export const readProjectTerminalImage = (
         Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
       )
     }
-    const plan = planTerminalImageFetch(imagePath)
+    const plan = planTerminalImageFetch(imagePath, { baseDir: record.projectTargetDir })
     if (plan._tag === "InvalidTerminalImageFetch") {
       return yield* _(Effect.fail(new ApiBadRequestError({ message: plan.message })))
     }

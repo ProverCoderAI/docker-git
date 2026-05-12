@@ -25,6 +25,7 @@ import type {
   TerminalSocketListenerArgs,
   TerminalSocketRef
 } from "./terminal-panel-runtime-types.js"
+import { installTerminalQuerySuppression } from "./terminal-query-suppression.js"
 import { resolveTerminalReconnectDelay, terminalReconnectGraceMs } from "./terminal-reconnect.js"
 import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "./terminal.js"
 
@@ -79,6 +80,7 @@ export const createTerminalRuntime = (host: HTMLDivElement): TerminalRuntime => 
     fontSize: 14,
     theme: { background: "#080a0d", foreground: "#f4f7fb" }
   })
+  installTerminalQuerySuppression(terminal)
   const fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(host)

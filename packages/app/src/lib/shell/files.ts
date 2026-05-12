@@ -6,7 +6,11 @@ import { Effect, Match } from "effect"
 
 import { dockerGitScriptNames } from "../core/docker-git-scripts.js"
 import { type TemplateConfig } from "../core/domain.js"
-import { resolveComposeResourceLimits, withDefaultResourceLimitIntent } from "../core/resource-limits.js"
+import {
+  resolveComposeResourceLimits,
+  resolvePlaywrightComposeResourceLimits,
+  withDefaultResourceLimitIntent
+} from "../core/resource-limits.js"
 import { type FileSpec, planFiles } from "../core/templates.js"
 import { FileExistsError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
@@ -235,7 +239,10 @@ export const writeProjectFiles = (
 
     const normalizedConfig = withDefaultResourceLimitIntent(config)
     const hostResources = yield* _(loadHostResources())
-    const composeResourceLimits = resolveComposeResourceLimits(normalizedConfig, hostResources)
+    const composeResourceLimits = {
+      main: resolveComposeResourceLimits(normalizedConfig, hostResources),
+      playwright: resolvePlaywrightComposeResourceLimits(normalizedConfig, hostResources)
+    }
     const specs = planFiles(normalizedConfig, composeResourceLimits)
     const created: Array<string> = []
     const existingFilePaths = force ? [] : yield* _(collectExistingFilePaths(fs, path, baseDir, specs))

@@ -23,11 +23,15 @@ import {
   CreateProjectRequestSchema,
   ExchangePollRequestSchema,
   ExchangeSubscribeRequestSchema,
+  GitlabAuthLoginRequestSchema,
+  GitlabAuthLogoutRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
   ProjectDatabaseProfileRequestSchema,
   ProjectAuthRequestSchema,
   ProjectPortForwardRequestSchema,
+  ProjectPromptUpdateRequestSchema,
+  ProjectSkillUpdateRequestSchema,
   StartProjectTerminalSessionRequestSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
@@ -40,13 +44,17 @@ import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import { resolveWorkspaceRoot } from "@effect-template/lib/shell/workspace-root"
 import {
   importCodexAuth,
+  loginGitlabAuth,
   loginGithubAuth,
   logoutCodexAuth,
+  logoutGitlabAuth,
   logoutGithubAuth,
   readCodexAuthStatus,
+  readGitlabAuthStatus,
   readGithubAuthStatus,
 } from "./services/auth.js"
 import { readAuthMenuSnapshot, runAuthMenuFlow } from "./services/auth-menu.js"
+import { streamGitlabAuthLogin } from "./services/auth-gitlab-login-stream.js"
 import { streamGithubAuthLogin } from "./services/auth-github-login-stream.js"
 import { createAuthTerminalSession, deleteAuthTerminalSession } from "./services/auth-terminal-sessions.js"
 import { streamCodexAuthLogin } from "./services/auth-codex-login-stream.js"
@@ -84,6 +92,18 @@ import {
   upProject
 } from "./services/projects.js"
 import { readProjectAuthSnapshot, runProjectAuthFlow } from "./services/project-auth.js"
+import {
+  deleteProjectPrompt,
+  readProjectPromptsSnapshot,
+  writeProjectPrompt
+} from "./services/project-prompts.js"
+import type { ProjectPromptKind } from "./services/project-prompts.js"
+import {
+  deleteProjectSkill,
+  readProjectSkillsSnapshot,
+  writeProjectSkill
+} from "./services/project-skills.js"
+import type { ProjectSkillScope } from "./services/project-skills.js"
 import { readProjectBrowserSession, proxyProjectBrowser } from "./services/project-browser.js"
 import { parseProjectBrowserProxyPath } from "./services/project-browser-core.js"
 import {
@@ -119,6 +139,13 @@ import {
   startTerminalSession
 } from "./services/terminal-sessions.js"
 import {
+  openSkiller,
+  openSkillerForTerminalSession,
+  parseSkillerRoute,
+  proxySkillerTrpc,
+  serveSkillerApp
+} from "./services/skiller.js"
+import {
   commitStateFromRequest,
   initStateFromRequest,
   pullState,
@@ -144,6 +171,17 @@ const ProjectPortForwardParamsSchema = Schema.Struct({
 const ProjectDatabaseProfileParamsSchema = Schema.Struct({
   projectId: Schema.String,
   profileId: Schema.String
+})
+
+const ProjectPromptParamsSchema = Schema.Struct({
+  projectId: Schema.String,
+  kind: Schema.Literal("claude", "codex", "gemini")
+})
+
+const ProjectSkillParamsSchema = Schema.Struct({
+  projectId: Schema.String,
+  scopeId: Schema.String,
+  name: Schema.String
 })
 
 const AgentParamsSchema = Schema.Struct({
@@ -342,6 +380,8 @@ const projectParams = HttpRouter.schemaParams(ProjectParamsSchema)
 const projectKeyParams = HttpRouter.schemaParams(ProjectKeyParamsSchema)
 const projectPortForwardParams = HttpRouter.schemaParams(ProjectPortForwardParamsSchema)
 const projectDatabaseProfileParams = HttpRouter.schemaParams(ProjectDatabaseProfileParamsSchema)
+const projectPromptParams = HttpRouter.schemaParams(ProjectPromptParamsSchema)
+const projectSkillParams = HttpRouter.schemaParams(ProjectSkillParamsSchema)
 const agentParams = HttpRouter.schemaParams(AgentParamsSchema)
 const terminalSessionParams = HttpRouter.schemaParams(TerminalSessionParamsSchema)
 const terminalSessionByProjectKeyParams = HttpRouter.schemaParams(TerminalSessionByProjectKeyParamsSchema)
@@ -352,12 +392,66 @@ const readCreateProjectRequest = () => HttpServerRequest.schemaBodyJson(CreatePr
 const readCreateFollowRequest = () => HttpServerRequest.schemaBodyJson(CreateFollowRequestSchema)
 const readGithubAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLoginRequestSchema)
 const readGithubAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLogoutRequestSchema)
+const readGitlabAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GitlabAuthLoginRequestSchema)
+const readGitlabAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GitlabAuthLogoutRequestSchema)
 const readAuthMenuRequest = () => HttpServerRequest.schemaBodyJson(AuthMenuRequestSchema)
 const readAuthTerminalSessionRequest = () => HttpServerRequest.schemaBodyJson(AuthTerminalSessionRequestSchema)
 const readCodexAuthImportRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthImportRequestSchema)
 const readCodexAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLoginRequestSchema)
 const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLogoutRequestSchema)
 const readProjectAuthRequest = () => HttpServerRequest.schemaBodyJson(ProjectAuthRequestSchema)
+const readProjectPromptUpdateRequest = () => HttpServerRequest.schemaBodyJson(ProjectPromptUpdateRequestSchema)
+const readProjectSkillUpdateRequest = () => HttpServerRequest.schemaBodyJson(ProjectSkillUpdateRequestSchema)
+
+const skillScopeFromId = (scopeId: string): ProjectSkillScope | null => {
+  switch (scopeId) {
+    case "skills":
+      return "skills"
+    case "agents-skills":
+      return "agents/skills"
+    case "agents-dot-skills":
+      return "agents/.skills"
+    case "claude-skills":
+      return "claude/skills"
+    case "codex-skills":
+      return "codex/skills"
+    case "gemini-skills":
+      return "gemini/skills"
+    default:
+      return null
+  }
+}
+
+export const skillScopeToId = (scope: ProjectSkillScope): string => {
+  switch (scope) {
+    case "skills":
+      return "skills"
+    case "agents/skills":
+      return "agents-skills"
+    case "agents/.skills":
+      return "agents-dot-skills"
+    case "claude/skills":
+      return "claude-skills"
+    case "codex/skills":
+      return "codex-skills"
+    case "gemini/skills":
+      return "gemini-skills"
+  }
+}
+
+const skillScopeFromBody = (scope: string): ProjectSkillScope | null => {
+  switch (scope) {
+    case "skills":
+    case "agents/skills":
+    case "agents/.skills":
+    case "claude/skills":
+    case "codex/skills":
+    case "gemini/skills":
+      return scope as ProjectSkillScope
+    default:
+      return null
+  }
+}
 const readProjectPortForwardRequest = () => HttpServerRequest.schemaBodyJson(ProjectPortForwardRequestSchema)
 const readProjectDatabaseProfileRequest = () => HttpServerRequest.schemaBodyJson(ProjectDatabaseProfileRequestSchema)
 const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitRequestSchema)
@@ -450,6 +544,12 @@ const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
 const projectProxyResponse = Effect.gen(function*(_) {
   const request = yield* _(HttpServerRequest.HttpServerRequest)
   const pathname = new URL(request.url, "http://localhost").pathname
+  const skillerRoute = parseSkillerRoute(pathname)
+  if (skillerRoute !== null) {
+    return skillerRoute._tag === "App"
+      ? yield* _(serveSkillerApp(skillerRoute))
+      : yield* _(proxySkillerTrpc(request, skillerRoute))
+  }
   const browserTarget = parseProjectBrowserProxyPath(pathname)
   if (browserTarget !== null) {
     return yield* _(proxyProjectBrowser(request, browserTarget, resolveRequestOrigin(request)))
@@ -491,6 +591,29 @@ export const makeRouter = () => {
         const projectsRoot = defaultProjectsRoot(cwd)
         return yield* _(jsonResponse({ ok: true, revision: controllerRevision, cwd, projectsRoot }, 200))
       }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/skiller/open",
+      openSkiller().pipe(
+        Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/by-key/:projectKey/skiller/open",
+      projectKeyParams.pipe(
+        Effect.flatMap(({ projectKey }) => openSkiller(projectKey)),
+        Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/by-key/:projectKey/terminal-sessions/:sessionId/skiller/open",
+      terminalSessionByProjectKeyParams.pipe(
+        Effect.flatMap(({ projectKey, sessionId }) => openSkillerForTerminalSession(projectKey, sessionId)),
+        Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
+        Effect.catchAll(errorResponse)
+      )
     )
   )
 
@@ -499,6 +622,13 @@ export const makeRouter = () => {
       "/auth/github/status",
       Effect.gen(function*(_) {
         const status = yield* _(readGithubAuthStatus())
+        return yield* _(jsonResponse({ status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/auth/gitlab/status",
+      Effect.gen(function*(_) {
+        const status = yield* _(readGitlabAuthStatus())
         return yield* _(jsonResponse({ status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
@@ -528,6 +658,28 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(readGithubAuthLoginRequest())
         const status = yield* _(loginGithubAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/gitlab/login/stream",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGitlabAuthLoginRequest())
+        const outputStream = yield* _(streamGitlabAuthLogin(request))
+        return HttpServerResponse.stream(outputStream, {
+          status: 200,
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "cache-control": "no-cache"
+          }
+        })
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/gitlab/login",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGitlabAuthLoginRequest())
+        const status = yield* _(loginGitlabAuth(request))
         return yield* _(jsonResponse({ ok: true, status }, 201))
       }).pipe(Effect.catchAll(errorResponse))
     ),
@@ -572,6 +724,14 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(readGithubAuthLogoutRequest())
         const status = yield* _(logoutGithubAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/gitlab/logout",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGitlabAuthLogoutRequest())
+        const status = yield* _(logoutGitlabAuth(request))
         return yield* _(jsonResponse({ ok: true, status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
@@ -837,6 +997,88 @@ export const makeRouter = () => {
         const request = yield* _(readProjectAuthRequest())
         const project = yield* _(getProject(projectId))
         const snapshot = yield* _(runProjectAuthFlow(project, request))
+        return yield* _(jsonResponse({ ok: true, snapshot }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/projects/:projectId/prompts",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) =>
+          Effect.gen(function*(_) {
+            const project = yield* _(getProject(projectId))
+            const snapshot = yield* _(readProjectPromptsSnapshot(project))
+            return { snapshot }
+          })
+        ),
+        Effect.flatMap((payload) => jsonResponse(payload, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.put(
+      "/projects/:projectId/prompts/:kind",
+      Effect.gen(function*(_) {
+        const { projectId, kind } = yield* _(projectPromptParams)
+        const request = yield* _(readProjectPromptUpdateRequest())
+        const project = yield* _(getProject(projectId))
+        const prompt = yield* _(writeProjectPrompt(project, kind as ProjectPromptKind, request.content))
+        const snapshot = yield* _(readProjectPromptsSnapshot(project))
+        return yield* _(jsonResponse({ ok: true, prompt, snapshot }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.del(
+      "/projects/:projectId/prompts/:kind",
+      Effect.gen(function*(_) {
+        const { projectId, kind } = yield* _(projectPromptParams)
+        const project = yield* _(getProject(projectId))
+        yield* _(deleteProjectPrompt(project, kind as ProjectPromptKind))
+        const snapshot = yield* _(readProjectPromptsSnapshot(project))
+        return yield* _(jsonResponse({ ok: true, snapshot }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/projects/:projectId/skills",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) =>
+          Effect.gen(function*(_) {
+            const project = yield* _(getProject(projectId))
+            const snapshot = yield* _(readProjectSkillsSnapshot(project))
+            return { snapshot }
+          })
+        ),
+        Effect.flatMap((payload) => jsonResponse(payload, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/skills",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(readProjectSkillUpdateRequest())
+        const scope = skillScopeFromBody(request.scope)
+        if (scope === null) {
+          return yield* _(
+            Effect.fail(new ApiBadRequestError({ message: `Unknown skill scope: ${request.scope}` }))
+          )
+        }
+        const project = yield* _(getProject(projectId))
+        const skill = yield* _(writeProjectSkill(project, scope, request.name, request.content))
+        const snapshot = yield* _(readProjectSkillsSnapshot(project))
+        return yield* _(jsonResponse({ ok: true, skill, snapshot }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.del(
+      "/projects/:projectId/skills/:scopeId/:name",
+      Effect.gen(function*(_) {
+        const { projectId, scopeId, name } = yield* _(projectSkillParams)
+        const scope = skillScopeFromId(scopeId)
+        if (scope === null) {
+          return yield* _(
+            Effect.fail(new ApiBadRequestError({ message: `Unknown skill scope: ${scopeId}` }))
+          )
+        }
+        const project = yield* _(getProject(projectId))
+        yield* _(deleteProjectSkill(project, scope, name))
+        const snapshot = yield* _(readProjectSkillsSnapshot(project))
         return yield* _(jsonResponse({ ok: true, snapshot }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),

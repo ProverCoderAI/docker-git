@@ -34,7 +34,7 @@ Commands:
   ps, status          Show docker compose status for all docker-git projects
   apply-all           Apply docker-git config and refresh all containers (docker compose up); use --active to restrict to running containers only
   down-all            Stop all docker-git containers (docker compose down)
-  auth                Manage GitHub/Codex/Claude Code auth for docker-git
+  auth                Manage GitHub/GitLab/Codex/Claude Code auth for docker-git
   state               Manage docker-git state directory via git (sync across machines)
 
 Options:
@@ -57,13 +57,15 @@ Options:
   --controller-cpu <value>  Controller CPU cap intent: percent or cores (default: 90%)
   --controller-ram <value>  Controller RAM cap intent: percent or size (default: 90%)
   --controller-pids <n>     Controller PID cap (default: 4096)
+  --playwright-cpu <value>  CPU limit for the MCP Playwright browser sidecar (default: 30% or --cpu when set)
+  --playwright-ram <value>  RAM limit for the MCP Playwright browser sidecar (default: 30% or --ram when set)
   --network-mode <mode>     Compose network mode: shared|project (default: shared)
   --shared-network <name>   Shared Docker network name when network-mode=shared (default: docker-git-shared)
   --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>[/issue-<id>|/pr-<id>])
   --project-dir <path>      Project directory for open/attach (default: .)
   --archive <path>          Scrap snapshot directory (default: .orch/scrap/session)
   --mode <session>          Scrap mode (default: session)
-  --git-token <label>       Token label for clone/create (maps to GITHUB_TOKEN__<LABEL>, example: agiens)
+  --git-token <label>       Token label for clone/create (maps to GITHUB_TOKEN__<LABEL>, GITLAB_TOKEN__<LABEL>, or GIT_AUTH_TOKEN__<LABEL>, example: agiens)
   --gh-skip                 Skip GitHub auth for public clone/create and force anonymous HTTPS clone
   --codex-token <label>     Codex auth label for clone/create (maps to CODEX_AUTH_LABEL, example: agien)
   --claude-token <label>    Claude auth label for clone/create (maps to CLAUDE_AUTH_LABEL, example: agien)
@@ -83,6 +85,13 @@ Container runtime env (set via .orch/env/project.env):
   CODEX_SHARE_AUTH=1|0                  Share Codex auth.json across projects (default: 1)
   CODEX_AUTO_UPDATE=1|0                 Auto-update Codex CLI on container start (default: 1)
   CLAUDE_AUTO_SYSTEM_PROMPT=1|0         Auto-attach docker-git managed system prompt to claude (default: 1)
+  CLAUDE_SYSTEM_PROMPT_OVERRIDE=<text>  Custom Claude system prompt body (overrides default Russian template)
+  CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE=<path>  Path to file with custom Claude prompt (takes precedence over OVERRIDE)
+  CODEX_SYSTEM_PROMPT_OVERRIDE=<text>   Custom Codex managed-block content for AGENTS.md
+  CODEX_SYSTEM_PROMPT_OVERRIDE_FILE=<path>  Path to file with custom Codex managed-block content (takes precedence)
+  GEMINI_SYSTEM_PROMPT_OVERRIDE=<text>  Custom Gemini system prompt body
+  GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE=<path>  Path to file with custom Gemini prompt (takes precedence over OVERRIDE)
+  CODEX_EXTRA_SKILLS_PATHS=<spec>[,<spec>...]  Extra skill trees mounted into Codex (format: "prio-name::relative/path"; comma- or newline-separated)
   DOCKER_GIT_ZSH_AUTOSUGGEST=1|0        Enable zsh-autosuggestions (default: 0)
   DOCKER_GIT_ZSH_AUTOSUGGEST_STYLE=...  zsh-autosuggestions highlight style (default: fg=8,italic)
   DOCKER_GIT_ZSH_AUTOSUGGEST_STRATEGY=...  Suggestion sources (default: history completion)
@@ -95,6 +104,7 @@ Container runtime env (set via .orch/env/project.env):
 
 Auth providers:
   github, gh         GitHub CLI auth (tokens saved to env file)
+  gitlab             GitLab CLI auth (tokens saved to env file)
   codex             Codex CLI auth (stored under .orch/auth/codex)
   claude, cc        Claude Code CLI auth (OAuth cache stored under .orch/auth/claude)
 
@@ -106,10 +116,10 @@ Auth actions:
 
 Auth options:
   --label <label>        Account label (default: default)
-  --token <token>        GitHub token override (login only; useful for non-interactive/CI)
-  --web                 Force OAuth web flow (login only; ignores --token)
+  --token <token>        GitHub/GitLab token override (login only; useful for non-interactive/CI)
+  --web                 Force OAuth web flow where supported (login only; ignores --token)
   --scopes <scopes>      GitHub scopes (login only, default: repo,workflow,read:org)
-  --env-global <path>    Env file path for GitHub tokens (default: <projectsRoot>/.orch/env/global.env)
+  --env-global <path>    Env file path for GitHub/GitLab tokens (default: <projectsRoot>/.orch/env/global.env)
   --codex-auth <path>    Codex auth root path (default: <projectsRoot>/.orch/auth/codex)
 
 State actions:

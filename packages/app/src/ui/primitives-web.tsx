@@ -109,24 +109,23 @@ export const webPrimitives = {
       children,
       style: textStyle(props)
     }),
-  TextInput: ({
-    ariaLabel,
-    autoFocus,
-    onChange,
-    onEnter,
-    onEscape,
-    placeholder,
-    secret,
-    value
-  }: UiTextInputProps): JSX.Element => (
-    <input
+  TextInput: (props: UiTextInputProps): JSX.Element =>
+    props.multiline === true ? <MultilineTextInput {...props} /> : <SingleLineTextInput {...props} />
+} as const
+
+const MultilineTextInput = (
+  { ariaLabel, autoFocus, minRows, onChange, onEnter, onEscape, placeholder, value }: UiTextInputProps
+): JSX.Element => {
+  const rows = minRows ?? 6
+  return (
+    <textarea
       aria-label={ariaLabel}
       autoFocus={autoFocus}
       onChange={(event) => {
         onChange(event.currentTarget.value)
       }}
       onKeyDown={(event) => {
-        if (event.key === "Enter") {
+        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
           event.preventDefault()
           event.stopPropagation()
           onEnter?.(event.shiftKey)
@@ -139,9 +138,44 @@ export const webPrimitives = {
         }
       }}
       placeholder={placeholder}
-      style={inputStyle}
-      type={secret ? "password" : "text"}
+      rows={rows}
+      style={{
+        ...inputStyle,
+        color: "#d6e5f7",
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+        minHeight: `${rows * 1.5}em`,
+        resize: "vertical"
+      }}
       value={value}
     />
   )
-} as const
+}
+
+const SingleLineTextInput = (
+  { ariaLabel, autoFocus, onChange, onEnter, onEscape, placeholder, secret, value }: UiTextInputProps
+): JSX.Element => (
+  <input
+    aria-label={ariaLabel}
+    autoFocus={autoFocus}
+    onChange={(event) => {
+      onChange(event.currentTarget.value)
+    }}
+    onKeyDown={(event) => {
+      if (event.key === "Enter") {
+        event.preventDefault()
+        event.stopPropagation()
+        onEnter?.(event.shiftKey)
+        return
+      }
+      if (event.key === "Escape") {
+        event.preventDefault()
+        event.stopPropagation()
+        onEscape?.()
+      }
+    }}
+    placeholder={placeholder}
+    style={inputStyle}
+    type={secret ? "password" : "text"}
+    value={value}
+  />
+)

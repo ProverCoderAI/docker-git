@@ -103,4 +103,53 @@ describe("terminal image fetch core", () => {
       _tag: "InvalidTerminalImageFetch"
     })
   })
+
+  it("resolves a relative path against the provided absolute base directory", () => {
+    expect(
+      planTerminalImageFetch(
+        "app/docs/screenshots/issue-237/proof/pr238-proof-06-skiller-submodule-status.png",
+        { baseDir: "/home/dev" }
+      )
+    ).toEqual({
+      _tag: "ValidTerminalImageFetch",
+      containerPath: "/home/dev/app/docs/screenshots/issue-237/proof/pr238-proof-06-skiller-submodule-status.png",
+      mediaType: "image/png"
+    })
+  })
+
+  it("ignores trailing slashes on the base directory when resolving a relative path", () => {
+    expect(planTerminalImageFetch("photos/cover.jpg", { baseDir: "/home/dev/" })).toEqual({
+      _tag: "ValidTerminalImageFetch",
+      containerPath: "/home/dev/photos/cover.jpg",
+      mediaType: "image/jpeg"
+    })
+  })
+
+  it("still rejects relative paths when no base directory is supplied", () => {
+    expect(planTerminalImageFetch("app/cover.png")).toEqual({
+      _tag: "InvalidTerminalImageFetch",
+      message: "Image path must be absolute."
+    })
+  })
+
+  it("rejects relative paths when the supplied base directory is not absolute", () => {
+    expect(planTerminalImageFetch("app/cover.png", { baseDir: "home/dev" })).toEqual({
+      _tag: "InvalidTerminalImageFetch",
+      message: "Image path must be absolute."
+    })
+  })
+
+  it("rejects an unsafe base directory containing traversal segments", () => {
+    expect(planTerminalImageFetch("cover.png", { baseDir: "/home/dev/../etc" })).toEqual({
+      _tag: "InvalidTerminalImageFetch",
+      message: "Image base directory is invalid."
+    })
+  })
+
+  it("rejects relative paths that contain traversal segments after resolution", () => {
+    expect(planTerminalImageFetch("../etc/cover.png", { baseDir: "/home/dev" })).toMatchObject({
+      _tag: "InvalidTerminalImageFetch",
+      message: "Image path must not contain '.' or '..' segments."
+    })
+  })
 })

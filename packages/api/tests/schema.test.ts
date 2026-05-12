@@ -11,6 +11,8 @@ import {
   ExchangeSubscribeRequestSchema,
   CreateFollowRequestSchema,
   CreateProjectRequestSchema,
+  GitlabAuthLoginRequestSchema,
+  GitlabAuthLogoutRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
   ProjectBrowserSessionSchema,
@@ -149,6 +151,24 @@ describe("api schemas", () => {
       })
     }))
 
+  it.effect("decodes gitlab auth login payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(GitlabAuthLoginRequestSchema)({
+        label: "default",
+        token: "glpat-token"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.label).toBe("default")
+          expect(value.token).toBe("glpat-token")
+        }
+      })
+    }))
+
   it.effect("decodes codex auth import payload", () =>
     Effect.sync(() => {
       const result = Schema.decodeUnknownEither(CodexAuthImportRequestSchema)({
@@ -202,6 +222,22 @@ describe("api schemas", () => {
   it.effect("decodes auth logout payload", () =>
     Effect.sync(() => {
       const result = Schema.decodeUnknownEither(GithubAuthLogoutRequestSchema)({
+        label: "default"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.label).toBe("default")
+        }
+      })
+    }))
+
+  it.effect("decodes gitlab auth logout payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(GitlabAuthLogoutRequestSchema)({
         label: "default"
       })
 

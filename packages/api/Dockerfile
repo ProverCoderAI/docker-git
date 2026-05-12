@@ -31,6 +31,9 @@ RUN set -eu; \
   done; \
   apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
     ca-certificates curl git docker.io docker-compose-v2 openssh-client sshpass python3 make g++ unzip \
+    xvfb libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libgtk-3-0 \
+    libnss3 libpango-1.0-0 libx11-xcb1 libxcb-dri3-0 libxcomposite1 libxdamage1 libxfixes3 \
+    libxkbcommon0 libxrandr2 libxshmfence1 \
  && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
@@ -43,6 +46,8 @@ COPY package.json bun.lock bunfig.toml tsconfig.base.json tsconfig.json ./
 COPY patches ./patches
 COPY scripts ./scripts
 COPY packages ./packages
+COPY .gitmodules ./.gitmodules
+COPY third_party ./third_party
 
 RUN set -eu; \
     for attempt in 1 2 3 4 5; do \
@@ -57,6 +62,14 @@ RUN set -eu; \
     exit 1
 RUN bun run --cwd packages/lib build
 RUN bun run --cwd packages/api build
+RUN bun scripts/skiller-apply-docker-git-patches.mjs
+RUN test -f third_party/skiller-desktop-skills-manager/package.json \
+ && cd third_party/skiller-desktop-skills-manager \
+ && bun install --frozen-lockfile --silent \
+ && bun run build \
+ && touch out/.docker-git-browser-folder-picker.patch \
+ && mkdir -p out/preload \
+ && ln -sf index.mjs out/preload/index.js
 
 ENV DOCKER_GIT_API_PORT=3334
 ENV DOCKER_GIT_DOCKER_RUNTIME=isolated

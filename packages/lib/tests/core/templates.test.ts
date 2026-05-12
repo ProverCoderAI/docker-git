@@ -58,6 +58,11 @@ describe("renderDockerfile", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
     expectContainsAll(dockerfile, [
+      "# Tooling: GitLab CLI (glab)",
+      "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/",
+      "glab_1.93.0_linux_$GLAB_ARCH.deb",
+      "curl -fsSL --retry 5 --retry-all-errors --retry-delay 2",
+      "glab --version",
       'ARG DOCKER_GIT_SESSION_SYNC_PACKAGE="@prover-coder-ai/docker-git-session-sync@latest"',
       'COPY .docker-git-tools/docker-git-session-sync /opt/docker-git/tools/docker-git-session-sync',
       'npm install -g "$DOCKER_GIT_SESSION_SYNC_PACKAGE"',
@@ -65,6 +70,7 @@ describe("renderDockerfile", () => {
       "using local session sync fallback",
       "install -m 0755 /opt/docker-git/tools/docker-git-session-sync /usr/local/bin/docker-git-session-sync"
     ])
+    expect(dockerfile).not.toContain("glab_1.93.0_linux_\\$GLAB_ARCH.deb")
   })
 })
 
@@ -113,25 +119,37 @@ describe("renderEntrypoint auth bridge", () => {
     const entrypoint = renderAuthEntrypoint()
 
     expectContainsAll(entrypoint, [
+      "GITLAB_TOKEN=\"${GITLAB_TOKEN:-}\"",
       "GIT_AUTH_TOKEN=\"${GIT_AUTH_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}\"",
       "GITHUB_TOKEN=\"${GITHUB_TOKEN:-${GH_TOKEN:-}}\"",
       "GITHUB_AUTH_SKIP=\"${GITHUB_AUTH_SKIP:-0}\"",
-      "AUTH_LABEL_RAW=\"${GIT_AUTH_LABEL:-${GITHUB_AUTH_LABEL:-}}\"",
+      "AUTH_LABEL_RAW=\"${GIT_AUTH_LABEL:-${GITHUB_AUTH_LABEL:-${GITLAB_AUTH_LABEL:-}}}\"",
+      "if [[ -n \"$AUTH_LABEL_RAW\" ]]; then",
       "LABELED_GITHUB_TOKEN_KEY=\"GITHUB_TOKEN__$RESOLVED_AUTH_LABEL\"",
+      "LABELED_GITLAB_TOKEN_KEY=\"GITLAB_TOKEN__$RESOLVED_AUTH_LABEL\"",
       "LABELED_GIT_TOKEN_KEY=\"GIT_AUTH_TOKEN__$RESOLVED_AUTH_LABEL\"",
       "if [[ -n \"$EFFECTIVE_GH_TOKEN\" ]]; then",
       String.raw`printf "export GITHUB_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN"`,
       String.raw`printf "export GH_TOKEN=%q\n" "$EFFECTIVE_GH_TOKEN"`,
-      String.raw`printf "export GIT_AUTH_TOKEN=%q\n" "$EFFECTIVE_GITHUB_TOKEN"`,
+      String.raw`printf "export GITLAB_TOKEN=%q\n" "$EFFECTIVE_GITLAB_TOKEN"`,
+      String.raw`printf "export GLAB_IS_OAUTH2=%q\n" "$EFFECTIVE_GLAB_IS_OAUTH2"`,
+      String.raw`printf "export GIT_AUTH_TOKEN=%q\n" "$EFFECTIVE_GIT_AUTH_TOKEN"`,
       "docker_git_upsert_ssh_env \"GITHUB_TOKEN\" \"$EFFECTIVE_GITHUB_TOKEN\"",
       "docker_git_upsert_ssh_env \"GH_TOKEN\" \"$EFFECTIVE_GH_TOKEN\"",
-      "docker_git_upsert_ssh_env \"GIT_AUTH_TOKEN\" \"$EFFECTIVE_GITHUB_TOKEN\"",
+      "docker_git_upsert_ssh_env \"GITLAB_TOKEN\" \"$EFFECTIVE_GITLAB_TOKEN\"",
+      "docker_git_upsert_ssh_env \"GLAB_IS_OAUTH2\" \"$EFFECTIVE_GLAB_IS_OAUTH2\"",
+      "docker_git_upsert_ssh_env \"GIT_AUTH_TOKEN\" \"$EFFECTIVE_GIT_AUTH_TOKEN\"",
+      "PRIVATE-TOKEN: $EFFECTIVE_GITLAB_TOKEN",
+      "Authorization: Bearer $EFFECTIVE_GITLAB_TOKEN",
       "GIT_CREDENTIAL_HELPER_PATH=\"/usr/local/bin/docker-git-credential-helper\"",
       "token=\"${GITHUB_TOKEN:-}\"",
+      "token=\"${GITLAB_TOKEN:-}\"",
       "token=\"${GH_TOKEN:-}\"",
+      "username=\"oauth2\"",
       String.raw`printf "%s\n" "password=$token"`,
       "git config --global credential.helper"
     ])
+    expect(entrypoint).not.toContain('if [[ "$GITHUB_AUTH_SKIP" != "1" && -n "$AUTH_LABEL_RAW" ]]; then')
   })
 
   it("renders Claude auth and wrapper bootstrap wiring", () => {
@@ -213,9 +231,47 @@ describe("renderEntrypoint auth bridge", () => {
       "CLAUDE_GLOBAL_PROMPT_FILE=\"/home/dev/.claude/CLAUDE.md\"",
       "CLAUDE_AUTO_SYSTEM_PROMPT=\"${CLAUDE_AUTO_SYSTEM_PROMPT:-1}\"",
       "docker-git-managed:claude-md",
-      "SUBAGENTS_LINE=\"Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.\""
+      "SUBAGENTS_LINE=",
+      "MANAGED_LINES=\"$(docker_git_decode_unicode_escapes \"$MANAGED_LINES\")\""
     ])
-    expect(entrypoint.split("Для решения задач обязательно используй subagents.").length - 1).toBeGreaterThanOrEqual(2)
+    expect(entrypoint.split("SUBAGENTS_LINE=").length - 1).toBeGreaterThanOrEqual(1)
+  })
+
+  it("renders system-prompt override hooks for codex/claude/gemini", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      "docker_git_decode_unicode_escapes()",
+      "CLAUDE_DEFAULT_PROMPT_BODY=\"$(docker_git_decode_unicode_escapes \"$CLAUDE_DEFAULT_PROMPT_BODY\")\"",
+      "CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE=\"${CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE:-}\"",
+      "CLAUDE_SYSTEM_PROMPT_OVERRIDE=\"${CLAUDE_SYSTEM_PROMPT_OVERRIDE:-}\"",
+      "if [[ -n \"$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE\" && -r \"$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE\" ]]; then",
+      "CLAUDE_PROMPT_BODY=\"$(cat \"$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE\")\"",
+      "CLAUDE_PROMPT_BODY=\"$CLAUDE_SYSTEM_PROMPT_OVERRIDE\"",
+      "CLAUDE_PROMPT_BODY=\"$CLAUDE_DEFAULT_PROMPT_BODY\"",
+      "CODEX_SYSTEM_PROMPT_OVERRIDE_FILE=\"${CODEX_SYSTEM_PROMPT_OVERRIDE_FILE:-}\"",
+      "CODEX_SYSTEM_PROMPT_OVERRIDE=\"${CODEX_SYSTEM_PROMPT_OVERRIDE:-}\"",
+      "MANAGED_LINES=\"$(cat \"$CODEX_SYSTEM_PROMPT_OVERRIDE_FILE\")\"",
+      "MANAGED_LINES=\"$CODEX_SYSTEM_PROMPT_OVERRIDE\"",
+      "GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE=\"${GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE:-}\"",
+      "GEMINI_SYSTEM_PROMPT_OVERRIDE=\"${GEMINI_SYSTEM_PROMPT_OVERRIDE:-}\"",
+      "GEMINI_DEFAULT_PROMPT_BODY=\"$(docker_git_decode_unicode_escapes \"$GEMINI_DEFAULT_PROMPT_BODY\")\"",
+      "GEMINI_PROMPT_BODY=\"$(cat \"$GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE\")\"",
+      "GEMINI_PROMPT_BODY=\"$GEMINI_SYSTEM_PROMPT_OVERRIDE\"",
+      "GEMINI_PROMPT_BODY=\"$GEMINI_DEFAULT_PROMPT_BODY\""
+    ])
+  })
+
+  it("renders extra-skills hook for the codex skill sync function", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      "local extra_specs=\"${CODEX_EXTRA_SKILLS_PATHS:-}\"",
+      "if [[ -n \"$extra_specs\" ]]; then",
+      "extra_specs=\"${extra_specs//,/$'\\n'}\"",
+      "while IFS= read -r spec; do",
+      "done <<< \"$extra_specs\""
+    ])
   })
 
   it("renders terminal recovery hooks and disables zsh autosuggestions by default", () => {
@@ -297,6 +353,47 @@ describe("renderDockerCompose", () => {
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(2)
   })
 
+  it("applies separate resource limits for the browser sidecar when provided", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        enableMcpPlaywright: true
+      }),
+      {
+        main: { cpuLimit: 2, ramLimit: "4g" },
+        playwright: { cpuLimit: 0.5, ramLimit: "1g" }
+      }
+    )
+    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
+    const browserSection = compose.slice(browserServiceIndex)
+    const mainSection = compose.slice(0, browserServiceIndex)
+
+    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
+    expect(mainSection).toContain("    cpus: 2\n")
+    expect(mainSection).toContain('    mem_limit: "4g"\n')
+    expect(mainSection).toContain('    memswap_limit: "4g"\n')
+    expect(browserSection).toContain("    cpus: 0.5\n")
+    expect(browserSection).toContain('    mem_limit: "1g"\n')
+    expect(browserSection).toContain('    memswap_limit: "1g"\n')
+  })
+
+  it("backward-compatibly applies single resource limit shape to both services", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        enableMcpPlaywright: true
+      }),
+      {
+        cpuLimit: 1.5,
+        ramLimit: "2g"
+      }
+    )
+    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
+    const browserSection = compose.slice(browserServiceIndex)
+
+    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
+    expect(browserSection).toContain("    cpus: 1.5\n")
+    expect(browserSection).toContain('    mem_limit: "2g"\n')
+  })
+
   it("renders explicit anonymous GitHub clone override for public repos", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({
@@ -311,6 +408,6 @@ describe("renderDockerCompose", () => {
 
     expect(compose).toContain('GITHUB_AUTH_SKIP: "1"')
     expect(entrypoint).toContain('GITHUB_AUTH_SKIP="${GITHUB_AUTH_SKIP:-0}"')
-    expect(entrypoint).toContain('if [[ "${GITHUB_AUTH_SKIP:-0}" == "1" ]]; then')
+    expect(entrypoint).toContain('if [[ "${GITHUB_AUTH_SKIP:-0}" == "1" && "$REPO_URL" == https://github.com/* ]]; then')
   })
 })

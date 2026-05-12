@@ -128,7 +128,11 @@ export const hasClaudeCredentials = (record: JsonRecord | null): boolean =>
   record !== null && typeof record["claudeAiOauth"] === "object" && record["claudeAiOauth"] !== null
 
 export const isGithubTokenKey = (key: string): boolean =>
-  key === "GITHUB_TOKEN" || key === "GH_TOKEN" || key.startsWith("GITHUB_TOKEN__")
+  key === "GITHUB_TOKEN" ||
+  key === "GH_TOKEN" ||
+  key === "GITLAB_TOKEN" ||
+  key.startsWith("GITHUB_TOKEN__") ||
+  key.startsWith("GITLAB_TOKEN__")
 
 export const hasNonEmptyFile = (
   fs: FileSystem.FileSystem,
@@ -165,5 +169,6 @@ export type AuthSyncSpec = {
 
 export type LegacyOrchPaths = AuthPaths & {
   readonly ghAuthPath: string
+  readonly gitlabAuthPath?: string
   readonly geminiAuthPath?: string
 }

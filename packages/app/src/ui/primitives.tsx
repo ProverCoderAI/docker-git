@@ -53,6 +53,8 @@ export type UiButtonProps = {
 export type UiTextInputProps = {
   readonly ariaLabel: string
   readonly autoFocus?: boolean
+  readonly minRows?: number
+  readonly multiline?: boolean
   readonly onChange: (value: string) => void
   readonly onEnter?: (shift: boolean) => void
   readonly onEscape?: () => void

@@ -11,12 +11,14 @@ import type { AuthSnapshot, DashboardData, GithubAuthStatus, ProjectAuthSnapshot
 import { maybeLoadProjectBrowser } from "./app-ready-browser-hook.js"
 import { maybeLoadProjectDatabases } from "./app-ready-databases-hook.js"
 import { maybeLoadProjectPortForwards } from "./app-ready-port-forwards-hook.js"
+import { maybeLoadProjectPrompts } from "./app-ready-prompts-hook.js"
 import {
   normalizeSelectedProjectId,
   shouldRefreshAuthPanel,
   shouldRefreshProjectAuthPanel,
   shouldRefreshProjectDetails
 } from "./app-ready-shortcuts.js"
+import { maybeLoadProjectSkills } from "./app-ready-skills-hook.js"
 import { maybeLoadProjectTasks } from "./app-ready-tasks-hook.js"
 import type { BrowserMenuTag } from "./menu.js"
 import type { BrowserScreen } from "./screen.js"
@@ -152,6 +154,8 @@ const loadReadyPanel = (args: PanelAutoloadArgs): void => {
   maybeLoadProjectPortForwards(args)
   maybeLoadProjectDatabases(args)
   maybeLoadProjectBrowser(args)
+  maybeLoadProjectPrompts(args)
+  maybeLoadProjectSkills(args)
   maybeLoadProjectTasks(args)
 }
 

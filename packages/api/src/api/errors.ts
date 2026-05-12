@@ -1,7 +1,7 @@
 import { Data } from "effect"
 
 export class ApiAuthRequiredError extends Data.TaggedError("ApiAuthRequiredError")<{
-  readonly provider: "github"
+  readonly provider: "github" | "gitlab"
   readonly message: string
   readonly command: string
 }> {}

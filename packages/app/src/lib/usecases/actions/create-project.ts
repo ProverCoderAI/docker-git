@@ -22,6 +22,7 @@ import { logDockerAccessInfo } from "../access-log.js"
 import { resolveAutoAgentMode } from "../agent-auto-select.js"
 import { applyGithubForkConfig } from "../github-fork.js"
 import { validateGithubCloneAuthTokenPreflight } from "../github-token-preflight.js"
+import { validateGitlabCloneAuthTokenPreflight } from "../gitlab-token-preflight.js"
 import { defaultProjectsRoot } from "../menu-helpers.js"
 import { resolveTemplateResourceLimits } from "../resource-limits.js"
 import { autoSyncState } from "../state-repo.js"
@@ -165,6 +166,7 @@ export const prepareProject = (
       deleteConflictingProjectsIfNeeded(resolvedOutDir, rootedConfig, command.force)
     )
     yield* _(validateGithubCloneAuthTokenPreflight(rootedConfig))
+    yield* _(validateGitlabCloneAuthTokenPreflight(rootedConfig))
 
     const resolvedConfig = yield* _(resolveCreateConfig(rootedConfig, resolvedOutDir))
     const finalConfig = yield* _(resolveRuntimeConfig(resolvedConfig))

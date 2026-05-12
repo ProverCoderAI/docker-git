@@ -3,11 +3,20 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as Path from "@effect/platform/Path"
 import { defaultTemplateConfig } from "@effect-template/lib/core/template-defaults"
-import { parseGithubRepoUrl } from "@effect-template/lib/core/repo"
+import { parseGithubRepoUrl, parseGitlabRepoUrl } from "@effect-template/lib/core/repo"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { authCodexLogin as runCodexLogin } from "@effect-template/lib/usecases/auth-codex"
+import { authGitlabLogin as runGitlabLogin, authGitlabLogout as runGitlabLogout, listGitlabTokens } from "@effect-template/lib/usecases/auth-gitlab"
 import { authGithubLogin as runGithubLogin, authGithubLogout as runGithubLogout } from "@effect-template/lib/usecases/auth-github"
 import { readEnvText } from "@effect-template/lib/usecases/env-file"
+import {
+  gitlabRepoAccessMessage,
+  gitlabRepoAccessWarning,
+  gitlabInvalidTokenMessage,
+  probeGitlabRepoAccess,
+  resolveGitlabCloneAuthToken
+} from "@effect-template/lib/usecases/gitlab-token-preflight"
+import { validateGitlabToken, type GitlabTokenValidationResult } from "@effect-template/lib/usecases/gitlab-token-validation"
 import {
   githubRepoAccessMessage,
   githubRepoAccessWarning,
@@ -25,6 +34,10 @@ import type {
   CodexAuthLoginRequest,
   CodexAuthLogoutRequest,
   CodexAuthStatus,
+  GitlabAuthLoginRequest,
+  GitlabAuthLogoutRequest,
+  GitlabAuthStatus,
+  GitlabAuthTokenStatus,
   GithubAuthLoginRequest,
   GithubAuthLogoutRequest,
   GithubAuthStatus,
@@ -36,6 +49,11 @@ export const githubAuthRequiredCommand = "docker-git auth github login --web"
 export const githubAuthRequiredMessage = [
   "GitHub auth is missing: no GitHub token/key was found for this repository.",
   "If the repository requires access, run: docker-git auth github login --web"
+].join("\n")
+export const gitlabAuthRequiredCommand = "docker-git auth gitlab login"
+export const gitlabAuthRequiredMessage = [
+  "GitLab auth is missing: no GitLab token/key was found for this repository.",
+  "If the repository requires access, run: docker-git auth gitlab login"
 ].join("\n")
 export const githubAuthEnvGlobalPath = defaultTemplateConfig.envGlobalPath
 export const codexAuthPath = defaultTemplateConfig.codexAuthPath
@@ -101,6 +119,13 @@ const githubAuthError = (message: string): ApiAuthRequiredError =>
     provider: "github",
     message,
     command: githubAuthRequiredCommand
+  })
+
+const gitlabAuthError = (message: string): ApiAuthRequiredError =>
+  new ApiAuthRequiredError({
+    provider: "gitlab",
+    message,
+    command: gitlabAuthRequiredCommand
   })
 
 const toCodexApiError = (error: CodexCommandError): ApiBadRequestError | ApiInternalError =>
@@ -251,6 +276,49 @@ const readGithubAuthTokens = (
 export const readGithubAuthStatus = (): Effect.Effect<GithubAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
   readGithubAuthTokens(githubAuthEnvGlobalPath)
 
+const toGitlabTokenStatus = (
+  entry: ReturnType<typeof listGitlabTokens>[number],
+  validation: GitlabTokenValidationResult
+): GitlabAuthTokenStatus => ({
+  key: entry.key,
+  label: entry.label,
+  status: validation.status,
+  login: validation.login
+})
+
+const buildGitlabStatusSummary = (tokens: ReadonlyArray<GitlabAuthTokenStatus>): string =>
+  tokens.length === 0
+    ? "GitLab not connected (no tokens)."
+    : `GitLab tokens (${tokens.length}):`
+
+const readGitlabAuthTokens = (
+  envGlobalPath: string
+): Effect.Effect<GitlabAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const resolvedEnvPath = resolveControllerEnvPath(path, envGlobalPath)
+    const envText = yield* _(readEnvText(fs, resolvedEnvPath))
+    const entries = listGitlabTokens(envText)
+    const tokens: ReadonlyArray<GitlabAuthTokenStatus> = yield* _(
+      Effect.forEach(
+        entries,
+        (entry) =>
+          validateGitlabToken(entry.token).pipe(
+            Effect.map((validation: GitlabTokenValidationResult) => toGitlabTokenStatus(entry, validation))
+          ),
+        { concurrency: "unbounded" }
+      )
+    )
+    return {
+      summary: buildGitlabStatusSummary(tokens),
+      tokens
+    } satisfies GitlabAuthStatus
+  })
+
+export const readGitlabAuthStatus = (): Effect.Effect<GitlabAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  readGitlabAuthTokens(githubAuthEnvGlobalPath)
+
 export const loginGithubAuth = (request: GithubAuthLoginRequest) =>
   Effect.gen(function*(_) {
     yield* _(
@@ -263,6 +331,19 @@ export const loginGithubAuth = (request: GithubAuthLoginRequest) =>
       })
     )
     return yield* _(readGithubAuthTokens(githubAuthEnvGlobalPath))
+  })
+
+export const loginGitlabAuth = (request: GitlabAuthLoginRequest) =>
+  Effect.gen(function*(_) {
+    yield* _(
+      runGitlabLogin({
+        _tag: "AuthGitlabLogin",
+        label: request.label ?? null,
+        token: request.token ?? null,
+        envGlobalPath: githubAuthEnvGlobalPath
+      })
+    )
+    return yield* _(readGitlabAuthTokens(githubAuthEnvGlobalPath))
   })
 
 export const loginCodexAuth = (
@@ -294,6 +375,18 @@ export const logoutGithubAuth = (request: GithubAuthLogoutRequest) =>
       })
     )
     return yield* _(readGithubAuthTokens(githubAuthEnvGlobalPath))
+  })
+
+export const logoutGitlabAuth = (request: GitlabAuthLogoutRequest) =>
+  Effect.gen(function*(_) {
+    yield* _(
+      runGitlabLogout({
+        _tag: "AuthGitlabLogout",
+        label: request.label ?? null,
+        envGlobalPath: githubAuthEnvGlobalPath
+      })
+    )
+    return yield* _(readGitlabAuthTokens(githubAuthEnvGlobalPath))
   })
 
 const codexAuthStatus = (
@@ -445,6 +538,55 @@ export const ensureGithubAuthForCreate = (config: {
             })
           )),
         Match.when("unknown", () => Effect.logWarning(githubRepoAccessWarning)),
+        Match.exhaustive
+      )
+    )
+  })
+
+export const ensureGitlabAuthForCreate = (config: {
+  readonly repoUrl: string
+  readonly gitTokenLabel?: string | undefined
+  readonly envGlobalPath: string
+}): Effect.Effect<void, ApiAuthRequiredError | ApiBadRequestError | PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    if (parseGitlabRepoUrl(config.repoUrl) === null) {
+      return
+    }
+
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const resolvedEnvPath = resolveControllerEnvPath(path, config.envGlobalPath)
+    const envText = yield* _(readEnvText(fs, resolvedEnvPath))
+    const token = resolveGitlabCloneAuthToken(envText, {
+      repoUrl: config.repoUrl,
+      gitTokenLabel: config.gitTokenLabel
+    })
+
+    if (token === null) {
+      return yield* _(Effect.fail(gitlabAuthError(gitlabAuthRequiredMessage)))
+    }
+
+    const validation: GitlabTokenValidationResult = yield* _(validateGitlabToken(token))
+    yield* _(
+      Match.value(validation.status).pipe(
+        Match.when("valid", () => Effect.void),
+        Match.when("invalid", () => Effect.fail(gitlabAuthError(gitlabInvalidTokenMessage))),
+        Match.when("unknown", () => Effect.logWarning("Unable to validate GitLab token before create; continuing.")),
+        Match.exhaustive
+      )
+    )
+
+    const access = yield* _(probeGitlabRepoAccess(config.repoUrl, token))
+    return yield* _(
+      Match.value(access).pipe(
+        Match.when("accessible", () => Effect.void),
+        Match.when("notAccessible", () =>
+          Effect.fail(
+            new ApiBadRequestError({
+              message: gitlabRepoAccessMessage(config.repoUrl, true)
+            })
+          )),
+        Match.when("unknown", () => Effect.logWarning(gitlabRepoAccessWarning)),
         Match.exhaustive
       )
     )
