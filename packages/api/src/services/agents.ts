@@ -49,6 +49,10 @@ const upsertProjectIndex = (projectId: string, agentId: string): void => {
 }
 
 const shellEscape = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`
+const agentEnvKeyPattern = /^[A-Za-z_][A-Za-z0-9_]*$/u
+const simpleEnvAssignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*=[^\s]+$/u
+
+const agentHome = (sshUser: string): string => `/home/${sshUser}`
 
 const sourceLabel = (request: CreateAgentRequest): string =>
   request.label?.trim().length ? request.label.trim() : request.provider
@@ -81,29 +85,95 @@ export const buildCommand = (request: CreateAgentRequest): string => {
   return args.length === 0 ? base : `${base} ${args.join(" ")}`
 }
 
-const buildAgentScript = (
+const buildEnvExports = (
+  envEntries: ReadonlyArray<{ readonly key: string; readonly value: string }>
+): string => envEntries
+  .map(({ key, value }) => {
+    if (!agentEnvKeyPattern.test(key)) {
+      throw new ApiBadRequestError({ message: `Invalid agent env key: ${key}` })
+    }
+    return `export ${key}=${shellEscape(value)}`
+  })
+  .join("\n")
+
+const execLine = (command: string): string => {
+  const parts = command.trim().split(/\s+/u)
+  const firstCommandIndex = parts.findIndex((part) => !simpleEnvAssignmentPattern.test(part))
+
+  return firstCommandIndex > 0
+    ? `exec env ${parts.slice(0, firstCommandIndex).join(" ")} ${parts.slice(firstCommandIndex).join(" ")}`
+    : `exec ${command}`
+}
+
+export const buildAgentScript = (
   sessionId: string,
   cwd: string,
+  sshUser: string,
+  codexHome: string,
   envEntries: ReadonlyArray<{ readonly key: string; readonly value: string }>,
   command: string
 ): string => {
   const pidFile = `/tmp/docker-git-agent-${sessionId}.pid`
-  const exports = envEntries
-    .map(({ key, value }) => `export ${key}=${shellEscape(value)}`)
-    .join("\n")
+  const home = agentHome(sshUser)
+  const sshEnvPath = `${home}/.ssh/environment`
+  const exports = buildEnvExports(envEntries)
 
   return [
-    "set -euo pipefail",
+    "set -eo pipefail",
     `PID_FILE=${shellEscape(pidFile)}`,
     "cleanup() { rm -f \"$PID_FILE\"; }",
     "trap cleanup EXIT",
     "echo $$ > \"$PID_FILE\"",
+    `export HOME=${shellEscape(home)}`,
+    `export USER=${shellEscape(sshUser)}`,
+    `export LOGNAME=${shellEscape(sshUser)}`,
+    `export CODEX_HOME=${shellEscape(codexHome)}`,
+    "export DOCKER_GIT_RTK_ENABLE=\"${DOCKER_GIT_RTK_ENABLE:-1}\"",
+    "if [ -f /etc/profile ]; then . /etc/profile >/dev/null 2>&1 || true; fi",
+    `if [ -f ${shellEscape(sshEnvPath)} ]; then`,
+    "  set -a",
+    `  . ${shellEscape(sshEnvPath)} >/dev/null 2>&1 || true`,
+    "  set +a",
+    "fi",
+    "if [ -f /run/docker-git/agent-env.sh ]; then . /run/docker-git/agent-env.sh >/dev/null 2>&1 || true; fi",
+    `export HOME=${shellEscape(home)}`,
+    `export USER=${shellEscape(sshUser)}`,
+    `export LOGNAME=${shellEscape(sshUser)}`,
+    `export CODEX_HOME=${shellEscape(codexHome)}`,
+    "export DOCKER_GIT_RTK_ENABLE=\"${DOCKER_GIT_RTK_ENABLE:-1}\"",
+    "set -u",
     `cd ${shellEscape(cwd)}`,
     exports,
-    `exec ${command}`
+    execLine(command)
   ]
     .filter((line) => line.trim().length > 0)
     .join("\n")
+}
+
+export const buildAgentDockerExecArgs = (
+  project: Pick<ProjectDetails, "containerName" | "sshUser" | "codexHome">,
+  script: string
+): ReadonlyArray<string> => {
+  const home = agentHome(project.sshUser)
+
+  return [
+    "exec",
+    "-i",
+    "-u",
+    project.sshUser,
+    "-e",
+    `HOME=${home}`,
+    "-e",
+    `USER=${project.sshUser}`,
+    "-e",
+    `LOGNAME=${project.sshUser}`,
+    "-e",
+    `CODEX_HOME=${project.codexHome}`,
+    project.containerName,
+    "bash",
+    "-lc",
+    script
+  ]
 }
 
 const trimLogs = (logs: Array<AgentLogLine>): Array<AgentLogLine> =>
@@ -316,6 +386,14 @@ export const startAgent = (
         updatedAt: startedAt
       }
 
+      const script = buildAgentScript(
+        sessionId,
+        workingDir,
+        project.sshUser,
+        project.codexHome,
+        request.env ?? [],
+        command
+      )
       const record: AgentRecord = {
         session,
         projectDir: project.projectDir,
@@ -328,10 +406,9 @@ export const startAgent = (
       records.set(sessionId, record)
       upsertProjectIndex(project.id, sessionId)
 
-      const script = buildAgentScript(sessionId, workingDir, request.env ?? [], command)
       const child = spawn(
         "docker",
-        ["exec", "-i", project.containerName, "bash", "-lc", script],
+        [...buildAgentDockerExecArgs(project, script)],
         {
           cwd: project.projectDir,
           env: process.env,

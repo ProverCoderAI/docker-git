@@ -81,6 +81,7 @@ Options:
 Container runtime env (set via .orch/env/project.env):
   CODEX_SHARE_AUTH=1|0                  Share Codex auth.json across projects (default: 1)
   CODEX_AUTO_UPDATE=1|0                 Auto-update Codex CLI on container start (default: 1)
+  DOCKER_GIT_RTK_ENABLE=1|0             Configure RTK token-saving hooks/instructions on container start (default: 1)
   CLAUDE_AUTO_SYSTEM_PROMPT=1|0         Auto-attach docker-git managed system prompt to claude (default: 1)
   CLAUDE_SYSTEM_PROMPT_OVERRIDE=<text>  Custom Claude system prompt body (overrides default Russian template)
   CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE=<path>  Path to file with custom Claude prompt (takes precedence over OVERRIDE)

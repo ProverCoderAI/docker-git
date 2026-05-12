@@ -32,7 +32,7 @@ RUN set -eu; \
   apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
     openssh-server git gh ca-certificates curl unzip bsdutils sudo \
     make docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
-    ncurses-term \
+    ncurses-term jq \
  && rm -rf /var/lib/apt/lists/*
 
 # Passwordless sudo for all users (container is disposable)
@@ -84,6 +84,24 @@ RUN npm install -g @anthropic-ai/claude-code@latest
 RUN claude --version
 RUN npm install -g @google/gemini-cli@latest --force
 RUN gemini --version`
+
+// CHANGE: install RTK as a real command-output optimizer in generated containers.
+// WHY: issue-266 asks for out-of-the-box RTK behavior, not only a session-sync estimate.
+// REF: issue-266
+// SOURCE: https://github.com/rtk-ai/rtk/blob/develop/install.sh
+// PURITY: CORE (pure template renderer)
+// INVARIANT: rtk is available on PATH under /usr/local/bin during container runtime
+// COMPLEXITY: O(1)
+const renderDockerfileRtk = (): string =>
+  `# Tooling: RTK (Rust Token Killer)
+RUN set -eu; \
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+    https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh \
+    -o /tmp/rtk-install.sh; \
+  RTK_INSTALL_DIR=/usr/local/bin sh /tmp/rtk-install.sh; \
+  rm -f /tmp/rtk-install.sh; \
+  rtk --version; \
+  rtk gain >/dev/null 2>&1 || true`
 
 const dockerGitSessionSyncPackage = "@prover-coder-ai/docker-git-session-sync@latest"
 
@@ -267,6 +285,7 @@ export const renderDockerfile = (config: TemplateConfig): string =>
     renderDockerfilePrompt(),
     renderDockerfileNode(),
     renderDockerfileBun(config),
+    renderDockerfileRtk(),
     renderDockerfileOpenCode(),
     renderDockerfileGitleaks(),
     renderDockerfileUsers(config),
