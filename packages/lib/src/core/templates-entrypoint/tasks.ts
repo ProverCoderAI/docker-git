@@ -117,6 +117,17 @@ const renderCloneAuthRepoUrl = (): string =>
     AUTH_REPO_URL="$(printf "%s" "$REPO_URL" | sed "s#^https://#https://\${RESOLVED_GIT_AUTH_USER}:\${RESOLVED_GIT_AUTH_TOKEN}@#")"
   fi`
 
+// CHANGE: restrict clone-cache mirror refresh to branch and tag refs
+// WHY: broad refs include hosted forge PR refs and make cache reuse proportional to every remote ref
+// QUOTE(ТЗ): "Для тестов можно реализовать CI/CD workflow для Linux, MAC, Windows"
+// REF: issue-278-ci-check-clone-cache
+// SOURCE: n/a
+// FORMAT THEOREM: forall r in refreshedRefs: r in refs/heads/* union refs/tags/*
+// PURITY: CORE
+// INVARIANT: clone-cache refresh never requests refs/pull/* or refs/merge-requests/*
+// COMPLEXITY: O(|heads| + |tags|)
+const cloneCacheRefreshRefspecs = "'+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'"
+
 const renderCloneCacheInit = (config: TemplateConfig): string =>
   `  CLONE_CACHE_ARGS=""
   CACHE_REPO_DIR=""
@@ -135,7 +146,7 @@ const renderCloneCacheInit = (config: TemplateConfig): string =>
     chown 1000:1000 "$CACHE_ROOT" || true
     if [[ -d "$CACHE_REPO_DIR" ]]; then
       if su - ${config.sshUser} -c "git --git-dir '$CACHE_REPO_DIR' rev-parse --is-bare-repository >/dev/null 2>&1"; then
-        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' '+refs/*:refs/*'"; then
+        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' ${cloneCacheRefreshRefspecs}"; then
           echo "[clone-cache] mirror refresh failed for $REPO_URL"
         fi
         CLONE_CACHE_ARGS="--reference-if-able '$CACHE_REPO_DIR' --dissociate"

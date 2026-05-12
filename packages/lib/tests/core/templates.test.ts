@@ -74,6 +74,17 @@ describe("renderDockerfile", () => {
   })
 })
 
+describe("renderEntrypoint clone cache", () => {
+  it("refreshes mirrors without broad remote refs", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expect(entrypoint).toContain("git --git-dir '$CACHE_REPO_DIR' fetch")
+    expect(entrypoint).toContain("'+refs/heads/*:refs/heads/*'")
+    expect(entrypoint).toContain("'+refs/tags/*:refs/tags/*'")
+    expect(entrypoint).not.toContain("'+refs/*:refs/*'")
+  })
+})
+
 describe("renderEntrypointGitHooks", () => {
   it("installs pre-push protection checks and a global git post-push runtime", () => {
     const hooks = renderEntrypointGitHooks()
