@@ -27,6 +27,7 @@ import { renderEntrypointGitConfig, renderEntrypointGitHooks } from "./templates
 import { renderEntrypointDockerGitBootstrap } from "./templates-entrypoint/nested-docker-git.js"
 import { renderEntrypointOpenCodeConfig } from "./templates-entrypoint/opencode.js"
 import { renderEntrypointProjectAgentRules } from "./templates-entrypoint/project-rules.js"
+import { renderEntrypointRtkConfig } from "./templates-entrypoint/rtk.js"
 import { renderEntrypointBackgroundTasks } from "./templates-entrypoint/tasks.js"
 import {
   renderEntrypointBashCompletion,
@@ -61,6 +62,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointGitConfig(config),
     renderEntrypointClaudeConfig(config),
     renderEntrypointGeminiConfig(config),
+    renderEntrypointRtkConfig(config),
     renderEntrypointGitHooks(),
     renderEntrypointBackgroundTasks(config),
     renderEntrypointBaseline(),
