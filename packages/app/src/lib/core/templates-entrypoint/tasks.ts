@@ -117,6 +117,16 @@ const renderCloneAuthRepoUrl = (): string =>
     AUTH_REPO_URL="$(printf "%s" "$REPO_URL" | sed "s#^https://#https://\${RESOLVED_GIT_AUTH_USER}:\${RESOLVED_GIT_AUTH_TOKEN}@#")"
   fi`
 
+// CHANGE: refresh shared git mirrors with branch/tag refs only.
+// WHY: GitHub exposes refs/pull/* under refs/*; fetching all refs is unbounded for public repos.
+// QUOTE(TZ): n/a
+// REF: issue-267
+// SOURCE: n/a
+// FORMAT THEOREM: forall r in fetchedRefs: r in refs/heads/* union refs/tags/*
+// PURITY: SHELL
+// EFFECT: generated shell performs git fetch through the configured container user
+// INVARIANT: mirror refresh excludes refs/pull/* while preserving branch/tag object reuse.
+// COMPLEXITY: O(|heads| + |tags|) remote refs
 const renderCloneCacheInit = (config: TemplateConfig): string =>
   `  CLONE_CACHE_ARGS=""
   CACHE_REPO_DIR=""
@@ -135,7 +145,7 @@ const renderCloneCacheInit = (config: TemplateConfig): string =>
     chown 1000:1000 "$CACHE_ROOT" || true
     if [[ -d "$CACHE_REPO_DIR" ]]; then
       if su - ${config.sshUser} -c "git --git-dir '$CACHE_REPO_DIR' rev-parse --is-bare-repository >/dev/null 2>&1"; then
-        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' '+refs/*:refs/*'"; then
+        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'"; then
           echo "[clone-cache] mirror refresh failed for $REPO_URL"
         fi
         CLONE_CACHE_ARGS="--reference-if-able '$CACHE_REPO_DIR' --dissociate"

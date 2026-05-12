@@ -355,6 +355,15 @@ describe("renderEntrypoint auth bridge", () => {
       "DOCKER_GIT_ZSH_AUTOSUGGEST=0"
     ])
   })
+
+  it("refreshes clone cache mirrors without fetching GitHub pull request refs", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expect(entrypoint).toContain(
+      "git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'"
+    )
+    expect(entrypoint).not.toContain("'+refs/*:refs/*'")
+  })
 })
 
 describe("renderDockerCompose", () => {
