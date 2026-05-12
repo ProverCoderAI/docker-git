@@ -163,6 +163,22 @@ docker_git_sync_project_codex_skills() {
     fi
   done
 
+  # Extra entries via CODEX_EXTRA_SKILLS_PATHS (comma- or newline-separated "prio-name::relative/path").
+  local extra_specs="${"$"}{CODEX_EXTRA_SKILLS_PATHS:-}"
+  if [[ -n "$extra_specs" ]]; then
+    extra_specs="${"$"}{extra_specs//,/$'\n'}"
+    while IFS= read -r spec; do
+      [[ -z "$spec" ]] && continue
+      mount_name="${"$"}{spec%%::*}"
+      relative_path="${"$"}{spec#*::}"
+      if [[ -d "$project_dir/$relative_path" ]]; then
+        ln -sfn "$project_dir/$relative_path" "$project_skills_root/$mount_name"
+        chown -h 1000:1000 "$project_skills_root/$mount_name" 2>/dev/null || true
+        linked=1
+      fi
+    done <<< "$extra_specs"
+  fi
+
   chown 1000:1000 "$codex_home/skills" "$project_skills_root" 2>/dev/null || true
 
   if [[ "$linked" -eq 1 ]]; then

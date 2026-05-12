@@ -10,7 +10,9 @@ export type BrowserProjectMenuTag = Extract<
   | "Logs"
   | "Ports"
   | "ProjectAuth"
+  | "Prompts"
   | "Select"
+  | "Skills"
   | "Status"
   | "Tasks"
 >
@@ -38,7 +40,9 @@ const projectMenuTags: ReadonlySet<BrowserMenuTag> = new Set<BrowserMenuTag>([
   "Logs",
   "Ports",
   "ProjectAuth",
+  "Prompts",
   "Select",
+  "Skills",
   "Status",
   "Tasks"
 ])

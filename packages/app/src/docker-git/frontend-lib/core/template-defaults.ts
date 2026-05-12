@@ -22,6 +22,8 @@ type DefaultTemplateConfig = Pick<
   | "geminiHome"
   | "cpuLimit"
   | "ramLimit"
+  | "playwrightCpuLimit"
+  | "playwrightRamLimit"
   | "dockerNetworkMode"
   | "dockerSharedNetworkName"
   | "enableMcpPlaywright"
@@ -37,6 +39,10 @@ export const dockerGitSharedCodexVolumeName = "docker-git-shared-codex"
 export const defaultCpuLimit = "30%"
 
 export const defaultRamLimit = "30%"
+
+export const defaultPlaywrightCpuLimit = "30%"
+
+export const defaultPlaywrightRamLimit = "30%"
 
 export const defaultTemplateConfig = {
   containerName: "dev-ssh",
@@ -58,6 +64,8 @@ export const defaultTemplateConfig = {
   geminiHome: "/home/dev/.gemini",
   cpuLimit: defaultCpuLimit,
   ramLimit: defaultRamLimit,
+  playwrightCpuLimit: defaultPlaywrightCpuLimit,
+  playwrightRamLimit: defaultPlaywrightRamLimit,
   dockerNetworkMode: defaultDockerNetworkMode,
   dockerSharedNetworkName: defaultDockerSharedNetworkName,
   enableMcpPlaywright: false,

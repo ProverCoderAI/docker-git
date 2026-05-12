@@ -3,6 +3,14 @@ import type { TemplateConfig } from "../domain.js"
 const entrypointAgentsNoticeTemplate = String.raw`# Ensure global AGENTS.md exists for container context
 AGENTS_PATH="__CODEX_HOME__/AGENTS.md"
 LEGACY_AGENTS_PATH="/home/__SSH_USER__/AGENTS.md"
+docker_git_decode_unicode_escapes() {
+  local value="$1"
+  if printf "%s" "$value" | grep -q '\\u[0-9a-fA-F]'; then
+    printf "%b" "$value"
+  else
+    printf "%s" "$value"
+  fi
+}
 PROJECT_LINE="Рабочая папка проекта (git clone): __TARGET_DIR__"
 WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
 WORKSPACE_INFO_LINE="Контекст workspace: repository"
@@ -42,15 +50,28 @@ elif [[ "$REPO_REF" == refs/pull/*/head ]]; then
 fi
 MANAGED_START="<!-- docker-git:managed:start -->"
 MANAGED_END="<!-- docker-git:managed:end -->"
-if [[ ! -f "$AGENTS_PATH" ]]; then
-  MANAGED_BLOCK="$(cat <<EOF
-$MANAGED_START
+CODEX_SYSTEM_PROMPT_OVERRIDE_FILE="${"$"}{CODEX_SYSTEM_PROMPT_OVERRIDE_FILE:-}"
+CODEX_SYSTEM_PROMPT_OVERRIDE="${"$"}{CODEX_SYSTEM_PROMPT_OVERRIDE:-}"
+if [[ -n "$CODEX_SYSTEM_PROMPT_OVERRIDE_FILE" && -r "$CODEX_SYSTEM_PROMPT_OVERRIDE_FILE" ]]; then
+  MANAGED_LINES="$(cat "$CODEX_SYSTEM_PROMPT_OVERRIDE_FILE")"
+elif [[ -n "$CODEX_SYSTEM_PROMPT_OVERRIDE" ]]; then
+  MANAGED_LINES="$CODEX_SYSTEM_PROMPT_OVERRIDE"
+else
+  MANAGED_LINES="$(cat <<EOF
 $PROJECT_LINE
 $WORKSPACES_LINE
 $WORKSPACE_INFO_LINE
 $FOCUS_LINE
 $INTERNET_LINE
 $SUBAGENTS_LINE
+EOF
+)"
+  MANAGED_LINES="$(docker_git_decode_unicode_escapes "$MANAGED_LINES")"
+fi
+if [[ ! -f "$AGENTS_PATH" ]]; then
+  MANAGED_BLOCK="$(cat <<EOF
+$MANAGED_START
+$MANAGED_LINES
 $MANAGED_END
 EOF
 )"
@@ -64,12 +85,7 @@ fi
 if [[ -f "$AGENTS_PATH" ]]; then
   MANAGED_BLOCK="$(cat <<EOF
 $MANAGED_START
-$PROJECT_LINE
-$WORKSPACES_LINE
-$WORKSPACE_INFO_LINE
-$FOCUS_LINE
-$INTERNET_LINE
-$SUBAGENTS_LINE
+$MANAGED_LINES
 $MANAGED_END
 EOF
 )"
@@ -96,6 +112,13 @@ EOF
     fi
     printf "%s\n" "$MANAGED_BLOCK" >> "$TMP_AGENTS_PATH"
   fi
+  mv "$TMP_AGENTS_PATH" "$AGENTS_PATH"
+  chown 1000:1000 "$AGENTS_PATH" || true
+fi
+if [[ -f "$AGENTS_PATH" ]] && grep -qF "$MANAGED_START" "$AGENTS_PATH" && grep -q '\\u[0-9a-fA-F]' "$AGENTS_PATH"; then
+  TMP_AGENTS_PATH="$(mktemp)"
+  docker_git_decode_unicode_escapes "$(cat "$AGENTS_PATH")" > "$TMP_AGENTS_PATH"
+  printf "\n" >> "$TMP_AGENTS_PATH"
   mv "$TMP_AGENTS_PATH" "$AGENTS_PATH"
   chown 1000:1000 "$AGENTS_PATH" || true
 fi

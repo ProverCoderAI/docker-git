@@ -51,8 +51,10 @@ const menuSlugs: Readonly<Record<BrowserMenuTag, string>> = {
   Logs: "logs",
   Ports: "ports",
   ProjectAuth: "project-auth",
+  Prompts: "prompts",
   Quit: "quit",
   Select: "select",
+  Skills: "skills",
   Status: "status",
   Tasks: "tasks"
 }

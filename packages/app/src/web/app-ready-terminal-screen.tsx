@@ -21,6 +21,7 @@ type TerminalScreenProps = Pick<
   | "onOpenProjectBrowserById"
   | "onOpenProjectTaskManagerById"
   | "onOpenProjectTerminalById"
+  | "onOpenSkiller"
   | "onLoadProjectTaskLogs"
   | "onProjectTasksIncludeDefaultChange"
   | "onRefreshProjectTasks"
@@ -46,6 +47,7 @@ type TerminalPaneProps =
     | "onOpenProjectBrowserById"
     | "onOpenProjectTaskManagerById"
     | "onOpenProjectTerminalById"
+    | "onOpenSkiller"
     | "onLoadProjectTaskLogs"
     | "onProjectTasksIncludeDefaultChange"
     | "onRefreshProjectTasks"
@@ -135,6 +137,17 @@ const pendingTerminalBodyStyle: CSSProperties = {
 }
 
 const terminalTabLabel = (session: ActiveTerminalSession): string => session.browserProjectName ?? session.header
+
+const projectSkillerAction = (
+  projectKey: string | undefined,
+  sessionId: string,
+  onOpenSkiller: (projectKey?: string, sessionId?: string) => void
+): (() => void) | undefined =>
+  projectKey === undefined
+    ? undefined
+    : () => {
+      onOpenSkiller(projectKey, sessionId)
+    }
 
 const PendingTerminalBody = ({ session }: { readonly session: ActiveTerminalSession }): JSX.Element | null => {
   if (!isPendingActiveTerminalSession(session)) {
@@ -346,6 +359,7 @@ const TerminalPane = (
     onOpenProjectBrowserById,
     onOpenProjectTaskManagerById,
     onOpenProjectTerminalById,
+    onOpenSkiller,
     onProjectTasksIncludeDefaultChange,
     onRefreshProjectTasks,
     onSetActiveScreen,
@@ -424,6 +438,7 @@ const TerminalPane = (
           : () => {
             onOpenProjectBrowserById(browserProjectId)
           }}
+        onOpenSkiller={projectSkillerAction(browserProjectKey, terminalSession.session.id, onOpenSkiller)}
         onApplyProject={browserProjectId === undefined
           ? undefined
           : () => {
@@ -487,6 +502,7 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
                 props.onOpenProjectTaskManagerById(projectId)
               }}
               onOpenProjectTerminalById={props.onOpenProjectTerminalById}
+              onOpenSkiller={props.onOpenSkiller}
               onProjectTasksIncludeDefaultChange={props.onProjectTasksIncludeDefaultChange}
               onRefreshProjectTasks={props.onRefreshProjectTasks}
               onSetActiveScreen={props.onSetActiveScreen}

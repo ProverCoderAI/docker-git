@@ -246,9 +246,47 @@ describe("renderEntrypoint auth bridge", () => {
       "CLAUDE_GLOBAL_PROMPT_FILE=\"/home/dev/.claude/CLAUDE.md\"",
       "CLAUDE_AUTO_SYSTEM_PROMPT=\"${CLAUDE_AUTO_SYSTEM_PROMPT:-1}\"",
       "docker-git-managed:claude-md",
-      "SUBAGENTS_LINE=\"Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.\""
+      "SUBAGENTS_LINE=",
+      "MANAGED_LINES=\"$(docker_git_decode_unicode_escapes \"$MANAGED_LINES\")\""
     ])
-    expect(entrypoint.split("Для решения задач обязательно используй subagents.").length - 1).toBeGreaterThanOrEqual(2)
+    expect(entrypoint.split("SUBAGENTS_LINE=").length - 1).toBeGreaterThanOrEqual(1)
+  })
+
+  it("renders system-prompt override hooks for codex/claude/gemini", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      "docker_git_decode_unicode_escapes()",
+      "CLAUDE_DEFAULT_PROMPT_BODY=\"$(docker_git_decode_unicode_escapes \"$CLAUDE_DEFAULT_PROMPT_BODY\")\"",
+      "CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE=\"${CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE:-}\"",
+      "CLAUDE_SYSTEM_PROMPT_OVERRIDE=\"${CLAUDE_SYSTEM_PROMPT_OVERRIDE:-}\"",
+      "if [[ -n \"$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE\" && -r \"$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE\" ]]; then",
+      "CLAUDE_PROMPT_BODY=\"$(cat \"$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE\")\"",
+      "CLAUDE_PROMPT_BODY=\"$CLAUDE_SYSTEM_PROMPT_OVERRIDE\"",
+      "CLAUDE_PROMPT_BODY=\"$CLAUDE_DEFAULT_PROMPT_BODY\"",
+      "CODEX_SYSTEM_PROMPT_OVERRIDE_FILE=\"${CODEX_SYSTEM_PROMPT_OVERRIDE_FILE:-}\"",
+      "CODEX_SYSTEM_PROMPT_OVERRIDE=\"${CODEX_SYSTEM_PROMPT_OVERRIDE:-}\"",
+      "MANAGED_LINES=\"$(cat \"$CODEX_SYSTEM_PROMPT_OVERRIDE_FILE\")\"",
+      "MANAGED_LINES=\"$CODEX_SYSTEM_PROMPT_OVERRIDE\"",
+      "GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE=\"${GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE:-}\"",
+      "GEMINI_SYSTEM_PROMPT_OVERRIDE=\"${GEMINI_SYSTEM_PROMPT_OVERRIDE:-}\"",
+      "GEMINI_DEFAULT_PROMPT_BODY=\"$(docker_git_decode_unicode_escapes \"$GEMINI_DEFAULT_PROMPT_BODY\")\"",
+      "GEMINI_PROMPT_BODY=\"$(cat \"$GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE\")\"",
+      "GEMINI_PROMPT_BODY=\"$GEMINI_SYSTEM_PROMPT_OVERRIDE\"",
+      "GEMINI_PROMPT_BODY=\"$GEMINI_DEFAULT_PROMPT_BODY\""
+    ])
+  })
+
+  it("renders extra-skills hook for the codex skill sync function", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      "local extra_specs=\"${CODEX_EXTRA_SKILLS_PATHS:-}\"",
+      "if [[ -n \"$extra_specs\" ]]; then",
+      "extra_specs=\"${extra_specs//,/$'\\n'}\"",
+      "while IFS= read -r spec; do",
+      "done <<< \"$extra_specs\""
+    ])
   })
 
   it("renders terminal recovery hooks and disables zsh autosuggestions by default", () => {
@@ -328,6 +366,47 @@ describe("renderDockerCompose", () => {
     expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
     expect(browserDnsIndex).toBeGreaterThan(browserServiceIndex)
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(2)
+  })
+
+  it("applies separate resource limits for the browser sidecar when provided", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        enableMcpPlaywright: true
+      }),
+      {
+        main: { cpuLimit: 2, ramLimit: "4g" },
+        playwright: { cpuLimit: 0.5, ramLimit: "1g" }
+      }
+    )
+    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
+    const browserSection = compose.slice(browserServiceIndex)
+    const mainSection = compose.slice(0, browserServiceIndex)
+
+    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
+    expect(mainSection).toContain("    cpus: 2\n")
+    expect(mainSection).toContain('    mem_limit: "4g"\n')
+    expect(mainSection).toContain('    memswap_limit: "4g"\n')
+    expect(browserSection).toContain("    cpus: 0.5\n")
+    expect(browserSection).toContain('    mem_limit: "1g"\n')
+    expect(browserSection).toContain('    memswap_limit: "1g"\n')
+  })
+
+  it("backward-compatibly applies single resource limit shape to both services", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        enableMcpPlaywright: true
+      }),
+      {
+        cpuLimit: 1.5,
+        ramLimit: "2g"
+      }
+    )
+    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
+    const browserSection = compose.slice(browserServiceIndex)
+
+    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
+    expect(browserSection).toContain("    cpus: 1.5\n")
+    expect(browserSection).toContain('    mem_limit: "2g"\n')
   })
 
   it("renders explicit anonymous GitHub clone override for public repos", () => {

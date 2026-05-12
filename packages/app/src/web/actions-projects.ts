@@ -3,6 +3,7 @@ import { openSelectedProjectDatabaseEditor } from "./actions-databases.js"
 import { readEventPayloadString } from "./actions-event-payload.js"
 import { appendOutputLine, appendOutputLineHandler, notifyProjectEventRateLimit } from "./actions-output.js"
 import { openSelectedProjectPort } from "./actions-port-forwards.js"
+import { loadSelectedProjectPrompts } from "./actions-prompts.js"
 import {
   type BrowserActionContext,
   confirmAction,
@@ -12,6 +13,7 @@ import {
   withBusy,
   withSelectedProjectBusy
 } from "./actions-shared.js"
+import { loadSelectedProjectSkills } from "./actions-skills.js"
 import { loadSelectedProjectTasks } from "./actions-tasks.js"
 import {
   type ApiEvent,
@@ -440,13 +442,31 @@ export const runProjectMenuAction = (
     loadSelectedProjectTasks(context)
     return
   }
+  if (currentMenu === "Prompts") {
+    loadSelectedProjectPrompts(context)
+    return
+  }
+  if (currentMenu === "Skills") {
+    loadSelectedProjectSkills(context)
+    return
+  }
   runProjectMenuCommand(currentMenu, context)
 }
 
 const runProjectMenuCommand = (
   currentMenu: Exclude<
     BrowserMenuTag,
-    "Auth" | "ProjectAuth" | "Browser" | "Create" | "Databases" | "Select" | "Info" | "Ports" | "Tasks"
+    | "Auth"
+    | "ProjectAuth"
+    | "Browser"
+    | "Create"
+    | "Databases"
+    | "Select"
+    | "Info"
+    | "Ports"
+    | "Prompts"
+    | "Skills"
+    | "Tasks"
   >,
   context: BrowserActionContext
 ) => {

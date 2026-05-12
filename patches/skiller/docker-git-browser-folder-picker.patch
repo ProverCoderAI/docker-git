@@ -1,0 +1,913 @@
+diff --git a/src/main/projects.ts b/src/main/projects.ts
+index d55528c..744baed 100644
+--- a/src/main/projects.ts
++++ b/src/main/projects.ts
+@@ -1 +1 @@
+-import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
++import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+@@ -3 +3 @@ import { tmpdir } from "node:os";
+-import { basename, join, normalize, resolve, sep } from "node:path";
++import { basename, dirname, join, normalize, resolve, sep } from "node:path";
+@@ -5 +5,8 @@ import simpleGit from "simple-git";
+-import type { ProjectEntryJson, ProjectSkillJson } from "../shared/rpc-schema";
++import type {
++	ProjectEntryJson,
++	ProjectPromptFileJson,
++	ProjectPromptKindJson,
++	ProjectPromptScopeJson,
++	ProjectPromptsSnapshotJson,
++	ProjectSkillJson,
++} from "../shared/rpc-schema";
+@@ -201,0 +209,220 @@ export function listProjectSkills(projectPath: string): ProjectSkillJson[] {
++// ─── Project + global system prompts ───────────────────────────────────────
++
++const SYSTEM_PROMPT_MAX_BYTES = 1024 * 256;
++
++type ProjectPromptDescriptor = {
++	kind: ProjectPromptKindJson;
++	label: string;
++	fileName: string;
++	globalDir: string;
++	envOverrideKey: string;
++	overrideFileName: string;
++};
++
++const PROJECT_PROMPT_DESCRIPTORS: ProjectPromptDescriptor[] = [
++	{
++		kind: "codex",
++		label: "Codex",
++		fileName: "AGENTS.md",
++		globalDir: ".codex",
++		envOverrideKey: "CODEX_SYSTEM_PROMPT_OVERRIDE_FILE",
++		overrideFileName: "codex.md",
++	},
++	{
++		kind: "claude",
++		label: "Claude Code",
++		fileName: "CLAUDE.md",
++		globalDir: ".claude",
++		envOverrideKey: "CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE",
++		overrideFileName: "claude.md",
++	},
++	{
++		kind: "gemini",
++		label: "Gemini",
++		fileName: "GEMINI.md",
++		globalDir: ".gemini",
++		envOverrideKey: "GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE",
++		overrideFileName: "gemini.md",
++	},
++];
++
++function findPromptDescriptor(kind: ProjectPromptKindJson): ProjectPromptDescriptor {
++	const descriptor = PROJECT_PROMPT_DESCRIPTORS.find((item) => item.kind === kind);
++	if (!descriptor) throw new Error(`unknown prompt kind: ${kind}`);
++	return descriptor;
++}
++
++function currentHomePath(): string {
++	const home = process.env.HOME?.trim();
++	if (!home) throw new Error("HOME is not set");
++	return home;
++}
++
++function globalPromptHostPath(descriptor: ProjectPromptDescriptor): string {
++	return join(currentHomePath(), descriptor.globalDir, descriptor.fileName);
++}
++
++function promptHostPath(
++	projectPath: string,
++	scope: ProjectPromptScopeJson,
++	descriptor: ProjectPromptDescriptor,
++): string {
++	return scope === "project"
++		? join(projectPath, descriptor.fileName)
++		: globalPromptHostPath(descriptor);
++}
++
++function dockerGitOverrideHostPath(descriptor: ProjectPromptDescriptor): string {
++	return join(
++		currentHomePath(),
++		".docker-git",
++		".orch",
++		"prompts",
++		"global",
++		descriptor.overrideFileName,
++	);
++}
++
++function dockerGitOverrideContainerPath(descriptor: ProjectPromptDescriptor): string {
++	const containerHome =
++		process.env.DOCKER_GIT_SKILLER_CONTAINER_HOME_PATH?.trim() || currentHomePath();
++	return [
++		containerHome.replace(/\/+$/u, ""),
++		".docker-git",
++		".orch",
++		"prompts",
++		"global",
++		descriptor.overrideFileName,
++	].join("/");
++}
++
++function decodeEscapedUnicodePromptText(content: string): string {
++	const escapeMatches = content.match(/\\u[0-9a-fA-F]{4}/gu) ?? [];
++	if (escapeMatches.length < 4) return content;
++	const decoded = content.replace(
++		/\\u([0-9a-fA-F]{4})/gu,
++		(_sequence, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)),
++	);
++	const cyrillicMatches = decoded.match(/[А-Яа-яЁё]/gu) ?? [];
++	return cyrillicMatches.length >= 4 ? decoded : content;
++}
++
++function readPromptContent(filePath: string): string {
++	const raw = readFileSync(filePath, "utf-8");
++	const decoded = decodeEscapedUnicodePromptText(raw);
++	if (decoded !== raw) {
++		writeFileSync(filePath, decoded, "utf-8");
++	}
++	return decoded;
++}
++
++function readPromptFile(
++	projectPath: string,
++	scope: ProjectPromptScopeJson,
++	descriptor: ProjectPromptDescriptor,
++): ProjectPromptFileJson {
++	const filePath = promptHostPath(projectPath, scope, descriptor);
++	if (!existsSync(filePath)) {
++		return {
++			scope,
++			kind: descriptor.kind,
++			label: descriptor.label,
++			file_name: descriptor.fileName,
++			path: filePath,
++			exists: false,
++			bytes: 0,
++			content: "",
++		};
++	}
++	const stat = statSync(filePath);
++	if (!stat.isFile()) {
++		return {
++			scope,
++			kind: descriptor.kind,
++			label: descriptor.label,
++			file_name: descriptor.fileName,
++			path: filePath,
++			exists: false,
++			bytes: 0,
++			content: "",
++		};
++	}
++	const content = readPromptContent(filePath);
++	return {
++		scope,
++		kind: descriptor.kind,
++		label: descriptor.label,
++		file_name: descriptor.fileName,
++		path: filePath,
++		exists: true,
++		bytes: Buffer.byteLength(content, "utf8"),
++		content,
++	};
++}
++
++function readEnvText(envPath: string): string {
++	return existsSync(envPath) ? readFileSync(envPath, "utf-8") : "";
++}
++
++function writeEnvOverride(key: string, value: string | null): void {
++	const envPath = process.env.DOCKER_GIT_SKILLER_HOST_ENV_GLOBAL_PATH?.trim();
++	if (!envPath) return;
++	const raw = readEnvText(envPath);
++	const nextLines = raw
++		.split(/\r?\n/u)
++		.filter((line) => line.trim().length > 0)
++		.filter((line) => !line.startsWith(`${key}=`));
++	if (value !== null) nextLines.push(`${key}=${value}`);
++	mkdirSync(dirname(envPath), { recursive: true });
++	writeFileSync(envPath, nextLines.length === 0 ? "" : `${nextLines.join("\n")}\n`, "utf-8");
++}
++
++export function listProjectPrompts(projectPath: string): ProjectPromptsSnapshotJson {
++	const prompts: ProjectPromptFileJson[] = [];
++	for (const scope of ["project", "global"] satisfies ProjectPromptScopeJson[]) {
++		for (const descriptor of PROJECT_PROMPT_DESCRIPTORS) {
++			prompts.push(readPromptFile(projectPath, scope, descriptor));
++		}
++	}
++	return { project_path: projectPath, prompts };
++}
++
++export function writeProjectPrompt(
++	projectPath: string,
++	scope: ProjectPromptScopeJson,
++	kind: ProjectPromptKindJson,
++	content: string,
++): ProjectPromptsSnapshotJson {
++	const bytes = Buffer.byteLength(content, "utf8");
++	if (bytes > SYSTEM_PROMPT_MAX_BYTES) {
++		throw new Error(`prompt is too large: maximum ${SYSTEM_PROMPT_MAX_BYTES} bytes`);
++	}
++	const descriptor = findPromptDescriptor(kind);
++	const filePath = promptHostPath(projectPath, scope, descriptor);
++	mkdirSync(dirname(filePath), { recursive: true });
++	writeFileSync(filePath, content, "utf-8");
++	if (scope === "global") {
++		const overridePath = dockerGitOverrideHostPath(descriptor);
++		mkdirSync(dirname(overridePath), { recursive: true });
++		writeFileSync(overridePath, content, "utf-8");
++		writeEnvOverride(descriptor.envOverrideKey, dockerGitOverrideContainerPath(descriptor));
++	}
++	return listProjectPrompts(projectPath);
++}
++
++export function deleteProjectPrompt(
++	projectPath: string,
++	scope: ProjectPromptScopeJson,
++	kind: ProjectPromptKindJson,
++): ProjectPromptsSnapshotJson {
++	const descriptor = findPromptDescriptor(kind);
++	const filePath = promptHostPath(projectPath, scope, descriptor);
++	if (existsSync(filePath)) rmSync(filePath, { force: true });
++	if (scope === "global") {
++		const overridePath = dockerGitOverrideHostPath(descriptor);
++		if (existsSync(overridePath)) rmSync(overridePath, { force: true });
++		writeEnvOverride(descriptor.envOverrideKey, null);
++	}
++	return listProjectPrompts(projectPath);
++}
++
+@@ -348 +574,0 @@ export function uninstallProjectSkill(projectPath: string, skillId: string): voi
+-
+diff --git a/src/main/rpc-handlers.ts b/src/main/rpc-handlers.ts
+index 7c96ad4..a5d4ac5 100644
+--- a/src/main/rpc-handlers.ts
++++ b/src/main/rpc-handlers.ts
+@@ -56,0 +57 @@ import {
++  deleteProjectPrompt,
+@@ -61,0 +63 @@ import {
++  listProjectPrompts,
+@@ -68,0 +71 @@ import {
++  writeProjectPrompt,
+@@ -633,0 +637,19 @@ export function createRequestHandlers(ctx: {
++    list_project_prompts: async (params: { path: string }) =>
++      listProjectPrompts(params.path),
++    write_project_prompt: async (params: {
++      path: string
++      scope: import('../shared/rpc-schema').ProjectPromptScopeJson
++      kind: import('../shared/rpc-schema').ProjectPromptKindJson
++      content: string
++    }) =>
++      writeProjectPrompt(
++        params.path,
++        params.scope,
++        params.kind,
++        params.content,
++      ),
++    delete_project_prompt: async (params: {
++      path: string
++      scope: import('../shared/rpc-schema').ProjectPromptScopeJson
++      kind: import('../shared/rpc-schema').ProjectPromptKindJson
++    }) => deleteProjectPrompt(params.path, params.scope, params.kind),
+diff --git a/src/main/trpc/router.ts b/src/main/trpc/router.ts
+index 917c1cc..c522645 100644
+--- a/src/main/trpc/router.ts
++++ b/src/main/trpc/router.ts
+@@ -83,0 +84,7 @@ export function createAppRouter(ctx: {
++    list_project_prompts: proc.input(anyIn).query(({ input }) => h.list_project_prompts(input)),
++    write_project_prompt: proc.input(anyIn).mutation(({ input }) =>
++      h.write_project_prompt(input),
++    ),
++    delete_project_prompt: proc.input(anyIn).mutation(({ input }) =>
++      h.delete_project_prompt(input),
++    ),
+diff --git a/src/mainview/components/AgentRow.tsx b/src/mainview/components/AgentRow.tsx
+index 0903566..0f91a46 100644
+--- a/src/mainview/components/AgentRow.tsx
++++ b/src/mainview/components/AgentRow.tsx
+@@ -3 +3 @@ import { Trash2 } from "lucide-react";
+-import { revealItemInDir } from "@/mainview/lib/native";
++import { displayFolderPath, revealItemInDir } from "@/mainview/lib/native";
+@@ -80 +80 @@ export const AgentRow = memo(function AgentRow({
+-            {path}
++            {displayFolderPath(path)}
+diff --git a/src/mainview/components/ImportWizard.tsx b/src/mainview/components/ImportWizard.tsx
+index d968d09..ec05fd1 100644
+--- a/src/mainview/components/ImportWizard.tsx
++++ b/src/mainview/components/ImportWizard.tsx
+@@ -4 +4 @@ import { X, Loader2, GitBranch, FolderOpen, Check, Puzzle, FolderPlus } from "lu
+-import { listen, pickFolder as pickDirectory, invoke } from "@/mainview/lib/native";
++import { displayFolderPath, listen, pickFolder as pickDirectory, invoke } from "@/mainview/lib/native";
+@@ -339 +339 @@ export default function ImportWizard({ mode, initialLocalPath, initialProjectPat
+-                  {localPath}
++                  {displayFolderPath(localPath)}
+@@ -480 +480 @@ export default function ImportWizard({ mode, initialLocalPath, initialProjectPat
+-                              {p.name} — {p.path}
++                              {p.name} — {displayFolderPath(p.path)}
+diff --git a/src/mainview/components/InstallToProjectPicker.tsx b/src/mainview/components/InstallToProjectPicker.tsx
+index cc78676..6b86318 100644
+--- a/src/mainview/components/InstallToProjectPicker.tsx
++++ b/src/mainview/components/InstallToProjectPicker.tsx
+@@ -6 +6 @@ import { Button } from "@/mainview/components/ui/button";
+-import { pickFolder } from "@/mainview/lib/native";
++import { displayFolderPath, pickFolder } from "@/mainview/lib/native";
+@@ -86 +86 @@ export default function InstallToProjectPicker({ skillName, onInstall, onClose }
+-                    {p.path}
++                    {displayFolderPath(p.path)}
+diff --git a/src/mainview/components/ProjectSkillDetailModal.tsx b/src/mainview/components/ProjectSkillDetailModal.tsx
+index 55e407c..2d070cf 100644
+--- a/src/mainview/components/ProjectSkillDetailModal.tsx
++++ b/src/mainview/components/ProjectSkillDetailModal.tsx
+@@ -7 +7 @@ import MarkdownContent from "@/mainview/components/MarkdownContent";
+-import { invoke, revealItemInDir } from "@/mainview/lib/native";
++import { displayFolderPath, invoke, revealItemInDir } from "@/mainview/lib/native";
+@@ -103 +103 @@ export default function ProjectSkillDetailModal({ projectPath, skill, onClose }:
+-              {skill.path}
++              {displayFolderPath(skill.path)}
+diff --git a/src/mainview/hooks/useProjects.ts b/src/mainview/hooks/useProjects.ts
+index 0317be7..8c6d105 100644
+--- a/src/mainview/hooks/useProjects.ts
++++ b/src/mainview/hooks/useProjects.ts
+@@ -3 +3,8 @@ import { invoke } from "@/mainview/lib/native";
+-import type { ProjectEntryJson, ProjectSkillJson } from "@/shared/rpc-schema";
++import type {
++  ProjectEntryJson,
++  ProjectPromptFileJson,
++  ProjectPromptKindJson,
++  ProjectPromptScopeJson,
++  ProjectPromptsSnapshotJson,
++  ProjectSkillJson,
++} from "@/shared/rpc-schema";
+@@ -5,0 +13,2 @@ export type Project = ProjectEntryJson;
++export type ProjectPromptFile = ProjectPromptFileJson;
++export type ProjectPromptsSnapshot = ProjectPromptsSnapshotJson;
+@@ -102,0 +112,59 @@ export function useProjectSkills(path: string | null) {
++export function useProjectPrompts(path: string | null) {
++  return useQuery<ProjectPromptsSnapshot>({
++    queryKey: ["project-prompts", path],
++    queryFn: async () =>
++      (await invoke("list_project_prompts", { path: path! })) as ProjectPromptsSnapshot,
++    enabled: !!path,
++    staleTime: 30 * 1000,
++  });
++}
++
++export function useWriteProjectPrompt() {
++  const qc = useQueryClient();
++  return useMutation({
++    mutationFn: ({
++      content,
++      kind,
++      projectPath,
++      scope,
++    }: {
++      content: string;
++      kind: ProjectPromptKindJson;
++      projectPath: string;
++      scope: ProjectPromptScopeJson;
++    }) =>
++      invoke("write_project_prompt", {
++        content,
++        kind,
++        path: projectPath,
++        scope,
++      }) as Promise<ProjectPromptsSnapshot>,
++    onSuccess: (_d, vars) => {
++      qc.invalidateQueries({ queryKey: ["project-prompts", vars.projectPath] });
++    },
++  });
++}
++
++export function useDeleteProjectPrompt() {
++  const qc = useQueryClient();
++  return useMutation({
++    mutationFn: ({
++      kind,
++      projectPath,
++      scope,
++    }: {
++      kind: ProjectPromptKindJson;
++      projectPath: string;
++      scope: ProjectPromptScopeJson;
++    }) =>
++      invoke("delete_project_prompt", {
++        kind,
++        path: projectPath,
++        scope,
++      }) as Promise<ProjectPromptsSnapshot>,
++    onSuccess: (_d, vars) => {
++      qc.invalidateQueries({ queryKey: ["project-prompts", vars.projectPath] });
++    },
++  });
++}
++
+diff --git a/src/mainview/lib/native.ts b/src/mainview/lib/native.ts
+index 364bf0c..93e1988 100644
+--- a/src/mainview/lib/native.ts
++++ b/src/mainview/lib/native.ts
+@@ -21,0 +22,2 @@ declare global {
++    /** Set by docker-git when Skiller is opened from a terminal session. */
++    __DOCKER_GIT_SKILLER_SCOPE__?: DockerGitSkillerScope
+@@ -33,0 +36,15 @@ declare global {
++type DockerGitPathRoot = {
++  containerPath: string
++  hostPath: string
++  id: 'project' | 'home' | 'codexSkills'
++  label: string
++}
++
++type DockerGitSkillerScope = {
++  containerName: string
++  currentProject: DockerGitPathRoot
++  projectKey: string
++  roots: DockerGitPathRoot[]
++  sessionId: string
++}
++
+@@ -276,0 +294,191 @@ export function revealItemInDir(path: string): void {
++function dockerGitSkillerScope(): DockerGitSkillerScope | null {
++  if (typeof window === 'undefined') return null
++  return window.__DOCKER_GIT_SKILLER_SCOPE__ ?? null
++}
++
++function normalizeSlashPath(raw: string): string | null {
++  const trimmed = raw.trim().replace(/\\/gu, '/')
++  if (trimmed.length === 0) return null
++  const absolute = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
++  const parts: string[] = []
++  for (const part of absolute.split('/')) {
++    if (part.length === 0 || part === '.') continue
++    if (part === '..') {
++      parts.pop()
++      continue
++    }
++    parts.push(part)
++  }
++  return `/${parts.join('/')}`
++}
++
++function isPathInside(basePath: string, targetPath: string): boolean {
++  return targetPath === basePath || targetPath.startsWith(`${basePath}/`)
++}
++
++function rootDepth(root: DockerGitPathRoot, key: 'containerPath' | 'hostPath'): number {
++  return root[key].split('/').filter((part) => part.length > 0).length
++}
++
++function sortedRoots(
++  scope: DockerGitSkillerScope,
++  key: 'containerPath' | 'hostPath',
++): DockerGitPathRoot[] {
++  return [...scope.roots].sort((left, right) => rootDepth(right, key) - rootDepth(left, key))
++}
++
++function normalizePickerInput(raw: string, scope: DockerGitSkillerScope): string | null {
++  const trimmed = raw.trim()
++  if (trimmed === '~') return scope.roots.find((root) => root.id === 'home')?.containerPath ?? null
++  if (trimmed.startsWith('~/')) {
++    const home = scope.roots.find((root) => root.id === 'home')?.containerPath
++    return home ? normalizeSlashPath(`${home}/${trimmed.slice(2)}`) : null
++  }
++  if (trimmed.startsWith('/')) return normalizeSlashPath(trimmed)
++  return normalizeSlashPath(`${scope.currentProject.containerPath}/${trimmed}`)
++}
++
++function mapContainerPathToHost(
++  scope: DockerGitSkillerScope,
++  rawPath: string,
++): { error: string; hostPath: null } | { error: null; hostPath: string } {
++  const containerPath = normalizePickerInput(rawPath, scope)
++  if (containerPath === null) {
++    return { error: 'Enter a folder path.', hostPath: null }
++  }
++  const root = sortedRoots(scope, 'containerPath')
++    .find((candidate) => isPathInside(candidate.containerPath, containerPath))
++  if (!root) {
++    return {
++      error: `Choose a path inside ${scope.currentProject.containerPath} or ${scope.roots.find((candidate) => candidate.id === 'home')?.containerPath ?? 'the selected container home'}.`,
++      hostPath: null,
++    }
++  }
++  const relative = containerPath.slice(root.containerPath.length).replace(/^\/+/u, '')
++  return {
++    error: null,
++    hostPath: relative.length === 0 ? root.hostPath : `${root.hostPath}/${relative}`,
++  }
++}
++
++export function displayFolderPath(path: string): string {
++  const scope = dockerGitSkillerScope()
++  if (scope === null) return path
++  const normalizedPath = path.replace(/\\/gu, '/')
++  const root = sortedRoots(scope, 'hostPath')
++    .find((candidate) => isPathInside(candidate.hostPath, normalizedPath))
++  if (!root) return path
++  const relative = normalizedPath.slice(root.hostPath.length).replace(/^\/+/u, '')
++  return relative.length === 0 ? root.containerPath : `${root.containerPath}/${relative}`
++}
++
++function pickerButton(label: string, path: string, onClick: () => void): HTMLButtonElement {
++  const button = document.createElement('button')
++  button.type = 'button'
++  button.className = [
++    'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left',
++    'hover:bg-black/[0.04] dark:hover:bg-white/[0.06]',
++  ].join(' ')
++  button.innerHTML = [
++    '<span class="text-sm font-medium"></span>',
++    '<span class="min-w-0 flex-1 truncate text-right text-[10px] font-mono text-muted-foreground/70"></span>',
++  ].join('')
++  const [nameEl, pathEl] = [...button.children] as HTMLElement[]
++  nameEl.textContent = label
++  pathEl.textContent = path
++  button.addEventListener('click', onClick)
++  return button
++}
++
++function openDockerGitFolderPicker(
++  scope: DockerGitSkillerScope,
++  title: string | undefined,
++): Promise<string | null> {
++  return new Promise((resolve) => {
++    const overlay = document.createElement('div')
++    overlay.className = 'fixed inset-0 z-[1000] flex items-center justify-center bg-black/30 dark:bg-black/50'
++    const panel = document.createElement('div')
++    panel.className = 'w-full max-w-xl rounded-xl border border-border bg-popover p-5 shadow-2xl'
++    panel.addEventListener('click', (event) => event.stopPropagation())
++
++    const heading = document.createElement('div')
++    heading.className = 'mb-4 flex items-start justify-between gap-3'
++    const titleBlock = document.createElement('div')
++    const titleEl = document.createElement('h2')
++    titleEl.className = 'text-sm font-[590] text-foreground'
++    titleEl.textContent = title ?? 'Select project folder'
++    const scopeEl = document.createElement('p')
++    scopeEl.className = 'mt-1 text-[11px] text-muted-foreground'
++    scopeEl.textContent = `${scope.containerName} · ${scope.currentProject.containerPath}`
++    titleBlock.append(titleEl, scopeEl)
++    const closeButton = document.createElement('button')
++    closeButton.type = 'button'
++    closeButton.className = 'text-muted-foreground hover:text-foreground'
++    closeButton.textContent = 'x'
++    heading.append(titleBlock, closeButton)
++
++    const rootsEl = document.createElement('div')
++    rootsEl.className = 'mb-4 space-y-1 rounded-lg border border-border/60 p-1'
++    const input = document.createElement('input')
++    input.type = 'text'
++    input.value = scope.currentProject.containerPath
++    input.className = [
++      'w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm',
++      'placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring',
++    ].join(' ')
++    for (const root of scope.roots) {
++      rootsEl.append(pickerButton(root.label, root.containerPath, () => {
++        input.value = root.containerPath
++        input.focus()
++        input.select()
++      }))
++    }
++
++    const error = document.createElement('p')
++    error.className = 'mt-2 min-h-4 text-xs text-destructive'
++    const footer = document.createElement('div')
++    footer.className = 'mt-4 flex justify-end gap-2'
++    const cancel = document.createElement('button')
++    cancel.type = 'button'
++    cancel.className = 'rounded-md border border-border px-3 py-2 text-sm hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
++    cancel.textContent = 'Cancel'
++    const choose = document.createElement('button')
++    choose.type = 'button'
++    choose.className = 'rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground hover:opacity-90'
++    choose.textContent = 'Choose folder'
++    footer.append(cancel, choose)
++    panel.append(heading, rootsEl, input, error, footer)
++    overlay.append(panel)
++
++    const cleanup = (value: string | null) => {
++      document.removeEventListener('keydown', onKeyDown)
++      overlay.remove()
++      resolve(value)
++    }
++    const submit = () => {
++      const result = mapContainerPathToHost(scope, input.value)
++      if (result.error !== null) {
++        error.textContent = result.error
++        return
++      }
++      cleanup(result.hostPath)
++    }
++    const onKeyDown = (event: KeyboardEvent) => {
++      if (event.key === 'Escape') cleanup(null)
++      if (event.key === 'Enter') submit()
++    }
++
++    overlay.addEventListener('click', () => cleanup(null))
++    closeButton.addEventListener('click', () => cleanup(null))
++    cancel.addEventListener('click', () => cleanup(null))
++    choose.addEventListener('click', submit)
++    input.addEventListener('input', () => {
++      error.textContent = ''
++    })
++    document.addEventListener('keydown', onKeyDown)
++    document.body.append(overlay)
++    input.focus()
++    input.select()
++  })
++}
++
+@@ -280,0 +489,4 @@ export async function pickFolder(options?: {
++  const scope = dockerGitSkillerScope()
++  if (scope !== null) {
++    return openDockerGitFolderPicker(scope, options?.title)
++  }
+diff --git a/src/mainview/pages/Dashboard.tsx b/src/mainview/pages/Dashboard.tsx
+index 08f05a7..9bd9d54 100644
+--- a/src/mainview/pages/Dashboard.tsx
++++ b/src/mainview/pages/Dashboard.tsx
+@@ -26 +26 @@ import { cn, nativeSelectClass, nativeSelectChevronClass } from "@/mainview/lib/
+-import { openUrl } from "@/mainview/lib/native";
++import { displayFolderPath, openUrl } from "@/mainview/lib/native";
+@@ -571 +571 @@ function InstallGuideModal({
+-                  {path}
++                  {displayFolderPath(path)}
+diff --git a/src/mainview/pages/Projects.tsx b/src/mainview/pages/Projects.tsx
+index 7db4e58..92fe6f5 100644
+--- a/src/mainview/pages/Projects.tsx
++++ b/src/mainview/pages/Projects.tsx
+@@ -9,0 +10 @@ import {
++  FileText,
+@@ -11,0 +13 @@ import {
++  Save,
+@@ -18 +20 @@ import { Button } from "@/mainview/components/ui/button";
+-import { invoke, pickFolder, revealItemInDir } from "@/mainview/lib/native";
++import { displayFolderPath, invoke, pickFolder, revealItemInDir } from "@/mainview/lib/native";
+@@ -25,0 +28 @@ import {
++  useDeleteProjectPrompt,
+@@ -26,0 +30 @@ import {
++  useProjectPrompts,
+@@ -33,0 +38 @@ import {
++  useWriteProjectPrompt,
+@@ -34,0 +40 @@ import {
++  type ProjectPromptFile,
+@@ -37,0 +44 @@ import {
++import type { ProjectPromptScopeJson } from "@/shared/rpc-schema";
+@@ -611 +618 @@ function ProjectRow({
+-          {project.path}
++          {displayFolderPath(project.path)}
+@@ -631,0 +639,3 @@ function ProjectDetail({ project }: { project: Project }) {
++  const { data: promptSnapshot, isLoading: promptsLoading } = useProjectPrompts(project.path);
++  const writePrompt = useWriteProjectPrompt();
++  const deletePrompt = useDeleteProjectPrompt();
+@@ -665 +675 @@ function ProjectDetail({ project }: { project: Project }) {
+-            {project.path}
++            {displayFolderPath(project.path)}
+@@ -784,0 +795,193 @@ function ProjectDetail({ project }: { project: Project }) {
++
++      </div>
++
++      <SystemPromptsSection
++        isLoading={promptsLoading}
++        prompts={promptSnapshot?.prompts ?? []}
++        onDelete={async (prompt) => {
++          await deletePrompt.mutateAsync({
++            kind: prompt.kind,
++            projectPath: project.path,
++            scope: prompt.scope,
++          });
++        }}
++        onSave={async (prompt, content) => {
++          await writePrompt.mutateAsync({
++            content,
++            kind: prompt.kind,
++            projectPath: project.path,
++            scope: prompt.scope,
++          });
++        }}
++      />
++    </div>
++  );
++}
++
++const PROMPT_GROUPS: ReadonlyArray<{
++  scope: ProjectPromptScopeJson;
++  title: string;
++  description: string;
++}> = [
++  {
++    scope: "project",
++    title: "Project system prompts",
++    description: "Files in this repository workspace.",
++  },
++  {
++    scope: "global",
++    title: "Global system prompts",
++    description: "Files in the selected container home.",
++  },
++];
++
++const promptSortOrder: Record<string, number> = {
++  codex: 0,
++  claude: 1,
++  gemini: 2,
++};
++
++function SystemPromptsSection({
++  isLoading,
++  onDelete,
++  onSave,
++  prompts,
++}: {
++  isLoading: boolean;
++  prompts: ProjectPromptFile[];
++  onDelete: (prompt: ProjectPromptFile) => Promise<void>;
++  onSave: (prompt: ProjectPromptFile, content: string) => Promise<void>;
++}) {
++  return (
++    <div className="space-y-3 border-t border-border/60 pt-4">
++      <div className="flex items-center justify-between">
++        <div>
++          <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
++            System prompts
++          </h2>
++          <p className="mt-1 text-xs text-muted-foreground">
++            Edit the prompt files that Codex, Claude Code, and Gemini read from this container.
++          </p>
++        </div>
++        <FileText className="size-4 text-muted-foreground/60" />
++      </div>
++
++      {isLoading ? (
++        <div className="space-y-2">
++          <div className="h-28 rounded-md bg-muted/30 animate-pulse" />
++          <div className="h-28 rounded-md bg-muted/30 animate-pulse" />
++        </div>
++      ) : (
++        PROMPT_GROUPS.map((group) => {
++          const groupPrompts = prompts
++            .filter((prompt) => prompt.scope === group.scope)
++            .sort((left, right) => (promptSortOrder[left.kind] ?? 99) - (promptSortOrder[right.kind] ?? 99));
++          return (
++            <section key={group.scope} className="space-y-2">
++              <div>
++                <h3 className="text-sm font-[590]">{group.title}</h3>
++                <p className="text-xs text-muted-foreground">{group.description}</p>
++              </div>
++              <div className="grid gap-2 xl:grid-cols-3">
++                {groupPrompts.map((prompt) => (
++                  <SystemPromptEditor
++                    key={`${prompt.scope}:${prompt.kind}`}
++                    prompt={prompt}
++                    onDelete={onDelete}
++                    onSave={onSave}
++                  />
++                ))}
++              </div>
++            </section>
++          );
++        })
++      )}
++    </div>
++  );
++}
++
++function SystemPromptEditor({
++  onDelete,
++  onSave,
++  prompt,
++}: {
++  onDelete: (prompt: ProjectPromptFile) => Promise<void>;
++  onSave: (prompt: ProjectPromptFile, content: string) => Promise<void>;
++  prompt: ProjectPromptFile;
++}) {
++  const [draft, setDraft] = useState(prompt.content);
++  const [busy, setBusy] = useState<"delete" | "save" | null>(null);
++  const [error, setError] = useState<string | null>(null);
++  const dirty = draft !== prompt.content;
++
++  useEffect(() => {
++    setDraft(prompt.content);
++    setError(null);
++  }, [prompt.content, prompt.path]);
++
++  async function savePrompt() {
++    setBusy("save");
++    setError(null);
++    try {
++      await onSave(prompt, draft);
++    } catch (err) {
++      setError(err instanceof Error ? err.message : String(err));
++    } finally {
++      setBusy(null);
++    }
++  }
++
++  async function deletePrompt() {
++    if (!window.confirm(`Delete ${prompt.label} ${prompt.scope} prompt?`)) return;
++    setBusy("delete");
++    setError(null);
++    try {
++      await onDelete(prompt);
++    } catch (err) {
++      setError(err instanceof Error ? err.message : String(err));
++    } finally {
++      setBusy(null);
++    }
++  }
++
++  return (
++    <div className="flex min-h-[260px] flex-col rounded-lg border border-border/50 bg-muted/10 p-3">
++      <div className="mb-2 min-w-0">
++        <div className="flex items-center justify-between gap-2">
++          <p className="truncate text-sm font-[590]">{prompt.label}</p>
++          <span className="shrink-0 text-[10px] text-muted-foreground">
++            {prompt.exists ? `${prompt.bytes} bytes` : "not created"}
++          </span>
++        </div>
++        <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground/70" title={displayFolderPath(prompt.path)}>
++          {displayFolderPath(prompt.path)}
++        </p>
++      </div>
++      <textarea
++        className="min-h-[150px] flex-1 resize-y rounded-md border border-border/60 bg-background/70 px-2 py-2 font-mono text-xs leading-relaxed outline-none focus:border-primary/50"
++        spellCheck={false}
++        value={draft}
++        onChange={(event) => setDraft(event.currentTarget.value)}
++      />
++      {error && (
++        <p className="mt-2 line-clamp-2 text-xs text-destructive">{error}</p>
++      )}
++      <div className="mt-3 flex justify-end gap-2">
++        <Button
++          size="sm"
++          variant="ghost"
++          disabled={busy !== null}
++          onClick={deletePrompt}
++        >
++          <Trash2 className="size-3.5" />
++          {busy === "delete" ? "Deleting..." : "Delete"}
++        </Button>
++        <Button
++          size="sm"
++          variant="outline"
++          disabled={!dirty || busy !== null}
++          onClick={savePrompt}
++        >
++          <Save className="size-3.5" />
++          {busy === "save" ? "Saving..." : "Save"}
++        </Button>
+diff --git a/src/shared/rpc-schema.ts b/src/shared/rpc-schema.ts
+index 4ca38cd..7d2a3d9 100644
+--- a/src/shared/rpc-schema.ts
++++ b/src/shared/rpc-schema.ts
+@@ -81,0 +82,20 @@ export type ProjectSkillJson = {
++export type ProjectPromptKindJson = "claude" | "codex" | "gemini";
++
++export type ProjectPromptScopeJson = "project" | "global";
++
++export type ProjectPromptFileJson = {
++  scope: ProjectPromptScopeJson;
++  kind: ProjectPromptKindJson;
++  label: string;
++  file_name: string;
++  path: string;
++  exists: boolean;
++  bytes: number;
++  content: string;
++};
++
++export type ProjectPromptsSnapshotJson = {
++  project_path: string;
++  prompts: ProjectPromptFileJson[];
++};
++
+@@ -257,0 +278,21 @@ export type AppRPCSchema = {
++      list_project_prompts: {
++        params: { path: string };
++        response: ProjectPromptsSnapshotJson;
++      };
++      write_project_prompt: {
++        params: {
++          path: string;
++          scope: ProjectPromptScopeJson;
++          kind: ProjectPromptKindJson;
++          content: string;
++        };
++        response: ProjectPromptsSnapshotJson;
++      };
++      delete_project_prompt: {
++        params: {
++          path: string;
++          scope: ProjectPromptScopeJson;
++          kind: ProjectPromptKindJson;
++        };
++        response: ProjectPromptsSnapshotJson;
++      };
+diff --git a/src/shared/trpc-query-procedures.ts b/src/shared/trpc-query-procedures.ts
+index 14ab9c9..4f411f2 100644
+--- a/src/shared/trpc-query-procedures.ts
++++ b/src/shared/trpc-query-procedures.ts
+@@ -15,0 +16 @@ const QUERY_NAMES = new Set<string>([
++  'list_project_prompts',

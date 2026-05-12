@@ -30,6 +30,11 @@ type PlaywrightFragments = Pick<
   "maybeDependsOn" | "maybePlaywrightEnv" | "maybeBrowserService" | "maybeBrowserVolume"
 >
 
+export type ComposeResourceLimits = {
+  readonly main: ResolvedComposeResourceLimits | undefined
+  readonly playwright: ResolvedComposeResourceLimits | undefined
+}
+
 const sharedCodexVolumeKey = "docker_git_shared_codex"
 const sharedCacheVolumeKey = "docker_git_shared_cache"
 const bootstrapVolumeKey = "docker_git_bootstrap"
@@ -108,9 +113,25 @@ const buildPlaywrightFragments = (
   }
 }
 
+const isResolvedComposeResourceLimits = (
+  value: ResolvedComposeResourceLimits | ComposeResourceLimits
+): value is ResolvedComposeResourceLimits => "cpuLimit" in value && "ramLimit" in value
+
+const normalizeComposeResourceLimits = (
+  resourceLimits: ResolvedComposeResourceLimits | ComposeResourceLimits | undefined
+): ComposeResourceLimits => {
+  if (resourceLimits === undefined) {
+    return { main: undefined, playwright: undefined }
+  }
+  if (isResolvedComposeResourceLimits(resourceLimits)) {
+    return { main: resourceLimits, playwright: resourceLimits }
+  }
+  return resourceLimits
+}
+
 const buildComposeFragments = (
   config: TemplateConfig,
-  resourceLimits: ResolvedComposeResourceLimits | undefined
+  resourceLimits: ComposeResourceLimits
 ): ComposeFragments => {
   const networkMode = config.dockerNetworkMode
   const networkName = resolveComposeNetworkName(config)
@@ -124,7 +145,7 @@ const buildComposeFragments = (
   const maybeClaudeAuthLabelEnv = renderClaudeAuthLabelEnv(claudeAuthLabel)
   const maybeAgentModeEnv = renderAgentModeEnv(config.agentMode)
   const maybeAgentAutoEnv = renderAgentAutoEnv(config.agentAuto)
-  const playwright = buildPlaywrightFragments(config, networkName, resourceLimits)
+  const playwright = buildPlaywrightFragments(config, networkName, resourceLimits.playwright)
 
   return {
     networkMode,
@@ -147,7 +168,7 @@ const buildComposeFragments = (
 const renderComposeServices = (
   config: TemplateConfig,
   fragments: ComposeFragments,
-  resourceLimits: ResolvedComposeResourceLimits | undefined
+  resourceLimits: ComposeResourceLimits
 ): string =>
   `services:
   ${config.serviceName}:
@@ -170,7 +191,7 @@ ${fragments.maybeClaudeAuthLabelEnv}${fragments.maybeAgentModeEnv}${fragments.ma
 ${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    # bootstrap auth/env arrives through docker_git_bootstrap
     ports:
       - "\${DOCKER_GIT_PROJECT_SSH_BIND_HOST:-127.0.0.1}:${config.sshPort}:22"
-${renderResourceLimits(resourceLimits)}    volumes:
+${renderResourceLimits(resourceLimits.main)}    volumes:
       - ${config.volumeName}:/home/${config.sshUser}
       - ${sharedCacheVolumeKey}:/home/${config.sshUser}/.docker-git/.cache
       - ${sharedCodexVolumeKey}:${config.codexHome}-shared
@@ -214,12 +235,13 @@ const renderComposeVolumes = (config: TemplateConfig, maybeBrowserVolume: string
 
 export const renderDockerCompose = (
   config: TemplateConfig,
-  resourceLimits?: ResolvedComposeResourceLimits
+  resourceLimits?: ResolvedComposeResourceLimits | ComposeResourceLimits
 ): string => {
-  const fragments = buildComposeFragments(config, resourceLimits)
+  const limits = normalizeComposeResourceLimits(resourceLimits)
+  const fragments = buildComposeFragments(config, limits)
   return [
     `name: ${resolveComposeProjectName(config)}`,
-    renderComposeServices(config, fragments, resourceLimits),
+    renderComposeServices(config, fragments, limits),
     renderComposeNetworks(fragments.networkMode, fragments.networkName),
     renderComposeVolumes(config, fragments.maybeBrowserVolume)
   ].join("\n\n")

@@ -22,6 +22,8 @@ interface ValueOptionSpec {
     | "codexHome"
     | "cpuLimit"
     | "ramLimit"
+    | "playwrightCpuLimit"
+    | "playwrightRamLimit"
     | "dockerNetworkMode"
     | "dockerSharedNetworkName"
     | "archivePath"
@@ -60,6 +62,10 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--cpus", key: "cpuLimit" },
   { flag: "--ram", key: "ramLimit" },
   { flag: "--memory", key: "ramLimit" },
+  { flag: "--playwright-cpu", key: "playwrightCpuLimit" },
+  { flag: "--playwright-cpus", key: "playwrightCpuLimit" },
+  { flag: "--playwright-ram", key: "playwrightRamLimit" },
+  { flag: "--playwright-memory", key: "playwrightRamLimit" },
   { flag: "--network-mode", key: "dockerNetworkMode" },
   { flag: "--shared-network", key: "dockerSharedNetworkName" },
   { flag: "--archive", key: "archivePath" },
@@ -118,6 +124,8 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   codexHome: (raw, value) => ({ ...raw, codexHome: value }),
   cpuLimit: (raw, value) => ({ ...raw, cpuLimit: value }),
   ramLimit: (raw, value) => ({ ...raw, ramLimit: value }),
+  playwrightCpuLimit: (raw, value) => ({ ...raw, playwrightCpuLimit: value }),
+  playwrightRamLimit: (raw, value) => ({ ...raw, playwrightRamLimit: value }),
   dockerNetworkMode: (raw, value) => ({ ...raw, dockerNetworkMode: value }),
   dockerSharedNetworkName: (raw, value) => ({ ...raw, dockerSharedNetworkName: value }),
   archivePath: (raw, value) => ({ ...raw, archivePath: value }),

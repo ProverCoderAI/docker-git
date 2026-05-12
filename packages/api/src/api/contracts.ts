@@ -271,6 +271,68 @@ export type ProjectAuthRequest = {
   readonly label?: string | null | undefined
 }
 
+export type ProjectPromptKind = "claude" | "codex" | "gemini"
+
+export type ProjectPromptFile = {
+  readonly kind: ProjectPromptKind
+  readonly fileName: string
+  readonly relativePath: string
+  readonly absolutePath: string
+  readonly exists: boolean
+  readonly bytes: number
+  readonly content: string
+}
+
+export type ProjectPromptsSnapshot = {
+  readonly projectId: string
+  readonly projectKey: string
+  readonly projectDir: string
+  readonly prompts: ReadonlyArray<ProjectPromptFile>
+}
+
+export type ProjectPromptUpdateRequest = {
+  readonly content: string
+}
+
+export type ProjectSkillScope =
+  | "skills"
+  | "agents/skills"
+  | "agents/.skills"
+  | "claude/skills"
+  | "codex/skills"
+  | "gemini/skills"
+
+export type ProjectSkillFile = {
+  readonly id: string
+  readonly scope: ProjectSkillScope
+  readonly name: string
+  readonly relativePath: string
+  readonly absolutePath: string
+  readonly bytes: number
+  readonly content: string
+  readonly updatedAtIso: string | null
+}
+
+export type ProjectSkillScopeInfo = {
+  readonly scope: ProjectSkillScope
+  readonly relativeRoot: string
+  readonly absoluteRoot: string
+}
+
+export type ProjectSkillsSnapshot = {
+  readonly projectId: string
+  readonly projectKey: string
+  readonly projectDir: string
+  readonly skills: ReadonlyArray<ProjectSkillFile>
+  readonly scopes: ReadonlyArray<ProjectSkillScopeInfo>
+}
+
+export type ProjectSkillUpdateRequest = {
+  readonly scope: ProjectSkillScope
+  readonly name: string
+  readonly content: string
+}
+
 export type StateInitRequest = {
   readonly repoUrl: string
   readonly repoRef?: string | undefined

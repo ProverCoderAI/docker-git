@@ -54,6 +54,8 @@ Options:
   --codex-home <path>       Container path for Codex auth (default: /home/dev/.codex)
   --cpu <value>             CPU limit: percent or cores (examples: 30%, 1.5; default: 30%)
   --ram <value>             RAM limit: percent or size (examples: 30%, 512m, 4g; default: 30%)
+  --playwright-cpu <value>  CPU limit for the MCP Playwright browser sidecar (default: 30% or --cpu when set)
+  --playwright-ram <value>  RAM limit for the MCP Playwright browser sidecar (default: 30% or --ram when set)
   --network-mode <mode>     Compose network mode: shared|project (default: shared)
   --shared-network <name>   Shared Docker network name when network-mode=shared (default: docker-git-shared)
   --out-dir <path>          Output directory (default: <projectsRoot>/<org>/<repo>[/issue-<id>|/pr-<id>])
@@ -81,6 +83,13 @@ Container runtime env (set via .orch/env/project.env):
   CODEX_AUTO_UPDATE=1|0                 Auto-update Codex CLI on container start (default: 1)
   DOCKER_GIT_RTK_ENABLE=1|0             Configure RTK token-saving hooks/instructions on container start (default: 1)
   CLAUDE_AUTO_SYSTEM_PROMPT=1|0         Auto-attach docker-git managed system prompt to claude (default: 1)
+  CLAUDE_SYSTEM_PROMPT_OVERRIDE=<text>  Custom Claude system prompt body (overrides default Russian template)
+  CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE=<path>  Path to file with custom Claude prompt (takes precedence over OVERRIDE)
+  CODEX_SYSTEM_PROMPT_OVERRIDE=<text>   Custom Codex managed-block content for AGENTS.md
+  CODEX_SYSTEM_PROMPT_OVERRIDE_FILE=<path>  Path to file with custom Codex managed-block content (takes precedence)
+  GEMINI_SYSTEM_PROMPT_OVERRIDE=<text>  Custom Gemini system prompt body
+  GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE=<path>  Path to file with custom Gemini prompt (takes precedence over OVERRIDE)
+  CODEX_EXTRA_SKILLS_PATHS=<spec>[,<spec>...]  Extra skill trees mounted into Codex (format: "prio-name::relative/path"; comma- or newline-separated)
   DOCKER_GIT_ZSH_AUTOSUGGEST=1|0        Enable zsh-autosuggestions (default: 0)
   DOCKER_GIT_ZSH_AUTOSUGGEST_STYLE=...  zsh-autosuggestions highlight style (default: fg=8,italic)
   DOCKER_GIT_ZSH_AUTOSUGGEST_STRATEGY=...  Suggestion sources (default: history completion)
