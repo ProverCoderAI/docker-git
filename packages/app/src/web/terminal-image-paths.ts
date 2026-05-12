@@ -8,8 +8,7 @@ const imagePathPattern = new RegExp(
   "giu"
 )
 
-const treePointerImagePathSource =
-  String.raw`[^\s"'(<>\[\]{}|\\/][^\s"'(<>\[\]{}|\\]*\.(?:${extensionAlternation})`
+const treePointerImagePathSource = String.raw`[^\s"'(<>\[\]{}|\\/][^\s"'(<>\[\]{}|\\]*\.(?:${extensionAlternation})`
 const treePointerImagePathPattern = new RegExp(
   String.raw`(?:^|\s)[└├]\s+(${treePointerImagePathSource})(?=$|[\s"')<>\[\]{}|.,;:?!])`,
   "giu"

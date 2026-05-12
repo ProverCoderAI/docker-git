@@ -50,9 +50,11 @@ const TaskSystemToggle = (
     onIncludeDefaultChange
   }: Pick<TaskPanelProps, "includeDefault" | "onIncludeDefaultChange">
 ): JSX.Element => (
-  <label style={systemToggleStyle}>
+  <label htmlFor="task-panel-show-system" style={systemToggleStyle}>
     <input
       checked={includeDefault}
+      id="task-panel-show-system"
+      name="task-panel-show-system"
       onChange={(event) => {
         onIncludeDefaultChange(event.currentTarget.checked)
       }}
