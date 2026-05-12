@@ -2,16 +2,20 @@
 import type { ApplyCommand, TemplateConfig } from "../core/domain.js"
 import { normalizeAuthLabel, normalizeGitTokenLabel } from "../core/token-labels.js"
 
+const applyOverrideKeys = [
+  "gitTokenLabel",
+  "codexTokenLabel",
+  "claudeTokenLabel",
+  "cpuLimit",
+  "ramLimit",
+  "playwrightCpuLimit",
+  "playwrightRamLimit",
+  "gpu",
+  "enableMcpPlaywright"
+] satisfies ReadonlyArray<keyof ApplyCommand>
+
 export const hasApplyOverrides = (command: ApplyCommand): boolean =>
-  command.gitTokenLabel !== undefined ||
-  command.codexTokenLabel !== undefined ||
-  command.claudeTokenLabel !== undefined ||
-  command.cpuLimit !== undefined ||
-  command.ramLimit !== undefined ||
-  command.playwrightCpuLimit !== undefined ||
-  command.playwrightRamLimit !== undefined ||
-  command.gpu !== undefined ||
-  command.enableMcpPlaywright !== undefined
+  applyOverrideKeys.some((key) => command[key] !== undefined)
 
 const applyTokenOverrides = (template: TemplateConfig, command: ApplyCommand): TemplateConfig => {
   let next = template

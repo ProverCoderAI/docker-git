@@ -1,9 +1,9 @@
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
-import type { PlatformError } from "@effect/platform/Error"
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
+import type * as FileSystem from "@effect/platform/FileSystem"
+import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
+import { composeFilesForMode, prepareControllerRevision, resolveControllerComposeFiles } from "./controller-compose.js"
 import {
   runCommandCapture,
   runCommandExitCode,
@@ -18,12 +18,10 @@ import {
   resolveConfiguredApiBaseUrl,
   uniqueStrings
 } from "./controller-reachability.js"
-import {
-  computeLocalControllerRevision,
-  controllerRevisionEnvKey,
-  parseControllerRevisionEnvOutput
-} from "./controller-revision.js"
+import { parseControllerRevisionEnvOutput } from "./controller-revision.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
+
+export { controllerGpuModeEnvKey, controllerRevisionForMode, parseControllerGpuMode } from "./controller-compose.js"
 
 export type ControllerRuntime =
   | CommandExecutor.CommandExecutor
@@ -40,33 +38,6 @@ const controllerBootstrapError = (message: string): ControllerBootstrapError => 
   _tag: "ControllerBootstrapError",
   message
 })
-
-const composeFilePath = (): Effect.Effect<string, PlatformError, FileSystem.FileSystem | Path.Path> =>
-  Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
-    let current = process.cwd()
-
-    for (;;) {
-      const candidate = path.join(current, "docker-compose.yml")
-      const exists = yield* _(fs.exists(candidate))
-      if (exists) {
-        return candidate
-      }
-
-      const parent = path.dirname(current)
-      if (parent === current) {
-        return path.resolve(process.cwd(), "docker-compose.yml")
-      }
-      current = parent
-    }
-  })
-
-const mapComposePathError = (error: PlatformError): ControllerBootstrapError =>
-  controllerBootstrapError(`Failed to resolve docker-compose.yml path.\nDetails: ${String(error)}`)
-
-const mapControllerRevisionError = (error: PlatformError): ControllerBootstrapError =>
-  controllerBootstrapError(`Failed to compute docker-git controller revision.\nDetails: ${String(error)}`)
 
 const currentProcessEnv = (): Readonly<Record<string, string>> =>
   Object.fromEntries(
@@ -211,11 +182,10 @@ export const runCompose = (
 ): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
     const dockerCommand = yield* _(resolveDockerCommand())
-    const composePath = yield* _(composeFilePath().pipe(Effect.mapError(mapComposePathError)))
+    const composeFiles = yield* _(resolveControllerComposeFiles())
     const invocation = buildDockerInvocation(dockerCommand, [
       "compose",
-      "-f",
-      composePath,
+      ...composeFilesForMode(composeFiles.composePath, composeFiles.gpuOverlayPath),
       ...args
     ])
     const exitCode = yield* _(
@@ -269,18 +239,7 @@ export const inspectControllerRevision = (): Effect.Effect<
   )
 
 export const prepareLocalControllerRevision = (): Effect.Effect<string, ControllerBootstrapError, ControllerRuntime> =>
-  Effect.gen(function*(_) {
-    const composePath = yield* _(composeFilePath().pipe(Effect.mapError(mapComposePathError)))
-    const revision = yield* _(
-      computeLocalControllerRevision(composePath).pipe(Effect.mapError(mapControllerRevisionError))
-    )
-    yield* _(
-      Effect.sync(() => {
-        process.env[controllerRevisionEnvKey] = revision
-      })
-    )
-    return revision
-  })
+  prepareControllerRevision()
 
 export const inspectContainerNetworks = (
   containerName: string

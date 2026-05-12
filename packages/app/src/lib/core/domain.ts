@@ -242,8 +242,7 @@ export type Command =
 export const isDockerNetworkMode = (value: string): value is DockerNetworkMode =>
   value === "shared" || value === "project"
 
-export const isGpuMode = (value: string): value is GpuMode =>
-  value === "none" || value === "all"
+export const isGpuMode = (value: string): value is GpuMode => value === "none" || value === "all"
 
 // CHANGE: derive compose network name from typed template config
 // WHY: keep network naming deterministic across template generation and runtime checks
