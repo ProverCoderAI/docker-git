@@ -30,10 +30,19 @@ RUN set -eu; \
     sleep $((attempt * 2)); \
   done; \
   apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-    ca-certificates curl git docker.io docker-compose-v2 openssh-client sshpass python3 make g++ unzip \
+    ca-certificates curl gpg git docker.io docker-compose-v2 openssh-client sshpass python3 make g++ unzip \
     xvfb libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libgtk-3-0 \
     libnss3 libpango-1.0-0 libx11-xcb1 libxcb-dri3-0 libxcomposite1 libxdamage1 libxfixes3 \
     libxkbcommon0 libxrandr2 libxshmfence1 \
+ && mkdir -p /usr/share/keyrings \
+ && curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+    | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+ && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+    | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+    > /etc/apt/sources.list.d/nvidia-container-toolkit.list \
+ && apt-get -o Acquire::Retries=3 update \
+ && apt-get -o Acquire::Retries=3 install -y --no-install-recommends nvidia-container-toolkit \
+ && nvidia-ctk runtime configure --runtime=docker \
  && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \

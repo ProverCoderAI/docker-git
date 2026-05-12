@@ -33,6 +33,7 @@ services:
     volumes:
       - docker_git_projects:${DOCKER_GIT_PROJECTS_ROOT:-/home/dev/.docker-git}
       - docker_git_docker_data:/var/lib/docker
+    gpus: all
     privileged: true
     cgroup: host
     init: true
