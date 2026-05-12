@@ -1,4 +1,7 @@
+import * as Command from "@effect/platform/Command"
+import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
+import { Effect, pipe } from "effect"
 
 import { defaultTemplateConfig, type TemplateConfig } from "../../src/core/domain.js"
 import { renderDockerCompose } from "../../src/core/templates/docker-compose.js"
@@ -6,6 +9,7 @@ import { renderDockerfile } from "../../src/core/templates/dockerfile.js"
 import { renderEntrypoint } from "../../src/core/templates-entrypoint.js"
 import { renderEntrypointDnsRepair } from "../../src/core/templates-entrypoint/dns-repair.js"
 import { renderEntrypointGitHooks } from "../../src/core/templates-entrypoint/git.js"
+import { renderPromptScript } from "../../src/core/templates-prompt.js"
 
 const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateConfig => ({
   ...defaultTemplateConfig,
@@ -89,6 +93,25 @@ describe("renderDockerfile", () => {
     ])
     expect(dockerfile).not.toContain("glab_1.93.0_linux_\\$GLAB_ARCH.deb")
   })
+})
+
+describe("renderPromptScript", () => {
+  it.effect("is silent when sourced by a non-interactive shell without a controlling TTY", () =>
+    pipe(
+      Command.make(
+        "bash",
+        "-lc",
+        String.raw`set -euo pipefail; { source <(printf '%s' "$DOCKER_GIT_PROMPT_SCRIPT"); } 2>&1; printf ok`
+      ),
+      Command.env({ DOCKER_GIT_PROMPT_SCRIPT: renderPromptScript() }),
+      Command.stdout("pipe"),
+      Command.stderr("pipe"),
+      Command.string,
+      Effect.tap((output) => Effect.sync(() => expect(output).toBe("ok"))),
+      Effect.asVoid,
+      Effect.provide(NodeContext.layer)
+    )
+  )
 })
 
 describe("renderEntrypointGitHooks", () => {
@@ -295,7 +318,8 @@ describe("renderEntrypoint auth bridge", () => {
     const entrypoint = renderAuthEntrypoint()
 
     expectContainsAll(entrypoint, [
-      "stty sane < /dev/tty > /dev/tty 2>/dev/null",
+      "{ stty sane < /dev/tty > /dev/tty; } 2>/dev/null",
+      '*) return 0 2>/dev/null || exit 0 ;;',
       "docker_git_terminal_sanitize",
       "trap 'docker_git_terminal_sanitize' EXIT INT TERM",
       "add-zsh-hook zshexit docker_git_terminal_on_exit",
