@@ -39,9 +39,9 @@ services:
     cgroup: host
     init: true
     restart: unless-stopped
-    cpus: ${DOCKER_GIT_CONTROLLER_CPUS:-2.0}
-    mem_limit: ${DOCKER_GIT_CONTROLLER_MEMORY:-4g}
-    memswap_limit: ${DOCKER_GIT_CONTROLLER_MEMORY:-4g}
+    cpus: ${DOCKER_GIT_CONTROLLER_CPUS:-0.9}
+    mem_limit: ${DOCKER_GIT_CONTROLLER_MEMORY:-921m}
+    memswap_limit: ${DOCKER_GIT_CONTROLLER_MEMORY:-921m}
     pids_limit: ${DOCKER_GIT_CONTROLLER_PIDS:-4096}
 
 volumes:

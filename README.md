@@ -123,11 +123,20 @@ project (or the controller itself) cannot consume the entire system.
   `30%` RAM (resolved against the host on `apply`). Override via
   `--cpu` / `--ram` (or per-project `docker-git.json`).
 - **Controller container** (`docker-git-api`) is capped in
-  `docker-compose.yml` and `docker-compose.api.yml`. Override via
-  environment variables before `./ctl up`:
+  `docker-compose.yml` and `docker-compose.api.yml`. When started through
+  `docker-git` or `./ctl`, the default CPU/RAM cap is resolved to `90%` of
+  host resources. Override with global CLI flags:
+
+  ```bash
+  docker-git --controller-cpu 75% --controller-ram 8g --controller-pids 8192 ps
+  ./ctl up --cpu 75% --ram 8g --pids 8192
+  ```
+
+  The same values can be provided through env vars before `docker-git` or
+  `./ctl up`:
 
   | Variable                       | Default | Purpose                              |
   | ------------------------------ | ------- | ------------------------------------ |
-  | `DOCKER_GIT_CONTROLLER_CPUS`   | `2.0`   | Maximum CPU cores for the controller |
-  | `DOCKER_GIT_CONTROLLER_MEMORY` | `4g`    | Memory + swap cap (matched values)   |
+  | `DOCKER_GIT_CONTROLLER_CPUS`   | `90%`   | CPU percent or cores for the controller |
+  | `DOCKER_GIT_CONTROLLER_MEMORY` | `90%`   | RAM percent or size; swap is matched |
   | `DOCKER_GIT_CONTROLLER_PIDS`   | `4096`  | Maximum PIDs inside the controller   |
