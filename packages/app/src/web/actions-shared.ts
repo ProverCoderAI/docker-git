@@ -3,18 +3,7 @@ import type { Dispatch, SetStateAction } from "react"
 
 import type { ActionPromptState } from "./action-prompt.js"
 import { createAuthActionPrompt } from "./action-prompt.js"
-import type {
-  AuthSnapshot,
-  ContainerTaskSnapshot,
-  GithubAuthStatus,
-  ProjectAuthSnapshot,
-  ProjectBrowserSession,
-  ProjectDatabaseForward,
-  ProjectDatabaseProfile,
-  ProjectDatabaseSession,
-  ProjectDetails,
-  ProjectPortForward
-} from "./api.js"
+import type * as ApiTypes from "./api-state-types.js"
 import { githubAuthGateMessage, shouldRequireGithubAuth } from "./github-auth-gate.js"
 import { browserMenuIndex } from "./menu.js"
 import type { BrowserScreen } from "./screen.js"
@@ -41,9 +30,9 @@ type SelectedProjectBusyAction<A> = {
 }
 
 type AuthSuccessState = {
-  readonly githubStatus: GithubAuthStatus
+  readonly githubStatus: ApiTypes.GithubAuthStatus
   readonly message: string
-  readonly snapshot: AuthSnapshot
+  readonly snapshot: ApiTypes.AuthSnapshot
 }
 
 const outputLineLimit = 4000
@@ -53,7 +42,7 @@ export type BrowserActionContext = {
   readonly databaseLabelInput: string
   readonly addTerminalSession: (session: ActiveTerminalSession) => void
   readonly closeTerminalSession: (sessionId: string) => void
-  readonly githubStatus: GithubAuthStatus | null
+  readonly githubStatus: ApiTypes.GithubAuthStatus | null
   readonly portForwardInput: string
   readonly projectTasksIncludeDefault: boolean
   readonly reloadDashboard: () => void
@@ -62,25 +51,27 @@ export type BrowserActionContext = {
   readonly selectedProjectName: string | null
   readonly setActionPrompt: Setter<ActionPromptState | null>
   readonly setActiveScreen: Setter<BrowserScreen>
-  readonly setAuthSnapshot: Setter<AuthSnapshot | null>
+  readonly setAuthSnapshot: Setter<ApiTypes.AuthSnapshot | null>
   readonly setBusyLabel: Setter<string | null>
   readonly setDatabaseConnectionInput: Setter<string>
-  readonly setDatabaseForwards: Setter<ReadonlyArray<ProjectDatabaseForward>>
+  readonly setDatabaseForwards: Setter<ReadonlyArray<ApiTypes.ProjectDatabaseForward>>
   readonly setDatabaseLabelInput: Setter<string>
-  readonly setDatabaseProfiles: Setter<ReadonlyArray<ProjectDatabaseProfile>>
-  readonly setDatabaseSession: Setter<ProjectDatabaseSession | null>
-  readonly setGithubStatus: Setter<GithubAuthStatus | null>
+  readonly setDatabaseProfiles: Setter<ReadonlyArray<ApiTypes.ProjectDatabaseProfile>>
+  readonly setDatabaseSession: Setter<ApiTypes.ProjectDatabaseSession | null>
+  readonly setGithubStatus: Setter<ApiTypes.GithubAuthStatus | null>
   readonly setMessage: Setter<string | null>
   readonly setOutput: Setter<string>
   readonly setPortForwardInput: Setter<string>
-  readonly setPortForwards: Setter<ReadonlyArray<ProjectPortForward>>
-  readonly setProjectAuthSnapshot: Setter<ProjectAuthSnapshot | null>
-  readonly setProjectBrowser: Setter<ProjectBrowserSession | null>
+  readonly setPortForwards: Setter<ReadonlyArray<ApiTypes.ProjectPortForward>>
+  readonly setProjectAuthSnapshot: Setter<ApiTypes.ProjectAuthSnapshot | null>
+  readonly setProjectBrowser: Setter<ApiTypes.ProjectBrowserSession | null>
+  readonly setProjectPrompts: Setter<ApiTypes.ProjectPromptsSnapshot | null>
+  readonly setProjectSkills: Setter<ApiTypes.ProjectSkillsSnapshot | null>
   readonly setProjectTaskLogs: Setter<string>
-  readonly setProjectTasks: Setter<ContainerTaskSnapshot | null>
+  readonly setProjectTasks: Setter<ApiTypes.ContainerTaskSnapshot | null>
   readonly setProjectTasksIncludeDefault: Setter<boolean>
   readonly setSelectedMenuIndex: Setter<number>
-  readonly setSelectedProject: Setter<ProjectDetails | null>
+  readonly setSelectedProject: Setter<ApiTypes.ProjectDetails | null>
   readonly setSelectedProjectId: Setter<string | null>
 }
 

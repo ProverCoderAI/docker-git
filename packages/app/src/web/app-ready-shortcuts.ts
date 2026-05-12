@@ -7,6 +7,8 @@ import {
   loadSelectedProjectDatabases,
   loadSelectedProjectInfo,
   loadSelectedProjectPorts,
+  loadSelectedProjectPrompts,
+  loadSelectedProjectSkills,
   loadSelectedProjectTasks,
   refreshAuthPanel,
   refreshProjectAuthPanel,
@@ -77,7 +79,9 @@ const projectPrimaryNavigationMenus: ReadonlySet<BrowserMenuTag> = new Set([
   "Logs",
   "Ports",
   "ProjectAuth",
+  "Prompts",
   "Select",
+  "Skills",
   "Status",
   "Tasks"
 ])
@@ -100,6 +104,8 @@ const resolveRefreshAction = (
     Match.when("Browser", () => loadSelectedProjectBrowser),
     Match.when("Databases", () => loadSelectedProjectDatabases),
     Match.when("Ports", () => loadSelectedProjectPorts),
+    Match.when("Prompts", () => loadSelectedProjectPrompts),
+    Match.when("Skills", () => loadSelectedProjectSkills),
     Match.when("Tasks", () => loadSelectedProjectTasks),
     Match.when("ProjectAuth", () => refreshProjectAuthPanel),
     Match.orElse(() => loadSelectedProjectInfo)
@@ -149,7 +155,9 @@ export const shouldLoadProjectDetails = (currentMenu: BrowserMenuTag): boolean =
     Match.when("Logs", () => true),
     Match.when("Ports", () => true),
     Match.when("ProjectAuth", () => true),
+    Match.when("Prompts", () => true),
     Match.when("Select", () => true),
+    Match.when("Skills", () => true),
     Match.when("Status", () => true),
     Match.when("Tasks", () => true),
     Match.orElse(() => false)

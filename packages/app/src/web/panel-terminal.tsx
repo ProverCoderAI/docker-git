@@ -26,6 +26,7 @@ type TerminalPanelProps = {
   readonly onKill: () => void
   readonly onMessage: (message: string) => void
   readonly onOpenBrowser?: (() => void) | undefined
+  readonly onOpenSkiller?: (() => void) | undefined
   readonly onOpenTaskManager?: (() => void) | undefined
   readonly onOpenTerminal?: (() => void) | undefined
   readonly session: ActiveTerminalSession
@@ -310,13 +311,21 @@ const TerminalHeaderActions = (
     onDetach,
     onKill,
     onOpenBrowser,
+    onOpenSkiller,
     onOpenTaskManager,
     onOpenTerminal,
     session
   }:
     & Pick<
       TerminalPanelProps,
-      "onApplyProject" | "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
+      | "onApplyProject"
+      | "onDetach"
+      | "onKill"
+      | "onOpenBrowser"
+      | "onOpenSkiller"
+      | "onOpenTaskManager"
+      | "onOpenTerminal"
+      | "session"
     >
     & {
       readonly compactHeaderMode: boolean
@@ -332,6 +341,13 @@ const TerminalHeaderActions = (
         enabled={hasProjectActions}
         label="Open browser"
         onClick={onOpenBrowser}
+      />
+      <OptionalTerminalActionButton
+        compactHeaderMode={compactHeaderMode}
+        compactLabel="Skiller"
+        enabled={hasProjectActions}
+        label="Skiller"
+        onClick={onOpenSkiller}
       />
       <OptionalTerminalActionButton
         compactHeaderMode={compactHeaderMode}
@@ -371,6 +387,7 @@ const TerminalHeader = (
     onDetach,
     onKill,
     onOpenBrowser,
+    onOpenSkiller,
     onOpenTaskManager,
     onOpenTerminal,
     session,
@@ -378,7 +395,14 @@ const TerminalHeader = (
   }:
     & Pick<
       TerminalPanelProps,
-      "onApplyProject" | "onDetach" | "onKill" | "onOpenBrowser" | "onOpenTaskManager" | "onOpenTerminal" | "session"
+      | "onApplyProject"
+      | "onDetach"
+      | "onKill"
+      | "onOpenBrowser"
+      | "onOpenSkiller"
+      | "onOpenTaskManager"
+      | "onOpenTerminal"
+      | "session"
     >
     & {
       readonly compactHeaderMode: boolean
@@ -393,6 +417,7 @@ const TerminalHeader = (
       onDetach={onDetach}
       onKill={onKill}
       onOpenBrowser={onOpenBrowser}
+      onOpenSkiller={onOpenSkiller}
       onOpenTaskManager={onOpenTaskManager}
       onOpenTerminal={onOpenTerminal}
       session={session}
@@ -542,6 +567,7 @@ export const TerminalPanel = (
     onKill,
     onMessage,
     onOpenBrowser,
+    onOpenSkiller,
     onOpenTaskManager,
     onOpenTerminal,
     session
@@ -639,6 +665,7 @@ export const TerminalPanel = (
           onKill()
         }}
         onOpenBrowser={onOpenBrowser}
+        onOpenSkiller={onOpenSkiller}
         onOpenTaskManager={onOpenTaskManager}
         onOpenTerminal={onOpenTerminal}
         session={session}

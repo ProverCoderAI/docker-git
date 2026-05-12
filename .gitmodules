@@ -1,0 +1,3 @@
+[submodule "third_party/skiller-desktop-skills-manager"]
+	path = third_party/skiller-desktop-skills-manager
+	url = https://github.com/beautyfree/skiller-desktop-skills-manager.git

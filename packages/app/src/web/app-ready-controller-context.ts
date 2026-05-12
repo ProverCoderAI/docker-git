@@ -39,6 +39,8 @@ export const createReadyActionContext = (
     setPortForwards: state.setPortForwards,
     setProjectAuthSnapshot: state.setProjectAuthSnapshot,
     setProjectBrowser: state.setProjectBrowser,
+    setProjectPrompts: state.setProjectPrompts,
+    setProjectSkills: state.setProjectSkills,
     setProjectTaskLogs: state.setProjectTaskLogs,
     setProjectTasks: state.setProjectTasks,
     setProjectTasksIncludeDefault: state.setProjectTasksIncludeDefault,

@@ -49,6 +49,8 @@ export const makeBrowserActionContext = (
       setPortForwards: vi.fn(),
       setProjectAuthSnapshot: vi.fn(),
       setProjectBrowser,
+      setProjectPrompts: vi.fn(),
+      setProjectSkills: vi.fn(),
       setProjectTaskLogs: vi.fn(),
       setProjectTasks: vi.fn(),
       setProjectTasksIncludeDefault: vi.fn(),

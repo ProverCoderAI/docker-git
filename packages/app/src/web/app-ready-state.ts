@@ -13,11 +13,15 @@ import type {
   ProjectDatabaseProfile,
   ProjectDatabaseSession,
   ProjectDetails,
-  ProjectPortForward
-} from "./api.js"
+  ProjectPortForward,
+  ProjectPromptsSnapshot,
+  ProjectSkillsSnapshot
+} from "./api-state-types.js"
 import { resetCreateView } from "./app-ready-create.js"
 import { useDatabaseState } from "./app-ready-databases-hook.js"
 import { usePortForwardState } from "./app-ready-port-forwards-hook.js"
+import { useProjectPromptsState } from "./app-ready-prompts-hook.js"
+import { useProjectSkillsState } from "./app-ready-skills-hook.js"
 import { useProjectTasksState } from "./app-ready-tasks-hook.js"
 import { type TerminalWorkspaceReadyState, useTerminalWorkspaceState } from "./app-ready-terminal-state-hook.js"
 import { type BrowserScreen, menuScreen } from "./screen.js"
@@ -40,6 +44,8 @@ type ReadyStateSetters = Pick<
   | "setPortForwards"
   | "setProjectAuthSnapshot"
   | "setProjectBrowser"
+  | "setProjectPrompts"
+  | "setProjectSkills"
   | "setProjectTaskLogs"
   | "setProjectTasks"
   | "setProjectTasksIncludeDefault"
@@ -68,6 +74,8 @@ export type ReadyState = ReadyStateSetters & TerminalWorkspaceReadyState & {
   readonly projectNavigationArmed: boolean
   readonly projectAuthSnapshot: ProjectAuthSnapshot | null
   readonly projectBrowser: ProjectBrowserSession | null
+  readonly projectPrompts: ProjectPromptsSnapshot | null
+  readonly projectSkills: ProjectSkillsSnapshot | null
   readonly projectTaskLogs: string
   readonly projectTasks: ContainerTaskSnapshot | null
   readonly projectTasksIncludeDefault: boolean
@@ -151,6 +159,8 @@ export const useReadyState = (): ReadyState => {
   const panelState = useReadyPanelState()
   const databaseState = useDatabaseState()
   const portForwardState = usePortForwardState()
+  const projectPromptsState = useProjectPromptsState()
+  const projectSkillsState = useProjectSkillsState()
   const projectTasksState = useProjectTasksState()
   const projectState = useReadyProjectState()
 
@@ -159,6 +169,8 @@ export const useReadyState = (): ReadyState => {
     ...panelState,
     ...databaseState,
     ...portForwardState,
+    ...projectPromptsState,
+    ...projectSkillsState,
     ...projectTasksState,
     ...projectState
   }

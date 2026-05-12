@@ -155,6 +155,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Docker info
@@ -168,6 +170,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Docker info
@@ -181,6 +185,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Docker info
@@ -194,6 +200,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Docker info
@@ -207,6 +215,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Docker info
@@ -220,6 +230,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Docker info

@@ -3,6 +3,14 @@ import type { TemplateConfig } from "../domain.js"
 const entrypointClaudeGlobalPromptTemplate = String
   .raw`# Claude Code: managed global memory (CLAUDE.md is auto-loaded by Claude Code)
 CLAUDE_GLOBAL_PROMPT_FILE="/home/__SSH_USER__/.claude/CLAUDE.md"
+docker_git_decode_unicode_escapes() {
+  local value="$1"
+  if printf "%s" "$value" | grep -q '\\u[0-9a-fA-F]'; then
+    printf "%b" "$value"
+  else
+    printf "%s" "$value"
+  fi
+}
 CLAUDE_AUTO_SYSTEM_PROMPT="${"$"}{CLAUDE_AUTO_SYSTEM_PROMPT:-1}"
 CLAUDE_WORKSPACE_CONTEXT="Контекст workspace: repository"
 REPO_REF_VALUE="${"$"}{REPO_REF:-__REPO_REF_DEFAULT__}"
@@ -40,12 +48,9 @@ elif [[ "$REPO_REF_VALUE" == refs/pull/*/head ]]; then
   fi
 fi
 
-if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
-  mkdir -p "$(dirname "$CLAUDE_GLOBAL_PROMPT_FILE")"
-  chown 1000:1000 "$(dirname "$CLAUDE_GLOBAL_PROMPT_FILE")" 2>/dev/null || true
-  if [[ ! -f "$CLAUDE_GLOBAL_PROMPT_FILE" ]] || grep -q "^<!-- docker-git-managed:claude-md -->$" "$CLAUDE_GLOBAL_PROMPT_FILE"; then
-    cat <<EOF > "$CLAUDE_GLOBAL_PROMPT_FILE"
-<!-- docker-git-managed:claude-md -->
+CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE="${"$"}{CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE:-}"
+CLAUDE_SYSTEM_PROMPT_OVERRIDE="${"$"}{CLAUDE_SYSTEM_PROMPT_OVERRIDE:-}"
+CLAUDE_DEFAULT_PROMPT_BODY="$(cat <<EOF
 Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, bun, codex, opencode, oh-my-opencode, sshpass, claude, git, node и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
 Рабочая папка проекта (git clone): __TARGET_DIR__
 Доступные workspace пути: __TARGET_DIR__
@@ -54,6 +59,24 @@ $CLAUDE_WORKSPACE_CONTEXT
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
 Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
 Если ты видишь файлы AGENTS.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
+EOF
+)"
+CLAUDE_DEFAULT_PROMPT_BODY="$(docker_git_decode_unicode_escapes "$CLAUDE_DEFAULT_PROMPT_BODY")"
+if [[ -n "$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE" && -r "$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE" ]]; then
+  CLAUDE_PROMPT_BODY="$(cat "$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE")"
+elif [[ -n "$CLAUDE_SYSTEM_PROMPT_OVERRIDE" ]]; then
+  CLAUDE_PROMPT_BODY="$CLAUDE_SYSTEM_PROMPT_OVERRIDE"
+else
+  CLAUDE_PROMPT_BODY="$CLAUDE_DEFAULT_PROMPT_BODY"
+fi
+
+if [[ "$CLAUDE_AUTO_SYSTEM_PROMPT" == "1" ]]; then
+  mkdir -p "$(dirname "$CLAUDE_GLOBAL_PROMPT_FILE")"
+  chown 1000:1000 "$(dirname "$CLAUDE_GLOBAL_PROMPT_FILE")" 2>/dev/null || true
+  if [[ ! -f "$CLAUDE_GLOBAL_PROMPT_FILE" ]] || grep -q "^<!-- docker-git-managed:claude-md -->$" "$CLAUDE_GLOBAL_PROMPT_FILE"; then
+    cat <<EOF > "$CLAUDE_GLOBAL_PROMPT_FILE"
+<!-- docker-git-managed:claude-md -->
+$CLAUDE_PROMPT_BODY
 <!-- /docker-git-managed:claude-md -->
 EOF
     chmod 0644 "$CLAUDE_GLOBAL_PROMPT_FILE" || true

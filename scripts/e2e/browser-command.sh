@@ -16,6 +16,7 @@ BROWSER_LOG="$ROOT/browser-command.log"
 STATE_PATH="$ROOT/.orch/state/browser-frontend.json"
 FAILURE_DUMPED=0
 BROWSER_PID=""
+BROWSER_STARTUP_ATTEMPTS="${DOCKER_GIT_E2E_BROWSER_STARTUP_ATTEMPTS:-240}"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_PROJECTS_ROOT_VOLUME="docker-git-e2e-browser-$RUN_ID-projects"
@@ -140,9 +141,9 @@ setsid bash -lc 'bun run docker-git -- browser' >"$BROWSER_LOG" 2>&1 &
 BROWSER_PID="$!"
 
 wait_for_log_line "Ensuring docker-git API controller is current."
-wait_for_http_contains "http://127.0.0.1:${DOCKER_GIT_API_PORT}/health" '"ok":true'
-wait_for_http_contains "http://127.0.0.1:${DOCKER_GIT_WEB_PORT}/" "<title>docker-git browser</title>"
-wait_for_http_contains "http://127.0.0.1:${DOCKER_GIT_WEB_PORT}/api/health" '"ok":true'
+wait_for_http_contains "http://127.0.0.1:${DOCKER_GIT_API_PORT}/health" '"ok":true' "$BROWSER_STARTUP_ATTEMPTS"
+wait_for_http_contains "http://127.0.0.1:${DOCKER_GIT_WEB_PORT}/" "<title>docker-git browser</title>" "$BROWSER_STARTUP_ATTEMPTS"
+wait_for_http_contains "http://127.0.0.1:${DOCKER_GIT_WEB_PORT}/api/health" '"ok":true' "$BROWSER_STARTUP_ATTEMPTS"
 wait_for_log_line "docker-git web runtime listening on http://"
 
 browser_alive || fail "browser command exited after startup checks"

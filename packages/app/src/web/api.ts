@@ -17,6 +17,7 @@ import {
   ProjectsResponseSchema,
   ProjectTerminalSessionResponseSchema,
   ProjectTerminalSessionsResponseSchema,
+  SkillerLaunchResponseSchema,
   StartProjectTerminalSessionAcceptedResponseSchema,
   TerminalSessionLookupResponseSchema,
   TerminalSessionResponseSchema
@@ -52,6 +53,8 @@ export {
   loadProjectPs,
   upProject
 } from "./api-project-core.js"
+export { deleteProjectPrompt, loadProjectPrompts, writeProjectPrompt } from "./api-prompts.js"
+export { deleteProjectSkill, loadProjectSkills, projectSkillScopeToId, writeProjectSkill } from "./api-skills.js"
 export { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api-tasks.js"
 
 export type * from "./api-types.js"
@@ -106,6 +109,24 @@ export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
       health,
       projects: sortDashboardProjects(projectsResponse.projects)
     }))
+  )
+
+const openSkillerPath = (projectKey: string | undefined, sessionId: string | undefined): string => {
+  if (projectKey !== undefined && sessionId !== undefined) {
+    return `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/${
+      encodeURIComponent(sessionId)
+    }/skiller/open`
+  }
+  return projectKey === undefined
+    ? "/skiller/open"
+    : `/projects/by-key/${encodeURIComponent(projectKey)}/skiller/open`
+}
+
+export const openSkiller = (projectKey?: string, sessionId?: string) =>
+  requestJson(
+    "POST",
+    openSkillerPath(projectKey, sessionId),
+    SkillerLaunchResponseSchema
   )
 
 export const loadProjectPortForwards = (projectId: string) =>
