@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
   buildCommentBody,
   buildSnapshotRef,
+  formatTokenReduction,
   isChatTranscriptPath,
   maxRepoFileSize,
-  shouldIgnoreSessionPath
+  shouldIgnoreSessionPath,
+  summarizeTokenReduction
 } from "../src/core.js"
 import { collectSessionFiles, parseUploadContext, uploadFromContext, type Output } from "../src/backup.js"
 import { parseArgs } from "../src/cli.js"
@@ -190,7 +192,13 @@ describe("PR comment body", () => {
         state: "success",
         manifestUrl: "https://example.test/manifest",
         readmeUrl: "https://example.test/readme",
-        summary: { fileCount: 2, totalBytes: 1234 }
+        summary: { fileCount: 2, totalBytes: 1234 },
+        tokenReduction: {
+          sourceTokens: 2000,
+          retainedTokens: 512,
+          reducedTokens: 1488,
+          reductionPercent: 74
+        }
       },
       gitStatus
     })
@@ -204,6 +212,7 @@ describe("PR comment body", () => {
     expect(queuedBody).toContain(gitStatusBlock)
     expect(successBody).toContain("Status: success")
     expect(successBody).toContain("Links: [README](https://example.test/readme) | [Manifest](https://example.test/manifest)")
+    expect(successBody).toContain("RTK token reduction estimate: ~2000 -> ~512 tokens (-~1488, 74%)")
     expect(successBody).toContain(gitStatusBlock)
     expect(failureBody).toContain("Status: failure")
     expect(failureBody).toContain("Error: upload failed")
@@ -214,6 +223,24 @@ describe("PR comment body", () => {
     expect(buildCommentBody({ source, upload: { state: "queued" }, gitStatus: null })).toContain(
       ["`git status`", "```", "(unavailable)", "```"].join("\n")
     )
+  })
+})
+
+describe("RTK token reduction summary", () => {
+  it("keeps retained tokens below source tokens and reports the saved budget", () => {
+    const summary = summarizeTokenReduction([
+      { logicalName: ".codex/sessions/a.jsonl", sourcePath: "/tmp/a", size: 4_000 },
+      { logicalName: ".codex/sessions/b.jsonl", sourcePath: "/tmp/b", size: 8_000 }
+    ])
+
+    expect(summary).toEqual({
+      sourceTokens: 3_000,
+      retainedTokens: 512,
+      reducedTokens: 2_488,
+      reductionPercent: 83
+    })
+    expect(summary.retainedTokens).toBeLessThanOrEqual(summary.sourceTokens)
+    expect(formatTokenReduction(summary)).toBe("~3000 -> ~512 tokens (-~2488, 83%)")
   })
 })
 

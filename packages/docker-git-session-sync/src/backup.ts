@@ -10,6 +10,7 @@ import {
   buildSnapshotReadme,
   buildSnapshotRef,
   formatBytes,
+  formatTokenReduction,
   isPathWithinParent,
   isChatTranscriptPath,
   sessionDirNames,
@@ -17,6 +18,7 @@ import {
   shouldIgnoreSessionPath,
   sortSessionFiles,
   summarizeFiles,
+  summarizeTokenReduction,
   toLogicalRelativePath
 } from "./core.js"
 import {
@@ -567,6 +569,7 @@ const runSessionUpload = (
       (message) => logVerbose(verbose, output, message)
     )
     const summary = summarizeFiles(prepared.manifestFiles)
+    const tokenReduction = summarizeTokenReduction(sessionFiles)
     const sessionRoots = sessionDirs.map((dir) => `~/${dir.name}`)
     const manifestUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, `${context.snapshotRef}/manifest.json`)
     const readmeRepoPath = `${context.snapshotRef}/README.md`
@@ -581,20 +584,20 @@ const runSessionUpload = (
     const readmePath = path.join(tmpDir, "README.md")
     fs.writeFileSync(
       readmePath,
-      buildSnapshotReadme({ backupRepo, source: context.source, manifestUrl, summary, sessionRoots }),
+      buildSnapshotReadme({ backupRepo, source: context.source, manifestUrl, summary, tokenReduction, sessionRoots }),
       "utf8"
     )
     const uploadEntries = [...prepared.uploadEntries, buildReadmeUploadEntry(readmeRepoPath, readmePath)]
     logVerbose(verbose, output, `Uploading snapshot to ${backupRepo.fullName}:${context.snapshotRef}`)
     const uploadResult = uploadSnapshot(backupRepo, context.snapshotRef, manifest, uploadEntries, ghEnv)
     if (!uploadResult.changed) {
-      output.out(`[session-backup] skipped: no new or changed chat transcripts (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`)
+      output.out(`[session-backup] skipped: no new or changed chat transcripts (${summary.fileCount} files, ${formatBytes(summary.totalBytes)}; RTK ${formatTokenReduction(tokenReduction)})`)
       printGitStatus(output, context.gitStatus)
       logVerbose(verbose, output, `[session-backup] No backup repo changes for ${backupRepo.fullName}:${context.snapshotRef}`)
       updateUploadComment(context, ghEnv, output, { state: "skipped", message: "No new or changed chat transcripts." })
       return 0
     }
-    output.out(`[session-backup] ok: ${context.source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`)
+    output.out(`[session-backup] ok: ${context.source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)}; RTK ${formatTokenReduction(tokenReduction)})`)
     printGitStatus(output, context.gitStatus)
     logVerbose(verbose, output, `[session-backup] Uploaded snapshot to ${backupRepo.fullName}:${context.snapshotRef}`)
     logVerbose(verbose, output, `[session-backup] Manifest: ${uploadResult.manifestUrl}`)
@@ -602,7 +605,8 @@ const runSessionUpload = (
       state: "success",
       manifestUrl: uploadResult.manifestUrl,
       readmeUrl,
-      summary
+      summary,
+      tokenReduction
     })
     return 0
   } catch (error) {
@@ -751,9 +755,10 @@ const runDryRun = (
       (message) => logVerbose(verbose, output, message)
     )
     const summary = summarizeFiles(prepared.manifestFiles)
+    const tokenReduction = summarizeTokenReduction(sessionFiles)
     const manifestUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, `${resolved.snapshotRef}/manifest.json`)
     const readmeUrl = buildBlobUrl(backupRepo.fullName, backupRepo.defaultBranch, `${resolved.snapshotRef}/README.md`)
-    output.out(`[session-backup] dry-run: ${resolved.source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)})`)
+    output.out(`[session-backup] dry-run: ${resolved.source.commitSha.slice(0, 12)} (${summary.fileCount} files, ${formatBytes(summary.totalBytes)}; RTK ${formatTokenReduction(tokenReduction)})`)
     printGitStatus(output, resolved.gitStatus)
     logVerbose(verbose, output, `[dry-run] Upload target: ${backupRepo.fullName}:${resolved.snapshotRef}`)
     logVerbose(verbose, output, `[dry-run] README URL: ${readmeUrl}`)
@@ -765,7 +770,7 @@ const runDryRun = (
         output,
         buildCommentBody({
           source: resolved.source,
-          upload: { state: "success", manifestUrl, readmeUrl, summary },
+          upload: { state: "success", manifestUrl, readmeUrl, summary, tokenReduction },
           gitStatus: resolved.gitStatus
         })
       )
