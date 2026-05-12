@@ -237,6 +237,7 @@ const resolveSkillerScope = (
       containerName: project.containerName,
       containerProjectPath: project.targetDir,
       hostCodexSkillsPath,
+      hostEnvGlobalPath: project.envGlobalPath,
       hostHomePath,
       hostProjectPath,
       projectId: project.projectDir,
@@ -307,6 +308,8 @@ const skillerHomeEnv = (
   scope === null
     ? {}
     : {
+      DOCKER_GIT_SKILLER_CONTAINER_HOME_PATH: scope.containerHomePath,
+      DOCKER_GIT_SKILLER_HOST_ENV_GLOBAL_PATH: scope.hostEnvGlobalPath,
       HOME: scope.hostHomePath,
       USER: scope.sshUser,
       XDG_CACHE_HOME: join(scope.hostHomePath, ".cache"),

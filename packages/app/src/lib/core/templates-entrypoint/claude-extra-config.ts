@@ -4,6 +4,14 @@ import type { TemplateConfig } from "../domain.js"
 const entrypointClaudeGlobalPromptTemplate = String
   .raw`# Claude Code: managed global memory (CLAUDE.md is auto-loaded by Claude Code)
 CLAUDE_GLOBAL_PROMPT_FILE="/home/__SSH_USER__/.claude/CLAUDE.md"
+docker_git_decode_unicode_escapes() {
+  local value="$1"
+  if printf "%s" "$value" | grep -q '\\u[0-9a-fA-F]'; then
+    printf "%b" "$value"
+  else
+    printf "%s" "$value"
+  fi
+}
 CLAUDE_AUTO_SYSTEM_PROMPT="${"$"}{CLAUDE_AUTO_SYSTEM_PROMPT:-1}"
 CLAUDE_WORKSPACE_CONTEXT="Контекст workspace: repository"
 REPO_REF_VALUE="${"$"}{REPO_REF:-__REPO_REF_DEFAULT__}"
@@ -54,6 +62,7 @@ $CLAUDE_WORKSPACE_CONTEXT
 Если ты видишь файлы AGENTS.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
 EOF
 )"
+CLAUDE_DEFAULT_PROMPT_BODY="$(docker_git_decode_unicode_escapes "$CLAUDE_DEFAULT_PROMPT_BODY")"
 if [[ -n "$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE" && -r "$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE" ]]; then
   CLAUDE_PROMPT_BODY="$(cat "$CLAUDE_SYSTEM_PROMPT_OVERRIDE_FILE")"
 elif [[ -n "$CLAUDE_SYSTEM_PROMPT_OVERRIDE" ]]; then

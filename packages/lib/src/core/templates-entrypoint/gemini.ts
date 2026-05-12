@@ -231,6 +231,14 @@ docker_git_upsert_ssh_env "GEMINI_CLI_APPROVAL_MODE" "yolo"`
 
 const entrypointGeminiNoticeTemplate = String.raw`# Ensure global GEMINI.md exists for container context
 GEMINI_MD_PATH="__GEMINI_HOME__/GEMINI.md"
+docker_git_decode_unicode_escapes() {
+  local value="$1"
+  if printf "%s" "$value" | grep -q '\\u[0-9a-fA-F]'; then
+    printf "%b" "$value"
+  else
+    printf "%s" "$value"
+  fi
+}
 GEMINI_WORKSPACE_CONTEXT="Контекст workspace: repository"
 if [[ "$REPO_REF" == issue-* ]]; then
   ISSUE_ID="$(printf "%s" "$REPO_REF" | sed -E 's#^issue-##')"
@@ -277,6 +285,7 @@ $GEMINI_WORKSPACE_CONTEXT
 Если ты видишь файлы AGENTS.md, GEMINI.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
 EOF
 )"
+GEMINI_DEFAULT_PROMPT_BODY="$(docker_git_decode_unicode_escapes "$GEMINI_DEFAULT_PROMPT_BODY")"
 if [[ -n "$GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE" && -r "$GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE" ]]; then
   GEMINI_PROMPT_BODY="$(cat "$GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE")"
 elif [[ -n "$GEMINI_SYSTEM_PROMPT_OVERRIDE" ]]; then

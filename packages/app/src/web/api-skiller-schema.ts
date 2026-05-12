@@ -6,6 +6,7 @@ export const SkillerScopeResponseSchema = Schema.Struct({
   containerName: Schema.String,
   containerProjectPath: Schema.String,
   hostCodexSkillsPath: Schema.String,
+  hostEnvGlobalPath: Schema.String,
   hostHomePath: Schema.String,
   hostProjectPath: Schema.String,
   projectId: Schema.String,

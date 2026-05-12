@@ -12,6 +12,7 @@ export type SkillerContainerScope = {
   readonly containerName: string
   readonly containerProjectPath: string
   readonly hostCodexSkillsPath: string
+  readonly hostEnvGlobalPath: string
   readonly hostHomePath: string
   readonly hostProjectPath: string
   readonly projectId: string
@@ -112,6 +113,7 @@ export const sameSkillerScope = (
   return left.projectKey === right.projectKey &&
     left.containerName === right.containerName &&
     left.hostCodexSkillsPath === right.hostCodexSkillsPath &&
+    left.hostEnvGlobalPath === right.hostEnvGlobalPath &&
     left.hostHomePath === right.hostHomePath &&
     left.hostProjectPath === right.hostProjectPath
 }

@@ -61,6 +61,11 @@ The latest Playwright proof screenshots are checked in under `docs/screenshots/i
 - `pr238-proof-31-skiller-project-scoped-folder-picker-working.png` shows `/api/skiller/app/` opened from a project-scoped Skiller process with `Add project folder...` resolving to the selected container paths.
 - `pr238-proof-32-docker-git-browser-live-command.png` shows the live `docker-git browser` frontend served through the same controller used for the proof.
 - `pr238-proof-33-skiller-session-folder-picker-mcp.png` shows the terminal session-scoped Skiller URL opened from the real `Skiller` button and the `Add project folder...` picker resolving to `dg-skiller-button-demo:/home/dev/app`.
+- `pr238-proof-34-skiller-container-skill-paths.png` shows the session-scoped Skiller skill detail rendering the Codex skill path as `/home/dev/.codex/skills/...` instead of the controller Docker volume path.
+- `pr238-proof-35-skiller-container-project-paths.png` shows the Skiller Projects view rendering the active project as `/home/dev/app` instead of the controller Docker volume path.
+- `pr238-proof-36-skiller-system-prompts-ui.png` shows the real session-scoped Skiller Projects UI with project and global system prompt editors backed by the selected container paths.
+- `pr238-proof-37-skiller-global-system-prompt-ui.png` shows the same Skiller UI after saving a global Codex system prompt at `/home/dev/.codex/AGENTS.md`.
+- `pr238-proof-38-skiller-russian-system-prompts.png` shows Skiller rendering existing docker-git-managed Claude and Gemini global prompts as readable UTF-8 Russian text instead of literal `\u0422...` escapes.
 
 ## Updating the Pin
 

@@ -22,6 +22,7 @@ const scope = (projectKey: string): SkillerContainerScope => ({
   containerName: `dg-${projectKey}`,
   containerProjectPath: "/home/dev/app",
   hostCodexSkillsPath: `/var/lib/docker/volumes/${projectKey}-home/_data/.codex/skills`,
+  hostEnvGlobalPath: `/home/dev/.docker-git/${projectKey}/.docker-git/.orch/env/global.env`,
   hostHomePath: `/var/lib/docker/volumes/${projectKey}-home/_data`,
   hostProjectPath: `/var/lib/docker/volumes/${projectKey}-home/_data/app`,
   projectId: `/home/dev/.docker-git/${projectKey}`,

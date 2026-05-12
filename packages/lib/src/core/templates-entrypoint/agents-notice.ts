@@ -3,6 +3,14 @@ import type { TemplateConfig } from "../domain.js"
 const entrypointAgentsNoticeTemplate = String.raw`# Ensure global AGENTS.md exists for container context
 AGENTS_PATH="__CODEX_HOME__/AGENTS.md"
 LEGACY_AGENTS_PATH="/home/__SSH_USER__/AGENTS.md"
+docker_git_decode_unicode_escapes() {
+  local value="$1"
+  if printf "%s" "$value" | grep -q '\\u[0-9a-fA-F]'; then
+    printf "%b" "$value"
+  else
+    printf "%s" "$value"
+  fi
+}
 PROJECT_LINE="Рабочая папка проекта (git clone): __TARGET_DIR__"
 WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
 WORKSPACE_INFO_LINE="Контекст workspace: repository"
@@ -58,6 +66,7 @@ $INTERNET_LINE
 $SUBAGENTS_LINE
 EOF
 )"
+  MANAGED_LINES="$(docker_git_decode_unicode_escapes "$MANAGED_LINES")"
 fi
 if [[ ! -f "$AGENTS_PATH" ]]; then
   MANAGED_BLOCK="$(cat <<EOF
@@ -103,6 +112,13 @@ EOF
     fi
     printf "%s\n" "$MANAGED_BLOCK" >> "$TMP_AGENTS_PATH"
   fi
+  mv "$TMP_AGENTS_PATH" "$AGENTS_PATH"
+  chown 1000:1000 "$AGENTS_PATH" || true
+fi
+if [[ -f "$AGENTS_PATH" ]] && grep -qF "$MANAGED_START" "$AGENTS_PATH" && grep -q '\\u[0-9a-fA-F]' "$AGENTS_PATH"; then
+  TMP_AGENTS_PATH="$(mktemp)"
+  docker_git_decode_unicode_escapes "$(cat "$AGENTS_PATH")" > "$TMP_AGENTS_PATH"
+  printf "\n" >> "$TMP_AGENTS_PATH"
   mv "$TMP_AGENTS_PATH" "$AGENTS_PATH"
   chown 1000:1000 "$AGENTS_PATH" || true
 fi

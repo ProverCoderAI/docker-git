@@ -14,6 +14,7 @@ const proofScope = {
   containerName: "dg-project",
   containerProjectPath: "/home/dev/app",
   hostCodexSkillsPath: "/var/lib/docker/volumes/dg-project-home/_data/.codex/skills",
+  hostEnvGlobalPath: "/home/dev/.docker-git/project/.docker-git/.orch/env/global.env",
   hostHomePath: "/var/lib/docker/volumes/dg-project-home/_data",
   hostProjectPath: "/var/lib/docker/volumes/dg-project-home/_data/app",
   projectId: "/home/dev/.docker-git/project",
@@ -31,6 +32,7 @@ const skillerLaunch = (
       readonly containerName: string
       readonly containerProjectPath: string
       readonly hostCodexSkillsPath: string
+      readonly hostEnvGlobalPath: string
       readonly hostHomePath: string
       readonly hostProjectPath: string
       readonly projectId: string

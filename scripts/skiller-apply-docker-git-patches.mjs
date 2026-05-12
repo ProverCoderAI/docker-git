@@ -89,9 +89,10 @@ const applyFilePatch = (content, filePatch, direction) => {
   const lines = [...parsed.lines]
   let offset = 0
   for (const hunk of filePatch.hunks) {
-    const start = (direction === "forward" ? hunk.oldStart : hunk.newStart) - 1 + offset
     const fromLines = hunkLines(hunk, direction, "from")
     const toLines = hunkLines(hunk, direction, "to")
+    const rangeStart = direction === "forward" ? hunk.oldStart : hunk.newStart
+    const start = (fromLines.length === 0 ? rangeStart : rangeStart - 1) + offset
     const current = lines.slice(start, start + fromLines.length)
     if (current.length !== fromLines.length || current.some((line, itemIndex) => line !== fromLines[itemIndex])) {
       return null
