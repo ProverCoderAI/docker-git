@@ -70,6 +70,7 @@ import {
   listFollowSubscriptions,
   makeFederationActorDocument,
   makeFederationContext,
+  makeFederationExchangeStatus,
   makeFederationFollowersCollection,
   makeFederationFollowingCollection,
   makeFederationLikedCollection,
@@ -822,6 +823,14 @@ export const makeRouter = () => {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
         return yield* _(activityJsonResponse(makeFederationLikedCollection(context), 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/federation/exchange/status",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const context = yield* _(resolveFederationContext(request))
+        return yield* _(jsonResponse(makeFederationExchangeStatus(context), 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(

@@ -662,6 +662,57 @@ export type ExchangePollResult = {
   readonly failedItems: number
 }
 
+export type FederationExchangeEventKind =
+  | "follow.sent"
+  | "inbox.follow.accept"
+  | "inbox.follow.reject"
+  | "inbox.issue.received"
+  | "poll.completed"
+
+export type FederationExchangeEvent = {
+  readonly id: string
+  readonly kind: FederationExchangeEventKind
+  readonly occurredAt: string
+  readonly subscriptionId?: string | undefined
+  readonly target?: string | undefined
+  readonly queue?: string | undefined
+  readonly status?: FollowStatus | undefined
+  readonly issueId?: string | undefined
+  readonly remoteActor?: string | undefined
+  readonly totalItems?: number | undefined
+  readonly newItems?: number | undefined
+  readonly processedItems?: number | undefined
+  readonly failedItems?: number | undefined
+}
+
+export type FederationExchangeStatusSubscription = {
+  readonly id: string
+  readonly target: string
+  readonly queue?: string | undefined
+  readonly status: FollowStatus
+  readonly remoteActor?: string | undefined
+  readonly remoteInbox?: string | undefined
+  readonly remoteOutbox?: string | undefined
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export type FederationExchangeStatus = {
+  readonly publicActor: string
+  readonly summary: {
+    readonly subscriptions: number
+    readonly accepted: number
+    readonly pending: number
+    readonly rejected: number
+    readonly issues: number
+    readonly processedOutboxItems: number
+    readonly lastInboxAt?: string | undefined
+    readonly lastPollAt?: string | undefined
+  }
+  readonly subscriptions: ReadonlyArray<FederationExchangeStatusSubscription>
+  readonly recentEvents: ReadonlyArray<FederationExchangeEvent>
+}
+
 export type ApiEventType =
   | "snapshot"
   | "project.created"
