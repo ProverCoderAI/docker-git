@@ -3,9 +3,22 @@ import { renderDockerfilePrompt } from "../templates-prompt.js"
 import { renderDockerfileGlab } from "./glab.js"
 import { renderDockerfileGitleaks, renderDockerfileOpenCode } from "./tools.js"
 
-const renderDockerfilePrelude = (): string =>
-  `FROM ubuntu:24.04
+// CHANGE: use the shared link-foundation box as the generated project base image
+// WHY: issue #267 asks docker-git to reuse unified box containers instead of maintaining a raw Ubuntu workspace base
+// QUOTE(ТЗ): "Что бы не зависить только от своих обновлений, а иметь единую инфраструктру есть смысл юзать готовый репозиторий"
+// REF: issue-267
+// SOURCE: https://github.com/link-foundation/box
+// FORMAT THEOREM: renderDockerfile(config) -> base_image(rendered) = DOCKER_GIT_BASE_IMAGE
+// PURITY: CORE
+// INVARIANT: the rendered Dockerfile inherits language/runtime tooling from link-foundation/box while preserving docker-git bootstrap layers
+// COMPLEXITY: O(1)/O(1)
+const dockerGitBaseImage = "ghcr.io/link-foundation/box:latest"
 
+const renderDockerfilePrelude = (): string =>
+  `ARG DOCKER_GIT_BASE_IMAGE=${dockerGitBaseImage}
+FROM \${DOCKER_GIT_BASE_IMAGE}
+
+USER root
 ARG UBUNTU_APT_MIRROR=
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NVM_DIR=/usr/local/nvm
@@ -187,13 +200,16 @@ const renderDockerfileBun = (config: TemplateConfig): string =>
 
 const renderDockerfileUsers = (config: TemplateConfig): string =>
   `# Create non-root user for SSH (align UID/GID with host user 1000)
-RUN if id -u ubuntu >/dev/null 2>&1; then \
-      if getent group 1000 >/dev/null 2>&1; then \
-        EXISTING_GROUP="$(getent group 1000 | cut -d: -f1)"; \
-        if [ "$EXISTING_GROUP" != "${config.sshUser}" ]; then groupmod -n ${config.sshUser} "$EXISTING_GROUP" || true; fi; \
+RUN for BASE_USER in box ubuntu; do \
+      if [ "$BASE_USER" != "${config.sshUser}" ] && id -u "$BASE_USER" >/dev/null 2>&1; then \
+        if getent group 1000 >/dev/null 2>&1; then \
+          EXISTING_GROUP="$(getent group 1000 | cut -d: -f1)"; \
+          if [ "$EXISTING_GROUP" != "${config.sshUser}" ]; then groupmod -n ${config.sshUser} "$EXISTING_GROUP" || true; fi; \
+        fi; \
+        usermod -l ${config.sshUser} -d /home/${config.sshUser} -m -s /usr/bin/zsh "$BASE_USER" || true; \
+        break; \
       fi; \
-      usermod -l ${config.sshUser} -d /home/${config.sshUser} -m -s /usr/bin/zsh ubuntu || true; \
-    fi
+    done
 RUN if id -u ${config.sshUser} >/dev/null 2>&1; then \
       usermod -u 1000 -g 1000 -o ${config.sshUser}; \
     else \

@@ -54,6 +54,23 @@ describe("renderEntrypointDnsRepair", () => {
 })
 
 describe("renderDockerfile", () => {
+  it("uses the shared box image as the project container base", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expect(dockerfile).toContain("ARG DOCKER_GIT_BASE_IMAGE=ghcr.io/link-foundation/box:latest")
+    expect(dockerfile).toContain("FROM ${DOCKER_GIT_BASE_IMAGE}")
+    expect(dockerfile).toContain("USER root")
+    expect(dockerfile).not.toContain("FROM ubuntu:24.04")
+  })
+
+  it("renames the box base user to the configured SSH user", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expect(dockerfile).toContain("for BASE_USER in box ubuntu; do")
+    expect(dockerfile).toContain('if [ "$BASE_USER" != "dev" ] && id -u "$BASE_USER" >/dev/null 2>&1; then')
+    expect(dockerfile).toContain('usermod -l dev -d /home/dev -m -s /usr/bin/zsh "$BASE_USER" || true')
+  })
+
   it("installs session sync from npmjs with a local fallback", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
