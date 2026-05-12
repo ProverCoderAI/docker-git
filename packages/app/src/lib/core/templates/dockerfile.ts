@@ -3,16 +3,16 @@ import { renderDockerfilePrompt } from "../templates-prompt.js"
 import { renderDockerfileGlab } from "./glab.js"
 import { renderDockerfileGitleaks, renderDockerfileOpenCode } from "./tools.js"
 
-// CHANGE: use the shared link-foundation box as the generated project base image
-// WHY: issue #267 asks docker-git to reuse unified box containers instead of maintaining a raw Ubuntu workspace base; the Docker Hub alias is publicly pullable in CI
+// CHANGE: use the shared link-foundation JS box as the generated project base image
+// WHY: issue #267 asks docker-git to reuse unified box containers instead of maintaining a raw Ubuntu workspace base; the Docker Hub JS alias is public and keeps CI pull size bounded
 // QUOTE(ТЗ): "Что бы не зависить только от своих обновлений, а иметь единую инфраструктру есть смысл юзать готовый репозиторий"
 // REF: issue-267
 // SOURCE: https://github.com/link-foundation/box#docker-hub---combo-boxes
 // FORMAT THEOREM: renderDockerfile(config) -> base_image(rendered) = DOCKER_GIT_BASE_IMAGE
 // PURITY: CORE
-// INVARIANT: the rendered Dockerfile inherits language/runtime tooling from link-foundation/box while preserving docker-git bootstrap layers
+// INVARIANT: the rendered Dockerfile inherits JS/runtime tooling from link-foundation/box while preserving docker-git bootstrap layers
 // COMPLEXITY: O(1)/O(1)
-const dockerGitBaseImage = "konard/box:latest"
+const dockerGitBaseImage = "konard/box-js:latest"
 
 const renderDockerfilePrelude = (): string =>
   `ARG DOCKER_GIT_BASE_IMAGE=${dockerGitBaseImage}

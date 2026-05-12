@@ -54,10 +54,10 @@ describe("renderEntrypointDnsRepair", () => {
 })
 
 describe("renderDockerfile", () => {
-  it("uses the shared box image as the project container base", () => {
+  it("uses the shared JS box image as the project container base", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
-    expect(dockerfile).toContain("ARG DOCKER_GIT_BASE_IMAGE=konard/box:latest")
+    expect(dockerfile).toContain("ARG DOCKER_GIT_BASE_IMAGE=konard/box-js:latest")
     expect(dockerfile).toContain("FROM ${DOCKER_GIT_BASE_IMAGE}")
     expect(dockerfile).toContain("USER root")
     expect(dockerfile).not.toContain("FROM ubuntu:24.04")
