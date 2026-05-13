@@ -25,48 +25,13 @@ const validGithubStatus: GithubAuthStatus = {
   tokens: [{ key: "default", label: "default", login: "octocat", status: "valid" }]
 }
 
-const githubNameChars = [
-  "a",
-  "b",
-  "c",
-  "d",
-  "e",
-  "f",
-  "g",
-  "h",
-  "i",
-  "j",
-  "k",
-  "l",
-  "m",
-  "n",
-  "o",
-  "p",
-  "q",
-  "r",
-  "s",
-  "t",
-  "u",
-  "v",
-  "w",
-  "x",
-  "y",
-  "z",
-  "0",
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
-  "7",
-  "8",
-  "9",
-  "-"
-] as const
+const githubNameChars = "abcdefghijklmnopqrstuvwxyz0123456789-"
+const githubNameCharArbitrary = fc
+  .integer({ min: 0, max: githubNameChars.length - 1 })
+  .map((index) => githubNameChars[index] ?? "a")
 
 const githubSegmentArbitrary = fc
-  .array(fc.constantFrom(...githubNameChars), { minLength: 1, maxLength: 12 })
+  .array(githubNameCharArbitrary, { minLength: 1, maxLength: 12 })
   .map((chars) => chars.join(""))
   .filter((value) => !value.startsWith("-") && !value.endsWith("-"))
 
