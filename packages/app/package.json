@@ -114,7 +114,7 @@
     "eslint-plugin-sonarjs": "^4.0.3",
     "eslint-plugin-sort-destructure-keys": "^3.0.0",
     "eslint-plugin-unicorn": "^64.0.0",
-    "fast-check": "3.23.2",
+    "fast-check": "4.8.0",
     "globals": "^17.6.0",
     "jscpd": "^4.1.1",
     "typescript": "^6.0.3",
