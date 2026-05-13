@@ -93,10 +93,13 @@ const decideStdout = (cmd: RecordedCommand): string => {
 const nvidiaRuntimeFailure =
   "Error response from daemon: failed to create task for container: nvidia-container-cli: initialization error: load library failed: libnvidia-ml.so.1"
 
-const hasNvidiaFallbackWarning = (logs: ReadonlyArray<string>): boolean =>
+const nvidiaMissingDeviceDriverFailure =
+  'Error response from daemon: could not select device driver "" with capabilities: [[gpu]]'
+
+const hasNvidiaFallbackWarning = (logs: ReadonlyArray<string>, expectedDetail: string): boolean =>
   logs.some((entry) =>
     entry.includes("NVIDIA runtime failed") &&
-    entry.includes("libnvidia-ml.so.1") &&
+    entry.includes(expectedDetail) &&
     entry.includes("GPU access disabled")
   )
 
@@ -105,6 +108,7 @@ const shouldFailNvidiaGpuComposeUp = (cmd: RecordedCommand): boolean =>
 
 type FakeExecutorOptions = {
   readonly failGpuComposeUp?: boolean
+  readonly gpuFailureStderr?: string
 }
 
 const makeFakeExecutor = (
@@ -112,6 +116,7 @@ const makeFakeExecutor = (
   options: FakeExecutorOptions = {}
 ): CommandExecutor.CommandExecutor => {
   let shouldFailGpuComposeUp = options.failGpuComposeUp === true
+  const gpuFailureStderr = options.gpuFailureStderr ?? nvidiaRuntimeFailure
 
   const start = (command: Command.Command): Effect.Effect<CommandExecutor.Process, never> =>
     Effect.gen(function*(_) {
@@ -134,7 +139,7 @@ const makeFakeExecutor = (
       const stdout = stdoutText.length === 0 ? Stream.empty : Stream.succeed(encode(stdoutText))
       const failed = shouldFailGpuComposeUp && shouldFailNvidiaGpuComposeUp(invocation)
       shouldFailGpuComposeUp = shouldFailGpuComposeUp && !failed
-      const stderr = failed ? Stream.succeed(encode(nvidiaRuntimeFailure)) : Stream.empty
+      const stderr = failed ? Stream.succeed(encode(gpuFailureStderr)) : Stream.empty
 
       const process: CommandExecutor.Process = {
         [CommandExecutor.ProcessTypeId]: CommandExecutor.ProcessTypeId,
@@ -294,12 +299,60 @@ describe("runDockerComposeUpWithPortCheck", () => {
         expect(started.gpu).toBe("none")
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
-        expect(composeAfter).not.toContain("    gpus: all\n")
+        expect(composeAfter).not.toMatch(/\bgpus:\s*all\b/)
 
         const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         expect(configAfter).toContain('"gpu": "none"')
         expect(recorded.filter((entry) => isDockerComposeUpWithBuild(entry)).length).toBe(2)
-        expect(hasNvidiaFallbackWarning(logs)).toBe(true)
+        expect(hasNvidiaFallbackWarning(logs, "libnvidia-ml.so.1")).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("falls back to GPU none on missing-device-driver NVIDIA runtime failure", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const targetDir = "/home/dev/workspaces/org/repo"
+        const globalConfig = makeTemplateConfig(root, outDir, path, targetDir)
+        const projectConfig: TemplateConfig = {
+          ...makeTemplateConfig(root, outDir, path, targetDir),
+          gpu: "all"
+        }
+        const recorded: Array<RecordedCommand> = []
+        const logs: Array<string> = []
+        const executor = makeFakeExecutor(recorded, {
+          failGpuComposeUp: true,
+          gpuFailureStderr: nvidiaMissingDeviceDriverFailure
+        })
+        const logger = Logger.make(({ message }) => {
+          logs.push(String(message))
+        })
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          })
+        )
+
+        const started = yield* _(
+          runDockerComposeUpWithPortCheck(outDir).pipe(
+            Effect.provideService(CommandExecutor.CommandExecutor, executor),
+            Effect.provide(Logger.replace(Logger.defaultLogger, logger))
+          )
+        )
+
+        expect(started.gpu).toBe("none")
+
+        const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+        expect(composeAfter).not.toMatch(/\bgpus:\s*all\b/)
+
+        const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
+        expect(configAfter).toContain('"gpu": "none"')
+        expect(recorded.filter((entry) => isDockerComposeUpWithBuild(entry)).length).toBe(2)
+        expect(hasNvidiaFallbackWarning(logs, "could not select device driver")).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -342,13 +395,13 @@ describe("runDockerComposeUpWithPortCheck", () => {
         expect(started.gpu).toBe("none")
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
-        expect(composeAfter).not.toContain("    gpus: all\n")
+        expect(composeAfter).not.toMatch(/\bgpus:\s*all\b/)
 
         const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         expect(configAfter).toContain('"gpu": "none"')
         expect(recorded.filter((entry) => isDockerComposeUpReuse(entry)).length).toBe(2)
         expect(recorded.filter((entry) => isDockerComposeUpWithBuild(entry)).length).toBe(0)
-        expect(hasNvidiaFallbackWarning(logs)).toBe(true)
+        expect(hasNvidiaFallbackWarning(logs, "libnvidia-ml.so.1")).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
