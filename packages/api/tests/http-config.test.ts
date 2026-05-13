@@ -1,8 +1,14 @@
+import * as HttpApp from "@effect/platform/HttpApp"
+import * as HttpRouter from "@effect/platform/HttpRouter"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import fc from "fast-check"
 
-import { resolveConfiguredFederationPublicOrigin } from "../src/http.js"
+import {
+  federationExchangeStatusResponse,
+  resolveConfiguredFederationPublicOrigin
+} from "../src/http.js"
+import { clearFederationState } from "../src/services/federation.js"
 
 const envValueArbitrary = fc.option(
   fc.oneof(
@@ -25,6 +31,52 @@ const expectedConfiguredFederationPublicOrigin = (
   const api = apiPublicUrl?.trim()
   return api !== undefined && api.length > 0 ? api : undefined
 }
+
+const federationStatusHandler = HttpApp.toWebHandler(
+  Effect.flatten(
+    HttpRouter.toHttpApp(
+      HttpRouter.empty.pipe(
+        HttpRouter.get("/federation/status", federationExchangeStatusResponse()),
+        HttpRouter.get("/federation/exchange/status", federationExchangeStatusResponse())
+      )
+    )
+  )
+)
+
+const readFederationStatusRoute = (path: string) =>
+  Effect.gen(function*(_) {
+    const response = yield* _(
+      Effect.tryPromise({
+        try: () =>
+          federationStatusHandler(
+            new Request(`http://127.0.0.1${path}`, {
+              headers: {
+                "x-forwarded-host": "public.example.test",
+                "x-forwarded-proto": "https"
+              }
+            })
+          ),
+        catch: (cause) => new Error(String(cause))
+      })
+    )
+    const body = yield* _(
+      Effect.tryPromise({
+        try: () => response.text(),
+        catch: (cause) => new Error(String(cause))
+      })
+    )
+    return { body, status: response.status }
+  })
+
+const parseJsonObject = (raw: string): object | null => {
+  const parsed: unknown = JSON.parse(raw)
+  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+    ? parsed
+    : null
+}
+
+const readField = (value: object | null, key: string): unknown =>
+  value === null ? undefined : Reflect.get(value, key)
 
 describe("api http config", () => {
   it.effect("ignores empty federation public origin values", () =>
@@ -68,5 +120,23 @@ describe("api http config", () => {
           }
         )
       )
+    }))
+
+  it.effect("serves equivalent federation status aliases at the HTTP layer", () =>
+    Effect.gen(function*(_) {
+      yield* _(Effect.sync(() => clearFederationState()))
+
+      const publicStatus = yield* _(readFederationStatusRoute("/federation/status"))
+      const compatibilityStatus = yield* _(readFederationStatusRoute("/federation/exchange/status"))
+      const payload = parseJsonObject(publicStatus.body)
+
+      expect(publicStatus.status).toBe(200)
+      expect(compatibilityStatus.status).toBe(200)
+      expect(compatibilityStatus.body).toBe(publicStatus.body)
+      expect(payload).not.toBeNull()
+      expect(readField(payload, "publicActor")).toBe("https://public.example.test/federation/actor")
+      expect(typeof readField(payload, "summary")).toBe("object")
+      expect(Array.isArray(readField(payload, "subscriptions"))).toBe(true)
+      expect(Array.isArray(readField(payload, "recentEvents"))).toBe(true)
     }))
 })

@@ -577,6 +577,24 @@ const resolveFederationContext = (
   })
 }
 
+/**
+ * Builds the federation status HTTP handler shared by public and compatibility routes.
+ *
+ * @pure false
+ * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationExchangeStatus, serializes with jsonResponse, and maps failures through errorResponse.
+ * @invariant same request context produces the same federation status payload for every route alias.
+ * @precondition request headers or configured env provide a non-empty public origin.
+ * @postcondition successful responses contain federation exchange status JSON with HTTP 200.
+ * @complexity O(s + e log e) time where s is subscription count and e is event count; O(s + e) space.
+ * @throws Never; failures are represented through the Effect error channel and converted by errorResponse.
+ */
+export const federationExchangeStatusResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonResponse(makeFederationExchangeStatus(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
 const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
   const request = yield* _(HttpServerRequest.HttpServerRequest)
   const upgrade = readHeader(request, "upgrade")?.toLowerCase()
@@ -629,24 +647,6 @@ const projectProxyResponse = Effect.gen(function*(_) {
 })
 
 export const makeRouter = () => {
-  /**
-   * Builds the federation status HTTP handler shared by public and compatibility routes.
-   *
-   * @pure false
-   * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationExchangeStatus, serializes with jsonResponse, and maps failures through errorResponse.
-   * @invariant same request context produces the same federation status payload for every route alias.
-   * @precondition request headers or configured env provide a non-empty public origin.
-   * @postcondition successful responses contain federation exchange status JSON with HTTP 200.
-   * @complexity O(s + e log e) time where s is subscription count and e is event count; O(s + e) space.
-   * @throws Never; failures are represented through the Effect error channel and converted by errorResponse.
-   */
-  const federationExchangeStatusResponse = () =>
-    Effect.gen(function*(_) {
-      const request = yield* _(HttpServerRequest.HttpServerRequest)
-      const context = yield* _(resolveFederationContext(request))
-      return yield* _(jsonResponse(makeFederationExchangeStatus(context), 200))
-    }).pipe(Effect.catchAll(errorResponse))
-
   const withUi = HttpRouter.empty.pipe(
     HttpRouter.get("/", 
       Effect.gen(function*(_) {
