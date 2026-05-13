@@ -34,7 +34,7 @@ export type MenuSnapshotStore = {
 
 // CHANGE: make a fresh CLI TUI process the first user key after readiness gates
 // WHY: ready/ignoreUntil already filters bootstrap noise; skipping valid input breaks menu liveness
-// QUOTE(ISSUE): "Почему-то CLI TUI не работает"
+// QUOTE(ТЗ): "Почему-то CLI TUI не работает"
 // REF: issue-274
 // SOURCE: n/a
 // FORMAT THEOREM: forall key in ValidMenuInput: ready(menu) -> processed(key)
