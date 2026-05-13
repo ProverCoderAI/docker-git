@@ -180,7 +180,9 @@ const renderComposeServices = (
     build: .
     container_name: ${config.containerName}
     restart: unless-stopped
-${renderGpu(config.gpu)}${renderEnvFiles(config)}    # runtime auth/env must be loaded into the container process, not only bootstrap scripts
+${renderGpu(config.gpu)}${
+    renderEnvFiles(config)
+  }    # runtime auth/env must be loaded into the container process, not only bootstrap scripts
     environment:
       REPO_URL: "${config.repoUrl}"
       REPO_REF: "${config.repoRef}"

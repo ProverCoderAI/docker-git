@@ -64,6 +64,7 @@ describe("app-ready-create", () => {
       "repoUrl",
       "cpuLimit",
       "ramLimit",
+      "gpu",
       "runUp",
       "mcpPlaywright"
     ])
