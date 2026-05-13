@@ -479,9 +479,28 @@ const readUpProjectRequest = () =>
   )
 const readInboxPayload = () => HttpServerRequest.schemaBodyJson(Schema.Unknown)
 
+const firstNonEmptyEnv = (
+  values: ReadonlyArray<string | undefined>
+): string | undefined => {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed !== undefined && trimmed.length > 0) {
+      return trimmed
+    }
+  }
+  return undefined
+}
+
+export const resolveConfiguredFederationPublicOrigin = (
+  env: Record<string, string | undefined>
+): string | undefined =>
+  firstNonEmptyEnv([
+    env["DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN"],
+    env["DOCKER_GIT_API_PUBLIC_URL"]
+  ])
+
 const configuredFederationPublicOrigin =
-  process.env["DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN"] ??
-  process.env["DOCKER_GIT_API_PUBLIC_URL"]
+  resolveConfiguredFederationPublicOrigin(process.env)
 
 const configuredFederationActorUsername =
   process.env["DOCKER_GIT_FEDERATION_ACTOR"] ?? "docker-git"
@@ -582,6 +601,13 @@ const projectProxyResponse = Effect.gen(function*(_) {
 })
 
 export const makeRouter = () => {
+  const federationExchangeStatusResponse = () =>
+    Effect.gen(function*(_) {
+      const request = yield* _(HttpServerRequest.HttpServerRequest)
+      const context = yield* _(resolveFederationContext(request))
+      return yield* _(jsonResponse(makeFederationExchangeStatus(context), 200))
+    }).pipe(Effect.catchAll(errorResponse))
+
   const withUi = HttpRouter.empty.pipe(
     HttpRouter.get("/", 
       Effect.gen(function*(_) {
@@ -833,12 +859,12 @@ export const makeRouter = () => {
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
+      "/federation/status",
+      federationExchangeStatusResponse()
+    ),
+    HttpRouter.get(
       "/federation/exchange/status",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonResponse(makeFederationExchangeStatus(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationExchangeStatusResponse()
     ),
     HttpRouter.post(
       "/federation/exchange/subscriptions",
