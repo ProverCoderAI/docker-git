@@ -125,6 +125,20 @@ const isRecord = (value: unknown): value is JsonRecord =>
 const asRecord = (value: unknown): JsonRecord | null =>
   isRecord(value) ? value : null
 
+/**
+ * Extracts string JSON-LD context entries from a boundary value.
+ *
+ * @param value - Unknown ActivityPub or ForgeFed @context field value.
+ * @returns Immutable set of string context identifiers; unsupported shapes produce an empty set.
+ *
+ * @pure true
+ * @effect none
+ * @invariant every returned element is a string from value, and no non-string value is introduced.
+ * @precondition value may be any boundary value.
+ * @postcondition result contains value iff value is a string; result contains each string item iff value is an array.
+ * @complexity O(n) time and O(n) space where n is array length, or O(1) for non-array values.
+ * @throws Never.
+ */
 const jsonLdContextValues = (value: unknown): ReadonlySet<string> => {
   if (typeof value === "string") {
     return new Set([value])
@@ -135,11 +149,41 @@ const jsonLdContextValues = (value: unknown): ReadonlySet<string> => {
   return new Set(value.filter((item): item is string => typeof item === "string"))
 }
 
+/**
+ * Checks whether a JSON-LD context value contains both required federation contexts.
+ *
+ * @param value - Unknown @context value to validate.
+ * @returns True when ActivityStreams and ForgeFed context identifiers are both present.
+ *
+ * @pure true
+ * @effect none
+ * @invariant result is true iff jsonLdContextValues(value) contains both required context URIs.
+ * @precondition value may be any boundary value.
+ * @postcondition result does not mutate or normalize the input value.
+ * @complexity O(n) time and O(n) space where n is array length, or O(1) for non-array values.
+ * @throws Never.
+ */
 const hasFederationJsonLdContext = (value: unknown): boolean => {
   const contexts = jsonLdContextValues(value)
   return contexts.has(activityStreamsJsonLdContext) && contexts.has(forgeFedJsonLdContext)
 }
 
+/**
+ * Requires a top-level federation document to declare or inherit valid JSON-LD contexts.
+ *
+ * @param payload - Parsed JSON object representing the federation document being checked.
+ * @param label - Human-readable document label used in the typed validation error.
+ * @param inheritedContext - Optional parent @context accepted when payload omits its own @context.
+ * @returns Effect that succeeds when ActivityStreams and ForgeFed contexts are available.
+ *
+ * @pure false
+ * @effect Constructs a typed ApiBadRequestError in the Effect error channel when validation fails.
+ * @invariant success implies payload.@context or inheritedContext contains ActivityStreams and ForgeFed contexts.
+ * @precondition payload is a decoded JSON object at the federation boundary.
+ * @postcondition failure message identifies the invalid document label.
+ * @complexity O(n) time and O(n) space where n is the checked context array length.
+ * @throws Never; validation failures are represented as ApiBadRequestError.
+ */
 const requireFederationJsonLdContext = (
   payload: JsonRecord,
   label: string,
@@ -159,6 +203,22 @@ const requireFederationJsonLdContext = (
     )
 }
 
+/**
+ * Requires nested federation objects to use valid JSON-LD context only when they override inheritance.
+ *
+ * @param payload - Parsed nested JSON object being checked.
+ * @param label - Human-readable nested object label used in the typed validation error.
+ * @param inheritedContext - Parent @context available to nested objects that omit @context.
+ * @returns Effect that succeeds when the nested object inherits context or declares a valid override.
+ *
+ * @pure false
+ * @effect Delegates invalid explicit context failures to requireFederationJsonLdContext.
+ * @invariant missing nested @context is accepted, explicit nested @context must contain ActivityStreams and ForgeFed contexts.
+ * @precondition payload is a decoded nested JSON object and inheritedContext is the parent document context.
+ * @postcondition success preserves JSON-LD inheritance semantics for nested ForgeFed objects.
+ * @complexity O(n) time and O(n) space where n is the explicit nested context array length, or O(1) if omitted.
+ * @throws Never; validation failures are represented as ApiBadRequestError.
+ */
 const requireNestedFederationJsonLdContext = (
   payload: JsonRecord,
   label: string,
