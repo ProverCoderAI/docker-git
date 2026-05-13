@@ -479,9 +479,56 @@ const readUpProjectRequest = () =>
   )
 const readInboxPayload = () => HttpServerRequest.schemaBodyJson(Schema.Unknown)
 
+/**
+ * Selects the first trimmed, non-empty string from an ordered list.
+ *
+ * @param values - Candidate strings in priority order.
+ * @returns The first trimmed non-empty candidate, or undefined when none exist.
+ *
+ * @pure true
+ * @effect none
+ * @invariant result === undefined || result.length > 0
+ * @precondition values is a readonly array of strings or undefined entries.
+ * @postcondition result is the first trimmed non-empty value in values, otherwise undefined.
+ * @complexity O(n * m) time where n is values.length and m is average trim cost; O(1) space.
+ * @throws Never
+ */
+const firstNonEmptyEnv = (
+  values: ReadonlyArray<string | undefined>
+): string | undefined => {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed !== undefined && trimmed.length > 0) {
+      return trimmed
+    }
+  }
+  return undefined
+}
+
+/**
+ * Resolves the configured federation public origin from environment variables.
+ *
+ * @param env - Environment map containing optional docker-git public origin keys.
+ * @returns The first non-empty configured public origin, or undefined.
+ *
+ * @pure true
+ * @effect none; delegates deterministic selection to firstNonEmptyEnv.
+ * @invariant result belongs to trimmed env values for DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN or DOCKER_GIT_API_PUBLIC_URL, or is undefined.
+ * @precondition env is a Record<string, string | undefined>.
+ * @postcondition result equals the first non-empty value from federation origin keys in priority order, otherwise undefined.
+ * @complexity O(k * m) time for k configured keys and average trim cost m; O(1) space.
+ * @throws Never
+ */
+export const resolveConfiguredFederationPublicOrigin = (
+  env: Record<string, string | undefined>
+): string | undefined =>
+  firstNonEmptyEnv([
+    env["DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN"],
+    env["DOCKER_GIT_API_PUBLIC_URL"]
+  ])
+
 const configuredFederationPublicOrigin =
-  process.env["DOCKER_GIT_FEDERATION_PUBLIC_ORIGIN"] ??
-  process.env["DOCKER_GIT_API_PUBLIC_URL"]
+  resolveConfiguredFederationPublicOrigin(process.env)
 
 const configuredFederationActorUsername =
   process.env["DOCKER_GIT_FEDERATION_ACTOR"] ?? "docker-git"
@@ -529,6 +576,24 @@ const resolveFederationContext = (
     actorUsername: configuredFederationActorUsername
   })
 }
+
+/**
+ * Builds the federation status HTTP handler shared by public and compatibility routes.
+ *
+ * @pure false
+ * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationExchangeStatus, serializes with jsonResponse, and maps failures through errorResponse.
+ * @invariant same request context produces the same federation status payload for every route alias.
+ * @precondition request headers or configured env provide a non-empty public origin.
+ * @postcondition successful responses contain federation exchange status JSON with HTTP 200.
+ * @complexity O(s + e log e) time where s is subscription count and e is event count; O(s + e) space.
+ * @throws Never; failures are represented through the Effect error channel and converted by errorResponse.
+ */
+export const federationExchangeStatusResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonResponse(makeFederationExchangeStatus(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
 
 const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
   const request = yield* _(HttpServerRequest.HttpServerRequest)
@@ -833,12 +898,12 @@ export const makeRouter = () => {
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
+      "/federation/status",
+      federationExchangeStatusResponse()
+    ),
+    HttpRouter.get(
       "/federation/exchange/status",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonResponse(makeFederationExchangeStatus(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationExchangeStatusResponse()
     ),
     HttpRouter.post(
       "/federation/exchange/subscriptions",

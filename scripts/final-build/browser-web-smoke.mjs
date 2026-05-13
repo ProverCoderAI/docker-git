@@ -77,6 +77,23 @@ const createApiServer = () =>
       }))
       return
     }
+    if (request.url === "/federation/status") {
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" })
+      response.end(JSON.stringify({
+        publicActor: "https://docker-git.example/federation/actor",
+        recentEvents: [],
+        subscriptions: [],
+        summary: {
+          accepted: 0,
+          issues: 0,
+          pending: 0,
+          processedOutboxItems: 0,
+          rejected: 0,
+          subscriptions: 0
+        }
+      }))
+      return
+    }
     response.writeHead(404, { "content-type": "text/plain; charset=utf-8" })
     response.end("not found")
   })
@@ -143,6 +160,10 @@ const main = async () => {
     await waitForText(
       `http://127.0.0.1:${webPort}/api/health`,
       ({ body, status }) => status === 200 && body.includes("\"ok\":true")
+    )
+    await waitForText(
+      `http://127.0.0.1:${webPort}/federation/status`,
+      ({ body, status }) => status === 200 && body.includes("\"publicActor\"")
     )
     console.log("browser web smoke passed")
   } catch (error) {
