@@ -67,7 +67,7 @@ describe("renderDockerfile", () => {
       "ncurses-term jq",
       "# Tooling: RTK (Rust Token Killer)",
       "ARG RTK_VERSION=v0.39.0",
-      "https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh",
+      'https://raw.githubusercontent.com/rtk-ai/rtk/${RTK_VERSION}/install.sh',
       'RTK_VERSION="${RTK_VERSION}" RTK_INSTALL_DIR=/usr/local/bin sh /tmp/rtk-install.sh',
       "rtk --version",
       "rtk gain >/dev/null 2>&1 || true",
