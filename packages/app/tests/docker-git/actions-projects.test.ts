@@ -255,7 +255,7 @@ describe("web project actions", () => {
       applyProjectById("project-1", context)
 
       yield* _(waitForAssertion(() => {
-        expect(applyProjectMock).toHaveBeenCalledWith("project-1")
+        expect(applyProjectMock).toHaveBeenCalledWith("project-1", undefined)
       }))
 
       expect(confirmMock).toHaveBeenCalledWith(
@@ -265,7 +265,7 @@ describe("web project actions", () => {
       expect(context.setSelectedProjectId).toHaveBeenCalledWith("project-1")
       expect(context.setSelectedProject).toHaveBeenCalledWith(project)
       expect(reloadDashboard).toHaveBeenCalledTimes(1)
-      expect(setMessage).toHaveBeenLastCalledWith("Applied octocat/hello-world.")
+      expect(setMessage).toHaveBeenLastCalledWith("Applied octocat/hello-world (GPU none).")
     }))
 
   it("does not apply a project when the user declines confirmation", () => {

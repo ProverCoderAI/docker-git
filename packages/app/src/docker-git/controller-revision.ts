@@ -7,6 +7,7 @@ export const controllerRevisionEnvKey = "DOCKER_GIT_CONTROLLER_REV"
 
 const controllerRevisionInputs: ReadonlyArray<string> = [
   "docker-compose.yml",
+  "docker-compose.gpu.yml",
   "package.json",
   "bun.lock",
   "bunfig.toml",

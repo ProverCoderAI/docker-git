@@ -56,6 +56,7 @@ describe("menu-create-shared", () => {
       "repoUrl",
       "cpuLimit",
       "ramLimit",
+      "gpu",
       "runUp",
       "mcpPlaywright",
       "force"
@@ -86,7 +87,8 @@ describe("menu-create-shared", () => {
     expect(resolveCreateFlowSteps(view.values)).toEqual([
       "repoUrl",
       "cpuLimit",
-      "ramLimit"
+      "ramLimit",
+      "gpu"
     ])
   })
 
@@ -94,13 +96,14 @@ describe("menu-create-shared", () => {
     const inputs = expectCompleteResult(advanceCreateFlow(
       cwd,
       createInitialFlowView(
-        "https://github.com/org/repo/tree/feature-x --cpu 25% --ram 4g --no-up --mcp-playwright --force"
+        "https://github.com/org/repo/tree/feature-x --cpu 25% --ram 4g --gpu all --no-up --mcp-playwright --force"
       )
     ))
 
     expectFeatureRepoDefaults(inputs, defaultRoot)
     expect(inputs.cpuLimit).toBe("25%")
     expect(inputs.ramLimit).toBe("4g")
+    expect(inputs.gpu).toBe("all")
     expect(inputs.runUp).toBe(false)
     expect(inputs.enableMcpPlaywright).toBe(true)
     expect(inputs.force).toBe(true)

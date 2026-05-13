@@ -42,6 +42,19 @@ const actionLabels: Record<MainPanelsProps["currentMenu"], string> = {
 
 const actionLabel = (menu: MainPanelsProps["currentMenu"]): string => actionLabels[menu]
 
+type ProjectActionBarProps = Pick<
+  MainPanelsProps,
+  | "currentMenu"
+  | "onApplyAllProjects"
+  | "onApplySelectedProject"
+  | "onRunCurrentMenuAction"
+  | "project"
+  | "projectBrowser"
+  | "selectedProjectSummary"
+>
+
+type ProjectGpuMode = NonNullable<MainPanelsProps["project"]>["gpu"]
+
 const screenTitle = (props: Pick<MainPanelsProps, "activeScreen" | "currentMenu">): string => {
   if (props.activeScreen.tag === "Create") {
     return "docker-git / Create"
@@ -80,29 +93,129 @@ const MainMenuRoute = (
   </ScreenFrame>
 )
 
-const ProjectActionBar = (
+const selectedProjectGpu = (
+  { project, selectedProjectSummary }: Pick<ProjectActionBarProps, "project" | "selectedProjectSummary">
+): ProjectGpuMode | null =>
+  selectedProjectSummary !== undefined && project !== null && project.id === selectedProjectSummary.id
+    ? project.gpu
+    : null
+
+type ActionButtonProps = {
+  readonly fg?: string | undefined
+  readonly label: string
+  readonly onClick: () => void
+}
+
+const ActionButton = ({ fg = "#78f0a3", label, onClick }: ActionButtonProps): JSX.Element => (
+  <Box onClick={onClick} width="auto">
+    <Text bold={true} fg={fg}>{label}</Text>
+  </Box>
+)
+
+const ProjectSelectionSummary = (
+  { currentMenu, project, selectedProjectSummary }: Pick<
+    ProjectActionBarProps,
+    "currentMenu" | "project" | "selectedProjectSummary"
+  >
+): JSX.Element => {
+  const selectedGpu = selectedProjectGpu({ project, selectedProjectSummary })
+  const showGpu = currentMenu === "Select" && selectedProjectSummary !== undefined
+
+  return (
+    <Box flexDirection="column" width="auto">
+      <Text fg="#aab7c4" wrap="truncate">
+        {selectedProjectSummary === undefined ? "No project selected." : selectedProjectSummary.displayName}
+      </Text>
+      {showGpu ? <Text fg="#8fa6c4">GPU: {selectedGpu ?? "unknown"}</Text> : null}
+    </Box>
+  )
+}
+
+const ProjectGpuControls = (
+  { onApplySelectedProject, selectedGpu }: Pick<ProjectActionBarProps, "onApplySelectedProject"> & {
+    readonly selectedGpu: ProjectGpuMode | null
+  }
+): JSX.Element => (
+  <>
+    <ActionButton
+      fg={selectedGpu === "all" ? "#56f39a" : "#78f0a3"}
+      label="GPU on"
+      onClick={() => {
+        onApplySelectedProject("all")
+      }}
+    />
+    <ActionButton
+      fg={selectedGpu === "none" ? "#ffd166" : "#ffb86b"}
+      label="GPU off"
+      onClick={() => {
+        onApplySelectedProject("none")
+      }}
+    />
+  </>
+)
+
+const SelectProjectControls = (
   {
     currentMenu,
     onApplyAllProjects,
     onApplySelectedProject,
+    selectedGpu,
+    selectedProjectSummary
+  }:
+    & Pick<
+      ProjectActionBarProps,
+      "currentMenu" | "onApplyAllProjects" | "onApplySelectedProject" | "selectedProjectSummary"
+    >
+    & {
+      readonly selectedGpu: ProjectGpuMode | null
+    }
+): JSX.Element | null => {
+  if (currentMenu !== "Select") {
+    return null
+  }
+
+  return (
+    <>
+      {selectedProjectSummary === undefined
+        ? null
+        : <ProjectGpuControls onApplySelectedProject={onApplySelectedProject} selectedGpu={selectedGpu} />}
+      {selectedProjectSummary === undefined
+        ? null
+        : (
+          <ActionButton
+            label="Apply"
+            onClick={() => {
+              onApplySelectedProject()
+            }}
+          />
+        )}
+      <ActionButton label="Apply all" onClick={onApplyAllProjects} />
+    </>
+  )
+}
+
+const PrimaryMenuAction = (
+  {
+    currentMenu,
     onRunCurrentMenuAction,
-    project,
     projectBrowser,
     selectedProjectSummary
   }: Pick<
-    MainPanelsProps,
-    | "currentMenu"
-    | "onApplyAllProjects"
-    | "onApplySelectedProject"
-    | "onRunCurrentMenuAction"
-    | "project"
-    | "projectBrowser"
-    | "selectedProjectSummary"
+    ProjectActionBarProps,
+    "currentMenu" | "onRunCurrentMenuAction" | "projectBrowser" | "selectedProjectSummary"
   >
 ): JSX.Element => {
-  const selectedGpu = selectedProjectSummary !== undefined && project !== null && project.id === selectedProjectSummary.id
-    ? project.gpu
-    : null
+  const label = actionLabel(currentMenu)
+  const browserUnavailable = currentMenu === "Browser" &&
+    !canOpenProjectBrowser(projectBrowser, selectedProjectSummary?.id ?? null)
+
+  return browserUnavailable
+    ? <Text bold={true} fg="#8fa6c4">{label}</Text>
+    : <ActionButton label={label} onClick={onRunCurrentMenuAction} />
+}
+
+const ProjectActionBar = (props: ProjectActionBarProps): JSX.Element => {
+  const selectedGpu = selectedProjectGpu(props)
 
   return (
     <Box
@@ -115,56 +228,25 @@ const ProjectActionBar = (
       justifyContent="space-between"
       padding={1}
     >
-      <Box flexDirection="column" width="auto">
-        <Text fg="#aab7c4" wrap="truncate">
-          {selectedProjectSummary === undefined ? "No project selected." : selectedProjectSummary.displayName}
-        </Text>
-        {currentMenu === "Select" && selectedProjectSummary !== undefined
-          ? <Text fg="#8fa6c4">GPU: {selectedGpu ?? "unknown"}</Text>
-          : null}
-      </Box>
+      <ProjectSelectionSummary
+        currentMenu={props.currentMenu}
+        project={props.project}
+        selectedProjectSummary={props.selectedProjectSummary}
+      />
       <Box flexWrap="wrap" gap={1} justifyContent="flex-end" width="auto">
-        {currentMenu === "Select" && selectedProjectSummary !== undefined
-          ? (
-            <Box onClick={() => {
-              onApplySelectedProject("all")
-            }} width="auto">
-              <Text bold={true} fg={selectedGpu === "all" ? "#56f39a" : "#78f0a3"}>GPU on</Text>
-            </Box>
-          )
-          : null}
-        {currentMenu === "Select" && selectedProjectSummary !== undefined
-          ? (
-            <Box onClick={() => {
-              onApplySelectedProject("none")
-            }} width="auto">
-              <Text bold={true} fg={selectedGpu === "none" ? "#ffd166" : "#ffb86b"}>GPU off</Text>
-            </Box>
-          )
-          : null}
-        {currentMenu === "Select" && selectedProjectSummary !== undefined
-          ? (
-            <Box onClick={() => {
-              onApplySelectedProject()
-            }} width="auto">
-              <Text bold={true} fg="#78f0a3">Apply</Text>
-            </Box>
-          )
-          : null}
-        {currentMenu === "Select"
-          ? (
-            <Box onClick={onApplyAllProjects} width="auto">
-              <Text bold={true} fg="#78f0a3">Apply all</Text>
-            </Box>
-          )
-          : null}
-        {currentMenu === "Browser" && !canOpenProjectBrowser(projectBrowser, selectedProjectSummary?.id ?? null)
-          ? <Text bold={true} fg="#8fa6c4">{actionLabel(currentMenu)}</Text>
-          : (
-            <Box onClick={onRunCurrentMenuAction} width="auto">
-              <Text bold={true} fg="#78f0a3">{actionLabel(currentMenu)}</Text>
-            </Box>
-          )}
+        <SelectProjectControls
+          currentMenu={props.currentMenu}
+          onApplyAllProjects={props.onApplyAllProjects}
+          onApplySelectedProject={props.onApplySelectedProject}
+          selectedGpu={selectedGpu}
+          selectedProjectSummary={props.selectedProjectSummary}
+        />
+        <PrimaryMenuAction
+          currentMenu={props.currentMenu}
+          onRunCurrentMenuAction={props.onRunCurrentMenuAction}
+          projectBrowser={props.projectBrowser}
+          selectedProjectSummary={props.selectedProjectSummary}
+        />
       </Box>
     </Box>
   )
