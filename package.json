@@ -23,9 +23,9 @@
     "changeset": "changeset",
     "changeset-publish": "bun -e \"if (!process.env.NPM_TOKEN) { console.log('Skipping publish: NPM_TOKEN is not set'); process.exit(0); }\" && changeset publish",
     "changeset-version": "changeset version",
-    "clone": "bash -lc 'bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js clone \"$@\"' --",
-    "open": "bash -lc 'bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js open \"$@\"' --",
-    "docker-git": "bash -lc 'bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js \"$@\"' --",
+    "clone": "bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js clone",
+    "open": "bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js open",
+    "docker-git": "bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js",
     "skiller:init": "git submodule update --init --checkout third_party/skiller-desktop-skills-manager && bun scripts/skiller-apply-docker-git-patches.mjs",
     "skiller:install": "bun install --cwd third_party/skiller-desktop-skills-manager --frozen-lockfile",
     "skiller:dev": "bun run --cwd third_party/skiller-desktop-skills-manager dev",
@@ -36,7 +36,7 @@
     "e2e:login-context": "bash scripts/e2e/login-context.sh",
     "e2e:runtime-volumes-ssh": "bash scripts/e2e/runtime-volumes-ssh.sh",
     "e2e:opencode-autoconnect": "bash scripts/e2e/opencode-autoconnect.sh",
-    "list": "bash -lc 'bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js ps \"$@\"' --",
+    "list": "bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js ps",
     "dev": "bun run --cwd packages/app dev",
     "web:dev": "bun run --cwd packages/app dev:web",
     "web:build": "bun run --cwd packages/app build:web",
@@ -47,7 +47,7 @@
     "lint:effect": "bun run --filter @prover-coder-ai/docker-git lint:effect && bun run --filter @effect-template/lib lint:effect",
     "test": "bun run --filter @prover-coder-ai/docker-git-session-sync test && bun run --filter @prover-coder-ai/docker-git test && bun run --filter @effect-template/lib test",
     "typecheck": "bun run --filter @prover-coder-ai/docker-git-session-sync typecheck && bun run --filter @prover-coder-ai/docker-git typecheck && bun run --filter @effect-template/lib typecheck",
-    "start": "bash -lc 'bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js \"$@\"' --"
+    "start": "bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
