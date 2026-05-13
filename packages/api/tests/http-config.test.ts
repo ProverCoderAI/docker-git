@@ -5,6 +5,11 @@ import { Effect } from "effect"
 import fc from "fast-check"
 
 import {
+  actorJsonLdContext,
+  federationJsonLdResponseContentType
+} from "../src/api/contracts.js"
+import {
+  federationActorDocumentResponse,
   federationExchangeStatusResponse,
   resolveConfiguredFederationPublicOrigin
 } from "../src/http.js"
@@ -43,6 +48,16 @@ const federationStatusHandler = HttpApp.toWebHandler(
   )
 )
 
+const federationDocumentHandler = HttpApp.toWebHandler(
+  Effect.flatten(
+    HttpRouter.toHttpApp(
+      HttpRouter.empty.pipe(
+        HttpRouter.get("/federation/actor", federationActorDocumentResponse())
+      )
+    )
+  )
+)
+
 const readFederationStatusRoute = (path: string) =>
   Effect.gen(function*(_) {
     const response = yield* _(
@@ -66,6 +81,31 @@ const readFederationStatusRoute = (path: string) =>
       })
     )
     return { body, status: response.status }
+  })
+
+const readFederationDocumentRoute = (path: string) =>
+  Effect.gen(function*(_) {
+    const response = yield* _(
+      Effect.tryPromise({
+        try: () =>
+          federationDocumentHandler(
+            new Request(`http://127.0.0.1${path}`, {
+              headers: {
+                "x-forwarded-host": "public.example.test",
+                "x-forwarded-proto": "https"
+              }
+            })
+          ),
+        catch: (cause) => new Error(String(cause))
+      })
+    )
+    const body = yield* _(
+      Effect.tryPromise({
+        try: () => response.text(),
+        catch: (cause) => new Error(String(cause))
+      })
+    )
+    return { body, contentType: response.headers.get("content-type"), status: response.status }
   })
 
 const parseJsonObject = (raw: string): object | null => {
@@ -138,5 +178,18 @@ describe("api http config", () => {
       expect(typeof readField(payload, "summary")).toBe("object")
       expect(Array.isArray(readField(payload, "subscriptions"))).toBe(true)
       expect(Array.isArray(readField(payload, "recentEvents"))).toBe(true)
+    }))
+
+  it.effect("serves federation actor documents as JSON-LD", () =>
+    Effect.gen(function*(_) {
+      yield* _(Effect.sync(() => clearFederationState()))
+
+      const actor = yield* _(readFederationDocumentRoute("/federation/actor"))
+      const payload = parseJsonObject(actor.body)
+
+      expect(actor.status).toBe(200)
+      expect(actor.contentType).toBe(federationJsonLdResponseContentType)
+      expect(readField(payload, "@context")).toEqual(actorJsonLdContext)
+      expect(readField(payload, "id")).toBe("https://public.example.test/federation/actor")
     }))
 })

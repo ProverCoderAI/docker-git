@@ -11,7 +11,7 @@ import * as Schema from "effect/Schema"
 import { renderError, type AppError } from "@effect-template/lib/usecases/errors"
 
 import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
-import type { ApplyProjectRequest } from "./api/contracts.js"
+import { federationJsonLdResponseContentType, type ApplyProjectRequest } from "./api/contracts.js"
 import {
   AuthMenuRequestSchema,
   AuthTerminalSessionRequestSchema,
@@ -275,8 +275,8 @@ const binaryResponse = (data: Uint8Array, contentType: string, status = 200) =>
     )
   )
 
-const activityJsonResponse = (data: unknown, status: number) =>
-  textResponse(JSON.stringify(data), "application/activity+json; charset=utf-8", status)
+const jsonLdResponse = (data: unknown, status: number) =>
+  textResponse(JSON.stringify(data), federationJsonLdResponseContentType, status)
 
 const parseQueryInt = (url: string, key: string, fallback: number): number => {
   const parsed = Number(new URL(url, "http://localhost").searchParams.get(key) ?? "")
@@ -595,6 +595,13 @@ export const federationExchangeStatusResponse = () =>
     return yield* _(jsonResponse(makeFederationExchangeStatus(context), 200))
   }).pipe(Effect.catchAll(errorResponse))
 
+export const federationActorDocumentResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonLdResponse(makeFederationActorDocument(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
 const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
   const request = yield* _(HttpServerRequest.HttpServerRequest)
   const upgrade = readHeader(request, "upgrade")?.toLowerCase()
@@ -859,18 +866,14 @@ export const makeRouter = () => {
     ),
     HttpRouter.get(
       "/federation/actor",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(activityJsonResponse(makeFederationActorDocument(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationActorDocumentResponse()
     ),
     HttpRouter.get(
       "/federation/outbox",
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
-        return yield* _(activityJsonResponse(makeFederationOutboxCollection(context), 200))
+        return yield* _(jsonLdResponse(makeFederationOutboxCollection(context), 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
@@ -878,7 +881,7 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
-        return yield* _(activityJsonResponse(makeFederationFollowersCollection(context), 200))
+        return yield* _(jsonLdResponse(makeFederationFollowersCollection(context), 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
@@ -886,7 +889,7 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
-        return yield* _(activityJsonResponse(makeFederationFollowingCollection(context), 200))
+        return yield* _(jsonLdResponse(makeFederationFollowingCollection(context), 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
@@ -894,7 +897,7 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
-        return yield* _(activityJsonResponse(makeFederationLikedCollection(context), 200))
+        return yield* _(jsonLdResponse(makeFederationLikedCollection(context), 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(

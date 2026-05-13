@@ -3,6 +3,11 @@ import { Effect } from "effect"
 import { vi } from "vitest"
 
 import {
+  activityForgeFedJsonLdContext,
+  actorJsonLdContext,
+  federationJsonLdContentType
+} from "../src/api/contracts.js"
+import {
   clearFederationState,
   createFollowSubscription,
   ensureExchangeSubscription,
@@ -76,11 +81,13 @@ describe("federation service", () => {
 
       expect(created.subscription.status).toBe("pending")
       expect(created.activity.type).toBe("Follow")
+      expect(created.activity["@context"]).toEqual(activityForgeFedJsonLdContext)
       expect(created.activity.id).toContain("https://social.provercoder.ai/federation/activities/follows/")
       expect(created.activity.actor).toBe("https://social.provercoder.ai/federation/actor")
 
       const accepted = yield* _(
         ingestFederationInbox({
+          "@context": activityForgeFedJsonLdContext,
           type: "Accept",
           actor: "https://tracker.example/system",
           object: created.activity.id
@@ -136,6 +143,7 @@ describe("federation service", () => {
 
       const person = makeFederationActorDocument(context)
       expect(person.type).toBe("Person")
+      expect(person["@context"]).toEqual(actorJsonLdContext)
       expect(person.id).toBe("https://social.provercoder.ai/federation/actor")
       expect(person.preferredUsername).toBe("tasks")
       expect(person.followers).toBe("https://social.provercoder.ai/federation/followers")
@@ -151,6 +159,7 @@ describe("federation service", () => {
 
       yield* _(
         ingestFederationInbox({
+          "@context": activityForgeFedJsonLdContext,
           type: "Accept",
           object: created.activity.id
         })
@@ -199,10 +208,6 @@ describe("federation service", () => {
           type: "Create",
           actor: "https://exchange.lefine.pro/actor/code",
           object: {
-            "@context": [
-              "https://www.w3.org/ns/activitystreams",
-              "https://forgefed.org/ns"
-            ],
             type: "Ticket",
             id: "https://exchange.lefine.pro/orders/111",
             attributedTo: "https://exchange.lefine.pro/actor/code",
@@ -227,6 +232,45 @@ describe("federation service", () => {
           mediaType: "text/plain"
         })
       }
+    }))
+
+  it.effect("rejects federation inbox payloads without JSON-LD ForgeFed context", () =>
+    Effect.gen(function*(_) {
+      clearFederationState()
+
+      const missingContext = yield* _(
+        ingestFederationInbox({
+          id: "https://tracker.example/offers/42",
+          type: "Offer",
+          object: {
+            type: "Ticket",
+            id: "https://tracker.example/issues/42",
+            attributedTo: "https://origin.example/users/alice",
+            summary: "Need context",
+            content: "Missing JSON-LD context."
+          }
+        }).pipe(Effect.flip)
+      )
+
+      const missingForgeFed = yield* _(
+        ingestFederationInbox({
+          "@context": "https://www.w3.org/ns/activitystreams",
+          id: "https://tracker.example/offers/43",
+          type: "Offer",
+          object: {
+            type: "Ticket",
+            id: "https://tracker.example/issues/43",
+            attributedTo: "https://origin.example/users/alice",
+            summary: "Need ForgeFed context",
+            content: "Missing ForgeFed JSON-LD context."
+          }
+        }).pipe(Effect.flip)
+      )
+
+      expect(missingContext._tag).toBe("ApiBadRequestError")
+      expect(missingContext.message).toContain("JSON-LD @context")
+      expect(missingForgeFed._tag).toBe("ApiBadRequestError")
+      expect(missingForgeFed.message).toContain("ForgeFed")
     }))
 
   it.effect("discovers exchange root target and deduplicates polled Create tasks", () =>
@@ -303,7 +347,13 @@ describe("federation service", () => {
         const created = yield* _(ensureExchangeSubscription({ target: "https://exchange.lefine.pro" }, context))
         expect(created.subscription.remoteOutbox).toBe("https://exchange.lefine.pro/outbox/code")
         expect(created.subscription.queue).toBe("code")
+        expect(created.activity["@context"]).toEqual(activityForgeFedJsonLdContext)
         expect(listExchangeSubscriptions()).toHaveLength(1)
+
+        const followPost = fetchMock.mock.calls.find(([, init]) => init?.method === "POST")
+        expect(followPost?.[1]?.headers).toMatchObject({
+          "content-type": federationJsonLdContentType
+        })
 
         const pendingStatus = makeFederationExchangeStatus(context)
         expect(pendingStatus.summary.pending).toBe(1)
@@ -311,6 +361,7 @@ describe("federation service", () => {
 
         yield* _(
           ingestFederationInbox({
+            "@context": activityForgeFedJsonLdContext,
             type: "Accept",
             actor: "https://exchange.lefine.pro/actor/code",
             object: created.activity.id
@@ -364,6 +415,7 @@ describe("federation service", () => {
       for (let index = 0; index < 105; index += 1) {
         yield* _(
           ingestFederationInbox({
+            "@context": activityForgeFedJsonLdContext,
             type: "Ticket",
             id: `https://tracker.example/issues/${index}`,
             attributedTo: "https://origin.example/users/alice",
