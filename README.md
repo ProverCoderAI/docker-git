@@ -3,6 +3,8 @@
 `docker-git` создаёт отдельную Docker-среду для каждого репозитория, issue или PR.
 По умолчанию проекты лежат в `~/.docker-git`.
 
+License: MIT. See [LICENSE](LICENSE).
+
 ## Установка
 
 ```bash

@@ -1,0 +1,43 @@
+{
+  "strictness": 1,
+  "commentTypes": ["logic", "syntax", "style", "info"],
+  "triggerOnUpdates": true,
+  "triggerOnDrafts": true,
+  "ignorePatterns": "node_modules/**\ndist/**\ncoverage/**\nthird_party/**",
+  "statusCheck": true,
+  "statusCommentsEnabled": true,
+  "updateExistingSummaryComment": true,
+  "summarySection": {
+    "included": true,
+    "collapsible": true,
+    "defaultOpen": false
+  },
+  "instructions": "This is a public MIT open-source TypeScript/Bun monorepo. Review every PR as SPEC DRIVEN DEVELOPMENT: compare the diff with README.md, repository Markdown docs, linked issues, PR description, PR comments and the relevant codebase. Flag spec drift, undocumented behavior changes, missing tests for promised behavior, high-confidence security risks, weak formal invariants, and game-theory incentive problems.",
+  "rules": [
+    {
+      "id": "spec-source-required",
+      "rule": "Every behavioral change must be traceable to a visible source of truth: linked issue, PR description, PR discussion, README/docs, or changed-code reference. If the spec is missing, ask the author to add it before approval.",
+      "severity": "high"
+    },
+    {
+      "id": "spec-alignment",
+      "rule": "Flag any change that contradicts the visible issue/TZ/spec, PR discussion, README/docs, or changes behavior without documentation.",
+      "severity": "high"
+    },
+    {
+      "id": "security-review",
+      "rule": "Look for injection, path traversal, secret leaks, unsafe Docker/GitHub Actions settings, supply-chain risk, and cross-container isolation regressions.",
+      "severity": "high"
+    },
+    {
+      "id": "formal-verification",
+      "rule": "Assess which invariants, preconditions, and postconditions are mathematically defensible. Flag weak or unstated invariants when they affect correctness.",
+      "severity": "medium"
+    },
+    {
+      "id": "game-theory",
+      "rule": "Assess whether the implementation creates incentives to bypass intended rules or safety controls. Suggest a stronger mechanism when incentives are misaligned.",
+      "severity": "medium"
+    }
+  ]
+}

@@ -60,8 +60,8 @@ reviews:
     issue_assessment:
       mode: "warning"
     custom_checks:
-      - name: "Spec alignment"
-        mode: "warning"
+      - name: "Requirements alignment"
+        mode: "error"
         instructions: |
           Fail if the diff contradicts the visible spec/TZ, linked issue, PR
           discussion, README/docs, or changes behavior without documenting it.
@@ -71,9 +71,14 @@ reviews:
       - name: "Security regression"
         mode: "warning"
         instructions: |
-          Fail only for high-confidence security regressions: injection,
-          path traversal, secret leaks, unsafe Docker/GitHub Actions settings,
-          or unjustified supply-chain risk.
+          Fail if changed files introduce a high-confidence security regression, including:
+          - command injection or unsafe shell/process execution with user-controlled input;
+          - path traversal or writes outside intended project/container state directories;
+          - credential, token, private-key, or PII exposure in source, generated config, logs, or CI output;
+          - unsafe Docker/GitHub Actions configuration such as privileged containers, broad host mounts, unbounded Docker socket access, unsafe `pull_request_target`, or unnecessary write permissions;
+          - dependency or package-manager changes that materially increase supply-chain risk without justification.
+
+          Pass when no high-confidence regression is found. Return Inconclusive when the diff is too large or lacks enough context to determine risk.
 
   tools:
     github-checks:
