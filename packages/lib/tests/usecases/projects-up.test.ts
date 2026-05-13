@@ -4,8 +4,9 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, Logger } from "effect"
 import * as Inspectable from "effect/Inspectable"
+import * as Option from "effect/Option"
 import * as Sink from "effect/Sink"
 import * as Stream from "effect/Stream"
 
@@ -112,7 +113,7 @@ const makeFakeExecutor = (
         recorded.push({
           command: entry.command,
           args: entry.args,
-          cwd: entry.cwd._tag === "Some" ? entry.cwd.value : undefined
+          cwd: Option.getOrUndefined(entry.cwd)
         })
       }
 
@@ -120,7 +121,7 @@ const makeFakeExecutor = (
       const invocation: RecordedCommand = {
         command: last.command,
         args: last.args,
-        cwd: last.cwd._tag === "Some" ? last.cwd.value : undefined
+        cwd: Option.getOrUndefined(last.cwd)
       }
       const stdoutText = decideStdout(invocation)
       const stdout = stdoutText.length === 0 ? Stream.empty : Stream.succeed(encode(stdoutText))
@@ -263,7 +264,11 @@ describe("runDockerComposeUpWithPortCheck", () => {
           gpu: "all"
         }
         const recorded: Array<RecordedCommand> = []
+        const logs: Array<string> = []
         const executor = makeFakeExecutor(recorded, { failGpuComposeUp: true })
+        const logger = Logger.make(({ message }) => {
+          logs.push(String(message))
+        })
 
         yield* _(
           prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
@@ -274,7 +279,8 @@ describe("runDockerComposeUpWithPortCheck", () => {
 
         const started = yield* _(
           runDockerComposeUpWithPortCheck(outDir).pipe(
-            Effect.provideService(CommandExecutor.CommandExecutor, executor)
+            Effect.provideService(CommandExecutor.CommandExecutor, executor),
+            Effect.provide(Logger.replace(Logger.defaultLogger, logger))
           )
         )
 
@@ -285,7 +291,12 @@ describe("runDockerComposeUpWithPortCheck", () => {
 
         const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         expect(configAfter).toContain('"gpu": "none"')
-        expect(recorded.filter((entry) => isDockerComposeUpWithBuild(entry)).length).toBeGreaterThan(1)
+        expect(recorded.filter((entry) => isDockerComposeUpWithBuild(entry)).length).toBe(2)
+        expect(logs.some((entry) =>
+          entry.includes("NVIDIA runtime failed") &&
+          entry.includes("libnvidia-ml.so.1") &&
+          entry.includes("GPU access disabled")
+        )).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

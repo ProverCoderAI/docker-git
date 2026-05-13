@@ -181,7 +181,7 @@ const startProjectPostStartSelfHealInBackground = (
 // FORMAT THEOREM: forall t,e: gpu(t)=all and nvidia_runtime_failure(e) -> gpu(retry(t,e))=none
 // PURITY: SHELL
 // EFFECT: Effect<TemplateConfig, DockerCommandError | FileExistsError | PlatformError, FileSystem | Path | CommandExecutor>
-// INVARIANT: fallback never escalates GPU access and rewrites managed files before retry
+// INVARIANT: fallback never escalates GPU access and terminates after at most one all -> none downgrade
 // COMPLEXITY: O(1) compose attempts plus O(file-size) template rewrite
 const recoverProjectComposeGpuFailure = (
   projectDir: string,
@@ -194,6 +194,7 @@ const recoverProjectComposeGpuFailure = (
     Effect.catchTag("DockerCommandError", (error) => {
       const fallbackGpu = gpuModeAfterDockerFailure(template.gpu, error.details)
       if (fallbackGpu === template.gpu) {
+        // Idempotence witness: non-NVIDIA errors and gpu=none cannot produce a lower GPU mode.
         return Effect.fail(error)
       }
 
@@ -201,7 +202,9 @@ const recoverProjectComposeGpuFailure = (
       return Effect.gen(function*(_) {
         yield* _(
           Effect.logWarning(
-            "NVIDIA runtime failed while GPU access was enabled; rewriting project with GPU access disabled and retrying docker compose up."
+            `NVIDIA runtime failed while GPU access was enabled (${
+              error.details ?? "no docker output"
+            }); rewriting project with GPU access disabled and retrying docker compose up.`
           )
         )
         yield* _(syncManagedProjectFiles(projectDir, fallbackTemplate))
