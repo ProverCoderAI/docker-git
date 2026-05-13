@@ -106,7 +106,6 @@ const defaultActorUsername = "docker-git"
 const activityJsonContentType = "application/activity+json"
 const activityAcceptHeader = `${federationJsonLdContentType}, ${activityJsonContentType}, application/json`
 const defaultExchangeQueue = "code"
-const stateVersion = 1 as const
 const exchangeEventLimit = 100
 
 const issueStore: Map<string, FederationIssueRecord> = new Map()
@@ -380,7 +379,7 @@ const normalizeHttpUrl = (
   })
 
 const serializeState = (): StoredFederationState => ({
-  version: stateVersion,
+  version: 1,
   issues: [...issueStore.values()],
   follows: [...followStore.values()],
   processedOutboxItems: [...processedOutboxItems],
@@ -1494,13 +1493,13 @@ const fetchOutbox = (
   fetchJson(url, "Exchange outbox").pipe(
     Effect.flatMap((record) =>
       requireFederationJsonLdContext(record, "Exchange outbox").pipe(
-        Effect.as({
+        Effect.map((): ActivityPubOrderedCollection => ({
           "@context": activityForgeFedJsonLdContext,
-          type: "OrderedCollection" as const,
+          type: "OrderedCollection",
           id: readOptionalString(record, "id") ?? url,
           totalItems: typeof record["totalItems"] === "number" ? record["totalItems"] : 0,
           orderedItems: Array.isArray(record["orderedItems"]) ? record["orderedItems"] : []
-        })
+        }))
       )
     )
   )

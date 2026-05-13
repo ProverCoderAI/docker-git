@@ -602,6 +602,34 @@ export const federationActorDocumentResponse = () =>
     return yield* _(jsonLdResponse(makeFederationActorDocument(context), 200))
   }).pipe(Effect.catchAll(errorResponse))
 
+export const federationOutboxDocumentResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonLdResponse(makeFederationOutboxCollection(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
+export const federationFollowersDocumentResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonLdResponse(makeFederationFollowersCollection(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
+export const federationFollowingDocumentResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonLdResponse(makeFederationFollowingCollection(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
+export const federationLikedDocumentResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonLdResponse(makeFederationLikedCollection(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
 const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
   const request = yield* _(HttpServerRequest.HttpServerRequest)
   const upgrade = readHeader(request, "upgrade")?.toLowerCase()
@@ -870,35 +898,19 @@ export const makeRouter = () => {
     ),
     HttpRouter.get(
       "/federation/outbox",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonLdResponse(makeFederationOutboxCollection(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationOutboxDocumentResponse()
     ),
     HttpRouter.get(
       "/federation/followers",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonLdResponse(makeFederationFollowersCollection(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationFollowersDocumentResponse()
     ),
     HttpRouter.get(
       "/federation/following",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonLdResponse(makeFederationFollowingCollection(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationFollowingDocumentResponse()
     ),
     HttpRouter.get(
       "/federation/liked",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(jsonLdResponse(makeFederationLikedCollection(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationLikedDocumentResponse()
     ),
     HttpRouter.get(
       "/federation/status",
