@@ -9,6 +9,7 @@ import * as Inspectable from "effect/Inspectable"
 import * as Option from "effect/Option"
 import * as Sink from "effect/Sink"
 import * as Stream from "effect/Stream"
+import fc from "fast-check"
 
 import type { TemplateConfig } from "../../src/core/domain.js"
 import { gpuModeAfterDockerFailure } from "../../src/core/gpu.js"
@@ -91,14 +92,28 @@ const decideStdout = (cmd: RecordedCommand): string => {
   return ""
 }
 
-const nvidiaRuntimeFailure =
-  "Error response from daemon: failed to create task for container: nvidia-container-cli: initialization error: load library failed: libnvidia-ml.so.1"
+const nvidiaContainerCliMarker = "nvidia-container-cli"
+const libNvidiaMlMarker = "libnvidia-ml.so.1"
+const missingDeviceDriverMarker = "could not select device driver"
+
+const nvidiaRuntimeFailure = `Error response from daemon: failed to create task for container: ${nvidiaContainerCliMarker}: initialization error: load library failed: ${libNvidiaMlMarker}`
 
 const nvidiaMissingDeviceDriverFailure =
-  'Error response from daemon: could not select device driver "" with capabilities: [[gpu]]'
+  `Error response from daemon: ${missingDeviceDriverMarker} "" with capabilities: [[gpu]]`
 
 const arbitraryComposeFailure =
   "Error response from daemon: network sandbox setup failed"
+
+const nvidiaFailureMarkers: ReadonlyArray<string> = [
+  nvidiaContainerCliMarker,
+  libNvidiaMlMarker,
+  missingDeviceDriverMarker
+]
+
+const containsNvidiaFailureMarker = (details: string): boolean => {
+  const normalized = details.toLowerCase()
+  return nvidiaFailureMarkers.some((marker) => normalized.includes(marker))
+}
 
 const hasNvidiaFallbackWarning = (logs: ReadonlyArray<string>, expectedDetail: string): boolean =>
   logs.some((entry) =>
@@ -363,6 +378,29 @@ describe("runDockerComposeUpWithPortCheck", () => {
   it("keeps GPU access unchanged for arbitrary docker compose up failures", () => {
     expect(gpuModeAfterDockerFailure("all", arbitraryComposeFailure)).toBe("all")
     expect(gpuModeAfterDockerFailure("none", arbitraryComposeFailure)).toBe("none")
+  })
+
+  it("satisfies the GPU fallback classifier invariant", () => {
+    const dockerFailureDetails = fc.oneof(
+      fc.string(),
+      fc
+        .tuple(
+          fc.string(),
+          fc.constantFrom(nvidiaContainerCliMarker, libNvidiaMlMarker, missingDeviceDriverMarker),
+          fc.string()
+        )
+        .map(([left, marker, right]) => `${left}${marker}${right}`)
+    )
+
+    fc.assert(
+      fc.property(dockerFailureDetails, (details) => {
+        const expectedGpu = containsNvidiaFailureMarker(details) ? "none" : "all"
+
+        expect(gpuModeAfterDockerFailure("all", details)).toBe(expectedGpu)
+        expect(gpuModeAfterDockerFailure("none", details)).toBe("none")
+      }),
+      { numRuns: 50 }
+    )
   })
 
   it.effect("falls back to GPU none before retrying reuse mode when the host NVIDIA runtime is unavailable", () =>
