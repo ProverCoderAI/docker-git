@@ -41,43 +41,33 @@ reviews:
   path_instructions:
     - path: "**/*"
       instructions: |
-        Review every PR against its source of truth, not only against the diff.
+        Ты строгий ревьюер SPEC DRIVEN DEVELOPMENT.
 
-        Requirement sources, in priority order:
-        1. Linked GitHub issues in the PR body (`Fixes #123`, `Closes #123`, full issue URLs).
-        2. Explicit issue/TZ references in the PR title, PR description, branch name (`issue-123`), and PR discussion.
-        3. Changed-code markers such as `QUOTE(ТЗ): ...`, `REF: issue-...`, and nearby tests.
-        4. If final decisions only exist in issue comments and are not available in review context, ask the author to copy the final TZ/acceptance criteria into the issue body or PR description.
+        Перед выводами изучи README.md, другие *.md файлы, linked issues,
+        PR description, PR comments/discussion и релевантную кодовую базу.
 
-        Always include a "Соответствие ТЗ" section when the PR has an issue/TZ reference:
-        - list the concrete issue/TZ requirements that the diff implements;
-        - flag any requirement from the issue, PR body, or PR discussion that is missing or contradicted by the code;
-        - flag scope creep when the diff changes behavior not requested by the issue/TZ;
-        - verify that tests cover the observable behavior promised by the issue/TZ.
+        Сверь изменения с исходным ТЗ/спекой и обсуждением. Флагай любой уход
+        от спеки, недокументированное изменение поведения, отсутствие тестов
+        для заявленного поведения и security-риск. Если спека не видна,
+        попроси автора добавить ее в issue или PR description.
 
-        Security review priorities:
-        - command injection, shell argument escaping, unsafe `docker`, `git`, `ssh`, `gh`, `sudo`, or process spawning;
-        - path traversal, unsafe filesystem access, and accidental writes outside `.docker-git` or the project workspace;
-        - SSRF/open redirects/network access introduced by user-controlled input;
-        - leaked secrets, tokens, private keys, and sensitive data in logs;
-        - GitHub Actions permission escalation, unpinned risky actions, unsafe `pull_request_target`, and supply-chain risks;
-        - Docker socket exposure, privileged containers, host mounts, GPU/resource flags, and cross-container isolation breaks.
+        Проверь решение с точки зрения формальной верификации: какие инварианты,
+        предусловия и постусловия можно доказать математически, а где доказуемость
+        слабая. Оцени решение с точки зрения теории игр: устойчивы ли стимулы,
+        нет ли выгодного обхода правил, и какое решение было бы сильнее.
 
   pre_merge_checks:
     issue_assessment:
       mode: "warning"
     custom_checks:
       - name: "Requirements alignment"
-        mode: "warning"
+        mode: "error"
         instructions: |
-          Fail if any of these are true:
-          - The PR has no discoverable source requirement: no linked issue, no issue/TZ reference in the PR title/body/branch/discussion, and no changed-code `QUOTE(ТЗ)` or `REF` marker.
-          - The changed code contradicts a linked issue title/body, PR description, PR discussion decision, or changed-code `QUOTE(ТЗ)`/`REF` marker.
-          - A concrete acceptance criterion from the linked issue or PR description is not implemented and not explicitly marked out of scope in the PR description.
-          - Observable behavior promised by the issue/TZ is changed without matching tests or a clear explanation in the PR description.
-
-          Pass when the source requirement is traceable and every explicit requirement is implemented, tested, or explicitly documented as out of scope.
-          Return Inconclusive only when the relevant issue/TZ discussion is referenced but not available in the review context; ask the author to copy the final TZ into the issue body or PR description.
+          Fail if the diff contradicts the visible spec/TZ, linked issue, PR
+          discussion, README/docs, or changes behavior without documenting it.
+          Fail if promised behavior has no relevant tests. Return Inconclusive
+          when the spec is missing and ask the author to add it. Also flag weak
+          formal invariants or game-theory incentives when they undermine the spec.
       - name: "Security regression"
         mode: "warning"
         instructions: |

@@ -1,0 +1,13 @@
+ignore:
+  - .git
+  - node_modules
+  - dist
+  - coverage
+  - third_party
+
+github:
+  labels: []
+  ignore_labels:
+    - sourcery-ignore
+    - do-not-review
+    - skip-review
