@@ -1,0 +1,24 @@
+[github_app]
+pr_commands = [
+  "/agentic_describe",
+  "/agentic_review"
+]
+handle_push_trigger = true
+push_commands = [
+  "/agentic_review"
+]
+
+[review_agent]
+comments_location_policy = "both"
+inline_comments_severity_threshold = 2
+issues_user_guidelines = """
+Review as SPEC DRIVEN DEVELOPMENT.
+Read README.md, repository Markdown docs, linked issues, PR description, PR comments/discussion, and relevant code.
+Flag spec drift, undocumented behavior changes, missing tests for promised behavior, and security risks.
+"""
+compliance_user_guidelines = """
+Check whether the code matches the visible issue/TZ/spec and discussion.
+Check formal-verification quality: invariants, preconditions, postconditions, and what can be proved mathematically.
+Check game-theory quality: whether incentives let users bypass intended rules, and suggest stronger mechanisms.
+If the spec is missing, ask the author to add it to the issue or PR description.
+"""

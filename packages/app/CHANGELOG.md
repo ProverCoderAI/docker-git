@@ -1,5 +1,47 @@
 # @prover-coder-ai/docker-git
 
+## 1.1.5
+
+### Patch Changes
+
+- chore: automated version bump
+
+- Updated dependencies []:
+  - @prover-coder-ai/docker-git-session-sync@1.0.8
+
+## 1.1.4
+
+### Patch Changes
+
+- chore: automated version bump
+
+- Updated dependencies []:
+  - @prover-coder-ai/docker-git-session-sync@1.0.7
+
+## 1.1.3
+
+### Patch Changes
+
+- [#263](https://github.com/ProverCoderAI/docker-git/pull/263) [`f6682d3`](https://github.com/ProverCoderAI/docker-git/commit/f6682d36afa792206fc5bc9bcb63152b7c621d18) Thanks [@konard](https://github.com/konard)! - feat: cap controller container CPU, memory, and PID consumption
+
+  Adds default `cpus`, `mem_limit`, `memswap_limit`, and `pids_limit` to the
+  `docker-git-api` controller in `docker-compose.yml` and
+  `docker-compose.api.yml`. Each value is parameterized so operators can
+  override it via `DOCKER_GIT_CONTROLLER_CPUS`, `DOCKER_GIT_CONTROLLER_MEMORY`,
+  and `DOCKER_GIT_CONTROLLER_PIDS`, or via `--controller-cpu`,
+  `--controller-ram`, and `--controller-pids` on the host CLI. Defaults resolve
+  to 90% CPU, 90% RAM/swap, and 4096 PIDs. This complements the existing
+  per-project caps so a runaway controller cannot consume the entire host.
+
+## 1.1.2
+
+### Patch Changes
+
+- chore: automated version bump
+
+- Updated dependencies []:
+  - @prover-coder-ai/docker-git-session-sync@1.0.6
+
 ## 1.1.1
 
 ### Patch Changes

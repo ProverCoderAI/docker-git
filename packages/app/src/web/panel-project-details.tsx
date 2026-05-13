@@ -247,6 +247,7 @@ const renderDetailsPanel = (
       <Text bold={true} fg="#8be9fd">{details.title}</Text>
       <Box flexDirection="column" marginTop={1}>
         {renderSelectLines(details.lines)}
+        <Text fg="#d6e5f7">GPU: {project.gpu}</Text>
       </Box>
       <HelpLines lines={[selectHint(purpose, false)]} />
     </Box>

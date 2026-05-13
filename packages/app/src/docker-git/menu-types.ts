@@ -3,6 +3,7 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import type * as Effect from "effect/Effect"
 
+import type { GpuMode } from "./frontend-lib/core/domain.js"
 import type { MenuError } from "./menu-errors.js"
 import type { ProjectItem } from "./project-item.js"
 
@@ -51,6 +52,7 @@ export type CreateInputs = {
   readonly outDir: string
   readonly cpuLimit: string
   readonly ramLimit: string
+  readonly gpu: GpuMode
   readonly runUp: boolean
   readonly enableMcpPlaywright: boolean
   readonly force: boolean
@@ -63,6 +65,7 @@ export type CreateStep =
   | "outDir"
   | "cpuLimit"
   | "ramLimit"
+  | "gpu"
   | "runUp"
   | "mcpPlaywright"
   | "force"
@@ -71,6 +74,7 @@ export const createSteps: ReadonlyArray<CreateStep> = [
   "repoUrl",
   "cpuLimit",
   "ramLimit",
+  "gpu",
   "runUp",
   "mcpPlaywright",
   "force"

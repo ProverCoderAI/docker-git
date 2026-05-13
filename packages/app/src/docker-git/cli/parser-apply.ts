@@ -1,5 +1,6 @@
 import { Either } from "effect"
 
+import { parseGpuMode } from "../frontend-lib/core/command-builders-shared.js"
 import { type ApplyCommand, type ParseError } from "../frontend-lib/core/domain.js"
 import { normalizeCpuLimit, normalizeRamLimit } from "../frontend-lib/core/resource-limits.js"
 
@@ -24,6 +25,7 @@ export const parseApply = (
     const ramLimit = yield* _(normalizeRamLimit(raw.ramLimit, "--ram"))
     const playwrightCpuLimit = yield* _(normalizeCpuLimit(raw.playwrightCpuLimit, "--playwright-cpu"))
     const playwrightRamLimit = yield* _(normalizeRamLimit(raw.playwrightRamLimit, "--playwright-ram"))
+    const gpu = raw.gpu === undefined ? undefined : yield* _(parseGpuMode(raw.gpu))
     return {
       _tag: "Apply",
       projectDir,
@@ -35,6 +37,7 @@ export const parseApply = (
       ramLimit,
       playwrightCpuLimit,
       playwrightRamLimit,
+      gpu,
       enableMcpPlaywright: raw.enableMcpPlaywright
     }
   })

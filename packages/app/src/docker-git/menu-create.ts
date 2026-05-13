@@ -51,7 +51,8 @@ const optionalCreateArgs = (input: CreateInputs): ReadonlyArray<OptionalCreateAr
   { value: input.repoRef, args: ["--repo-ref", input.repoRef] },
   { value: input.outDir, args: ["--out-dir", input.outDir] },
   { value: input.cpuLimit, args: ["--cpu", input.cpuLimit] },
-  { value: input.ramLimit, args: ["--ram", input.ramLimit] }
+  { value: input.ramLimit, args: ["--ram", input.ramLimit] },
+  { value: input.gpu === "all" ? input.gpu : "", args: ["--gpu", input.gpu] }
 ]
 
 const booleanCreateFlags = (input: CreateInputs): ReadonlyArray<string> =>

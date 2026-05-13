@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
+import { controllerRevisionForMode, parseControllerGpuMode } from "../../src/docker-git/controller-docker.js"
 import {
   parseControllerRevisionEnvOutput,
   shouldForceRecreateController
@@ -97,5 +98,20 @@ describe("controller reachability", () => {
       expect(shouldForceRecreateController(true, "local-a", "local-a")).toBe(false)
       expect(shouldForceRecreateController(true, "local-a", "local-b")).toBe(true)
       expect(shouldForceRecreateController(true, "local-a", null)).toBe(true)
+    }))
+
+  it.effect("parses controller GPU mode from environment values", () =>
+    Effect.sync(() => {
+      expect(parseControllerGpuMode()).toBe("none")
+      expect(parseControllerGpuMode("")).toBe("none")
+      expect(parseControllerGpuMode("none")).toBe("none")
+      expect(parseControllerGpuMode("all")).toBe("all")
+      expect(parseControllerGpuMode("gpu")).toBeNull()
+    }))
+
+  it.effect("includes controller GPU mode in the revision", () =>
+    Effect.sync(() => {
+      expect(controllerRevisionForMode("abc123def4567890", "none")).toBe("abc123def4567890-none")
+      expect(controllerRevisionForMode("abc123def4567890", "all")).toBe("abc123def4567890-all")
     }))
 })

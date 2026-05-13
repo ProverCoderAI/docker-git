@@ -12,6 +12,7 @@ import {
   listFollowSubscriptions,
   makeFederationActorDocument,
   makeFederationContext,
+  makeFederationExchangeStatus,
   makeFederationFollowingCollection,
   pollExchangeOutboxes
 } from "../src/services/federation.js"
@@ -304,6 +305,23 @@ describe("federation service", () => {
         expect(created.subscription.queue).toBe("code")
         expect(listExchangeSubscriptions()).toHaveLength(1)
 
+        const pendingStatus = makeFederationExchangeStatus(context)
+        expect(pendingStatus.summary.pending).toBe(1)
+        expect(pendingStatus.recentEvents.map((event) => event.kind)).toContain("follow.sent")
+
+        yield* _(
+          ingestFederationInbox({
+            type: "Accept",
+            actor: "https://exchange.lefine.pro/actor/code",
+            object: created.activity.id
+          })
+        )
+
+        const acceptedStatus = makeFederationExchangeStatus(context)
+        expect(acceptedStatus.summary.accepted).toBe(1)
+        expect(acceptedStatus.summary.lastInboxAt).toBeDefined()
+        expect(acceptedStatus.recentEvents.map((event) => event.kind)).toContain("inbox.follow.accept")
+
         const firstPoll = yield* _(pollExchangeOutboxes({ runTasks: false }, context))
         expect(firstPoll.newItems).toBe(1)
         expect(firstPoll.processedItems).toBe(1)
@@ -312,10 +330,52 @@ describe("federation service", () => {
         expect(issues).toHaveLength(1)
         expect(issues[0]?.issueId).toBe("https://exchange.lefine.pro/orders/111")
 
+        const polledStatus = makeFederationExchangeStatus(context)
+        const polledEventKinds = polledStatus.recentEvents.map((event) => event.kind)
+        expect(polledStatus.summary.issues).toBe(1)
+        expect(polledStatus.summary.processedOutboxItems).toBe(1)
+        expect(polledStatus.summary.lastPollAt).toBe(firstPoll.polledAt)
+        expect(polledEventKinds).toContain("inbox.issue.received")
+        expect(polledEventKinds).toContain("poll.completed")
+        expect(polledStatus.recentEvents.find((event) => event.kind === "poll.completed")).toMatchObject({
+          totalItems: 1,
+          newItems: 1,
+          processedItems: 1,
+          failedItems: 0
+        })
+
         const secondPoll = yield* _(pollExchangeOutboxes({ runTasks: false }, context))
         expect(secondPoll.newItems).toBe(0)
       } finally {
         globalThis.fetch = previousFetch
       }
+    }))
+
+  it.effect("bounds federation exchange event history", () =>
+    Effect.gen(function*(_) {
+      clearFederationState()
+
+      const context = yield* _(
+        makeFederationContext({
+          publicOrigin: "https://social.provercoder.ai"
+        })
+      )
+
+      for (let index = 0; index < 105; index += 1) {
+        yield* _(
+          ingestFederationInbox({
+            type: "Ticket",
+            id: `https://tracker.example/issues/${index}`,
+            attributedTo: "https://origin.example/users/alice",
+            summary: `Issue ${index}`,
+            content: "Confirm bounded exchange event history."
+          })
+        )
+      }
+
+      const status = makeFederationExchangeStatus(context)
+      expect(status.summary.issues).toBe(105)
+      expect(status.recentEvents).toHaveLength(100)
+      expect(status.recentEvents.map((event) => event.kind)).toContain("inbox.issue.received")
     }))
 })

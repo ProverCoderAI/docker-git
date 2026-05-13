@@ -19,11 +19,17 @@ export const loadProjectLogs = (projectId: string) =>
     Effect.map((response) => response.output)
   )
 
-export const applyProject = (projectId: string) =>
+export const applyProject = (
+  projectId: string,
+  request?: {
+    readonly gpu?: "none" | "all" | undefined
+  }
+) =>
   requestJson(
     "POST",
     `/projects/${encodeURIComponent(projectId)}/apply`,
-    ProjectResponseSchema
+    ProjectResponseSchema,
+    request
   ).pipe(
     Effect.map((response) => response.project)
   )

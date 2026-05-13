@@ -11,9 +11,11 @@ import * as Schema from "effect/Schema"
 import { renderError, type AppError } from "@effect-template/lib/usecases/errors"
 
 import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
+import type { ApplyProjectRequest } from "./api/contracts.js"
 import {
   AuthMenuRequestSchema,
   AuthTerminalSessionRequestSchema,
+  ApplyProjectRequestSchema,
   ApplyAllRequestSchema,
   CodexAuthImportRequestSchema,
   CodexAuthLoginRequestSchema,
@@ -70,6 +72,7 @@ import {
   listFollowSubscriptions,
   makeFederationActorDocument,
   makeFederationContext,
+  makeFederationExchangeStatus,
   makeFederationFollowersCollection,
   makeFederationFollowingCollection,
   makeFederationLikedCollection,
@@ -457,6 +460,11 @@ const readProjectDatabaseProfileRequest = () => HttpServerRequest.schemaBodyJson
 const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitRequestSchema)
 const readStateCommitRequest = () => HttpServerRequest.schemaBodyJson(StateCommitRequestSchema)
 const readStateSyncRequest = () => HttpServerRequest.schemaBodyJson(StateSyncRequestSchema)
+const emptyApplyProjectRequest: ApplyProjectRequest = {}
+const readApplyProjectRequest = () =>
+  HttpServerRequest.schemaBodyJson(ApplyProjectRequestSchema).pipe(
+    Effect.catchAll(() => Effect.succeed(emptyApplyProjectRequest))
+  )
 const readApplyAllRequest = () => HttpServerRequest.schemaBodyJson(ApplyAllRequestSchema)
 const readExchangeSubscribeRequest = () => HttpServerRequest.schemaBodyJson(ExchangeSubscribeRequestSchema)
 const emptyExchangePollRequest = {}
@@ -822,6 +830,14 @@ export const makeRouter = () => {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const context = yield* _(resolveFederationContext(request))
         return yield* _(activityJsonResponse(makeFederationLikedCollection(context), 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/federation/exchange/status",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const context = yield* _(resolveFederationContext(request))
+        return yield* _(jsonResponse(makeFederationExchangeStatus(context), 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(
@@ -1226,14 +1242,17 @@ export const makeRouter = () => {
         Effect.catchAll(errorResponse)
       )
     ),
-    HttpRouter.post(
-      "/projects/:projectId/apply",
-      projectParams.pipe(
-        Effect.flatMap(({ projectId }) => applyProjectById(projectId)),
-        Effect.flatMap((project) => jsonResponse({ ok: true, project }, 200)),
-        Effect.catchAll(errorResponse)
-      )
-    ),
+  HttpRouter.post(
+    "/projects/:projectId/apply",
+    Effect.gen(function*(_) {
+      const { projectId } = yield* _(projectParams)
+      const request = yield* _(readApplyProjectRequest())
+      const project = yield* _(applyProjectById(projectId, request))
+      return yield* _(jsonResponse({ ok: true, project }, 200))
+    }).pipe(
+      Effect.catchAll(errorResponse)
+    )
+  ),
     HttpRouter.post(
       "/projects/:projectId/down",
       projectParams.pipe(

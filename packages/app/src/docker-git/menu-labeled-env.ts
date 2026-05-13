@@ -26,24 +26,12 @@ const parseEnvEntries = (input: string): ReadonlyArray<EnvEntry> => {
 }
 
 export const normalizeLabel = (value: string): string => {
-  const trimmed = value.trim()
-  if (trimmed.length === 0) {
-    return ""
-  }
-  const normalized = trimmed
+  const parts = value
+    .trim()
     .toUpperCase()
-    .replaceAll(/[^A-Z0-9]+/g, "_")
-
-  let start = 0
-  while (start < normalized.length && normalized[start] === "_") {
-    start += 1
-  }
-  let end = normalized.length
-  while (end > start && normalized[end - 1] === "_") {
-    end -= 1
-  }
-  const cleaned = normalized.slice(start, end)
-  return cleaned.length > 0 ? cleaned : ""
+    .split(/[^A-Z0-9]+/u)
+    .filter((part) => part.length > 0)
+  return parts.join("_")
 }
 
 export const buildLabeledEnvKey = (baseKey: string, label: string): string => {
