@@ -1,5 +1,11 @@
 # @prover-coder-ai/docker-git-session-sync
 
+## 1.0.10
+
+### Patch Changes
+
+- [#279](https://github.com/ProverCoderAI/docker-git/pull/279) [`2cf6fb4`](https://github.com/ProverCoderAI/docker-git/commit/2cf6fb421ee1df4f6aefcb17efb378e3adb14162) Thanks [@konard](https://github.com/konard)! - Add portable launch/build scripts and CI final-build verification across Linux, macOS, and Windows.
+
 ## 1.0.9
 
 ### Patch Changes
