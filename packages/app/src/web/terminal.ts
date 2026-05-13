@@ -53,32 +53,65 @@ type PendingProjectActiveTerminalSessionArgs = {
   readonly message?: string
 }
 
+type ProjectTerminalSessionBaseArgs = {
+  readonly projectDisplayName: string
+  readonly projectId: string
+  readonly projectKey: string
+  readonly sessionId: string
+}
+
+type ProjectTerminalSessionBase = Pick<
+  ActiveTerminalSession,
+  | "browserProjectId"
+  | "browserProjectKey"
+  | "browserProjectName"
+  | "closePath"
+  | "header"
+  | "readyMessage"
+  | "websocketPath"
+>
+
 export const terminalSessionRoutePath = (sessionId: string): string => `/ssh/session/${encodeURIComponent(sessionId)}`
 
 export const isPendingActiveTerminalSession = (
   session: ActiveTerminalSession
 ): session is PendingActiveTerminalSession => session.pendingConnection !== undefined
 
-export const buildProjectActiveTerminalSession = (
-  { onExit, onReady, projectDisplayName, projectId, projectKey, session }: ProjectActiveTerminalSessionArgs
-): ActiveTerminalSession => {
+const buildProjectTerminalSessionBase = (
+  { projectDisplayName, projectId, projectKey, sessionId }: ProjectTerminalSessionBaseArgs
+): ProjectTerminalSessionBase => {
   const encodedProjectKey = encodeURIComponent(projectKey)
-  const encodedSessionId = encodeURIComponent(session.id)
+  const encodedSessionId = encodeURIComponent(sessionId)
+  const terminalSessionPath = `/projects/by-key/${encodedProjectKey}/terminal-sessions/${encodedSessionId}`
   return {
     browserProjectId: projectId,
     browserProjectKey: projectKey,
     browserProjectName: projectDisplayName,
-    closePath: `/projects/by-key/${encodedProjectKey}/terminal-sessions/${encodedSessionId}`,
-    exitMessage: "SSH session ended.",
+    closePath: terminalSessionPath,
     header: `SSH terminal: ${projectDisplayName}`,
+    readyMessage: `SSH connected: ${projectDisplayName}.`,
+    websocketPath: `${terminalSessionPath}/ws`
+  }
+}
+
+export const buildProjectActiveTerminalSession = (
+  { onExit, onReady, projectDisplayName, projectId, projectKey, session }: ProjectActiveTerminalSessionArgs
+): ActiveTerminalSession => {
+  const base = buildProjectTerminalSessionBase({
+    projectDisplayName,
+    projectId,
+    projectKey,
+    sessionId: session.id
+  })
+  return {
+    ...base,
+    exitMessage: "SSH session ended.",
     ...(onExit === undefined ? {} : { onExit }),
     ...(onReady === undefined ? {} : { onReady }),
     pendingDeleteMessage: `Terminal session was closed before attach: ${projectDisplayName}.`,
-    readyMessage: `SSH connected: ${projectDisplayName}.`,
     session,
     sessionPath: terminalSessionRoutePath(session.id),
-    subtitle: session.sshCommand,
-    websocketPath: `/projects/by-key/${encodedProjectKey}/terminal-sessions/${encodedSessionId}/ws`
+    subtitle: session.sshCommand
   }
 }
 
@@ -107,16 +140,16 @@ export const buildPendingProjectActiveTerminalSession = (
     projectKey
   }: PendingProjectActiveTerminalSessionArgs
 ): ActiveTerminalSession => {
-  const encodedProjectKey = encodeURIComponent(projectKey)
-  const encodedSessionId = encodeURIComponent(pendingSessionId)
+  const base = buildProjectTerminalSessionBase({
+    projectDisplayName,
+    projectId,
+    projectKey,
+    sessionId: pendingSessionId
+  })
   const resolvedMessage = resolvePendingProjectMessage(message, phase)
   return {
-    browserProjectId: projectId,
-    browserProjectKey: projectKey,
-    browserProjectName: projectDisplayName,
-    closePath: `/projects/by-key/${encodedProjectKey}/terminal-sessions/${encodedSessionId}`,
+    ...base,
     exitMessage: "Pending SSH session closed.",
-    header: `SSH terminal: ${projectDisplayName}`,
     ...(onExit === undefined ? {} : { onExit }),
     pendingConnection: {
       message: resolvedMessage,
@@ -132,8 +165,7 @@ export const buildPendingProjectActiveTerminalSession = (
       status: phase === "error" ? "failed" : "ready"
     },
     sessionPath: terminalSessionRoutePath(pendingSessionId),
-    subtitle: resolvedMessage,
-    websocketPath: `/projects/by-key/${encodedProjectKey}/terminal-sessions/${encodedSessionId}/ws`
+    subtitle: resolvedMessage
   }
 }
 
