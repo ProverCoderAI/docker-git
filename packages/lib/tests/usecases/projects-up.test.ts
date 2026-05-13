@@ -11,6 +11,7 @@ import * as Sink from "effect/Sink"
 import * as Stream from "effect/Stream"
 
 import type { TemplateConfig } from "../../src/core/domain.js"
+import { gpuModeAfterDockerFailure } from "../../src/core/gpu.js"
 import { prepareProjectFiles } from "../../src/usecases/actions/prepare-files.js"
 import { runDockerComposeUpWithPortCheck } from "../../src/usecases/projects-up.js"
 
@@ -96,6 +97,9 @@ const nvidiaRuntimeFailure =
 const nvidiaMissingDeviceDriverFailure =
   'Error response from daemon: could not select device driver "" with capabilities: [[gpu]]'
 
+const arbitraryComposeFailure =
+  "Error response from daemon: network sandbox setup failed"
+
 const hasNvidiaFallbackWarning = (logs: ReadonlyArray<string>, expectedDetail: string): boolean =>
   logs.some((entry) =>
     entry.includes("NVIDIA runtime failed") &&
@@ -103,7 +107,7 @@ const hasNvidiaFallbackWarning = (logs: ReadonlyArray<string>, expectedDetail: s
     entry.includes("GPU access disabled")
   )
 
-const shouldFailNvidiaGpuComposeUp = (cmd: RecordedCommand): boolean =>
+const isDockerComposeUpAttempt = (cmd: RecordedCommand): boolean =>
   isDockerComposeUpWithBuild(cmd) || isDockerComposeUpReuse(cmd)
 
 type FakeExecutorOptions = {
@@ -137,7 +141,7 @@ const makeFakeExecutor = (
       }
       const stdoutText = decideStdout(invocation)
       const stdout = stdoutText.length === 0 ? Stream.empty : Stream.succeed(encode(stdoutText))
-      const failed = shouldFailGpuComposeUp && shouldFailNvidiaGpuComposeUp(invocation)
+      const failed = shouldFailGpuComposeUp && isDockerComposeUpAttempt(invocation)
       shouldFailGpuComposeUp = shouldFailGpuComposeUp && !failed
       const stderr = failed ? Stream.succeed(encode(gpuFailureStderr)) : Stream.empty
 
@@ -355,6 +359,11 @@ describe("runDockerComposeUpWithPortCheck", () => {
         expect(hasNvidiaFallbackWarning(logs, "could not select device driver")).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
+
+  it("keeps GPU access unchanged for arbitrary docker compose up failures", () => {
+    expect(gpuModeAfterDockerFailure("all", arbitraryComposeFailure)).toBe("all")
+    expect(gpuModeAfterDockerFailure("none", arbitraryComposeFailure)).toBe("none")
+  })
 
   it.effect("falls back to GPU none before retrying reuse mode when the host NVIDIA runtime is unavailable", () =>
     withTempDir((root) =>
