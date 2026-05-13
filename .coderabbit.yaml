@@ -24,7 +24,7 @@ reviews:
   abort_on_close: true
 
   auto_review:
-    enabled: true
+    enabled: false
     auto_incremental_review: true
     auto_pause_after_reviewed_commits: 0
     drafts: true
@@ -41,54 +41,33 @@ reviews:
   path_instructions:
     - path: "**/*"
       instructions: |
-        Review every PR against its source of truth, not only against the diff.
+        Ты строгий ревьюер SPEC DRIVEN DEVELOPMENT.
 
-        Requirement sources, in priority order:
-        1. Linked GitHub issues in the PR body (`Fixes #123`, `Closes #123`, full issue URLs).
-        2. Explicit issue/TZ references in the PR title, PR description, branch name (`issue-123`), and PR discussion.
-        3. Changed-code markers such as `QUOTE(ТЗ): ...`, `REF: issue-...`, and nearby tests.
-        4. If final decisions only exist in issue comments and are not available in review context, ask the author to copy the final TZ/acceptance criteria into the issue body or PR description.
+        Перед выводами изучи README.md, другие *.md файлы, linked issues,
+        PR description, PR comments/discussion и релевантную кодовую базу.
 
-        Always include a "Соответствие ТЗ" section when the PR has an issue/TZ reference:
-        - list the concrete issue/TZ requirements that the diff implements;
-        - flag any requirement from the issue, PR body, or PR discussion that is missing or contradicted by the code;
-        - flag scope creep when the diff changes behavior not requested by the issue/TZ;
-        - verify that tests cover the observable behavior promised by the issue/TZ.
-
-        Security review priorities:
-        - command injection, shell argument escaping, unsafe `docker`, `git`, `ssh`, `gh`, `sudo`, or process spawning;
-        - path traversal, unsafe filesystem access, and accidental writes outside `.docker-git` or the project workspace;
-        - SSRF/open redirects/network access introduced by user-controlled input;
-        - leaked secrets, tokens, private keys, and sensitive data in logs;
-        - GitHub Actions permission escalation, unpinned risky actions, unsafe `pull_request_target`, and supply-chain risks;
-        - Docker socket exposure, privileged containers, host mounts, GPU/resource flags, and cross-container isolation breaks.
+        Сверь изменения с исходным ТЗ/спекой и обсуждением. Флагай любой уход
+        от спеки, недокументированное изменение поведения, отсутствие тестов
+        для заявленного поведения и security-риск. Если спека не видна,
+        попроси автора добавить ее в issue или PR description.
 
   pre_merge_checks:
     issue_assessment:
       mode: "warning"
     custom_checks:
-      - name: "Requirements alignment"
+      - name: "Spec alignment"
         mode: "warning"
         instructions: |
-          Fail if any of these are true:
-          - The PR has no discoverable source requirement: no linked issue, no issue/TZ reference in the PR title/body/branch/discussion, and no changed-code `QUOTE(ТЗ)` or `REF` marker.
-          - The changed code contradicts a linked issue title/body, PR description, PR discussion decision, or changed-code `QUOTE(ТЗ)`/`REF` marker.
-          - A concrete acceptance criterion from the linked issue or PR description is not implemented and not explicitly marked out of scope in the PR description.
-          - Observable behavior promised by the issue/TZ is changed without matching tests or a clear explanation in the PR description.
-
-          Pass when the source requirement is traceable and every explicit requirement is implemented, tested, or explicitly documented as out of scope.
-          Return Inconclusive only when the relevant issue/TZ discussion is referenced but not available in the review context; ask the author to copy the final TZ into the issue body or PR description.
+          Fail if the diff contradicts the visible spec/TZ, linked issue, PR
+          discussion, README/docs, or changes behavior without documenting it.
+          Fail if promised behavior has no relevant tests. Return Inconclusive
+          when the spec is missing and ask the author to add it.
       - name: "Security regression"
         mode: "warning"
         instructions: |
-          Fail if changed files introduce a high-confidence security regression, including:
-          - command injection or unsafe shell/process execution with user-controlled input;
-          - path traversal or writes outside intended project/container state directories;
-          - credential, token, private-key, or PII exposure in source, generated config, logs, or CI output;
-          - unsafe Docker/GitHub Actions configuration such as privileged containers, broad host mounts, unbounded Docker socket access, unsafe `pull_request_target`, or unnecessary write permissions;
-          - dependency or package-manager changes that materially increase supply-chain risk without justification.
-
-          Pass when no high-confidence regression is found. Return Inconclusive when the diff is too large or lacks enough context to determine risk.
+          Fail only for high-confidence security regressions: injection,
+          path traversal, secret leaks, unsafe Docker/GitHub Actions settings,
+          or unjustified supply-chain risk.
 
   tools:
     github-checks:
