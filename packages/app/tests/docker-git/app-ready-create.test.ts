@@ -1,6 +1,8 @@
+import * as fc from "fast-check"
 import type { Dispatch, SetStateAction } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { deriveRepoPathParts, resolveRepoInput } from "../../src/docker-git/frontend-lib/core/domain.js"
 import {
   type CreateFlowView,
   createInitialFlowView,
@@ -22,6 +24,72 @@ const validGithubStatus: GithubAuthStatus = {
   summary: "valid",
   tokens: [{ key: "default", label: "default", login: "octocat", status: "valid" }]
 }
+
+const githubNameChars = [
+  "a",
+  "b",
+  "c",
+  "d",
+  "e",
+  "f",
+  "g",
+  "h",
+  "i",
+  "j",
+  "k",
+  "l",
+  "m",
+  "n",
+  "o",
+  "p",
+  "q",
+  "r",
+  "s",
+  "t",
+  "u",
+  "v",
+  "w",
+  "x",
+  "y",
+  "z",
+  "0",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "-"
+] as const
+
+const githubSegmentArbitrary = fc
+  .array(fc.constantFrom(...githubNameChars), { minLength: 1, maxLength: 12 })
+  .map((chars) => chars.join(""))
+  .filter((value) => !value.startsWith("-") && !value.endsWith("-"))
+
+const repositoryCreateInputArbitrary = fc.record({
+  branch: fc.option(githubSegmentArbitrary, { nil: null }),
+  owner: githubSegmentArbitrary,
+  repo: githubSegmentArbitrary
+}).map(({ branch, owner, repo }) => ({
+  expectedRepoRef: branch ?? "main",
+  repoUrl: branch === null
+    ? `https://github.com/${owner}/${repo}`
+    : `https://github.com/${owner}/${repo}/tree/${branch}`
+}))
+
+const defaultQuickCreateInputs = {
+  cpuLimit: "",
+  enableMcpPlaywright: false,
+  force: false,
+  forceEnv: false,
+  gpu: "none",
+  ramLimit: "",
+  runUp: true
+} satisfies Omit<CreateInputs, "outDir" | "repoRef" | "repoUrl">
 
 const createSetCreateViewSpy = () => {
   const spy = vi.fn<(value: SetStateAction<CreateFlowView>) => void>()
@@ -57,6 +125,32 @@ const submitCreateBuffer = (
 
   return { context, setCreateViewSpy }
 }
+
+const requireSubmittedCreateInputs = (): CreateInputs => {
+  const inputs = submitCreateInputsMock.mock.calls[0]?.[0]
+  if (inputs === undefined) {
+    throw new Error("Expected submitted CreateInputs.")
+  }
+  return inputs
+}
+
+const expectQuickCreateInputs = (
+  expected: Pick<CreateInputs, "outDir" | "repoRef" | "repoUrl">
+) => {
+  expect(requireSubmittedCreateInputs()).toEqual(
+    {
+      ...defaultQuickCreateInputs,
+      ...expected
+    } satisfies CreateInputs
+  )
+}
+
+const expectCreateViewReset = (setCreateViewSpy: ReturnType<typeof submitCreateBuffer>["setCreateViewSpy"]) => {
+  expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual(createInitialFlowView())
+}
+
+const expectedOutDirForRepoUrl = (repoUrl: string): string =>
+  `/home/dev/.docker-git/${deriveRepoPathParts(resolveRepoInput(repoUrl).repoUrl).pathParts.join("/")}`
 
 describe("app-ready-create", () => {
   beforeEach(() => {
@@ -102,20 +196,29 @@ describe("app-ready-create", () => {
     )
 
     expect(submitCreateInputsMock).toHaveBeenCalledTimes(1)
-    expect(submitCreateInputsMock.mock.calls[0]?.[0]).toEqual(
-      {
-        cpuLimit: "",
-        enableMcpPlaywright: false,
-        force: false,
-        forceEnv: false,
-        gpu: "none",
-        outDir: "/home/dev/.docker-git/octocat/hello-world",
-        ramLimit: "",
-        repoRef: "feature-x",
-        repoUrl: "https://github.com/octocat/Hello-World/tree/feature-x",
-        runUp: true
-      } satisfies CreateInputs
+    expectQuickCreateInputs({
+      outDir: "/home/dev/.docker-git/octocat/hello-world",
+      repoRef: "feature-x",
+      repoUrl: "https://github.com/octocat/Hello-World/tree/feature-x"
+    })
+    expectCreateViewReset(setCreateViewSpy)
+  })
+
+  it("preserves quick create repo url to out dir invariants for generated GitHub repos", () => {
+    fc.assert(
+      fc.property(repositoryCreateInputArbitrary, ({ expectedRepoRef, repoUrl }) => {
+        submitCreateInputsMock.mockReset()
+        const { setCreateViewSpy } = submitCreateBuffer(repoUrl, { quickCreate: true })
+
+        expect(submitCreateInputsMock).toHaveBeenCalledTimes(1)
+        expectQuickCreateInputs({
+          outDir: expectedOutDirForRepoUrl(repoUrl),
+          repoRef: expectedRepoRef,
+          repoUrl
+        })
+        expectCreateViewReset(setCreateViewSpy)
+      }),
+      { numRuns: 50 }
     )
-    expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual(createInitialFlowView())
   })
 })
