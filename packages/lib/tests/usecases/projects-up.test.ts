@@ -16,6 +16,7 @@ import { runDockerComposeUpWithPortCheck } from "../../src/usecases/projects-up.
 type RecordedCommand = {
   readonly command: string
   readonly args: ReadonlyArray<string>
+  readonly cwd?: string | undefined
 }
 
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value)
@@ -88,26 +89,52 @@ const decideStdout = (cmd: RecordedCommand): string => {
   return ""
 }
 
-const makeFakeExecutor = (recorded: Array<RecordedCommand>): CommandExecutor.CommandExecutor => {
+const nvidiaRuntimeFailure =
+  "Error response from daemon: failed to create task for container: nvidia-container-cli: initialization error: load library failed: libnvidia-ml.so.1"
+
+const shouldFailNvidiaGpuComposeUp = (cmd: RecordedCommand): boolean =>
+  isDockerComposeUpWithBuild(cmd) || isDockerComposeUpReuse(cmd)
+
+type FakeExecutorOptions = {
+  readonly failGpuComposeUp?: boolean
+}
+
+const makeFakeExecutor = (
+  recorded: Array<RecordedCommand>,
+  options: FakeExecutorOptions = {}
+): CommandExecutor.CommandExecutor => {
+  let shouldFailGpuComposeUp = options.failGpuComposeUp === true
+
   const start = (command: Command.Command): Effect.Effect<CommandExecutor.Process, never> =>
     Effect.gen(function*(_) {
       const flattened = Command.flatten(command)
       for (const entry of flattened) {
-        recorded.push({ command: entry.command, args: entry.args })
+        recorded.push({
+          command: entry.command,
+          args: entry.args,
+          cwd: entry.cwd._tag === "Some" ? entry.cwd.value : undefined
+        })
       }
 
       const last = flattened[flattened.length - 1]!
-      const invocation: RecordedCommand = { command: last.command, args: last.args }
+      const invocation: RecordedCommand = {
+        command: last.command,
+        args: last.args,
+        cwd: last.cwd._tag === "Some" ? last.cwd.value : undefined
+      }
       const stdoutText = decideStdout(invocation)
       const stdout = stdoutText.length === 0 ? Stream.empty : Stream.succeed(encode(stdoutText))
+      const failed = shouldFailGpuComposeUp && shouldFailNvidiaGpuComposeUp(invocation)
+      shouldFailGpuComposeUp = shouldFailGpuComposeUp && !failed
+      const stderr = failed ? Stream.succeed(encode(nvidiaRuntimeFailure)) : Stream.empty
 
       const process: CommandExecutor.Process = {
         [CommandExecutor.ProcessTypeId]: CommandExecutor.ProcessTypeId,
         pid: CommandExecutor.ProcessId(1),
-        exitCode: Effect.succeed(CommandExecutor.ExitCode(0)),
+        exitCode: Effect.succeed(CommandExecutor.ExitCode(failed ? 1 : 0)),
         isRunning: Effect.succeed(false),
         kill: (_signal) => Effect.void,
-        stderr: Stream.empty,
+        stderr,
         stdin: Sink.drain,
         stdout,
         toJSON: () => ({ _tag: "ProjectsUpTestProcess", command: invocation.command, args: invocation.args }),
@@ -220,6 +247,45 @@ describe("runDockerComposeUpWithPortCheck", () => {
         expect(recorded.some((entry) => isDockerVolumeCreate(entry))).toBe(true)
         expect(recorded.some((entry) => isBootstrapSeed(entry))).toBe(true)
         expect(recorded.some((entry) => isDockerComposeUpWithBuild(entry))).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("falls back to GPU none when the host NVIDIA runtime is unavailable", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const targetDir = "/home/dev/workspaces/org/repo"
+        const globalConfig = makeTemplateConfig(root, outDir, path, targetDir)
+        const projectConfig: TemplateConfig = {
+          ...makeTemplateConfig(root, outDir, path, targetDir),
+          gpu: "all"
+        }
+        const recorded: Array<RecordedCommand> = []
+        const executor = makeFakeExecutor(recorded, { failGpuComposeUp: true })
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          })
+        )
+
+        const started = yield* _(
+          runDockerComposeUpWithPortCheck(outDir).pipe(
+            Effect.provideService(CommandExecutor.CommandExecutor, executor)
+          )
+        )
+
+        expect(started.gpu).toBe("none")
+
+        const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+        expect(composeAfter).not.toContain("    gpus: all\n")
+
+        const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
+        expect(configAfter).toContain('"gpu": "none"')
+        expect(recorded.filter((entry) => isDockerComposeUpWithBuild(entry)).length).toBeGreaterThan(1)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

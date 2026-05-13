@@ -27,6 +27,20 @@ describe("renderError", () => {
     expect(message).toContain("auth.docker.io")
   })
 
+  it("includes NVIDIA runtime recovery hint for DockerCommandError", () => {
+    const message = renderError(
+      new DockerCommandError({
+        exitCode: 1,
+        details:
+          "nvidia-container-cli: initialization error: load library failed: libnvidia-ml.so.1: cannot open shared object file"
+      })
+    )
+
+    expect(message).toContain("NVIDIA GPU access is enabled")
+    expect(message).toContain("--gpu none")
+    expect(message).toContain("NVIDIA Container Toolkit")
+  })
+
   it("renders actionable recovery for DockerAccessError", () => {
     const message = renderError(
       new DockerAccessError({

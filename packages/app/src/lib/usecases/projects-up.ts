@@ -6,6 +6,7 @@ import type { Path } from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
 import type { ProjectConfig, TemplateConfig } from "../core/domain.js"
+import { gpuModeAfterDockerFailure } from "../core/gpu.js"
 import { readProjectConfig } from "../shell/config.js"
 import {
   runDockerComposePsFormatted,
@@ -30,6 +31,9 @@ import { resolveTemplateResourceLimits } from "./resource-limits.js"
 import { ensureSharedCodexVolumeReady } from "./shared-volume-seed.js"
 
 const maxPortAttempts = 25
+
+type ProjectComposeUpError = DockerCommandError | FileExistsError | PlatformError
+type ProjectComposeUpRequirements = FileSystem | Path | CommandExecutor
 
 const syncManagedProjectFiles = (
   projectDir: string,
@@ -122,6 +126,41 @@ const ensureClaudeCliReady = (
     })
   )
 
+// CHANGE: recover from host NVIDIA runtime failures by disabling per-project GPU access.
+// WHY: Docker rejects gpus: all before the container starts when the host NVIDIA runtime is unavailable.
+// QUOTE(ТЗ): "nvidia-container-cli: initialization error: load library failed: libnvidia-ml.so.1"
+// REF: issue-291
+// SOURCE: n/a
+// FORMAT THEOREM: forall t,e: gpu(t)=all and nvidia_runtime_failure(e) -> gpu(retry(t,e))=none
+// PURITY: SHELL
+// EFFECT: Effect<TemplateConfig, DockerCommandError | FileExistsError | PlatformError, FileSystem | Path | CommandExecutor>
+// INVARIANT: fallback never escalates GPU access and rewrites managed files before retry
+// COMPLEXITY: O(1) compose attempts plus O(file-size) template rewrite
+const runProjectComposeUp = (
+  projectDir: string,
+  template: TemplateConfig
+): Effect.Effect<TemplateConfig, ProjectComposeUpError, ProjectComposeUpRequirements> =>
+  runDockerComposeUp(projectDir).pipe(
+    Effect.as(template),
+    Effect.catchTag("DockerCommandError", (error) => {
+      const fallbackGpu = gpuModeAfterDockerFailure(template.gpu, error.details)
+      if (fallbackGpu === template.gpu) {
+        return Effect.fail(error)
+      }
+
+      const fallbackTemplate: TemplateConfig = { ...template, gpu: fallbackGpu }
+      return Effect.gen(function*(_) {
+        yield* _(
+          Effect.logWarning(
+            "NVIDIA runtime failed while GPU access was enabled; rewriting project with GPU access disabled and retrying docker compose up."
+          )
+        )
+        yield* _(syncManagedProjectFiles(projectDir, fallbackTemplate))
+        return yield* _(runProjectComposeUp(projectDir, fallbackTemplate))
+      })
+    })
+  )
+
 // CHANGE: update template port when the preferred SSH port is reserved or busy
 // WHY: keep each project on a unique port even across restarts
 // QUOTE(ТЗ): "Почему контейнер пытается подниматься на существующий порт?"
@@ -194,8 +233,8 @@ export const runDockerComposeUpWithPortCheck = (
     yield* _(syncManagedProjectFiles(projectDir, resolvedTemplate))
     yield* _(ensureComposeNetworkReady(projectDir, resolvedTemplate))
     yield* _(ensureSharedCodexVolumeReady(projectDir, resolvedTemplate))
-    yield* _(runDockerComposeUp(projectDir))
-    yield* _(ensureClaudeCliReady(projectDir, resolvedTemplate.containerName))
+    const startedTemplate = yield* _(runProjectComposeUp(projectDir, resolvedTemplate))
+    yield* _(ensureClaudeCliReady(projectDir, startedTemplate.containerName))
 
     const ensureBridgeAccess = (containerName: string) =>
       runDockerInspectContainerBridgeIp(projectDir, containerName).pipe(
@@ -215,11 +254,11 @@ export const runDockerComposeUpWithPortCheck = (
         })
       )
 
-    yield* _(ensureBridgeAccess(resolvedTemplate.containerName))
-    if (resolvedTemplate.enableMcpPlaywright) {
-      yield* _(ensureBridgeAccess(`${resolvedTemplate.containerName}-browser`))
+    yield* _(ensureBridgeAccess(startedTemplate.containerName))
+    if (startedTemplate.enableMcpPlaywright) {
+      yield* _(ensureBridgeAccess(`${startedTemplate.containerName}-browser`))
     }
 
-    return resolvedTemplate
+    return startedTemplate
   })
 /* jscpd:ignore-end */
