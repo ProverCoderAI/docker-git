@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
+import * as fc from "fast-check"
 
 import rootPackage from "../../../../package.json" with { type: "json" }
 import sessionSyncPackage from "../../../docker-git-session-sync/package.json" with { type: "json" }
@@ -23,12 +24,14 @@ const launchScripts: ReadonlyArray<Readonly<{ packageName: string; scriptName: s
 
 describe("package scripts cross-platform contract", () => {
   it("keeps user-facing launch scripts independent from bash", () => {
-    for (const entry of launchScripts) {
+    fc.assert(fc.property(fc.constantFrom(...launchScripts), (entry) => {
       expect(entry.script, `${entry.packageName}:${entry.scriptName}`).not.toMatch(/\bbash(?:\.exe)?\b/u)
-    }
+    }))
   })
 
   it("keeps final package build independent from raw chmod", () => {
-    expect(sessionSyncPackage.scripts.build).not.toMatch(/\bchmod\s+/u)
+    fc.assert(fc.property(fc.constant(sessionSyncPackage.scripts.build), (script) => {
+      expect(script).not.toMatch(/\bchmod\s+/u)
+    }))
   })
 })

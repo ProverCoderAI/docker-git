@@ -1,14 +1,22 @@
 import type { Dispatch, SetStateAction } from "react"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   type CreateFlowView,
   createInitialFlowView,
   resolveCreateFlowSteps
 } from "../../src/docker-git/menu-create-shared.js"
+import type { CreateInputs } from "../../src/docker-git/menu-types.js"
+import type { submitCreateInputs } from "../../src/web/actions-projects.js"
 import type { GithubAuthStatus } from "../../src/web/api.js"
 import { submitCreateView } from "../../src/web/app-ready-create.js"
 import { makeBrowserActionContext } from "./browser-action-context-fixture.js"
+
+const submitCreateInputsMock = vi.hoisted(() => vi.fn<typeof submitCreateInputs>())
+
+vi.mock("../../src/web/actions-projects.js", () => ({
+  submitCreateInputs: submitCreateInputsMock
+}))
 
 const validGithubStatus: GithubAuthStatus = {
   summary: "valid",
@@ -30,15 +38,20 @@ const requireCreateViewValue = (
   return value
 }
 
-const submitCreateBuffer = (buffer: string) => {
+const submitCreateBuffer = (
+  buffer: string,
+  options: { readonly quickCreate?: boolean } = {}
+) => {
   const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
   const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
+  const quickCreate = options.quickCreate === undefined ? {} : { quickCreate: options.quickCreate }
 
   submitCreateView({
     context,
     controllerCwd: "/workspace",
     createView: createInitialFlowView(buffer),
     projectsRoot: "/home/dev/.docker-git",
+    ...quickCreate,
     setCreateView
   })
 
@@ -46,6 +59,10 @@ const submitCreateBuffer = (buffer: string) => {
 }
 
 describe("app-ready-create", () => {
+  beforeEach(() => {
+    submitCreateInputsMock.mockReset()
+  })
+
   it("advances to the next create field on Enter for a repo URL", () => {
     const { context, setCreateViewSpy } = submitCreateBuffer("https://github.com/org/repo/tree/feature-x --force")
 
@@ -76,5 +93,29 @@ describe("app-ready-create", () => {
 
     expect(setCreateViewSpy).not.toHaveBeenCalled()
     expect(context.setMessage).toHaveBeenCalledWith("Missing value for option: --bogus")
+  })
+
+  it("submits a quick create clone from the Create menu", () => {
+    const { setCreateViewSpy } = submitCreateBuffer(
+      "https://github.com/octocat/Hello-World/tree/feature-x",
+      { quickCreate: true }
+    )
+
+    expect(submitCreateInputsMock).toHaveBeenCalledTimes(1)
+    expect(submitCreateInputsMock.mock.calls[0]?.[0]).toEqual(
+      {
+        cpuLimit: "",
+        enableMcpPlaywright: false,
+        force: false,
+        forceEnv: false,
+        gpu: "none",
+        outDir: "/home/dev/.docker-git/octocat/hello-world",
+        ramLimit: "",
+        repoRef: "feature-x",
+        repoUrl: "https://github.com/octocat/Hello-World/tree/feature-x",
+        runUp: true
+      } satisfies CreateInputs
+    )
+    expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual(createInitialFlowView())
   })
 })

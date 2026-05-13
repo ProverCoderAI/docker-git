@@ -89,6 +89,8 @@ describe("renderEntrypoint clone cache", () => {
     expect(entrypoint).toContain("'+refs/heads/*:refs/heads/*'")
     expect(entrypoint).toContain("'+refs/tags/*:refs/tags/*'")
     expect(entrypoint).not.toContain("'+refs/*:refs/*'")
+    expect(entrypoint).not.toContain("'+refs/pull/*:refs/pull/*'")
+    expect(entrypoint).not.toContain("'+refs/merge-requests/*:refs/merge-requests/*'")
   })
 })
 
