@@ -11,7 +11,7 @@ import * as Schema from "effect/Schema"
 import { renderError, type AppError } from "@effect-template/lib/usecases/errors"
 
 import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
-import type { ApplyProjectRequest } from "./api/contracts.js"
+import { federationJsonLdResponseContentType, type ApplyProjectRequest } from "./api/contracts.js"
 import {
   AuthMenuRequestSchema,
   AuthTerminalSessionRequestSchema,
@@ -275,8 +275,23 @@ const binaryResponse = (data: Uint8Array, contentType: string, status = 200) =>
     )
   )
 
-const activityJsonResponse = (data: unknown, status: number) =>
-  textResponse(JSON.stringify(data), "application/activity+json; charset=utf-8", status)
+/**
+ * Serializes a federation JSON-LD document with the ForgeFed response content type.
+ *
+ * @param data - JSON-LD payload that satisfies the JSON.stringify serializability precondition.
+ * @param status - HTTP status code assigned to the response.
+ * @returns Effect that yields an HTTP text response containing the serialized JSON-LD document.
+ *
+ * @pure false
+ * @effect Delegates response allocation to textResponse and preserves no-store HTTP headers.
+ * @invariant successful responses always use federationJsonLdResponseContentType.
+ * @precondition data is JSON.stringify-serializable and status is a valid HTTP status code.
+ * @postcondition response body equals JSON.stringify(data) and response status equals status.
+ * @complexity O(n) time and O(n) space where n is the serialized JSON-LD payload size.
+ * @throws TypeError when data violates the JSON.stringify serializability precondition.
+ */
+const jsonLdResponse = (data: unknown, status: number) =>
+  textResponse(JSON.stringify(data), federationJsonLdResponseContentType, status)
 
 const parseQueryInt = (url: string, key: string, fallback: number): number => {
   const parsed = Number(new URL(url, "http://localhost").searchParams.get(key) ?? "")
@@ -595,6 +610,106 @@ export const federationExchangeStatusResponse = () =>
     return yield* _(jsonResponse(makeFederationExchangeStatus(context), 200))
   }).pipe(Effect.catchAll(errorResponse))
 
+/**
+ * Builds the federation actor JSON-LD HTTP handler.
+ *
+ * @returns Effect that yields the local ActivityPub actor document response.
+ *
+ * @pure false
+ * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationActorDocument, serializes with jsonLdResponse, and maps failures through errorResponse.
+ * @invariant successful responses contain the actor id derived from the resolved federation context.
+ * @precondition request headers or configured env provide a non-empty public origin.
+ * @postcondition successful responses contain a JSON-LD Person document with HTTP 200.
+ * @complexity O(1) time and O(1) space for document construction, excluding serialization size.
+ * @throws Never; failures are represented through the Effect error channel and converted by errorResponse.
+ */
+export const federationActorDocumentResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonLdResponse(makeFederationActorDocument(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
+/**
+ * Builds the federation outbox JSON-LD HTTP handler.
+ *
+ * @returns Effect that yields the local ActivityPub outbox collection response.
+ *
+ * @pure false
+ * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationOutboxCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
+ * @invariant successful responses contain the outbox id derived from the resolved federation context.
+ * @precondition request headers or configured env provide a non-empty public origin.
+ * @postcondition successful responses contain a JSON-LD OrderedCollection document with HTTP 200.
+ * @complexity O(1) time and O(1) space for document construction, excluding serialization size.
+ * @throws Never; failures are represented through the Effect error channel and converted by errorResponse.
+ */
+export const federationOutboxDocumentResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonLdResponse(makeFederationOutboxCollection(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
+/**
+ * Builds the federation followers JSON-LD HTTP handler.
+ *
+ * @returns Effect that yields the local ActivityPub followers collection response.
+ *
+ * @pure false
+ * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationFollowersCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
+ * @invariant successful responses contain the followers id derived from the resolved federation context.
+ * @precondition request headers or configured env provide a non-empty public origin.
+ * @postcondition successful responses contain a JSON-LD OrderedCollection document with HTTP 200.
+ * @complexity O(1) time and O(1) space for document construction, excluding serialization size.
+ * @throws Never; failures are represented through the Effect error channel and converted by errorResponse.
+ */
+export const federationFollowersDocumentResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonLdResponse(makeFederationFollowersCollection(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
+/**
+ * Builds the federation following JSON-LD HTTP handler.
+ *
+ * @returns Effect that yields the local ActivityPub following collection response.
+ *
+ * @pure false
+ * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationFollowingCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
+ * @invariant successful responses contain the following id derived from the resolved federation context.
+ * @precondition request headers or configured env provide a non-empty public origin.
+ * @postcondition successful responses contain a JSON-LD OrderedCollection document with HTTP 200.
+ * @complexity O(1) time and O(1) space for document construction, excluding serialization size.
+ * @throws Never; failures are represented through the Effect error channel and converted by errorResponse.
+ */
+export const federationFollowingDocumentResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonLdResponse(makeFederationFollowingCollection(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
+/**
+ * Builds the federation liked JSON-LD HTTP handler.
+ *
+ * @returns Effect that yields the local ActivityPub liked collection response.
+ *
+ * @pure false
+ * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationLikedCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
+ * @invariant successful responses contain the liked collection id derived from the resolved federation context.
+ * @precondition request headers or configured env provide a non-empty public origin.
+ * @postcondition successful responses contain a JSON-LD OrderedCollection document with HTTP 200.
+ * @complexity O(1) time and O(1) space for document construction, excluding serialization size.
+ * @throws Never; failures are represented through the Effect error channel and converted by errorResponse.
+ */
+export const federationLikedDocumentResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    return yield* _(jsonLdResponse(makeFederationLikedCollection(context), 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
 const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
   const request = yield* _(HttpServerRequest.HttpServerRequest)
   const upgrade = readHeader(request, "upgrade")?.toLowerCase()
@@ -859,43 +974,23 @@ export const makeRouter = () => {
     ),
     HttpRouter.get(
       "/federation/actor",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(activityJsonResponse(makeFederationActorDocument(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationActorDocumentResponse()
     ),
     HttpRouter.get(
       "/federation/outbox",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(activityJsonResponse(makeFederationOutboxCollection(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationOutboxDocumentResponse()
     ),
     HttpRouter.get(
       "/federation/followers",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(activityJsonResponse(makeFederationFollowersCollection(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationFollowersDocumentResponse()
     ),
     HttpRouter.get(
       "/federation/following",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(activityJsonResponse(makeFederationFollowingCollection(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationFollowingDocumentResponse()
     ),
     HttpRouter.get(
       "/federation/liked",
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const context = yield* _(resolveFederationContext(request))
-        return yield* _(activityJsonResponse(makeFederationLikedCollection(context), 200))
-      }).pipe(Effect.catchAll(errorResponse))
+      federationLikedDocumentResponse()
     ),
     HttpRouter.get(
       "/federation/status",

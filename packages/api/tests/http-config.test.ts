@@ -5,7 +5,17 @@ import { Effect } from "effect"
 import fc from "fast-check"
 
 import {
+  activityForgeFedJsonLdContext,
+  actorJsonLdContext,
+  federationJsonLdResponseContentType
+} from "../src/api/contracts.js"
+import {
+  federationActorDocumentResponse,
   federationExchangeStatusResponse,
+  federationFollowersDocumentResponse,
+  federationFollowingDocumentResponse,
+  federationLikedDocumentResponse,
+  federationOutboxDocumentResponse,
   resolveConfiguredFederationPublicOrigin
 } from "../src/http.js"
 import { clearFederationState } from "../src/services/federation.js"
@@ -43,6 +53,20 @@ const federationStatusHandler = HttpApp.toWebHandler(
   )
 )
 
+const federationDocumentHandler = HttpApp.toWebHandler(
+  Effect.flatten(
+    HttpRouter.toHttpApp(
+      HttpRouter.empty.pipe(
+        HttpRouter.get("/federation/actor", federationActorDocumentResponse()),
+        HttpRouter.get("/federation/outbox", federationOutboxDocumentResponse()),
+        HttpRouter.get("/federation/followers", federationFollowersDocumentResponse()),
+        HttpRouter.get("/federation/following", federationFollowingDocumentResponse()),
+        HttpRouter.get("/federation/liked", federationLikedDocumentResponse())
+      )
+    )
+  )
+)
+
 const readFederationStatusRoute = (path: string) =>
   Effect.gen(function*(_) {
     const response = yield* _(
@@ -68,6 +92,31 @@ const readFederationStatusRoute = (path: string) =>
     return { body, status: response.status }
   })
 
+const readFederationDocumentRoute = (path: string) =>
+  Effect.gen(function*(_) {
+    const response = yield* _(
+      Effect.tryPromise({
+        try: () =>
+          federationDocumentHandler(
+            new Request(`http://127.0.0.1${path}`, {
+              headers: {
+                "x-forwarded-host": "public.example.test",
+                "x-forwarded-proto": "https"
+              }
+            })
+          ),
+        catch: (cause) => new Error(String(cause))
+      })
+    )
+    const body = yield* _(
+      Effect.tryPromise({
+        try: () => response.text(),
+        catch: (cause) => new Error(String(cause))
+      })
+    )
+    return { body, contentType: response.headers.get("content-type"), status: response.status }
+  })
+
 const parseJsonObject = (raw: string): object | null => {
   const parsed: unknown = JSON.parse(raw)
   return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
@@ -77,6 +126,44 @@ const parseJsonObject = (raw: string): object | null => {
 
 const readField = (value: object | null, key: string): unknown =>
   value === null ? undefined : Reflect.get(value, key)
+
+const federationDocumentCases: ReadonlyArray<{
+  readonly path: string
+  readonly expectedContext: unknown
+  readonly expectedId: string
+  readonly expectedType: string
+}> = [
+  {
+    path: "/federation/actor",
+    expectedContext: actorJsonLdContext,
+    expectedId: "https://public.example.test/federation/actor",
+    expectedType: "Person"
+  },
+  {
+    path: "/federation/outbox",
+    expectedContext: activityForgeFedJsonLdContext,
+    expectedId: "https://public.example.test/federation/outbox",
+    expectedType: "OrderedCollection"
+  },
+  {
+    path: "/federation/followers",
+    expectedContext: activityForgeFedJsonLdContext,
+    expectedId: "https://public.example.test/federation/followers",
+    expectedType: "OrderedCollection"
+  },
+  {
+    path: "/federation/following",
+    expectedContext: activityForgeFedJsonLdContext,
+    expectedId: "https://public.example.test/federation/following",
+    expectedType: "OrderedCollection"
+  },
+  {
+    path: "/federation/liked",
+    expectedContext: activityForgeFedJsonLdContext,
+    expectedId: "https://public.example.test/federation/liked",
+    expectedType: "OrderedCollection"
+  }
+]
 
 describe("api http config", () => {
   it.effect("ignores empty federation public origin values", () =>
@@ -139,4 +226,20 @@ describe("api http config", () => {
       expect(Array.isArray(readField(payload, "subscriptions"))).toBe(true)
       expect(Array.isArray(readField(payload, "recentEvents"))).toBe(true)
     }))
+
+  for (const documentCase of federationDocumentCases) {
+    it.effect(`serves ${documentCase.path} as JSON-LD`, () =>
+      Effect.gen(function*(_) {
+        yield* _(Effect.sync(() => clearFederationState()))
+
+        const document = yield* _(readFederationDocumentRoute(documentCase.path))
+        const payload = parseJsonObject(document.body)
+
+        expect(document.status).toBe(200)
+        expect(document.contentType).toBe(federationJsonLdResponseContentType)
+        expect(readField(payload, "@context")).toEqual(documentCase.expectedContext)
+        expect(readField(payload, "type")).toBe(documentCase.expectedType)
+        expect(readField(payload, "id")).toBe(documentCase.expectedId)
+      }))
+  }
 })

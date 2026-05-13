@@ -490,6 +490,26 @@ export type ContainerTaskSnapshot = {
   readonly agents: ReadonlyArray<AgentSession>
 }
 
+export const activityStreamsJsonLdContext = "https://www.w3.org/ns/activitystreams" as const
+export const forgeFedJsonLdContext = "https://forgefed.org/ns" as const
+export const securityJsonLdContext = "https://w3id.org/security/v1" as const
+export const activityForgeFedJsonLdContext = [
+  activityStreamsJsonLdContext,
+  forgeFedJsonLdContext
+] as const
+export const actorJsonLdContext = [
+  activityStreamsJsonLdContext,
+  securityJsonLdContext,
+  forgeFedJsonLdContext
+] as const
+export const federationJsonLdContentType =
+  `application/ld+json; profile="${activityStreamsJsonLdContext}"` as const
+export const federationJsonLdResponseContentType =
+  `${federationJsonLdContentType}; charset=utf-8` as const
+
+export type ActivityForgeFedJsonLdContext = typeof activityForgeFedJsonLdContext
+export type ActorJsonLdContext = typeof actorJsonLdContext
+
 export type ForgeFedTicket = {
   readonly id: string
   readonly attributedTo: string
@@ -550,7 +570,7 @@ export type CreateFollowRequest = {
 export type FollowStatus = "pending" | "accepted" | "rejected"
 
 export type ActivityPubFollowActivity = {
-  readonly "@context": string | ReadonlyArray<string>
+  readonly "@context": ActivityForgeFedJsonLdContext
   readonly id: string
   readonly type: "Follow"
   readonly actor: string
@@ -566,7 +586,7 @@ export type ActivityPubPublicKey = {
 }
 
 export type ActivityPubPerson = {
-  readonly "@context": "https://www.w3.org/ns/activitystreams"
+  readonly "@context": ActorJsonLdContext
   readonly type: "Person"
   readonly id: string
   readonly name: string
@@ -584,7 +604,7 @@ export type ActivityPubPerson = {
 }
 
 export type ActivityPubOrderedCollection = {
-  readonly "@context": "https://www.w3.org/ns/activitystreams" | ReadonlyArray<string>
+  readonly "@context": ActivityForgeFedJsonLdContext
   readonly type: "OrderedCollection"
   readonly id: string
   readonly totalItems: number
