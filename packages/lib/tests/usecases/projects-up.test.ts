@@ -104,6 +104,8 @@ const nvidiaMissingDeviceDriverFailure =
 const arbitraryComposeFailure =
   "Error response from daemon: network sandbox setup failed"
 
+const gpuAllComposeYamlPattern = /(^|\s)gpus:\s*["']?all["']?(\s|$)/m
+
 const nvidiaFailureMarkers: ReadonlyArray<string> = [
   nvidiaContainerCliMarker,
   libNvidiaMlMarker,
@@ -318,7 +320,7 @@ describe("runDockerComposeUpWithPortCheck", () => {
         expect(started.gpu).toBe("none")
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
-        expect(composeAfter).not.toMatch(/\bgpus:\s*all\b/)
+        expect(composeAfter).not.toMatch(gpuAllComposeYamlPattern)
 
         const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         expect(configAfter).toContain('"gpu": "none"')
@@ -366,7 +368,7 @@ describe("runDockerComposeUpWithPortCheck", () => {
         expect(started.gpu).toBe("none")
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
-        expect(composeAfter).not.toMatch(/\bgpus:\s*all\b/)
+        expect(composeAfter).not.toMatch(gpuAllComposeYamlPattern)
 
         const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         expect(configAfter).toContain('"gpu": "none"')
@@ -442,7 +444,7 @@ describe("runDockerComposeUpWithPortCheck", () => {
         expect(started.gpu).toBe("none")
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
-        expect(composeAfter).not.toMatch(/\bgpus:\s*all\b/)
+        expect(composeAfter).not.toMatch(gpuAllComposeYamlPattern)
 
         const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         expect(configAfter).toContain('"gpu": "none"')
