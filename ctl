@@ -18,10 +18,14 @@ API_PORT="${DOCKER_GIT_API_PORT:-3334}"
 API_HOST="${DOCKER_GIT_API_BIND_HOST:-127.0.0.1}"
 API_BASE_URL="http://127.0.0.1:${API_PORT}"
 DOCKER_CMD=()
+PARSED_ARGS=()
+CONTROLLER_CPU_LIMIT="${DOCKER_GIT_CONTROLLER_CPUS:-}"
+CONTROLLER_RAM_LIMIT="${DOCKER_GIT_CONTROLLER_MEMORY:-}"
+CONTROLLER_PIDS_LIMIT="${DOCKER_GIT_CONTROLLER_PIDS:-}"
 
 usage() {
   cat <<'USAGE'
-Usage: ./ctl <command>
+Usage: ./ctl <command> [controller options]
 
 Controller:
   up              Build and start the API controller
@@ -40,6 +44,11 @@ API:
                     ./ctl request GET /projects
                     ./ctl request POST /projects '{"repoUrl":"https://github.com/org/repo.git"}'
                     ./ctl request POST /projects/<projectId>/up
+
+Controller options:
+  --cpu, --cpus, --controller-cpu <value>       CPU cap intent, percent or cores (default: 90%)
+  --ram, --memory, --controller-ram <value>     RAM cap intent, percent or size (default: 90%)
+  --pids, --controller-pids <n>                 PID cap (default: 4096)
 
 USAGE
 }
@@ -60,6 +69,76 @@ prepare_controller_revision() {
     exit 1
   fi
   export DOCKER_GIT_CONTROLLER_REV="$revision"
+}
+
+parse_controller_limit_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --cpu|--cpus|--controller-cpu|--controller-cpus)
+        if [[ $# -lt 2 ]]; then
+          echo "Missing value for option: $1" >&2
+          exit 1
+        fi
+        CONTROLLER_CPU_LIMIT="$2"
+        shift 2
+        ;;
+      --cpu=*|--cpus=*|--controller-cpu=*|--controller-cpus=*)
+        CONTROLLER_CPU_LIMIT="${1#*=}"
+        shift
+        ;;
+      --ram|--memory|--controller-ram|--controller-memory)
+        if [[ $# -lt 2 ]]; then
+          echo "Missing value for option: $1" >&2
+          exit 1
+        fi
+        CONTROLLER_RAM_LIMIT="$2"
+        shift 2
+        ;;
+      --ram=*|--memory=*|--controller-ram=*|--controller-memory=*)
+        CONTROLLER_RAM_LIMIT="${1#*=}"
+        shift
+        ;;
+      --pids|--controller-pids)
+        if [[ $# -lt 2 ]]; then
+          echo "Missing value for option: $1" >&2
+          exit 1
+        fi
+        CONTROLLER_PIDS_LIMIT="$2"
+        shift 2
+        ;;
+      --pids=*|--controller-pids=*)
+        CONTROLLER_PIDS_LIMIT="${1#*=}"
+        shift
+        ;;
+      *)
+        PARSED_ARGS+=("$1")
+        shift
+        ;;
+    esac
+  done
+}
+
+prepare_controller_resource_limits() {
+  local env_output
+  env_output="$(
+    DOCKER_GIT_CONTROLLER_CPUS="$CONTROLLER_CPU_LIMIT" \
+    DOCKER_GIT_CONTROLLER_MEMORY="$CONTROLLER_RAM_LIMIT" \
+    DOCKER_GIT_CONTROLLER_PIDS="$CONTROLLER_PIDS_LIMIT" \
+      bun --cwd "$ROOT/packages/app" scripts/print-controller-resource-env.ts
+  )"
+
+  local key
+  local value
+  while IFS='=' read -r key value; do
+    if [[ -z "$key" ]]; then
+      continue
+    fi
+    case "$key" in
+      DOCKER_GIT_CONTROLLER_CPUS|DOCKER_GIT_CONTROLLER_MEMORY|DOCKER_GIT_CONTROLLER_PIDS)
+        export "$key=$value"
+        ;;
+    esac
+  done <<< "$env_output"
 }
 
 require_running() {
@@ -192,8 +271,12 @@ resolve_docker_cmd() {
 
 resolve_docker_cmd
 
+parse_controller_limit_args "$@"
+set -- "${PARSED_ARGS[@]}"
+
 case "${1:-}" in
   up)
+    prepare_controller_resource_limits
     prepare_controller_revision
     compose up -d --build
     wait_for_health
@@ -209,6 +292,7 @@ case "${1:-}" in
     compose logs -f --tail=200
     ;;
   restart)
+    prepare_controller_resource_limits
     prepare_controller_revision
     compose up -d --build --force-recreate
     wait_for_health
