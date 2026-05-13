@@ -93,6 +93,13 @@ const decideStdout = (cmd: RecordedCommand): string => {
 const nvidiaRuntimeFailure =
   "Error response from daemon: failed to create task for container: nvidia-container-cli: initialization error: load library failed: libnvidia-ml.so.1"
 
+const hasNvidiaFallbackWarning = (logs: ReadonlyArray<string>): boolean =>
+  logs.some((entry) =>
+    entry.includes("NVIDIA runtime failed") &&
+    entry.includes("libnvidia-ml.so.1") &&
+    entry.includes("GPU access disabled")
+  )
+
 const shouldFailNvidiaGpuComposeUp = (cmd: RecordedCommand): boolean =>
   isDockerComposeUpWithBuild(cmd) || isDockerComposeUpReuse(cmd)
 
@@ -292,11 +299,56 @@ describe("runDockerComposeUpWithPortCheck", () => {
         const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         expect(configAfter).toContain('"gpu": "none"')
         expect(recorded.filter((entry) => isDockerComposeUpWithBuild(entry)).length).toBe(2)
-        expect(logs.some((entry) =>
-          entry.includes("NVIDIA runtime failed") &&
-          entry.includes("libnvidia-ml.so.1") &&
-          entry.includes("GPU access disabled")
-        )).toBe(true)
+        expect(hasNvidiaFallbackWarning(logs)).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("falls back to GPU none before retrying reuse mode when the host NVIDIA runtime is unavailable", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const targetDir = "/home/dev/workspaces/org/repo"
+        const globalConfig = makeTemplateConfig(root, outDir, path, targetDir)
+        const projectConfig: TemplateConfig = {
+          ...makeTemplateConfig(root, outDir, path, targetDir),
+          gpu: "all"
+        }
+        const recorded: Array<RecordedCommand> = []
+        const logs: Array<string> = []
+        const executor = makeFakeExecutor(recorded, { failGpuComposeUp: true })
+        const logger = Logger.make(({ message }) => {
+          logs.push(String(message))
+        })
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          })
+        )
+
+        const started = yield* _(
+          runDockerComposeUpWithPortCheck(outDir, {
+            buildMode: "reuse",
+            waitForPostStart: false
+          }).pipe(
+            Effect.provideService(CommandExecutor.CommandExecutor, executor),
+            Effect.provide(Logger.replace(Logger.defaultLogger, logger))
+          )
+        )
+
+        expect(started.gpu).toBe("none")
+
+        const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+        expect(composeAfter).not.toContain("    gpus: all\n")
+
+        const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
+        expect(configAfter).toContain('"gpu": "none"')
+        expect(recorded.filter((entry) => isDockerComposeUpReuse(entry)).length).toBe(2)
+        expect(recorded.filter((entry) => isDockerComposeUpWithBuild(entry)).length).toBe(0)
+        expect(hasNvidiaFallbackWarning(logs)).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
