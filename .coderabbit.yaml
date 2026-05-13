@@ -51,6 +51,11 @@ reviews:
         для заявленного поведения и security-риск. Если спека не видна,
         попроси автора добавить ее в issue или PR description.
 
+        Проверь решение с точки зрения формальной верификации: какие инварианты,
+        предусловия и постусловия можно доказать математически, а где доказуемость
+        слабая. Оцени решение с точки зрения теории игр: устойчивы ли стимулы,
+        нет ли выгодного обхода правил, и какое решение было бы сильнее.
+
   pre_merge_checks:
     issue_assessment:
       mode: "warning"
@@ -61,7 +66,8 @@ reviews:
           Fail if the diff contradicts the visible spec/TZ, linked issue, PR
           discussion, README/docs, or changes behavior without documenting it.
           Fail if promised behavior has no relevant tests. Return Inconclusive
-          when the spec is missing and ask the author to add it.
+          when the spec is missing and ask the author to add it. Also flag weak
+          formal invariants or game-theory incentives when they undermine the spec.
       - name: "Security regression"
         mode: "warning"
         instructions: |
