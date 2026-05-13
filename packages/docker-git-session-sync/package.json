@@ -26,7 +26,7 @@
     "agents"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "bugs": {
     "url": "https://github.com/ProverCoderAI/docker-git/issues"

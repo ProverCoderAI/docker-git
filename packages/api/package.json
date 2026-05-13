@@ -31,6 +31,7 @@
     "type": "git",
     "url": "git+https://github.com/ProverCoderAI/docker-git.git"
   },
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/ProverCoderAI/docker-git/issues"
   },
