@@ -1,18 +1,19 @@
 import type { TemplateConfig } from "../domain.js"
+import { shellSingleQuote } from "../shell-literals.js"
 import { renderDockerfilePrompt } from "../templates-prompt.js"
 import { renderDockerfileGlab } from "./glab.js"
 import { renderDockerfileGitleaks, renderDockerfileOpenCode } from "./tools.js"
 
 // CHANGE: use the shared link-foundation JS box as the generated project base image
-// WHY: issue #267 asks docker-git to reuse unified box containers instead of maintaining a raw Ubuntu workspace base; the Docker Hub JS alias is public and keeps CI pull size bounded
+// WHY: issue #267 asks docker-git to reuse unified box containers instead of maintaining a raw Ubuntu workspace base; the Docker Hub JS image is public and version-pinned to avoid latest drift
 // QUOTE(ТЗ): "Что бы не зависить только от своих обновлений, а иметь единую инфраструктру есть смысл юзать готовый репозиторий"
 // REF: issue-267
 // SOURCE: https://github.com/link-foundation/box#docker-hub---combo-boxes
-// FORMAT THEOREM: renderDockerfile(config) -> base_image(rendered) = DOCKER_GIT_BASE_IMAGE
+// FORMAT THEOREM: renderDockerfile(config) -> base_image_default(rendered) = konard/box-js:2.1.1
 // PURITY: CORE
 // INVARIANT: the rendered Dockerfile inherits JS/runtime tooling from link-foundation/box while preserving docker-git bootstrap layers
 // COMPLEXITY: O(1)/O(1)
-const dockerGitBaseImage = "konard/box-js:latest"
+const dockerGitBaseImage = "konard/box-js:2.1.1"
 
 /**
  * Renders the base image, root user, apt mirror, core packages, and sudo prelude.
@@ -21,12 +22,15 @@ const dockerGitBaseImage = "konard/box-js:latest"
  * @pure true
  * @effect none; CORE template renderer only constructs a string.
  * @invariant the returned fragment starts from the configured shared JS box image.
+ * @precondition docker-git generated entrypoint remains the container entrypoint.
+ * @postcondition the fragment keeps root available for setup and runtime bootstrap.
  * @complexity O(1) time / O(1) space.
  */
 const renderDockerfilePrelude = (): string =>
   `ARG DOCKER_GIT_BASE_IMAGE=${dockerGitBaseImage}
 FROM \${DOCKER_GIT_BASE_IMAGE}
 
+#checkov:skip=CKV_DOCKER_8: docker-git entrypoint must start as root to prepare SSH/auth/bootstrap and run sshd
 USER root
 ARG UBUNTU_APT_MIRROR=
 ENV DEBIAN_FRONTEND=noninteractive
@@ -255,6 +259,7 @@ const renderDockerfileBun = (config: TemplateConfig): string =>
  * @effect none; CORE template renderer only constructs a string.
  * @invariant rendered HOME, PATH, WORKDIR, sudoers, and AllowUsers entries target config.sshUser.
  * @precondition config.sshUser satisfies the Linux user-name invariant.
+ * @postcondition inherited box or ubuntu accounts resolve to config.sshUser when present.
  * @complexity O(1) time / O(1) space.
  */
 const renderDockerfileUsers = (config: TemplateConfig): string =>
@@ -324,11 +329,13 @@ RUN set -eu; \
     docker-git-session-sync --help >/dev/null; \
   fi`
 
-const renderDockerfileWorkspace = (config: TemplateConfig): string =>
-  `# Workspace path (supports root-level dirs like /repo)
+const renderDockerfileWorkspace = (config: TemplateConfig): string => {
+  const targetDirLiteral = shellSingleQuote(config.targetDir)
+
+  return `# Workspace path (supports root-level dirs like /repo)
 RUN set -eu; \
     HOME_DIR="/home/${config.sshUser}"; \
-    TARGET_DIR="${config.targetDir}"; \
+    TARGET_DIR=${targetDirLiteral}; \
     mkdir -p "$HOME_DIR" "$TARGET_DIR"; \
     chown 1000:1000 "$HOME_DIR"; \
     if [ "$TARGET_DIR" != "/" ] && [ "$TARGET_DIR" != "$HOME_DIR" ]; then chown -R 1000:1000 "$TARGET_DIR"; fi
@@ -346,6 +353,7 @@ RUN sed -i 's/\\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 EXPOSE 22
 ENTRYPOINT ["/entrypoint.sh"]`
+}
 
 export const renderDockerfile = (config: TemplateConfig): string =>
   [

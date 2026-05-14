@@ -1,5 +1,12 @@
 import type { TemplateConfig } from "../domain.js"
+import { shellSingleQuote } from "../shell-literals.js"
 import { renderInputRc } from "../templates-prompt.js"
+
+const renderTargetDirDefault = (config: TemplateConfig): string =>
+  `TARGET_DIR="\${TARGET_DIR:-}"
+if [[ -z "$TARGET_DIR" ]]; then
+  TARGET_DIR=${shellSingleQuote(config.targetDir)}
+fi`
 
 export const renderEntrypointHeader = (config: TemplateConfig): string =>
   `#!/usr/bin/env bash
@@ -8,7 +15,7 @@ set -euo pipefail
 REPO_URL="\${REPO_URL:-}"
 REPO_REF="\${REPO_REF:-}"
 FORK_REPO_URL="\${FORK_REPO_URL:-}"
-TARGET_DIR="\${TARGET_DIR:-${config.targetDir}}"
+${renderTargetDirDefault(config)}
 if [[ "$TARGET_DIR" == "~" ]]; then
   TARGET_DIR="$HOME"
 elif [[ "$TARGET_DIR" == "~/"* ]]; then

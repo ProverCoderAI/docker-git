@@ -3,7 +3,13 @@ import { hostname } from "node:os"
 
 import { expandContainerHome } from "../usecases/scrap-path.js"
 import { resolveAutoAgentFlags } from "./auto-agent-flags.js"
-import { nonEmpty, parseDockerNetworkMode, parseGpuMode, parseSshPort, parseSshUser } from "./command-builders-shared.js"
+import {
+  nonEmpty,
+  parseDockerNetworkMode,
+  parseGpuMode,
+  parseSshPort,
+  parseSshUser
+} from "./command-builders-shared.js"
 import { type RawOptions } from "./command-options.js"
 import {
   type AgentMode,

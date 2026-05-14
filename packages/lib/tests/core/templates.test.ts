@@ -85,8 +85,11 @@ describe("renderDockerfile", () => {
   it("uses the shared JS box image as the project container base", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
-    expect(dockerfile).toContain("ARG DOCKER_GIT_BASE_IMAGE=konard/box-js:latest")
+    expect(dockerfile).toContain("ARG DOCKER_GIT_BASE_IMAGE=konard/box-js:2.1.1")
     expect(dockerfile).toContain("FROM ${DOCKER_GIT_BASE_IMAGE}")
+    expect(dockerfile).toContain(
+      "#checkov:skip=CKV_DOCKER_8: docker-git entrypoint must start as root to prepare SSH/auth/bootstrap and run sshd"
+    )
     expect(dockerfile).toContain("USER root")
     expect(dockerfile).not.toContain("FROM ubuntu:24.04")
   })
@@ -156,6 +159,16 @@ describe("renderDockerfile", () => {
     expect(dockerfile).not.toContain("chown -R 1000:1000 /home/${config.sshUser}")
   })
 
+  it("renders targetDir as a single-quoted shell literal in workspace setup", () => {
+    const config = makeTemplateConfig({
+      targetDir: "/home/dev/org/repo'$(touch-pwned)`echo-pwned`"
+    })
+    const dockerfile = renderDockerfile(config)
+
+    expect(dockerfile).toContain("TARGET_DIR='/home/dev/org/repo'\"'\"'$(touch-pwned)`echo-pwned`';")
+    expect(dockerfile).not.toContain("TARGET_DIR=\"/home/dev/org/repo'$(touch-pwned)`echo-pwned`\"")
+  })
+
   it("installs session sync from npmjs with a local fallback", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
@@ -220,6 +233,17 @@ describe("renderPromptScript", () => {
 })
 
 describe("renderEntrypoint clone cache", () => {
+  it("renders the default targetDir as a shell literal without evaluating substitutions", () => {
+    const config = makeTemplateConfig({
+      targetDir: "/home/dev/org/repo'$(touch-pwned)`echo-pwned`"
+    })
+    const entrypoint = renderEntrypoint(config)
+
+    expect(entrypoint).toContain('TARGET_DIR="${TARGET_DIR:-}"')
+    expect(entrypoint).toContain("TARGET_DIR='/home/dev/org/repo'\"'\"'$(touch-pwned)`echo-pwned`'")
+    expect(entrypoint).not.toContain('TARGET_DIR="${TARGET_DIR:-/home/dev/org/repo')
+  })
+
   it("refreshes mirrors without broad remote refs", () => {
     const entrypoint = renderEntrypoint(makeTemplateConfig())
 

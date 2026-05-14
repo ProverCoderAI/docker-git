@@ -29,8 +29,32 @@ const parsePort = (value: string): Either.Either<number, ParseError> => {
   return Either.right(parsed)
 }
 
+/**
+ * Parses a raw SSH port value into the valid Docker host-port range.
+ *
+ * @param value - Raw textual value for `--ssh-port`.
+ * @returns Either a valid integer port or a typed parse error for `--ssh-port`.
+ * @pure true
+ * @effect none; CORE parser only evaluates the provided string.
+ * @invariant Right(port) implies Number.isInteger(port) and 1 <= port <= 65535.
+ * @precondition value is untrusted CLI or config text.
+ * @postcondition the function returns a typed Either and never throws.
+ * @complexity O(1) time / O(1) space.
+ */
 export const parseSshPort = (value: string): Either.Either<number, ParseError> => parsePort(value)
 
+/**
+ * Parses and validates the SSH user used by generated Dockerfiles and entrypoints.
+ *
+ * @param value - Optional raw value for `--ssh-user`; undefined falls back to the default template user.
+ * @returns Either a Linux user name matching the docker-git invariant or a typed parse error.
+ * @pure true
+ * @effect none; CORE parser only trims and validates the candidate string.
+ * @invariant Right(user) implies user matches ^[a-z_][a-z0-9_-]{0,31}$.
+ * @precondition value is untrusted CLI or config text.
+ * @postcondition empty candidates fail as MissingRequiredOption; unsafe candidates fail as InvalidOption.
+ * @complexity O(n) time / O(1) space where n = |value|.
+ */
 export const parseSshUser = (
   value: string | undefined
 ): Either.Either<string, ParseError> => {
@@ -51,6 +75,18 @@ export const parseSshUser = (
   return Either.right(candidate)
 }
 
+/**
+ * Parses the Docker network mode selector used by generated compose files.
+ *
+ * @param value - Optional raw value for `--network-mode`; undefined falls back to the template default.
+ * @returns Either a supported network mode or a typed parse error for `--network-mode`.
+ * @pure true
+ * @effect none; CORE parser only trims and checks a finite domain.
+ * @invariant Right(mode) implies mode is either "shared" or "project".
+ * @precondition value is untrusted CLI or config text.
+ * @postcondition unsupported modes fail as InvalidOption.
+ * @complexity O(n) time / O(1) space where n = |value|.
+ */
 export const parseDockerNetworkMode = (
   value: string | undefined
 ): Either.Either<CreateCommand["config"]["dockerNetworkMode"], ParseError> => {
@@ -65,6 +101,18 @@ export const parseDockerNetworkMode = (
   })
 }
 
+/**
+ * Parses the GPU mode selector used by generated compose files.
+ *
+ * @param value - Optional raw value for `--gpu`; undefined falls back to the template default.
+ * @returns Either a supported GPU mode or a typed parse error for `--gpu`.
+ * @pure true
+ * @effect none; CORE parser only trims and checks a finite domain.
+ * @invariant Right(mode) implies mode is either "none" or "all".
+ * @precondition value is untrusted CLI or config text.
+ * @postcondition unsupported modes fail as InvalidOption.
+ * @complexity O(n) time / O(1) space where n = |value|.
+ */
 export const parseGpuMode = (
   value: string | undefined
 ): Either.Either<CreateCommand["config"]["gpu"], ParseError> => {
@@ -79,6 +127,20 @@ export const parseGpuMode = (
   })
 }
 
+/**
+ * Parses a required non-empty string option with an optional fallback.
+ *
+ * @param option - CLI option name reported in typed parse errors.
+ * @param value - Optional raw value supplied by the user.
+ * @param fallback - Optional default used when value is undefined.
+ * @returns Either the trimmed non-empty candidate or a typed missing-option error.
+ * @pure true
+ * @effect none; CORE parser only trims and checks string length.
+ * @invariant Right(candidate) implies candidate.length > 0.
+ * @precondition option names the boundary field being decoded.
+ * @postcondition missing or empty candidates fail as MissingRequiredOption.
+ * @complexity O(n) time / O(1) space where n = |value|.
+ */
 export const nonEmpty = (
   option: string,
   value: string | undefined,
