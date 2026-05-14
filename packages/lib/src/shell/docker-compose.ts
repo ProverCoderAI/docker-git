@@ -3,6 +3,7 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import { Duration, Effect, pipe, Schedule } from "effect"
 
+import { isNvidiaRuntimeFailure } from "../core/gpu.js"
 import { runCommandCapture, runCommandWithStreamingOutput } from "./command-runner.js"
 import { composeSpec, resolveDockerComposeEnv } from "./docker-compose-env.js"
 import { DockerCommandError } from "./errors.js"
@@ -53,17 +54,40 @@ const dockerComposeUpRetrySchedule = Schedule.addDelay(
   () => Duration.seconds(2)
 )
 
+// CHANGE: classify compose-up failures that are worth retrying.
+// WHY: host NVIDIA runtime misconfiguration is deterministic, so repeated compose attempts only delay fallback.
+// QUOTE(ТЗ): "nvidia-container-cli: initialization error: load library failed: libnvidia-ml.so.1"
+// REF: issue-291
+// SOURCE: n/a
+// FORMAT THEOREM: forall e: nvidia_runtime_failure(e) -> retryable(e)=false
+// PURITY: SHELL
+// EFFECT: n/a
+// INVARIANT: non-Docker platform errors keep the existing retry behavior
+// COMPLEXITY: O(n * m) where n = |details| and m = marker count
+const isRetryableDockerComposeUpError = (error: DockerCommandError | PlatformError): boolean => {
+  if (error._tag !== "DockerCommandError") {
+    return true
+  }
+
+  return !isNvidiaRuntimeFailure(error.details)
+}
+
 const retryDockerComposeUp = (
   cwd: string,
   effect: Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor>
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   effect.pipe(
-    Effect.tapError(() =>
-      Effect.logWarning(
-        `docker compose up failed in ${cwd}; retrying (possible transient Docker Hub/DNS issue)...`
-      )
+    Effect.tapError((error) =>
+      isRetryableDockerComposeUpError(error)
+        ? Effect.logWarning(
+          `docker compose up failed in ${cwd}; retrying (possible transient Docker Hub/DNS issue)...`
+        )
+        : Effect.void
     ),
-    Effect.retry(dockerComposeUpRetrySchedule)
+    Effect.retry({
+      schedule: dockerComposeUpRetrySchedule,
+      while: isRetryableDockerComposeUpError
+    })
   )
 
 export type DockerComposeUpBuildMode = "build" | "reuse"

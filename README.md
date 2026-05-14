@@ -60,6 +60,23 @@ docker-git apply-all --active
 - `apply` применяет конфиг к одному проекту. `--no-up` только обновляет файлы без `docker compose up`.
 - `apply-all` применяет конфиг ко всем проектам. `--active` только к запущенным контейнерам.
 
+## GPU режим
+
+По умолчанию проекты запускаются без GPU (`gpu: "none"`), поэтому Docker не
+требует NVIDIA runtime на обычных CPU-хостах.
+
+GPU включается только явно через `--gpu all` или сохранённое значение
+`"gpu": "all"` в `docker-git.json`. Если Docker возвращает ошибку NVIDIA
+prestart hook вида `nvidia-container-cli` / `libnvidia-ml.so.1`, `docker-git`
+перезаписывает managed-файлы проекта с `gpu: "none"` и повторяет
+`docker compose up`, чтобы среда оставалась запускаемой на хосте без рабочей
+NVIDIA userspace-части.
+
+Если проекту действительно нужен GPU, установите драйвер NVIDIA и NVIDIA
+Container Toolkit на хосте, затем снова примените конфигурацию с `--gpu all`.
+GPU для controller-контейнера включается отдельно через
+`DOCKER_GIT_CONTROLLER_GPU=all`; значение по умолчанию для controller тоже
+`none`.
 
 Для запуска WEB версии:
 ```bash
