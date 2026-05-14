@@ -1,7 +1,10 @@
 import type { IDisposable, Terminal } from "xterm"
 import type { FitAddon } from "xterm-addon-fit"
 
-import type { TerminalInlineImageOutputSegment } from "./terminal-inline-images-core.js"
+import type {
+  TerminalInlineImageOutputSegment,
+  TerminalInlineImagePreviewsEnabledRef
+} from "./terminal-inline-images-core.js"
 import type { ActiveTerminalSession } from "./terminal.js"
 
 export type TerminalStatus = "attached" | "connecting" | "error" | "exited" | "reconnecting"
@@ -38,6 +41,7 @@ export type TerminalPasteGuard = {
 
 export type TerminalMessageHandlers = {
   readonly connectionRef: { current: TerminalConnectionState }
+  readonly inlineImagePreviewsEnabledRef: TerminalInlineImagePreviewsEnabledRef
   readonly lifecycle: TerminalLifecycleState
   readonly notifyMessage: (message: string) => void
   readonly session: ActiveTerminalSession
@@ -63,6 +67,7 @@ export type TerminalCleanupArgs = {
 export type TerminalLifecycleArgs = {
   readonly connectionRef: { current: TerminalConnectionState }
   readonly hostRef: { readonly current: HTMLDivElement | null }
+  readonly inlineImagePreviewsEnabledRef: TerminalInlineImagePreviewsEnabledRef
   readonly notifyMessage: (message: string) => void
   readonly onAttachFailure: () => void
   readonly runtimeRef: { current: TerminalInputController | null }
