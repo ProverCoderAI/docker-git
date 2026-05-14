@@ -382,7 +382,11 @@ const runTerminalSessionPersistence = (
       Effect.runPromise(
         effect.pipe(
           Effect.provide(NodeContext.layer),
-          Effect.catchAll(() => Effect.void)
+          Effect.catchAll((error) =>
+            Effect.logWarning(
+              `[terminal-sessions] Failed to persist state for project ${projectId}: ${describeUnknown(error)}`
+            )
+          )
         )
       )
     )
@@ -651,6 +655,7 @@ const finalizeRecord = (
   exitCode: number | null,
   signal: number | null
 ): void => {
+  // A clean tmux-backed PTY exit leaves the project session reattachable.
   const nextStatus = exitCode === 0 || exitCode === 130 ? "ready" : status
   broadcastServerMessage(record, { type: "exit", exitCode, signal })
   closeRecordSockets(record)
