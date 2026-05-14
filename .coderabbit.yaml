@@ -1,0 +1,140 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "ru-RU"
+early_access: false
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  review_status: true
+  review_details: true
+  commit_status: true
+  fail_commit_status: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: true
+  poem: false
+  in_progress_fortune: false
+  abort_on_close: true
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 0
+    drafts: true
+    base_branches:
+      - ".*"
+    labels:
+      - "!do-not-review"
+      - "!skip-coderabbit"
+    ignore_title_keywords:
+      - "[skip review]"
+      - "[skip coderabbit]"
+      - "do not review"
+
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        Ты строгий ревьюер SPEC DRIVEN DEVELOPMENT.
+
+        Перед выводами изучи README.md, другие *.md файлы, linked issues,
+        PR description, PR comments/discussion и релевантную кодовую базу.
+
+        Сверь изменения с исходным ТЗ/спекой и обсуждением. Флагай любой уход
+        от спеки, недокументированное изменение поведения, отсутствие тестов
+        для заявленного поведения и security-риск. Если спека не видна,
+        попроси автора добавить ее в issue или PR description.
+
+        Проверь решение с точки зрения формальной верификации: какие инварианты,
+        предусловия и постусловия можно доказать математически, а где доказуемость
+        слабая. Оцени решение с точки зрения теории игр: устойчивы ли стимулы,
+        нет ли выгодного обхода правил, и какое решение было бы сильнее.
+
+  pre_merge_checks:
+    issue_assessment:
+      mode: "warning"
+    custom_checks:
+      - name: "Requirements alignment"
+        mode: "error"
+        instructions: |
+          Fail if the diff contradicts the visible spec/TZ, linked issue, PR
+          discussion, README/docs, or changes behavior without documenting it.
+          Fail if promised behavior has no relevant tests. Return Inconclusive
+          when the spec is missing and ask the author to add it. Also flag weak
+          formal invariants or game-theory incentives when they undermine the spec.
+      - name: "Security regression"
+        mode: "warning"
+        instructions: |
+          Fail if changed files introduce a high-confidence security regression, including:
+          - command injection or unsafe shell/process execution with user-controlled input;
+          - path traversal or writes outside intended project/container state directories;
+          - credential, token, private-key, or PII exposure in source, generated config, logs, or CI output;
+          - unsafe Docker/GitHub Actions configuration such as privileged containers, broad host mounts, unbounded Docker socket access, unsafe `pull_request_target`, or unnecessary write permissions;
+          - dependency or package-manager changes that materially increase supply-chain risk without justification.
+
+          Pass when no high-confidence regression is found. Return Inconclusive when the diff is too large or lacks enough context to determine risk.
+
+  tools:
+    github-checks:
+      enabled: true
+      timeout_ms: 900000
+    gitleaks:
+      enabled: true
+    trufflehog:
+      enabled: true
+    semgrep:
+      enabled: true
+    opengrep:
+      enabled: true
+    osvScanner:
+      enabled: true
+    checkov:
+      enabled: true
+    trivy:
+      enabled: true
+    presidio:
+      enabled: true
+    actionlint:
+      enabled: true
+    hadolint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    eslint:
+      enabled: true
+    oxc:
+      enabled: true
+    yamllint:
+      enabled: true
+    dotenvLint:
+      enabled: true
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "GEMINI.md"
+      - "README.md"
+      - "docs/**/*.md"
+  issues:
+    scope: "local"
+  pull_requests:
+    scope: "local"
+  learnings:
+    scope: "local"
+
+chat:
+  art: false
+  auto_reply: true
+  allow_non_org_members: true

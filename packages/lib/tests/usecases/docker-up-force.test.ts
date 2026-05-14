@@ -115,6 +115,7 @@ describe("runDockerUpIfNeeded with force", () => {
         dockerNetworkMode: "project",
         dockerSharedNetworkName: "docker-git-shared",
         enableMcpPlaywright: true,
+        gpu: "none",
         bunVersion: "1.3.11",
         agentMode: undefined,
         agentAuto: false,

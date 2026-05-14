@@ -7,7 +7,8 @@ import type {
   SessionFile,
   SnapshotManifest,
   SnapshotManifestFile,
-  SourceInfo
+  SourceInfo,
+  TokenReductionSummary
 } from "./types.js"
 
 export const backupRepoName = "docker-git-sessions"
@@ -115,6 +116,33 @@ export const summarizeFiles = (files: ReadonlyArray<SnapshotManifestFile>): File
   )
 })
 
+// CHANGE: Add deterministic RTK token-volume estimate for session backups.
+// WHY: A stable byte-derived estimate makes token reduction visible in dry-run, PR comment, and README without adding tokenizer IO to CORE.
+// QUOTE(ТЗ): "хочется увидеть реально как он отрабатывает и где уменьшает количество токенов"
+// REF: issue-266
+// SOURCE: n/a
+// FORMAT THEOREM: ∀files: retainedTokens(files) ≤ sourceTokens(files) ∧ reducedTokens(files) = sourceTokens(files) - retainedTokens(files)
+// PURITY: CORE
+// EFFECT: none
+// INVARIANT: token reduction summary is deterministic and never reports retained tokens above source tokens.
+// COMPLEXITY: O(n)/O(1)
+const estimatedCharsPerToken = 4
+export const rtkRetainedTokenBudget = 512
+
+export const estimateTokenCount = (bytes: number): number =>
+  Math.ceil(bytes / estimatedCharsPerToken)
+
+export const summarizeTokenReduction = (files: ReadonlyArray<SessionFile>): TokenReductionSummary => {
+  const sourceTokens = files.reduce((sum, file) => sum + estimateTokenCount(file.size), 0)
+  const retainedTokens = sourceTokens === 0 ? 0 : Math.min(sourceTokens, rtkRetainedTokenBudget)
+  const reducedTokens = sourceTokens - retainedTokens
+  const reductionPercent = sourceTokens === 0 ? 0 : Math.round((reducedTokens / sourceTokens) * 100)
+  return { sourceTokens, retainedTokens, reducedTokens, reductionPercent }
+}
+
+export const formatTokenReduction = (summary: TokenReductionSummary): string =>
+  `~${summary.sourceTokens} -> ~${summary.retainedTokens} tokens (-~${summary.reducedTokens}, ${summary.reductionPercent}%)`
+
 export const buildManifest = (input: {
   readonly backupRepo: BackupRepo
   readonly snapshotRef: string
@@ -138,6 +166,7 @@ export const buildSnapshotReadme = (input: {
   readonly source: SourceInfo
   readonly manifestUrl: string
   readonly summary: FileSummary
+  readonly tokenReduction: TokenReductionSummary
   readonly sessionRoots: ReadonlyArray<string>
 }): string =>
   [
@@ -153,6 +182,7 @@ export const buildSnapshotReadme = (input: {
     `- Created At: \`${input.source.createdAt}\``,
     `- Files: \`${input.summary.fileCount}\``,
     `- Total Size: \`${formatBytes(input.summary.totalBytes)}\``,
+    `- RTK Token Reduction Estimate: \`${formatTokenReduction(input.tokenReduction)}\``,
     `- Session Roots: \`${input.sessionRoots.join("`, `")}\``,
     "",
     `- Manifest: ${input.manifestUrl}`,
@@ -180,6 +210,7 @@ export const buildCommentBody = (input: {
     return [
       "Status: success",
       `Files: ${input.upload.summary.fileCount} (${formatBytes(input.upload.summary.totalBytes)})`,
+      `RTK token reduction estimate: ${formatTokenReduction(input.upload.tokenReduction)}`,
       `Links: [README](${input.upload.readmeUrl}) | [Manifest](${input.upload.manifestUrl})`
     ]
   })()

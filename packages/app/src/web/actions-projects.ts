@@ -260,38 +260,47 @@ export const connectProjectById = (
   })
 }
 
-const applyProjectConfirmMessage = (label: string): string =>
-  `Apply docker-git config to ${label}? This restarts the container and ends active SSH sessions and in-container browsers.`
+const applyProjectConfirmMessage = (
+  label: string,
+  gpu?: "none" | "all"
+): string =>
+  gpu === undefined
+    ? `Apply docker-git config to ${label}? This restarts the container and ends active SSH sessions and in-container browsers.`
+    : `Apply docker-git config to ${label} with GPU ${gpu}? This restarts the container and ends active SSH sessions and in-container browsers.`
 
 export const applyProjectById = (
   projectId: string,
-  context: BrowserActionContext
+  context: BrowserActionContext,
+  gpu?: "none" | "all"
 ) => {
   const label = context.selectedProjectId === projectId
     ? projectActionLabel(context)
     : projectId
-  if (!confirmAction(applyProjectConfirmMessage(label))) {
+  if (!confirmAction(applyProjectConfirmMessage(label, gpu))) {
     return
   }
   context.setSelectedProjectId(projectId)
   withBusy({
     context,
-    effect: applyProject(projectId),
+    effect: applyProject(projectId, gpu === undefined ? undefined : { gpu }),
     label: "Applying project",
     onSuccess: (project) => {
       context.reloadDashboard()
       context.setSelectedProject(project)
-      context.setMessage(`Applied ${project.displayName}.`)
+      context.setMessage(`Applied ${project.displayName} (GPU ${project.gpu}).`)
     }
   })
 }
 
-export const applySelectedProject = (context: BrowserActionContext) => {
+export const applySelectedProject = (
+  context: BrowserActionContext,
+  gpu?: "none" | "all"
+) => {
   const projectId = requireSelectedProjectId(context)
   if (projectId === null) {
     return
   }
-  applyProjectById(projectId, context)
+  applyProjectById(projectId, context, gpu)
 }
 
 export const attachProjectTerminalById = (

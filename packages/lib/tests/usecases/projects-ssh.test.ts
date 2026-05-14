@@ -12,6 +12,7 @@ const projectItem: ProjectItem = {
   displayName: "org/repo",
   envGlobalPath: "/tmp/.env",
   envProjectPath: "/tmp/project/.env",
+  gpu: "none",
   projectDir: "/tmp/project",
   repoRef: "main",
   repoUrl: "https://example.com/org/repo.git",

@@ -24,6 +24,7 @@ export type ProjectDetails = ProjectSummary & {
   readonly serviceName: string
   readonly sshUser: string
   readonly sshPort: number
+  readonly gpu: "none" | "all"
   readonly targetDir: string
   readonly projectDir: string
   readonly sshCommand: string
@@ -355,6 +356,10 @@ export type UpProjectRequest = {
   readonly useManagedAuthorizedKeys?: boolean | undefined
 }
 
+export type ApplyProjectRequest = {
+  readonly gpu?: "none" | "all" | undefined
+}
+
 export type ApiAuthRequired = {
   readonly provider: "github"
   readonly message: string
@@ -380,6 +385,7 @@ export type CreateProjectRequest = {
   readonly codexHome?: string | undefined
   readonly cpuLimit?: string | undefined
   readonly ramLimit?: string | undefined
+  readonly gpu?: "none" | "all" | undefined
   readonly dockerNetworkMode?: string | undefined
   readonly dockerSharedNetworkName?: string | undefined
   readonly enableMcpPlaywright?: boolean | undefined
@@ -484,6 +490,26 @@ export type ContainerTaskSnapshot = {
   readonly agents: ReadonlyArray<AgentSession>
 }
 
+export const activityStreamsJsonLdContext = "https://www.w3.org/ns/activitystreams" as const
+export const forgeFedJsonLdContext = "https://forgefed.org/ns" as const
+export const securityJsonLdContext = "https://w3id.org/security/v1" as const
+export const activityForgeFedJsonLdContext = [
+  activityStreamsJsonLdContext,
+  forgeFedJsonLdContext
+] as const
+export const actorJsonLdContext = [
+  activityStreamsJsonLdContext,
+  securityJsonLdContext,
+  forgeFedJsonLdContext
+] as const
+export const federationJsonLdContentType =
+  `application/ld+json; profile="${activityStreamsJsonLdContext}"` as const
+export const federationJsonLdResponseContentType =
+  `${federationJsonLdContentType}; charset=utf-8` as const
+
+export type ActivityForgeFedJsonLdContext = typeof activityForgeFedJsonLdContext
+export type ActorJsonLdContext = typeof actorJsonLdContext
+
 export type ForgeFedTicket = {
   readonly id: string
   readonly attributedTo: string
@@ -544,7 +570,7 @@ export type CreateFollowRequest = {
 export type FollowStatus = "pending" | "accepted" | "rejected"
 
 export type ActivityPubFollowActivity = {
-  readonly "@context": string | ReadonlyArray<string>
+  readonly "@context": ActivityForgeFedJsonLdContext
   readonly id: string
   readonly type: "Follow"
   readonly actor: string
@@ -560,7 +586,7 @@ export type ActivityPubPublicKey = {
 }
 
 export type ActivityPubPerson = {
-  readonly "@context": "https://www.w3.org/ns/activitystreams"
+  readonly "@context": ActorJsonLdContext
   readonly type: "Person"
   readonly id: string
   readonly name: string
@@ -578,7 +604,7 @@ export type ActivityPubPerson = {
 }
 
 export type ActivityPubOrderedCollection = {
-  readonly "@context": "https://www.w3.org/ns/activitystreams" | ReadonlyArray<string>
+  readonly "@context": ActivityForgeFedJsonLdContext
   readonly type: "OrderedCollection"
   readonly id: string
   readonly totalItems: number
@@ -660,6 +686,57 @@ export type ExchangePollResult = {
   readonly newItems: number
   readonly processedItems: number
   readonly failedItems: number
+}
+
+export type FederationExchangeEventKind =
+  | "follow.sent"
+  | "inbox.follow.accept"
+  | "inbox.follow.reject"
+  | "inbox.issue.received"
+  | "poll.completed"
+
+export type FederationExchangeEvent = {
+  readonly id: string
+  readonly kind: FederationExchangeEventKind
+  readonly occurredAt: string
+  readonly subscriptionId?: string | undefined
+  readonly target?: string | undefined
+  readonly queue?: string | undefined
+  readonly status?: FollowStatus | undefined
+  readonly issueId?: string | undefined
+  readonly remoteActor?: string | undefined
+  readonly totalItems?: number | undefined
+  readonly newItems?: number | undefined
+  readonly processedItems?: number | undefined
+  readonly failedItems?: number | undefined
+}
+
+export type FederationExchangeStatusSubscription = {
+  readonly id: string
+  readonly target: string
+  readonly queue?: string | undefined
+  readonly status: FollowStatus
+  readonly remoteActor?: string | undefined
+  readonly remoteInbox?: string | undefined
+  readonly remoteOutbox?: string | undefined
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export type FederationExchangeStatus = {
+  readonly publicActor: string
+  readonly summary: {
+    readonly subscriptions: number
+    readonly accepted: number
+    readonly pending: number
+    readonly rejected: number
+    readonly issues: number
+    readonly processedOutboxItems: number
+    readonly lastInboxAt?: string | undefined
+    readonly lastPollAt?: string | undefined
+  }
+  readonly subscriptions: ReadonlyArray<FederationExchangeStatusSubscription>
+  readonly recentEvents: ReadonlyArray<FederationExchangeEvent>
 }
 
 export type ApiEventType =

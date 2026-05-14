@@ -5,6 +5,7 @@ import type { Path } from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
 import type { ProjectConfig, TemplateConfig } from "../core/domain.js"
+import { gpuModeAfterDockerFailure } from "../core/gpu.js"
 import { readProjectConfig } from "../shell/config.js"
 import {
   runDockerComposePsFormatted,
@@ -34,6 +35,10 @@ export type RunDockerComposeUpWithPortCheckOptions = {
   readonly buildMode?: "build" | "reuse"
   readonly waitForPostStart?: boolean
 }
+
+type ProjectComposeUpAttemptError = DockerCommandError | PlatformError
+type ProjectComposeUpError = DockerCommandError | FileExistsError | PlatformError
+type ProjectComposeUpRequirements = FileSystem | Path | CommandExecutor
 
 const syncManagedProjectFiles = (
   projectDir: string,
@@ -168,22 +173,68 @@ const startProjectPostStartSelfHealInBackground = (
     yield* _(Effect.forkDaemon(runProjectPostStartSelfHeal(projectDir, template)))
   })
 
+// CHANGE: recover from host NVIDIA runtime failures by disabling per-project GPU access.
+// WHY: Docker rejects gpus: all before the container starts when the host NVIDIA runtime is unavailable.
+// QUOTE(ТЗ): "nvidia-container-cli: initialization error: load library failed: libnvidia-ml.so.1"
+// REF: issue-291
+// SOURCE: n/a
+// FORMAT THEOREM: forall t,e: gpu(t)=all and nvidia_runtime_failure(e) -> gpu(retry(t,e))=none
+// PURITY: SHELL
+// EFFECT: Effect<TemplateConfig, DockerCommandError | FileExistsError | PlatformError, FileSystem | Path | CommandExecutor>
+// INVARIANT: fallback never escalates GPU access and terminates after at most one all -> none downgrade
+// COMPLEXITY: O(1) compose attempts plus O(file-size) template rewrite
+const recoverProjectComposeGpuFailure = (
+  projectDir: string,
+  template: TemplateConfig,
+  effect: Effect.Effect<void, ProjectComposeUpAttemptError, CommandExecutor>,
+  buildMode: "build" | "reuse"
+): Effect.Effect<TemplateConfig, ProjectComposeUpError, ProjectComposeUpRequirements> =>
+  effect.pipe(
+    Effect.as(template),
+    Effect.catchTag("DockerCommandError", (error) => {
+      const fallbackGpu = gpuModeAfterDockerFailure(template.gpu, error.details)
+      if (fallbackGpu === template.gpu) {
+        // Idempotence witness: non-NVIDIA errors and gpu=none cannot produce a lower GPU mode.
+        return Effect.fail(error)
+      }
+
+      const fallbackTemplate: TemplateConfig = { ...template, gpu: fallbackGpu }
+      return Effect.gen(function*(_) {
+        yield* _(
+          Effect.logWarning(
+            `NVIDIA runtime failed while GPU access was enabled (${
+              error.details ?? "no docker output"
+            }); rewriting project with GPU access disabled and retrying docker compose up.`
+          )
+        )
+        yield* _(syncManagedProjectFiles(projectDir, fallbackTemplate))
+        return yield* _(runProjectComposeUp(projectDir, fallbackTemplate, buildMode))
+      })
+    })
+  )
+
 const runProjectComposeUp = (
   projectDir: string,
+  template: TemplateConfig,
   buildMode: "build" | "reuse"
-): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor> => {
-  if (buildMode === "build") {
-    return runDockerComposeUp(projectDir)
-  }
+): Effect.Effect<TemplateConfig, ProjectComposeUpError, ProjectComposeUpRequirements> => {
+  const composeUp = buildMode === "build"
+    ? runDockerComposeUp(projectDir)
+    : runDockerComposeUp(projectDir, { buildMode: "reuse" }).pipe(
+      Effect.catchTag("DockerCommandError", (error) => {
+        if (gpuModeAfterDockerFailure(template.gpu, error.details) !== template.gpu) {
+          return Effect.fail(error)
+        }
 
-  return runDockerComposeUp(projectDir, { buildMode: "reuse" }).pipe(
-    Effect.catchTag("DockerCommandError", () =>
-      Effect.logWarning(
-        `docker compose up -d failed in ${projectDir}; falling back to docker compose up -d --build.`
-      ).pipe(
-        Effect.zipRight(runDockerComposeUp(projectDir))
-      ))
-  )
+        return Effect.logWarning(
+          `docker compose up -d failed in ${projectDir}; falling back to docker compose up -d --build.`
+        ).pipe(
+          Effect.zipRight(runDockerComposeUp(projectDir))
+        )
+      })
+    )
+
+  return recoverProjectComposeGpuFailure(projectDir, template, composeUp, buildMode)
 }
 
 // CHANGE: update template port when the preferred SSH port is reserved or busy
@@ -259,10 +310,10 @@ export const runDockerComposeUpWithPortCheck = (
     yield* _(syncManagedProjectFiles(projectDir, resolvedTemplate))
     yield* _(ensureComposeNetworkReady(projectDir, resolvedTemplate))
     yield* _(ensureSharedCodexVolumeReady(projectDir, resolvedTemplate))
-    yield* _(runProjectComposeUp(projectDir, options.buildMode ?? "build"))
+    const startedTemplate = yield* _(runProjectComposeUp(projectDir, resolvedTemplate, options.buildMode ?? "build"))
     yield* (options.waitForPostStart === false
-      ? _(startProjectPostStartSelfHealInBackground(projectDir, resolvedTemplate))
-      : _(runProjectPostStartSelfHeal(projectDir, resolvedTemplate)))
+      ? _(startProjectPostStartSelfHealInBackground(projectDir, startedTemplate))
+      : _(runProjectPostStartSelfHeal(projectDir, startedTemplate)))
 
-    return resolvedTemplate
+    return startedTemplate
   })

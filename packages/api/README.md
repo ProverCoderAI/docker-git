@@ -96,6 +96,8 @@ Optional env:
 - `GET /federation/followers`
 - `GET /federation/following`
 - `GET /federation/liked`
+- `GET /federation/status` (connection summary and recent exchange events)
+- `GET /federation/exchange/status` (connection summary and recent exchange events)
 - `POST /federation/exchange/subscriptions` (discover remote actor, persist metadata, send signed `Follow`)
 - `GET /federation/exchange/subscriptions`
 - `POST /federation/exchange/poll` (manual remote outbox poll)
@@ -131,9 +133,12 @@ Exchange targets must be explicit. Use `https://exchange.lefine.pro`, an actor U
 }'
 
 ./ctl request POST /federation/exchange/poll '{}'
+./ctl request GET /federation/status
 ./ctl request GET /federation/exchange/subscriptions
 ./ctl request GET /federation/issues
 ```
+
+`GET /federation/status` is the live observability endpoint for a Lefine connection. `GET /federation/exchange/status` is kept as a compatibility alias. It reports subscription counts, accepted/pending/rejected state, `lastInboxAt`, `lastPollAt`, persisted issue count, processed outbox items, and recent events such as `follow.sent`, `inbox.follow.accept`, `inbox.issue.received`, and `poll.completed`.
 
 When a polled `Create(Ticket)` has no GitHub URL in the Ticket payload, `projectRepoUrl` or `DOCKER_GIT_EXCHANGE_PROJECT_REPO_URL` is required for the automatic docker-git project/agent run.
 

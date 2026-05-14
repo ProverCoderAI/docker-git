@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
+import fc from "fast-check"
 
 import {
   DockerAccessError,
@@ -25,6 +26,65 @@ describe("renderError", () => {
     expect(message).toContain("port is already allocated")
     expect(message).toContain("--ssh-port")
     expect(message).toContain("auth.docker.io")
+  })
+
+  it("includes NVIDIA runtime recovery hint for DockerCommandError", () => {
+    const message = renderError(
+      new DockerCommandError({
+        exitCode: 1,
+        details:
+          "nvidia-container-cli: initialization error: load library failed: libnvidia-ml.so.1: cannot open shared object file"
+      })
+    )
+
+    expect(message).toContain("NVIDIA GPU access is enabled")
+    expect(message).toContain("--gpu none")
+    expect(message).toContain("NVIDIA Container Toolkit")
+  })
+
+  it("shows NVIDIA hint iff docker output contains NVIDIA runtime markers", () => {
+    const nvidiaContainerCliMarker = "nvidia-container-cli"
+    const libNvidiaMlMarker = "libnvidia-ml.so.1"
+    const missingDeviceDriverMarker = "could not select device driver"
+    const markers: ReadonlyArray<string> = [
+      nvidiaContainerCliMarker,
+      libNvidiaMlMarker,
+      missingDeviceDriverMarker
+    ]
+    const includesMarker = (details: string): boolean => markers.some((marker) => details.includes(marker))
+
+    fc.assert(
+      fc.property(
+        fc.string(),
+        fc.constantFrom(nvidiaContainerCliMarker, libNvidiaMlMarker, missingDeviceDriverMarker),
+        fc.string(),
+        (left, marker, right) => {
+          const message = renderError(
+            new DockerCommandError({
+              exitCode: 1,
+              details: `${left}${marker}${right}`
+            })
+          )
+
+          expect(message).toContain("--gpu none")
+        }
+      ),
+      { numRuns: 50 }
+    )
+
+    fc.assert(
+      fc.property(fc.string().filter((details) => !includesMarker(details)), (details) => {
+        const message = renderError(
+          new DockerCommandError({
+            exitCode: 1,
+            details
+          })
+        )
+
+        expect(message).not.toContain("--gpu none")
+      }),
+      { numRuns: 50 }
+    )
   })
 
   it("renders actionable recovery for DockerAccessError", () => {

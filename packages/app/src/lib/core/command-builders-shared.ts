@@ -1,7 +1,7 @@
 /* jscpd:ignore-start */
 import { Either } from "effect"
 
-import { type CreateCommand, defaultTemplateConfig, isDockerNetworkMode, type ParseError } from "./domain.js"
+import { type CreateCommand, defaultTemplateConfig, isDockerNetworkMode, isGpuMode, type ParseError } from "./domain.js"
 
 const parsePort = (value: string): Either.Either<number, ParseError> => {
   const parsed = Number(value)
@@ -35,6 +35,20 @@ export const parseDockerNetworkMode = (
     _tag: "InvalidOption",
     option: "--network-mode",
     reason: "expected one of: shared, project"
+  })
+}
+
+export const parseGpuMode = (
+  value: string | undefined
+): Either.Either<CreateCommand["config"]["gpu"], ParseError> => {
+  const candidate = value?.trim() ?? defaultTemplateConfig.gpu
+  if (isGpuMode(candidate)) {
+    return Either.right(candidate)
+  }
+  return Either.left({
+    _tag: "InvalidOption",
+    option: "--gpu",
+    reason: "expected one of: none, all"
   })
 }
 

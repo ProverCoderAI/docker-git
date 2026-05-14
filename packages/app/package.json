@@ -1,6 +1,6 @@
 {
   "name": "@prover-coder-ai/docker-git",
-  "version": "1.1.1",
+  "version": "1.1.10",
   "description": "docker-git Bun and Gridland CLI plus browser frontend",
   "main": "dist/src/docker-git/main.js",
   "bin": {
@@ -28,12 +28,12 @@
     "prebuild:docker-git": "bun install --cwd ../.. && bun run --cwd ../docker-git-session-sync build && bun run --cwd ../lib build",
     "build:docker-git": "vite build --config vite.docker-git.config.ts",
     "check": "bun run typecheck",
-    "clone": "bash -lc 'bun run build:docker-git && bun dist/src/docker-git/main.js clone \"$@\"' --",
-    "open": "bash -lc 'bun run build:docker-git && bun dist/src/docker-git/main.js open \"$@\"' --",
-    "docker-git": "bash -lc 'bun run build:docker-git && bun dist/src/docker-git/main.js \"$@\"' --",
-    "list": "bash -lc 'bun run build:docker-git && bun dist/src/docker-git/main.js ps \"$@\"' --",
+    "clone": "bun run build:docker-git && bun dist/src/docker-git/main.js clone",
+    "open": "bun run build:docker-git && bun dist/src/docker-git/main.js open",
+    "docker-git": "bun run build:docker-git && bun dist/src/docker-git/main.js",
+    "list": "bun run build:docker-git && bun dist/src/docker-git/main.js ps",
     "preview:web": "vite preview --config vite.web.config.ts",
-    "start": "bash -lc 'bun run build:docker-git && bun dist/src/docker-git/main.js \"$@\"' --",
+    "start": "bun run build:docker-git && bun dist/src/docker-git/main.js",
     "pretest": "bun run --cwd ../docker-git-session-sync build && bun run --cwd ../lib build",
     "test": "bun run lint:tests && vitest run",
     "pretypecheck": "bun run --cwd ../docker-git-session-sync build && bun run --cwd ../lib build",
@@ -50,7 +50,7 @@
     "console"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "bugs": {
     "url": "https://github.com/ProverCoderAI/docker-git/issues"
@@ -85,7 +85,7 @@
     "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.14",
+    "@biomejs/biome": "^2.4.15",
     "@effect-template/lib": "workspace:*",
     "@effect/eslint-plugin": "^0.3.2",
     "@effect/language-service": "latest",
@@ -96,16 +96,16 @@
     "@eslint/js": "10.0.1",
     "@prover-coder-ai/eslint-plugin-suggest-members": "^0.0.26",
     "@ton-ai-core/vibecode-linter": "^1.0.11",
-    "@types/node": "^25.6.2",
+    "@types/node": "^25.7.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
-    "@typescript-eslint/eslint-plugin": "^8.59.2",
-    "@typescript-eslint/parser": "^8.59.2",
+    "@typescript-eslint/eslint-plugin": "^8.59.3",
+    "@typescript-eslint/parser": "^8.59.3",
     "@vitejs/plugin-react": "^6.0.1",
-    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/coverage-v8": "^4.1.6",
     "@vitest/eslint-plugin": "^1.6.17",
-    "biome": "npm:@biomejs/biome@^2.4.14",
+    "biome": "npm:@biomejs/biome@^2.4.15",
     "eslint": "^10.3.0",
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-codegen": "0.34.1",
@@ -114,12 +114,13 @@
     "eslint-plugin-sonarjs": "^4.0.3",
     "eslint-plugin-sort-destructure-keys": "^3.0.0",
     "eslint-plugin-unicorn": "^64.0.0",
+    "fast-check": "4.8.0",
     "globals": "^17.6.0",
-    "jscpd": "^4.0.9",
+    "jscpd": "^4.1.1",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.2",
-    "vite": "^8.0.11",
-    "vitest": "^4.1.5",
-    "ws": "^8.20.0"
+    "typescript-eslint": "^8.59.3",
+    "vite": "^8.0.12",
+    "vitest": "^4.1.6",
+    "ws": "^8.20.1"
   }
 }

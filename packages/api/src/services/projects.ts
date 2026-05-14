@@ -26,6 +26,7 @@ import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import { Effect, Either, Logger } from "effect"
 
 import type {
+  ApplyProjectRequest,
   CreateProjectAccepted,
   CreateProjectRequest,
   ProjectDetails,
@@ -200,6 +201,7 @@ const toProjectDetails = (
   serviceName: project.serviceName,
   sshUser: project.sshUser,
   sshPort: project.sshPort,
+  gpu: project.gpu,
   targetDir: project.targetDir,
   projectDir: project.projectDir,
   sshCommand: project.sshCommand,
@@ -422,6 +424,7 @@ const toCreateRawOptions = (request: CreateProjectRequest): RawOptions => ({
   ...(request.codexHome === undefined ? {} : { codexHome: request.codexHome }),
   ...(request.cpuLimit === undefined ? {} : { cpuLimit: request.cpuLimit }),
   ...(request.ramLimit === undefined ? {} : { ramLimit: request.ramLimit }),
+  ...(request.gpu === undefined ? {} : { gpu: request.gpu }),
   ...(request.dockerNetworkMode === undefined ? {} : { dockerNetworkMode: request.dockerNetworkMode }),
   ...(request.dockerSharedNetworkName === undefined
     ? {}
@@ -591,7 +594,8 @@ export const applyAllProjects = (activeOnly: boolean) =>
   })
 
 export const applyProjectById = (
-  projectId: string
+  projectId: string,
+  request: ApplyProjectRequest = {}
 ) =>
   Effect.gen(function*(_) {
     const project = yield* _(findProjectById(projectId))
@@ -602,6 +606,7 @@ export const applyProjectById = (
         applyProjectConfig({
           _tag: "Apply",
           projectDir: project.projectDir,
+          ...(request.gpu === undefined ? {} : { gpu: request.gpu }),
           runUp: true
         })
       )

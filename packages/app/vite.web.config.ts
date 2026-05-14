@@ -24,6 +24,12 @@ const createProxy = (apiTarget: string) => ({
     xfwd: true,
     ws: false
   },
+  "/federation": {
+    target: apiTarget,
+    changeOrigin: false,
+    xfwd: true,
+    ws: false
+  },
   "/api": {
     target: apiTarget,
     changeOrigin: false,

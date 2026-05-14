@@ -22,6 +22,7 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
     - name: Install OpenSSH client
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         if command -v ssh >/dev/null 2>&1 && command -v ssh-keygen >/dev/null 2>&1; then

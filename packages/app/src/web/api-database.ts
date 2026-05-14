@@ -15,6 +15,12 @@ export const projectDatabaseEditorUrl = (session: ProjectDatabaseSession): strin
 export const projectDatabaseExternalUrl = (forward: ProjectDatabaseForward): string =>
   `${forward.publicHost}:${forward.hostPort}`
 
+const projectDatabaseProfilePath = (projectId: string, profileId: string): string =>
+  `/projects/${encodeURIComponent(projectId)}/databases/profiles/${encodeURIComponent(profileId)}`
+
+const projectDatabaseForwardPath = (projectId: string, profileId: string): string =>
+  `${projectDatabaseProfilePath(projectId, profileId)}/expose`
+
 export const loadProjectDatabaseProfiles = (projectId: string) =>
   requestJson(
     "GET",
@@ -50,11 +56,7 @@ export const saveProjectDatabaseProfile = (
 export const deleteProjectDatabaseProfile = (
   projectId: string,
   profileId: string
-) =>
-  requestText(
-    "DELETE",
-    `/projects/${encodeURIComponent(projectId)}/databases/profiles/${encodeURIComponent(profileId)}`
-  ).pipe(Effect.asVoid)
+) => requestText("DELETE", projectDatabaseProfilePath(projectId, profileId)).pipe(Effect.asVoid)
 
 export const exposeProjectDatabaseProfile = (
   projectId: string,
@@ -71,11 +73,7 @@ export const exposeProjectDatabaseProfile = (
 export const deleteProjectDatabaseForward = (
   projectId: string,
   profileId: string
-) =>
-  requestText(
-    "DELETE",
-    `/projects/${encodeURIComponent(projectId)}/databases/profiles/${encodeURIComponent(profileId)}/expose`
-  ).pipe(Effect.asVoid)
+) => requestText("DELETE", projectDatabaseForwardPath(projectId, profileId)).pipe(Effect.asVoid)
 
 export const loadProjectDatabaseSession = (projectId: string) =>
   requestJson(

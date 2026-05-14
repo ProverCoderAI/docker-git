@@ -82,6 +82,13 @@ export interface FileSummary {
   readonly totalBytes: number
 }
 
+export interface TokenReductionSummary {
+  readonly sourceTokens: number
+  readonly retainedTokens: number
+  readonly reducedTokens: number
+  readonly reductionPercent: number
+}
+
 export type CommentUploadState =
   | { readonly state: "queued" }
   | { readonly state: "skipped"; readonly message: string }
@@ -90,6 +97,7 @@ export type CommentUploadState =
     readonly manifestUrl: string
     readonly readmeUrl: string
     readonly summary: FileSummary
+    readonly tokenReduction: TokenReductionSummary
   }
   | { readonly state: "failed"; readonly message: string }
 

@@ -22,6 +22,8 @@ import type {
   CreateProjectRequest,
   ExchangePollRequest,
   ExchangeSubscribeRequest,
+  FederationExchangeEvent,
+  FederationExchangeStatus,
   FederationInboxResult,
   FederationIssueRecord,
   FollowStatus,
@@ -30,6 +32,13 @@ import type {
   ForgeFedTicket,
   ForgeFedTicketSource,
   ProjectDetails
+} from "../api/contracts.js"
+import {
+  activityForgeFedJsonLdContext,
+  activityStreamsJsonLdContext,
+  actorJsonLdContext,
+  federationJsonLdContentType,
+  forgeFedJsonLdContext
 } from "../api/contracts.js"
 import { ApiBadRequestError, ApiConflictError, ApiNotFoundError } from "../api/errors.js"
 import { getAgent, readAgentLogs, startAgent } from "./agents.js"
@@ -47,6 +56,7 @@ type StoredFederationState = {
   readonly issues: ReadonlyArray<FederationIssueRecord>
   readonly follows: ReadonlyArray<FollowSubscription>
   readonly processedOutboxItems: ReadonlyArray<string>
+  readonly exchangeEvents?: ReadonlyArray<FederationExchangeEvent> | undefined
   readonly localActorKeys?: LocalActorKeys | undefined
 }
 
@@ -71,6 +81,7 @@ type IngestOptions = {
   readonly scheduleTask?: boolean | undefined
   readonly context?: FederationContext | undefined
   readonly subscription?: FollowSubscription | undefined
+  readonly inheritedJsonLdContext?: unknown
 }
 
 export type FederationContextInput = {
@@ -93,16 +104,16 @@ export type FederationContext = {
 
 const defaultActorUsername = "docker-git"
 const activityJsonContentType = "application/activity+json"
-const jsonLdContentType = "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
-const activityAcceptHeader = `${jsonLdContentType}, ${activityJsonContentType}, application/json`
+const activityAcceptHeader = `${federationJsonLdContentType}, ${activityJsonContentType}, application/json`
 const defaultExchangeQueue = "code"
-const stateVersion = 1 as const
+const exchangeEventLimit = 100
 
 const issueStore: Map<string, FederationIssueRecord> = new Map()
 const followStore: Map<string, FollowSubscription> = new Map()
 const followByActivityId: Map<string, string> = new Map()
 const followByActorObject: Map<string, string> = new Map()
 const processedOutboxItems: Set<string> = new Set()
+let exchangeEvents: ReadonlyArray<FederationExchangeEvent> = []
 let localActorKeys: LocalActorKeys | null = null
 let stateLoaded = false
 
@@ -114,11 +125,141 @@ const isRecord = (value: unknown): value is JsonRecord =>
 const asRecord = (value: unknown): JsonRecord | null =>
   isRecord(value) ? value : null
 
+/**
+ * Extracts string JSON-LD context entries from a boundary value.
+ *
+ * @param value - Unknown ActivityPub or ForgeFed @context field value.
+ * @returns Immutable set of string context identifiers; unsupported shapes produce an empty set.
+ *
+ * @pure true
+ * @effect none
+ * @invariant every returned element is a string from value, and no non-string value is introduced.
+ * @precondition value may be any boundary value.
+ * @postcondition result contains value iff value is a string; result contains each string item iff value is an array.
+ * @complexity O(n) time and O(n) space where n is array length, or O(1) for non-array values.
+ * @throws Never.
+ */
+const jsonLdContextValues = (value: unknown): ReadonlySet<string> => {
+  if (typeof value === "string") {
+    return new Set([value])
+  }
+  if (!Array.isArray(value)) {
+    return new Set()
+  }
+  return new Set(value.filter((item): item is string => typeof item === "string"))
+}
+
+/**
+ * Checks whether a JSON-LD context value contains both required federation contexts.
+ *
+ * @param value - Unknown @context value to validate.
+ * @returns True when ActivityStreams and ForgeFed context identifiers are both present.
+ *
+ * @pure true
+ * @effect none
+ * @invariant result is true iff jsonLdContextValues(value) contains both required context URIs.
+ * @precondition value may be any boundary value.
+ * @postcondition result does not mutate or normalize the input value.
+ * @complexity O(n) time and O(n) space where n is array length, or O(1) for non-array values.
+ * @throws Never.
+ */
+const hasFederationJsonLdContext = (value: unknown): boolean => {
+  const contexts = jsonLdContextValues(value)
+  return contexts.has(activityStreamsJsonLdContext) && contexts.has(forgeFedJsonLdContext)
+}
+
+/**
+ * Requires a top-level federation document to declare or inherit valid JSON-LD contexts.
+ *
+ * @param payload - Parsed JSON object representing the federation document being checked.
+ * @param label - Human-readable document label used in the typed validation error.
+ * @param inheritedContext - Optional parent @context accepted when payload omits its own @context.
+ * @returns Effect that succeeds when ActivityStreams and ForgeFed contexts are available.
+ *
+ * @pure false
+ * @effect Constructs a typed ApiBadRequestError in the Effect error channel when validation fails.
+ * @invariant success implies payload.@context or inheritedContext contains ActivityStreams and ForgeFed contexts.
+ * @precondition payload is a decoded JSON object at the federation boundary.
+ * @postcondition failure message identifies the invalid document label.
+ * @complexity O(n) time and O(n) space where n is the checked context array length.
+ * @throws Never; validation failures are represented as ApiBadRequestError.
+ */
+const requireFederationJsonLdContext = (
+  payload: JsonRecord,
+  label: string,
+  inheritedContext?: unknown
+): Effect.Effect<void, ApiBadRequestError> => {
+  const context = payload["@context"]
+  const valid = context === undefined
+    ? hasFederationJsonLdContext(inheritedContext)
+    : hasFederationJsonLdContext(context)
+
+  return valid
+    ? Effect.void
+    : Effect.fail(
+      new ApiBadRequestError({
+        message: `${label} must include JSON-LD @context with ActivityStreams and ForgeFed contexts.`
+      })
+    )
+}
+
+/**
+ * Requires nested federation objects to use valid JSON-LD context only when they override inheritance.
+ *
+ * @param payload - Parsed nested JSON object being checked.
+ * @param label - Human-readable nested object label used in the typed validation error.
+ * @param inheritedContext - Parent @context available to nested objects that omit @context.
+ * @returns Effect that succeeds when the nested object inherits context or declares a valid override.
+ *
+ * @pure false
+ * @effect Delegates invalid explicit context failures to requireFederationJsonLdContext.
+ * @invariant missing nested @context is accepted, explicit nested @context must contain ActivityStreams and ForgeFed contexts.
+ * @precondition payload is a decoded nested JSON object and inheritedContext is the parent document context.
+ * @postcondition success preserves JSON-LD inheritance semantics for nested ForgeFed objects.
+ * @complexity O(n) time and O(n) space where n is the explicit nested context array length, or O(1) if omitted.
+ * @throws Never; validation failures are represented as ApiBadRequestError.
+ */
+const requireNestedFederationJsonLdContext = (
+  payload: JsonRecord,
+  label: string,
+  inheritedContext: unknown
+): Effect.Effect<void, ApiBadRequestError> =>
+  payload["@context"] === undefined
+    ? Effect.void
+    : requireFederationJsonLdContext(payload, label, inheritedContext)
+
 const asNonEmptyString = (value: unknown): string | null =>
   typeof value === "string" && value.trim().length > 0 ? value.trim() : null
 
 const readOptionalString = (record: JsonRecord, key: string): string | undefined =>
   asNonEmptyString(record[key]) ?? undefined
+
+type FederationExchangeEventDraft = Omit<FederationExchangeEvent, "id" | "occurredAt"> & {
+  readonly occurredAt?: string | undefined
+}
+
+const exchangeSubscriptionTarget = (subscription: FollowSubscription): string =>
+  subscription.subscriptionName ?? subscription.remoteActor ?? subscription.object
+
+const findExchangeSubscriptionByActor = (actor: string | undefined): FollowSubscription | undefined =>
+  actor === undefined
+    ? undefined
+    : [...followStore.values()].find((subscription) =>
+      subscription.remoteOutbox !== undefined &&
+        (subscription.remoteActor === actor || subscription.object === actor)
+    )
+
+const recordExchangeEvent = (event: FederationExchangeEventDraft): FederationExchangeEvent => {
+  const { occurredAt, ...details } = event
+  const stored: FederationExchangeEvent = {
+    id: randomUUID(),
+    occurredAt: occurredAt ?? nowIso(),
+    ...details
+  }
+  exchangeEvents = [...exchangeEvents, stored].slice(-exchangeEventLimit)
+  persistFederationStateBestEffort()
+  return stored
+}
 
 const readRequiredString = (
   record: JsonRecord,
@@ -298,10 +439,11 @@ const normalizeHttpUrl = (
   })
 
 const serializeState = (): StoredFederationState => ({
-  version: stateVersion,
+  version: 1,
   issues: [...issueStore.values()],
   follows: [...followStore.values()],
   processedOutboxItems: [...processedOutboxItems],
+  exchangeEvents,
   ...(localActorKeys === null ? {} : { localActorKeys })
 })
 
@@ -377,6 +519,7 @@ const hydrateState = (state: StoredFederationState): void => {
   followByActivityId.clear()
   followByActorObject.clear()
   processedOutboxItems.clear()
+  exchangeEvents = []
 
   for (const issue of state.issues ?? []) {
     issueStore.set(issue.issueId, issue)
@@ -387,6 +530,7 @@ const hydrateState = (state: StoredFederationState): void => {
   for (const item of state.processedOutboxItems ?? []) {
     processedOutboxItems.add(item)
   }
+  exchangeEvents = [...(state.exchangeEvents ?? [])].slice(-exchangeEventLimit)
   localActorKeys = state.localActorKeys ?? null
 }
 
@@ -456,7 +600,7 @@ const publicKeyForContext = (context: FederationContext): ActivityPubPublicKey =
 export const makeFederationActorDocument = (
   context: FederationContext
 ): ActivityPubPerson => ({
-  "@context": "https://www.w3.org/ns/activitystreams",
+  "@context": actorJsonLdContext,
   type: "Person",
   id: context.actorId,
   name: "docker-git task feed",
@@ -478,7 +622,7 @@ export const makeFederationOutboxCollection = (
 ): ActivityPubOrderedCollection => {
   const orderedItems = listFollowSubscriptions().map((subscription) => subscription.activity)
   return {
-    "@context": "https://www.w3.org/ns/activitystreams",
+    "@context": activityForgeFedJsonLdContext,
     type: "OrderedCollection",
     id: context.outbox,
     totalItems: orderedItems.length,
@@ -489,7 +633,7 @@ export const makeFederationOutboxCollection = (
 export const makeFederationFollowersCollection = (
   context: FederationContext
 ): ActivityPubOrderedCollection => ({
-  "@context": "https://www.w3.org/ns/activitystreams",
+  "@context": activityForgeFedJsonLdContext,
   type: "OrderedCollection",
   id: context.followers,
   totalItems: 0,
@@ -504,7 +648,7 @@ export const makeFederationFollowingCollection = (
     .map((subscription) => subscription.object)
 
   return {
-    "@context": "https://www.w3.org/ns/activitystreams",
+    "@context": activityForgeFedJsonLdContext,
     type: "OrderedCollection",
     id: context.following,
     totalItems: orderedItems.length,
@@ -515,7 +659,7 @@ export const makeFederationFollowingCollection = (
 export const makeFederationLikedCollection = (
   context: FederationContext
 ): ActivityPubOrderedCollection => ({
-  "@context": "https://www.w3.org/ns/activitystreams",
+  "@context": activityForgeFedJsonLdContext,
   type: "OrderedCollection",
   id: context.liked,
   totalItems: 0,
@@ -542,9 +686,11 @@ const readTicketAttachment = (payload: JsonRecord): ReadonlyArray<unknown> | und
 }
 
 const parseTicket = (
-  payload: JsonRecord
+  payload: JsonRecord,
+  inheritedJsonLdContext: unknown
 ): Effect.Effect<ForgeFedTicket, ApiBadRequestError> =>
   Effect.gen(function*(_) {
+    yield* _(requireNestedFederationJsonLdContext(payload, "ForgeFed ticket", inheritedJsonLdContext))
     if (!hasType(payload, "Ticket")) {
       return yield* _(
         Effect.fail(
@@ -666,10 +812,12 @@ const resolveFollowFromInbox = (
   })
 
 const ingestOfferTicket = (
-  payload: JsonRecord
+  payload: JsonRecord,
+  inheritedJsonLdContext: unknown
 ): Effect.Effect<FederationIssueRecord, ApiBadRequestError> =>
   Effect.gen(function*(_) {
     const objectPayload = yield* _(readObjectRecord(payload, "object", "ForgeFed offer"))
+    yield* _(requireNestedFederationJsonLdContext(objectPayload, "ForgeFed offer Ticket", inheritedJsonLdContext))
     if (!hasType(objectPayload, "Ticket")) {
       return yield* _(
         Effect.fail(
@@ -680,7 +828,7 @@ const ingestOfferTicket = (
       )
     }
 
-    const ticket = yield* _(parseTicket(objectPayload))
+    const ticket = yield* _(parseTicket(objectPayload, inheritedJsonLdContext))
     return upsertIssue({
       issueId: ticket.id,
       offerId: readOptionalString(payload, "id"),
@@ -695,9 +843,10 @@ const ingestOfferTicket = (
   })
 
 const ingestDirectTicket = (
-  payload: JsonRecord
+  payload: JsonRecord,
+  inheritedJsonLdContext: unknown
 ): Effect.Effect<FederationIssueRecord, ApiBadRequestError> =>
-  Effect.map(parseTicket(payload), (ticket) =>
+  Effect.map(parseTicket(payload, inheritedJsonLdContext), (ticket) =>
     upsertIssue({
       issueId: ticket.id,
       status: "accepted",
@@ -708,10 +857,12 @@ const ingestDirectTicket = (
 
 const ingestCreateTicket = (
   payload: JsonRecord,
-  options: IngestOptions
+  options: IngestOptions,
+  inheritedJsonLdContext: unknown
 ): Effect.Effect<FederationIssueRecord, ApiBadRequestError> =>
   Effect.gen(function*(_) {
     const objectPayload = yield* _(readObjectRecord(payload, "object", "ActivityPub Create"))
+    yield* _(requireNestedFederationJsonLdContext(objectPayload, "ActivityPub Create Ticket", inheritedJsonLdContext))
     if (!hasType(objectPayload, "Ticket")) {
       return yield* _(
         Effect.fail(
@@ -722,7 +873,7 @@ const ingestCreateTicket = (
       )
     }
 
-    const ticket = yield* _(parseTicket(objectPayload))
+    const ticket = yield* _(parseTicket(objectPayload, inheritedJsonLdContext))
     const subscription = options.subscription
     const issue = upsertIssue({
       issueId: ticket.id,
@@ -739,6 +890,22 @@ const ingestCreateTicket = (
 
     return issue
   })
+
+const recordIssueReceivedEvent = (
+  issue: FederationIssueRecord,
+  options: IngestOptions
+): void => {
+  const remoteActor = issue.actor ?? issue.ticket.attributedTo
+  const subscription = options.subscription ?? findExchangeSubscriptionByActor(remoteActor)
+  recordExchangeEvent({
+    kind: "inbox.issue.received",
+    subscriptionId: subscription?.id,
+    target: subscription === undefined ? undefined : exchangeSubscriptionTarget(subscription),
+    queue: subscription?.queue,
+    issueId: issue.issueId,
+    remoteActor: subscription?.remoteActor ?? remoteActor
+  })
+}
 
 // CHANGE: support ForgeFed issue inputs and ActivityPub inbox transitions in API mode.
 // WHY: issue #233 requires ForgeFed/ActivityPub subscription and task intake.
@@ -766,18 +933,24 @@ export const ingestFederationInbox = (
       )
     }
 
+    yield* _(requireFederationJsonLdContext(record, "Federation inbox payload", options.inheritedJsonLdContext))
+    const inheritedJsonLdContext = record["@context"] ?? options.inheritedJsonLdContext
+
     if (hasType(record, "Offer")) {
-      const issue = yield* _(ingestOfferTicket(record))
+      const issue = yield* _(ingestOfferTicket(record, inheritedJsonLdContext))
+      recordIssueReceivedEvent(issue, options)
       return { kind: "issue.offer", issue }
     }
 
     if (hasType(record, "Create")) {
-      const issue = yield* _(ingestCreateTicket(record, options))
+      const issue = yield* _(ingestCreateTicket(record, options, inheritedJsonLdContext))
+      recordIssueReceivedEvent(issue, options)
       return { kind: "issue.create", issue }
     }
 
     if (hasType(record, "Ticket")) {
-      const issue = yield* _(ingestDirectTicket(record))
+      const issue = yield* _(ingestDirectTicket(record, inheritedJsonLdContext))
+      recordIssueReceivedEvent(issue, options)
       return { kind: "issue.ticket", issue }
     }
 
@@ -785,6 +958,14 @@ export const ingestFederationInbox = (
       const subscription = yield* _(resolveFollowFromInbox(record))
       const status: FollowStatus = hasType(record, "Accept") ? "accepted" : "rejected"
       const updated = updateFollowStatus(subscription, status)
+      recordExchangeEvent({
+        kind: status === "accepted" ? "inbox.follow.accept" : "inbox.follow.reject",
+        subscriptionId: updated.id,
+        target: exchangeSubscriptionTarget(updated),
+        queue: updated.queue,
+        status: updated.status,
+        remoteActor: updated.remoteActor
+      })
       return status === "accepted"
         ? { kind: "follow.accept", subscription: updated }
         : { kind: "follow.reject", subscription: updated }
@@ -823,7 +1004,7 @@ const signRequestHeaders = (
 
   return {
     accept: activityAcceptHeader,
-    "content-type": activityJsonContentType,
+    "content-type": federationJsonLdContentType,
     date,
     digest,
     signature: [
@@ -910,10 +1091,7 @@ export const createFollowSubscription = (
     const createdAt = nowIso()
 
     const activity: ActivityPubFollowActivity = {
-      "@context": [
-        "https://www.w3.org/ns/activitystreams",
-        "https://forgefed.org/ns"
-      ],
+      "@context": activityForgeFedJsonLdContext,
       id: activityId,
       type: "Follow",
       actor,
@@ -1069,9 +1247,11 @@ const fetchJson = (
 
 const parseRemoteActorDocument = (
   payload: JsonRecord,
-  fallbackActor: string
+  fallbackActor: string,
+  inheritedJsonLdContext: unknown
 ): Effect.Effect<RemoteActorDocument, ApiBadRequestError> =>
   Effect.gen(function*(_) {
+    yield* _(requireFederationJsonLdContext(payload, "Exchange actor", inheritedJsonLdContext))
     const id = readOptionalString(payload, "id") ?? fallbackActor
     const outbox = readOptionalString(payload, "outbox")
     if (outbox === undefined) {
@@ -1120,21 +1300,33 @@ const parseExchangeActorPayload = (
   target: ExchangeTarget,
   candidateActor: string,
   payload: JsonRecord
-): Effect.Effect<RemoteActorDocument, ApiBadRequestError> => {
-  const collectionItems = collectionActorItems(payload)
-  const outbox = readOptionalString(payload, "outbox")
-  if (outbox === undefined && collectionItems.length > 0) {
-    const selected = collectionItems.find((item) => actorItemMatchesQueue(item, target.queue))
-    return selected === undefined
-      ? Effect.fail(
-        new ApiBadRequestError({
-          message: `Exchange actor collection did not include queue "${target.queue}".`
-        })
+): Effect.Effect<RemoteActorDocument, ApiBadRequestError> =>
+  Effect.gen(function*(_) {
+    yield* _(requireFederationJsonLdContext(payload, "Exchange actor"))
+    const inheritedJsonLdContext = payload["@context"]
+    const collectionItems = collectionActorItems(payload)
+    const outbox = readOptionalString(payload, "outbox")
+    if (outbox === undefined && collectionItems.length > 0) {
+      const selected = collectionItems.find((item) => actorItemMatchesQueue(item, target.queue))
+      if (selected === undefined) {
+        return yield* _(
+          Effect.fail(
+            new ApiBadRequestError({
+              message: `Exchange actor collection did not include queue "${target.queue}".`
+            })
+          )
+        )
+      }
+      return yield* _(
+        parseRemoteActorDocument(
+          selected,
+          readOptionalString(selected, "id") ?? target.remoteActor,
+          inheritedJsonLdContext
+        )
       )
-      : parseRemoteActorDocument(selected, readOptionalString(selected, "id") ?? target.remoteActor)
-  }
-  return parseRemoteActorDocument(payload, candidateActor)
-}
+    }
+    return yield* _(parseRemoteActorDocument(payload, candidateActor, inheritedJsonLdContext))
+  })
 
 const fetchExchangeActorDocument = (
   target: ExchangeTarget
@@ -1170,10 +1362,7 @@ const buildFollowActivity = (
   to: ReadonlyArray<string>,
   capability: string | undefined
 ): ActivityPubFollowActivity => ({
-  "@context": [
-    "https://www.w3.org/ns/activitystreams",
-    "https://forgefed.org/ns"
-  ],
+  "@context": activityForgeFedJsonLdContext,
   id: `${context.followsActivityPrefix}/${randomUUID()}`,
   type: "Follow",
   actor,
@@ -1242,6 +1431,14 @@ export const ensureExchangeSubscription = (
     if (inbox !== undefined) {
       yield* _(sendJsonLd(context, inbox, activity).pipe(Effect.ignore))
     }
+    recordExchangeEvent({
+      kind: "follow.sent",
+      subscriptionId: subscription.id,
+      target: exchangeSubscriptionTarget(subscription),
+      queue: subscription.queue,
+      status: subscription.status,
+      remoteActor: subscription.remoteActor
+    })
 
     return { subscription, activity }
   })
@@ -1255,12 +1452,65 @@ export const listFollowSubscriptions = (): ReadonlyArray<FollowSubscription> =>
 export const listExchangeSubscriptions = (): ReadonlyArray<FollowSubscription> =>
   listFollowSubscriptions().filter((subscription) => subscription.remoteOutbox !== undefined)
 
+const latestIso = (values: ReadonlyArray<string | undefined>): string | undefined =>
+  values
+    .filter((value): value is string => value !== undefined && value.length > 0)
+    .sort()
+    .at(-1)
+
+export const makeFederationExchangeStatus = (
+  context: FederationContext
+): FederationExchangeStatus => {
+  const subscriptions = listExchangeSubscriptions()
+  const recentEvents = [...exchangeEvents].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+  const accepted = subscriptions.filter((subscription) => subscription.status === "accepted").length
+  const pending = subscriptions.filter((subscription) => subscription.status === "pending").length
+  const rejected = subscriptions.filter((subscription) => subscription.status === "rejected").length
+  const inboxEventTimes = exchangeEvents
+    .filter((event) => event.kind === "inbox.follow.accept" || event.kind === "inbox.follow.reject" || event.kind === "inbox.issue.received")
+    .map((event) => event.occurredAt)
+  const acceptedTransitionTimes = subscriptions
+    .filter((subscription) => subscription.status === "accepted" || subscription.status === "rejected")
+    .map((subscription) => subscription.updatedAt)
+
+  return {
+    publicActor: context.actorId,
+    summary: {
+      subscriptions: subscriptions.length,
+      accepted,
+      pending,
+      rejected,
+      issues: issueStore.size,
+      processedOutboxItems: processedOutboxItems.size,
+      lastInboxAt: latestIso([...inboxEventTimes, ...acceptedTransitionTimes]),
+      lastPollAt: latestIso(
+        exchangeEvents
+          .filter((event) => event.kind === "poll.completed")
+          .map((event) => event.occurredAt)
+      )
+    },
+    subscriptions: subscriptions.map((subscription) => ({
+      id: subscription.id,
+      target: exchangeSubscriptionTarget(subscription),
+      queue: subscription.queue,
+      status: subscription.status,
+      remoteActor: subscription.remoteActor,
+      remoteInbox: subscription.remoteInbox,
+      remoteOutbox: subscription.remoteOutbox,
+      createdAt: subscription.createdAt,
+      updatedAt: subscription.updatedAt
+    })),
+    recentEvents
+  }
+}
+
 export const clearFederationState = (): void => {
   issueStore.clear()
   followStore.clear()
   followByActivityId.clear()
   followByActorObject.clear()
   processedOutboxItems.clear()
+  exchangeEvents = []
   localActorKeys = null
   stateLoaded = true
 }
@@ -1301,15 +1551,17 @@ const fetchOutbox = (
   url: string
 ): Effect.Effect<ActivityPubOrderedCollection, ApiBadRequestError> =>
   fetchJson(url, "Exchange outbox").pipe(
-    Effect.map((record) => ({
-      "@context": Array.isArray(record["@context"])
-        ? record["@context"].filter((item): item is string => typeof item === "string")
-        : "https://www.w3.org/ns/activitystreams",
-      type: "OrderedCollection" as const,
-      id: readOptionalString(record, "id") ?? url,
-      totalItems: typeof record["totalItems"] === "number" ? record["totalItems"] : 0,
-      orderedItems: Array.isArray(record["orderedItems"]) ? record["orderedItems"] : []
-    }))
+    Effect.flatMap((record) =>
+      requireFederationJsonLdContext(record, "Exchange outbox").pipe(
+        Effect.map((): ActivityPubOrderedCollection => ({
+          "@context": activityForgeFedJsonLdContext,
+          type: "OrderedCollection",
+          id: readOptionalString(record, "id") ?? url,
+          totalItems: typeof record["totalItems"] === "number" ? record["totalItems"] : 0,
+          orderedItems: Array.isArray(record["orderedItems"]) ? record["orderedItems"] : []
+        }))
+      )
+    )
   )
 
 const matchesPollRequest = (subscription: FollowSubscription, request: ExchangePollRequest): boolean => {
@@ -1355,7 +1607,8 @@ export const pollExchangeOutboxes = (
           ingestFederationInbox(item, {
             scheduleTask: true,
             context,
-            subscription
+            subscription,
+            inheritedJsonLdContext: collection["@context"]
           }).pipe(Effect.either)
         )
         processedOutboxItems.add(itemId)
@@ -1377,8 +1630,19 @@ export const pollExchangeOutboxes = (
       }
     }
 
+    const polledAt = nowIso()
+    recordExchangeEvent({
+      kind: "poll.completed",
+      occurredAt: polledAt,
+      target: request.target,
+      totalItems,
+      newItems,
+      processedItems,
+      failedItems
+    })
+
     return {
-      polledAt: nowIso(),
+      polledAt,
       subscriptions: subscriptions.length,
       totalItems,
       newItems,
@@ -1495,10 +1759,7 @@ const buildIssueUpdateActivity = (
   status: FederationIssueRecord["status"],
   message: string
 ) => ({
-  "@context": [
-    "https://www.w3.org/ns/activitystreams",
-    "https://forgefed.org/ns"
-  ],
+  "@context": activityForgeFedJsonLdContext,
   id: `${context.exchangeActivityPrefix}/${issueSlug(issue)}/${status}/${randomUUID()}`,
   type: "Update",
   actor: context.actorId,

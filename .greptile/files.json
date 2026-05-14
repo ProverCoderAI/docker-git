@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "description": "Main project behavior, CLI usage, runtime contracts, and architecture notes."
+    },
+    {
+      "path": "AGENTS.md",
+      "description": "Repository engineering rules, formal verification expectations, and review constraints."
+    },
+    {
+      "path": "LICENSE",
+      "description": "Project license text, legal terms, and copyright."
+    }
+  ]
+}

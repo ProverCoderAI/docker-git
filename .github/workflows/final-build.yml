@@ -1,0 +1,51 @@
+name: Final Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  final-build:
+    name: Final build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+        with:
+          bun-version: 1.3.11
+          node-version: 24.14.0
+      - name: Build final workspace packages
+        run: bun run build
+      - name: Verify docker-git CLI starts
+        run: bun ./packages/app/dist/src/docker-git/main.js --help
+      - name: Verify session sync CLI starts
+        run: bun ./packages/docker-git-session-sync/dist/docker-git-session-sync.js --help
+      - name: Verify browser UI and menu clone smoke checks
+        run: |
+          bun run --cwd packages/app build:web
+          bun scripts/final-build/browser-web-smoke.mjs
+          bun run --cwd packages/app vitest run tests/docker-git/browser-frontend.test.ts tests/docker-git/app-ready-create.test.ts tests/docker-git/actions-project-create.test.ts
+      - name: Prepare package artifacts directory
+        run: |
+          node -e "require('node:fs').mkdirSync('artifacts', { recursive: true })"
+      - name: Pack docker-git package
+        working-directory: packages/app
+        run: bun pm pack --quiet --ignore-scripts --destination ../../artifacts
+      - name: Pack session sync package
+        working-directory: packages/docker-git-session-sync
+        run: bun pm pack --quiet --ignore-scripts --destination ../../artifacts
+      - name: Upload final build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: final-build-${{ matrix.os }}
+          path: artifacts/*.tgz

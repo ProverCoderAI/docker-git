@@ -123,6 +123,9 @@ const resolveUpstreamPath = (url) => {
   return `${pathname}${parsed.search}`
 }
 
+const isFederationPath = (pathname) =>
+  pathname === "/federation" || pathname.startsWith("/federation/")
+
 const firstHeader = (value) => Array.isArray(value) ? value[0] : value
 
 const proxyForwardHeaders = (request, forwardedPrefix) => {
@@ -273,6 +276,7 @@ const server = createServer((request, response) => {
   if (
     parsed.pathname === "/api" ||
     parsed.pathname.startsWith("/api/") ||
+    isFederationPath(parsed.pathname) ||
     parsed.pathname.startsWith("/p/") ||
     parsed.pathname.startsWith("/b/") ||
     parsed.pathname.startsWith("/d/") ||

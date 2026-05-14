@@ -2,6 +2,7 @@ import * as Command from "@effect/platform/Command"
 import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, pipe } from "effect"
+import * as fc from "fast-check"
 
 import { defaultTemplateConfig, type TemplateConfig } from "../../src/core/domain.js"
 import { renderDockerCompose } from "../../src/core/templates/docker-compose.js"
@@ -26,6 +27,7 @@ const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateCo
   codexAuthPath: "/workspace/.orch/auth/codex",
   codexSharedAuthPath: "/workspace/.orch/auth/codex-shared",
   geminiAuthPath: "/workspace/.orch/auth/gemini",
+  gpu: "none",
   ...overrides
 })
 
@@ -34,6 +36,28 @@ const expectContainsAll = (value: string, snippets: ReadonlyArray<string>): void
     expect(value).toContain(snippet)
   }
 }
+
+const generatedTemplateConfigArbitrary: fc.Arbitrary<TemplateConfig> = fc
+  .record({
+    gpu: fc.constantFrom<TemplateConfig["gpu"]>("none", "all"),
+    projectIndex: fc.integer({ min: 1, max: 100_000 }),
+    sshPort: fc.integer({ min: 1_024, max: 65_535 }),
+    sshUserIndex: fc.integer({ min: 1, max: 100_000 })
+  })
+  .map(({ gpu, projectIndex, sshPort, sshUserIndex }) => {
+    const sshUser = `dev${sshUserIndex}`
+    const projectName = `repo-${projectIndex}`
+
+    return makeTemplateConfig({
+      containerName: `dg-test-${projectIndex}`,
+      gpu,
+      serviceName: `dg-test-${projectIndex}`,
+      sshPort,
+      sshUser,
+      targetDir: `/home/${sshUser}/org/${projectName}`,
+      volumeName: `dg-test-${projectIndex}-home`
+    })
+  })
 
 describe("renderEntrypointDnsRepair", () => {
   it("renders the fallback nameserver repair block", () => {
@@ -85,6 +109,27 @@ describe("renderDockerfile", () => {
     ])
   })
 
+  it("preserves HOME/PATH/WORKDIR normalization for generated configs", () => {
+    fc.assert(
+      fc.property(generatedTemplateConfigArbitrary, (config) => {
+        const dockerfile = renderDockerfile(config)
+        const home = `/home/${config.sshUser}`
+
+        expectContainsAll(dockerfile, [
+          `ENV HOME=${home}`,
+          `ENV PATH=/usr/local/bun/bin:${home}/.deno/bin:${home}/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
+          `WORKDIR ${home}`
+        ])
+        expect(dockerfile).not.toContain("ENV HOME=/home/box")
+        expect(dockerfile).not.toContain("ENV HOME=/home/ubuntu")
+        expect(dockerfile).not.toContain("WORKDIR /home/box")
+        expect(dockerfile).not.toContain("WORKDIR /home/ubuntu")
+        expect(dockerfile).not.toContain("ENV PATH=/usr/local/bun/bin:/home/box/")
+        expect(dockerfile).not.toContain("ENV PATH=/usr/local/bun/bin:/home/ubuntu/")
+      })
+    )
+  })
+
   it("rewrites inherited login rc files away from the base image home", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
@@ -111,6 +156,13 @@ describe("renderDockerfile", () => {
       "glab_1.93.0_linux_$GLAB_ARCH.deb",
       "curl -fsSL --retry 5 --retry-all-errors --retry-delay 2",
       "glab --version",
+      "ncurses-term jq",
+      "# Tooling: RTK (Rust Token Killer)",
+      "ARG RTK_VERSION=v0.39.0",
+      'https://raw.githubusercontent.com/rtk-ai/rtk/${RTK_VERSION}/install.sh',
+      'RTK_VERSION="${RTK_VERSION}" RTK_INSTALL_DIR=/usr/local/bin sh /tmp/rtk-install.sh',
+      "rtk --version",
+      "rtk gain >/dev/null 2>&1 || true",
       'ARG DOCKER_GIT_SESSION_SYNC_PACKAGE="@prover-coder-ai/docker-git-session-sync@latest"',
       'COPY .docker-git-tools/docker-git-session-sync /opt/docker-git/tools/docker-git-session-sync',
       'npm install -g "$DOCKER_GIT_SESSION_SYNC_PACKAGE"',
@@ -139,6 +191,54 @@ describe("renderPromptScript", () => {
       Effect.provide(NodeContext.layer)
     )
   )
+
+  it("keeps interactive prompt mutations behind the non-interactive guard", () => {
+    const nonInteractiveGuard = "*) return 0 2>/dev/null || exit 0 ;;"
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom("PROMPT_COMMAND=", "PS1=", "trap 'docker_git_terminal_sanitize' EXIT INT TERM"),
+        (interactiveMutation) => {
+          const script = renderPromptScript()
+          const guardIndex = script.indexOf(nonInteractiveGuard)
+
+          expect(guardIndex).toBeGreaterThanOrEqual(0)
+          expect(script.indexOf(interactiveMutation)).toBeGreaterThan(guardIndex)
+        }
+      )
+    )
+  })
+})
+
+describe("renderEntrypoint clone cache", () => {
+  it("refreshes mirrors without broad remote refs", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expect(entrypoint).toContain("git --git-dir '$CACHE_REPO_DIR' fetch")
+    expect(entrypoint).toContain("'+refs/heads/*:refs/heads/*'")
+    expect(entrypoint).toContain("'+refs/tags/*:refs/tags/*'")
+    expect(entrypoint).not.toContain("'+refs/*:refs/*'")
+    expect(entrypoint).not.toContain("'+refs/pull/*:refs/pull/*'")
+    expect(entrypoint).not.toContain("'+refs/merge-requests/*:refs/merge-requests/*'")
+  })
+
+  it("preserves branch/tag-only clone-cache refspecs for generated configs", () => {
+    fc.assert(
+      fc.property(generatedTemplateConfigArbitrary, (config) => {
+        const entrypoint = renderEntrypoint(config)
+        const cloneCacheFetch = entrypoint
+          .split("\n")
+          .find((line) => line.includes("git --git-dir '$CACHE_REPO_DIR' fetch"))
+
+        expect(cloneCacheFetch).toBeDefined()
+        expect(cloneCacheFetch).toContain("'+refs/heads/*:refs/heads/*'")
+        expect(cloneCacheFetch).toContain("'+refs/tags/*:refs/tags/*'")
+        expect(cloneCacheFetch).not.toContain("'+refs/*:refs/*'")
+        expect(cloneCacheFetch).not.toContain("refs/pull")
+        expect(cloneCacheFetch).not.toContain("refs/merge-requests")
+      })
+    )
+  })
 })
 
 describe("renderEntrypointGitHooks", () => {
@@ -178,7 +278,8 @@ describe("renderEntrypoint auth bridge", () => {
   const renderAuthEntrypoint = (): string =>
     renderEntrypoint(
       makeTemplateConfig({
-        enableMcpPlaywright: false
+        enableMcpPlaywright: false,
+        gpu: "none",
       })
     )
 
@@ -265,6 +366,15 @@ describe("renderEntrypoint auth bridge", () => {
       "docker_git_prepare_active_agent_project_rules()",
       "docker_git_detect_claude_project_rules()",
       "docker_git_detect_gemini_project_rules()",
+      "DOCKER_GIT_RTK_ENABLE=\"${DOCKER_GIT_RTK_ENABLE:-1}\"",
+      "DOCKER_GIT_RTK_ENABLE=1",
+      "docker_git_rtk_init_as_user()",
+      "mkdir -p \"$CLAUDE_CONFIG_DIR\" \"/home/dev/.codex\"",
+      "su - dev -s /bin/bash -c \"$command\" </dev/null",
+      "CODEX_HOME='/home/dev/.codex' rtk init -g --codex",
+      "RTK_CLAUDE_DIR='$CLAUDE_CONFIG_DIR' rtk init -g --auto-patch",
+      "rtk init -g --gemini --auto-patch",
+      "rtk init -g --opencode",
       "\"codex\")",
       "\"claude\")",
       "\"gemini\")",
@@ -389,9 +499,25 @@ describe("renderDockerCompose", () => {
     expect(compose).toContain('- "${DOCKER_GIT_PROJECT_SSH_BIND_HOST:-127.0.0.1}:2222:22"')
     expect(compose).toContain('    extra_hosts:\n      - "host.docker.internal:host-gateway"')
     expect(compose).toContain("    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1\n    networks:")
+    expect(compose).not.toContain("    gpus: all\n")
     expect(compose).not.toContain("dg-test-browser")
     expect(compose).not.toContain("/var/run/docker.sock:/var/run/docker.sock")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
+  })
+
+  it("renders GPU access only on the main service when explicitly enabled", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        enableMcpPlaywright: true,
+        gpu: "all"
+      })
+    )
+    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
+
+    expect(compose).toContain("    gpus: all\n")
+    expect((compose.match(/\n    gpus: all\n/g) ?? []).length).toBe(1)
+    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
+    expect(compose.slice(browserServiceIndex)).not.toContain("    gpus: all\n")
   })
 
   it("persists explicit Docker host into login and SSH environments before socket fallback", () => {
@@ -407,7 +533,8 @@ describe("renderDockerCompose", () => {
   it("renders fallback DNS servers for the browser sidecar when Playwright is enabled", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({
-        enableMcpPlaywright: true
+        enableMcpPlaywright: true,
+        gpu: "none",
       }),
       {
         cpuLimit: 1.5,
@@ -433,7 +560,8 @@ describe("renderDockerCompose", () => {
   it("applies separate resource limits for the browser sidecar when provided", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({
-        enableMcpPlaywright: true
+        enableMcpPlaywright: true,
+        gpu: "none",
       }),
       {
         main: { cpuLimit: 2, ramLimit: "4g" },
@@ -456,7 +584,8 @@ describe("renderDockerCompose", () => {
   it("backward-compatibly applies single resource limit shape to both services", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({
-        enableMcpPlaywright: true
+        enableMcpPlaywright: true,
+        gpu: "none",
       }),
       {
         cpuLimit: 1.5,

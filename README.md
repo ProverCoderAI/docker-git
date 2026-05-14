@@ -3,6 +3,8 @@
 `docker-git` создаёт отдельную Docker-среду для каждого репозитория, issue или PR.
 По умолчанию проекты лежат в `~/.docker-git`.
 
+License: MIT. See [LICENSE](LICENSE).
+
 ## Установка
 
 ```bash
@@ -58,6 +60,23 @@ docker-git apply-all --active
 - `apply` применяет конфиг к одному проекту. `--no-up` только обновляет файлы без `docker compose up`.
 - `apply-all` применяет конфиг ко всем проектам. `--active` только к запущенным контейнерам.
 
+## GPU режим
+
+По умолчанию проекты запускаются без GPU (`gpu: "none"`), поэтому Docker не
+требует NVIDIA runtime на обычных CPU-хостах.
+
+GPU включается только явно через `--gpu all` или сохранённое значение
+`"gpu": "all"` в `docker-git.json`. Если Docker возвращает ошибку NVIDIA
+prestart hook вида `nvidia-container-cli` / `libnvidia-ml.so.1`, `docker-git`
+перезаписывает managed-файлы проекта с `gpu: "none"` и повторяет
+`docker compose up`, чтобы среда оставалась запускаемой на хосте без рабочей
+NVIDIA userspace-части.
+
+Если проекту действительно нужен GPU, установите драйвер NVIDIA и NVIDIA
+Container Toolkit на хосте, затем снова примените конфигурацию с `--gpu all`.
+GPU для controller-контейнера включается отдельно через
+`DOCKER_GIT_CONTROLLER_GPU=all`; значение по умолчанию для controller тоже
+`none`.
 
 Для запуска WEB версии:
 ```bash
@@ -113,3 +132,30 @@ When the CLI cannot acquire Docker access it now prints a message that
 names the specific failure mode, restates the host-Docker contract, and
 lists remediation steps for that exact mode. Implementation lives in
 `packages/app/src/docker-git/controller-docker-diagnostics.ts`.
+
+## Resource limits
+
+`docker-git` caps host resource consumption at two layers so a runaway
+project (or the controller itself) cannot consume the entire system.
+
+- **Per-project containers** ship with a default limit of `30%` CPU and
+  `30%` RAM (resolved against the host on `apply`). Override via
+  `--cpu` / `--ram` (or per-project `docker-git.json`).
+- **Controller container** (`docker-git-api`) is capped in
+  `docker-compose.yml` and `docker-compose.api.yml`. When started through
+  `docker-git` or `./ctl`, the default CPU/RAM cap is resolved to `90%` of
+  host resources. Override with global CLI flags:
+
+  ```bash
+  docker-git --controller-cpu 75% --controller-ram 8g --controller-pids 8192 ps
+  ./ctl up --cpu 75% --ram 8g --pids 8192
+  ```
+
+  The same values can be provided through env vars before `docker-git` or
+  `./ctl up`:
+
+  | Variable                       | Default | Purpose                              |
+  | ------------------------------ | ------- | ------------------------------------ |
+  | `DOCKER_GIT_CONTROLLER_CPUS`   | `90%`   | CPU percent or cores for the controller |
+  | `DOCKER_GIT_CONTROLLER_MEMORY` | `90%`   | RAM percent or size; swap is matched |
+  | `DOCKER_GIT_CONTROLLER_PIDS`   | `4096`  | Maximum PIDs inside the controller   |
