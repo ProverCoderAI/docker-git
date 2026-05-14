@@ -227,7 +227,6 @@ export const useTerminalSessionLifecycle = (
   }, [
     connectionRef,
     hostRef,
-    inlineImagePreviewsEnabledRef,
     notifyMessage,
     onAttachFailure,
     runtimeRef,
