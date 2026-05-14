@@ -30,7 +30,7 @@ RUN set -eu; \
     sleep $((attempt * 2)); \
   done; \
   apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-    openssh-server git gh ca-certificates curl unzip bsdutils sudo \
+    openssh-server git gh ca-certificates curl unzip bsdutils sudo tmux \
     make docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
     ncurses-term jq \
  && rm -rf /var/lib/apt/lists/*

@@ -149,7 +149,8 @@ describe("web project actions", () => {
       startProjectTerminalSessionMock.mockImplementation(() =>
         Effect.succeed(startTerminalAccepted("pending-session-id"))
       )
-      loadProjectTerminalSessionMock.mockImplementation(() => Effect.succeed(session))
+      const acceptedSession = { ...session, id: "pending-session-id" }
+      loadProjectTerminalSessionMock.mockImplementation(() => Effect.succeed(acceptedSession))
       openProjectEventStreamMock.mockImplementation(() => ({ close: eventStreamCloseMock }))
       const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
       const closeTerminalSession = vi.fn<(sessionId: string) => void>()
@@ -164,7 +165,7 @@ describe("web project actions", () => {
         payload: {
           phase: "created",
           requestId: "pending-session-id",
-          sessionId: "session-1"
+          sessionId: "pending-session-id"
         },
         projectId: "project-1",
         seq: 8,
@@ -180,7 +181,7 @@ describe("web project actions", () => {
         throw new Error("missing pending terminal session")
       }
       expect(startProjectTerminalSessionMock).toHaveBeenCalledWith("octocat/hello-world", "pending-session-id")
-      expect(loadProjectTerminalSessionMock).toHaveBeenCalledWith("octocat/hello-world", "session-1")
+      expect(loadProjectTerminalSessionMock).toHaveBeenCalledWith("octocat/hello-world", "pending-session-id")
       expect(context.setSelectedProjectId).toHaveBeenCalledWith("project-1")
       expect(pendingSession).toMatchObject({
         browserProjectId: "project-1",
@@ -197,17 +198,17 @@ describe("web project actions", () => {
         browserProjectId: "project-1",
         browserProjectKey: "octocat/hello-world",
         browserProjectName: "octocat/hello-world",
-        closePath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1",
+        closePath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/pending-session-id",
         exitMessage: "SSH session ended.",
         header: "SSH terminal: octocat/hello-world",
         onExit: reloadDashboard,
         onReady: reloadDashboard,
         pendingDeleteMessage: "Terminal session was closed before attach: octocat/hello-world.",
         readyMessage: "SSH connected: octocat/hello-world.",
-        session,
-        sessionPath: "/ssh/session/session-1",
+        session: acceptedSession,
+        sessionPath: "/ssh/session/pending-session-id",
         subtitle: "ssh -p 22 dev@172.18.0.7",
-        websocketPath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1/ws"
+        websocketPath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/pending-session-id/ws"
       })
       expect(eventStreamCloseMock).toHaveBeenCalledTimes(1)
       expect(setMessage).toHaveBeenLastCalledWith(
