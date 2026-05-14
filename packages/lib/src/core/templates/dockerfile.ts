@@ -1,11 +1,37 @@
 import type { TemplateConfig } from "../domain.js"
+import { shellSingleQuote } from "../shell-literals.js"
 import { renderDockerfilePrompt } from "../templates-prompt.js"
 import { renderDockerfileGlab } from "./glab.js"
 import { renderDockerfileGitleaks, renderDockerfileOpenCode } from "./tools.js"
 
-const renderDockerfilePrelude = (): string =>
-  `FROM ubuntu:24.04
+// CHANGE: use the shared link-foundation JS box as the generated project base image
+// WHY: issue #267 asks docker-git to reuse unified box containers instead of maintaining a raw Ubuntu workspace base; the Docker Hub JS image is public and version-pinned to avoid latest drift
+// QUOTE(ТЗ): "Что бы не зависить только от своих обновлений, а иметь единую инфраструктру есть смысл юзать готовый репозиторий"
+// REF: issue-267
+// SOURCE: https://github.com/link-foundation/box#docker-hub---combo-boxes
+// FORMAT THEOREM: renderDockerfile(config) -> base_image_default(rendered) = konard/box-js:2.1.1
+// PURITY: CORE
+// INVARIANT: the rendered Dockerfile inherits JS/runtime tooling from link-foundation/box while preserving docker-git bootstrap layers
+// COMPLEXITY: O(1)/O(1)
+const dockerGitBaseImage = "konard/box-js:2.1.1"
 
+/**
+ * Renders the base image, root user, apt mirror, core packages, and sudo prelude.
+ *
+ * @returns Dockerfile fragment that establishes the shared project container base.
+ * @pure true
+ * @effect none; CORE template renderer only constructs a string.
+ * @invariant the returned fragment starts from the configured shared JS box image.
+ * @precondition docker-git generated entrypoint remains the container entrypoint.
+ * @postcondition the fragment keeps root available for setup and runtime bootstrap.
+ * @complexity O(1) time / O(1) space.
+ */
+const renderDockerfilePrelude = (): string =>
+  `ARG DOCKER_GIT_BASE_IMAGE=${dockerGitBaseImage}
+FROM \${DOCKER_GIT_BASE_IMAGE}
+
+#checkov:skip=CKV_DOCKER_8: docker-git entrypoint must start as root to prepare SSH/auth/bootstrap and run sshd
+USER root
 ARG UBUNTU_APT_MIRROR=
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NVM_DIR=/usr/local/nvm
@@ -187,8 +213,19 @@ exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" "\${EXTRA_ARGS[@]}" "$@"
 EOF
 RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
 
+/**
+ * Renders /etc/profile.d/bun.sh with a runtime-relative PATH extension.
+ *
+ * @returns Dockerfile RUN directive that prepends Bun to PATH at container runtime.
+ * @pure true
+ * @effect none; CORE template renderer only constructs a string.
+ * @invariant output contains /usr/local/bun/bin and escaped \$PATH, preserving shell-time expansion.
+ * @precondition no inputs are required.
+ * @postcondition returned Dockerfile command writes /etc/profile.d/bun.sh and chmods it to 0644.
+ * @complexity O(1) time / O(1) space.
+ */
 const renderDockerfileBunProfile = (): string =>
-  `RUN printf "export PATH=/usr/local/bun/bin:$PATH\\n" \
+  `RUN printf "export PATH=/usr/local/bun/bin:\\$PATH\\n" \
   > /etc/profile.d/bun.sh && chmod 0644 /etc/profile.d/bun.sh`
 
 const renderDockerfileBun = (config: TemplateConfig): string =>
@@ -204,21 +241,54 @@ const renderDockerfileBun = (config: TemplateConfig): string =>
     .filter((chunk) => chunk.trim().length > 0)
     .join("\n")
 
+// CHANGE: normalize inherited box image HOME/PATH/WORKDIR and moved login files after the SSH user rewrite
+// WHY: box-js publishes HOME=/home/box and login rc files may contain absolute /home/box references; runtime user paths must be re-bound to the mounted /home/dev volume
+// QUOTE(ТЗ): "юзать готовый репозиторий"
+// REF: issue-267
+// SOURCE: n/a
+// FORMAT THEOREM: forall u = config.sshUser: HOME(rendered) = /home/u and forall p in login_rc(u): not contains(p, "/home/box")
+// PURITY: CORE
+// INVARIANT: tilde-expanded and login-shell runtime paths for the SSH user resolve inside the configured home volume
+// COMPLEXITY: O(1)/O(1)
+/**
+ * Renders user, home, PATH, workdir, sudo, and sshd configuration for the project account.
+ *
+ * @param config - Template configuration whose sshUser is validated before rendering.
+ * @returns Dockerfile fragment that creates or rewrites the non-root SSH user.
+ * @pure true
+ * @effect none; CORE template renderer only constructs a string.
+ * @invariant rendered HOME, PATH, WORKDIR, sudoers, and AllowUsers entries target config.sshUser.
+ * @precondition config.sshUser satisfies the Linux user-name invariant.
+ * @postcondition inherited box or ubuntu accounts resolve to config.sshUser when present.
+ * @complexity O(1) time / O(1) space.
+ */
 const renderDockerfileUsers = (config: TemplateConfig): string =>
   `# Create non-root user for SSH (align UID/GID with host user 1000)
-RUN if id -u ubuntu >/dev/null 2>&1; then \
-      if getent group 1000 >/dev/null 2>&1; then \
-        EXISTING_GROUP="$(getent group 1000 | cut -d: -f1)"; \
-        if [ "$EXISTING_GROUP" != "${config.sshUser}" ]; then groupmod -n ${config.sshUser} "$EXISTING_GROUP" || true; fi; \
+RUN for BASE_USER in ubuntu box; do \
+      if [ "$BASE_USER" != "${config.sshUser}" ] && id -u "$BASE_USER" >/dev/null 2>&1; then \
+        if getent group 1000 >/dev/null 2>&1; then \
+          EXISTING_GROUP="$(getent group 1000 | cut -d: -f1)"; \
+          if [ "$EXISTING_GROUP" != "${config.sshUser}" ]; then groupmod -n ${config.sshUser} "$EXISTING_GROUP" || true; fi; \
+        fi; \
+        usermod -l ${config.sshUser} -d /home/${config.sshUser} -m -s /usr/bin/zsh "$BASE_USER" || true; \
+        break; \
       fi; \
-      usermod -l ${config.sshUser} -d /home/${config.sshUser} -m -s /usr/bin/zsh ubuntu || true; \
-    fi
+    done
 RUN if id -u ${config.sshUser} >/dev/null 2>&1; then \
       usermod -u 1000 -g 1000 -o ${config.sshUser}; \
     else \
       groupadd -g 1000 ${config.sshUser} || true; \
       useradd -m -s /usr/bin/zsh -u 1000 -g 1000 -o ${config.sshUser}; \
     fi
+RUN set -eu; \
+    if [ -d /home/${config.sshUser} ]; then \
+      find /home/${config.sshUser} -maxdepth 2 -type f \
+        \\( -name ".profile" -o -name ".bash_profile" -o -name ".bashrc" -o -name ".zprofile" -o -name ".zshenv" -o -name ".zshrc" \\) \
+        -exec sed -i -e "s|/home/box|/home/${config.sshUser}|g" -e "s|/home/ubuntu|/home/${config.sshUser}|g" {} +; \
+    fi
+ENV HOME=/home/${config.sshUser}
+ENV PATH=/usr/local/bun/bin:/home/${config.sshUser}/.deno/bin:/home/${config.sshUser}/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WORKDIR /home/${config.sshUser}
 RUN printf "%s\\n" "${config.sshUser} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${config.sshUser} \
   && chmod 0440 /etc/sudoers.d/${config.sshUser}
 
@@ -259,11 +329,22 @@ RUN set -eu; \
     docker-git-session-sync --help >/dev/null; \
   fi`
 
-const renderDockerfileWorkspace = (config: TemplateConfig): string =>
-  `# Workspace path (supports root-level dirs like /repo)
-RUN mkdir -p ${config.targetDir} \
-  && chown -R 1000:1000 /home/${config.sshUser} \
-  && if [ "${config.targetDir}" != "/" ]; then chown -R 1000:1000 "${config.targetDir}"; fi
+const renderDockerfileWorkspace = (config: TemplateConfig): string => {
+  const targetDirLiteral = shellSingleQuote(config.targetDir)
+
+  return `# Workspace path (supports root-level dirs like /repo)
+RUN set -eu; \
+    HOME_DIR="/home/${config.sshUser}"; \
+    TARGET_DIR=${targetDirLiteral}; \
+    HOME_DIR_CANON="$HOME_DIR"; \
+    TARGET_DIR_CANON="$TARGET_DIR"; \
+    while [ "\${HOME_DIR_CANON%/}" != "$HOME_DIR_CANON" ]; do HOME_DIR_CANON="\${HOME_DIR_CANON%/}"; done; \
+    while [ "\${TARGET_DIR_CANON%/}" != "$TARGET_DIR_CANON" ]; do TARGET_DIR_CANON="\${TARGET_DIR_CANON%/}"; done; \
+    [ -n "$HOME_DIR_CANON" ] || HOME_DIR_CANON="/"; \
+    [ -n "$TARGET_DIR_CANON" ] || TARGET_DIR_CANON="/"; \
+    mkdir -p "$HOME_DIR" "$TARGET_DIR"; \
+    chown 1000:1000 "$HOME_DIR"; \
+    if [ "$TARGET_DIR_CANON" != "/" ] && [ "$TARGET_DIR_CANON" != "$HOME_DIR_CANON" ]; then chown -R 1000:1000 "$TARGET_DIR"; fi
 
 RUN mkdir -p /opt/docker-git/bootstrap/.orch/auth/codex \
   /opt/docker-git/bootstrap/.orch/auth/codex-shared \
@@ -278,6 +359,7 @@ RUN sed -i 's/\\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 EXPOSE 22
 ENTRYPOINT ["/entrypoint.sh"]`
+}
 
 export const renderDockerfile = (config: TemplateConfig): string =>
   [

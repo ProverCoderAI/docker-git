@@ -5,7 +5,9 @@ RUN_ID="$(date +%s)-$RANDOM"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$REPO_ROOT/scripts/e2e/_lib.sh"
-ROOT_BASE="${DOCKER_GIT_E2E_ROOT_BASE:-$REPO_ROOT/.docker-git/e2e-root}"
+# Keep transient project state outside the checkout so docker bind-mount
+# ownership changes cannot interfere with git operations during E2E runs.
+ROOT_BASE="${DOCKER_GIT_E2E_ROOT_BASE:-/tmp/docker-git-e2e-root}"
 mkdir -p "$ROOT_BASE"
 ROOT="$(mktemp -d "$ROOT_BASE/login-context.XXXXXX")"
 # docker-git containers may `chown -R` the `.docker-git` bind mount to UID 1000.

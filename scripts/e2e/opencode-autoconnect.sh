@@ -5,7 +5,7 @@ RUN_ID="$(date +%s)-$RANDOM"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$REPO_ROOT/scripts/e2e/_lib.sh"
-ROOT_BASE="${DOCKER_GIT_E2E_ROOT_BASE:-$REPO_ROOT/.docker-git/e2e-root}"
+ROOT_BASE="${DOCKER_GIT_E2E_ROOT_BASE:-/tmp/docker-git-e2e-root}"
 mkdir -p "$ROOT_BASE"
 ROOT="$(mktemp -d "$ROOT_BASE/opencode-autoconnect.XXXXXX")"
 # docker-git containers may `chown -R` the `.docker-git` bind mount to UID 1000.
@@ -42,6 +42,10 @@ fail() {
 on_error() {
   local line="$1"
   echo "e2e/opencode-autoconnect: failed at line $line" >&2
+  if [[ -f "${AUTH_LOG:-}" ]]; then
+    echo "--- codex auth log ---" >&2
+    cat "$AUTH_LOG" >&2 || true
+  fi
   docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -n 50 || true
   if dg_project_docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" 2>/dev/null; then
     dg_project_docker exec -u dev "$CONTAINER_NAME" bash -lc '
