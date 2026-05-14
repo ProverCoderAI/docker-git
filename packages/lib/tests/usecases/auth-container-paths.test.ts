@@ -7,9 +7,11 @@ import { Effect } from "effect"
 import * as Inspectable from "effect/Inspectable"
 import * as Sink from "effect/Sink"
 import * as Stream from "effect/Stream"
+import { vi } from "vitest"
 
 import { authCodexLogin } from "../../src/usecases/auth-codex.js"
 import { authGithubLogin } from "../../src/usecases/auth-github.js"
+import { githubForbiddenDeleteRepoScopeMessage } from "../../src/usecases/github-scope-policy.js"
 
 type RecordedCommand = {
   readonly command: string
@@ -60,6 +62,23 @@ const withPatchedEnv = <A, E, R>(
             process.env[key] = value
           }
         }
+      })
+  )
+
+const withPatchedFetch = <A, E, R>(
+  fetchImpl: typeof globalThis.fetch,
+  effect: Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R> =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const previous = globalThis.fetch
+      globalThis.fetch = fetchImpl
+      return previous
+    }),
+    () => effect,
+    (previous) =>
+      Effect.sync(() => {
+        globalThis.fetch = previous
       })
   )
 
@@ -145,6 +164,15 @@ const makeFakeExecutor = (
   return CommandExecutor.makeExecutor(start)
 }
 
+const githubUserResponse = (scopes: string): Response =>
+  new Response(JSON.stringify({ login: "octocat" }), {
+    status: 200,
+    headers: {
+      "content-type": "application/json",
+      "x-oauth-scopes": scopes
+    }
+  })
+
 describe("auth container paths", () => {
   it.effect("pins gh auth login and token reads to the same writable config dir", () =>
     withTempDir((root) =>
@@ -154,35 +182,50 @@ describe("auth container paths", () => {
         const accountPath = `${root}/.docker-git/.orch/auth/gh/default`
         const recorded: Array<RecordedCommand> = []
         const executor = makeFakeExecutor(recorded)
+        const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
+          Effect.runPromise(Effect.succeed(githubUserResponse("repo, workflow, read:org")))
+        )
 
         yield* _(
-          withPatchedEnv(
-            {
-              HOME: root,
-              DOCKER_GIT_STATE_AUTO_SYNC: "0"
-            },
-            withWorkingDirectory(
-              root,
-              authGithubLogin({
-                _tag: "AuthGithubLogin",
-                label: null,
-                token: null,
-                scopes: null,
-                envGlobalPath: ".docker-git/.orch/env/global.env"
-              }).pipe(Effect.provideService(CommandExecutor.CommandExecutor, executor))
+          withPatchedFetch(
+            fetchMock,
+            withPatchedEnv(
+              {
+                HOME: root,
+                DOCKER_GIT_STATE_AUTO_SYNC: "0"
+              },
+              withWorkingDirectory(
+                root,
+                authGithubLogin({
+                  _tag: "AuthGithubLogin",
+                  label: null,
+                  token: null,
+                  scopes: null,
+                  envGlobalPath: ".docker-git/.orch/env/global.env"
+                }).pipe(Effect.provideService(CommandExecutor.CommandExecutor, executor))
+              )
             )
           )
         )
 
-        const loginCommand = recorded.find((entry) =>
+        const loginIndex = recorded.findIndex((entry) =>
           isDockerRunFor(entry, "docker-git-auth-gh:latest", ["auth", "login"])
         )
-        const tokenCommand = recorded.find((entry) =>
+        const refreshIndex = recorded.findIndex((entry) =>
+          isDockerRunFor(entry, "docker-git-auth-gh:latest", ["auth", "refresh"])
+        )
+        const tokenIndex = recorded.findIndex((entry) =>
           isDockerRunFor(entry, "docker-git-auth-gh:latest", ["auth", "token"])
         )
+        const loginCommand = recorded[loginIndex]
+        const refreshCommand = recorded[refreshIndex]
+        const tokenCommand = recorded[tokenIndex]
 
         expect(loginCommand).toBeDefined()
+        expect(refreshCommand).toBeDefined()
         expect(tokenCommand).toBeDefined()
+        expect(refreshIndex).toBeGreaterThan(loginIndex)
+        expect(tokenIndex).toBeGreaterThan(refreshIndex)
         expect(
           includesArgsInOrder(loginCommand?.args ?? [], [
             "-v",
@@ -193,7 +236,24 @@ describe("auth container paths", () => {
             "GH_CONFIG_DIR=/gh-auth",
             "docker-git-auth-gh:latest",
             "auth",
-            "login"
+            "login",
+            "--scopes",
+            "repo,workflow,read:org"
+          ])
+        ).toBe(true)
+        expect(
+          includesArgsInOrder(refreshCommand?.args ?? [], [
+            "-v",
+            `${accountPath}:/gh-auth`,
+            "-e",
+            "BROWSER=echo",
+            "-e",
+            "GH_CONFIG_DIR=/gh-auth",
+            "docker-git-auth-gh:latest",
+            "auth",
+            "refresh",
+            "--remove-scopes",
+            "delete_repo"
           ])
         ).toBe(true)
         expect(
@@ -210,6 +270,126 @@ describe("auth container paths", () => {
 
         const envText = yield* _(fs.readFileString(envPath))
         expect(envText).toContain("GITHUB_TOKEN=test-gh-token")
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("filters delete_repo from requested scopes before GitHub web login", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const recorded: Array<RecordedCommand> = []
+        const executor = makeFakeExecutor(recorded)
+        const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
+          Effect.runPromise(Effect.succeed(githubUserResponse("repo, workflow")))
+        )
+
+        yield* _(
+          withPatchedFetch(
+            fetchMock,
+            withPatchedEnv(
+              {
+                HOME: root,
+                DOCKER_GIT_STATE_AUTO_SYNC: "0"
+              },
+              withWorkingDirectory(
+                root,
+                authGithubLogin({
+                  _tag: "AuthGithubLogin",
+                  label: null,
+                  token: null,
+                  scopes: "repo,DELETE_REPO workflow",
+                  envGlobalPath: ".docker-git/.orch/env/global.env"
+                }).pipe(Effect.provideService(CommandExecutor.CommandExecutor, executor))
+              )
+            )
+          )
+        )
+
+        const loginCommand = recorded.find((entry) =>
+          isDockerRunFor(entry, "docker-git-auth-gh:latest", ["auth", "login"])
+        )
+
+        expect(loginCommand).toBeDefined()
+        expect(includesArgsInOrder(loginCommand?.args ?? [], ["--scopes", "repo,workflow"])).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("does not persist a generated token when GitHub reports delete_repo", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const envPath = `${root}/.docker-git/.orch/env/global.env`
+        const recorded: Array<RecordedCommand> = []
+        const executor = makeFakeExecutor(recorded)
+        const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
+          Effect.runPromise(Effect.succeed(githubUserResponse("repo, delete_repo")))
+        )
+
+        const failure = yield* _(
+          withPatchedFetch(
+            fetchMock,
+            withPatchedEnv(
+              {
+                HOME: root,
+                DOCKER_GIT_STATE_AUTO_SYNC: "0"
+              },
+              withWorkingDirectory(
+                root,
+                authGithubLogin({
+                  _tag: "AuthGithubLogin",
+                  label: null,
+                  token: null,
+                  scopes: null,
+                  envGlobalPath: ".docker-git/.orch/env/global.env"
+                }).pipe(
+                  Effect.provideService(CommandExecutor.CommandExecutor, executor),
+                  Effect.flip
+                )
+              )
+            )
+          )
+        )
+
+        expect(failure._tag).toBe("AuthError")
+        expect(failure.message).toBe(githubForbiddenDeleteRepoScopeMessage)
+        expect(yield* _(fs.exists(envPath))).toBe(false)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("rejects a manual token when GitHub reports delete_repo", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const envPath = `${root}/.docker-git/.orch/env/global.env`
+        const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
+          Effect.runPromise(Effect.succeed(githubUserResponse("repo, delete_repo")))
+        )
+
+        const failure = yield* _(
+          withPatchedFetch(
+            fetchMock,
+            withPatchedEnv(
+              {
+                HOME: root,
+                DOCKER_GIT_STATE_AUTO_SYNC: "0"
+              },
+              withWorkingDirectory(
+                root,
+                authGithubLogin({
+                  _tag: "AuthGithubLogin",
+                  label: null,
+                  token: "manual-token",
+                  scopes: null,
+                  envGlobalPath: ".docker-git/.orch/env/global.env"
+                }).pipe(Effect.flip)
+              )
+            )
+          )
+        )
+
+        expect(failure._tag).toBe("AuthError")
+        expect(failure.message).toBe(githubForbiddenDeleteRepoScopeMessage)
+        expect(yield* _(fs.exists(envPath))).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
