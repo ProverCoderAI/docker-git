@@ -11,6 +11,7 @@ import { parseInspectNetworkEntry } from "@effect-template/lib/shell/docker-insp
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import type * as PlatformPath from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
@@ -20,7 +21,7 @@ import { Effect, Either } from "effect"
 import { Buffer } from "node:buffer"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import type { IncomingMessage, Server as HttpServer } from "node:http"
 import os from "node:os"
 import path from "node:path"
@@ -74,9 +75,15 @@ type TerminalRecord = {
   projectKey: string
   projectTargetDir: string
   prepared: ReturnType<typeof prepareProjectSsh>
+  tmuxName: string
 }
 
 type TerminalSessionRuntime =
+  | CommandExecutor.CommandExecutor
+  | FileSystem.FileSystem
+  | PlatformPath.Path
+
+type TerminalSessionStateRuntime =
   | CommandExecutor.CommandExecutor
   | FileSystem.FileSystem
   | PlatformPath.Path
@@ -101,11 +108,12 @@ type DurableTerminalSessionFile = {
 }
 
 const records = new Map<string, TerminalRecord>()
+const terminalSessionPersistenceQueues = new Map<string, Promise<void>>()
 const terminalWsPathPattern = /^(?:\/api)?\/projects\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
 const terminalWsByKeyPathPattern = /^(?:\/api)?\/projects\/by-key\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
 const terminalSessionStateRelativePath: ReadonlyArray<string> = [".orch", "state", "terminal-sessions.json"]
 const tmuxMissingMessage =
-  "tmux is not installed in this project image. Apply or rebuild the project image, then reopen this SSH terminal session."
+  "tmux is not available in this project container. Apply docker-git config or rebuild the project image so tmux is installed, then reopen this SSH terminal session."
 
 const TerminalClientMessageSchema = Schema.parseJson(
   Schema.Union(
@@ -164,12 +172,28 @@ export const clearTerminalSessionRuntimeForTest = (): void => {
     closeRecordSockets(record)
   }
   records.clear()
+  terminalSessionPersistenceQueues.clear()
 }
 
 const nowIso = (): string => new Date().toISOString()
 
-const terminalSessionStatePath = (projectId: string): string =>
-  path.join(projectId, ...terminalSessionStateRelativePath)
+const isPathInsideDirectory = (root: string, candidate: string): boolean => {
+  const resolvedRoot = path.resolve(root)
+  const resolvedCandidate = path.resolve(candidate)
+  if (resolvedCandidate === resolvedRoot) {
+    return false
+  }
+  const prefix = resolvedRoot.endsWith(path.sep) ? resolvedRoot : `${resolvedRoot}${path.sep}`
+  return resolvedCandidate.startsWith(prefix)
+}
+
+const terminalSessionStatePath = (projectId: string): string => {
+  const projectRoot = path.resolve(projectId)
+  const statePath = path.resolve(projectRoot, ...terminalSessionStateRelativePath)
+  return isPathInsideDirectory(projectRoot, statePath)
+    ? statePath
+    : path.resolve(projectRoot, ".orch", "state", "terminal-sessions.json")
+}
 
 const emptyTerminalSessionFile = (): DurableTerminalSessionFile => ({
   schemaVersion: 1,
@@ -182,27 +206,57 @@ const decodeTerminalSessionFile = (input: string): DurableTerminalSessionFile | 
     onRight: (value) => value
   })
 
-const readTerminalSessionFile = (projectId: string): DurableTerminalSessionFile => {
-  const statePath = terminalSessionStatePath(projectId)
-  if (!existsSync(statePath)) {
-    return emptyTerminalSessionFile()
-  }
-  try {
-    const decoded = decodeTerminalSessionFile(readFileSync(statePath, "utf8"))
-    return decoded ?? emptyTerminalSessionFile()
-  } catch {
-    return emptyTerminalSessionFile()
-  }
-}
+const readTerminalSessionFile = (
+  projectId: string
+): Effect.Effect<DurableTerminalSessionFile, never, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const statePath = terminalSessionStatePath(projectId)
+    const exists = yield* _(Effect.either(fs.exists(statePath)))
+    const fileExists = Either.match(exists, {
+      onLeft: () => false,
+      onRight: (value) => value
+    })
+    if (!fileExists) {
+      return emptyTerminalSessionFile()
+    }
+    const contents = yield* _(Effect.either(fs.readFileString(statePath)))
+    return Either.match(contents, {
+      onLeft: () => emptyTerminalSessionFile(),
+      onRight: (value) => decodeTerminalSessionFile(value) ?? emptyTerminalSessionFile()
+    })
+  }).pipe(Effect.catchAll(() => Effect.succeed(emptyTerminalSessionFile())))
+
+const toTerminalSessionStateError = (
+  action: string,
+  projectId: string
+) =>
+  (error: PlatformError | ApiInternalError): ApiInternalError =>
+    error instanceof ApiInternalError
+      ? error
+      : new ApiInternalError({
+        message: `Failed to ${action} terminal session state for project: ${projectId}`,
+        cause: error
+      })
 
 const writeTerminalSessionFile = (
   projectId: string,
   state: DurableTerminalSessionFile
-): void => {
-  const statePath = terminalSessionStatePath(projectId)
-  mkdirSync(path.dirname(statePath), { recursive: true })
-  writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8")
-}
+): Effect.Effect<void, ApiInternalError, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const statePath = terminalSessionStatePath(projectId)
+    yield* _(
+      fs.makeDirectory(path.dirname(statePath), { recursive: true }).pipe(
+        Effect.mapError(toTerminalSessionStateError("create", projectId))
+      )
+    )
+    yield* _(
+      fs.writeFileString(statePath, `${JSON.stringify(state, null, 2)}\n`).pipe(
+        Effect.mapError(toTerminalSessionStateError("write", projectId))
+      )
+    )
+  })
 
 const tmuxNameForSessionId = (sessionId: string): string => {
   const normalized = sessionId.replace(/[^A-Za-z0-9_-]/gu, "-").replace(/-+/gu, "-")
@@ -252,65 +306,94 @@ const durableFromSession = (
 const upsertDurableSession = (
   projectId: string,
   durable: DurableTerminalSession
-): void => {
-  const state = readTerminalSessionFile(projectId)
-  const sessions = state.sessions.filter((session) => session.id !== durable.id)
-  writeTerminalSessionFile(projectId, {
-    schemaVersion: 1,
-    sessions: [...sessions, durable]
+): Effect.Effect<void, ApiInternalError, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const state = yield* _(readTerminalSessionFile(projectId))
+    const sessions = state.sessions.filter((session) => session.id !== durable.id)
+    yield* _(writeTerminalSessionFile(projectId, {
+      schemaVersion: 1,
+      sessions: [...sessions, durable]
+    }))
   })
-}
 
 const patchDurableSession = (
   record: TerminalRecord,
   patch: Partial<TerminalSession>
-): void => {
-  const state = readTerminalSessionFile(record.projectId)
-  const updatedAt = nowIso()
-  const sessions = state.sessions.map((session) =>
-    session.id === record.session.id
-      ? durableFromSession({
-        projectDisplayName: record.projectDisplayName,
-        projectKey: record.projectKey,
-        session: {
-          ...terminalSessionFromDurable(session, 0),
-          ...patch
-        },
-        tmuxName: session.tmuxName,
-        updatedAt
-      })
-      : session
-  )
-  writeTerminalSessionFile(record.projectId, {
-    schemaVersion: 1,
-    sessions
+): Effect.Effect<void, ApiInternalError, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const state = yield* _(readTerminalSessionFile(record.projectId))
+    const updatedAt = nowIso()
+    const sessions = state.sessions.map((session) =>
+      session.id === record.session.id
+        ? durableFromSession({
+          projectDisplayName: record.projectDisplayName,
+          projectKey: record.projectKey,
+          session: {
+            ...terminalSessionFromDurable(session, 0),
+            ...patch
+          },
+          tmuxName: session.tmuxName,
+          updatedAt
+        })
+        : session
+    )
+    yield* _(writeTerminalSessionFile(record.projectId, {
+      schemaVersion: 1,
+      sessions
+    }))
   })
-}
 
 const deleteDurableSession = (
   projectId: string,
   sessionId: string
-): boolean => {
-  const state = readTerminalSessionFile(projectId)
-  const sessions = state.sessions.filter((session) => session.id !== sessionId)
-  if (sessions.length === state.sessions.length) {
-    return false
-  }
-  writeTerminalSessionFile(projectId, {
-    schemaVersion: 1,
-    sessions
+): Effect.Effect<boolean, ApiInternalError, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const state = yield* _(readTerminalSessionFile(projectId))
+    const sessions = state.sessions.filter((session) => session.id !== sessionId)
+    if (sessions.length === state.sessions.length) {
+      return false
+    }
+    yield* _(writeTerminalSessionFile(projectId, {
+      schemaVersion: 1,
+      sessions
+    }))
+    return true
   })
-  return true
-}
 
 const findDurableSession = (
   projectId: string,
   sessionId: string
-): DurableTerminalSession | null =>
-  readTerminalSessionFile(projectId).sessions.find((session) => session.id === sessionId) ?? null
+): Effect.Effect<DurableTerminalSession | null, never, FileSystem.FileSystem> =>
+  readTerminalSessionFile(projectId).pipe(
+    Effect.map((state) => state.sessions.find((session) => session.id === sessionId) ?? null)
+  )
 
 const isAppError = (value: unknown): value is AppError =>
   typeof value === "object" && value !== null && "_tag" in value
+
+const runTerminalSessionPersistence = (
+  projectId: string,
+  effect: Effect.Effect<void, ApiInternalError, FileSystem.FileSystem>
+): void => {
+  const previous = terminalSessionPersistenceQueues.get(projectId) ?? Promise.resolve()
+  const next = previous
+    .catch(() => undefined)
+    .then(() =>
+      Effect.runPromise(
+        effect.pipe(
+          Effect.provide(NodeContext.layer),
+          Effect.catchAll(() => Effect.void)
+        )
+      )
+    )
+    .catch(() => undefined)
+    .finally(() => {
+      if (terminalSessionPersistenceQueues.get(projectId) === next) {
+        terminalSessionPersistenceQueues.delete(projectId)
+      }
+    })
+  terminalSessionPersistenceQueues.set(projectId, next)
+}
 
 const updateSession = (
   record: TerminalRecord,
@@ -321,7 +404,7 @@ const updateSession = (
     ...patch
   }
   records.set(record.session.id, record)
-  patchDurableSession(record, patch)
+  runTerminalSessionPersistence(record.projectId, patchDurableSession(record, patch))
 }
 
 const attachedClientCount = (record: TerminalRecord): number => {
@@ -351,6 +434,11 @@ const toTerminalSessionLookupError = (
   error instanceof ApiConflictError || error instanceof ApiInternalError || error instanceof ApiNotFoundError
     ? error
     : toApiInternalError(error)
+
+const toTerminalSessionProjectError = (
+  error: unknown
+): ApiInternalError | ApiNotFoundError =>
+  error instanceof ApiNotFoundError ? error : toApiInternalError(error)
 
 const normalizeSshKeyPermissions = (sshKeyPath: string | null) =>
   sshKeyPath === null
@@ -807,16 +895,27 @@ const resizePty = (pty: PtyBridge | null, cols: number, rows: number): void => {
   }
 }
 
-const renderRemoteTmuxCommand = (record: TerminalRecord): string => {
-  const tmuxName = findDurableSession(record.projectId, record.session.id)?.tmuxName ?? tmuxNameForSessionId(
-    record.session.id
-  )
+export const renderTmuxAttachCommand = (
+  args: {
+    readonly missingMessage?: string
+    readonly targetDir: string
+    readonly tmuxName: string
+  }
+): string => {
   const script = [
-    `if ! command -v tmux >/dev/null 2>&1; then printf '%s\\n' ${shellQuote(tmuxMissingMessage)} >&2; exit 127; fi`,
-    `exec tmux new-session -A -s ${shellQuote(tmuxName)} -c ${shellQuote(record.projectTargetDir)}`
+    `if ! command -v tmux >/dev/null 2>&1; then printf '%s\\n' ${
+      shellQuote(args.missingMessage ?? tmuxMissingMessage)
+    } >&2; exit 127; fi`,
+    `exec tmux new-session -A -s ${shellQuote(args.tmuxName)} -c ${shellQuote(args.targetDir)}`
   ].join("; ")
   return `sh -lc ${shellQuote(script)}`
 }
+
+const renderRemoteTmuxCommand = (record: TerminalRecord): string =>
+  renderTmuxAttachCommand({
+    targetDir: record.projectTargetDir,
+    tmuxName: record.tmuxName
+  })
 
 const preparedArgsForTmuxSession = (record: TerminalRecord): ReadonlyArray<string> => [
   ...record.prepared.args,
@@ -871,44 +970,46 @@ const registerRecord = (
   projectContainerName: string,
   projectTargetDir: string,
   sessionId: string = randomUUID()
-): TerminalSession => {
-  const createdAt = nowIso()
-  const session: TerminalSession = {
-    attachedClients: 0,
-    createdAt,
-    id: sessionId,
-    projectId,
-    sshCommand: renderPreparedSshCommand(prepared),
-    status: "ready"
-  }
-  const tmuxName = tmuxNameForSessionId(session.id)
-  upsertDurableSession(
-    projectId,
-    durableFromSession({
+): Effect.Effect<TerminalSession, ApiInternalError, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const createdAt = nowIso()
+    const session: TerminalSession = {
+      attachedClients: 0,
+      createdAt,
+      id: sessionId,
+      projectId,
+      sshCommand: renderPreparedSshCommand(prepared),
+      status: "ready"
+    }
+    const tmuxName = tmuxNameForSessionId(session.id)
+    yield* _(upsertDurableSession(
+      projectId,
+      durableFromSession({
+        projectDisplayName,
+        projectKey,
+        session,
+        tmuxName,
+        updatedAt: createdAt
+      })
+    ))
+    const record: TerminalRecord = {
+      attachTimeout: null,
+      detachTimeout: null,
+      outputBuffer: emptyTerminalOutputBuffer,
+      prepared,
+      projectContainerName,
       projectDisplayName,
+      projectId,
       projectKey,
+      projectTargetDir,
+      pty: null,
       session,
-      tmuxName,
-      updatedAt: createdAt
-    })
-  )
-  const record: TerminalRecord = {
-    attachTimeout: null,
-    detachTimeout: null,
-    outputBuffer: emptyTerminalOutputBuffer,
-    prepared,
-    projectContainerName,
-    projectDisplayName,
-    projectId,
-    projectKey,
-    projectTargetDir,
-    pty: null,
-    session,
-    sockets: new Set<WebSocket>()
-  }
-  records.set(session.id, record)
-  return session
-}
+      sockets: new Set<WebSocket>(),
+      tmuxName
+    }
+    records.set(session.id, record)
+    return session
+  })
 
 const registerHydratedRecord = (
   durable: DurableTerminalSession,
@@ -927,7 +1028,8 @@ const registerHydratedRecord = (
     projectTargetDir: projectItem.targetDir,
     pty: null,
     session: terminalSessionFromDurable(durable, 0),
-    sockets: new Set<WebSocket>()
+    sockets: new Set<WebSocket>(),
+    tmuxName: durable.tmuxName
   }
   records.set(record.session.id, record)
   return record
@@ -952,7 +1054,7 @@ const hydrateProjectTerminalRecord = (
     if (existing !== undefined && existing.projectId === projectItem.projectDir) {
       return existing
     }
-    const durable = findDurableSession(projectItem.projectDir, sessionId)
+    const durable = yield* _(findDurableSession(projectItem.projectDir, sessionId))
     if (durable === null) {
       return yield* _(Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` })))
     }
@@ -975,6 +1077,38 @@ const hydrateTerminalRecordByProjectKey = (
   getProjectItemByKey(projectKey).pipe(
     Effect.mapError(toTerminalSessionLookupError),
     Effect.flatMap((projectItem) => hydrateProjectTerminalRecord(projectItem, sessionId))
+  )
+
+const renderRemoteTmuxProbeCommand = (): string =>
+  `sh -lc ${shellQuote("command -v tmux >/dev/null 2>&1")}`
+
+const probeProjectTmuxAvailable = (
+  projectItem: ProjectItem
+): Effect.Effect<boolean, never, CommandExecutor.CommandExecutor> => {
+  const prepared = prepareProjectSsh(projectItem)
+  return runCommandCapture(
+    {
+      cwd: prepared.cwd,
+      command: prepared.command,
+      args: [...prepared.args, renderRemoteTmuxProbeCommand()]
+    },
+    [0],
+    (exitCode) => new CommandFailedError({ command: "ssh command -v tmux", exitCode })
+  ).pipe(
+    Effect.as(true),
+    Effect.orElseSucceed(() => false)
+  )
+}
+
+const ensureProjectTmuxAvailable = (
+  projectItem: ProjectItem
+): Effect.Effect<void, ApiConflictError, CommandExecutor.CommandExecutor> =>
+  probeProjectTmuxAvailable(projectItem).pipe(
+    Effect.flatMap((available) =>
+      available
+        ? Effect.void
+        : Effect.fail(new ApiConflictError({ message: tmuxMissingMessage }))
+    )
   )
 
 const emitTerminalStatus = (projectId: string, phase: string, message: string) =>
@@ -1015,49 +1149,52 @@ export const createTerminalSession = (
   } = {}
 ) =>
   Effect.gen(function*(_) {
-    yield* _(emitTerminalStatus(projectId, "ssh.prepare", "Preparing SSH session"))
-    const loadedProjectItem = yield* _(getProjectItemById(projectId))
+    const project = yield* _(getProject(projectId))
+    const resolvedProjectId = project.id
+    yield* _(emitTerminalStatus(resolvedProjectId, "ssh.prepare", "Preparing SSH session"))
+    const loadedProjectItem = yield* _(getProjectItemById(resolvedProjectId))
     const projectItem = yield* _(resolveControllerReachableProject(loadedProjectItem))
     yield* _(normalizeSshKeyPermissions(projectItem.sshKeyPath))
     const sshAlreadyReady = yield* _(probeProjectSshReady(projectItem).pipe(Effect.orElseSucceed(() => false)))
 
     if (sshAlreadyReady) {
-      yield* _(emitTerminalStatus(projectId, "ssh.fast-ready", "SSH is already ready"))
-      const project = yield* _(getProject(projectId))
+      yield* _(emitTerminalStatus(resolvedProjectId, "ssh.fast-ready", "SSH is already ready"))
+      yield* _(ensureProjectTmuxAvailable(projectItem))
       const prepared = prepareProjectSsh(projectItem)
-      const session = registerRecord(
-        projectId,
+      const session = yield* _(registerRecord(
+        resolvedProjectId,
         project.projectKey,
         project.displayName,
         prepared,
         projectItem.containerName,
         projectItem.targetDir,
         options.requestId
-      )
-      yield* _(emitTerminalSessionCreated(projectId, session.id, options.requestId))
+      ))
+      yield* _(emitTerminalSessionCreated(resolvedProjectId, session.id, options.requestId))
       return { project, session }
     }
 
-    const project = yield* _(upProject(projectId, undefined, true, { startupMode: "ssh-open" }))
-    const refreshedProjectItem = yield* _(getProjectItemById(projectId))
+    const startedProject = yield* _(upProject(resolvedProjectId, undefined, true, { startupMode: "ssh-open" }))
+    const refreshedProjectItem = yield* _(getProjectItemById(resolvedProjectId))
     const reachableProjectItem = yield* _(resolveControllerReachableProject(refreshedProjectItem))
     yield* _(normalizeSshKeyPermissions(reachableProjectItem.sshKeyPath))
-    yield* _(emitTerminalStatus(projectId, "ssh.wait", "Waiting for SSH"))
+    yield* _(emitTerminalStatus(resolvedProjectId, "ssh.wait", "Waiting for SSH"))
     yield* _(waitForProjectSshReady(reachableProjectItem).pipe(Effect.mapError(toApiInternalError)))
-    yield* _(emitTerminalStatus(projectId, "ssh.ready", "SSH is ready"))
+    yield* _(emitTerminalStatus(resolvedProjectId, "ssh.ready", "SSH is ready"))
+    yield* _(ensureProjectTmuxAvailable(reachableProjectItem))
     const prepared = prepareProjectSsh(reachableProjectItem)
-    const session = registerRecord(
-      projectId,
-      project.projectKey,
-      project.displayName,
+    const session = yield* _(registerRecord(
+      resolvedProjectId,
+      startedProject.projectKey,
+      startedProject.displayName,
       prepared,
       reachableProjectItem.containerName,
       reachableProjectItem.targetDir,
       options.requestId
-    )
-    yield* _(emitTerminalSessionCreated(projectId, session.id, options.requestId))
-    yield* _(emitTerminalStatus(projectId, "ssh.post-start", "Post-start self-heal continues in background"))
-    return { project, session }
+    ))
+    yield* _(emitTerminalSessionCreated(resolvedProjectId, session.id, options.requestId))
+    yield* _(emitTerminalStatus(resolvedProjectId, "ssh.post-start", "Post-start self-heal continues in background"))
+    return { project: startedProject, session }
   })
 
 // CHANGE: start SSH terminal creation asynchronously for web clients behind request timeouts
@@ -1101,21 +1238,23 @@ export const startTerminalSession = (
 export const deleteTerminalSession = (
   projectId: string,
   sessionId: string
-): Effect.Effect<void, ApiNotFoundError> =>
+): Effect.Effect<void, ApiInternalError | ApiNotFoundError, TerminalSessionStateRuntime> =>
   Effect.gen(function*(_) {
+    const project = yield* _(getProject(projectId).pipe(Effect.mapError(toTerminalSessionProjectError)))
+    const resolvedProjectId = project.id
     const record = records.get(sessionId)
-    const deleted = deleteDurableSession(projectId, sessionId)
-    if ((record === undefined || record.projectId !== projectId) && !deleted) {
+    const deleted = yield* _(deleteDurableSession(resolvedProjectId, sessionId))
+    if ((record === undefined || record.projectId !== resolvedProjectId) && !deleted) {
       return yield* _(
         Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
       )
     }
-    if (record !== undefined && record.projectId === projectId) {
+    if (record !== undefined && record.projectId === resolvedProjectId) {
       cleanupRecord(record)
     }
     yield* _(
       Effect.sync(() => {
-        emitProjectEvent(projectId, "project.ssh.session", {
+        emitProjectEvent(resolvedProjectId, "project.ssh.session", {
           phase: "closed",
           sessionId
         })
@@ -1123,27 +1262,36 @@ export const deleteTerminalSession = (
     )
   })
 
-export const listProjectTerminalSessions = (projectId: string): ReadonlyArray<TerminalSession> =>
-  readTerminalSessionFile(projectId).sessions.map((durable) => {
-    const record = records.get(durable.id)
-    if (record !== undefined && record.projectId === projectId) {
-      syncAttachedClientCount(record)
-      return record.session
-    }
-    return terminalSessionFromDurable(durable, 0)
+export const listProjectTerminalSessions = (
+  projectId: string
+): Effect.Effect<ReadonlyArray<TerminalSession>, ApiInternalError | ApiNotFoundError, TerminalSessionStateRuntime> =>
+  Effect.gen(function*(_) {
+    const project = yield* _(getProject(projectId).pipe(Effect.mapError(toTerminalSessionProjectError)))
+    const resolvedProjectId = project.id
+    const state = yield* _(readTerminalSessionFile(resolvedProjectId))
+    return state.sessions.map((durable) => {
+      const record = records.get(durable.id)
+      if (record !== undefined && record.projectId === resolvedProjectId) {
+        syncAttachedClientCount(record)
+        return record.session
+      }
+      return terminalSessionFromDurable(durable, 0)
+    })
   })
 
 export const getProjectTerminalSession = (
   projectId: string,
   sessionId: string
-): Effect.Effect<TerminalSession, ApiNotFoundError> =>
+): Effect.Effect<TerminalSession, ApiInternalError | ApiNotFoundError, TerminalSessionStateRuntime> =>
   Effect.gen(function*(_) {
+    const project = yield* _(getProject(projectId).pipe(Effect.mapError(toTerminalSessionProjectError)))
+    const resolvedProjectId = project.id
     const record = records.get(sessionId)
-    if (record !== undefined && record.projectId === projectId) {
+    if (record !== undefined && record.projectId === resolvedProjectId) {
       syncAttachedClientCount(record)
       return record.session
     }
-    const durable = findDurableSession(projectId, sessionId)
+    const durable = yield* _(findDurableSession(resolvedProjectId, sessionId))
     if (durable === null) {
       return yield* _(
         Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
@@ -1158,11 +1306,14 @@ export const readProjectTerminalImage = (
   imagePath: string
 ): Effect.Effect<
   { readonly bytes: Buffer; readonly mediaType: string },
-  ApiBadRequestError | ApiInternalError | ApiNotFoundError
+  ApiBadRequestError | ApiInternalError | ApiNotFoundError,
+  TerminalSessionStateRuntime
 > =>
   Effect.gen(function*(_) {
+    const project = yield* _(getProject(projectId).pipe(Effect.mapError(toTerminalSessionProjectError)))
+    const resolvedProjectId = project.id
     const record = records.get(sessionId)
-    if (record === undefined || record.projectId !== projectId) {
+    if (record === undefined || record.projectId !== resolvedProjectId) {
       return yield* _(
         Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
       )
@@ -1198,7 +1349,7 @@ export const lookupTerminalSessionById = (
     }
     const projects = yield* _(listProjectItems)
     for (const project of projects) {
-      const durable = findDurableSession(project.projectDir, sessionId)
+      const durable = yield* _(findDurableSession(project.projectDir, sessionId))
       if (durable !== null) {
         return {
           projectDisplayName: durable.projectDisplayName,
@@ -1220,7 +1371,10 @@ export const lookupTerminalSessionById = (
   )
 
 const handleCloseMessage = (record: TerminalRecord): void => {
-  deleteDurableSession(record.projectId, record.session.id)
+  runTerminalSessionPersistence(
+    record.projectId,
+    deleteDurableSession(record.projectId, record.session.id).pipe(Effect.asVoid)
+  )
   cleanupRecord(record)
 }
 
@@ -1365,5 +1519,5 @@ export const attachTerminalWebSocketServer = (server: HttpServer): void => {
 export const verifyTerminalSession = (
   projectId: string,
   sessionId: string
-): Effect.Effect<TerminalSession, ApiNotFoundError> =>
+): Effect.Effect<TerminalSession, ApiInternalError | ApiNotFoundError, TerminalSessionStateRuntime> =>
   getProjectTerminalSession(projectId, sessionId)

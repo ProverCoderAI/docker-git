@@ -1438,7 +1438,11 @@ export const makeRouter = () => {
       projectKeyParams.pipe(
         Effect.flatMap(({ projectKey }) =>
           getProjectItemByKey(projectKey).pipe(
-            Effect.map((project) => ({ sessions: listProjectTerminalSessions(project.projectDir) }))
+            Effect.flatMap((project) =>
+              listProjectTerminalSessions(project.projectDir).pipe(
+                Effect.map((sessions) => ({ sessions }))
+              )
+            )
           )
         ),
         Effect.flatMap((body) => jsonResponse(body, 200)),
@@ -1484,7 +1488,11 @@ export const makeRouter = () => {
     HttpRouter.get(
       "/projects/:projectId/terminal-sessions",
       projectParams.pipe(
-        Effect.flatMap(({ projectId }) => Effect.succeed({ sessions: listProjectTerminalSessions(projectId) })),
+        Effect.flatMap(({ projectId }) =>
+          listProjectTerminalSessions(projectId).pipe(
+            Effect.map((sessions) => ({ sessions }))
+          )
+        ),
         Effect.flatMap((body) => jsonResponse(body, 200)),
         Effect.catchAll(errorResponse)
       )
