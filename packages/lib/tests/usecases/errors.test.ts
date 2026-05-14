@@ -42,6 +42,25 @@ describe("renderError", () => {
     expect(message).toContain("NVIDIA Container Toolkit")
   })
 
+  it("includes disk pressure recovery hint for apt invalid signature build failures", () => {
+    const message = renderError(
+      new DockerCommandError({
+        exitCode: 1,
+        details: [
+          "apt-get update failed after retries",
+          "W: GPG error: http://archive.ubuntu.com/ubuntu noble InRelease: At least one invalid signature was encountered.",
+          "E: The repository 'http://archive.ubuntu.com/ubuntu noble InRelease' is not signed.",
+          "E: The repository 'http://security.ubuntu.com/ubuntu noble-security InRelease' is not signed."
+        ].join("\n")
+      })
+    )
+
+    expect(message).toContain("low Docker host disk space")
+    expect(message).toContain("df -h")
+    expect(message).toContain("docker builder prune -af")
+    expect(message).toContain("docker image prune -af")
+  })
+
   it("shows NVIDIA hint iff docker output contains NVIDIA runtime markers", () => {
     const nvidiaContainerCliMarker = "nvidia-container-cli"
     const libNvidiaMlMarker = "libnvidia-ml.so.1"

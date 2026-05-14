@@ -94,10 +94,10 @@ describe("renderDockerfile", () => {
     expect(dockerfile).not.toContain("FROM ubuntu:24.04")
   })
 
-  it("renames the box base user to the configured SSH user", () => {
+  it("renames the UID 1000 base user to the configured SSH user before the box fallback", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
-    expect(dockerfile).toContain("for BASE_USER in box ubuntu; do")
+    expect(dockerfile).toContain("for BASE_USER in ubuntu box; do")
     expect(dockerfile).toContain('if [ "$BASE_USER" != "dev" ] && id -u "$BASE_USER" >/dev/null 2>&1; then')
     expect(dockerfile).toContain('usermod -l dev -d /home/dev -m -s /usr/bin/zsh "$BASE_USER" || true')
   })

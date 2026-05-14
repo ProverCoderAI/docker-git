@@ -264,7 +264,7 @@ const renderDockerfileBun = (config: TemplateConfig): string =>
  */
 const renderDockerfileUsers = (config: TemplateConfig): string =>
   `# Create non-root user for SSH (align UID/GID with host user 1000)
-RUN for BASE_USER in box ubuntu; do \
+RUN for BASE_USER in ubuntu box; do \
       if [ "$BASE_USER" != "${config.sshUser}" ] && id -u "$BASE_USER" >/dev/null 2>&1; then \
         if getent group 1000 >/dev/null 2>&1; then \
           EXISTING_GROUP="$(getent group 1000 | cut -d: -f1)"; \

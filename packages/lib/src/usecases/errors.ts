@@ -79,6 +79,23 @@ const renderDockerAccessActionPlan = (issue: DockerAccessError["issue"]): string
   return issue === "PermissionDenied" ? permissionDeniedPlan.join("\n") : daemonUnavailablePlan.join("\n")
 }
 
+// CHANGE: classify Docker build apt signature noise that is commonly caused by storage exhaustion.
+// WHY: when Docker's backing filesystem is full, apt can report every repository as "not signed"; surfacing disk-pressure recovery avoids chasing false GPG/key fixes.
+// QUOTE(ТЗ): "Все пробелмы с котоырми ты сталкиваешься должны быть потом покрыты тестами"
+// REF: runtime-2026-05-14-docker-disk-full
+// SOURCE: n/a
+// FORMAT THEOREM: contains_apt_invalid_signature(details) -> render_error(details) includes disk_space_recovery_hint
+// PURITY: CORE
+// INVARIANT: the classifier only adds guidance and does not alter command execution semantics
+// COMPLEXITY: O(n) time / O(1) space where n = |details|.
+const isAptInvalidSignatureFailure = (details: string | undefined): boolean => {
+  const normalized = details?.toLowerCase() ?? ""
+  return normalized.includes("apt-get update failed") &&
+    normalized.includes("invalid signature") &&
+    normalized.includes("repository") &&
+    normalized.includes("not signed")
+}
+
 const renderDockerCommandError = ({ details, exitCode }: DockerCommandError): string =>
   [
     `docker compose failed with exit code ${exitCode}`,
@@ -89,6 +106,11 @@ const renderDockerCommandError = ({ details, exitCode }: DockerCommandError): st
     ...(isNvidiaRuntimeFailure(details)
       ? [
         "Hint: NVIDIA GPU access is enabled but Docker cannot load the host NVIDIA runtime; run with GPU disabled (`--gpu none`) or install the NVIDIA driver and NVIDIA Container Toolkit."
+      ]
+      : []),
+    ...(isAptInvalidSignatureFailure(details)
+      ? [
+        "Hint: apt reported invalid signatures for multiple repositories during Docker build; this can be caused by low Docker host disk space. Check `df -h` and reclaim unused Docker cache with `docker builder prune -af` and `docker image prune -af` before retrying."
       ]
       : []),
     "Hint: if output above contains 'lookup auth.docker.io' or 'read udp ... [::1]:53 ... connection refused', fix Docker DNS resolver (set working DNS in host/daemon config) and retry."
