@@ -90,8 +90,7 @@ const renderDockerAccessActionPlan = (issue: DockerAccessError["issue"]): string
 // COMPLEXITY: O(n) time / O(1) space where n = |details|.
 const isAptInvalidSignatureFailure = (details: string | undefined): boolean => {
   const normalized = details?.toLowerCase() ?? ""
-  return normalized.includes("apt-get update failed") &&
-    normalized.includes("invalid signature") &&
+  return normalized.includes("invalid signature") &&
     normalized.includes("repository") &&
     normalized.includes("not signed")
 }

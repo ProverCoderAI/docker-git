@@ -155,9 +155,26 @@ describe("renderDockerfile", () => {
     const dockerfile = renderDockerfile(config)
 
     expect(dockerfile).toContain('chown 1000:1000 "$HOME_DIR"')
+    expect(dockerfile).toContain('TARGET_DIR_CANON="$TARGET_DIR"')
+    expect(dockerfile).toContain('HOME_DIR_CANON="$HOME_DIR"')
     expect(dockerfile).toContain('chown -R 1000:1000 "$TARGET_DIR"')
+    expect(dockerfile).toContain(
+      'if [ "$TARGET_DIR_CANON" != "/" ] && [ "$TARGET_DIR_CANON" != "$HOME_DIR_CANON" ]; then chown -R 1000:1000 "$TARGET_DIR"; fi'
+    )
     expect(dockerfile).not.toContain("chown -R 1000:1000 /home/dev")
     expect(dockerfile).not.toContain(`chown -R 1000:1000 /home/${config.sshUser}`)
+    expect(dockerfile).not.toContain('if [ "$TARGET_DIR" != "/" ] && [ "$TARGET_DIR" != "$HOME_DIR" ]')
+  })
+
+  it("normalizes trailing slashes before deciding whether to chown the target directory", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig({ targetDir: "/home/dev/" }))
+
+    expectContainsAll(dockerfile, [
+      "TARGET_DIR='/home/dev/';",
+      'while [ "${TARGET_DIR_CANON%/}" != "$TARGET_DIR_CANON" ]; do TARGET_DIR_CANON="${TARGET_DIR_CANON%/}"; done;',
+      '[ -n "$TARGET_DIR_CANON" ] || TARGET_DIR_CANON="/";',
+      'if [ "$TARGET_DIR_CANON" != "/" ] && [ "$TARGET_DIR_CANON" != "$HOME_DIR_CANON" ]; then chown -R 1000:1000 "$TARGET_DIR"; fi'
+    ])
   })
 
   it("renders targetDir as a single-quoted shell literal in workspace setup", () => {

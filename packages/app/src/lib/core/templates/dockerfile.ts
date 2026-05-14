@@ -336,9 +336,15 @@ const renderDockerfileWorkspace = (config: TemplateConfig): string => {
 RUN set -eu; \
     HOME_DIR="/home/${config.sshUser}"; \
     TARGET_DIR=${targetDirLiteral}; \
+    HOME_DIR_CANON="$HOME_DIR"; \
+    TARGET_DIR_CANON="$TARGET_DIR"; \
+    while [ "\${HOME_DIR_CANON%/}" != "$HOME_DIR_CANON" ]; do HOME_DIR_CANON="\${HOME_DIR_CANON%/}"; done; \
+    while [ "\${TARGET_DIR_CANON%/}" != "$TARGET_DIR_CANON" ]; do TARGET_DIR_CANON="\${TARGET_DIR_CANON%/}"; done; \
+    [ -n "$HOME_DIR_CANON" ] || HOME_DIR_CANON="/"; \
+    [ -n "$TARGET_DIR_CANON" ] || TARGET_DIR_CANON="/"; \
     mkdir -p "$HOME_DIR" "$TARGET_DIR"; \
     chown 1000:1000 "$HOME_DIR"; \
-    if [ "$TARGET_DIR" != "/" ] && [ "$TARGET_DIR" != "$HOME_DIR" ]; then chown -R 1000:1000 "$TARGET_DIR"; fi
+    if [ "$TARGET_DIR_CANON" != "/" ] && [ "$TARGET_DIR_CANON" != "$HOME_DIR_CANON" ]; then chown -R 1000:1000 "$TARGET_DIR"; fi
 
 RUN mkdir -p /opt/docker-git/bootstrap/.orch/auth/codex \
   /opt/docker-git/bootstrap/.orch/auth/codex-shared \
