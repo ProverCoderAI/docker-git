@@ -326,9 +326,12 @@ RUN set -eu; \
 
 const renderDockerfileWorkspace = (config: TemplateConfig): string =>
   `# Workspace path (supports root-level dirs like /repo)
-RUN mkdir -p ${config.targetDir} \
-  && chown -R 1000:1000 /home/${config.sshUser} \
-  && if [ "${config.targetDir}" != "/" ]; then chown -R 1000:1000 "${config.targetDir}"; fi
+RUN set -eu; \
+    HOME_DIR="/home/${config.sshUser}"; \
+    TARGET_DIR="${config.targetDir}"; \
+    mkdir -p "$HOME_DIR" "$TARGET_DIR"; \
+    chown 1000:1000 "$HOME_DIR"; \
+    if [ "$TARGET_DIR" != "/" ] && [ "$TARGET_DIR" != "$HOME_DIR" ]; then chown -R 1000:1000 "$TARGET_DIR"; fi
 
 RUN mkdir -p /opt/docker-git/bootstrap/.orch/auth/codex \
   /opt/docker-git/bootstrap/.orch/auth/codex-shared \
