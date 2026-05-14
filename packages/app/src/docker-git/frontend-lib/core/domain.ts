@@ -58,6 +58,21 @@ export type AgentMode = "claude" | "codex" | "gemini"
 export type DockerNetworkMode = "shared" | "project"
 export type GpuMode = "none" | "all"
 
+const unixUserNamePattern = /^[a-z_][a-z0-9_-]{0,31}$/
+
+export const sshUserNamePatternDescription = "^[a-z_][a-z0-9_-]{0,31}$"
+
+// CHANGE: define the SSH user name invariant in the core domain
+// WHY: generated Dockerfiles and entrypoints interpolate sshUser into shell-sensitive user commands
+// QUOTE(ТЗ): n/a
+// REF: PR-281-coderabbit-sshUser-validation
+// SOURCE: n/a
+// FORMAT THEOREM: forall u: isUnixUserName(u) -> not contains_shell_metacharacters(u)
+// PURITY: CORE
+// INVARIANT: accepted user names contain only lowercase Linux account-name characters
+// COMPLEXITY: O(n)/O(1) where n = |value|
+export const isUnixUserName = (value: string): boolean => unixUserNamePattern.test(value)
+
 export interface TemplateConfig {
   readonly containerName: string
   readonly serviceName: string

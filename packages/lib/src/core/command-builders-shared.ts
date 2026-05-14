@@ -1,6 +1,14 @@
 import { Either } from "effect"
 
-import { type CreateCommand, defaultTemplateConfig, isDockerNetworkMode, isGpuMode, type ParseError } from "./domain.js"
+import {
+  type CreateCommand,
+  defaultTemplateConfig,
+  isDockerNetworkMode,
+  isGpuMode,
+  isUnixUserName,
+  type ParseError,
+  sshUserNamePatternDescription
+} from "./domain.js"
 
 const parsePort = (value: string): Either.Either<number, ParseError> => {
   const parsed = Number(value)
@@ -22,6 +30,26 @@ const parsePort = (value: string): Either.Either<number, ParseError> => {
 }
 
 export const parseSshPort = (value: string): Either.Either<number, ParseError> => parsePort(value)
+
+export const parseSshUser = (
+  value: string | undefined
+): Either.Either<string, ParseError> => {
+  const candidate = value?.trim() ?? defaultTemplateConfig.sshUser
+  if (candidate.length === 0) {
+    return Either.left({
+      _tag: "MissingRequiredOption",
+      option: "--ssh-user"
+    })
+  }
+  if (!isUnixUserName(candidate)) {
+    return Either.left({
+      _tag: "InvalidOption",
+      option: "--ssh-user",
+      reason: `expected Linux user name matching ${sshUserNamePatternDescription}`
+    })
+  }
+  return Either.right(candidate)
+}
 
 export const parseDockerNetworkMode = (
   value: string | undefined

@@ -14,6 +14,15 @@ import { renderDockerfileGitleaks, renderDockerfileOpenCode } from "./tools.js"
 // COMPLEXITY: O(1)/O(1)
 const dockerGitBaseImage = "konard/box-js:latest"
 
+/**
+ * Renders the base image, root user, apt mirror, core packages, and sudo prelude.
+ *
+ * @returns Dockerfile fragment that establishes the shared project container base.
+ * @pure true
+ * @effect none; CORE template renderer only constructs a string.
+ * @invariant the returned fragment starts from the configured shared JS box image.
+ * @complexity O(1) time / O(1) space.
+ */
 const renderDockerfilePrelude = (): string =>
   `ARG DOCKER_GIT_BASE_IMAGE=${dockerGitBaseImage}
 FROM \${DOCKER_GIT_BASE_IMAGE}
@@ -237,6 +246,17 @@ const renderDockerfileBun = (config: TemplateConfig): string =>
 // PURITY: CORE
 // INVARIANT: tilde-expanded and login-shell runtime paths for the SSH user resolve inside the configured home volume
 // COMPLEXITY: O(1)/O(1)
+/**
+ * Renders user, home, PATH, workdir, sudo, and sshd configuration for the project account.
+ *
+ * @param config - Template configuration whose sshUser is validated before rendering.
+ * @returns Dockerfile fragment that creates or rewrites the non-root SSH user.
+ * @pure true
+ * @effect none; CORE template renderer only constructs a string.
+ * @invariant rendered HOME, PATH, WORKDIR, sudoers, and AllowUsers entries target config.sshUser.
+ * @precondition config.sshUser satisfies the Linux user-name invariant.
+ * @complexity O(1) time / O(1) space.
+ */
 const renderDockerfileUsers = (config: TemplateConfig): string =>
   `# Create non-root user for SSH (align UID/GID with host user 1000)
 RUN for BASE_USER in box ubuntu; do \

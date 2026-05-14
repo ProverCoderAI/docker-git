@@ -65,6 +65,20 @@ describe("parseArgs", () => {
       }
     ))
 
+  it.effect("parses Linux SSH user names for create", () =>
+    expectCreateCommand(
+      ["create", "--repo-url", "https://github.com/org/repo.git", "--ssh-user", "dev_user-1"],
+      (command) => {
+        expect(command.config.sshUser).toBe("dev_user-1")
+      }
+    ))
+
+  it.effect("rejects shell metacharacters in SSH user names for create", () =>
+    expectParseErrorTag(
+      ["create", "--repo-url", "https://github.com/org/repo.git", "--ssh-user", "dev;touch-pwned"],
+      "InvalidOption"
+    ))
+
   it.effect("rejects unitless RAM absolute limit", () =>
     expectParseErrorTag(["create", "--repo-url", "https://github.com/org/repo.git", "--ram", "4096"], "InvalidOption"))
 
