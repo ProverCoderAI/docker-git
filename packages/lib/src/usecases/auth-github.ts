@@ -16,6 +16,7 @@ import { ensureEnvFile, parseEnvEntries, readEnvText, removeEnvKey, upsertEnvKey
 import { ensureGhAuthImage, ghAuthDir, ghAuthRoot, ghImageName } from "./github-auth-image.js"
 import {
   githubForbiddenDeleteRepoScopeMessage,
+  githubUnverifiedTokenScopesMessage,
   hasGithubRepositoryDeleteScope,
   normalizeGithubScopes
 } from "./github-scope-policy.js"
@@ -182,7 +183,7 @@ const runGithubLogin = (
     (exitCode) => new CommandFailedError({ command: "gh auth login --web", exitCode })
   )
 
-const runGithubRemoveDeleteRepoScope = (
+export const runGithubRemoveDeleteRepoScope = (
   cwd: string,
   accountPath: string
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
@@ -200,12 +201,16 @@ const runGithubRemoveDeleteRepoScope = (
     (exitCode) => new CommandFailedError({ command: "gh auth refresh --remove-scopes delete_repo", exitCode })
   )
 
-const rejectGithubTokenWithRepositoryDeleteScope = (token: string): Effect.Effect<void, AuthError> =>
+export const rejectGithubTokenWithRepositoryDeleteScope = (token: string): Effect.Effect<void, AuthError> =>
   validateGithubToken(token).pipe(
-    Effect.flatMap((validation) =>
-      hasGithubRepositoryDeleteScope(validation.oauthScopes)
+    Effect.flatMap((validation) => {
+      if (validation.status !== "valid" || validation.oauthScopes === null) {
+        return Effect.fail(new AuthError({ message: githubUnverifiedTokenScopesMessage }))
+      }
+      return hasGithubRepositoryDeleteScope(validation.oauthScopes)
         ? Effect.fail(new AuthError({ message: githubForbiddenDeleteRepoScopeMessage }))
-        : Effect.void)
+        : Effect.void
+    })
   )
 
 const retryGithubLogin = (

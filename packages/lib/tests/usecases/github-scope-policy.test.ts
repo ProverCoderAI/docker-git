@@ -26,6 +26,8 @@ describe("github scope policy", () => {
   })
 
   it("parses GitHub OAuth scope headers and detects repository deletion", () => {
+    expect(parseGithubOauthScopesHeader(null)).toBe(null)
+    expect(parseGithubOauthScopesHeader(undefined)).toBe(null)
     expect(parseGithubOauthScopesHeader("repo, workflow, delete_repo")).toEqual(["repo", "workflow", "delete_repo"])
     expect(hasGithubRepositoryDeleteScope(["repo", "DELETE_REPO"])).toBe(true)
     expect(hasGithubRepositoryDeleteScope(["repo", "workflow"])).toBe(false)

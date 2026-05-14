@@ -1,8 +1,9 @@
 /* jscpd:ignore-start */
 import { FetchHttpClient, HttpClient } from "@effect/platform"
+import * as Headers from "@effect/platform/Headers"
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
-import { Effect, Either } from "effect"
+import { Effect, Either, Option } from "effect"
 
 import { parseGithubOauthScopesHeader } from "./github-scope-policy.js"
 
@@ -73,7 +74,7 @@ export const validateGithubToken = (token: string): Effect.Effect<GithubTokenVal
     )
 
     const status = mapGithubTokenValidationStatus(response.status)
-    const oauthScopes = parseGithubOauthScopesHeader(response.headers["x-oauth-scopes"])
+    const oauthScopes = parseGithubOauthScopesHeader(Option.getOrNull(Headers.get(response.headers, "x-oauth-scopes")))
     if (status !== "valid") {
       return {
         status,

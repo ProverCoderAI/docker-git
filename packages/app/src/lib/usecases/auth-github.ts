@@ -17,6 +17,7 @@ import { ensureEnvFile, parseEnvEntries, readEnvText, removeEnvKey, upsertEnvKey
 import { ensureGhAuthImage, ghAuthDir, ghAuthRoot, ghImageName } from "./github-auth-image.js"
 import {
   githubForbiddenDeleteRepoScopeMessage,
+  githubUnverifiedTokenScopesMessage,
   hasGithubRepositoryDeleteScope,
   normalizeGithubScopes
 } from "./github-scope-policy.js"
@@ -203,10 +204,14 @@ const runGithubRemoveDeleteRepoScope = (
 
 const rejectGithubTokenWithRepositoryDeleteScope = (token: string): Effect.Effect<void, AuthError> =>
   validateGithubToken(token).pipe(
-    Effect.flatMap((validation) =>
-      hasGithubRepositoryDeleteScope(validation.oauthScopes)
+    Effect.flatMap((validation) => {
+      if (validation.status !== "valid" || validation.oauthScopes === null) {
+        return Effect.fail(new AuthError({ message: githubUnverifiedTokenScopesMessage }))
+      }
+      return hasGithubRepositoryDeleteScope(validation.oauthScopes)
         ? Effect.fail(new AuthError({ message: githubForbiddenDeleteRepoScopeMessage }))
-        : Effect.void)
+        : Effect.void
+    })
   )
 
 const retryGithubLogin = (

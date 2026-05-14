@@ -11,7 +11,10 @@ import { vi } from "vitest"
 
 import { authCodexLogin } from "../../src/usecases/auth-codex.js"
 import { authGithubLogin } from "../../src/usecases/auth-github.js"
-import { githubForbiddenDeleteRepoScopeMessage } from "../../src/usecases/github-scope-policy.js"
+import {
+  githubForbiddenDeleteRepoScopeMessage,
+  githubUnverifiedTokenScopesMessage
+} from "../../src/usecases/github-scope-policy.js"
 
 type RecordedCommand = {
   readonly command: string
@@ -164,14 +167,18 @@ const makeFakeExecutor = (
   return CommandExecutor.makeExecutor(start)
 }
 
-const githubUserResponse = (scopes: string): Response =>
-  new Response(JSON.stringify({ login: "octocat" }), {
+const githubUserResponse = (scopes: string | null): Response => {
+  const headers: Record<string, string> = {
+    "content-type": "application/json"
+  }
+  if (scopes !== null) {
+    headers["x-oauth-scopes"] = scopes
+  }
+  return new Response(JSON.stringify({ login: "octocat" }), {
     status: 200,
-    headers: {
-      "content-type": "application/json",
-      "x-oauth-scopes": scopes
-    }
+    headers
   })
+}
 
 describe("auth container paths", () => {
   it.effect("pins gh auth login and token reads to the same writable config dir", () =>
@@ -183,7 +190,7 @@ describe("auth container paths", () => {
         const recorded: Array<RecordedCommand> = []
         const executor = makeFakeExecutor(recorded)
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Effect.runPromise(Effect.succeed(githubUserResponse("repo, workflow, read:org")))
+          Promise.resolve(githubUserResponse("repo, workflow, read:org"))
         )
 
         yield* _(
@@ -280,7 +287,7 @@ describe("auth container paths", () => {
         const recorded: Array<RecordedCommand> = []
         const executor = makeFakeExecutor(recorded)
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Effect.runPromise(Effect.succeed(githubUserResponse("repo, workflow")))
+          Promise.resolve(githubUserResponse("repo, workflow"))
         )
 
         yield* _(
@@ -322,7 +329,7 @@ describe("auth container paths", () => {
         const recorded: Array<RecordedCommand> = []
         const executor = makeFakeExecutor(recorded)
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Effect.runPromise(Effect.succeed(githubUserResponse("repo, delete_repo")))
+          Promise.resolve(githubUserResponse("repo, delete_repo"))
         )
 
         const failure = yield* _(
@@ -356,13 +363,55 @@ describe("auth container paths", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("does not persist a generated token when GitHub omits OAuth scopes", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const envPath = `${root}/.docker-git/.orch/env/global.env`
+        const recorded: Array<RecordedCommand> = []
+        const executor = makeFakeExecutor(recorded)
+        const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
+          Promise.resolve(githubUserResponse(null))
+        )
+
+        const failure = yield* _(
+          withPatchedFetch(
+            fetchMock,
+            withPatchedEnv(
+              {
+                HOME: root,
+                DOCKER_GIT_STATE_AUTO_SYNC: "0"
+              },
+              withWorkingDirectory(
+                root,
+                authGithubLogin({
+                  _tag: "AuthGithubLogin",
+                  label: null,
+                  token: null,
+                  scopes: null,
+                  envGlobalPath: ".docker-git/.orch/env/global.env"
+                }).pipe(
+                  Effect.provideService(CommandExecutor.CommandExecutor, executor),
+                  Effect.flip
+                )
+              )
+            )
+          )
+        )
+
+        expect(failure._tag).toBe("AuthError")
+        expect(failure.message).toBe(githubUnverifiedTokenScopesMessage)
+        expect(yield* _(fs.exists(envPath))).toBe(false)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("rejects a manual token when GitHub reports delete_repo", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const fs = yield* _(FileSystem.FileSystem)
         const envPath = `${root}/.docker-git/.orch/env/global.env`
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Effect.runPromise(Effect.succeed(githubUserResponse("repo, delete_repo")))
+          Promise.resolve(githubUserResponse("repo, delete_repo"))
         )
 
         const failure = yield* _(
@@ -389,6 +438,43 @@ describe("auth container paths", () => {
 
         expect(failure._tag).toBe("AuthError")
         expect(failure.message).toBe(githubForbiddenDeleteRepoScopeMessage)
+        expect(yield* _(fs.exists(envPath))).toBe(false)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("rejects a manual token when GitHub omits OAuth scopes", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const envPath = `${root}/.docker-git/.orch/env/global.env`
+        const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
+          Promise.resolve(githubUserResponse(null))
+        )
+
+        const failure = yield* _(
+          withPatchedFetch(
+            fetchMock,
+            withPatchedEnv(
+              {
+                HOME: root,
+                DOCKER_GIT_STATE_AUTO_SYNC: "0"
+              },
+              withWorkingDirectory(
+                root,
+                authGithubLogin({
+                  _tag: "AuthGithubLogin",
+                  label: null,
+                  token: "manual-token",
+                  scopes: null,
+                  envGlobalPath: ".docker-git/.orch/env/global.env"
+                }).pipe(Effect.flip)
+              )
+            )
+          )
+        )
+
+        expect(failure._tag).toBe("AuthError")
+        expect(failure.message).toBe(githubUnverifiedTokenScopesMessage)
         expect(yield* _(fs.exists(envPath))).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))

@@ -4,21 +4,21 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { defaultTemplateConfig } from "@effect-template/lib/core/template-defaults"
 import { buildDockerAuthArgs, resolveDockerVolumeHostPath, runDockerAuthCapture } from "@effect-template/lib/shell/docker-auth"
-import { AuthError, CommandFailedError } from "@effect-template/lib/shell/errors"
+import type { AuthError } from "@effect-template/lib/shell/errors"
+import { CommandFailedError } from "@effect-template/lib/shell/errors"
+import {
+  rejectGithubTokenWithRepositoryDeleteScope,
+  runGithubRemoveDeleteRepoScope
+} from "@effect-template/lib/usecases/auth-github"
 import { buildDockerAuthSpec, normalizeAccountLabel } from "@effect-template/lib/usecases/auth-helpers"
 import { ensureEnvFile, readEnvText, upsertEnvKey } from "@effect-template/lib/usecases/env-file"
 import { ensureGhAuthImage, ghAuthDir, ghAuthRoot, ghImageName } from "@effect-template/lib/usecases/github-auth-image"
-import {
-  githubForbiddenDeleteRepoScopeMessage,
-  hasGithubRepositoryDeleteScope,
-  normalizeGithubScopes
-} from "@effect-template/lib/usecases/github-scope-policy"
-import { validateGithubToken } from "@effect-template/lib/usecases/github-token-validation"
+import { normalizeGithubScopes } from "@effect-template/lib/usecases/github-scope-policy"
 import { resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
 import { autoSyncState } from "@effect-template/lib/usecases/state-repo"
 import { ensureStateDotDockerGitRepo } from "@effect-template/lib/usecases/state-repo-github"
 import { migrateLegacyOrchLayout } from "@effect-template/lib/usecases/auth-sync"
-import { Effect, Logger, Runtime } from "effect"
+import { Effect, Logger, Match, Runtime } from "effect"
 import * as Stream from "effect/Stream"
 import { spawn, type ChildProcess } from "node:child_process"
 
@@ -77,18 +77,21 @@ const buildGithubTokenKey = (label: string | null): string => {
 const labelFromKey = (key: string): string => key.startsWith(githubTokenPrefix) ? key.slice(githubTokenPrefix.length) : "default"
 
 const toApiError = (error: GithubSetupError): ApiBadRequestError | ApiInternalError =>
-  error._tag === "AuthError"
-    ? new ApiBadRequestError({
-      message: error.message
-    })
-    : error._tag === "CommandFailedError"
-      ? new ApiBadRequestError({
-        message: `${error.command} failed (exit ${error.exitCode}).`
-      })
-      : new ApiInternalError({
-        message: String(error),
-        cause: error
-      })
+  Match.value(error).pipe(
+    Match.tag("AuthError", (authError) =>
+      new ApiBadRequestError({
+        message: authError.message
+      })),
+    Match.tag("CommandFailedError", (commandError) =>
+      new ApiBadRequestError({
+        message: `${commandError.command} failed (exit ${commandError.exitCode}).`
+      })),
+    Match.orElse((platformError) =>
+      new ApiInternalError({
+        message: String(platformError),
+        cause: platformError
+      }))
+  )
 
 const prepareGithubLogin = (
   request: GithubAuthLoginRequest
@@ -168,32 +171,6 @@ const resolveGithubToken = (
       (value) => value.length > 0,
       () => new CommandFailedError({ command: "gh auth token", exitCode: 1 })
     )
-  )
-
-const runGithubRemoveDeleteRepoScope = (
-  cwd: string,
-  accountPath: string
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  runDockerAuthCapture(
-    buildDockerAuthSpec({
-      cwd,
-      image: ghImageName,
-      hostPath: accountPath,
-      containerPath: ghAuthDir,
-      env: ["BROWSER=echo", `GH_CONFIG_DIR=${ghAuthDir}`],
-      args: ["auth", "refresh", "-h", "github.com", "--remove-scopes", "delete_repo"],
-      interactive: false
-    }),
-    [0],
-    (exitCode) => new CommandFailedError({ command: "gh auth refresh --remove-scopes delete_repo", exitCode })
-  ).pipe(Effect.asVoid)
-
-const rejectGithubTokenWithRepositoryDeleteScope = (token: string): Effect.Effect<void, AuthError> =>
-  validateGithubToken(token).pipe(
-    Effect.flatMap((validation) =>
-      hasGithubRepositoryDeleteScope(validation.oauthScopes)
-        ? Effect.fail(new AuthError({ message: githubForbiddenDeleteRepoScopeMessage }))
-        : Effect.void)
   )
 
 const persistGithubToken = (

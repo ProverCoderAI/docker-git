@@ -4,6 +4,10 @@ export const githubForbiddenDeleteRepoScopeMessage = [
   "GitHub auth token includes forbidden OAuth scope: delete_repo.",
   "Repository deletion is not allowed for docker-git tokens. The token was not stored."
 ].join("\n")
+export const githubUnverifiedTokenScopesMessage = [
+  "Unable to verify GitHub token OAuth scopes.",
+  "The token was not stored because docker-git could not confirm repository deletion is disabled."
+].join("\n")
 
 const scopeSeparator = /[,\s]+/g
 
@@ -53,4 +57,4 @@ export const parseGithubOauthScopesHeader = (value: string | null | undefined): 
 }
 
 export const hasGithubRepositoryDeleteScope = (scopes: ReadonlyArray<string> | null): boolean =>
-  scopes?.some(isGithubRepositoryDeleteScope) ?? false
+  scopes?.some((scope) => isGithubRepositoryDeleteScope(scope)) ?? false
