@@ -200,6 +200,17 @@ exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" "\${EXTRA_ARGS[@]}" "$@"
 EOF
 RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
 
+/**
+ * Renders /etc/profile.d/bun.sh with a runtime-relative PATH extension.
+ *
+ * @returns Dockerfile RUN directive that prepends Bun to PATH at container runtime.
+ * @pure true
+ * @effect none; CORE template renderer only constructs a string.
+ * @invariant output contains /usr/local/bun/bin and escaped \$PATH, preserving shell-time expansion.
+ * @precondition no inputs are required.
+ * @postcondition returned Dockerfile command writes /etc/profile.d/bun.sh and chmods it to 0644.
+ * @complexity O(1) time / O(1) space.
+ */
 const renderDockerfileBunProfile = (): string =>
   `RUN printf "export PATH=/usr/local/bun/bin:\\$PATH\\n" \
   > /etc/profile.d/bun.sh && chmod 0644 /etc/profile.d/bun.sh`
