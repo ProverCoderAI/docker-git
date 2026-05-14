@@ -74,7 +74,18 @@ RUN bun run --cwd packages/api build
 RUN bun scripts/skiller-apply-docker-git-patches.mjs
 RUN test -f third_party/skiller-desktop-skills-manager/package.json \
  && cd third_party/skiller-desktop-skills-manager \
- && bun install --frozen-lockfile --silent \
+ && for attempt in 1 2 3 4 5; do \
+      if bun install --frozen-lockfile --silent; then \
+        break; \
+      fi; \
+      if [ "$attempt" = "5" ]; then \
+        echo "skiller bun install failed after retries" >&2; \
+        exit 1; \
+      fi; \
+      echo "skiller bun install attempt ${attempt} failed; retrying..." >&2; \
+      rm -rf /root/.bun/install/cache node_modules; \
+      sleep $((attempt * 2)); \
+    done \
  && bun run build \
  && touch out/.docker-git-browser-folder-picker.patch \
  && mkdir -p out/preload \
