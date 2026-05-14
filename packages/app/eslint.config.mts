@@ -281,8 +281,7 @@ export default defineConfig(
   },
   {
     files: [
-      "src/docker-git/menu-create-shared.ts",
-      "src/docker-git/menu-render.ts",
+      "src/web/create-flow.ts",
       "src/web/actions-projects.ts",
       "src/web/app-ready-controller.ts",
       "src/web/app-ready-main-panels.tsx",
@@ -328,7 +327,7 @@ export default defineConfig(
   },
   {
     files: [
-      "src/docker-git/menu-create-shared.ts",
+      "src/web/create-flow.ts",
       "src/web/app-ready-terminal-screen.tsx",
       "src/web/panel-content.tsx",
       "src/web/panel-create-select.tsx",

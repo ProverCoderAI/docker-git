@@ -1,8 +1,8 @@
 import * as ParseResult from "@effect/schema/ParseResult"
 import { Either } from "effect"
 
-import { createProjectDraftFromInputs } from "../docker-git/menu-create-shared.js"
-import type { CreateInputs } from "../docker-git/menu-types.js"
+import { createProjectDraftFromInputs } from "./create-flow.js"
+import type { CreateInputs } from "./create-types.js"
 import { readEventPayloadString } from "./actions-event-payload.js"
 import { appendOutputLine, appendOutputLineHandler, notifyProjectEventRateLimit } from "./actions-output.js"
 import { type BrowserActionContext, withBusy } from "./actions-shared.js"

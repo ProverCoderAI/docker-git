@@ -1,5 +1,3 @@
-import type { ProjectItem } from "./project-item.js"
-
 export type SelectSearchAccessors<A> = {
   readonly clonedOnHostname: (item: A) => string | undefined
   readonly containerName: (item: A) => string | undefined
@@ -29,8 +27,8 @@ const searchableValues = <A>(
 
 const hasTerm = (values: ReadonlyArray<string>, term: string): boolean => values.some((value) => value.includes(term))
 
-// CHANGE: share project search semantics between CLI Select and WEB ProjectPicker
-// WHY: selecting by container name must behave identically across both surfaces
+// CHANGE: share project search semantics between browser project pickers
+// WHY: selecting by container name must behave identically across browser panels
 // QUOTE(ТЗ): "Можешь добавить ещё поиск контейнеров по имени?"
 // REF: user-message-2026-04-22-container-name-search
 // SOURCE: n/a
@@ -53,16 +51,3 @@ export const filterSelectItemsByQuery = <A>(
     return terms.every((term) => hasTerm(values, term))
   })
 }
-
-export const filterProjectItemsByQuery = (
-  items: ReadonlyArray<ProjectItem>,
-  query: string
-): ReadonlyArray<ProjectItem> =>
-  filterSelectItemsByQuery(items, query, {
-    clonedOnHostname: (item) => item.clonedOnHostname,
-    containerName: (item) => item.containerName,
-    displayName: (item) => item.displayName,
-    projectKey: (item) => item.projectDir,
-    repoRef: (item) => item.repoRef,
-    repoUrl: (item) => item.repoUrl
-  })

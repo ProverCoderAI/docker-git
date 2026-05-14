@@ -1,6 +1,6 @@
 import type { JSX } from "react"
 
-import { buildSelectLabels, type SelectPurpose } from "../docker-git/menu-select-presenter.js"
+import { buildSelectLabels, type SelectPurpose } from "./project-select-presenter.js"
 import { TextInput } from "../ui/primitives.js"
 import type { DashboardData } from "./api.js"
 import { Box, Text } from "./elements.js"

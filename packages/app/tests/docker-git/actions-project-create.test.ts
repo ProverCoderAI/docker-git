@@ -3,9 +3,9 @@ import { Effect } from "effect"
 import * as fc from "fast-check"
 import { beforeEach, vi } from "vitest"
 
-import type { CreateInputs } from "../../src/docker-git/menu-types.js"
 import { submitCreateInputs } from "../../src/web/actions-project-create.js"
 import type { ApiEvent, loadProjectDetails, ProjectDetails, startCreateProject } from "../../src/web/api.js"
+import type { CreateInputs } from "../../src/web/create-types.js"
 import type { openProjectEventStream } from "../../src/web/project-events.js"
 import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
 

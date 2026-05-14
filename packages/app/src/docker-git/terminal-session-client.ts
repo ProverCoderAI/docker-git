@@ -4,7 +4,7 @@ import { Effect, Either } from "effect"
 import { type TerminalServerMessage, TerminalServerMessageSchema } from "../shared/terminal-session-schema.js"
 import type { ApiTerminalSession } from "./api-client.js"
 import { resolveApiBaseUrl } from "./controller.js"
-import { writeToTerminal } from "./menu-shared.js"
+import { writeToTerminal } from "./terminal-output.js"
 
 export type TerminalSessionClientError = {
   readonly _tag: "TerminalSessionClientError"

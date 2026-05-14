@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  advanceCreateFlow,
-  createInitialFlowView,
-  resolveCreateFlowSteps
-} from "../../src/docker-git/menu-create-shared.js"
+import { advanceCreateFlow, createInitialFlowView, resolveCreateFlowSteps } from "../../src/web/create-flow.js"
 
 const expectContinueResult = (
   next: ReturnType<typeof advanceCreateFlow>
@@ -39,7 +35,7 @@ const expectFeatureRepoDefaults = (
   expect(value.outDir).toBe(defaultRoot)
 }
 
-describe("menu-create-shared", () => {
+describe("create-flow", () => {
   const cwd = process.cwd()
   const defaultRoot = `${process.env["HOME"] ?? cwd}/.docker-git/org/repo`
 

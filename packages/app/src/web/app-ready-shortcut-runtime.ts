@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react"
 
-import type { CreateFlowView } from "../docker-git/menu-create-shared.js"
+import type { CreateFlowView } from "./create-flow.js"
 import type { ActionPromptState } from "./action-prompt.js"
 import type { BrowserActionContext } from "./actions.js"
 import { runBrowserMenuAction } from "./actions.js"

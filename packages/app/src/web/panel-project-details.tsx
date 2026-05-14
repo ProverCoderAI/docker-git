@@ -8,7 +8,7 @@ import {
   type SelectPurpose,
   selectTitle,
   stoppedRuntime
-} from "../docker-git/menu-select-presenter.js"
+} from "./project-select-presenter.js"
 import { Box, Text } from "../ui/primitives.js"
 import { HelpLines } from "../ui/shared.js"
 import { loadProjectTerminalSessions, type ProjectDetails, type ProjectSummary, type TerminalSession } from "./api.js"

@@ -1,6 +1,15 @@
 import { Match } from "effect"
 
-import type { AuthFlow } from "./menu-types.js"
+export type AuthFlow =
+  | "GithubOauth"
+  | "GithubRemove"
+  | "GitSet"
+  | "GitRemove"
+  | "ClaudeOauth"
+  | "ClaudeLogout"
+  | "GeminiOauth"
+  | "GeminiApiKey"
+  | "GeminiLogout"
 
 export type AuthMenuAction = AuthFlow | "Refresh" | "Back"
 

@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 
-import { sortSelectItemsByLaunchTime } from "../docker-git/menu-select-order.js"
-import type { SelectProjectRuntime } from "../docker-git/menu-types.js"
+import { sortSelectItemsByLaunchTime } from "./project-select-order.js"
+import type { SelectProjectRuntime } from "./project-select-types.js"
 import type { AuthMenuRequestBody, ProjectAuthMenuRequestBody } from "../shared/auth-menu-request.js"
 import { requestJson, requestText, requestTextStream, resolveApiBaseUrl } from "./api-http.js"
 import {
@@ -81,8 +81,8 @@ const dashboardRuntimeByProject = (
     ])
   )
 
-// CHANGE: keep WEB `/select/` project order identical to CLI Select
-// WHY: both surfaces must use the same launch-time ordering and tie-breakers
+// CHANGE: keep browser project order consistent across panels
+// WHY: browser surfaces must use the same launch-time ordering and tie-breakers
 // QUOTE(ТЗ): "мы можем иметь 1 в 1 логику что в CLI что на WEB?"
 // REF: user-message-2026-04-21-unify-cli-web-select
 // SOURCE: n/a

@@ -459,10 +459,10 @@ export const runProjectMenuAction = (
     loadSelectedProjectSkills(context)
     return
   }
-  runProjectMenuCommand(currentMenu, context)
+  runProjectBrowserCommand(currentMenu, context)
 }
 
-const runProjectMenuCommand = (
+const runProjectBrowserCommand = (
   currentMenu: Exclude<
     BrowserMenuTag,
     | "Auth"

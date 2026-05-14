@@ -1,6 +1,6 @@
 import { Match } from "effect"
 
-import type { SelectProjectRuntime } from "./menu-types.js"
+import type { SelectProjectRuntime } from "./project-select-types.js"
 
 export type SelectPurpose = "Connect" | "Down" | "Info" | "Delete" | "Auth"
 

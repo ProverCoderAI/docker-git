@@ -71,10 +71,10 @@ export const authGeminiLoginCli = (
     yield* _(Effect.log("1. API Key (recommended for simplicity):"))
     yield* _(Effect.log("   - Go to https://ai.google.dev/aistudio"))
     yield* _(Effect.log("   - Create or retrieve your API key"))
-    yield* _(Effect.log("   - Use: docker-git menu -> Auth profiles -> Gemini CLI: set API key"))
+    yield* _(Effect.log("   - Use: docker-git browser -> Auth profiles -> Gemini CLI: set API key"))
     yield* _(Effect.log(""))
     yield* _(Effect.log("2. OAuth (Sign in with Google):"))
-    yield* _(Effect.log("   - Use: docker-git menu -> Auth profiles -> Gemini CLI: login via OAuth"))
+    yield* _(Effect.log("   - Use: docker-git browser -> Auth profiles -> Gemini CLI: login via OAuth"))
     yield* _(Effect.log("   - Follow the prompts to authenticate with your Google account"))
   })
 

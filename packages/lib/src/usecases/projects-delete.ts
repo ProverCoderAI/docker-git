@@ -62,7 +62,7 @@ const removeContainersFallback = (
     yield* _(removeContainerByName(item.projectDir, `${item.containerName}-browser`))
   })
 
-// CHANGE: delete a docker-git project directory (state) selected in the TUI
+// CHANGE: delete a docker-git project directory (state) selected by a caller
 // WHY: allow removing unwanted projects without rewriting git history (just delete the folder)
 // QUOTE(ТЗ): "Сделай возможность так же удалять мусорный для меня контейнер... Не нужно чистить гит историю. Пусть просто папку с ним удалит"
 // REF: user-request-2026-02-09-delete-project

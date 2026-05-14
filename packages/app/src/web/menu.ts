@@ -1,5 +1,3 @@
-import { menuItems } from "../docker-git/menu-types.js"
-
 export type BrowserMenuTag =
   | "Create"
   | "Select"
@@ -39,9 +37,29 @@ const browserMenuOrder: ReadonlyArray<BrowserMenuTag> = [
   "Quit"
 ]
 
+const browserMenuLabels: Readonly<Record<BrowserMenuTag, string>> = {
+  Auth: "Auth profiles (keys)",
+  Browser: "Open browser",
+  Create: "Create project",
+  Databases: "Databases",
+  Delete: "Delete project (folder + container)",
+  Down: "docker compose down",
+  DownAll: "docker compose down (ALL projects)",
+  Info: "Show connection info",
+  Logs: "docker compose logs --tail=200",
+  Ports: "Port forwards",
+  ProjectAuth: "Project auth (bind labels)",
+  Prompts: "Prompts",
+  Quit: "Quit",
+  Select: "Select project",
+  Skills: "Skills",
+  Status: "docker compose ps",
+  Tasks: "Tasks"
+}
+
 export const browserMenuItems = browserMenuOrder.map((tag) => ({
   tag,
-  label: menuItems.find((item) => item.id._tag === tag)?.label ?? tag
+  label: browserMenuLabels[tag]
 }))
 
 export const browserMenuIndex = (tag: BrowserMenuTag): number => {

@@ -154,7 +154,7 @@ const connectPreparedProjectSsh = (
   )
 
 // CHANGE: connect to a project via SSH using its resolved settings
-// WHY: allow TUI to open a shell immediately after selection
+// WHY: allow project selection flows to open a shell immediately after selection
 // QUOTE(ТЗ): "выбор проекта сразу подключает по SSH"
 // REF: user-request-2026-02-02-select-ssh
 // SOURCE: n/a

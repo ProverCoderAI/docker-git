@@ -1,7 +1,6 @@
 export { formatParseError } from "../frontend-lib/core/parse-errors.js"
 
-export const usageText = `docker-git menu
-docker-git browser
+export const usageText = `docker-git browser
 docker-git create [--repo-url <url>] [options]
 docker-git clone <url> [options]
 docker-git open [<selector>] [options]
@@ -20,7 +19,6 @@ docker-git auth <provider> <action> [options]
 docker-git state <action> [options]
 
 Commands:
-  menu                Interactive menu (default when no args)
   browser             Build and serve the browser frontend for the docker-git controller
   create, init        Generate docker development environment (repo URL optional)
   clone               Create + run container and clone repo

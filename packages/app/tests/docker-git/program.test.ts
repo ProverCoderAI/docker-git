@@ -7,13 +7,11 @@ import type { Command } from "../../src/docker-git/frontend-lib/core/domain.js"
 
 const ensureControllerReadyMock = vi.hoisted(() => vi.fn(() => Effect.void))
 const runBrowserFrontendCommandMock = vi.hoisted(() => vi.fn(() => Effect.void))
-const runMenuCallMock = vi.hoisted(() => vi.fn(() => {}))
 const readCommandMock = vi.hoisted(() => vi.fn<() => Command>())
 const codexLoginMock = vi.hoisted(() => vi.fn(() => Effect.void))
 const gitlabLoginMock = vi.hoisted(() => vi.fn(() => Effect.succeed({ ok: true })))
 const readStatePullMock = vi.hoisted(() => vi.fn(() => Effect.succeed("State pull completed.")))
 
-const menuCommand: Extract<Command, { readonly _tag: "Menu" }> = { _tag: "Menu" }
 const browserCommand: Extract<Command, { readonly _tag: "Browser" }> = { _tag: "Browser" }
 const codexLoginCommand: Extract<Command, { readonly _tag: "AuthCodexLogin" }> = {
   _tag: "AuthCodexLogin",
@@ -70,27 +68,20 @@ vi.mock("../../src/docker-git/api-client.js", () => ({
   syncState: vi.fn(() => Effect.succeed("State sync completed."))
 }))
 
-vi.mock("../../src/docker-git/menu.js", () => ({
-  runMenu: Effect.sync(() => {
-    runMenuCallMock()
-  })
-}))
-
 const runProgram = () =>
   Effect.gen(function*(_) {
     const { program } = yield* _(Effect.promise(() => import("../../src/docker-git/program.js")))
     yield* _(program.pipe(Effect.provide(NodeContext.layer)))
   })
 
-describe("program menu dispatch", () => {
+describe("program dispatch", () => {
   beforeEach(() => {
     ensureControllerReadyMock.mockReset()
     ensureControllerReadyMock.mockImplementation(() => Effect.void)
     runBrowserFrontendCommandMock.mockReset()
     runBrowserFrontendCommandMock.mockImplementation(() => Effect.void)
-    runMenuCallMock.mockReset()
     readCommandMock.mockReset()
-    readCommandMock.mockReturnValue(menuCommand)
+    readCommandMock.mockReturnValue(browserCommand)
     codexLoginMock.mockReset()
     codexLoginMock.mockImplementation(() => Effect.void)
     gitlabLoginMock.mockReset()
@@ -100,15 +91,6 @@ describe("program menu dispatch", () => {
     process.exitCode = 0
     vi.resetModules()
   })
-
-  it.effect("routes menu through controller bootstrap instead of unsupported-command path", () =>
-    Effect.gen(function*(_) {
-      yield* _(runProgram())
-
-      expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
-      expect(runMenuCallMock).toHaveBeenCalledTimes(1)
-      expect(process.exitCode ?? 0).toBe(0)
-    }))
 
   it.effect("routes browser frontend through the browser command runner", () =>
     Effect.gen(function*(_) {

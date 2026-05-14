@@ -1,6 +1,6 @@
 import type { JSX } from "react"
 
-import type { CreateFlowView } from "../docker-git/menu-create-shared.js"
+import type { CreateFlowView } from "./create-flow.js"
 import type { ActionPromptState } from "./action-prompt.js"
 import type {
   AuthSnapshot,
@@ -140,7 +140,7 @@ const terminalWorkspacePadding = (viewportLayout: ViewportLayout): string => {
 const HeaderTitle = ({ compact }: Pick<ViewportLayout, "compact">): JSX.Element => (
   <Box flexWrap="wrap" gap={1} justifyContent="space-between">
     <Text bold={true} fg="#f6fbff">docker-git browser</Text>
-    {compact ? null : <Text fg="#7fdfff">Gridland menu shell</Text>}
+    {compact ? null : <Text fg="#7fdfff">browser workspace</Text>}
   </Box>
 )
 

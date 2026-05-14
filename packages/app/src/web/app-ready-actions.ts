@@ -1,5 +1,5 @@
-import { authMenuActionByIndex } from "../docker-git/menu-auth-shared.js"
-import { projectAuthMenuActionByIndex } from "../docker-git/menu-project-auth-shared.js"
+import { authMenuActionByIndex } from "./auth-flow.js"
+import { projectAuthMenuActionByIndex } from "./project-auth-flow.js"
 import { runBrowserAuthAction, runBrowserProjectAuthAction } from "./actions.js"
 import type { BrowserActionContext } from "./actions.js"
 import type { BrowserMenuTag } from "./menu.js"

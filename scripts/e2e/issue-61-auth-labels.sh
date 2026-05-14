@@ -93,7 +93,7 @@ grep -Fq -- "GITHUB_TOKEN__AGIENS=$agiens_token" "$ROOT/.orch/env/global.env" \
 [[ "$(git --git-dir "$REMOTE" log -1 --pretty=%s)" == "chore(state): auth gh AGIENS" ]] \
   || fail "expected latest remote commit to come from labeled GH auth"
 
-# 2) Set labeled Git credentials + stub Claude Code OAuth cache via the same menu logic (non-interactive).
+# 2) Set labeled Git credentials + stub Claude Code OAuth cache via the controller API (non-interactive).
 PROJECT_DIR="$ROOT/e2e/project-1"
 PROJECT_ENV="$PROJECT_DIR/.orch/env/project.env"
 mkdir -p "$(dirname "$PROJECT_ENV")"
@@ -112,8 +112,7 @@ import { Effect } from "effect"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
-import { writeAuthFlow } from "./dist/src/docker-git/menu-auth-data.js"
-import { writeProjectAuthFlow } from "./dist/src/docker-git/menu-project-auth-data.js"
+import { runAuthMenuFlow, runProjectAuthFlow } from "./dist/src/docker-git/api-auth-menu-client.js"
 
 const projectDir = process.env.PROJECT_DIR ?? ""
 const envProjectPath = process.env.PROJECT_ENV_PATH ?? ""
@@ -126,15 +125,18 @@ if (gitToken.length === 0) {
   throw new Error("missing GIT_TOKEN_VALUE")
 }
 
-const project = {
-  projectDir,
-  displayName: "e2e/project-1",
-  envProjectPath
-}
+const requireSnapshot = (snapshot, label) =>
+  snapshot === null ? Effect.fail(new Error(`${label} returned an invalid snapshot`)) : Effect.void
 
 const main = Effect.gen(function*(_) {
   // Create labeled profiles in ~/.docker-git/.orch/env/global.env
-  yield* _(writeAuthFlow(process.cwd(), "GitSet", { label: "agiens", token: gitToken, user: "x-access-token" }))
+  yield* _(runAuthMenuFlow({
+    flow: "GitSet",
+    label: "agiens",
+    token: gitToken,
+    user: "x-access-token",
+    apiKey: null
+  }).pipe(Effect.flatMap((snapshot) => requireSnapshot(snapshot, "auth flow"))))
 
   // Stub a Claude Code OAuth cache for the same label so project binding can validate it.
   const root = process.env.DOCKER_GIT_PROJECTS_ROOT ?? ""
@@ -146,9 +148,18 @@ const main = Effect.gen(function*(_) {
   writeFileSync(join(claudeAuthDir, ".config.json"), JSON.stringify({}), "utf8")
 
   // Bind them into the project env.
-  yield* _(writeProjectAuthFlow(project, "ProjectGithubConnect", { label: "agiens" }))
-  yield* _(writeProjectAuthFlow(project, "ProjectGitConnect", { label: "agiens" }))
-  yield* _(writeProjectAuthFlow(project, "ProjectClaudeConnect", { label: "agiens" }))
+  yield* _(runProjectAuthFlow(projectDir, {
+    flow: "ProjectGithubConnect",
+    label: "agiens"
+  }).pipe(Effect.flatMap((snapshot) => requireSnapshot(snapshot, "project GitHub auth flow"))))
+  yield* _(runProjectAuthFlow(projectDir, {
+    flow: "ProjectGitConnect",
+    label: "agiens"
+  }).pipe(Effect.flatMap((snapshot) => requireSnapshot(snapshot, "project Git auth flow"))))
+  yield* _(runProjectAuthFlow(projectDir, {
+    flow: "ProjectClaudeConnect",
+    label: "agiens"
+  }).pipe(Effect.flatMap((snapshot) => requireSnapshot(snapshot, "project Claude auth flow"))))
 })
 
 NodeRuntime.runMain(Effect.provide(main, NodeContext.layer))

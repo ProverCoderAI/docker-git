@@ -95,12 +95,12 @@ docker-git --help
 ```
 
 Структура проекта:
-APP - CLI + React (Frontend)
-LIB - Весь бекенд (Основная бизнес логика)
-API - Просто апи сервер поднятный над LIB 
+APP - CLI + browser frontend (`docker-git browser`)
+LIB - основная бизнес-логика
+API - только API server над LIB
 
-APP работает только с API, и не имеет доступа к LIB
-API работает только с LIB
+APP работает с API; единственная пользовательская frontend-поверхность запускается через `docker-git browser`.
+API работает только с LIB и не сервит встроенный HTML frontend.
 
 ## Runtime contract: host-Docker-backed
 

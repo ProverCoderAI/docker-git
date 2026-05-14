@@ -28,7 +28,6 @@ import { type ControllerRuntime, ensureControllerReady } from "./controller.js"
 import type { CliError, UnsupportedCommandError } from "./host-errors.js"
 import { renderCliError } from "./host-errors.js"
 import { autoOpenProjectSsh } from "./host-ssh.js"
-import { runMenu } from "./menu.js"
 import { openExistingProjectSsh } from "./open-project.js"
 import { dispatchRoutedAuthCommand, isRoutedAuthCommand } from "./program-auth.js"
 import { unsupportedOperationalCommands, type UnsupportedOperationalCommandTag } from "./program-unsupported.js"
@@ -183,7 +182,7 @@ const unsupportedOperationalCommand = (
 
 type DirectOperationalCommand = Extract<
   OperationalCommand,
-  { readonly _tag: "Menu" | "Browser" | "Create" | "Open" | "Status" | "DownAll" | "ApplyAll" }
+  { readonly _tag: "Browser" | "Create" | "Open" | "Status" | "DownAll" | "ApplyAll" }
 >
 type RoutedOperationalCommand = Exclude<OperationalCommand, DirectOperationalCommand>
 const dispatchRoutedOperationalCommand = (
@@ -208,7 +207,6 @@ const dispatchOperationalCommand = (
   command: OperationalCommand
 ): Effect.Effect<void, CliError, ControllerRuntime> =>
   Match.value(command).pipe(
-    Match.when({ _tag: "Menu" }, () => withControllerReady(runMenu)),
     Match.when({ _tag: "Browser" }, () => runBrowserFrontendCommand),
     Match.when({ _tag: "Create" }, handleCreateCommand),
     Match.when({ _tag: "Open" }, handleOpenCommand),

@@ -1,13 +1,13 @@
 import { type Dispatch, type SetStateAction, useEffect } from "react"
 
 import { formatParseError } from "../docker-git/cli/usage.js"
-import { nextBufferValue } from "../docker-git/menu-buffer-input.js"
+import { nextBufferValue } from "./buffer-input.js"
 import {
   advanceCreateFlow,
   type CreateFlowView,
   createInitialFlowView,
   handleAdvanceCreateFlowResult
-} from "../docker-git/menu-create-shared.js"
+} from "./create-flow.js"
 import { submitCreateInputs } from "./actions-projects.js"
 import { requireGithubAuthConfigured } from "./actions-shared.js"
 import type { BrowserActionContext } from "./actions.js"

@@ -70,8 +70,8 @@ const resolveCommandLabel = (request: AuthTerminalSessionRequest): string => {
   const label = request.label?.trim()
   const suffix = label === undefined || label.length === 0 ? "" : ` [${label}]`
   return request.flow === "ClaudeOauth"
-    ? `docker-git menu auth claude oauth${suffix}`
-    : `docker-git menu auth gemini oauth${suffix}`
+    ? `Claude Code OAuth${suffix}`
+    : `Gemini CLI OAuth${suffix}`
 }
 
 const resolveRunnerArgs = (flow: AuthTerminalFlow, label: string | null | undefined): ReadonlyArray<string> => {

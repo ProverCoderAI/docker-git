@@ -9,7 +9,7 @@ import { CommandFailedError } from "../../shell/errors.js"
 export const successExitCode = Number(ExitCode(0))
 
 export const gitBaseEnv: Readonly<Record<string, string>> = {
-  // Avoid blocking on interactive credential prompts in CI / TUI contexts.
+  // Avoid blocking on interactive credential prompts in CI/API contexts.
   GIT_TERMINAL_PROMPT: "0",
   // Avoid SSH hanging on host key prompts or passphrases
   GIT_SSH_COMMAND: "ssh -o BatchMode=yes",

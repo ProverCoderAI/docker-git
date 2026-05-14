@@ -1,5 +1,5 @@
 import { asObject, asString, type JsonValue } from "./api-json.js"
-import type { AuthSnapshot, ProjectAuthSnapshot } from "./menu-types.js"
+import type { AuthSnapshot, ProjectAuthSnapshot } from "../web/api-types.js"
 
 type RawAuthSnapshot = {
   readonly globalEnvPath: string | null
