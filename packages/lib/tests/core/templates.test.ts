@@ -151,12 +151,13 @@ describe("renderDockerfile", () => {
   })
 
   it("does not recursively chown the inherited home directory from the base image", () => {
-    const dockerfile = renderDockerfile(makeTemplateConfig())
+    const config = makeTemplateConfig()
+    const dockerfile = renderDockerfile(config)
 
     expect(dockerfile).toContain('chown 1000:1000 "$HOME_DIR"')
     expect(dockerfile).toContain('chown -R 1000:1000 "$TARGET_DIR"')
     expect(dockerfile).not.toContain("chown -R 1000:1000 /home/dev")
-    expect(dockerfile).not.toContain("chown -R 1000:1000 /home/${config.sshUser}")
+    expect(dockerfile).not.toContain(`chown -R 1000:1000 /home/${config.sshUser}`)
   })
 
   it("renders targetDir as a single-quoted shell literal in workspace setup", () => {
