@@ -34,25 +34,11 @@ const activateInput = (
   }
 
   const normalized = input.trim()
-
-  if (normalized.length > 1) {
+  const hasMenuInput = normalized.length > 0 || input.length > 0
+  const hasMenuActionKey = key.upArrow || key.downArrow || key.return
+  if (hasMenuInput || hasMenuActionKey) {
     context.setInputStage("active")
     return { activated: true, allowProcessing: true }
-  }
-
-  if (key.upArrow || key.downArrow || key.return) {
-    context.setInputStage("active")
-    return { activated: true, allowProcessing: false }
-  }
-
-  if (normalized.length === 1) {
-    context.setInputStage("active")
-    return { activated: true, allowProcessing: false }
-  }
-
-  if (input.length > 0) {
-    context.setInputStage("active")
-    return { activated: true, allowProcessing: false }
   }
 
   return { activated: false, allowProcessing: false }

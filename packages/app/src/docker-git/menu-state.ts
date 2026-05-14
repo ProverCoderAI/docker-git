@@ -32,6 +32,16 @@ export type MenuSnapshotStore = {
   current: MenuSnapshot
 }
 
+// CHANGE: make a fresh CLI TUI process the first user key after readiness gates
+// WHY: ready/ignoreUntil already filters bootstrap noise; skipping valid input breaks menu liveness
+// QUOTE(ТЗ): "Почему-то CLI TUI не работает"
+// REF: issue-274
+// SOURCE: n/a
+// FORMAT THEOREM: forall key in ValidMenuInput: ready(menu) -> processed(key)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: initial snapshot has no synthetic skipped user inputs
+// COMPLEXITY: O(1)
 export const defaultMenuSnapshot = (): MenuSnapshot => ({
   activeDir: null,
   runningDockerGitContainers: 0,
@@ -39,9 +49,9 @@ export const defaultMenuSnapshot = (): MenuSnapshot => ({
   busy: false,
   message: null,
   view: { _tag: "Menu" },
-  inputStage: "cold",
+  inputStage: "active",
   ready: false,
-  skipInputs: 2,
+  skipInputs: 0,
   sshActive: false,
   startupLoaded: false
 })

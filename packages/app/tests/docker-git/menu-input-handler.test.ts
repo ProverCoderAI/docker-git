@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import { handleUserInput } from "../../src/docker-git/menu-input-handler.js"
 import type { MenuInputContext } from "../../src/docker-git/menu-input-handler.js"
+import { defaultMenuSnapshot } from "../../src/docker-git/menu-state.js"
 
 const makeContext = (inputStage: "cold" | "active"): MenuInputContext & {
   readonly runnerRunEffect: ReturnType<typeof vi.fn>
@@ -47,15 +48,15 @@ const makeContext = (inputStage: "cold" | "active"): MenuInputContext & {
 }
 
 describe("menu-input-handler", () => {
-  it("swallows the first single-character alias on cold start", () => {
+  it("handles the first single-character alias on cold start", () => {
     const context = makeContext("cold")
 
     handleUserInput("s", {}, context)
 
     expect(context.setInputStageMock).toHaveBeenCalledWith("active")
-    expect(context.runnerRunEffect).not.toHaveBeenCalled()
+    expect(context.runnerRunEffect).toHaveBeenCalledTimes(1)
+    expect(context.setSkipInputsMock).toHaveBeenCalledTimes(1)
     expect(context.setViewMock).not.toHaveBeenCalled()
-    expect(context.setMessageMock).not.toHaveBeenCalled()
   })
 
   it("allows the same alias once input is already active", () => {
@@ -65,5 +66,12 @@ describe("menu-input-handler", () => {
 
     expect(context.runnerRunEffect).toHaveBeenCalledTimes(1)
     expect(context.setSkipInputsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("starts a fresh TUI snapshot without synthetic skipped inputs", () => {
+    const snapshot = defaultMenuSnapshot()
+
+    expect(snapshot.inputStage).toBe("active")
+    expect(snapshot.skipInputs).toBe(0)
   })
 })
