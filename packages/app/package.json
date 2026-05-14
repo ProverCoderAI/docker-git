@@ -116,10 +116,10 @@
     "eslint-plugin-unicorn": "^64.0.0",
     "fast-check": "4.8.0",
     "globals": "^17.6.0",
-    "jscpd": "^4.1.1",
+    "jscpd": "^4.2.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.3",
-    "vite": "^8.0.12",
+    "vite": "^8.0.13",
     "vitest": "^4.1.6",
     "ws": "^8.20.1"
   }
