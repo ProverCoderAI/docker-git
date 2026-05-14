@@ -6,6 +6,20 @@ export type TerminalInlineImageOutputSegment = {
   readonly text: string
 }
 
+export type TerminalInlineImagePreviewsEnabledRef = { readonly current: boolean }
+
+export type TerminalOutputSegmentWriter = {
+  readonly writePreviewLineBreak: (segment: TerminalInlineImageOutputSegment, onComplete: () => void) => void
+  readonly writePreviews: (paths: ReadonlyArray<string>, onComplete: () => void) => void
+  readonly writeText: (text: string, onComplete: () => void) => void
+}
+
+export type TerminalOutputSegmentWriteArgs = {
+  readonly inlineImagePreviewsEnabledRef: TerminalInlineImagePreviewsEnabledRef
+  readonly segment: TerminalInlineImageOutputSegment
+  readonly writer: TerminalOutputSegmentWriter
+}
+
 const lineBreakPattern = /\r\n|\r|\n/gu
 
 const endsWithLineBreak = (text: string): boolean => /\r\n$|\r$|\n$/u.test(text)
@@ -37,4 +51,19 @@ export const splitTerminalInlineImageOutput = (
     })
   }
   return segments
+}
+
+export const writeTerminalOutputSegment = (
+  { inlineImagePreviewsEnabledRef, segment, writer }: TerminalOutputSegmentWriteArgs,
+  onComplete: () => void
+): void => {
+  writer.writeText(segment.text, () => {
+    if (segment.imagePaths.length === 0 || !inlineImagePreviewsEnabledRef.current) {
+      onComplete()
+      return
+    }
+    writer.writePreviewLineBreak(segment, () => {
+      writer.writePreviews(segment.imagePaths, onComplete)
+    })
+  })
 }
