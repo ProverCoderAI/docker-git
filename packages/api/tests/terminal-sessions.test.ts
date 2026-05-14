@@ -323,24 +323,25 @@ describe("terminal sessions service", () => {
   it("starts terminal session asynchronously and emits a correlated created event", async () => {
     probeProjectSshReadyMock.mockImplementation(() => Effect.succeed(true))
     getProjectMock.mockImplementation(() => Effect.succeed(projectDetails))
+    const requestId = "00000000-0000-4000-8000-000000000001"
 
-    const accepted = await runTestEffect(startTerminalSession(projectId, "request-1"))
+    const accepted = await runTestEffect(startTerminalSession(projectId, requestId))
 
     expect(accepted).toEqual({
       accepted: true,
       cursor: 0,
       projectId,
-      requestId: "request-1"
+      requestId
     })
 
     await vi.waitFor(() => {
       const created = listProjectEventsSince(projectId, 0).find((event) => event.type === "project.ssh.session")
       expect(created?.payload).toMatchObject({
         phase: "created",
-        sessionId: "request-1",
-        requestId: "request-1"
+        sessionId: requestId,
+        requestId
       })
-      expect(readPersistedSessionIds()).toContain("request-1")
+      expect(readPersistedSessionIds()).toContain(requestId)
     })
   })
 

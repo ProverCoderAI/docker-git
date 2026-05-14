@@ -91,12 +91,27 @@ const randomHex = (bytes: number): string => {
   return Date.now().toString(16).padStart(bytes * 2, "0").slice(0, bytes * 2)
 }
 
+const formatUuidV4 = (hex: string): string => {
+  const value = hex.padEnd(32, "0").slice(0, 32)
+  const variant = ((Number.parseInt(value.slice(16, 18), 16) & 0x3f) | 0x80)
+    .toString(16)
+    .padStart(2, "0")
+  const segments = [
+    value.slice(0, 8),
+    value.slice(8, 12),
+    `4${value.slice(13, 16)}`,
+    `${variant}${value.slice(18, 20)}`,
+    value.slice(20, 32)
+  ]
+  return segments.join("-")
+}
+
 const createPendingTerminalSessionId = (): string => {
   if (typeof globalThis.crypto.randomUUID === "function") {
     return globalThis.crypto.randomUUID()
   }
 
-  return `pending-${Date.now().toString(16)}-${randomHex(8)}`
+  return formatUuidV4(randomHex(16))
 }
 
 type ProjectActiveTerminalSessionArgs = Omit<

@@ -78,6 +78,7 @@ type TerminalRecord = {
   tmuxName: string
 }
 
+// Effect encodes combined service requirements as a union of Context tags; intersections reject valid composition.
 type TerminalSessionRuntime =
   | CommandExecutor.CommandExecutor
   | FileSystem.FileSystem
@@ -114,6 +115,7 @@ const terminalWsByKeyPathPattern = /^(?:\/api)?\/projects\/by-key\/([^/]+)\/term
 const terminalSessionStateRelativePath: ReadonlyArray<string> = [".orch", "state", "terminal-sessions.json"]
 const tmuxMissingMessage =
   "tmux is not available in this project container. Apply docker-git config or rebuild the project image so tmux is installed, then reopen this SSH terminal session."
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
 
 const TerminalClientMessageSchema = Schema.parseJson(
   Schema.Union(
@@ -176,6 +178,9 @@ export const clearTerminalSessionRuntimeForTest = (): void => {
 }
 
 const nowIso = (): string => new Date().toISOString()
+
+const requestSessionId = (requestId: string | undefined): string | undefined =>
+  requestId !== undefined && uuidPattern.test(requestId) ? requestId : undefined
 
 const isPathInsideDirectory = (root: string, candidate: string): boolean => {
   const resolvedRoot = path.resolve(root)
@@ -1156,6 +1161,7 @@ export const createTerminalSession = (
   Effect.gen(function*(_) {
     const project = yield* _(getProject(projectId))
     const resolvedProjectId = project.id
+    const requestedSessionId = requestSessionId(options.requestId)
     yield* _(emitTerminalStatus(resolvedProjectId, "ssh.prepare", "Preparing SSH session"))
     const loadedProjectItem = yield* _(getProjectItemById(resolvedProjectId))
     const projectItem = yield* _(resolveControllerReachableProject(loadedProjectItem))
@@ -1173,7 +1179,7 @@ export const createTerminalSession = (
         prepared,
         projectItem.containerName,
         projectItem.targetDir,
-        options.requestId
+        requestedSessionId
       ))
       yield* _(emitTerminalSessionCreated(resolvedProjectId, session.id, options.requestId))
       return { project, session }
@@ -1195,7 +1201,7 @@ export const createTerminalSession = (
       prepared,
       reachableProjectItem.containerName,
       reachableProjectItem.targetDir,
-      options.requestId
+      requestedSessionId
     ))
     yield* _(emitTerminalSessionCreated(resolvedProjectId, session.id, options.requestId))
     yield* _(emitTerminalStatus(resolvedProjectId, "ssh.post-start", "Post-start self-heal continues in background"))
@@ -1339,7 +1345,7 @@ export const lookupTerminalSessionById = (
   sessionId: string
 ): Effect.Effect<
   { readonly projectDisplayName: string; readonly projectKey: string; readonly session: TerminalSession },
-  ApiNotFoundError,
+  ApiInternalError | ApiNotFoundError,
   TerminalSessionRuntime
 > =>
   Effect.gen(function*(_) {
@@ -1367,12 +1373,9 @@ export const lookupTerminalSessionById = (
       Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
     )
   }).pipe(
-    Effect.catchAll((error) => {
-      if (error instanceof ApiNotFoundError) {
-        return Effect.fail(error)
-      }
-      return Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` }))
-    })
+    Effect.mapError((error) =>
+      error instanceof ApiNotFoundError ? error : toApiInternalError(error)
+    )
   )
 
 const handleCloseMessage = (record: TerminalRecord): void => {
