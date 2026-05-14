@@ -190,7 +190,7 @@ describe("auth container paths", () => {
         const recorded: Array<RecordedCommand> = []
         const executor = makeFakeExecutor(recorded)
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Promise.resolve(githubUserResponse("repo, workflow, read:org"))
+          Effect.runPromise(Effect.succeed(githubUserResponse("repo, workflow, read:org")))
         )
 
         yield* _(
@@ -287,7 +287,7 @@ describe("auth container paths", () => {
         const recorded: Array<RecordedCommand> = []
         const executor = makeFakeExecutor(recorded)
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Promise.resolve(githubUserResponse("repo, workflow"))
+          Effect.runPromise(Effect.succeed(githubUserResponse("repo, workflow")))
         )
 
         yield* _(
@@ -329,7 +329,7 @@ describe("auth container paths", () => {
         const recorded: Array<RecordedCommand> = []
         const executor = makeFakeExecutor(recorded)
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Promise.resolve(githubUserResponse("repo, delete_repo"))
+          Effect.runPromise(Effect.succeed(githubUserResponse("repo, delete_repo")))
         )
 
         const failure = yield* _(
@@ -371,7 +371,7 @@ describe("auth container paths", () => {
         const recorded: Array<RecordedCommand> = []
         const executor = makeFakeExecutor(recorded)
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Promise.resolve(githubUserResponse(null))
+          Effect.runPromise(Effect.succeed(githubUserResponse(null)))
         )
 
         const failure = yield* _(
@@ -411,7 +411,7 @@ describe("auth container paths", () => {
         const fs = yield* _(FileSystem.FileSystem)
         const envPath = `${root}/.docker-git/.orch/env/global.env`
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Promise.resolve(githubUserResponse("repo, delete_repo"))
+          Effect.runPromise(Effect.succeed(githubUserResponse("repo, delete_repo")))
         )
 
         const failure = yield* _(
@@ -448,7 +448,7 @@ describe("auth container paths", () => {
         const fs = yield* _(FileSystem.FileSystem)
         const envPath = `${root}/.docker-git/.orch/env/global.env`
         const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
-          Promise.resolve(githubUserResponse(null))
+          Effect.runPromise(Effect.succeed(githubUserResponse(null)))
         )
 
         const failure = yield* _(

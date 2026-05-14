@@ -1,4 +1,4 @@
-export const defaultGithubScopes: ReadonlyArray<string> = ["repo", "workflow", "read:org"]
+export const defaultGithubScopes: ReadonlyArray<string> = Object.freeze(["repo", "workflow", "read:org"])
 export const githubRepositoryDeleteScope = "delete_repo"
 export const githubForbiddenDeleteRepoScopeMessage = [
   "GitHub auth token includes forbidden OAuth scope: delete_repo.",

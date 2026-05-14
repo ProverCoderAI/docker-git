@@ -21,7 +21,7 @@ import {
   normalizeGithubScopes
 } from "./github-scope-policy.js"
 import type { GithubTokenValidationResult } from "./github-token-validation.js"
-import { validateGithubToken } from "./github-token-validation.js"
+import { githubInvalidTokenMessage, validateGithubToken } from "./github-token-validation.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 import { ensureStateDotDockerGitRepo } from "./state-repo-github.js"
@@ -204,7 +204,10 @@ export const runGithubRemoveDeleteRepoScope = (
 export const rejectGithubTokenWithRepositoryDeleteScope = (token: string): Effect.Effect<void, AuthError> =>
   validateGithubToken(token).pipe(
     Effect.flatMap((validation) => {
-      if (validation.status !== "valid" || validation.oauthScopes === null) {
+      if (validation.status === "invalid") {
+        return Effect.fail(new AuthError({ message: githubInvalidTokenMessage }))
+      }
+      if (validation.status === "unknown" || validation.oauthScopes === null) {
         return Effect.fail(new AuthError({ message: githubUnverifiedTokenScopesMessage }))
       }
       return hasGithubRepositoryDeleteScope(validation.oauthScopes)
