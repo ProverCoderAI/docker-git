@@ -481,6 +481,20 @@ describe("renderEntrypoint auth bridge", () => {
     expect(entrypoint.split("SUBAGENTS_LINE=").length - 1).toBeGreaterThanOrEqual(1)
   })
 
+  it("renders Grok API env expansion without escaping bash defaults", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      'if [[ -n "${GROK_API_KEY:-}" ]]; then',
+      'export XAI_API_KEY="${GROK_API_KEY:-}"',
+      'docker_git_upsert_ssh_env "GROK_API_KEY" "${GROK_API_KEY:-}"',
+      'docker_git_upsert_ssh_env "XAI_API_KEY" "${XAI_API_KEY:-}"'
+    ])
+    expect(entrypoint).not.toContain("\\${GROK_API_KEY:-}")
+    expect(entrypoint).not.toContain("\\${XAI_API_KEY:-}")
+    expect(entrypoint).not.toContain('export XAI_API_KEY="$GROK_API_KEY"')
+  })
+
   it("renders system-prompt override hooks for codex/claude/gemini/grok", () => {
     const entrypoint = renderAuthEntrypoint()
 

@@ -13,6 +13,18 @@ import type { TemplateConfig } from "../domain.js"
 
 const grokAuthRootContainerPath = (sshUser: string): string => `/home/${sshUser}/.docker-git/.orch/auth/grok`
 
+// CHANGE: render shell parameter defaults through TypeScript interpolation
+// WHY: String.raw preserves escaped \${...}, making optional Grok credentials fail under bash nounset
+// QUOTE(ТЗ): "GitHub Actions ... all CI checks are passing"
+// REF: issue-304-ci
+// SOURCE: n/a
+// FORMAT THEOREM: unset(GROK_API_KEY) -> safe_empty_value(GROK_API_KEY)
+// PURITY: CORE
+// INVARIANT: Optional Grok API credentials never require a bound environment variable
+// COMPLEXITY: O(1)
+const grokApiKeyDefaultExpansion = "${GROK_API_KEY:-}"
+const xaiApiKeyDefaultExpansion = "${XAI_API_KEY:-}"
+
 const grokAuthConfigTemplate = String
   .raw`# Grok CLI: keep ~/.grok as a real home directory while sharing auth files from ~/.docker-git/.orch/auth/grok
 GROK_LABEL_RAW="$GROK_AUTH_LABEL"
@@ -101,8 +113,8 @@ docker_git_refresh_grok_env() {
       export GROK_API_KEY="$API_KEY"
     fi
   fi
-  if [[ -n "\${GROK_API_KEY:-}" ]]; then
-    export XAI_API_KEY="$GROK_API_KEY"
+  if [[ -n "${grokApiKeyDefaultExpansion}" ]]; then
+    export XAI_API_KEY="${grokApiKeyDefaultExpansion}"
   fi
 }
 
@@ -166,14 +178,14 @@ printf "alias grok='/usr/local/bin/grok-wrapper'\n" >> "$GROK_PROFILE"
 cat <<'EOF' >> "$GROK_PROFILE"
 if [[ -f "$GROK_HOME/.api-key" ]]; then
   export GROK_API_KEY="$(cat "$GROK_HOME/.api-key" | tr -d '\r\n')"
-  export XAI_API_KEY="$GROK_API_KEY"
+  export XAI_API_KEY="${grokApiKeyDefaultExpansion}"
 fi
 EOF
 chmod 0644 "$GROK_PROFILE" || true
 
 docker_git_upsert_ssh_env "GROK_AUTH_LABEL" "$GROK_AUTH_LABEL"
-docker_git_upsert_ssh_env "GROK_API_KEY" "\${GROK_API_KEY:-}"
-docker_git_upsert_ssh_env "XAI_API_KEY" "\${XAI_API_KEY:-}"`
+docker_git_upsert_ssh_env "GROK_API_KEY" "${grokApiKeyDefaultExpansion}"
+docker_git_upsert_ssh_env "XAI_API_KEY" "${xaiApiKeyDefaultExpansion}"`
 
 const entrypointGrokNoticeTemplate = String.raw`# Ensure global GROK.md exists for container context
 GROK_MD_PATH="__GROK_HOME__/GROK.md"
