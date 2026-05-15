@@ -1,11 +1,11 @@
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
-import { authClaudeLogin, authGeminiLoginOauth } from "@effect-template/lib"
+import { authClaudeLogin, authGeminiLoginOauth, authGrokLoginOauth } from "@effect-template/lib"
 import { Effect, Match } from "effect"
 
-type AuthTerminalRunnerFlow = "ClaudeOauth" | "GeminiOauth"
+type AuthTerminalRunnerFlow = "ClaudeOauth" | "GeminiOauth" | "GrokOauth"
 
 const parseFlow = (value: string | undefined): AuthTerminalRunnerFlow =>
-  value === "ClaudeOauth" || value === "GeminiOauth" ? value : "ClaudeOauth"
+  value === "ClaudeOauth" || value === "GeminiOauth" || value === "GrokOauth" ? value : "ClaudeOauth"
 
 const parseLabel = (value: string | undefined): string | null => {
   const trimmed = value?.trim() ?? ""
@@ -27,6 +27,13 @@ const program = Match.value(flow).pipe(
       _tag: "AuthGeminiLogin",
       label,
       geminiAuthPath: ".docker-git/.orch/auth/gemini",
+      isWeb: false
+    })),
+  Match.when("GrokOauth", () =>
+    authGrokLoginOauth({
+      _tag: "AuthGrokLogin",
+      label,
+      grokAuthPath: ".docker-git/.orch/auth/grok",
       isWeb: false
     })),
   Match.exhaustive

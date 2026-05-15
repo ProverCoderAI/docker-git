@@ -251,8 +251,8 @@ const SkillsPanelHeader = (
   <>
     <Text bold={true} fg="#8be9fd">Project skills</Text>
     <Text fg="#d6e5f7" wrap="wrap">
-      Manage SKILL.md files across the conventional skill folders shared with Claude, Codex, Gemini and generic agents.
-      Each entry edits a single SKILL.md file under the project directory.
+      Manage SKILL.md files across the conventional skill folders shared with Claude, Codex, Gemini, Grok and generic
+      agents. Each entry edits a single SKILL.md file under the project directory.
     </Text>
     <Text fg="#8fa6c4" wrap="truncate">
       Project: {selectedProjectSummary?.displayName ?? "not selected"}

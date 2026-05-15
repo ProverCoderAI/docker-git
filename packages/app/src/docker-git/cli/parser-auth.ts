@@ -11,6 +11,7 @@ type AuthOptions = {
   readonly codexAuthPath: string
   readonly claudeAuthPath: string
   readonly geminiAuthPath: string
+  readonly grokAuthPath: string
   readonly label: string | null
   readonly token: string | null
   readonly scopes: string | null
@@ -43,12 +44,14 @@ const defaultEnvGlobalPath = ".docker-git/.orch/env/global.env"
 const defaultCodexAuthPath = ".docker-git/.orch/auth/codex"
 const defaultClaudeAuthPath = ".docker-git/.orch/auth/claude"
 const defaultGeminiAuthPath = ".docker-git/.orch/auth/gemini"
+const defaultGrokAuthPath = ".docker-git/.orch/auth/grok"
 
 const resolveAuthOptions = (raw: RawOptions): AuthOptions => ({
   envGlobalPath: raw.envGlobalPath ?? defaultEnvGlobalPath,
   codexAuthPath: raw.codexAuthPath ?? defaultCodexAuthPath,
   claudeAuthPath: defaultClaudeAuthPath,
   geminiAuthPath: defaultGeminiAuthPath,
+  grokAuthPath: defaultGrokAuthPath,
   label: normalizeOptionalText(raw.label),
   token: normalizeOptionalText(raw.token),
   scopes: normalizeOptionalText(raw.scopes),
@@ -191,6 +194,40 @@ const buildGeminiCommand = (action: string, options: AuthOptions): Either.Either
     Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
   )
 
+// CHANGE: add Grok CLI auth command parsing
+// WHY: issue #304 requires docker-git auth grok login/status/logout support
+// QUOTE(ТЗ): "Реализовать поддержку авторизации grok"
+// REF: issue-304
+// SOURCE: https://www.npmjs.com/package/grok-dev
+// FORMAT THEOREM: forall action: buildGrokCommand(action, opts) = AuthCommand | ParseError
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: grokAuthPath is always set from defaults
+// COMPLEXITY: O(1)
+const buildGrokCommand = (action: string, options: AuthOptions): Either.Either<AuthCommand, ParseError> =>
+  Match.value(action).pipe(
+    Match.when("login", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthGrokLogin",
+        label: options.label,
+        grokAuthPath: options.grokAuthPath,
+        isWeb: options.authWeb
+      })),
+    Match.when("status", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthGrokStatus",
+        label: options.label,
+        grokAuthPath: options.grokAuthPath
+      })),
+    Match.when("logout", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthGrokLogout",
+        label: options.label,
+        grokAuthPath: options.grokAuthPath
+      })),
+    Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
+  )
+
 const buildAuthCommand = (
   provider: string,
   action: string,
@@ -204,6 +241,7 @@ const buildAuthCommand = (
     Match.when("claude", () => buildClaudeCommand(action, options)),
     Match.when("cc", () => buildClaudeCommand(action, options)),
     Match.when("gemini", () => buildGeminiCommand(action, options)),
+    Match.when("grok", () => buildGrokCommand(action, options)),
     Match.orElse(() => Either.left(invalidArgument("auth provider", `unknown provider '${provider}'`)))
   )
 

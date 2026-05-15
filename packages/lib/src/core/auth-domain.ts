@@ -106,6 +106,35 @@ export interface AuthGeminiLogoutCommand {
   readonly geminiAuthPath: string
 }
 
+// CHANGE: add Grok CLI auth commands
+// WHY: issue #304 requires Grok login/status/logout profiles with isolated auth storage
+// QUOTE(ТЗ): "Реализовать поддержку авторизации grok"
+// REF: issue-304
+// SOURCE: https://www.npmjs.com/package/grok-dev
+// FORMAT THEOREM: forall cmd ∈ AuthGrokCommand: cmd.grokAuthPath is valid path
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: authentication state is isolated by label
+// COMPLEXITY: O(1)
+export interface AuthGrokLoginCommand {
+  readonly _tag: "AuthGrokLogin"
+  readonly label: string | null
+  readonly grokAuthPath: string
+  readonly isWeb: boolean
+}
+
+export interface AuthGrokStatusCommand {
+  readonly _tag: "AuthGrokStatus"
+  readonly label: string | null
+  readonly grokAuthPath: string
+}
+
+export interface AuthGrokLogoutCommand {
+  readonly _tag: "AuthGrokLogout"
+  readonly label: string | null
+  readonly grokAuthPath: string
+}
+
 export type AuthCommand =
   | AuthGithubLoginCommand
   | AuthGithubStatusCommand
@@ -123,3 +152,6 @@ export type AuthCommand =
   | AuthGeminiLoginCommand
   | AuthGeminiStatusCommand
   | AuthGeminiLogoutCommand
+  | AuthGrokLoginCommand
+  | AuthGrokStatusCommand
+  | AuthGrokLogoutCommand

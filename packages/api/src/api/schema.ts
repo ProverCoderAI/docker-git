@@ -32,6 +32,8 @@ export const CreateProjectRequestSchema = Schema.Struct({
   skipGithubAuth: OptionalBoolean,
   codexTokenLabel: OptionalString,
   claudeTokenLabel: OptionalString,
+  geminiTokenLabel: OptionalString,
+  grokTokenLabel: OptionalString,
   agentAutoMode: OptionalString,
   up: OptionalBoolean,
   openSsh: OptionalBoolean,
@@ -58,10 +60,12 @@ export const AuthMenuFlowSchema = Schema.Literal(
   "GitRemove",
   "ClaudeLogout",
   "GeminiApiKey",
-  "GeminiLogout"
+  "GeminiLogout",
+  "GrokApiKey",
+  "GrokLogout"
 )
 
-export const AuthTerminalFlowSchema = Schema.Literal("ClaudeOauth", "GeminiOauth")
+export const AuthTerminalFlowSchema = Schema.Literal("ClaudeOauth", "GeminiOauth", "GrokOauth")
 
 export const AuthMenuRequestSchema = Schema.Struct({
   flow: AuthMenuFlowSchema,
@@ -105,7 +109,9 @@ export const ProjectAuthFlowSchema = Schema.Literal(
   "ProjectClaudeConnect",
   "ProjectClaudeDisconnect",
   "ProjectGeminiConnect",
-  "ProjectGeminiDisconnect"
+  "ProjectGeminiDisconnect",
+  "ProjectGrokConnect",
+  "ProjectGrokDisconnect"
 )
 
 export const ProjectAuthRequestSchema = Schema.Struct({
@@ -113,7 +119,7 @@ export const ProjectAuthRequestSchema = Schema.Struct({
   label: OptionalNullableString
 })
 
-export const ProjectPromptKindSchema = Schema.Literal("claude", "codex", "gemini")
+export const ProjectPromptKindSchema = Schema.Literal("claude", "codex", "gemini", "grok")
 
 export const ProjectPromptUpdateRequestSchema = Schema.Struct({
   content: Schema.String
@@ -125,7 +131,8 @@ export const ProjectSkillScopeSchema = Schema.Literal(
   "agents/.skills",
   "claude/skills",
   "codex/skills",
-  "gemini/skills"
+  "gemini/skills",
+  "grok/skills"
 )
 
 export const ProjectSkillUpdateRequestSchema = Schema.Struct({
@@ -236,7 +243,7 @@ export const ProjectDatabaseForwardSchema = Schema.Struct({
   targetPort: Schema.Number
 })
 
-export const AgentProviderSchema = Schema.Literal("codex", "opencode", "claude", "custom")
+export const AgentProviderSchema = Schema.Literal("codex", "opencode", "claude", "grok", "custom")
 
 export const AgentEnvVarSchema = Schema.Struct({
   key: Schema.String,

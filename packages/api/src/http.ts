@@ -178,7 +178,7 @@ const ProjectDatabaseProfileParamsSchema = Schema.Struct({
 
 const ProjectPromptParamsSchema = Schema.Struct({
   projectId: Schema.String,
-  kind: Schema.Literal("claude", "codex", "gemini")
+  kind: Schema.Literal("claude", "codex", "gemini", "grok")
 })
 
 const ProjectSkillParamsSchema = Schema.Struct({
@@ -435,6 +435,8 @@ const skillScopeFromId = (scopeId: string): ProjectSkillScope | null => {
       return "codex/skills"
     case "gemini-skills":
       return "gemini/skills"
+    case "grok-skills":
+      return "grok/skills"
     default:
       return null
   }
@@ -454,6 +456,8 @@ export const skillScopeToId = (scope: ProjectSkillScope): string => {
       return "codex-skills"
     case "gemini/skills":
       return "gemini-skills"
+    case "grok/skills":
+      return "grok-skills"
   }
 }
 
@@ -465,6 +469,7 @@ const skillScopeFromBody = (scope: string): ProjectSkillScope | null => {
     case "claude/skills":
     case "codex/skills":
     case "gemini/skills":
+    case "grok/skills":
       return scope as ProjectSkillScope
     default:
       return null

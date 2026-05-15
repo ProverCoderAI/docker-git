@@ -1,3 +1,5 @@
+import { Match } from "effect"
+
 import { type AuthMenuAction, authViewSteps, authViewTitle } from "../docker-git/menu-auth-shared.js"
 import { type ProjectAuthMenuAction, projectAuthViewSteps } from "../docker-git/menu-project-auth-shared.js"
 
@@ -30,30 +32,20 @@ export type ActionPromptState =
 const initialPromptValues = (steps: ReadonlyArray<ActionPromptStep>): Readonly<Record<string, string>> =>
   Object.fromEntries(steps.map((step) => [step.key, ""]))
 
-const projectAuthTitle = (action: ProjectAuthPromptAction): string => {
-  if (action === "ProjectGithubConnect") {
-    return "Project GitHub connect"
-  }
-  if (action === "ProjectGithubDisconnect") {
-    return "Project GitHub disconnect"
-  }
-  if (action === "ProjectGitConnect") {
-    return "Project Git connect"
-  }
-  if (action === "ProjectGitDisconnect") {
-    return "Project Git disconnect"
-  }
-  if (action === "ProjectClaudeConnect") {
-    return "Project Claude connect"
-  }
-  if (action === "ProjectClaudeDisconnect") {
-    return "Project Claude disconnect"
-  }
-  if (action === "ProjectGeminiConnect") {
-    return "Project Gemini connect"
-  }
-  return "Project Gemini disconnect"
-}
+const projectAuthTitle = (action: ProjectAuthPromptAction): string =>
+  Match.value(action).pipe(
+    Match.when("ProjectGithubConnect", () => "Project GitHub connect"),
+    Match.when("ProjectGithubDisconnect", () => "Project GitHub disconnect"),
+    Match.when("ProjectGitConnect", () => "Project Git connect"),
+    Match.when("ProjectGitDisconnect", () => "Project Git disconnect"),
+    Match.when("ProjectClaudeConnect", () => "Project Claude connect"),
+    Match.when("ProjectClaudeDisconnect", () => "Project Claude disconnect"),
+    Match.when("ProjectGeminiConnect", () => "Project Gemini connect"),
+    Match.when("ProjectGeminiDisconnect", () => "Project Gemini disconnect"),
+    Match.when("ProjectGrokConnect", () => "Project Grok connect"),
+    Match.when("ProjectGrokDisconnect", () => "Project Grok disconnect"),
+    Match.exhaustive
+  )
 
 export const createAuthActionPrompt = (action: AuthPromptAction): ActionPromptState => {
   const steps = authViewSteps(action)

@@ -45,6 +45,8 @@ export const buildCreateProjectRequest = (
     useManagedAuthorizedKeys: true,
     codexTokenLabel: config.codexAuthLabel,
     claudeTokenLabel: config.claudeAuthLabel,
+    geminiTokenLabel: config.geminiAuthLabel,
+    grokTokenLabel: config.grokAuthLabel,
     agentAutoMode: config.agentAuto ? (config.agentMode ?? "auto") : undefined,
     up: command.runUp,
     openSsh: false,

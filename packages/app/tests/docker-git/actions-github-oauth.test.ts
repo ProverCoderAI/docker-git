@@ -34,6 +34,8 @@ const authSnapshot: AuthSnapshot = {
   claudeAuthPath: "/home/dev/.docker-git/.orch/auth/claude",
   geminiAuthEntries: 0,
   geminiAuthPath: "/home/dev/.docker-git/.orch/auth/gemini",
+  grokAuthEntries: 0,
+  grokAuthPath: "/home/dev/.docker-git/.orch/auth/grok",
   gitTokenEntries: 0,
   gitUserEntries: 0,
   githubTokenEntries: 1,

@@ -233,7 +233,7 @@ export const createProjectTerminalSession = (projectId: string) =>
   )
 
 export const createAuthTerminalSession = (
-  flow: "ClaudeOauth" | "GeminiOauth",
+  flow: "ClaudeOauth" | "GeminiOauth" | "GrokOauth",
   label: string | null
 ) =>
   request("POST", "/auth/terminal-sessions", { flow, label: label ?? undefined }).pipe(

@@ -1,0 +1,257 @@
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import type { PlatformError } from "@effect/platform/Error"
+import type * as FileSystem from "@effect/platform/FileSystem"
+import type * as Path from "@effect/platform/Path"
+import { Effect, pipe } from "effect"
+
+import type { AuthGrokLoginCommand, AuthGrokLogoutCommand, AuthGrokStatusCommand } from "../core/domain.js"
+import { defaultTemplateConfig } from "../core/domain.js"
+import { runCommandExitCode } from "../shell/command-runner.js"
+import type { CommandFailedError } from "../shell/errors.js"
+import { isRegularFile, normalizeAccountLabel } from "./auth-helpers.js"
+import { migrateLegacyOrchLayout } from "./auth-sync.js"
+import { ensureDockerImage } from "./docker-image.js"
+import { resolvePathFromCwd } from "./path-helpers.js"
+import { withFsPathContext } from "./runtime.js"
+
+export type GrokRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+export type GrokAuthMethod = "none" | "api-key" | "user-settings"
+
+export const grokImageName = "docker-git-auth-grok:latest"
+export const grokImageDir = ".docker-git/.orch/auth/grok/.image"
+export const grokContainerHomeDir = "/grok-home"
+export const grokCredentialsDir = ".grok"
+
+export type GrokAccountContext = {
+  readonly accountLabel: string
+  readonly accountPath: string
+  readonly cwd: string
+  readonly fs: FileSystem.FileSystem
+}
+
+export const grokAuthRoot = ".docker-git/.orch/auth/grok"
+
+export const grokApiKeyFileName = ".api-key"
+export const grokEnvFileName = ".env"
+
+export const grokApiKeyPath = (accountPath: string): string => `${accountPath}/${grokApiKeyFileName}`
+export const grokEnvFilePath = (accountPath: string): string => `${accountPath}/${grokEnvFileName}`
+export const grokCredentialsPath = (accountPath: string): string => `${accountPath}/${grokCredentialsDir}`
+export const grokUserSettingsPath = (accountPath: string): string =>
+  `${grokCredentialsPath(accountPath)}/user-settings.json`
+
+// CHANGE: render Dockerfile for Grok CLI authentication image
+// WHY: Grok browser/OAuth auth must run in an isolated shell that persists ~/.grok
+// QUOTE(ТЗ): "Signing in with Grok..."
+// REF: issue-304
+// SOURCE: https://www.npmjs.com/package/grok-dev
+// FORMAT THEOREM: renderGrokDockerfile() -> valid_dockerfile
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: image includes Node.js and a grok executable
+// COMPLEXITY: O(1)
+export const renderGrokDockerfile = (): string =>
+  String.raw`FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl bsdutils \
+  && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+  && apt-get install -y --no-install-recommends nodejs \
+  && rm -rf /var/lib/apt/lists/*
+RUN npm install -g grok-dev@latest --force
+`
+
+export const ensureGrokOrchLayout = (
+  cwd: string
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  migrateLegacyOrchLayout(cwd, {
+    envGlobalPath: defaultTemplateConfig.envGlobalPath,
+    envProjectPath: defaultTemplateConfig.envProjectPath,
+    codexAuthPath: defaultTemplateConfig.codexAuthPath,
+    ghAuthPath: ".docker-git/.orch/auth/gh",
+    claudeAuthPath: ".docker-git/.orch/auth/claude",
+    geminiAuthPath: ".docker-git/.orch/auth/gemini",
+    grokAuthPath: ".docker-git/.orch/auth/grok"
+  })
+
+export const resolveGrokAccountPath = (path: Path.Path, rootPath: string, label: string | null): {
+  readonly accountLabel: string
+  readonly accountPath: string
+} => {
+  const accountLabel = normalizeAccountLabel(label, "default")
+  const accountPath = path.join(rootPath, accountLabel)
+  return { accountLabel, accountPath }
+}
+
+export const withGrokAuth = <A, E>(
+  command: AuthGrokLoginCommand | AuthGrokLogoutCommand | AuthGrokStatusCommand,
+  run: (
+    context: GrokAccountContext
+  ) => Effect.Effect<A, E, CommandExecutor.CommandExecutor>,
+  options: { readonly buildImage?: boolean } = {}
+): Effect.Effect<A, E | PlatformError | CommandFailedError, GrokRuntime> =>
+  withFsPathContext(({ cwd, fs, path }) =>
+    Effect.gen(function*(_) {
+      yield* _(ensureGrokOrchLayout(cwd))
+      const rootPath = resolvePathFromCwd(path, cwd, command.grokAuthPath)
+      const { accountLabel, accountPath } = resolveGrokAccountPath(path, rootPath, command.label)
+      yield* _(fs.makeDirectory(accountPath, { recursive: true }))
+      if (options.buildImage === true) {
+        yield* _(
+          ensureDockerImage(fs, path, cwd, {
+            imageName: grokImageName,
+            imageDir: grokImageDir,
+            dockerfile: renderGrokDockerfile(),
+            buildLabel: "grok auth"
+          })
+        )
+      }
+      return yield* _(run({ accountLabel, accountPath, cwd, fs }))
+    })
+  )
+
+const readApiKeyFromEnvFile = (
+  fs: FileSystem.FileSystem,
+  envFilePath: string
+): Effect.Effect<string | null, PlatformError> =>
+  Effect.gen(function*(_) {
+    const hasEnvFile = yield* _(isRegularFile(fs, envFilePath))
+    if (!hasEnvFile) {
+      return null
+    }
+    const envContent = yield* _(fs.readFileString(envFilePath), Effect.orElseSucceed(() => ""))
+    for (const line of envContent.split("\n")) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith("GROK_API_KEY=")) {
+        continue
+      }
+      const value = trimmed.slice("GROK_API_KEY=".length).replaceAll(/^['"]|['"]$/g, "").trim()
+      if (value.length > 0) {
+        return value
+      }
+    }
+    return null
+  })
+
+export const readGrokApiKey = (
+  fs: FileSystem.FileSystem,
+  accountPath: string
+): Effect.Effect<string | null, PlatformError> =>
+  Effect.gen(function*(_) {
+    const apiKeyFilePath = grokApiKeyPath(accountPath)
+    const hasApiKey = yield* _(isRegularFile(fs, apiKeyFilePath))
+    if (hasApiKey) {
+      const apiKey = yield* _(fs.readFileString(apiKeyFilePath), Effect.orElseSucceed(() => ""))
+      const trimmed = apiKey.trim()
+      if (trimmed.length > 0) {
+        return trimmed
+      }
+    }
+
+    return yield* _(readApiKeyFromEnvFile(fs, grokEnvFilePath(accountPath)))
+  })
+
+export const hasGrokCredentials = (
+  fs: FileSystem.FileSystem,
+  accountPath: string
+): Effect.Effect<boolean, PlatformError> =>
+  Effect.gen(function*(_) {
+    const apiKey = yield* _(readGrokApiKey(fs, accountPath))
+    if (apiKey !== null) {
+      return true
+    }
+    const hasUserSettings = yield* _(isRegularFile(fs, grokUserSettingsPath(accountPath)))
+    if (!hasUserSettings) {
+      return false
+    }
+    const content = yield* _(fs.readFileString(grokUserSettingsPath(accountPath)), Effect.orElseSucceed(() => ""))
+    return content.trim().length > 0
+  })
+
+export const resolveGrokAuthMethod = (
+  fs: FileSystem.FileSystem,
+  accountPath: string
+): Effect.Effect<GrokAuthMethod, PlatformError> =>
+  Effect.gen(function*(_) {
+    const apiKey = yield* _(readGrokApiKey(fs, accountPath))
+    if (apiKey !== null) {
+      return "api-key"
+    }
+    const hasUserSettings = yield* _(hasGrokCredentials(fs, accountPath))
+    return hasUserSettings ? "user-settings" : "none"
+  })
+
+export const prepareGrokCredentialsDir = (
+  cwd: string,
+  accountPath: string,
+  fs: FileSystem.FileSystem
+) =>
+  Effect.gen(function*(_) {
+    const credentialsDir = grokCredentialsPath(accountPath)
+    const removeFallback = pipe(
+      runCommandExitCode({
+        cwd,
+        command: "docker",
+        args: ["run", "--rm", "-v", `${accountPath}:/target`, "alpine", "rm", "-rf", "/target/.grok"]
+      }),
+      Effect.asVoid,
+      Effect.orElse(() => Effect.void)
+    )
+
+    yield* _(
+      fs.remove(credentialsDir, { recursive: true, force: true }).pipe(
+        Effect.orElse(() => removeFallback)
+      )
+    )
+    yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
+    yield* _(
+      runCommandExitCode({
+        cwd,
+        command: "chmod",
+        args: ["-R", "777", credentialsDir]
+      }).pipe(Effect.orElse(() => Effect.succeed(0)))
+    )
+    return credentialsDir
+  })
+
+export const defaultGrokProjectSettings = {
+  sandboxMode: "off",
+  mcpServers: {
+    playwright: {
+      command: "docker-git-playwright-mcp",
+      args: [],
+      trust: true
+    }
+  }
+}
+
+export const defaultGrokUserSettings = (apiKey: string | null) => ({
+  ...(apiKey === null ? {} : { apiKey }),
+  sandboxMode: "off",
+  confirmBeforeToolUse: false
+})
+
+export const writeInitialGrokSettings = (
+  credentialsDir: string,
+  fs: FileSystem.FileSystem,
+  apiKey: string | null
+) =>
+  Effect.gen(function*(_) {
+    const settingsPath = `${credentialsDir}/settings.json`
+    yield* _(
+      fs.writeFileString(
+        settingsPath,
+        JSON.stringify(defaultGrokProjectSettings, null, 2) + "\n"
+      )
+    )
+
+    const userSettingsPath = `${credentialsDir}/user-settings.json`
+    yield* _(
+      fs.writeFileString(
+        userSettingsPath,
+        JSON.stringify(defaultGrokUserSettings(apiKey), null, 2) + "\n"
+      )
+    )
+    return settingsPath
+  })

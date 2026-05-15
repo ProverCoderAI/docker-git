@@ -461,6 +461,7 @@ export const uiHtml = `<!doctype html>
                     <option value="codex">codex</option>
                     <option value="opencode">opencode</option>
                     <option value="claude">claude</option>
+                    <option value="grok">grok</option>
                     <option value="custom">custom</option>
                   </select>
                 </div>
@@ -470,7 +471,7 @@ export const uiHtml = `<!doctype html>
                 </div>
               </div>
               <div style="margin-top:0.5rem">
-                <label for="agent-command">Command (optional for codex/opencode/claude)</label>
+                <label for="agent-command">Command (optional for codex/opencode/claude/grok)</label>
                 <input id="agent-command" type="text" placeholder="codex --help" />
               </div>
               <div style="margin-top:0.5rem">

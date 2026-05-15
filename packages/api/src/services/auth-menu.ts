@@ -2,7 +2,7 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as Path from "@effect/platform/Path"
-import { authClaudeLogout, authGeminiLogin, authGeminiLogout } from "@effect-template/lib/usecases/auth"
+import { authClaudeLogout, authGeminiLogin, authGeminiLogout, authGrokLogin, authGrokLogout } from "@effect-template/lib/usecases/auth"
 import { ensureEnvFile, parseEnvEntries, readEnvText, upsertEnvKey } from "@effect-template/lib/usecases/env-file"
 import { renderError, type AppError } from "@effect-template/lib/usecases/errors"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
@@ -16,6 +16,7 @@ type MenuAuthRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.Comma
 
 const claudeAuthRoot = `${defaultProjectsRoot(process.cwd())}/.orch/auth/claude`
 const geminiAuthRoot = `${defaultProjectsRoot(process.cwd())}/.orch/auth/gemini`
+const grokAuthRoot = `${defaultProjectsRoot(process.cwd())}/.orch/auth/grok`
 const globalEnvPath = `${defaultProjectsRoot(process.cwd())}/.orch/env/global.env`
 
 const normalizeLabel = (value: string): string => {
@@ -102,18 +103,21 @@ export const readAuthMenuSnapshot = (): Effect.Effect<AuthSnapshot, PlatformErro
     Effect.flatMap(({ envText, fs, path }) =>
       Effect.all({
         claudeAuthEntries: countAuthAccountDirectories(fs, path, claudeAuthRoot),
-        geminiAuthEntries: countAuthAccountDirectories(fs, path, geminiAuthRoot)
+        geminiAuthEntries: countAuthAccountDirectories(fs, path, geminiAuthRoot),
+        grokAuthEntries: countAuthAccountDirectories(fs, path, grokAuthRoot)
       }).pipe(
-        Effect.map(({ claudeAuthEntries, geminiAuthEntries }) => ({
+        Effect.map(({ claudeAuthEntries, geminiAuthEntries, grokAuthEntries }) => ({
           globalEnvPath,
           claudeAuthPath: claudeAuthRoot,
           geminiAuthPath: geminiAuthRoot,
+          grokAuthPath: grokAuthRoot,
           totalEntries: parseEnvEntries(envText).filter((entry) => entry.value.trim().length > 0).length,
           githubTokenEntries: countKeyEntries(envText, "GITHUB_TOKEN"),
           gitTokenEntries: countKeyEntries(envText, "GIT_AUTH_TOKEN"),
           gitUserEntries: countKeyEntries(envText, "GIT_AUTH_USER"),
           claudeAuthEntries,
-          geminiAuthEntries
+          geminiAuthEntries,
+          grokAuthEntries
         }))
       )
     )
@@ -135,7 +139,11 @@ const syncMessage = (request: AuthMenuRequest): string =>
           ? `chore(state): auth claude logout ${canonicalLabel(request.label)}`
           : request.flow === "GeminiApiKey"
             ? `chore(state): auth gemini ${canonicalLabel(request.label)}`
-            : `chore(state): auth gemini logout ${canonicalLabel(request.label)}`
+            : request.flow === "GeminiLogout"
+              ? `chore(state): auth gemini logout ${canonicalLabel(request.label)}`
+              : request.flow === "GrokApiKey"
+                ? `chore(state): auth grok ${canonicalLabel(request.label)}`
+                : `chore(state): auth grok logout ${canonicalLabel(request.label)}`
 
 const writeEnvBackedAuthFlow = (
   request: AuthMenuRequest
@@ -213,15 +221,45 @@ export const runAuthMenuFlow = (
             error instanceof ApiBadRequestError ? error : new ApiBadRequestError({ message: String(error) })
           )
         )
-        : pipe(
-          authGeminiLogout({
-            _tag: "AuthGeminiLogout",
-            label: request.label ?? null,
-            geminiAuthPath: geminiAuthRoot
-          }),
-          Effect.mapError(mapMenuAuthError),
-          Effect.zipRight(readAuthMenuSnapshot()),
-          Effect.mapError((error) =>
-            error instanceof ApiBadRequestError ? error : new ApiBadRequestError({ message: String(error) })
+        : request.flow === "GeminiLogout"
+          ? pipe(
+            authGeminiLogout({
+              _tag: "AuthGeminiLogout",
+              label: request.label ?? null,
+              geminiAuthPath: geminiAuthRoot
+            }),
+            Effect.mapError(mapMenuAuthError),
+            Effect.zipRight(readAuthMenuSnapshot()),
+            Effect.mapError((error) =>
+              error instanceof ApiBadRequestError ? error : new ApiBadRequestError({ message: String(error) })
+            )
           )
-        )
+          : request.flow === "GrokApiKey"
+            ? pipe(
+              authGrokLogin(
+                {
+                  _tag: "AuthGrokLogin",
+                  label: request.label ?? null,
+                  grokAuthPath: grokAuthRoot,
+                  isWeb: true
+                },
+                request.apiKey ?? ""
+              ),
+              Effect.mapError(mapMenuAuthError),
+              Effect.zipRight(readAuthMenuSnapshot()),
+              Effect.mapError((error) =>
+                error instanceof ApiBadRequestError ? error : new ApiBadRequestError({ message: String(error) })
+              )
+            )
+            : pipe(
+              authGrokLogout({
+                _tag: "AuthGrokLogout",
+                label: request.label ?? null,
+                grokAuthPath: grokAuthRoot
+              }),
+              Effect.mapError(mapMenuAuthError),
+              Effect.zipRight(readAuthMenuSnapshot()),
+              Effect.mapError((error) =>
+                error instanceof ApiBadRequestError ? error : new ApiBadRequestError({ message: String(error) })
+              )
+            )

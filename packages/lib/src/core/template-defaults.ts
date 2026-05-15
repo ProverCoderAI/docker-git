@@ -19,6 +19,8 @@ type DefaultTemplateConfig = Pick<
   | "codexHome"
   | "geminiAuthPath"
   | "geminiHome"
+  | "grokAuthPath"
+  | "grokHome"
   | "cpuLimit"
   | "ramLimit"
   | "playwrightCpuLimit"
@@ -62,6 +64,8 @@ export const defaultTemplateConfig = {
   codexHome: "/home/dev/.codex",
   geminiAuthPath: "./.docker-git/.orch/auth/gemini",
   geminiHome: "/home/dev/.gemini",
+  grokAuthPath: "./.docker-git/.orch/auth/grok",
+  grokHome: "/home/dev/.grok",
   cpuLimit: defaultCpuLimit,
   ramLimit: defaultRamLimit,
   playwrightCpuLimit: defaultPlaywrightCpuLimit,

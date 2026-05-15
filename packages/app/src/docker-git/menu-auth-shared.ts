@@ -4,7 +4,8 @@ import type { AuthFlow } from "./menu-types.js"
 
 export type AuthMenuAction = AuthFlow | "Refresh" | "Back"
 
-export type AuthEnvFlow = Exclude<AuthFlow, "GithubOauth" | "ClaudeOauth" | "GeminiOauth">
+export type AuthEnvFlow = Exclude<AuthFlow, "GithubOauth" | "ClaudeOauth" | "GeminiOauth" | "GrokOauth">
+export type TerminalAuthFlow = Extract<AuthFlow, "ClaudeOauth" | "GeminiOauth" | "GrokOauth">
 
 export type AuthPromptStep = {
   readonly key: "label" | "token" | "user" | "apiKey"
@@ -28,6 +29,9 @@ const authMenuItems: ReadonlyArray<AuthMenuItem> = [
   { action: "GeminiOauth", label: "Gemini CLI: login via OAuth (Google account)" },
   { action: "GeminiApiKey", label: "Gemini CLI: set API key" },
   { action: "GeminiLogout", label: "Gemini CLI: logout (clear credentials)" },
+  { action: "GrokOauth", label: "Grok CLI: login via OAuth (xAI account)" },
+  { action: "GrokApiKey", label: "Grok CLI: set API key" },
+  { action: "GrokLogout", label: "Grok CLI: logout (clear credentials)" },
   { action: "Refresh", label: "Refresh snapshot" },
   { action: "Back", label: "Back to main menu" }
 ]
@@ -62,6 +66,16 @@ const flowSteps: Readonly<Record<AuthFlow, ReadonlyArray<AuthPromptStep>>> = {
   ],
   GeminiLogout: [
     { key: "label", label: "Label to logout (empty = default)", required: false, secret: false }
+  ],
+  GrokOauth: [
+    { key: "label", label: "Label (empty = default)", required: false, secret: false }
+  ],
+  GrokApiKey: [
+    { key: "label", label: "Label (empty = default)", required: false, secret: false },
+    { key: "apiKey", label: "Grok API key (from x.ai)", required: true, secret: true }
+  ],
+  GrokLogout: [
+    { key: "label", label: "Label to logout (empty = default)", required: false, secret: false }
   ]
 }
 
@@ -76,6 +90,9 @@ export const successMessage = (flow: AuthFlow, label: string): string =>
     Match.when("GeminiOauth", () => `Saved Gemini CLI OAuth login (${label}).`),
     Match.when("GeminiApiKey", () => `Saved Gemini API key (${label}).`),
     Match.when("GeminiLogout", () => `Logged out Gemini CLI (${label}).`),
+    Match.when("GrokOauth", () => `Saved Grok CLI OAuth login (${label}).`),
+    Match.when("GrokApiKey", () => `Saved Grok API key (${label}).`),
+    Match.when("GrokLogout", () => `Logged out Grok CLI (${label}).`),
     Match.exhaustive
   )
 
@@ -90,6 +107,17 @@ export const authViewTitle = (flow: AuthFlow): string =>
     Match.when("GeminiOauth", () => "Gemini CLI OAuth"),
     Match.when("GeminiApiKey", () => "Gemini CLI API key"),
     Match.when("GeminiLogout", () => "Gemini CLI logout"),
+    Match.when("GrokOauth", () => "Grok CLI OAuth"),
+    Match.when("GrokApiKey", () => "Grok CLI API key"),
+    Match.when("GrokLogout", () => "Grok CLI logout"),
+    Match.exhaustive
+  )
+
+export const terminalAuthTitle = (flow: TerminalAuthFlow): string =>
+  Match.value(flow).pipe(
+    Match.when("ClaudeOauth", () => "Claude Code OAuth"),
+    Match.when("GeminiOauth", () => "Gemini CLI OAuth"),
+    Match.when("GrokOauth", () => "Grok CLI OAuth"),
     Match.exhaustive
   )
 

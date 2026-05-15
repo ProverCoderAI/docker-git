@@ -182,7 +182,7 @@ export const startProjectTerminalSession = (
   )
 
 export const createAuthTerminalSession = (
-  flow: "ClaudeOauth" | "GeminiOauth",
+  flow: "ClaudeOauth" | "GeminiOauth" | "GrokOauth",
   label: string | null
 ) =>
   requestJson(

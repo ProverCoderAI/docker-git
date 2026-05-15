@@ -5,6 +5,8 @@ const applyOverrideKeys = [
   "gitTokenLabel",
   "codexTokenLabel",
   "claudeTokenLabel",
+  "geminiTokenLabel",
+  "grokTokenLabel",
   "cpuLimit",
   "ramLimit",
   "playwrightCpuLimit",
@@ -26,6 +28,12 @@ const applyTokenOverrides = (template: TemplateConfig, command: ApplyCommand): T
   }
   if (command.claudeTokenLabel !== undefined) {
     next = { ...next, claudeAuthLabel: normalizeAuthLabel(command.claudeTokenLabel) }
+  }
+  if (command.geminiTokenLabel !== undefined) {
+    next = { ...next, geminiAuthLabel: normalizeAuthLabel(command.geminiTokenLabel) }
+  }
+  if (command.grokTokenLabel !== undefined) {
+    next = { ...next, grokAuthLabel: normalizeAuthLabel(command.grokTokenLabel) }
   }
   return next
 }

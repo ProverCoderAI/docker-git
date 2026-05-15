@@ -14,7 +14,8 @@ type PromptsPanelProps = {
 const promptTitleByKind: Record<ProjectPromptKind, string> = {
   claude: "Claude (CLAUDE.md)",
   codex: "Codex / Agents (AGENTS.md)",
-  gemini: "Gemini (GEMINI.md)"
+  gemini: "Gemini (GEMINI.md)",
+  grok: "Grok (GROK.md)"
 }
 
 const formatBytes = (bytes: number): string => {
@@ -125,7 +126,7 @@ export const ProjectPromptsPanel = (
     <Text bold={true} fg="#8be9fd">Project system prompts</Text>
     <Text fg="#d6e5f7" wrap="wrap">
       Edit per-project system prompts that agents read on startup: CLAUDE.md (Claude), AGENTS.md (Codex / generic
-      agents), GEMINI.md (Gemini).
+      agents), GEMINI.md (Gemini), GROK.md (Grok).
     </Text>
     <Text fg="#8fa6c4" wrap="truncate">
       Project: {selectedProjectSummary?.displayName ?? "not selected"}

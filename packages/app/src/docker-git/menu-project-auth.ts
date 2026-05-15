@@ -133,7 +133,8 @@ const runProjectAuthAction = (
     action === "ProjectGithubDisconnect" ||
     action === "ProjectGitDisconnect" ||
     action === "ProjectClaudeDisconnect" ||
-    action === "ProjectGeminiDisconnect"
+    action === "ProjectGeminiDisconnect" ||
+    action === "ProjectGrokDisconnect"
   ) {
     runProjectAuthEffect(view.project, action, {}, "default", context)
     return

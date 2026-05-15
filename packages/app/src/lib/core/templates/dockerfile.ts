@@ -79,7 +79,7 @@ RUN printf "export NVM_DIR=/usr/local/nvm\\n[ -s /usr/local/nvm/nvm.sh ] && . /u
   > /etc/profile.d/nvm.sh && chmod 0644 /etc/profile.d/nvm.sh`
 
 const renderDockerfileBunPrelude = (config: TemplateConfig): string =>
-  `# Tooling: Bun + Codex CLI (bun) + oh-my-opencode (npm + platform binary) + Claude Code CLI (npm)
+  `# Tooling: Bun + Codex CLI (bun) + oh-my-opencode (npm + platform binary) + Claude Code CLI (npm) + Grok CLI (npm)
 ENV TERM=xterm-256color
 RUN set -eu; \
   for attempt in 1 2 3 4 5; do \
@@ -109,7 +109,9 @@ RUN oh-my-opencode --version
 RUN npm install -g @anthropic-ai/claude-code@latest
 RUN claude --version
 RUN npm install -g @google/gemini-cli@latest --force
-RUN gemini --version`
+RUN gemini --version
+RUN npm install -g grok-dev@latest --force
+RUN grok --version >/dev/null || true`
 
 // CHANGE: install RTK as a real command-output optimizer in generated containers.
 // WHY: issue-266 asks for out-of-the-box RTK behavior, not only a session-sync estimate.
@@ -349,6 +351,8 @@ RUN set -eu; \
 RUN mkdir -p /opt/docker-git/bootstrap/.orch/auth/codex \
   /opt/docker-git/bootstrap/.orch/auth/codex-shared \
   /opt/docker-git/bootstrap/.orch/auth/claude \
+  /opt/docker-git/bootstrap/.orch/auth/gemini \
+  /opt/docker-git/bootstrap/.orch/auth/grok \
   /opt/docker-git/bootstrap/.orch/env \
   && touch /opt/docker-git/bootstrap/authorized_keys \
   /opt/docker-git/bootstrap/.orch/env/global.env \

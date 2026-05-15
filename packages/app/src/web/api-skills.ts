@@ -10,7 +10,8 @@ const skillScopeIdByScope: Readonly<Record<ProjectSkillScope, string>> = {
   "agents/.skills": "agents-dot-skills",
   "claude/skills": "claude-skills",
   "codex/skills": "codex-skills",
-  "gemini/skills": "gemini-skills"
+  "gemini/skills": "gemini-skills",
+  "grok/skills": "grok-skills"
 }
 
 export const projectSkillScopeToId = (scope: ProjectSkillScope): string => skillScopeIdByScope[scope]

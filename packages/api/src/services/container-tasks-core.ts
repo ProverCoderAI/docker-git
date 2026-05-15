@@ -17,7 +17,7 @@ export type ManagedAgentPid = {
   readonly pid: number
 }
 
-const interactiveAgentPattern = /\b(codex|claude|opencode|gemini)\b/u
+const interactiveAgentPattern = /\b(codex|claude|opencode|gemini|grok)\b/u
 
 const hasInteractiveTty = (process: RawContainerProcess): boolean =>
   process.tty !== "?" && process.tty.trim().length > 0

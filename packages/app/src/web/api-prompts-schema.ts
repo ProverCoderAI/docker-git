@@ -3,7 +3,8 @@ import * as Schema from "@effect/schema/Schema"
 export const ProjectPromptKindSchema = Schema.Union(
   Schema.Literal("claude"),
   Schema.Literal("codex"),
-  Schema.Literal("gemini")
+  Schema.Literal("gemini"),
+  Schema.Literal("grok")
 )
 
 export const ProjectPromptFileSchema = Schema.Struct({

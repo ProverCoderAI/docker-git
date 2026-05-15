@@ -171,4 +171,5 @@ export type LegacyOrchPaths = AuthPaths & {
   readonly ghAuthPath: string
   readonly gitlabAuthPath?: string
   readonly geminiAuthPath?: string
+  readonly grokAuthPath?: string
 }

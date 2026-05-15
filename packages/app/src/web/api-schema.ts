@@ -2,6 +2,12 @@ import * as Schema from "@effect/schema/Schema"
 
 import { TerminalSessionSchema } from "../shared/terminal-session-schema.js"
 
+export {
+  AuthSnapshotResponseSchema,
+  AuthSnapshotSchema,
+  ProjectAuthSnapshotResponseSchema,
+  ProjectAuthSnapshotSchema
+} from "./api-auth-schema.js"
 export { ApiEventSchema, ProjectEventsPollResponseSchema } from "./api-events-schema.js"
 export {
   ProjectPromptFileSchema,
@@ -242,45 +248,6 @@ export const GithubAuthStatusSchema = Schema.Struct({
 export const GithubStatusResponseSchema = Schema.Struct({
   ok: Schema.optional(Schema.Boolean),
   status: GithubAuthStatusSchema
-})
-
-export const AuthSnapshotSchema = Schema.Struct({
-  globalEnvPath: Schema.String,
-  claudeAuthPath: Schema.String,
-  geminiAuthPath: Schema.String,
-  totalEntries: Schema.Number,
-  githubTokenEntries: Schema.Number,
-  gitTokenEntries: Schema.Number,
-  gitUserEntries: Schema.Number,
-  claudeAuthEntries: Schema.Number,
-  geminiAuthEntries: Schema.Number
-})
-
-export const AuthSnapshotResponseSchema = Schema.Struct({
-  ok: Schema.optional(Schema.Boolean),
-  snapshot: AuthSnapshotSchema
-})
-
-export const ProjectAuthSnapshotSchema = Schema.Struct({
-  projectDir: Schema.String,
-  projectName: Schema.String,
-  envGlobalPath: Schema.String,
-  envProjectPath: Schema.String,
-  claudeAuthPath: Schema.String,
-  geminiAuthPath: Schema.String,
-  githubTokenEntries: Schema.Number,
-  gitTokenEntries: Schema.Number,
-  claudeAuthEntries: Schema.Number,
-  geminiAuthEntries: Schema.Number,
-  activeGithubLabel: NullableString,
-  activeGitLabel: NullableString,
-  activeClaudeLabel: NullableString,
-  activeGeminiLabel: NullableString
-})
-
-export const ProjectAuthSnapshotResponseSchema = Schema.Struct({
-  ok: Schema.optional(Schema.Boolean),
-  snapshot: ProjectAuthSnapshotSchema
 })
 
 export const TerminalSessionResponseSchema = Schema.Struct({

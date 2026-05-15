@@ -27,6 +27,7 @@ const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateCo
   codexAuthPath: "/workspace/.orch/auth/codex",
   codexSharedAuthPath: "/workspace/.orch/auth/codex-shared",
   geminiAuthPath: "/workspace/.orch/auth/gemini",
+  grokAuthPath: "/workspace/.orch/auth/grok",
   gpu: "none",
   ...overrides
 })
@@ -211,6 +212,15 @@ describe("renderDockerfile", () => {
       "install -m 0755 /opt/docker-git/tools/docker-git-session-sync /usr/local/bin/docker-git-session-sync"
     ])
     expect(dockerfile).not.toContain("glab_1.93.0_linux_\\$GLAB_ARCH.deb")
+  })
+
+  it("installs Grok CLI for generated project containers", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expectContainsAll(dockerfile, [
+      "npm install -g grok-dev@latest --force",
+      "grok --version >/dev/null || true"
+    ])
   })
 })
 
@@ -406,7 +416,7 @@ describe("renderEntrypoint auth bridge", () => {
     ])
   })
 
-  it("renders Codex and Gemini project rules wiring", () => {
+  it("renders Codex, Gemini and Grok project rules wiring", () => {
     const entrypoint = renderAuthEntrypoint()
 
     expectContainsAll(entrypoint, [
@@ -417,6 +427,7 @@ describe("renderEntrypoint auth bridge", () => {
       "docker_git_prepare_active_agent_project_rules()",
       "docker_git_detect_claude_project_rules()",
       "docker_git_detect_gemini_project_rules()",
+      "docker_git_detect_grok_project_rules()",
       "DOCKER_GIT_RTK_ENABLE=\"${DOCKER_GIT_RTK_ENABLE:-1}\"",
       "DOCKER_GIT_RTK_ENABLE=1",
       "docker_git_rtk_init_as_user()",
@@ -429,6 +440,7 @@ describe("renderEntrypoint auth bridge", () => {
       "\"codex\")",
       "\"claude\")",
       "\"gemini\")",
+      "\"grok\")",
       'MCP_PLAYWRIGHT_ISOLATED="${MCP_PLAYWRIGHT_ISOLATED:-0}"',
       "\"20-agents-skills::.agents/skills\"",
       "\"30-agents-dot-skills::.agents/.skills\"",
@@ -439,8 +451,12 @@ describe("renderEntrypoint auth bridge", () => {
       "$project_dir/.gemini/settings.json",
       "$project_dir/.gemini/commands",
       "$project_dir/.gemini/skills",
+      "$project_dir/.grok/settings.json",
+      "$project_dir/.grok/commands",
+      "$project_dir/.grok/skills",
       "MCP_PLAYWRIGHT_ISOLATED=1 codex exec",
-      "MCP_PLAYWRIGHT_ISOLATED=1 claude --dangerously-skip-permissions -p"
+      "MCP_PLAYWRIGHT_ISOLATED=1 claude --dangerously-skip-permissions -p",
+      "MCP_PLAYWRIGHT_ISOLATED=1 grok --no-sandbox -p"
     ])
     expect(entrypoint).not.toContain("codex --approval-mode full-auto")
     expect(entrypoint).not.toContain("\"40-claude-skills::.claude/skills\"")
@@ -465,7 +481,7 @@ describe("renderEntrypoint auth bridge", () => {
     expect(entrypoint.split("SUBAGENTS_LINE=").length - 1).toBeGreaterThanOrEqual(1)
   })
 
-  it("renders system-prompt override hooks for codex/claude/gemini", () => {
+  it("renders system-prompt override hooks for codex/claude/gemini/grok", () => {
     const entrypoint = renderAuthEntrypoint()
 
     expectContainsAll(entrypoint, [
@@ -486,7 +502,13 @@ describe("renderEntrypoint auth bridge", () => {
       "GEMINI_DEFAULT_PROMPT_BODY=\"$(docker_git_decode_unicode_escapes \"$GEMINI_DEFAULT_PROMPT_BODY\")\"",
       "GEMINI_PROMPT_BODY=\"$(cat \"$GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE\")\"",
       "GEMINI_PROMPT_BODY=\"$GEMINI_SYSTEM_PROMPT_OVERRIDE\"",
-      "GEMINI_PROMPT_BODY=\"$GEMINI_DEFAULT_PROMPT_BODY\""
+      "GEMINI_PROMPT_BODY=\"$GEMINI_DEFAULT_PROMPT_BODY\"",
+      "GROK_SYSTEM_PROMPT_OVERRIDE_FILE=\"${GROK_SYSTEM_PROMPT_OVERRIDE_FILE:-}\"",
+      "GROK_SYSTEM_PROMPT_OVERRIDE=\"${GROK_SYSTEM_PROMPT_OVERRIDE:-}\"",
+      "GROK_DEFAULT_PROMPT_BODY=\"$(docker_git_decode_unicode_escapes \"$GROK_DEFAULT_PROMPT_BODY\")\"",
+      "GROK_PROMPT_BODY=\"$(cat \"$GROK_SYSTEM_PROMPT_OVERRIDE_FILE\")\"",
+      "GROK_PROMPT_BODY=\"$GROK_SYSTEM_PROMPT_OVERRIDE\"",
+      "GROK_PROMPT_BODY=\"$GROK_DEFAULT_PROMPT_BODY\""
     ])
   })
 
