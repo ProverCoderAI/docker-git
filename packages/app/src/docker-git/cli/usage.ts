@@ -76,7 +76,7 @@ Options:
   --up | --no-up            Run docker compose up after init (default: --up)
   --ssh | --no-ssh          Auto-open SSH after create/clone (default: clone=--ssh, create=--no-ssh)
   --mcp-playwright | --no-mcp-playwright  Enable Playwright MCP + Chromium sidecar (default: --no-mcp-playwright)
-  --auto[=claude|codex]     Auto-execute an agent; without value picks by auth, random if both are available
+  --auto[=claude|codex|gemini|grok]  Auto-execute an agent; without value picks by auth, random if multiple are available
   --active                  apply-all: apply only to currently running containers (skip stopped ones)
   --force                   Overwrite existing files, replace conflicting docker-git projects/containers, and wipe compose volumes
   --force-env               Reset project env defaults only (keep workspace volume/data)

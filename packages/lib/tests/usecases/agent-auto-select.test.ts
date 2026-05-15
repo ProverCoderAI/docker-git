@@ -116,7 +116,39 @@ describe("resolveAutoAgentMode", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("returns one of the available agents when both Claude and Codex auth exist", () =>
+  it.effect("chooses Grok when only Grok auth exists", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const config = makeConfig(root, path)
+        const grokRoot = path.join(root, ".orch/auth/grok/default")
+
+        yield* _(fs.makeDirectory(grokRoot, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(grokRoot, ".api-key"), "grok-token\n"))
+
+        const mode = yield* _(resolveAutoAgentMode(config))
+        expect(mode).toBe("grok")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("keeps explicit Grok mode when Grok auth exists", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const config: TemplateConfig = { ...makeConfig(root, path), agentMode: "grok" }
+        const grokRoot = path.join(root, ".orch/auth/grok/default")
+
+        yield* _(fs.makeDirectory(grokRoot, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(grokRoot, ".api-key"), "grok-token\n"))
+
+        const mode = yield* _(resolveAutoAgentMode(config))
+        expect(mode).toBe("grok")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("returns one of the available agents when multiple agent auth entries exist", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const fs = yield* _(FileSystem.FileSystem)
@@ -124,14 +156,17 @@ describe("resolveAutoAgentMode", () => {
         const config = makeConfig(root, path)
         const claudeRoot = path.join(root, ".orch/auth/claude/default")
         const codexRoot = path.join(root, ".orch/auth/codex")
+        const grokRoot = path.join(root, ".orch/auth/grok/default")
 
         yield* _(fs.makeDirectory(claudeRoot, { recursive: true }))
         yield* _(fs.makeDirectory(codexRoot, { recursive: true }))
+        yield* _(fs.makeDirectory(grokRoot, { recursive: true }))
         yield* _(fs.writeFileString(path.join(claudeRoot, ".oauth-token"), "token\n"))
         yield* _(fs.writeFileString(path.join(codexRoot, "auth.json"), "{\"ok\":true}\n"))
+        yield* _(fs.writeFileString(path.join(grokRoot, ".api-key"), "grok-token\n"))
 
         const mode = yield* _(resolveAutoAgentMode(config))
-        expect(["claude", "codex"]).toContain(mode)
+        expect(["claude", "codex", "grok"]).toContain(mode)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -156,6 +191,22 @@ describe("resolveAutoAgentMode", () => {
       Effect.gen(function*(_) {
         const path = yield* _(Path.Path)
         const config: TemplateConfig = { ...makeConfig(root, path), agentMode: "codex" }
+
+        const exit = yield* _(
+          resolveAutoAgentMode(config).pipe(
+            Effect.flip,
+            Effect.map((error) => error._tag)
+          )
+        )
+        expect(exit).toBe("InvalidOption")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("fails explicit Grok mode when Grok auth is missing", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const config: TemplateConfig = { ...makeConfig(root, path), agentMode: "grok" }
 
         const exit = yield* _(
           resolveAutoAgentMode(config).pipe(
