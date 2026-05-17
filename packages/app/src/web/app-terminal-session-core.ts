@@ -1,9 +1,7 @@
 import type { ProjectTerminalSessionLookup } from "./api.js"
 import { type ActiveTerminalSession, buildProjectActiveTerminalSession } from "./terminal.js"
 
-export type WebAppRoute =
-  | { readonly tag: "Dashboard" }
-  | { readonly tag: "TerminalSession"; readonly sessionId: string }
+export type WebAppRoute = { readonly tag: "Dashboard" }
 
 const terminalSessionRoutePrefix = "/ssh/session/"
 

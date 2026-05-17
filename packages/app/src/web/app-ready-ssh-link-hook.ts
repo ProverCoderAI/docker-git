@@ -3,12 +3,12 @@ import { useEffect, useRef } from "react"
 
 import { connectProjectById } from "./actions-projects.js"
 import type { BrowserActionContext } from "./actions-shared.js"
+import type { TerminalSession } from "./api-types.js"
 import { loadProjectTerminalWorkspace, loadTerminalSessionById } from "./api.js"
 import type { DashboardData } from "./api.js"
-import type { TerminalSession } from "./api-types.js"
 import { browserMenuIndex } from "./menu.js"
 import { projectPickerScreen } from "./screen.js"
-import { terminalSessionId } from "./terminal-state.js"
+import { terminalSessionId, terminalSessionsForProject } from "./terminal-state.js"
 import {
   type ActiveTerminalSession,
   buildProjectActiveTerminalSession,
@@ -86,8 +86,7 @@ export const readSshLinkRequestFromHref = (href: string): SshLinkRequest | null 
   return readSshPathRequest(url) ?? readSshQueryRequest(url)
 }
 
-const readSshLinkRequest = (): SshLinkRequest | null =>
-  readSshLinkRequestFromHref(globalThis.location.href)
+const readSshLinkRequest = (): SshLinkRequest | null => readSshLinkRequestFromHref(globalThis.location.href)
 
 const findProjectBySshToken = (
   projects: DashboardData["projects"],
@@ -105,14 +104,6 @@ const findLocalTerminalSession = (
   sessions: ReadonlyArray<ActiveTerminalSession>,
   sessionId: string
 ): ActiveTerminalSession | undefined => sessions.find((session) => terminalSessionId(session) === sessionId)
-
-const isProjectTerminalSession = (session: ActiveTerminalSession, projectId: string): boolean =>
-  session.browserProjectId === projectId
-
-const projectTerminalSessions = (
-  sessions: ReadonlyArray<ActiveTerminalSession>,
-  projectId: string
-): ReadonlyArray<ActiveTerminalSession> => sessions.filter((session) => isProjectTerminalSession(session, projectId))
 
 const newestTerminalSession = <A extends { readonly createdAt: string; readonly status?: string }>(
   sessions: ReadonlyArray<A>
@@ -140,7 +131,7 @@ const selectLocalProjectTerminal = (
   projectId: string,
   terminalId: string | undefined
 ): ActiveTerminalSession | null => {
-  const projectSessions = projectTerminalSessions(sessions, projectId)
+  const projectSessions = terminalSessionsForProject(sessions, projectId)
   if (terminalId !== undefined) {
     return selectByExactIdOrUniquePrefix(
       projectSessions.map((session) => ({ ...session, id: terminalSessionId(session) })),
@@ -160,7 +151,7 @@ const selectLocalProjectTerminal = (
 export const selectWorkspaceTerminalSession = (
   sessions: ReadonlyArray<TerminalSession>,
   activeSessionId: string | null,
-  terminalId?: string | undefined
+  terminalId?: string
 ): TerminalSession | null => {
   if (terminalId !== undefined) {
     return selectByExactIdOrUniquePrefix(sessions, terminalId)

@@ -91,9 +91,18 @@ const randomHex = (bytes: number): string => {
   return Date.now().toString(16).padStart(bytes * 2, "0").slice(0, bytes * 2)
 }
 
+/**
+ * Converts a hex buffer into an RFC 4122-shaped UUID v4 string.
+ *
+ * @pure true
+ * @precondition hex contains hexadecimal characters and may be shorter or longer than 32 chars.
+ * @postcondition result length is 36, result[14] is "4", and result[19] has RFC variant bits 10xx.
+ * @invariant output preserves the padded/truncated 128-bit payload except version and variant bits.
+ * @complexity O(n) time for input normalization, O(1) output space.
+ */
 const formatUuidV4 = (hex: string): string => {
   const value = hex.padEnd(32, "0").slice(0, 32)
-  const variant = ((Number.parseInt(value.slice(16, 18), 16) & 0x3f) | 0x80)
+  const variant = ((Number.parseInt(value.slice(16, 18), 16) & 0x3F) | 0x80)
     .toString(16)
     .padStart(2, "0")
   const segments = [

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { ProjectItem } from "@effect-template/lib"
 import { NodeContext } from "@effect/platform-node"
+import { CommandFailedError } from "@effect-template/lib/shell/errors"
 
 import type { ProjectDetails } from "../src/api/contracts.js"
 import { clearProjectEvents, listProjectEventsSince } from "../src/services/events.js"
@@ -123,7 +124,7 @@ const cleanupSessions = (): Effect.Effect<void, never, unknown> =>
   })
 
 const runTestEffect = <A>(effect: Effect.Effect<A, unknown, unknown>): Promise<A> =>
-  Effect.runPromise(effect.pipe(Effect.provide(NodeContext.layer)) as Effect.Effect<A, unknown, never>)
+  Effect.runPromise(effect.pipe(Effect.provide(NodeContext.layer)))
 
 const phaseFromEvent = (event: { readonly payload: unknown }): string | null => {
   if (typeof event.payload !== "object" || event.payload === null || !Object.hasOwn(event.payload, "phase")) {
@@ -259,13 +260,26 @@ describe("terminal sessions service", () => {
     getProjectMock.mockImplementation(() => Effect.succeed(projectDetails))
     runCommandCaptureMock.mockImplementation((command: { readonly command: string }) =>
       command.command === "ssh"
-        ? Effect.fail(new Error("tmux missing"))
+        ? Effect.fail(new CommandFailedError({ command: "ssh command -v tmux", exitCode: 1 }))
         : Effect.fail(new Error("docker inspect skipped in tests"))
     )
 
     await expect(runTestEffect(createTerminalSession(projectId))).rejects.toThrow(
       "tmux is not available in this project container"
     )
+    expect(readPersistedSessionIds()).toEqual([])
+  })
+
+  it("surfaces tmux probe transport failures instead of reporting missing tmux", async () => {
+    probeProjectSshReadyMock.mockImplementation(() => Effect.succeed(true))
+    getProjectMock.mockImplementation(() => Effect.succeed(projectDetails))
+    runCommandCaptureMock.mockImplementation((command: { readonly command: string }) =>
+      command.command === "ssh"
+        ? Effect.fail(new CommandFailedError({ command: "ssh command -v tmux", exitCode: 255 }))
+        : Effect.fail(new Error("docker inspect skipped in tests"))
+    )
+
+    await expect(runTestEffect(createTerminalSession(projectId))).rejects.toThrow("Failed to probe tmux availability")
     expect(readPersistedSessionIds()).toEqual([])
   })
 

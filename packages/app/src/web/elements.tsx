@@ -109,7 +109,7 @@ export const Box = ({ children, onClick, ...props }: GridElementProps): JSX.Elem
       : ((event: Parameters<MouseEventHandler<HTMLElement>>[0]) => {
         onClick(event)
         event.currentTarget.blur()
-    }) satisfies MouseEventHandler<HTMLElement>,
+      }) satisfies MouseEventHandler<HTMLElement>,
     style: {
       ...baseStyle(props),
       ...interactiveStyle(onClick, props.backgroundColor, props.width)

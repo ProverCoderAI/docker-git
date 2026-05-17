@@ -3,6 +3,14 @@ import { renderDockerfilePrompt } from "../templates-prompt.js"
 import { renderDockerfileGlab } from "./glab.js"
 import { renderDockerfileGitleaks, renderDockerfileOpenCode } from "./tools.js"
 
+// CHANGE: include tmux in generated project images for durable terminal multiplexing.
+// WHY: stable project SSH links attach to persisted tmux sessions instead of one-off shell processes.
+// QUOTE(TZ): n/a
+// REF: PR-309
+// SOURCE: n/a
+// PURITY: CORE
+// INVARIANT: generated base image contains the terminal multiplexer required by project SSH sessions.
+// COMPLEXITY: O(1)/O(1)
 const renderDockerfilePrelude = (): string =>
   `FROM ubuntu:24.04
 

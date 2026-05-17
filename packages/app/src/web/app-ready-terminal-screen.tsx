@@ -136,7 +136,8 @@ const pendingTerminalBodyStyle: CSSProperties = {
   whiteSpace: "pre-wrap"
 }
 
-const fallbackTerminalTabLabel = (session: ActiveTerminalSession): string => session.browserProjectName ?? session.header
+const fallbackTerminalTabLabel = (session: ActiveTerminalSession): string =>
+  session.browserProjectName ?? session.header
 
 const terminalTabLabel = (
   session: ActiveTerminalSession,

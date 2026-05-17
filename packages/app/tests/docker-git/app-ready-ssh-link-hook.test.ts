@@ -1,3 +1,4 @@
+import * as fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
 import type { TerminalSession } from "../../src/web/api-types.js"
@@ -19,6 +20,19 @@ const makeSessionPair = (): ReadonlyArray<TerminalSession> => [
   makeSession("session-1", "2026-04-15T00:00:00.000Z"),
   makeSession("session-2", "2026-04-16T00:00:00.000Z")
 ]
+
+const createdAtForIndex = (index: number): string => `2026-04-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`
+
+const sessionIdsArbitrary = fc.uniqueArray(fc.integer({ max: 1_000_000, min: 1 }), {
+  maxLength: 8,
+  minLength: 1
+})
+
+const sessionsFromIds = (
+  ids: ReadonlyArray<number>,
+  statusForIndex: (index: number) => TerminalSession["status"] = () => "ready"
+): ReadonlyArray<TerminalSession> =>
+  ids.map((id, index) => makeSession(`session-${id}`, createdAtForIndex(index), statusForIndex(index)))
 
 describe("app-ready ssh link hook", () => {
   it("parses stable project SSH routes with an optional terminal selector", () => {
@@ -81,6 +95,63 @@ describe("app-ready ssh link hook", () => {
     ]
 
     expect(selectWorkspaceTerminalSession(sessions, null)?.id).toBe("ready-old")
+  })
+
+  it("preserves exact terminal selector invariants for generated sessions", () => {
+    fc.assert(
+      fc.property(sessionIdsArbitrary, fc.nat(), (ids, seed) => {
+        const sessions = sessionsFromIds(ids)
+        const expected = sessions[seed % sessions.length]
+
+        expect(selectWorkspaceTerminalSession(sessions, null, expected?.id)?.id).toBe(expected?.id)
+      }),
+      { numRuns: 50 }
+    )
+  })
+
+  it("preserves unique and ambiguous terminal prefix invariants", () => {
+    fc.assert(
+      fc.property(fc.integer({ max: 1_000_000, min: 1 }), (seed) => {
+        const prefix = `prefix-${seed}-`
+        const uniqueSessions = [
+          makeSession(`${prefix}a`, "2026-04-15T00:00:00.000Z"),
+          makeSession(`other-${seed}`, "2026-04-16T00:00:00.000Z")
+        ]
+        const ambiguousSessions = [
+          makeSession(`${prefix}a`, "2026-04-15T00:00:00.000Z"),
+          makeSession(`${prefix}b`, "2026-04-16T00:00:00.000Z")
+        ]
+
+        expect(selectWorkspaceTerminalSession(uniqueSessions, null, prefix)?.id).toBe(`${prefix}a`)
+        expect(selectWorkspaceTerminalSession(ambiguousSessions, null, prefix)).toBeNull()
+      }),
+      { numRuns: 50 }
+    )
+  })
+
+  it("preserves missing terminal selector invariants for generated sessions", () => {
+    fc.assert(
+      fc.property(sessionIdsArbitrary, fc.integer({ max: 1_000_000, min: 1 }), (ids, seed) => {
+        const sessions = sessionsFromIds(ids)
+
+        expect(selectWorkspaceTerminalSession(sessions, sessions[0]?.id ?? null, `missing-${seed}`)).toBeNull()
+      }),
+      { numRuns: 50 }
+    )
+  })
+
+  it("preserves newest non-failed fallback invariants for generated sessions", () => {
+    fc.assert(
+      fc.property(sessionIdsArbitrary, fc.nat(), (ids, seed) => {
+        const sessions = sessionsFromIds(ids, (index) => index % 2 === seed % 2 ? "failed" : "ready")
+        const reusable = sessions.filter((session) => session.status !== "failed")
+        const candidates = reusable.length === 0 ? sessions : reusable
+        const expected = candidates.toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))[0]
+
+        expect(selectWorkspaceTerminalSession(sessions, null)?.id).toBe(expected?.id)
+      }),
+      { numRuns: 50 }
+    )
   })
 
   it("falls back to the Select screen for a stale SSH session route", () => {

@@ -1134,7 +1134,7 @@ const renderRemoteTmuxProbeCommand = (): string =>
 
 const probeProjectTmuxAvailable = (
   projectItem: ProjectItem
-): Effect.Effect<boolean, never, CommandExecutor.CommandExecutor> => {
+): Effect.Effect<boolean, ApiInternalError, CommandExecutor.CommandExecutor> => {
   const prepared = prepareProjectSsh(projectItem)
   return runCommandCapture(
     {
@@ -1146,13 +1146,20 @@ const probeProjectTmuxAvailable = (
     (exitCode) => new CommandFailedError({ command: "ssh command -v tmux", exitCode })
   ).pipe(
     Effect.as(true),
-    Effect.orElseSucceed(() => false)
+    Effect.catchAll((error) =>
+      error._tag === "CommandFailedError" && error.exitCode === 1
+        ? Effect.succeed(false)
+        : Effect.fail(new ApiInternalError({
+          cause: error,
+          message: `Failed to probe tmux availability for project: ${projectItem.projectDir}`
+        }))
+    )
   )
 }
 
 const ensureProjectTmuxAvailable = (
   projectItem: ProjectItem
-): Effect.Effect<void, ApiConflictError, CommandExecutor.CommandExecutor> =>
+): Effect.Effect<void, ApiConflictError | ApiInternalError, CommandExecutor.CommandExecutor> =>
   probeProjectTmuxAvailable(projectItem).pipe(
     Effect.flatMap((available) =>
       available

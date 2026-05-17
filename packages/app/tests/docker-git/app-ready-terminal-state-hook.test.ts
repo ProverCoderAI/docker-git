@@ -1,3 +1,4 @@
+import * as fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
 import { projectActiveTerminalSelection } from "../../src/web/app-ready-terminal-state-hook.js"
@@ -26,6 +27,24 @@ const makeSession = (
   ...overrides
 })
 
+const idSegmentArbitrary = fc.integer({ max: 1_000_000, min: 1 }).map((value) => `id-${value}`)
+const projectKeyArbitrary = fc.tuple(idSegmentArbitrary, idSegmentArbitrary).map(([owner, repo]) => `${owner}/${repo}`)
+const sessionIdArbitrary = fc.integer({ max: 1_000_000, min: 1 }).map((value) => `session-${value}`)
+
+const makeSessionWithId = (
+  sessionId: string,
+  overrides: Partial<ActiveTerminalSession> = {}
+): ActiveTerminalSession => {
+  const base = makeSession()
+  return makeSession({
+    ...overrides,
+    session: {
+      ...base.session,
+      id: sessionId
+    }
+  })
+}
+
 describe("app-ready terminal state hook", () => {
   it("persists active project terminal selection by project key and session id", () => {
     expect(projectActiveTerminalSelection(makeSession())).toEqual({
@@ -47,5 +66,43 @@ describe("app-ready terminal state hook", () => {
 
   it("does not persist non-project terminal selection", () => {
     expect(projectActiveTerminalSelection(makeSession({ browserProjectKey: undefined }))).toBeNull()
+  })
+
+  it("preserves active project terminal selection invariants", () => {
+    fc.assert(
+      fc.property(projectKeyArbitrary, sessionIdArbitrary, (projectKey, sessionId) => {
+        expect(projectActiveTerminalSelection(makeSessionWithId(sessionId, { browserProjectKey: projectKey })))
+          .toEqual({ projectKey, sessionId })
+      }),
+      { numRuns: 50 }
+    )
+  })
+
+  it("preserves pending terminal non-persistence invariants", () => {
+    fc.assert(
+      fc.property(
+        projectKeyArbitrary,
+        sessionIdArbitrary,
+        fc.constantFrom("connecting", "error"),
+        idSegmentArbitrary,
+        (projectKey, sessionId, phase, message) => {
+          expect(projectActiveTerminalSelection(makeSessionWithId(sessionId, {
+            browserProjectKey: projectKey,
+            pendingConnection: { message, phase }
+          }))).toBeNull()
+        }
+      ),
+      { numRuns: 50 }
+    )
+  })
+
+  it("preserves non-project terminal non-persistence invariants", () => {
+    fc.assert(
+      fc.property(sessionIdArbitrary, (sessionId) => {
+        expect(projectActiveTerminalSelection(makeSessionWithId(sessionId, { browserProjectKey: undefined })))
+          .toBeNull()
+      }),
+      { numRuns: 50 }
+    )
   })
 })

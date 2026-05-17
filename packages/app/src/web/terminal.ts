@@ -98,13 +98,18 @@ const compareTerminalLabelSession = (left: TerminalLabelSession, right: Terminal
 
 export const terminalTitle = (index: number): string => `Terminal ${index + 1}`
 
+const terminalTitleEntry = (
+  session: TerminalLabelSession,
+  index: number
+): readonly [string, string] => [session.id, terminalTitle(index)]
+
 export const terminalTitleById = (
   sessions: ReadonlyArray<TerminalLabelSession>
 ): ReadonlyMap<string, string> =>
   new Map(
     sessions
       .toSorted(compareTerminalLabelSession)
-      .map((session, index) => [session.id, terminalTitle(index)] as const)
+      .map((session, index) => terminalTitleEntry(session, index))
   )
 
 export const isPendingActiveTerminalSession = (

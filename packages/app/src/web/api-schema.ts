@@ -1,8 +1,25 @@
 import * as Schema from "@effect/schema/Schema"
 
-import { TerminalSessionSchema } from "../shared/terminal-session-schema.js"
+import { NullableString } from "./api-project-schema.js"
 
+export {
+  AuthSnapshotResponseSchema,
+  AuthSnapshotSchema,
+  GithubAuthStatusSchema,
+  GithubStatusResponseSchema,
+  GithubTokenStatusSchema,
+  ProjectAuthSnapshotResponseSchema,
+  ProjectAuthSnapshotSchema
+} from "./api-auth-schema.js"
 export { ApiEventSchema, ProjectEventsPollResponseSchema } from "./api-events-schema.js"
+export {
+  HealthResponseSchema,
+  ProjectDetailsSchema,
+  ProjectResponseSchema,
+  ProjectsResponseSchema,
+  ProjectStatusSchema,
+  ProjectSummarySchema
+} from "./api-project-schema.js"
 export {
   ProjectPromptFileSchema,
   ProjectPromptKindSchema,
@@ -25,65 +42,14 @@ export {
   ContainerTaskSnapshotResponseSchema,
   ContainerTaskSnapshotSchema
 } from "./api-task-schema.js"
-
-const NullableString = Schema.NullOr(Schema.String)
-
-export const ProjectStatusSchema = Schema.Union(
-  Schema.Literal("running"),
-  Schema.Literal("stopped"),
-  Schema.Literal("unknown")
-)
-
-const projectSummaryFields = {
-  id: Schema.String,
-  projectKey: Schema.String,
-  displayName: Schema.String,
-  repoUrl: Schema.String,
-  repoRef: Schema.String,
-  containerName: Schema.optional(Schema.String),
-  status: ProjectStatusSchema,
-  statusLabel: Schema.String,
-  sshSessions: Schema.Number,
-  startedAtIso: NullableString,
-  startedAtEpochMs: Schema.NullOr(Schema.Number),
-  clonedOnHostname: Schema.optional(Schema.String)
-}
-
-export const ProjectSummarySchema = Schema.Struct(projectSummaryFields)
-
-export const ProjectDetailsSchema = Schema.Struct({
-  ...projectSummaryFields,
-  containerName: Schema.String,
-  serviceName: Schema.String,
-  sshUser: Schema.String,
-  sshPort: Schema.Number,
-  gpu: Schema.Union(Schema.Literal("none"), Schema.Literal("all")),
-  targetDir: Schema.String,
-  projectDir: Schema.String,
-  sshCommand: Schema.String,
-  authorizedKeysPath: Schema.String,
-  authorizedKeysExists: Schema.Boolean,
-  envGlobalPath: Schema.String,
-  envProjectPath: Schema.String,
-  codexAuthPath: Schema.String,
-  codexHome: Schema.String
-})
-
-export const HealthResponseSchema = Schema.Struct({
-  ok: Schema.Boolean,
-  revision: NullableString,
-  cwd: Schema.String,
-  projectsRoot: Schema.String
-})
-
-export const ProjectsResponseSchema = Schema.Struct({
-  projects: Schema.Array(ProjectSummarySchema)
-})
-
-export const ProjectResponseSchema = Schema.Struct({
-  ok: Schema.optional(Schema.Boolean),
-  project: ProjectDetailsSchema
-})
+export {
+  AuthTerminalSessionResponseSchema,
+  ProjectTerminalSessionResponseSchema,
+  ProjectTerminalSessionsResponseSchema,
+  TerminalServerMessageSchema,
+  TerminalSessionLookupResponseSchema,
+  TerminalSessionResponseSchema
+} from "./api-terminal-schema.js"
 
 export const CreateProjectAcceptedResponseSchema = Schema.Struct({
   accepted: Schema.Literal(true),
@@ -223,93 +189,6 @@ export const OutputResponseSchema = Schema.Struct({
   output: Schema.String
 })
 
-export const GithubTokenStatusSchema = Schema.Struct({
-  key: Schema.String,
-  label: Schema.String,
-  status: Schema.Union(
-    Schema.Literal("valid"),
-    Schema.Literal("invalid"),
-    Schema.Literal("unknown")
-  ),
-  login: NullableString
-})
-
-export const GithubAuthStatusSchema = Schema.Struct({
-  summary: Schema.String,
-  tokens: Schema.Array(GithubTokenStatusSchema)
-})
-
-export const GithubStatusResponseSchema = Schema.Struct({
-  ok: Schema.optional(Schema.Boolean),
-  status: GithubAuthStatusSchema
-})
-
-export const AuthSnapshotSchema = Schema.Struct({
-  globalEnvPath: Schema.String,
-  claudeAuthPath: Schema.String,
-  geminiAuthPath: Schema.String,
-  totalEntries: Schema.Number,
-  githubTokenEntries: Schema.Number,
-  gitTokenEntries: Schema.Number,
-  gitUserEntries: Schema.Number,
-  claudeAuthEntries: Schema.Number,
-  geminiAuthEntries: Schema.Number
-})
-
-export const AuthSnapshotResponseSchema = Schema.Struct({
-  ok: Schema.optional(Schema.Boolean),
-  snapshot: AuthSnapshotSchema
-})
-
-export const ProjectAuthSnapshotSchema = Schema.Struct({
-  projectDir: Schema.String,
-  projectName: Schema.String,
-  envGlobalPath: Schema.String,
-  envProjectPath: Schema.String,
-  claudeAuthPath: Schema.String,
-  geminiAuthPath: Schema.String,
-  githubTokenEntries: Schema.Number,
-  gitTokenEntries: Schema.Number,
-  claudeAuthEntries: Schema.Number,
-  geminiAuthEntries: Schema.Number,
-  activeGithubLabel: NullableString,
-  activeGitLabel: NullableString,
-  activeClaudeLabel: NullableString,
-  activeGeminiLabel: NullableString
-})
-
-export const ProjectAuthSnapshotResponseSchema = Schema.Struct({
-  ok: Schema.optional(Schema.Boolean),
-  snapshot: ProjectAuthSnapshotSchema
-})
-
-export const TerminalSessionResponseSchema = Schema.Struct({
-  ok: Schema.optional(Schema.Boolean),
-  project: ProjectDetailsSchema,
-  session: TerminalSessionSchema
-})
-
-export const ProjectTerminalSessionsResponseSchema = Schema.Struct({
-  activeSessionId: NullableString,
-  sessions: Schema.Array(TerminalSessionSchema)
-})
-
-export const ProjectTerminalSessionResponseSchema = Schema.Struct({
-  session: TerminalSessionSchema
-})
-
-export const TerminalSessionLookupResponseSchema = Schema.Struct({
-  projectDisplayName: Schema.String,
-  projectKey: Schema.String,
-  session: TerminalSessionSchema
-})
-
-export const AuthTerminalSessionResponseSchema = Schema.Struct({
-  ok: Schema.optional(Schema.Boolean),
-  session: TerminalSessionSchema
-})
-
-export { TerminalServerMessageSchema } from "../shared/terminal-session-schema.js"
 export type {
   ApiEvent,
   AuthMenuFlow,
