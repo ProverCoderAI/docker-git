@@ -1,8 +1,31 @@
+import { it as effectIt } from "@effect/vitest"
+import { Effect } from "effect"
 import * as fc from "fast-check"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { projectActiveTerminalSelection } from "../../src/web/app-ready-terminal-state-hook.js"
+import {
+  createProjectActiveTerminalPersistenceRef,
+  persistProjectActiveTerminalSelection,
+  projectActiveTerminalSelection
+} from "../../src/web/app-ready-terminal-state-hook.js"
+import type { TerminalWorkspaceState } from "../../src/web/terminal-state.js"
 import type { ActiveTerminalSession } from "../../src/web/terminal.js"
+
+const apiMock = vi.hoisted(() => ({
+  setProjectActiveTerminalSession: vi.fn()
+}))
+
+vi.mock("../../src/web/api.js", () => ({
+  setProjectActiveTerminalSession: apiMock.setProjectActiveTerminalSession
+}))
+
+type PendingPersistCall = {
+  readonly complete: () => void
+  readonly projectKey: string
+  readonly sessionId: string
+}
+
+const pendingPersistCalls: Array<PendingPersistCall> = []
 
 const makeSession = (
   overrides: Partial<ActiveTerminalSession> = {}
@@ -45,7 +68,37 @@ const makeSessionWithId = (
   })
 }
 
+const makeWorkspace = (session: ActiveTerminalSession): TerminalWorkspaceState => ({
+  activeTerminalSessionId: session.session.id,
+  terminalSessions: [session]
+})
+
+type ProjectActiveTerminalPersistenceRef = ReturnType<typeof createProjectActiveTerminalPersistenceRef>
+
+const persistSessionSelection = (
+  persistenceRef: ProjectActiveTerminalPersistenceRef,
+  sessionId: string
+): void => {
+  persistProjectActiveTerminalSelection(makeWorkspace(makeSessionWithId(sessionId)), persistenceRef)
+}
+
 describe("app-ready terminal state hook", () => {
+  beforeEach(() => {
+    pendingPersistCalls.length = 0
+    apiMock.setProjectActiveTerminalSession.mockReset()
+    apiMock.setProjectActiveTerminalSession.mockImplementation((projectKey: string, sessionId: string) =>
+      Effect.async<boolean>((resume) => {
+        pendingPersistCalls.push({
+          complete: () => {
+            resume(Effect.succeed(true))
+          },
+          projectKey,
+          sessionId
+        })
+      })
+    )
+  })
+
   it("persists active project terminal selection by project key and session id", () => {
     expect(projectActiveTerminalSelection(makeSession())).toEqual({
       projectKey: "octocat/hello-world",
@@ -105,4 +158,38 @@ describe("app-ready terminal state hook", () => {
       { numRuns: 50 }
     )
   })
+
+  effectIt.effect(
+    "serializes active session persistence so latest wins and superseded selections are skipped",
+    () =>
+      Effect.gen(function*(_) {
+        const persistenceRef = createProjectActiveTerminalPersistenceRef()
+
+        persistSessionSelection(persistenceRef, "session-1")
+        expect(apiMock.setProjectActiveTerminalSession).toHaveBeenCalledTimes(1)
+        expect(apiMock.setProjectActiveTerminalSession).toHaveBeenLastCalledWith("octocat/hello-world", "session-1")
+
+        persistSessionSelection(persistenceRef, "session-2")
+        expect(apiMock.setProjectActiveTerminalSession).toHaveBeenCalledTimes(1)
+
+        pendingPersistCalls[0]?.complete()
+        yield* _(Effect.yieldNow())
+
+        expect(apiMock.setProjectActiveTerminalSession).toHaveBeenCalledTimes(2)
+        expect(apiMock.setProjectActiveTerminalSession).toHaveBeenLastCalledWith("octocat/hello-world", "session-2")
+
+        pendingPersistCalls.length = 0
+        apiMock.setProjectActiveTerminalSession.mockClear()
+        const switchedBackPersistenceRef = createProjectActiveTerminalPersistenceRef()
+        persistSessionSelection(switchedBackPersistenceRef, "session-1")
+        persistSessionSelection(switchedBackPersistenceRef, "session-2")
+        persistSessionSelection(switchedBackPersistenceRef, "session-1")
+
+        pendingPersistCalls[0]?.complete()
+        yield* _(Effect.yieldNow())
+
+        expect(apiMock.setProjectActiveTerminalSession).toHaveBeenCalledTimes(1)
+        expect(apiMock.setProjectActiveTerminalSession).toHaveBeenLastCalledWith("octocat/hello-world", "session-1")
+      })
+  )
 })

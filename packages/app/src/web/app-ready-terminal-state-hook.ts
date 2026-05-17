@@ -23,60 +23,127 @@ export type TerminalWorkspaceReadyState = {
   readonly terminalSessions: ReadonlyArray<ActiveTerminalSession>
 }
 
-type PersistedSelectionRef = {
-  current: string | null
+type ProjectActiveTerminalSelection = {
+  readonly projectKey: string
+  readonly sessionId: string
 }
+
+type ProjectActiveTerminalPersistenceRequest = ProjectActiveTerminalSelection & {
+  readonly selectionKey: string
+}
+
+type ProjectActiveTerminalPersistenceState = {
+  readonly inFlightRequest: ProjectActiveTerminalPersistenceRequest | null
+  readonly latestRequest: ProjectActiveTerminalPersistenceRequest | null
+  readonly persistedSelectionKey: string | null
+}
+
+type ProjectActiveTerminalPersistenceRef = {
+  current: ProjectActiveTerminalPersistenceState
+}
+
+type SetProjectActiveTerminalSessionEffect = ReturnType<typeof setProjectActiveTerminalSession>
+type ProjectActiveTerminalPersistResult = Either.Either<
+  Effect.Effect.Success<SetProjectActiveTerminalSessionEffect>,
+  Effect.Effect.Error<SetProjectActiveTerminalSessionEffect>
+>
 
 export const projectActiveTerminalSelection = (
   active: ActiveTerminalSession | null
-): { readonly projectKey: string; readonly sessionId: string } | null =>
+): ProjectActiveTerminalSelection | null =>
   active?.browserProjectKey === undefined || active.pendingConnection !== undefined
     ? null
     : { projectKey: active.browserProjectKey, sessionId: active.session.id }
 
 const projectActiveTerminalSelectionKey = (
-  selection: { readonly projectKey: string; readonly sessionId: string }
+  selection: ProjectActiveTerminalSelection
 ): string => `${selection.projectKey}\0${selection.sessionId}`
 
-const clearFailedPersistedSelection = (
-  persistedSelectionRef: PersistedSelectionRef,
-  selectionKey: string
+const emptyProjectActiveTerminalPersistenceState = (): ProjectActiveTerminalPersistenceState => ({
+  inFlightRequest: null,
+  latestRequest: null,
+  persistedSelectionKey: null
+})
+
+export const createProjectActiveTerminalPersistenceRef = (): ProjectActiveTerminalPersistenceRef => ({
+  current: emptyProjectActiveTerminalPersistenceState()
+})
+
+const projectActiveTerminalPersistenceRequest = (
+  selection: ProjectActiveTerminalSelection
+): ProjectActiveTerminalPersistenceRequest => ({
+  ...selection,
+  selectionKey: projectActiveTerminalSelectionKey(selection)
+})
+
+const completeProjectActiveTerminalPersistRequest = (
+  persistedSelectionRef: ProjectActiveTerminalPersistenceRef,
+  request: ProjectActiveTerminalPersistenceRequest,
+  result: ProjectActiveTerminalPersistResult
 ): Effect.Effect<void> =>
   Effect.sync(() => {
-    if (persistedSelectionRef.current === selectionKey) {
-      persistedSelectionRef.current = null
+    if (persistedSelectionRef.current.inFlightRequest?.selectionKey !== request.selectionKey) {
+      return
+    }
+    const persistedSelectionKey = Either.match(result, {
+      onLeft: () => persistedSelectionRef.current.persistedSelectionKey,
+      onRight: () => request.selectionKey
+    })
+    persistedSelectionRef.current = {
+      ...persistedSelectionRef.current,
+      inFlightRequest: null,
+      persistedSelectionKey
+    }
+    const latestRequest = persistedSelectionRef.current.latestRequest
+    if (latestRequest !== null && latestRequest.selectionKey !== request.selectionKey) {
+      runProjectActiveTerminalPersistRequest(persistedSelectionRef)
     }
   })
 
-const persistProjectActiveTerminalSelection = (
-  state: TerminalWorkspaceState,
-  persistedSelectionRef: PersistedSelectionRef
+const runProjectActiveTerminalPersistRequest = (
+  persistedSelectionRef: ProjectActiveTerminalPersistenceRef
 ): void => {
-  const active = projectActiveTerminalSelection(activeTerminalSession(state))
-  if (active === null) {
+  const { inFlightRequest, latestRequest, persistedSelectionKey } = persistedSelectionRef.current
+  if (
+    inFlightRequest !== null ||
+    latestRequest === null ||
+    latestRequest.selectionKey === persistedSelectionKey
+  ) {
     return
   }
-  const selectionKey = projectActiveTerminalSelectionKey(active)
-  if (persistedSelectionRef.current === selectionKey) {
-    return
+  persistedSelectionRef.current = {
+    ...persistedSelectionRef.current,
+    inFlightRequest: latestRequest
   }
-  persistedSelectionRef.current = selectionKey
   void Effect.runPromise(
-    setProjectActiveTerminalSession(active.projectKey, active.sessionId).pipe(
+    setProjectActiveTerminalSession(latestRequest.projectKey, latestRequest.sessionId).pipe(
       Effect.either,
       Effect.flatMap((result) =>
-        Either.match(result, {
-          onLeft: () => clearFailedPersistedSelection(persistedSelectionRef, selectionKey),
-          onRight: () => Effect.void
-        })
+        completeProjectActiveTerminalPersistRequest(persistedSelectionRef, latestRequest, result)
       )
     )
   )
 }
 
+export const persistProjectActiveTerminalSelection = (
+  state: TerminalWorkspaceState,
+  persistedSelectionRef: ProjectActiveTerminalPersistenceRef
+): void => {
+  const active = projectActiveTerminalSelection(activeTerminalSession(state))
+  if (active === null) {
+    return
+  }
+  const latestRequest = projectActiveTerminalPersistenceRequest(active)
+  persistedSelectionRef.current = {
+    ...persistedSelectionRef.current,
+    latestRequest
+  }
+  runProjectActiveTerminalPersistRequest(persistedSelectionRef)
+}
+
 export const useTerminalWorkspaceState = (): TerminalWorkspaceReadyState => {
   const [terminalWorkspace, setTerminalWorkspace] = useState<TerminalWorkspaceState>(readStoredTerminalWorkspace)
-  const persistedSelectionRef = useRef<string | null>(null)
+  const persistedSelectionRef = useRef(emptyProjectActiveTerminalPersistenceState())
   const addTerminalSession = useCallback((session: ActiveTerminalSession) => {
     setTerminalWorkspace((state) => addTerminalSessionState(state, session))
   }, [])
