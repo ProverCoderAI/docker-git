@@ -113,7 +113,7 @@ const makeProjectDetails = (projectDir: string): ProjectDetails => ({
   targetDir: "/home/dev/app"
 })
 
-const cleanupSessions = (): Effect.Effect<void, never, unknown> =>
+const cleanupSessions = (): Effect.Effect<void, never, NodeContext.NodeContext> =>
   Effect.gen(function*(_) {
     const sessions = yield* _(listProjectTerminalSessions(projectId).pipe(Effect.catchAll(() => Effect.succeed([]))))
     yield* _(Effect.forEach(
@@ -123,7 +123,7 @@ const cleanupSessions = (): Effect.Effect<void, never, unknown> =>
     ))
   })
 
-const runTestEffect = <A>(effect: Effect.Effect<A, unknown, unknown>): Promise<A> =>
+const runTestEffect = <A, E>(effect: Effect.Effect<A, E, NodeContext.NodeContext>): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.provide(NodeContext.layer)))
 
 const phaseFromEvent = (event: { readonly payload: unknown }): string | null => {
