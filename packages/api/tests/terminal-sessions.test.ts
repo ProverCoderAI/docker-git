@@ -16,8 +16,10 @@ import {
   getProjectTerminalSession,
   listProjectTerminalSessions,
   lookupTerminalSessionById,
+  readProjectTerminalSessions,
   readProjectTerminalImage,
   renderTmuxAttachCommand,
+  setProjectActiveTerminalSession,
   startTerminalSession
 } from "../src/services/terminal-sessions.js"
 
@@ -133,12 +135,20 @@ const phaseFromEvent = (event: { readonly payload: unknown }): string | null => 
 const terminalSessionsStatePath = (): string =>
   path.join(projectId, ".orch", "state", "terminal-sessions.json")
 
-const readPersistedSessionIds = (): ReadonlyArray<string> => {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+const readPersistedSessionState = (): Record<string, unknown> | null => {
   if (!existsSync(terminalSessionsStatePath())) {
-    return []
+    return null
   }
   const raw: unknown = JSON.parse(readFileSync(terminalSessionsStatePath(), "utf8"))
-  if (typeof raw !== "object" || raw === null) {
+  return isRecord(raw) ? raw : null
+}
+
+const readPersistedSessionIds = (): ReadonlyArray<string> => {
+  const raw = readPersistedSessionState()
+  if (raw === null) {
     return []
   }
   const sessions = Reflect.get(raw, "sessions")
@@ -150,6 +160,15 @@ const readPersistedSessionIds = (): ReadonlyArray<string> => {
       typeof session === "object" && session !== null ? Reflect.get(session, "id") : null
     )
     .filter((id): id is string => typeof id === "string")
+}
+
+const readPersistedActiveSessionId = (): string | null => {
+  const raw = readPersistedSessionState()
+  if (raw === null) {
+    return null
+  }
+  const value = Reflect.get(raw, "lastActiveSessionId")
+  return typeof value === "string" ? value : null
 }
 
 describe("terminal sessions service", () => {
@@ -225,8 +244,12 @@ describe("terminal sessions service", () => {
     })
 
     expect(command).toContain("command -v tmux")
+    expect(command).toContain("bash --noprofile --norc -lc")
     expect(command).toContain("tmux missing")
-    expect(command).toContain("tmux new-session -A -s")
+    expect(command).toContain("tmux new-session -d -s")
+    expect(command).toContain("tmux set-option")
+    expect(command).toContain("status off")
+    expect(command).toContain("tmux attach-session -t")
     expect(command).toContain("docker-git-session-1")
     expect(command).toContain("/home/dev/project with spaces")
   })
@@ -257,6 +280,42 @@ describe("terminal sessions service", () => {
     expect(first.session.id).not.toBe(second.session.id)
     expect(listed.map((session) => session.id)).toEqual([first.session.id, second.session.id])
     expect(readPersistedSessionIds()).toEqual([first.session.id, second.session.id])
+    expect(readPersistedActiveSessionId()).toBe(second.session.id)
+  })
+
+  it("persists and hydrates the active terminal session for a project", async () => {
+    probeProjectSshReadyMock.mockImplementation(() => Effect.succeed(true))
+    getProjectMock.mockImplementation(() => Effect.succeed(projectDetails))
+
+    const first = await runTestEffect(createTerminalSession(projectId))
+    const second = await runTestEffect(createTerminalSession(projectId))
+
+    await expect(runTestEffect(setProjectActiveTerminalSession(projectId, first.session.id))).resolves.toMatchObject({
+      id: first.session.id,
+      projectId
+    })
+    expect(readPersistedActiveSessionId()).toBe(first.session.id)
+
+    clearTerminalSessionRuntimeForTest()
+
+    await expect(runTestEffect(readProjectTerminalSessions(projectId))).resolves.toMatchObject({
+      activeSessionId: first.session.id,
+      sessions: [
+        expect.objectContaining({ id: first.session.id }),
+        expect.objectContaining({ id: second.session.id })
+      ]
+    })
+  })
+
+  it("rejects active terminal selection for a missing project session", async () => {
+    probeProjectSshReadyMock.mockImplementation(() => Effect.succeed(true))
+    getProjectMock.mockImplementation(() => Effect.succeed(projectDetails))
+
+    await runTestEffect(createTerminalSession(projectId))
+
+    await expect(runTestEffect(setProjectActiveTerminalSession(projectId, "missing-session"))).rejects.toThrow(
+      "Terminal session not found: missing-session"
+    )
   })
 
   it("resolves project aliases before checking terminal image session ownership", async () => {
@@ -355,6 +414,7 @@ describe("terminal sessions service", () => {
     await runTestEffect(deleteTerminalSession(projectId, result.session.id))
 
     expect(readPersistedSessionIds()).toEqual([])
+    expect(readPersistedActiveSessionId()).toBeNull()
     await expect(runTestEffect(getProjectTerminalSession(projectId, result.session.id))).rejects.toThrow(
       `Terminal session not found: ${result.session.id}`
     )

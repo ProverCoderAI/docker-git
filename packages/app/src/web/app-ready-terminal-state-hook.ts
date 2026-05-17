@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react"
 
 import { JsonValueSchema } from "../shared/json-schema.js"
 import type { JsonObject, JsonValue } from "../shared/json-schema.js"
+import { setProjectActiveTerminalSession } from "./api.js"
 import {
   activeTerminalSession,
   addTerminalSessionState,
@@ -287,6 +288,13 @@ const writeStoredTerminalWorkspace = (state: TerminalWorkspaceState): void => {
   Effect.runSync(write)
 }
 
+export const projectActiveTerminalSelection = (
+  active: ActiveTerminalSession | null
+): { readonly projectKey: string; readonly sessionId: string } | null =>
+  active?.browserProjectKey === undefined || active.pendingConnection !== undefined
+    ? null
+    : { projectKey: active.browserProjectKey, sessionId: active.session.id }
+
 export const useTerminalWorkspaceState = (): TerminalWorkspaceReadyState => {
   const [terminalWorkspace, setTerminalWorkspace] = useState<TerminalWorkspaceState>(readStoredTerminalWorkspace)
   const addTerminalSession = useCallback((session: ActiveTerminalSession) => {
@@ -304,6 +312,19 @@ export const useTerminalWorkspaceState = (): TerminalWorkspaceReadyState => {
 
   useEffect(() => {
     writeStoredTerminalWorkspace(terminalWorkspace)
+  }, [terminalWorkspace])
+
+  useEffect(() => {
+    const active = projectActiveTerminalSelection(activeTerminalSession(terminalWorkspace))
+    if (active === null) {
+      return
+    }
+    void Effect.runPromise(
+      setProjectActiveTerminalSession(active.projectKey, active.sessionId).pipe(
+        Effect.either,
+        Effect.asVoid
+      )
+    )
   }, [terminalWorkspace])
 
   return {

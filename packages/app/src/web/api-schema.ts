@@ -290,6 +290,7 @@ export const TerminalSessionResponseSchema = Schema.Struct({
 })
 
 export const ProjectTerminalSessionsResponseSchema = Schema.Struct({
+  activeSessionId: NullableString,
   sessions: Schema.Array(TerminalSessionSchema)
 })
 

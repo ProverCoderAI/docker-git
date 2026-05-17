@@ -17,11 +17,8 @@ export const readTerminalSessionRoute = (pathname: string): string | null => {
   return sessionId.length === 0 ? null : sessionId
 }
 
-export const resolveWebAppRoute = (pathname: string): WebAppRoute => {
-  const sessionId = readTerminalSessionRoute(pathname)
-  return sessionId === null
-    ? { tag: "Dashboard" }
-    : { tag: "TerminalSession", sessionId }
+export const resolveWebAppRoute = (_pathname: string): WebAppRoute => {
+  return { tag: "Dashboard" }
 }
 
 export const buildTerminalOnlyActiveSession = (

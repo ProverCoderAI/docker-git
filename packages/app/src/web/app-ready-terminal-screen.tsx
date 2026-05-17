@@ -10,7 +10,7 @@ import { TerminalPanel } from "./panel-terminal.js"
 import { type BrowserScreen, projectPickerScreen } from "./screen.js"
 import { shouldShowTerminalTabs } from "./terminal-mobile-layout.js"
 import { terminalSessionId } from "./terminal-state.js"
-import { type ActiveTerminalSession, isPendingActiveTerminalSession } from "./terminal.js"
+import { type ActiveTerminalSession, isPendingActiveTerminalSession, terminalTitleById } from "./terminal.js"
 
 type TerminalWorkspaceView = "terminal" | "tasks"
 
@@ -136,7 +136,15 @@ const pendingTerminalBodyStyle: CSSProperties = {
   whiteSpace: "pre-wrap"
 }
 
-const terminalTabLabel = (session: ActiveTerminalSession): string => session.browserProjectName ?? session.header
+const fallbackTerminalTabLabel = (session: ActiveTerminalSession): string => session.browserProjectName ?? session.header
+
+const terminalTabLabel = (
+  session: ActiveTerminalSession,
+  labels: ReadonlyMap<string, string>
+): string =>
+  session.browserProjectId === undefined
+    ? fallbackTerminalTabLabel(session)
+    : labels.get(terminalSessionId(session)) ?? fallbackTerminalTabLabel(session)
 
 const projectSkillerAction = (
   projectKey: string | undefined,
@@ -222,12 +230,14 @@ const TerminalTab = (
     active,
     compactMobile,
     onSelect,
-    session
+    session,
+    terminalLabels
   }: {
     readonly active: boolean
     readonly compactMobile: boolean
     readonly onSelect: () => void
     readonly session: ActiveTerminalSession
+    readonly terminalLabels: ReadonlyMap<string, string>
   }
 ): JSX.Element => (
   <Box
@@ -241,7 +251,7 @@ const TerminalTab = (
     width="auto"
   >
     <Text bold={active} fg={active ? "#e8fff0" : "#9fb2c7"} wrap="truncate">
-      {terminalTabLabel(session)}
+      {terminalTabLabel(session, terminalLabels)}
     </Text>
   </Box>
 )
@@ -258,6 +268,7 @@ const TerminalTabs = (
     readonly compactMobile: boolean
   }
 ): JSX.Element => {
+  const terminalLabels = terminalTitleById(terminalSessions.map((session) => session.session))
   if (compactMobile) {
     return (
       <div
@@ -282,6 +293,7 @@ const TerminalTabs = (
                 onSelectTerminal(sessionId)
               }}
               session={session}
+              terminalLabels={terminalLabels}
             />
           )
         })}
@@ -323,6 +335,7 @@ const TerminalTabs = (
               onSelectTerminal(sessionId)
             }}
             session={session}
+            terminalLabels={terminalLabels}
           />
         )
       })}

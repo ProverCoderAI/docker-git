@@ -205,7 +205,7 @@ describe("web project actions", () => {
         pendingDeleteMessage: "Terminal session was closed before attach: octocat/hello-world.",
         readyMessage: "SSH connected: octocat/hello-world.",
         session: acceptedSession,
-        sessionPath: `/ssh/session/${pendingSessionId}`,
+        sessionPath: `/ssh/octocat/hello-world?t=${pendingSessionId.slice(0, 8)}`,
         subtitle: "ssh -p 22 dev@172.18.0.7",
         websocketPath: `/projects/by-key/octocat%2Fhello-world/terminal-sessions/${pendingSessionId}/ws`
       })

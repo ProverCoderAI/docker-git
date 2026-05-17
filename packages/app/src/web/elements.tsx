@@ -77,12 +77,13 @@ const baseStyle = (props: GridElementProps): CSSProperties => ({
 
 const interactiveStyle = (
   onClick: MouseEventHandler<HTMLElement> | undefined,
+  backgroundColor: GridElementProps["backgroundColor"],
   width: GridElementProps["width"]
 ): CSSProperties =>
   onClick === undefined
     ? {}
     : {
-      background: "transparent",
+      backgroundColor: backgroundColor ?? "transparent",
       cursor: "pointer",
       font: "inherit",
       textAlign: "left",
@@ -108,10 +109,10 @@ export const Box = ({ children, onClick, ...props }: GridElementProps): JSX.Elem
       : ((event: Parameters<MouseEventHandler<HTMLElement>>[0]) => {
         onClick(event)
         event.currentTarget.blur()
-      }) satisfies MouseEventHandler<HTMLElement>,
+    }) satisfies MouseEventHandler<HTMLElement>,
     style: {
       ...baseStyle(props),
-      ...interactiveStyle(onClick, props.width)
+      ...interactiveStyle(onClick, props.backgroundColor, props.width)
     },
     type: onClick === undefined ? undefined : "button"
   })

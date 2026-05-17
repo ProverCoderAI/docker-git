@@ -105,6 +105,7 @@ type DurableTerminalSession = {
 
 type DurableTerminalSessionFile = {
   readonly schemaVersion: 1
+  readonly lastActiveSessionId?: string | undefined
   readonly sessions: ReadonlyArray<DurableTerminalSession>
 }
 
@@ -157,6 +158,7 @@ const DurableTerminalSessionSchema = Schema.Struct({
 
 const DurableTerminalSessionFileSchema = Schema.Struct({
   schemaVersion: Schema.Literal(1),
+  lastActiveSessionId: Schema.optional(Schema.String),
   sessions: Schema.Array(DurableTerminalSessionSchema)
 })
 
@@ -204,6 +206,13 @@ const emptyTerminalSessionFile = (): DurableTerminalSessionFile => ({
   schemaVersion: 1,
   sessions: []
 })
+
+const validActiveSessionId = (state: DurableTerminalSessionFile): string | null => {
+  const activeSessionId = state.lastActiveSessionId
+  return activeSessionId !== undefined && state.sessions.some((session) => session.id === activeSessionId)
+    ? activeSessionId
+    : null
+}
 
 const decodeTerminalSessionFile = (input: string): DurableTerminalSessionFile | null =>
   Either.match(ParseResult.decodeUnknownEither(DurableTerminalSessionFileJsonSchema)(input), {
@@ -310,12 +319,16 @@ const durableFromSession = (
 
 const upsertDurableSession = (
   projectId: string,
-  durable: DurableTerminalSession
+  durable: DurableTerminalSession,
+  options: {
+    readonly activate?: boolean
+  } = {}
 ): Effect.Effect<void, ApiInternalError, FileSystem.FileSystem> =>
   Effect.gen(function*(_) {
     const state = yield* _(readTerminalSessionFile(projectId))
     const sessions = state.sessions.filter((session) => session.id !== durable.id)
     yield* _(writeTerminalSessionFile(projectId, {
+      ...(options.activate === true ? { lastActiveSessionId: durable.id } : { lastActiveSessionId: validActiveSessionId(state) ?? undefined }),
       schemaVersion: 1,
       sessions: [...sessions, durable]
     }))
@@ -343,6 +356,7 @@ const patchDurableSession = (
         : session
     )
     yield* _(writeTerminalSessionFile(record.projectId, {
+      lastActiveSessionId: validActiveSessionId({ ...state, sessions }) ?? undefined,
       schemaVersion: 1,
       sessions
     }))
@@ -359,10 +373,31 @@ const deleteDurableSession = (
       return false
     }
     yield* _(writeTerminalSessionFile(projectId, {
+      lastActiveSessionId: state.lastActiveSessionId === sessionId
+        ? undefined
+        : validActiveSessionId({ ...state, sessions }) ?? undefined,
       schemaVersion: 1,
       sessions
     }))
     return true
+  })
+
+const setActiveDurableSession = (
+  projectId: string,
+  sessionId: string
+): Effect.Effect<DurableTerminalSession, ApiInternalError | ApiNotFoundError, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const state = yield* _(readTerminalSessionFile(projectId))
+    const durable = state.sessions.find((session) => session.id === sessionId)
+    if (durable === undefined) {
+      return yield* _(Effect.fail(new ApiNotFoundError({ message: `Terminal session not found: ${sessionId}` })))
+    }
+    yield* _(writeTerminalSessionFile(projectId, {
+      lastActiveSessionId: sessionId,
+      schemaVersion: 1,
+      sessions: state.sessions
+    }))
+    return durable
   })
 
 const findDurableSession = (
@@ -916,9 +951,13 @@ export const renderTmuxAttachCommand = (
     `if ! command -v tmux >/dev/null 2>&1; then printf '%s\\n' ${
       shellQuote(args.missingMessage ?? tmuxMissingMessage)
     } >&2; exit 127; fi`,
-    `exec tmux new-session -A -s ${shellQuote(args.tmuxName)} -c ${shellQuote(args.targetDir)}`
+    `tmux has-session -t ${shellQuote(args.tmuxName)} 2>/dev/null || tmux new-session -d -s ${
+      shellQuote(args.tmuxName)
+    } -c ${shellQuote(args.targetDir)}`,
+    `tmux set-option -t ${shellQuote(args.tmuxName)} status off >/dev/null 2>&1 || true`,
+    `exec tmux attach-session -t ${shellQuote(args.tmuxName)}`
   ].join("; ")
-  return `sh -lc ${shellQuote(script)}`
+  return `bash --noprofile --norc -lc ${shellQuote(script)}`
 }
 
 const renderRemoteTmuxCommand = (record: TerminalRecord): string =>
@@ -1000,7 +1039,8 @@ const registerRecord = (
         session,
         tmuxName,
         updatedAt: createdAt
-      })
+      }),
+      { activate: true }
     ))
     const record: TerminalRecord = {
       attachTimeout: null,
@@ -1090,7 +1130,7 @@ const hydrateTerminalRecordByProjectKey = (
   )
 
 const renderRemoteTmuxProbeCommand = (): string =>
-  `sh -lc ${shellQuote("command -v tmux >/dev/null 2>&1")}`
+  `bash --noprofile --norc -lc ${shellQuote("command -v tmux >/dev/null 2>&1")}`
 
 const probeProjectTmuxAvailable = (
   projectItem: ProjectItem
@@ -1288,6 +1328,47 @@ export const listProjectTerminalSessions = (
       }
       return terminalSessionFromDurable(durable, 0)
     })
+  })
+
+export const readProjectTerminalSessions = (
+  projectId: string
+): Effect.Effect<
+  { readonly activeSessionId: string | null; readonly sessions: ReadonlyArray<TerminalSession> },
+  ApiInternalError | ApiNotFoundError,
+  TerminalSessionStateRuntime
+> =>
+  Effect.gen(function*(_) {
+    const project = yield* _(getProject(projectId).pipe(Effect.mapError(toTerminalSessionProjectError)))
+    const resolvedProjectId = project.id
+    const state = yield* _(readTerminalSessionFile(resolvedProjectId))
+    const sessions = state.sessions.map((durable) => {
+      const record = records.get(durable.id)
+      if (record !== undefined && record.projectId === resolvedProjectId) {
+        syncAttachedClientCount(record)
+        return record.session
+      }
+      return terminalSessionFromDurable(durable, 0)
+    })
+    return {
+      activeSessionId: validActiveSessionId(state),
+      sessions
+    }
+  })
+
+export const setProjectActiveTerminalSession = (
+  projectId: string,
+  sessionId: string
+): Effect.Effect<TerminalSession, ApiInternalError | ApiNotFoundError, TerminalSessionStateRuntime> =>
+  Effect.gen(function*(_) {
+    const project = yield* _(getProject(projectId).pipe(Effect.mapError(toTerminalSessionProjectError)))
+    const resolvedProjectId = project.id
+    const durable = yield* _(setActiveDurableSession(resolvedProjectId, sessionId))
+    const record = records.get(sessionId)
+    if (record !== undefined && record.projectId === resolvedProjectId) {
+      syncAttachedClientCount(record)
+      return record.session
+    }
+    return terminalSessionFromDurable(durable, 0)
   })
 
 export const getProjectTerminalSession = (
