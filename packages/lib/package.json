@@ -77,7 +77,7 @@
     "fast-check": "^4.8.0",
     "@vitest/eslint-plugin": "^1.6.17",
     "globals": "^17.6.0",
-    "jscpd": "^4.2.2",
+    "jscpd": "^4.2.3",
     "typescript": "^6.0.3",
     "vite": "^8.0.13",
     "vitest": "^4.1.6"
