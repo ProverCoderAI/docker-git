@@ -15,6 +15,7 @@ export type DockerImageSpec = {
   readonly imageDir: string
   readonly dockerfile: string
   readonly buildLabel: string
+  readonly buildNetwork?: string
 }
 
 // CHANGE: ensure a docker image is available locally
@@ -66,9 +67,10 @@ export const ensureDockerImage = (
     yield* _(fs.makeDirectory(imagePath, { recursive: true }))
     yield* _(fs.writeFileString(dockerfilePath, spec.dockerfile))
     yield* _(Effect.log(`Building ${spec.buildLabel} image (${spec.imageName})...`))
+    const networkArgs = spec.buildNetwork === undefined ? [] : ["--network", spec.buildNetwork]
     yield* _(
       runCommandWithExitCodes(
-        { cwd, command: "docker", args: ["build", "-t", spec.imageName, imagePath] },
+        { cwd, command: "docker", args: ["build", ...networkArgs, "-t", spec.imageName, imagePath] },
         [0],
         (exitCode) => new CommandFailedError({ command: `docker build (${spec.buildLabel})`, exitCode })
       )

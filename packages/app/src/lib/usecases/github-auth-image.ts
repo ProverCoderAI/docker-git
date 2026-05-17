@@ -16,16 +16,16 @@ export const ghImageDir = ".docker-git/.orch/auth/gh/.image"
 export const renderGhDockerfile = (): string =>
   String.raw`FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl gnupg bsdutils \
+RUN apt-get -o Acquire::Retries=3 update \
+  && apt-get -o Acquire::Retries=3 install -y --no-install-recommends ca-certificates curl gnupg bsdutils \
   && mkdir -p /etc/apt/keyrings \
-  && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  && curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     | gpg --dearmor -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
   && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
     > /etc/apt/sources.list.d/github-cli.list \
-  && apt-get update \
-  && apt-get install -y --no-install-recommends gh git \
+  && apt-get -o Acquire::Retries=3 update \
+  && apt-get -o Acquire::Retries=3 install -y --no-install-recommends gh git \
   && rm -rf /var/lib/apt/lists/*
 ENTRYPOINT ["gh"]
 `
@@ -50,6 +50,7 @@ export const ensureGhAuthImage = (
     imageName: ghImageName,
     imageDir: ghImageDir,
     dockerfile: renderGhDockerfile(),
-    buildLabel
+    buildLabel,
+    buildNetwork: "host"
   })
 /* jscpd:ignore-end */

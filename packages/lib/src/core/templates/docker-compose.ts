@@ -72,7 +72,7 @@ const renderAgentAutoEnv = (agentAuto: boolean | undefined): string =>
 const renderResourceLimits = (resourceLimits: ResolvedComposeResourceLimits | undefined): string =>
   resourceLimits === undefined
     ? ""
-    : `    cpus: ${resourceLimits.cpuLimit}\n    mem_limit: "${resourceLimits.ramLimit}"\n    memswap_limit: "${resourceLimits.ramLimit}"\n`
+    : `    cpus: ${resourceLimits.cpuLimit}\n    mem_limit: "${resourceLimits.ramLimit}"\n    memswap_limit: "${resourceLimits.swapLimit}"\n`
 
 const renderGpu = (gpu: TemplateConfig["gpu"]): string =>
   gpu === "all"
@@ -120,7 +120,7 @@ const buildPlaywrightFragments = (
 
 const isResolvedComposeResourceLimits = (
   value: ResolvedComposeResourceLimits | ComposeResourceLimits
-): value is ResolvedComposeResourceLimits => "cpuLimit" in value && "ramLimit" in value
+): value is ResolvedComposeResourceLimits => "cpuLimit" in value && "ramLimit" in value && "swapLimit" in value
 
 const normalizeComposeResourceLimits = (
   resourceLimits: ResolvedComposeResourceLimits | ComposeResourceLimits | undefined

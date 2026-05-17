@@ -68,10 +68,17 @@ const parsePatch = (patchText) => {
   return files
 }
 
-const splitText = (text) => ({
-  finalNewline: text.endsWith("\n"),
-  lines: text.endsWith("\n") ? text.slice(0, -1).split("\n") : text.split("\n")
-})
+// CHANGE: normalize checkout-dependent CRLF before exact hunk matching
+// WHY: Windows submodule checkouts can contain CRLF while docker-git patch files are LF-based
+// SOURCE: n/a
+// INVARIANT: patch matching depends on line content, not host checkout end-of-line policy
+const splitText = (text) => {
+  const normalized = text.replace(/\r\n/gu, "\n")
+  return {
+    finalNewline: normalized.endsWith("\n"),
+    lines: normalized.endsWith("\n") ? normalized.slice(0, -1).split("\n") : normalized.split("\n")
+  }
+}
 
 const joinText = ({ finalNewline, lines }) =>
   `${lines.join("\n")}${finalNewline ? "\n" : ""}`

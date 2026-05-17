@@ -14,6 +14,7 @@ export type DockerAuthSpec = {
   readonly cwd: string
   readonly image: string
   readonly volume: DockerVolume
+  readonly network?: string
   readonly entrypoint?: string
   readonly user?: string
   readonly env?: string | ReadonlyArray<string>
@@ -197,6 +198,10 @@ const appendEnvArgs = (base: Array<string>, env: string | ReadonlyArray<string>)
 
 const buildDockerArgs = (spec: DockerAuthSpec): ReadonlyArray<string> => {
   const base: Array<string> = ["run", "--rm"]
+  const dockerNetwork = (spec.network ?? resolveDockerEnvValue("DOCKER_GIT_AUTH_DOCKER_NETWORK") ?? "host").trim()
+  if (dockerNetwork.length > 0) {
+    base.push("--network", dockerNetwork)
+  }
   const dockerUser = (spec.user ?? "").trim() || resolveDefaultDockerUser()
   if (dockerUser !== null) {
     base.push("--user", dockerUser)
