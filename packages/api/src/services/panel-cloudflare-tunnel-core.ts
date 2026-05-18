@@ -1,7 +1,3 @@
-import { existsSync, readFileSync } from "node:fs"
-
-import { parseLinuxDefaultGatewayIp } from "./project-port-proxy-core.js"
-
 export type PanelTunnelTarget =
   | {
     readonly ok: true
@@ -144,20 +140,4 @@ export const resolvePanelTunnelTargetUrl = (
     panelUrl: normalized.panelUrl,
     targetUrl: target.toString()
   }
-}
-
-const readDefaultGatewayIp = (): string | null => {
-  try {
-    return parseLinuxDefaultGatewayIp(readFileSync("/proc/net/route", "utf8"))
-  } catch {
-    return null
-  }
-}
-
-export const defaultPanelTunnelLocalhostHost = (): string => {
-  const configured = process.env["DOCKER_GIT_PANEL_TUNNEL_LOCALHOST_HOST"]?.trim()
-  if (configured !== undefined && configured.length > 0) {
-    return configured
-  }
-  return existsSync("/.dockerenv") ? readDefaultGatewayIp() ?? "172.17.0.1" : "127.0.0.1"
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import * as fc from "fast-check"
 import { afterEach, beforeEach, vi } from "vitest"
 
 import {
@@ -39,6 +40,24 @@ const runningTunnel: PanelCloudflareTunnelSession = {
 
 type ClipboardWriteText = typeof globalThis.navigator.clipboard.writeText
 
+const labelCharacters = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+const labelCharacter = (value: number): string => labelCharacters[value] ?? "a"
+
+const hostnameLabelArbitrary = fc.array(fc.integer({ min: 0, max: 35 }), {
+  maxLength: 24,
+  minLength: 1
+}).map((values) => values.map((value) => labelCharacter(value)).join(""))
+
+const tryCloudflareOriginArbitrary = hostnameLabelArbitrary.map((label) => `https://${label}.trycloudflare.com`)
+
+const stoppedAtArbitrary = fc.integer({ max: 86_399_999, min: 0 }).map((milliseconds) =>
+  new Date(Date.UTC(2026, 4, 18, 0, 0, 0, milliseconds)).toISOString()
+)
+
+const clipboardImplementation = (succeeds: boolean): ClipboardWriteText => () =>
+  succeeds ? Effect.runPromise(Effect.void) : Effect.runPromise(Effect.fail(new Error("denied")))
+
 const copyTunnelWithClipboard = (implementation: ClipboardWriteText) => {
   const writeText = vi.fn(implementation)
   vi.stubGlobal("navigator", { clipboard: { writeText } })
@@ -60,6 +79,43 @@ const expectCopyTunnelMessage = (
       expect(writeText).toHaveBeenCalledWith("https://shared-panel.trycloudflare.com")
       expect(setMessage).toHaveBeenLastCalledWith(expectedMessage)
     }))
+  })
+
+const expectTryCloudflareOriginBlocked = (origin: string): void => {
+  startPanelCloudflareTunnelMock.mockClear()
+  vi.stubGlobal("location", { origin })
+  const { context, setMessage } = makeBrowserActionContext()
+
+  startPanelShareTunnel(context)
+
+  expect(startPanelCloudflareTunnelMock).not.toHaveBeenCalled()
+  expect(setMessage).toHaveBeenLastCalledWith("Open docker-git locally before starting a new Cloudflare tunnel.")
+}
+
+const expectStoppedTunnelContext = (
+  stoppedTunnel: PanelCloudflareTunnelSession
+) =>
+  Effect.gen(function*(_) {
+    stopPanelCloudflareTunnelMock.mockReset()
+    stopPanelCloudflareTunnelMock.mockImplementation(() => Effect.succeed(stoppedTunnel))
+    const { context, setMessage } = makeBrowserActionContext()
+
+    stopPanelShareTunnel(context)
+
+    yield* _(waitForAssertion(() => {
+      expect(stopPanelCloudflareTunnelMock).toHaveBeenCalledTimes(1)
+    }))
+    expect(context.setPanelCloudflareTunnel).toHaveBeenLastCalledWith(stoppedTunnel)
+    expect(setMessage).toHaveBeenLastCalledWith("Cloudflare tunnel stopped.")
+  })
+
+const assertAsyncFastCheck = <Ts>(
+  property: fc.IAsyncProperty<Ts>,
+  params?: fc.Parameters<Ts>
+) =>
+  Effect.tryPromise({
+    catch: (error) => error,
+    try: () => fc.assert(property, params)
   })
 
 describe("web share actions", () => {
@@ -91,23 +147,21 @@ describe("web share actions", () => {
     }))
 
   it("does not start a tunnel from an existing trycloudflare origin", () => {
-    vi.stubGlobal("location", {
-      origin: "https://already-shared.trycloudflare.com"
-    })
-    const { context, setMessage } = makeBrowserActionContext()
-
-    startPanelShareTunnel(context)
-
-    expect(startPanelCloudflareTunnelMock).not.toHaveBeenCalled()
-    expect(setMessage).toHaveBeenLastCalledWith("Open docker-git locally before starting a new Cloudflare tunnel.")
+    expectTryCloudflareOriginBlocked("https://already-shared.trycloudflare.com")
   })
 
-  it.effect("refreshes and stops the panel tunnel", () =>
+  it("blocks generated trycloudflare origins before calling the API", () => {
+    fc.assert(
+      fc.property(tryCloudflareOriginArbitrary, (origin) => {
+        expectTryCloudflareOriginBlocked(origin)
+      }),
+      { numRuns: 25 }
+    )
+  })
+
+  it.effect("refreshes the panel tunnel", () =>
     Effect.gen(function*(_) {
       loadPanelCloudflareTunnelMock.mockImplementation(() => Effect.succeed(runningTunnel))
-      stopPanelCloudflareTunnelMock.mockImplementation(() =>
-        Effect.succeed({ ...runningTunnel, status: "stopped", stoppedAt: "2026-05-18T00:01:00.000Z" })
-      )
       const { context } = makeBrowserActionContext()
 
       refreshPanelCloudflareTunnel(context)
@@ -115,16 +169,6 @@ describe("web share actions", () => {
         expect(loadPanelCloudflareTunnelMock).toHaveBeenCalledTimes(1)
       }))
       expect(context.setPanelCloudflareTunnel).toHaveBeenLastCalledWith(runningTunnel)
-
-      stopPanelShareTunnel(context)
-      yield* _(waitForAssertion(() => {
-        expect(stopPanelCloudflareTunnelMock).toHaveBeenCalledTimes(1)
-      }))
-      expect(context.setPanelCloudflareTunnel).toHaveBeenLastCalledWith({
-        ...runningTunnel,
-        status: "stopped",
-        stoppedAt: "2026-05-18T00:01:00.000Z"
-      })
     }))
 
   it.effect("copies the public tunnel URL after clipboard success", () =>
@@ -137,5 +181,30 @@ describe("web share actions", () => {
     expectCopyTunnelMessage(
       () => Effect.runPromise(Effect.fail(new Error("denied"))),
       "Failed to copy tunnel URL."
+    ))
+
+  it.effect("reports generated clipboard copy outcomes", () =>
+    assertAsyncFastCheck(
+      fc.asyncProperty(fc.boolean(), (succeeds) =>
+        Effect.runPromise(
+          expectCopyTunnelMessage(
+            clipboardImplementation(succeeds),
+            succeeds ? "Tunnel URL copied." : "Failed to copy tunnel URL."
+          )
+        )),
+      { numRuns: 10 }
+    ))
+
+  it.effect("keeps generated stopped sessions in context", () =>
+    assertAsyncFastCheck(
+      fc.asyncProperty(stoppedAtArbitrary, (stoppedAt) =>
+        Effect.runPromise(
+          expectStoppedTunnelContext({
+            ...runningTunnel,
+            status: "stopped",
+            stoppedAt
+          })
+        )),
+      { numRuns: 15 }
     ))
 })

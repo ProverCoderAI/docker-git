@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process"
-import { mkdirSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 
@@ -8,10 +8,10 @@ import { Duration, Effect } from "effect"
 import type { PanelCloudflareTunnelSession, StartPanelCloudflareTunnelRequest } from "../api/contracts.js"
 import { ApiBadRequestError, ApiInternalError } from "../api/errors.js"
 import {
-  defaultPanelTunnelLocalhostHost,
   parseTryCloudflareUrl,
   resolvePanelTunnelTargetUrl
 } from "./panel-cloudflare-tunnel-core.js"
+import { parseLinuxDefaultGatewayIp } from "./project-port-proxy-core.js"
 
 type PanelCloudflareTunnelRecord = {
   readonly homeDir: string
@@ -19,6 +19,7 @@ type PanelCloudflareTunnelRecord = {
   process: ChildProcess | null
   session: PanelCloudflareTunnelSession
   stderrRemainder: string
+  stopping: boolean
   stdoutRemainder: string
 }
 
@@ -112,10 +113,28 @@ const consumeChunk = (
 const processEnv = (
   homeDir: string
 ): Readonly<Record<string, string | undefined>> => ({
-  ...process.env,
+  PATH: process.env["PATH"],
+  SSL_CERT_DIR: process.env["SSL_CERT_DIR"],
+  SSL_CERT_FILE: process.env["SSL_CERT_FILE"],
   HOME: homeDir,
   NO_COLOR: "1"
 })
+
+const readDefaultGatewayIp = (): string | null => {
+  try {
+    return parseLinuxDefaultGatewayIp(readFileSync("/proc/net/route", "utf8"))
+  } catch {
+    return null
+  }
+}
+
+const defaultPanelTunnelLocalhostHost = (): string => {
+  const configured = process.env["DOCKER_GIT_PANEL_TUNNEL_LOCALHOST_HOST"]?.trim()
+  if (configured !== undefined && configured.length > 0) {
+    return configured
+  }
+  return existsSync("/.dockerenv") ? readDefaultGatewayIp() ?? "172.17.0.1" : "127.0.0.1"
+}
 
 const createStartingRecord = (
   panelUrl: string
@@ -138,6 +157,7 @@ const createStartingRecord = (
       stoppedAt: null
     },
     stderrRemainder: "",
+    stopping: false,
     stdoutRemainder: ""
   }
 }
@@ -150,36 +170,87 @@ const removeTunnelHomeBestEffort = (record: PanelCloudflareTunnelRecord): void =
   }
 }
 
-const stopRecord = (
+const finishStoppedRecord = (
   record: PanelCloudflareTunnelRecord,
   error: string | null = null
 ): PanelCloudflareTunnelSession => {
-  const process = record.process
   record.process = null
+  record.stopping = false
   const session = updateRecord(record, {
     error,
     status: error === null ? "stopped" : "failed",
     stoppedAt: nowIso()
   })
-  if (process !== null && !process.killed) {
-    try {
-      process.kill("SIGTERM")
-    } catch {
-      // process already exited
+  removeTunnelHomeBestEffort(record)
+  return session
+}
+
+const waitForChildClose = (child: ChildProcess): Effect.Effect<void> => {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Effect.void
+  }
+
+  return Effect.async((resume) => {
+    let completed = false
+    let killTimer: ReturnType<typeof setTimeout> | null = null
+    const complete = (): void => {
+      if (completed) {
+        return
+      }
+      completed = true
+      child.off("close", complete)
+      child.off("error", complete)
+      child.off("exit", complete)
+      if (killTimer !== null) {
+        clearTimeout(killTimer)
+      }
+      resume(Effect.void)
     }
-    const killTimer = setTimeout(() => {
+
+    child.once("close", complete)
+    child.once("error", complete)
+    child.once("exit", complete)
+    if (!child.killed) {
       try {
-        if (process.exitCode === null && process.signalCode === null) {
-          process.kill("SIGKILL")
+        child.kill("SIGTERM")
+      } catch {
+        complete()
+        return
+      }
+    }
+    killTimer = setTimeout(() => {
+      try {
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill("SIGKILL")
         }
       } catch {
-        // process already exited
+        complete()
       }
     }, 2_000)
     killTimer.unref()
+  })
+}
+
+const stopRecord = (
+  record: PanelCloudflareTunnelRecord,
+  error: string | null = null
+): Effect.Effect<PanelCloudflareTunnelSession> => {
+  const child = record.process
+  record.process = null
+  record.stopping = true
+  return (child === null ? Effect.void : waitForChildClose(child)).pipe(
+    Effect.map(() => finishStoppedRecord(record, error))
+  )
+}
+
+const runStopRecord = (
+  record: PanelCloudflareTunnelRecord,
+  error: string
+): void => {
+  if (record.stopping || record.session.status === "stopped" || record.session.status === "failed") {
+    return
   }
-  removeTunnelHomeBestEffort(record)
-  return session
+  Effect.runFork(stopRecord(record, error))
 }
 
 const attachProcessHandlers = (
@@ -194,16 +265,16 @@ const attachProcessHandlers = (
     consumeChunk(record, "stderr", chunk)
   })
   child.on("error", (error) => {
-    stopRecord(record, `cloudflared failed to start: ${error.message}`)
+    runStopRecord(record, `cloudflared failed to start: ${error.message}`)
   })
   child.on("close", (exitCode, signal) => {
     flushRemainder(record, "stdout")
     flushRemainder(record, "stderr")
-    if (record.session.status === "stopped" || record.session.status === "failed") {
+    if (record.stopping || record.session.status === "stopped" || record.session.status === "failed") {
       return
     }
     const details = exitCode === null ? `signal ${signal ?? "unknown"}` : `exit code ${exitCode}`
-    stopRecord(record, `cloudflared exited before the tunnel was stopped (${details}).`)
+    runStopRecord(record, `cloudflared exited before the tunnel was stopped (${details}).`)
   })
 }
 
@@ -303,7 +374,7 @@ const waitForRecordId = (
 
     yield* _(preflightPanelTarget(resolved.targetUrl))
     if (currentRecord !== null) {
-      stopRecord(currentRecord)
+      yield* _(stopRecord(currentRecord))
     }
 
     const record = createStartingRecord(resolved.panelUrl)
@@ -324,4 +395,6 @@ export const startPanelCloudflareTunnel = (
   })
 
 export const stopPanelCloudflareTunnel = (): Effect.Effect<PanelCloudflareTunnelSession | null> =>
-  Effect.sync(() => currentRecord === null ? null : stopRecord(currentRecord)).pipe(tunnelRecordLock.withPermits(1))
+  Effect.gen(function*(_) {
+    return currentRecord === null ? null : yield* _(stopRecord(currentRecord))
+  }).pipe(tunnelRecordLock.withPermits(1))
