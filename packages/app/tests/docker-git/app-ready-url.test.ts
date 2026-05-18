@@ -1,7 +1,22 @@
+import * as fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
 import type { DashboardData } from "../../src/web/api.js"
 import { parseReadyUrlNavigation, readyUrlPath } from "../../src/web/app-ready-url.js"
+import type { BrowserMenuTag } from "../../src/web/menu.js"
+import type { BrowserScreen } from "../../src/web/screen.js"
+
+type ReadyUrlPathInput = Parameters<typeof readyUrlPath>[0]
+type ParsedReadyNavigation = NonNullable<ReturnType<typeof parseReadyUrlNavigation>>
+
+type ProjectSelection = Pick<ReadyUrlPathInput, "selectedProjectId" | "selectedProjectSummary"> & {
+  readonly expectedSelectedProjectId: string | null
+}
+
+type ReadyUrlRoundTripCase = {
+  readonly expected: ParsedReadyNavigation
+  readonly state: ReadyUrlPathInput
+}
 
 const dashboard: DashboardData = {
   apiBaseUrl: "/api",
@@ -29,6 +44,155 @@ const dashboard: DashboardData = {
 }
 
 const selectedProjectSummary = dashboard.projects[0]
+
+const menuScreen: BrowserScreen = { tag: "Menu" }
+const outputScreen: BrowserScreen = { tag: "Output" }
+const projectPickerScreen: BrowserScreen = { tag: "ProjectPicker" }
+
+const menuTags: ReadonlyArray<BrowserMenuTag> = [
+  "Create",
+  "Select",
+  "Auth",
+  "ProjectAuth",
+  "Prompts",
+  "Skills",
+  "Info",
+  "Share",
+  "Ports",
+  "Databases",
+  "Tasks",
+  "Browser",
+  "Status",
+  "Logs",
+  "Down",
+  "DownAll",
+  "Delete",
+  "Quit"
+]
+
+const projectMenuTags: ReadonlyArray<BrowserMenuTag> = [
+  "Browser",
+  "Databases",
+  "Delete",
+  "Down",
+  "Info",
+  "Logs",
+  "Ports",
+  "ProjectAuth",
+  "Prompts",
+  "Select",
+  "Skills",
+  "Status",
+  "Tasks"
+]
+
+const nonProjectMenuTags: ReadonlyArray<BrowserMenuTag> = ["Auth", "Create", "DownAll", "Quit", "Share"]
+
+const parsedScreenByMenu: Readonly<Record<BrowserMenuTag, BrowserScreen>> = {
+  Auth: { tag: "Auth" },
+  Browser: projectPickerScreen,
+  Create: { tag: "Create" },
+  Databases: projectPickerScreen,
+  Delete: projectPickerScreen,
+  Down: projectPickerScreen,
+  DownAll: menuScreen,
+  Info: projectPickerScreen,
+  Logs: projectPickerScreen,
+  Ports: projectPickerScreen,
+  ProjectAuth: { tag: "ProjectAuth" },
+  Prompts: projectPickerScreen,
+  Quit: menuScreen,
+  Select: projectPickerScreen,
+  Share: { tag: "Share" },
+  Skills: projectPickerScreen,
+  Status: projectPickerScreen,
+  Tasks: projectPickerScreen
+}
+
+const projectSelectionArbitrary: fc.Arbitrary<ProjectSelection> = fc.constantFrom(
+  {
+    expectedSelectedProjectId: null,
+    selectedProjectId: null,
+    selectedProjectSummary: undefined
+  },
+  {
+    expectedSelectedProjectId: "project-1",
+    selectedProjectId: "project-1",
+    selectedProjectSummary
+  }
+)
+
+const readyUrlMenuRoundTripArbitrary: fc.Arbitrary<ReadyUrlRoundTripCase> = fc.constantFrom(...menuTags)
+  .map((menu) => ({
+    expected: {
+      activeScreen: menuScreen,
+      menu,
+      projectNavigationArmed: false,
+      selectedProjectId: null
+    },
+    state: {
+      activeScreen: menuScreen,
+      activeTerminalSession: null,
+      currentMenu: menu,
+      selectedProjectId: null,
+      selectedProjectSummary: undefined
+    }
+  }))
+
+const readyUrlActionRoundTripArbitrary: fc.Arbitrary<ReadyUrlRoundTripCase> = fc.oneof(
+  fc.constantFrom(...nonProjectMenuTags).map((menu) => ({
+    expected: {
+      activeScreen: parsedScreenByMenu[menu],
+      menu,
+      projectNavigationArmed: false,
+      selectedProjectId: null
+    },
+    state: {
+      activeScreen: parsedScreenByMenu[menu],
+      activeTerminalSession: null,
+      currentMenu: menu,
+      selectedProjectId: null,
+      selectedProjectSummary: undefined
+    }
+  })),
+  fc.tuple(fc.constantFrom(...projectMenuTags), projectSelectionArbitrary).map(([menu, selection]) => ({
+    expected: {
+      activeScreen: menu === "Select" && selection.expectedSelectedProjectId === null
+        ? menuScreen
+        : parsedScreenByMenu[menu],
+      menu,
+      projectNavigationArmed: false,
+      selectedProjectId: selection.expectedSelectedProjectId
+    },
+    state: {
+      activeScreen: projectPickerScreen,
+      activeTerminalSession: null,
+      currentMenu: menu,
+      selectedProjectId: selection.selectedProjectId,
+      selectedProjectSummary: selection.selectedProjectSummary
+    }
+  })),
+  fc.tuple(fc.constantFrom<BrowserMenuTag>("Logs", "Status"), projectSelectionArbitrary).map(([menu, selection]) => ({
+    expected: {
+      activeScreen: outputScreen,
+      menu,
+      projectNavigationArmed: false,
+      selectedProjectId: selection.expectedSelectedProjectId
+    },
+    state: {
+      activeScreen: outputScreen,
+      activeTerminalSession: null,
+      currentMenu: menu,
+      selectedProjectId: selection.selectedProjectId,
+      selectedProjectSummary: selection.selectedProjectSummary
+    }
+  }))
+)
+
+const readyUrlRoundTripArbitrary: fc.Arbitrary<ReadyUrlRoundTripCase> = fc.oneof(
+  readyUrlMenuRoundTripArbitrary,
+  readyUrlActionRoundTripArbitrary
+)
 
 describe("app ready URL state", () => {
   it("renders menu tab highlights as copyable URLs", () => {
@@ -105,7 +269,7 @@ describe("app ready URL state", () => {
     })).toBe("/ssh/octocat/hello-world?t=session-1")
   })
 
-  it("renders SSH project selection as a readable Select project deep link", () => {
+  it("renders Select project deep link for non-terminal sessions", () => {
     expect(readyUrlPath({
       activeScreen: { tag: "ProjectPicker" },
       activeTerminalSession: null,
@@ -134,6 +298,22 @@ describe("app ready URL state", () => {
         projectNavigationArmed: false,
         selectedProjectId: "project-1"
       }
+    )
+  })
+
+  it("preserves ready URL round-trip invariants for valid navigation states", () => {
+    fc.assert(
+      fc.property(readyUrlRoundTripArbitrary, ({ expected, state }) => {
+        const path = readyUrlPath(state)
+
+        expect(path).not.toBeNull()
+        if (path === null) {
+          return
+        }
+
+        expect(parseReadyUrlNavigation(`https://docker-git.local${path}`, dashboard.projects)).toEqual(expected)
+      }),
+      { numRuns: 75 }
     )
   })
 
