@@ -105,14 +105,14 @@ describe("app ready URL state", () => {
     })).toBe("/ssh/octocat/hello-world?t=session-1")
   })
 
-  it("renders SSH project selection as a project terminal list deep link", () => {
+  it("renders SSH project selection as a readable Select project deep link", () => {
     expect(readyUrlPath({
       activeScreen: { tag: "ProjectPicker" },
       activeTerminalSession: null,
       currentMenu: "Select",
       selectedProjectId: "project-1",
       selectedProjectSummary
-    })).toBe("/ssh/octocat/hello-world")
+    })).toBe("/select/octocat/hello-world")
   })
 
   it("parses project tab URLs back into app navigation state", () => {
