@@ -88,7 +88,9 @@ const printOauthInstructions = (): Effect.Effect<void> =>
   })
 
 const grokAuthPermissionScript = [
-  "chown -R 1000:1000 \"$1\"",
+  "target_uid=\"${CHOWN_UID:-$(stat -c %u \"$1\" 2>/dev/null || id -u)}\"",
+  "target_gid=\"${CHOWN_GID:-$(stat -c %g \"$1\" 2>/dev/null || id -g)}\"",
+  "chown -R \"$target_uid:$target_gid\" \"$1\"",
   "find \"$1\" -type d -exec chmod 700 {} +",
   "find \"$1\" -type f -exec chmod 600 {} +"
 ].join(" && ")
@@ -128,7 +130,7 @@ const fixGrokAuthPermissions = (cwd: string, hostPath: string, containerPath: st
  * @effect CommandExecutor; invokes Docker and writes credentials under the selected account path.
  * @invariant successful completion leaves credentials scoped to accountPath and not to project source files.
  * @precondition Docker is available and options.image contains the official Grok CLI binary.
- * @postcondition accountPath permissions are normalized for the project SSH user or a typed error is returned.
+ * @postcondition accountPath ownership follows the mounted account root or a typed error is returned.
  * @complexity O(n) local argument construction plus unbounded external OAuth interaction time.
  * @throws Never - failures are modeled as AuthError, CommandFailedError, or PlatformError in the Effect type.
  */
