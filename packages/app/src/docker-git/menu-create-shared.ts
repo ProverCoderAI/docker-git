@@ -56,6 +56,18 @@ type AdvanceCreateFlowOptions = {
 export type CreateSettingsNavigationDirection = "up" | "down"
 
 /**
+ * Horizontal choice direction over finite Create settings with discrete values.
+ *
+ * @pure true
+ * @effect none
+ * @invariant value ∈ {"left", "right"}
+ * @precondition n/a
+ * @postcondition direction maps only to an input-buffer token, never to applied Create values
+ * @complexity O(1)
+ */
+export type CreateSettingsChoiceDirection = "left" | "right"
+
+/**
  * User-facing key guide shown only after Create leaves the repo URL step.
  *
  * @pure true
@@ -114,6 +126,81 @@ export const renderCreateStepLabel = (step: CreateStep, defaults: CreateInputs):
       "force",
       () => `Force recreate (overwrite files + wipe volumes)? [${defaults.force ? "y" : "N"}]`
     ),
+    Match.exhaustive
+  )
+
+const renderExplicitBooleanChoice = (value: boolean): string => value ? "Y" : "N"
+
+const parseExplicitBooleanChoice = (input: string): boolean | null => {
+  const normalized = input.trim().toLowerCase()
+  if (normalized === "y" || normalized === "yes") {
+    return true
+  }
+  if (normalized === "n" || normalized === "no") {
+    return false
+  }
+  return null
+}
+
+const parseExplicitGpuChoice = (
+  input: string
+): GpuMode | null => {
+  const normalized = input.trim().toLowerCase()
+  if (normalized === "y" || normalized === "yes") {
+    return "all"
+  }
+  if (normalized === "n" || normalized === "no") {
+    return "none"
+  }
+  if (isGpuMode(normalized)) {
+    return normalized
+  }
+  return null
+}
+
+/**
+ * Renders the active Create settings label with an unapplied input-buffer preview.
+ *
+ * @pure true
+ * @effect none
+ * @invariant invalid or empty preview buffers preserve the committed/default label
+ * @precondition defaults are resolved Create inputs
+ * @postcondition Create values are not mutated or applied by rendering
+ * @complexity O(1)
+ */
+export const renderCreateStepLabelWithBufferPreview = (
+  step: CreateStep,
+  defaults: CreateInputs,
+  buffer: string
+): string =>
+  Match.value(step).pipe(
+    Match.when("repoUrl", () => renderCreateStepLabel(step, defaults)),
+    Match.when("repoRef", () => renderCreateStepLabel(step, defaults)),
+    Match.when("outDir", () => renderCreateStepLabel(step, defaults)),
+    Match.when("cpuLimit", () => renderCreateStepLabel(step, defaults)),
+    Match.when("ramLimit", () => renderCreateStepLabel(step, defaults)),
+    Match.when("gpu", () => {
+      const gpu = parseExplicitGpuChoice(buffer)
+      return gpu === null ? renderCreateStepLabel(step, defaults) : `GPU access [${gpu}]`
+    }),
+    Match.when("runUp", () => {
+      const runUp = parseExplicitBooleanChoice(buffer)
+      return runUp === null
+        ? renderCreateStepLabel(step, defaults)
+        : `Run docker compose up now? [${renderExplicitBooleanChoice(runUp)}]`
+    }),
+    Match.when("mcpPlaywright", () => {
+      const enableMcpPlaywright = parseExplicitBooleanChoice(buffer)
+      return enableMcpPlaywright === null
+        ? renderCreateStepLabel(step, defaults)
+        : `Enable Playwright MCP (nested Chromium browser)? [${renderExplicitBooleanChoice(enableMcpPlaywright)}]`
+    }),
+    Match.when("force", () => {
+      const force = parseExplicitBooleanChoice(buffer)
+      return force === null
+        ? renderCreateStepLabel(step, defaults)
+        : `Force recreate (overwrite files + wipe volumes)? [${renderExplicitBooleanChoice(force)}]`
+    }),
     Match.exhaustive
   )
 
@@ -405,6 +492,20 @@ export const resolveCreateFlowSteps = (
     .filter((step) => !isCreateStepSatisfied(step, values))
 ]
 
+/**
+ * Resolves the stable Create display rows used by browser Settings mode.
+ *
+ * @pure true
+ * @effect none
+ * @invariant result = createSteps and is independent of applied values
+ * @precondition n/a
+ * @postcondition applied settings rows remain present in the result
+ * @complexity O(1)
+ */
+export const resolveCreateDisplaySteps = (
+  _values: Partial<CreateInputs> = {}
+): ReadonlyArray<CreateStep> => createSteps
+
 const applyCreateStep = (input: {
   readonly step: CreateStep
   readonly buffer: string
@@ -504,6 +605,54 @@ const nextCreateSettingsStep = (
     Match.exhaustive
   )
 
+const booleanChoiceBuffer = (direction: CreateSettingsChoiceDirection): string =>
+  Match.value(direction).pipe(
+    Match.when("left", () => "n"),
+    Match.when("right", () => "y"),
+    Match.exhaustive
+  )
+
+const gpuChoiceBuffer = (direction: CreateSettingsChoiceDirection): string =>
+  Match.value(direction).pipe(
+    Match.when("left", () => "none"),
+    Match.when("right", () => "all"),
+    Match.exhaustive
+  )
+
+/**
+ * Resolves a horizontal settings choice to the Create input buffer without applying it.
+ *
+ * @pure true
+ * @effect none
+ * @invariant result = null for free-text Create rows
+ * @invariant result != null -> view.values are unchanged by caller-visible semantics
+ * @precondition view is a CreateFlowView snapshot
+ * @postcondition result ∈ {"none", "all", "n", "y"} ∪ {null}
+ * @complexity O(1)
+ */
+export const resolveCreateSettingsChoiceBuffer = (
+  view: CreateFlowView,
+  direction: CreateSettingsChoiceDirection
+): string | null => {
+  const step = resolveCreateDisplaySteps()[view.step]
+  if (step === undefined) {
+    return null
+  }
+
+  return Match.value(step).pipe(
+    Match.when("repoUrl", () => null),
+    Match.when("repoRef", () => null),
+    Match.when("outDir", () => null),
+    Match.when("cpuLimit", () => null),
+    Match.when("ramLimit", () => null),
+    Match.when("gpu", () => gpuChoiceBuffer(direction)),
+    Match.when("runUp", () => booleanChoiceBuffer(direction)),
+    Match.when("mcpPlaywright", () => booleanChoiceBuffer(direction)),
+    Match.when("force", () => booleanChoiceBuffer(direction)),
+    Match.exhaustive
+  )
+}
+
 /**
  * Moves the selected Create settings row without applying the current buffer.
  *
@@ -536,6 +685,122 @@ export const moveCreateSettingsStep = (
     step,
     buffer: ""
   }
+}
+
+/**
+ * Moves the selected browser Create settings row over the full display list.
+ *
+ * @pure true
+ * @effect none
+ * @invariant applied rows do not affect navigation order
+ * @invariant view.step = 0 -> result = null
+ * @invariant result != null -> 1 <= result.step < |resolveCreateDisplaySteps()|
+ * @precondition view is a CreateFlowView snapshot
+ * @postcondition result values are identical to input values
+ * @complexity O(1)
+ */
+export const moveCreateDisplaySettingsStep = (
+  view: CreateFlowView,
+  direction: CreateSettingsNavigationDirection
+): CreateFlowView | null => {
+  const steps = resolveCreateDisplaySteps()
+  const lastStep = steps.length - 1
+  if (view.step < firstCreateSettingsStepIndex || lastStep < firstCreateSettingsStepIndex) {
+    return null
+  }
+
+  const currentStep = clampCreateSettingsStep(view.step, lastStep)
+  const step = nextCreateSettingsStep(currentStep, lastStep, direction)
+  if (step === view.step) {
+    return view
+  }
+  return {
+    ...view,
+    step,
+    buffer: ""
+  }
+}
+
+/**
+ * Applies one browser Create settings display row without advancing or submitting.
+ *
+ * @pure true
+ * @effect none
+ * @invariant result._tag = "Continue" -> result.view.step = view.step
+ * @invariant result._tag = "Continue" -> result.view.buffer = ""
+ * @precondition view.step points at a settings display row
+ * @postcondition successful result stores the parsed setting in result.view.values
+ * @complexity O(1)
+ */
+export const applyCreateDisplaySettingsStep = (
+  contextOrCwd: string | CreateFlowContext,
+  view: CreateFlowView
+): AdvanceCreateFlowResult | null => {
+  const step = resolveCreateDisplaySteps()[view.step]
+  if (view.step < firstCreateSettingsStepIndex || step === undefined) {
+    return null
+  }
+
+  const context = normalizeCreateFlowContext(contextOrCwd)
+  const buffer = view.buffer.trim()
+  const currentDefaults = resolveCreateInputs(context, view.values)
+  const nextValues: Partial<Mutable<CreateInputs>> = { ...view.values }
+  const updated = applyCreateStep({
+    step,
+    buffer,
+    currentDefaults,
+    nextValues,
+    context
+  })
+  if (Either.isLeft(updated)) {
+    return {
+      _tag: "Error",
+      error: updated.left
+    }
+  }
+
+  return continueCreateFlow(view.step, nextValues)
+}
+
+/**
+ * Completes browser Create settings by applying a non-empty active buffer first.
+ *
+ * @pure true
+ * @effect none
+ * @invariant non-empty invalid buffer -> result._tag = "Error"
+ * @invariant successful result._tag = "Complete"
+ * @precondition view.step points at a settings display row
+ * @postcondition submitted inputs include all committed values and defaults
+ * @complexity O(1)
+ */
+export const completeCreateDisplaySettingsFlow = (
+  contextOrCwd: string | CreateFlowContext,
+  view: CreateFlowView
+): AdvanceCreateFlowResult | null => {
+  const step = resolveCreateDisplaySteps()[view.step]
+  if (view.step < firstCreateSettingsStepIndex || step === undefined) {
+    return null
+  }
+
+  const context = normalizeCreateFlowContext(contextOrCwd)
+  if (view.buffer.trim().length === 0) {
+    return {
+      _tag: "Complete",
+      inputs: resolveCreateInputs(context, view.values)
+    }
+  }
+
+  const applied = applyCreateDisplaySettingsStep(context, view)
+  if (applied === null || applied._tag === "Error") {
+    return applied
+  }
+  if (applied._tag === "Continue") {
+    return {
+      _tag: "Complete",
+      inputs: resolveCreateInputs(context, applied.view.values)
+    }
+  }
+  return applied
 }
 
 const resolveNextCreateFlowStep = (

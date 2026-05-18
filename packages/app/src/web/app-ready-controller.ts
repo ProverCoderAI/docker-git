@@ -198,7 +198,7 @@ const bindCreateActions = (
   onCreateCancel: () => {
     cancelCreate(actionContext, state.setCreateView)
   },
-  onCreateSubmit: (quickCreate = false) => {
+  onCreateSubmit: (quickCreate?: boolean) => {
     submitCreateView({
       context: actionContext,
       controllerCwd: dashboard.health.cwd,

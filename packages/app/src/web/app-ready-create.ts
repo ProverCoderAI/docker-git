@@ -4,10 +4,13 @@ import { formatParseError } from "../docker-git/cli/usage.js"
 import { nextBufferValue } from "../docker-git/menu-buffer-input.js"
 import {
   advanceCreateFlow,
+  applyCreateDisplaySettingsStep,
+  completeCreateDisplaySettingsFlow,
   type CreateFlowView,
   createInitialFlowView,
   handleAdvanceCreateFlowResult,
-  moveCreateSettingsStep
+  moveCreateDisplaySettingsStep,
+  resolveCreateSettingsChoiceBuffer
 } from "../docker-git/menu-create-shared.js"
 import { submitCreateInputs } from "./actions-projects.js"
 import { requireGithubAuthConfigured } from "./actions-shared.js"
@@ -26,7 +29,7 @@ type CreateKeyArgs = {
 }
 
 type CreateSubmitArgs = CreateKeyArgs & {
-  readonly quickCreate?: boolean
+  readonly quickCreate?: boolean | undefined
 }
 
 type CreateKeyboardEvent = {
@@ -57,6 +60,21 @@ export const setCreateBuffer = (
   setCreateView({ ...createView, buffer })
 }
 
+const resolveCreateSubmitResult = (
+  createContext: { readonly cwd: string; readonly projectsRoot: string },
+  createView: CreateFlowView,
+  quickCreate: boolean | undefined
+): ReturnType<typeof advanceCreateFlow> => {
+  if (createView.step > 0) {
+    return quickCreate === undefined
+      ? applyCreateDisplaySettingsStep(createContext, createView)
+      : completeCreateDisplaySettingsFlow(createContext, createView)
+  }
+  return quickCreate === undefined
+    ? advanceCreateFlow(createContext, createView)
+    : advanceCreateFlow(createContext, createView, { quickCreate })
+}
+
 export const submitCreateView = (
   {
     context,
@@ -72,9 +90,7 @@ export const submitCreateView = (
   }
 
   const createContext = { cwd: controllerCwd, projectsRoot }
-  const next = quickCreate === undefined
-    ? advanceCreateFlow(createContext, createView)
-    : advanceCreateFlow(createContext, createView, { quickCreate })
+  const next = resolveCreateSubmitResult(createContext, createView, quickCreate)
   handleAdvanceCreateFlowResult(next, {
     onError: (error) => {
       context.setMessage(formatParseError(error))
@@ -111,12 +127,25 @@ export const handleCreateKey = (
     return true
   }
   if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-    const nextView = moveCreateSettingsStep(createView, event.key === "ArrowUp" ? "up" : "down")
+    const nextView = moveCreateDisplaySettingsStep(createView, event.key === "ArrowUp" ? "up" : "down")
     if (nextView === null) {
       return false
     }
     event.preventDefault()
     setCreateView(nextView)
+    context.setMessage(null)
+    return true
+  }
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+    const nextBuffer = resolveCreateSettingsChoiceBuffer(
+      createView,
+      event.key === "ArrowLeft" ? "left" : "right"
+    )
+    if (nextBuffer === null) {
+      return false
+    }
+    event.preventDefault()
+    setCreateBuffer(createView, setCreateView, nextBuffer)
     context.setMessage(null)
     return true
   }
@@ -127,7 +156,7 @@ export const handleCreateKey = (
       controllerCwd,
       projectsRoot,
       createView,
-      quickCreate: event.shiftKey,
+      quickCreate: createView.step > 0 ? undefined : event.shiftKey,
       setCreateView
     })
     return true
