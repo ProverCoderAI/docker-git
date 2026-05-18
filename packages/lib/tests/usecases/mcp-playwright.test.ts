@@ -164,6 +164,7 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(browserRuntime).toContain('mktemp "\\${TMPDIR:-/tmp}/docker-git-browser-build.XXXXXX.log"')
         expect(browserRuntime).toContain('DOCKER_GIT_BROWSER_BUILD_TIMEOUT_SECONDS:-600')
         expect(browserRuntime).toContain('timeout "$build_timeout" docker build')
+        expect(browserRuntime).toContain('cat "$build_log" >&2 || true')
         expect(browserRuntime).toContain('--filter "label=docker-git.browser=1" --filter "label=docker-git.project-container"')
         expect(browserRuntime).toContain('docker inspect --format \'{{ .State.Running }}\' "$project_container"')
         expect(browserRuntime).toContain('if ! docker volume create "$volume_name" >/dev/null 2>&1; then')

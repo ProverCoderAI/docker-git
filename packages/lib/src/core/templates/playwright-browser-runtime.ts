@@ -109,7 +109,9 @@ docker_git_start_playwright_browser() {
 
   docker_git_browser_log "building $image_name"
   timeout "$build_timeout" docker build -t "$image_name" -f "$context_dir/Dockerfile.browser" "$context_dir" >"$build_log" 2>&1 || {
-    docker_git_browser_log "browser image build failed or timed out after \${build_timeout}s; see $build_log"
+    docker_git_browser_log "browser image build failed or timed out after \${build_timeout}s; output follows"
+    cat "$build_log" >&2 || true
+    docker_git_browser_log "browser image build log path before cleanup: $build_log"
     return 0
   }
   rm -f -- "$build_log"
