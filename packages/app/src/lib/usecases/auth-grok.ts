@@ -2,7 +2,7 @@ import type { PlatformError } from "@effect/platform/Error"
 import { Effect } from "effect"
 
 import type { AuthGrokLoginCommand } from "../core/domain.js"
-import type { AuthError, CommandFailedError } from "../shell/errors.js"
+import { AuthError, type CommandFailedError } from "../shell/errors.js"
 import {
   grokApiKeyPath,
   grokContainerHomeDir,
@@ -30,11 +30,14 @@ import { autoSyncState } from "./state-repo.js"
 export const authGrokLogin = (
   command: AuthGrokLoginCommand,
   apiKey: string
-): Effect.Effect<void, PlatformError | CommandFailedError, GrokRuntime> => {
+): Effect.Effect<void, AuthError | PlatformError | CommandFailedError, GrokRuntime> => {
+  const trimmedApiKey = apiKey.trim()
+  if (trimmedApiKey.length === 0) {
+    return Effect.fail(new AuthError({ message: "Grok API key must not be empty" }))
+  }
   const accountLabel = normalizeAccountLabel(command.label, "default")
   return withGrokAuth(command, ({ accountPath, fs }) =>
     Effect.gen(function*(_) {
-      const trimmedApiKey = apiKey.trim()
       const apiKeyFilePath = grokApiKeyPath(accountPath)
       yield* _(fs.writeFileString(apiKeyFilePath, `${trimmedApiKey}\n`))
       yield* _(fs.chmod(apiKeyFilePath, 0o600))

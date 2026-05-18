@@ -219,9 +219,11 @@ describe("renderDockerfile", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
     expectContainsAll(dockerfile, [
-      "npm install -g grok-dev@latest --force",
+      "npm install -g grok-dev@",
       "grok --version"
     ])
+    expect(dockerfile).not.toContain("grok-dev@latest")
+    expect(dockerfile).not.toContain("npm install -g grok-dev@latest --force")
     expect(dockerfile).not.toContain("grok --version >/dev/null || true")
   })
 })

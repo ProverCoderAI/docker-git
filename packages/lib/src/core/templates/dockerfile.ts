@@ -119,7 +119,7 @@ RUN npm install -g @anthropic-ai/claude-code@latest
 RUN claude --version
 RUN npm install -g @google/gemini-cli@latest --force
 RUN gemini --version
-RUN npm install -g grok-dev@latest --force
+RUN npm install -g grok-dev@1.1.7
 RUN grok --version`
 
 // CHANGE: install RTK as a real command-output optimizer in generated containers.

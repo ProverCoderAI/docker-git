@@ -3,6 +3,7 @@ import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import * as fc from "fast-check"
 
 import { authGrokLogin } from "../../src/usecases/auth-grok.js"
 import { hasGrokCredentials } from "../../src/usecases/auth-grok-helpers.js"
@@ -51,6 +52,24 @@ const withPatchedEnv = <A, E, R>(
         }
       })
   )
+
+const detectUserSettingsPayload = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  accountPath: string,
+  payload: object
+) =>
+  Effect.gen(function*(_) {
+    const credentialsDir = path.join(accountPath, ".grok")
+    yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
+    yield* _(
+      fs.writeFileString(
+        path.join(credentialsDir, "user-settings.json"),
+        `${JSON.stringify(payload)}\n`
+      )
+    )
+    return yield* _(hasGrokCredentials(fs, accountPath))
+  })
 
 describe("authGrokLogin", () => {
   it.effect("stores API key and writes Grok settings with Playwright MCP and no sandbox", () =>
@@ -104,6 +123,48 @@ describe("authGrokLogin", () => {
       )
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("rejects empty API keys", () =>
+    withTempDir((root) =>
+      withPatchedEnv(
+        {
+          HOME: root,
+          DOCKER_GIT_STATE_AUTO_SYNC: "0"
+        },
+        Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const grokAuthPath = path.join(root, ".docker-git/.orch/auth/grok")
+
+          const errors = yield* _(
+            Effect.forEach(
+              ["", "   "],
+              (apiKey) =>
+                authGrokLogin(
+                  {
+                    _tag: "AuthGrokLogin",
+                    label: "empty-key",
+                    grokAuthPath,
+                    isWeb: false
+                  },
+                  apiKey
+                ).pipe(
+                  Effect.provideService(FileSystem.FileSystem, fs),
+                  Effect.provideService(Path.Path, path),
+                  Effect.flip
+                )
+            )
+          )
+
+          for (const error of errors) {
+            expect(error._tag).toBe("AuthError")
+            if (error._tag === "AuthError") {
+              expect(error.message).toBe("Grok API key must not be empty")
+            }
+          }
+        })
+      )
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("detects user-settings.json as Grok credentials", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
@@ -138,6 +199,88 @@ describe("authGrokLogin", () => {
 
         const detected = yield* _(hasGrokCredentials(fs, accountPath))
         expect(detected).toBe(false)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("detects generated user settings with apiKey as Grok credentials", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const accountPath = path.join(root, "default")
+
+        yield* _(
+          Effect.tryPromise({
+            catch: (error) => error,
+            try: () =>
+              fc.assert(
+                fc.asyncProperty(
+                  fc.tuple(
+                    fc.string({ minLength: 1 }),
+                    fc.boolean(),
+                    fc.constantFrom("off", "on")
+                  ),
+                  ([apiKey, confirmBeforeToolUse, sandboxMode]) =>
+                    Effect.runPromise(
+                      detectUserSettingsPayload(fs, path, accountPath, {
+                        apiKey,
+                        confirmBeforeToolUse,
+                        sandboxMode
+                      }).pipe(
+                        Effect.map((detected) => {
+                          expect(detected).toBe(true)
+                        })
+                      )
+                    )
+                ),
+                { numRuns: 25 }
+              )
+          })
+        )
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("rejects generated bootstrap-like user settings without apiKey", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const accountPath = path.join(root, "default")
+
+        yield* _(
+          Effect.tryPromise({
+            catch: (error) => error,
+            try: () =>
+              fc.assert(
+                fc.asyncProperty(
+                  fc.tuple(
+                    fc.boolean(),
+                    fc.boolean(),
+                    fc.constantFrom("off", "on"),
+                    fc.constantFrom(
+                      {},
+                      { token: "" },
+                      { accessToken: "" },
+                      { refreshToken: "" }
+                    )
+                  ),
+                  ([includeConfirmBeforeToolUse, includeOauth, sandboxMode, oauth]) =>
+                    Effect.runPromise(
+                      detectUserSettingsPayload(fs, path, accountPath, {
+                        sandboxMode,
+                        ...(includeConfirmBeforeToolUse ? { confirmBeforeToolUse: false } : {}),
+                        ...(includeOauth ? { oauth } : {})
+                      }).pipe(
+                        Effect.map((detected) => {
+                          expect(detected).toBe(false)
+                        })
+                      )
+                    )
+                ),
+                { numRuns: 25 }
+              )
+          })
+        )
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

@@ -8,7 +8,7 @@ import { Effect, pipe } from "effect"
 import type { AuthGrokLoginCommand, AuthGrokLogoutCommand, AuthGrokStatusCommand } from "../core/domain.js"
 import { defaultTemplateConfig } from "../core/domain.js"
 import { runCommandExitCode } from "../shell/command-runner.js"
-import type { CommandFailedError } from "../shell/errors.js"
+import { CommandFailedError } from "../shell/errors.js"
 import { isRegularFile, normalizeAccountLabel } from "./auth-helpers.js"
 import { migrateLegacyOrchLayout } from "./auth-sync.js"
 import { ensureDockerImage } from "./docker-image.js"
@@ -22,6 +22,7 @@ export const grokImageName = "docker-git-auth-grok:latest"
 export const grokImageDir = ".docker-git/.orch/auth/grok/.image"
 export const grokContainerHomeDir = "/grok-home"
 export const grokCredentialsDir = ".grok"
+export const grokDevPackageSpec = "grok-dev@1.1.7"
 
 export type GrokAccountContext = {
   readonly accountLabel: string
@@ -60,7 +61,7 @@ RUN apt-get update \
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
   && apt-get install -y --no-install-recommends nodejs \
   && rm -rf /var/lib/apt/lists/*
-RUN npm install -g grok-dev@latest --force
+RUN npm install -g ${grokDevPackageSpec}
 RUN grok --version
 `
 
@@ -177,7 +178,7 @@ const grokUserSettingsCredentialMarkers: ReadonlyArray<RegExp> = [
   /"accessToken"\s*:\s*"[^"]+"/u,
   /"refreshToken"\s*:\s*"[^"]+"/u,
   /"authToken"\s*:\s*"[^"]+"/u,
-  /"oauth"\s*:/u
+  /"oauth"\s*:\s*\{[^}]*"(?:apiKey|accessToken|access_token|authToken|refreshToken|refresh_token|token)"\s*:\s*"[^"]+"/su
 ]
 
 const hasGrokUserSettingsCredentials = (content: string): boolean =>
@@ -209,7 +210,11 @@ export const prepareGrokCredentialsDir = (
         command: "docker",
         args: ["run", "--rm", "-v", `${accountPath}:/target`, "alpine", "rm", "-rf", "/target/.grok"]
       }),
-      Effect.asVoid
+      Effect.flatMap((exitCode) =>
+        exitCode === 0
+          ? Effect.void
+          : Effect.fail(new CommandFailedError({ command: "docker", exitCode }))
+      )
     )
 
     yield* _(

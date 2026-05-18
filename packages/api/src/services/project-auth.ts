@@ -241,7 +241,7 @@ const grokUserSettingsCredentialMarkers: ReadonlyArray<RegExp> = [
   /"accessToken"\s*:\s*"[^"]+"/u,
   /"refreshToken"\s*:\s*"[^"]+"/u,
   /"authToken"\s*:\s*"[^"]+"/u,
-  /"oauth"\s*:/u
+  /"oauth"\s*:\s*\{[^}]*"(?:apiKey|accessToken|access_token|authToken|refreshToken|refresh_token|token)"\s*:\s*"[^"]+"/su
 ]
 
 const hasGrokUserSettingsCredentials = (
