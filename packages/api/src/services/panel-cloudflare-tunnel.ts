@@ -348,6 +348,7 @@ const isReusableRecord = (
   record: PanelCloudflareTunnelRecord,
   panelUrl: string
 ): boolean =>
+  !record.stopping &&
   record.session.panelUrl === panelUrl &&
   Match.value(record.session.status).pipe(
     Match.when("failed", () => false),
@@ -450,7 +451,7 @@ export const stopPanelCloudflareTunnel = (): Effect.Effect<PanelCloudflareTunnel
     if (currentRecord === null) {
       return null
     }
-    if (isTerminalTunnelSession(currentRecord.session)) {
+    if (currentRecord.stopping || isTerminalTunnelSession(currentRecord.session)) {
       return currentRecord.session
     }
     return yield* _(stopRecord(currentRecord))
