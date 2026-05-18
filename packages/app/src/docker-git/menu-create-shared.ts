@@ -132,7 +132,7 @@ export const renderCreateStepLabel = (step: CreateStep, defaults: CreateInputs):
 
 const renderExplicitBooleanChoice = (value: boolean): string => value ? "Y" : "N"
 
-const parseExplicitBooleanChoice = (input: string): boolean | null => {
+const parseBooleanChoice = (input: string): boolean | null => {
   const normalized = input.trim().toLowerCase()
   if (normalized === "y" || normalized === "yes") {
     return true
@@ -142,6 +142,8 @@ const parseExplicitBooleanChoice = (input: string): boolean | null => {
   }
   return null
 }
+
+const parseExplicitBooleanChoice = parseBooleanChoice
 
 const parseExplicitGpuChoice = (
   input: string
@@ -267,16 +269,7 @@ const parseGpuInput = (
   return Either.left(createParseError("gpu must be one of: none, all, yes, no"))
 }
 
-const parseYesDefault = (input: string, fallback: boolean): boolean => {
-  const normalized = input.trim().toLowerCase()
-  if (normalized === "y" || normalized === "yes") {
-    return true
-  }
-  if (normalized === "n" || normalized === "no") {
-    return false
-  }
-  return fallback
-}
+const parseYesDefault = (input: string, fallback: boolean): boolean => parseBooleanChoice(input) ?? fallback
 
 const createParseError = (reason: string): ParseError => ({
   _tag: "InvalidOption",
@@ -565,6 +558,24 @@ const applyCreateStep = (input: {
     Match.exhaustive
   )
 
+const applyCreateBufferToValues = (
+  context: CreateFlowContext,
+  view: CreateFlowView,
+  step: CreateStep
+): Either.Either<Partial<Mutable<CreateInputs>>, ParseError> => {
+  const buffer = view.buffer.trim()
+  const currentDefaults = resolveCreateInputs(context, view.values)
+  const nextValues: Partial<Mutable<CreateInputs>> = { ...view.values }
+  const updated = applyCreateStep({
+    step,
+    buffer,
+    currentDefaults,
+    nextValues,
+    context
+  })
+  return Either.isLeft(updated) ? Either.left(updated.left) : Either.right(nextValues)
+}
+
 export const createInitialFlowView = (buffer = ""): CreateFlowView => ({
   step: 0,
   buffer,
@@ -607,6 +618,27 @@ const nextCreateSettingsStep = (
     Match.when("down", () => step === lastStep ? firstCreateSettingsStepIndex : step + 1),
     Match.exhaustive
   )
+
+const moveCreateSettingsWithin = (
+  view: CreateFlowView,
+  lastStep: number,
+  direction: CreateSettingsNavigationDirection
+): CreateFlowView | null => {
+  if (view.step < firstCreateSettingsStepIndex || lastStep < firstCreateSettingsStepIndex) {
+    return null
+  }
+
+  const currentStep = clampCreateSettingsStep(view.step, lastStep)
+  const step = nextCreateSettingsStep(currentStep, lastStep, direction)
+  return step === view.step
+    ? view
+    : {
+      ...view,
+      step,
+      buffer: "",
+      inputError: null
+    }
+}
 
 const booleanChoiceBuffer = (direction: CreateSettingsChoiceDirection): string =>
   Match.value(direction).pipe(
@@ -671,25 +703,7 @@ export const resolveCreateSettingsChoiceBuffer = (
 export const moveCreateSettingsStep = (
   view: CreateFlowView,
   direction: CreateSettingsNavigationDirection
-): CreateFlowView | null => {
-  const steps = resolveCreateFlowSteps(view.values)
-  const lastStep = steps.length - 1
-  if (view.step < firstCreateSettingsStepIndex || lastStep < firstCreateSettingsStepIndex) {
-    return null
-  }
-
-  const currentStep = clampCreateSettingsStep(view.step, lastStep)
-  const step = nextCreateSettingsStep(currentStep, lastStep, direction)
-  if (step === view.step) {
-    return view
-  }
-  return {
-    ...view,
-    step,
-    buffer: "",
-    inputError: null
-  }
-}
+): CreateFlowView | null => moveCreateSettingsWithin(view, resolveCreateFlowSteps(view.values).length - 1, direction)
 
 /**
  * Moves the selected browser Create settings row over the full display list.
@@ -706,24 +720,57 @@ export const moveCreateSettingsStep = (
 export const moveCreateDisplaySettingsStep = (
   view: CreateFlowView,
   direction: CreateSettingsNavigationDirection
-): CreateFlowView | null => {
-  const steps = resolveCreateDisplaySteps()
-  const lastStep = steps.length - 1
-  if (view.step < firstCreateSettingsStepIndex || lastStep < firstCreateSettingsStepIndex) {
-    return null
-  }
+): CreateFlowView | null => moveCreateSettingsWithin(view, resolveCreateDisplaySteps().length - 1, direction)
 
-  const currentStep = clampCreateSettingsStep(view.step, lastStep)
-  const step = nextCreateSettingsStep(currentStep, lastStep, direction)
-  if (step === view.step) {
-    return view
-  }
-  return {
-    ...view,
-    step,
-    buffer: "",
-    inputError: null
-  }
+const resolveActiveCreateDisplayStep = (view: CreateFlowView): CreateStep | null => {
+  const step = resolveCreateDisplaySteps()[view.step]
+  return view.step < firstCreateSettingsStepIndex || step === undefined ? null : step
+}
+
+type ActiveCreateDisplayContext = {
+  readonly context: CreateFlowContext
+  readonly step: CreateStep
+}
+
+const resolveActiveCreateDisplayContext = (
+  contextOrCwd: string | CreateFlowContext,
+  view: CreateFlowView
+): ActiveCreateDisplayContext | null => {
+  const step = resolveActiveCreateDisplayStep(view)
+  return step === null
+    ? null
+    : {
+      context: normalizeCreateFlowContext(contextOrCwd),
+      step
+    }
+}
+
+const completeCreateFlow = (
+  context: CreateFlowContext,
+  values: Partial<CreateInputs>
+): AdvanceCreateFlowResult => ({
+  _tag: "Complete",
+  inputs: resolveCreateInputs(context, values)
+})
+
+const foldAppliedCreateValues = (
+  appliedValues: Either.Either<Partial<Mutable<CreateInputs>>, ParseError>,
+  onSuccess: (nextValues: Partial<Mutable<CreateInputs>>) => AdvanceCreateFlowResult
+): AdvanceCreateFlowResult =>
+  Either.isLeft(appliedValues)
+    ? {
+      _tag: "Error",
+      error: appliedValues.left
+    }
+    : onSuccess(appliedValues.right)
+
+const withActiveCreateDisplayContext = (
+  contextOrCwd: string | CreateFlowContext,
+  view: CreateFlowView,
+  onActive: (active: ActiveCreateDisplayContext) => AdvanceCreateFlowResult | null
+): AdvanceCreateFlowResult | null => {
+  const active = resolveActiveCreateDisplayContext(contextOrCwd, view)
+  return active === null ? null : onActive(active)
 }
 
 /**
@@ -740,32 +787,12 @@ export const moveCreateDisplaySettingsStep = (
 export const applyCreateDisplaySettingsStep = (
   contextOrCwd: string | CreateFlowContext,
   view: CreateFlowView
-): AdvanceCreateFlowResult | null => {
-  const step = resolveCreateDisplaySteps()[view.step]
-  if (view.step < firstCreateSettingsStepIndex || step === undefined) {
-    return null
-  }
-
-  const context = normalizeCreateFlowContext(contextOrCwd)
-  const buffer = view.buffer.trim()
-  const currentDefaults = resolveCreateInputs(context, view.values)
-  const nextValues: Partial<Mutable<CreateInputs>> = { ...view.values }
-  const updated = applyCreateStep({
-    step,
-    buffer,
-    currentDefaults,
-    nextValues,
-    context
-  })
-  if (Either.isLeft(updated)) {
-    return {
-      _tag: "Error",
-      error: updated.left
-    }
-  }
-
-  return continueCreateFlow(view.step, nextValues)
-}
+): AdvanceCreateFlowResult | null =>
+  withActiveCreateDisplayContext(contextOrCwd, view, (active) =>
+    foldAppliedCreateValues(
+      applyCreateBufferToValues(active.context, view, active.step),
+      (nextValues) => continueCreateFlow(view.step, nextValues)
+    ))
 
 /**
  * Completes browser Create settings by applying a non-empty active buffer first.
@@ -781,32 +808,21 @@ export const applyCreateDisplaySettingsStep = (
 export const completeCreateDisplaySettingsFlow = (
   contextOrCwd: string | CreateFlowContext,
   view: CreateFlowView
-): AdvanceCreateFlowResult | null => {
-  const step = resolveCreateDisplaySteps()[view.step]
-  if (view.step < firstCreateSettingsStepIndex || step === undefined) {
-    return null
-  }
-
-  const context = normalizeCreateFlowContext(contextOrCwd)
-  if (view.buffer.trim().length === 0) {
-    return {
-      _tag: "Complete",
-      inputs: resolveCreateInputs(context, view.values)
+): AdvanceCreateFlowResult | null =>
+  withActiveCreateDisplayContext(contextOrCwd, view, (active) => {
+    if (view.buffer.trim().length === 0) {
+      return completeCreateFlow(active.context, view.values)
     }
-  }
 
-  const applied = applyCreateDisplaySettingsStep(context, view)
-  if (applied === null || applied._tag === "Error") {
+    const applied = applyCreateDisplaySettingsStep(active.context, view)
+    if (applied === null || applied._tag === "Error") {
+      return applied
+    }
+    if (applied._tag === "Continue") {
+      return completeCreateFlow(active.context, applied.view.values)
+    }
     return applied
-  }
-  if (applied._tag === "Continue") {
-    return {
-      _tag: "Complete",
-      inputs: resolveCreateInputs(context, applied.view.values)
-    }
-  }
-  return applied
-}
+  })
 
 const resolveNextCreateFlowStep = (
   currentStep: CreateStep,
@@ -829,40 +845,20 @@ export const advanceCreateFlow = (
     return null
   }
 
-  const buffer = view.buffer.trim()
-  const currentDefaults = resolveCreateInputs(context, view.values)
-  const nextValues: Partial<Mutable<CreateInputs>> = { ...view.values }
-  const updated = applyCreateStep({
-    step,
-    buffer,
-    currentDefaults,
-    nextValues,
-    context
-  })
-  if (Either.isLeft(updated)) {
-    return {
-      _tag: "Error",
-      error: updated.left
+  return foldAppliedCreateValues(
+    applyCreateBufferToValues(context, view, step),
+    (nextValues) => {
+      if (shouldQuickCreate(step, options)) {
+        return completeCreateFlow(context, nextValues)
+      }
+
+      const nextSteps = resolveCreateFlowSteps(nextValues)
+      const nextStep = resolveNextCreateFlowStep(step, view.step, nextSteps)
+      return nextSteps.length > firstCreateSettingsStepIndex && nextStep < nextSteps.length
+        ? continueCreateFlow(nextStep, nextValues)
+        : completeCreateFlow(context, nextValues)
     }
-  }
-
-  if (shouldQuickCreate(step, options)) {
-    return {
-      _tag: "Complete",
-      inputs: resolveCreateInputs(context, nextValues)
-    }
-  }
-
-  const nextSteps = resolveCreateFlowSteps(nextValues)
-  const nextStep = resolveNextCreateFlowStep(step, view.step, nextSteps)
-  if (nextSteps.length > firstCreateSettingsStepIndex && nextStep < nextSteps.length) {
-    return continueCreateFlow(nextStep, nextValues)
-  }
-
-  return {
-    _tag: "Complete",
-    inputs: resolveCreateInputs(context, nextValues)
-  }
+  )
 }
 
 export const handleAdvanceCreateFlowResult = (
