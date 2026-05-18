@@ -20,7 +20,7 @@ export type BrowserMenuTag =
   | "Delete"
   | "Quit"
 
-const browserMenuOrder: ReadonlyArray<BrowserMenuTag> = [
+export const browserMenuOrder: ReadonlyArray<BrowserMenuTag> = [
   "Create",
   "Select",
   "Auth",

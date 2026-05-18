@@ -141,7 +141,8 @@ const useTerminalOnlyReadyState = (
     projectId,
     projectKey,
     projectLabel,
-    setMessage
+    setMessage,
+    terminalSessionId: session.session.id
   })
   return { handlers, project, setMessage, setTaskManagerOpen, taskManagerOpen, tasks }
 }

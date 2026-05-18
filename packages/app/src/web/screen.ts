@@ -32,7 +32,7 @@ export const outputScreen = (): BrowserScreen => ({ tag: "Output" })
 
 export const projectPickerScreen = (): BrowserScreen => ({ tag: "ProjectPicker" })
 
-const projectMenuTags: ReadonlySet<BrowserMenuTag> = new Set<BrowserMenuTag>([
+export const browserProjectMenuTags: ReadonlyArray<BrowserProjectMenuTag> = [
   "Browser",
   "Databases",
   "Delete",
@@ -46,7 +46,9 @@ const projectMenuTags: ReadonlySet<BrowserMenuTag> = new Set<BrowserMenuTag>([
   "Skills",
   "Status",
   "Tasks"
-])
+]
+
+const projectMenuTags: ReadonlySet<BrowserMenuTag> = new Set<BrowserMenuTag>(browserProjectMenuTags)
 
 export const isProjectMenu = (menu: BrowserMenuTag): menu is BrowserProjectMenuTag => projectMenuTags.has(menu)
 

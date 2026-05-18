@@ -1,8 +1,8 @@
 import { type BrowserActionContext, withBusy } from "./actions-shared.js"
 import { openSkiller } from "./api.js"
-import { openUrl } from "./open-url.js"
+import { type PreparedOpenUrl, prepareOpenUrl } from "./open-url.js"
 
-type SkillerLaunch = {
+export type SkillerLaunch = {
   readonly alreadyRunning: boolean
   readonly appPath: string
   readonly logPath: string
@@ -14,7 +14,7 @@ type SkillerLaunch = {
   readonly trpcBasePath: string
 }
 
-const skillerLaunchMessage = (launch: SkillerLaunch, openedPath: string, opened: boolean): string => {
+export const skillerLaunchMessage = (launch: SkillerLaunch, openedPath: string, opened: boolean): string => {
   const pid = launch.pid === null ? "unknown pid" : `pid ${launch.pid}`
   const state = launch.alreadyRunning
     ? `Skiller is already running (${pid}). Log: ${launch.logPath}`
@@ -27,20 +27,29 @@ const skillerLaunchMessage = (launch: SkillerLaunch, openedPath: string, opened:
     : `${state}.${scope} Popup was blocked. Open ${openedPath} manually.`
 }
 
+export const openPreparedSkillerLaunch = (launch: SkillerLaunch, preparedUrl: PreparedOpenUrl): string => {
+  const openedPath = launch.appPath
+  const opened = preparedUrl.navigate(openedPath)
+  return skillerLaunchMessage(launch, openedPath, opened)
+}
+
 export const openSkillerApp = (
   context: BrowserActionContext,
   projectKey: string | null | undefined = context.selectedProjectKey,
   sessionId?: string
 ): void => {
   const resolvedProjectKey = projectKey ?? undefined
+  const preparedUrl = prepareOpenUrl()
+  context.setMessage("Opening Skiller...")
   withBusy({
     context,
     effect: openSkiller(resolvedProjectKey, sessionId),
     label: "Opening Skiller",
+    onFailure: () => {
+      preparedUrl.close()
+    },
     onSuccess: (launch) => {
-      const openedPath = launch.appPath
-      const opened = openUrl(openedPath)
-      context.setMessage(skillerLaunchMessage(launch, openedPath, opened))
+      context.setMessage(openPreparedSkillerLaunch(launch, preparedUrl))
     }
   })
 }
