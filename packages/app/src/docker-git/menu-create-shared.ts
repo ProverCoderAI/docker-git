@@ -634,6 +634,16 @@ export const createInitialFlowView = (buffer = ""): CreateModeFlowView => ({
   values: {}
 })
 
+const resolveDisplayFlowStep = (view: CreateFlowView): number => {
+  const displaySteps = resolveCreateDisplaySteps()
+  if (isDisplayModeFlowView(view)) {
+    return clampCreateSettingsStep(view.step, displaySteps.length - 1)
+  }
+  const flowStep = resolveCreateFlowSteps(view.values)[view.step]
+  const displayStep = flowStep === undefined ? -1 : displaySteps.indexOf(flowStep)
+  return clampCreateSettingsStep(displayStep === -1 ? view.step : displayStep, displaySteps.length - 1)
+}
+
 /**
  * Converts a parsed repo Create snapshot into browser display-settings mode.
  *
@@ -646,7 +656,7 @@ export const createInitialFlowView = (buffer = ""): CreateModeFlowView => ({
  */
 export const createDisplayFlowView = (view: CreateFlowView): DisplayModeFlowView => ({
   mode: "display",
-  step: clampCreateSettingsStep(view.step, resolveCreateDisplaySteps().length - 1),
+  step: resolveDisplayFlowStep(view),
   buffer: view.buffer,
   inputError: null,
   values: view.values

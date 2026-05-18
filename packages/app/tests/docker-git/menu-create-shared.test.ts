@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   advanceCreateFlow,
+  createDisplayFlowView,
   createInitialFlowView,
   moveCreateSettingsStep,
   resolveCreateDisplaySteps,
@@ -166,6 +167,23 @@ describe("menu-create-shared", () => {
         expectCreateNavigationResult(next, expectedWrappedCreateNavigationStep(step, direction, lastStep), view.values)
       })
     )
+  })
+
+  it("maps create-mode steps to the matching display row when opening browser Settings", () => {
+    const createView = {
+      ...createFeatureRepoSettingsView(cwd),
+      step: 1,
+      values: {
+        ...createFeatureRepoSettingsView(cwd).values,
+        cpuLimit: "40%"
+      }
+    }
+    const displayView = createDisplayFlowView(createView)
+
+    expect(resolveCreateFlowSteps(createView.values)[createView.step]).toBe("ramLimit")
+    expect(resolveCreateDisplaySteps()[displayView.step]).toBe("ramLimit")
+    expect(displayView.buffer).toBe(createView.buffer)
+    expect(displayView.values).toEqual(createView.values)
   })
 
   it("does not navigate settings from the repo URL step", () => {

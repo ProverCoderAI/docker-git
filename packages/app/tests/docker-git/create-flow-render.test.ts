@@ -8,6 +8,7 @@ import {
   type CreateFlowView,
   createInitialFlowView,
   createSettingsHint,
+  type CreateModeFlowView,
   type DisplayModeFlowView,
   renderCreateStepLabel,
   resolveCreateDisplaySteps,
@@ -20,6 +21,7 @@ import { UiProvider } from "../../src/ui/primitives.js"
 import { CreatePanel } from "../../src/web/panel-create-select.js"
 import {
   createFeatureRepoDisplaySettingsView,
+  createFeatureRepoSettingsView,
   createFlowViewAtStep,
   featureCreateRepoUrl
 } from "./create-flow-test-helpers.js"
@@ -70,7 +72,9 @@ const createSettingsViewAtStep = (
   buffer: string
 ): CreateFlowView => createFlowViewAtStep(createSettingsView(), stepName, buffer)
 
-const renderTerminalCreate = (createView: CreateFlowView): string => {
+const createTerminalSettingsView = (): CreateModeFlowView => createFeatureRepoSettingsView(createContext)
+
+const renderTerminalCreate = (createView: CreateModeFlowView): string => {
   const defaults = resolveCreateInputs(createContext, createView.values)
   const steps = resolveCreateFlowSteps(createView.values)
   const step = steps[createView.step] ?? "repoUrl"
@@ -208,7 +212,7 @@ describe("Create flow rendering", () => {
 
   it("renders terminal Create hints with the same repo/settings split", () => {
     const repoHtml = renderTerminalCreate(createInitialFlowView(featureCreateRepoUrl))
-    const settingsHtml = renderTerminalCreate(createSettingsView())
+    const settingsHtml = renderTerminalCreate(createTerminalSettingsView())
 
     expect(repoHtml).not.toContain("Enter = next, Esc = cancel.")
     expect(repoHtml).not.toContain("Shift+Enter")
@@ -218,27 +222,37 @@ describe("Create flow rendering", () => {
 
   it("preserves hint visibility invariants for every Create step", () => {
     const settingsView = createSettingsView()
-    const lastStep = resolveCreateFlowSteps(settingsView.values).length - 1
+    const lastDisplayStep = resolveCreateDisplaySteps(settingsView.values).length - 1
 
     fc.assert(
-      fc.property(fc.integer({ min: 0, max: lastStep }), (step) => {
+      fc.property(fc.integer({ min: 0, max: lastDisplayStep }), (step) => {
         const view = step === 0 ? createInitialFlowView(featureCreateRepoUrl) : { ...settingsView, step }
         const isSettings = step > 0
         const panelHtml = renderCreatePanel(view)
         const compactPanelHtml = renderCreatePanel(view, { compact: true })
-        const terminalHtml = renderTerminalCreate(view)
 
         expect(panelHtml.includes(createSettingsHint)).toBe(isSettings)
         expect(compactPanelHtml.includes(createSettingsHint)).toBe(isSettings)
-        expect(terminalHtml.includes(createSettingsHint)).toBe(isSettings)
         expect(panelHtml.includes(webCreateSettingsChoiceHint)).toBe(isSettings)
         expect(compactPanelHtml.includes(webCreateSettingsChoiceHint)).toBe(isSettings)
-        expect(terminalHtml).not.toContain(webCreateSettingsChoiceHint)
         expect(panelHtml).not.toContain("Enter = next, Esc = cancel.")
         expect(compactPanelHtml).not.toContain("Enter = next, Esc = cancel.")
-        expect(terminalHtml).not.toContain("Enter = next, Esc = cancel.")
         expect(panelHtml).not.toContain("Shift+Enter")
         expect(compactPanelHtml).not.toContain("Shift+Enter")
+      })
+    )
+
+    const terminalSettingsView = createTerminalSettingsView()
+    const lastTerminalStep = resolveCreateFlowSteps(terminalSettingsView.values).length - 1
+
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: lastTerminalStep }), (step) => {
+        const view = step === 0 ? createInitialFlowView(featureCreateRepoUrl) : { ...terminalSettingsView, step }
+        const terminalHtml = renderTerminalCreate(view)
+
+        expect(terminalHtml.includes(createSettingsHint)).toBe(step > 0)
+        expect(terminalHtml).not.toContain(webCreateSettingsChoiceHint)
+        expect(terminalHtml).not.toContain("Enter = next, Esc = cancel.")
         expect(terminalHtml).not.toContain("Shift+Enter")
       })
     )
