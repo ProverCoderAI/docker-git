@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 
-import { Duration, Effect } from "effect"
+import { Duration, Effect, Match } from "effect"
 
 import type { PanelCloudflareTunnelSession, StartPanelCloudflareTunnelRequest } from "../api/contracts.js"
 import { ApiBadRequestError, ApiInternalError } from "../api/errors.js"
@@ -121,10 +121,9 @@ const processEnv = (
 })
 
 const readDefaultGatewayIp = (): Effect.Effect<string | null> =>
-  Effect.try({
-    try: () => parseLinuxDefaultGatewayIp(readFileSync("/proc/net/route", "utf8")),
-    catch: () => null
-  }).pipe(Effect.catchAll((fallback) => Effect.succeed(fallback)))
+  Effect.try(() => parseLinuxDefaultGatewayIp(readFileSync("/proc/net/route", "utf8"))).pipe(
+    Effect.orElse(() => Effect.succeed(null))
+  )
 
 const defaultPanelTunnelLocalhostHost = (): Effect.Effect<string> => {
   const configured = process.env["DOCKER_GIT_PANEL_TUNNEL_LOCALHOST_HOST"]?.trim()
@@ -350,11 +349,24 @@ const isReusableRecord = (
   panelUrl: string
 ): boolean =>
   record.session.panelUrl === panelUrl &&
-  (record.session.status === "starting" || record.session.status === "running")
+  Match.value(record.session.status).pipe(
+    Match.when("failed", () => false),
+    Match.when("running", () => true),
+    Match.when("starting", () => true),
+    Match.when("stopped", () => false),
+    Match.exhaustive
+  )
 
 const isTerminalTunnelSession = (
   session: PanelCloudflareTunnelSession
-): boolean => session.status === "failed" || session.status === "stopped"
+): boolean =>
+  Match.value(session.status).pipe(
+    Match.when("failed", () => true),
+    Match.when("running", () => false),
+    Match.when("starting", () => false),
+    Match.when("stopped", () => true),
+    Match.exhaustive
+  )
 
 const waitForRecord = (
   request: StartPanelCloudflareTunnelRequest
