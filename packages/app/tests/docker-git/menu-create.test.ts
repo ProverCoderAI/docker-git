@@ -17,6 +17,7 @@ const settingsValues = {
 
 const createSettingsView = (): CreateView => ({
   _tag: "Create",
+  mode: "create",
   step: 1,
   buffer: "30%",
   inputError: null,
@@ -77,7 +78,7 @@ describe("menu-create", () => {
       handleCreateInput(
         "",
         { downArrow: true },
-        { _tag: "Create", step: 0, buffer: "", inputError: null, values: {} },
+        { _tag: "Create", mode: "create", step: 0, buffer: "", inputError: null, values: {} },
         context
       )
 

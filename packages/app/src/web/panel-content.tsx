@@ -4,6 +4,7 @@ import type { JSX } from "react"
 import type { CreateFlowView } from "../docker-git/menu-create-shared.js"
 import type { ActionPromptState } from "./action-prompt.js"
 import type { AuthSnapshot, GithubAuthStatus, ProjectAuthSnapshot, ProjectDetails, ProjectSummary } from "./api.js"
+import type { CreateSubmitMode } from "./app-ready-create.js"
 import { Box, Text } from "./elements.js"
 import type { BrowserMenuTag } from "./menu.js"
 import { AuthPanel } from "./panel-auth.js"
@@ -32,7 +33,7 @@ type ContentPanelProps = {
   ) => void
   readonly onCreateBufferChange: (buffer: string) => void
   readonly onCreateCancel: () => void
-  readonly onCreateSubmit: (quickCreate?: boolean) => void
+  readonly onCreateSubmit: (mode: CreateSubmitMode) => void
   readonly onKillProjectTerminalSession: (projectId: string, projectKey: string, sessionId: string) => void
   readonly onOpenProjectTerminalById: (projectId: string, projectKey?: string) => void
   readonly onRunAuthAction: (index: number) => void

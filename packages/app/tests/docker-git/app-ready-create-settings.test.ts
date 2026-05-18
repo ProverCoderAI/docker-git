@@ -15,7 +15,6 @@ import {
   requireCreateViewValue,
   requireSubmittedCreateInputs,
   resolveCreateDisplaySteps,
-  resolveCreateFlowSteps,
   runCreateKey,
   runSubmitCreateView
 } from "./app-ready-create-fixture.js"
@@ -41,7 +40,7 @@ describe("app-ready-create settings", () => {
   })
 
   it("wraps settings selection upward with ArrowUp and clears the uncommitted buffer", () => {
-    expectCreateArrowHandling(handleCreateKey, "ArrowUp", (view) => resolveCreateFlowSteps(view.values).length - 1)
+    expectCreateArrowHandling(handleCreateKey, "ArrowUp", () => resolveCreateDisplaySteps().length - 1)
   })
 
   it("fills discrete settings buffers with side arrows without applying values", () => {
@@ -130,7 +129,7 @@ describe("app-ready-create settings", () => {
     const { setCreateViewSpy } = runSubmitCreateView(
       submitCreateView,
       createSettingsFlowViewAtStep("mcpPlaywright", "y"),
-      { quickCreate: false }
+      { mode: "complete-settings" }
     )
 
     expect(submitCreateInputsMock).toHaveBeenCalledTimes(1)
@@ -142,7 +141,7 @@ describe("app-ready-create settings", () => {
     const { context, setCreateViewSpy } = runSubmitCreateView(
       submitCreateView,
       createSettingsFlowViewAtStep("gpu", "bogus"),
-      { quickCreate: false }
+      { mode: "complete-settings" }
     )
 
     expect(submitCreateInputsMock).not.toHaveBeenCalled()

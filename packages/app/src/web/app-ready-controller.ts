@@ -19,7 +19,13 @@ import { resolveCurrentMenu, runAuthActionByIndex, runProjectAuthActionByIndex }
 import { useProjectBrowserReset, useTerminalBrowserAutoload } from "./app-ready-browser-hook.js"
 import { useBrowserShortcuts } from "./app-ready-browser-shortcuts-hook.js"
 import { createReadyActionContext } from "./app-ready-controller-context.js"
-import { cancelCreate, setCreateBuffer, submitCreateView, useCreateMenuReset } from "./app-ready-create.js"
+import {
+  cancelCreate,
+  type CreateSubmitMode,
+  setCreateBuffer,
+  submitCreateView,
+  useCreateMenuReset
+} from "./app-ready-create.js"
 import { bindDatabaseActions } from "./app-ready-database-actions.js"
 import { useProjectDatabasesReset } from "./app-ready-databases-hook.js"
 import { useGithubAuthGate } from "./app-ready-github-auth-gate-hook.js"
@@ -198,13 +204,13 @@ const bindCreateActions = (
   onCreateCancel: () => {
     cancelCreate(actionContext, state.setCreateView)
   },
-  onCreateSubmit: (quickCreate?: boolean) => {
+  onCreateSubmit: (mode: CreateSubmitMode) => {
     submitCreateView({
       context: actionContext,
       controllerCwd: dashboard.health.cwd,
       projectsRoot: dashboard.health.projectsRoot,
       createView: state.createView,
-      quickCreate,
+      mode,
       setCreateView: state.setCreateView
     })
   }

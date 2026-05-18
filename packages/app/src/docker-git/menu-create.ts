@@ -157,7 +157,9 @@ const handleCreateReturn = (
       })
     },
     onContinue: (view) => {
-      context.setView({ _tag: "Create", ...view })
+      if (view.mode === "create") {
+        context.setView({ _tag: "Create", ...view })
+      }
       context.setMessage(null)
     },
     onError: (error) => {

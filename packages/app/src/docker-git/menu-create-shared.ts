@@ -22,12 +22,23 @@ export type CreateFlowContext = {
   readonly projectsRoot?: string | undefined
 }
 
-export type CreateFlowView = {
-  readonly step: number
+type BaseCreateFlowView = {
   readonly buffer: string
   readonly inputError: string | null
   readonly values: Partial<CreateInputs>
 }
+
+export type CreateModeFlowView = BaseCreateFlowView & {
+  readonly mode: "create"
+  readonly step: number
+}
+
+export type DisplayModeFlowView = BaseCreateFlowView & {
+  readonly mode: "display"
+  readonly step: number
+}
+
+export type CreateFlowView = CreateModeFlowView | DisplayModeFlowView
 
 type AdvanceCreateFlowResult =
   | { readonly _tag: "Continue"; readonly view: CreateFlowView }
@@ -81,6 +92,42 @@ export type CreateSettingsChoiceDirection = "left" | "right"
 export const createSettingsHint = "↑ - up, ↓ - down, Enter - apply"
 
 const firstCreateSettingsStepIndex = 1
+
+/**
+ * Narrows a Create flow snapshot to the unresolved step scale.
+ *
+ * @pure true
+ * @effect none
+ * @invariant true iff view.mode = "create"
+ * @precondition view is a CreateFlowView snapshot
+ * @postcondition result=true narrows the view to the unresolved Create step scale
+ * @complexity O(1)
+ */
+export const isCreateModeFlowView = (view: CreateFlowView): view is CreateModeFlowView => view.mode === "create"
+
+/**
+ * Narrows a Create flow snapshot to the browser display-settings step scale.
+ *
+ * @pure true
+ * @effect none
+ * @invariant true iff view.mode = "display"
+ * @precondition view is a CreateFlowView snapshot
+ * @postcondition result=true narrows the view to the display-settings step scale
+ * @complexity O(1)
+ */
+export const isDisplayModeFlowView = (view: CreateFlowView): view is DisplayModeFlowView => view.mode === "display"
+
+/**
+ * Detects the web Create repo URL entry state.
+ *
+ * @pure true
+ * @effect none
+ * @invariant result=true -> view.mode = "create" ∧ view.step = 0
+ * @precondition view is a CreateFlowView snapshot
+ * @postcondition display settings rows are never reported as repo-step submissions
+ * @complexity O(1)
+ */
+export const isCreateFlowRepoStep = (view: CreateFlowView): boolean => isCreateModeFlowView(view) && view.step === 0
 
 const trimLeftSlash = (value: string): string => {
   let start = 0
@@ -576,11 +623,30 @@ const applyCreateBufferToValues = (
   return Either.isLeft(updated) ? Either.left(updated.left) : Either.right(nextValues)
 }
 
-export const createInitialFlowView = (buffer = ""): CreateFlowView => ({
+export const createInitialFlowView = (buffer = ""): CreateModeFlowView => ({
+  mode: "create",
   step: 0,
   buffer,
   inputError: null,
   values: {}
+})
+
+/**
+ * Converts a parsed repo Create snapshot into browser display-settings mode.
+ *
+ * @pure true
+ * @effect none
+ * @invariant result.mode = "display"
+ * @precondition view contains already-applied repo values
+ * @postcondition result.step is clamped to a valid display settings row
+ * @complexity O(1)
+ */
+export const createDisplayFlowView = (view: CreateFlowView): DisplayModeFlowView => ({
+  mode: "display",
+  step: clampCreateSettingsStep(view.step, resolveCreateDisplaySteps().length - 1),
+  buffer: view.buffer,
+  inputError: null,
+  values: view.values
 })
 
 const shouldQuickCreate = (
@@ -596,7 +662,21 @@ const continueCreateFlow = (
 ): AdvanceCreateFlowResult => ({
   _tag: "Continue",
   view: {
+    mode: "create",
     step: nextStep,
+    buffer: "",
+    inputError: null,
+    values: nextValues
+  }
+})
+
+const continueCreateDisplayFlow = (
+  view: DisplayModeFlowView,
+  nextValues: Partial<Mutable<CreateInputs>>
+): AdvanceCreateFlowResult => ({
+  _tag: "Continue",
+  view: {
+    ...view,
     buffer: "",
     inputError: null,
     values: nextValues
@@ -619,11 +699,21 @@ const nextCreateSettingsStep = (
     Match.exhaustive
   )
 
-const moveCreateSettingsWithin = (
+function moveCreateSettingsWithin(
+  view: CreateModeFlowView,
+  lastStep: number,
+  direction: CreateSettingsNavigationDirection
+): CreateModeFlowView | null
+function moveCreateSettingsWithin(
+  view: DisplayModeFlowView,
+  lastStep: number,
+  direction: CreateSettingsNavigationDirection
+): DisplayModeFlowView | null
+function moveCreateSettingsWithin(
   view: CreateFlowView,
   lastStep: number,
   direction: CreateSettingsNavigationDirection
-): CreateFlowView | null => {
+): CreateFlowView | null {
   if (view.step < firstCreateSettingsStepIndex || lastStep < firstCreateSettingsStepIndex) {
     return null
   }
@@ -666,7 +756,7 @@ const gpuChoiceBuffer = (direction: CreateSettingsChoiceDirection): string =>
  * @complexity O(1)
  */
 export const resolveCreateSettingsChoiceBuffer = (
-  view: CreateFlowView,
+  view: DisplayModeFlowView,
   direction: CreateSettingsChoiceDirection
 ): string | null => {
   const step = resolveCreateDisplaySteps()[view.step]
@@ -701,9 +791,10 @@ export const resolveCreateSettingsChoiceBuffer = (
  * @complexity O(n) where n is the number of unresolved Create steps
  */
 export const moveCreateSettingsStep = (
-  view: CreateFlowView,
+  view: CreateModeFlowView,
   direction: CreateSettingsNavigationDirection
-): CreateFlowView | null => moveCreateSettingsWithin(view, resolveCreateFlowSteps(view.values).length - 1, direction)
+): CreateModeFlowView | null =>
+  moveCreateSettingsWithin(view, resolveCreateFlowSteps(view.values).length - 1, direction)
 
 /**
  * Moves the selected browser Create settings row over the full display list.
@@ -718,11 +809,11 @@ export const moveCreateSettingsStep = (
  * @complexity O(1)
  */
 export const moveCreateDisplaySettingsStep = (
-  view: CreateFlowView,
+  view: DisplayModeFlowView,
   direction: CreateSettingsNavigationDirection
-): CreateFlowView | null => moveCreateSettingsWithin(view, resolveCreateDisplaySteps().length - 1, direction)
+): DisplayModeFlowView | null => moveCreateSettingsWithin(view, resolveCreateDisplaySteps().length - 1, direction)
 
-const resolveActiveCreateDisplayStep = (view: CreateFlowView): CreateStep | null => {
+const resolveActiveCreateDisplayStep = (view: DisplayModeFlowView): CreateStep | null => {
   const step = resolveCreateDisplaySteps()[view.step]
   return view.step < firstCreateSettingsStepIndex || step === undefined ? null : step
 }
@@ -734,7 +825,7 @@ type ActiveCreateDisplayContext = {
 
 const resolveActiveCreateDisplayContext = (
   contextOrCwd: string | CreateFlowContext,
-  view: CreateFlowView
+  view: DisplayModeFlowView
 ): ActiveCreateDisplayContext | null => {
   const step = resolveActiveCreateDisplayStep(view)
   return step === null
@@ -766,7 +857,7 @@ const foldAppliedCreateValues = (
 
 const withActiveCreateDisplayContext = (
   contextOrCwd: string | CreateFlowContext,
-  view: CreateFlowView,
+  view: DisplayModeFlowView,
   onActive: (active: ActiveCreateDisplayContext) => AdvanceCreateFlowResult | null
 ): AdvanceCreateFlowResult | null => {
   const active = resolveActiveCreateDisplayContext(contextOrCwd, view)
@@ -786,12 +877,12 @@ const withActiveCreateDisplayContext = (
  */
 export const applyCreateDisplaySettingsStep = (
   contextOrCwd: string | CreateFlowContext,
-  view: CreateFlowView
+  view: DisplayModeFlowView
 ): AdvanceCreateFlowResult | null =>
   withActiveCreateDisplayContext(contextOrCwd, view, (active) =>
     foldAppliedCreateValues(
       applyCreateBufferToValues(active.context, view, active.step),
-      (nextValues) => continueCreateFlow(view.step, nextValues)
+      (nextValues) => continueCreateDisplayFlow(view, nextValues)
     ))
 
 /**
@@ -807,7 +898,7 @@ export const applyCreateDisplaySettingsStep = (
  */
 export const completeCreateDisplaySettingsFlow = (
   contextOrCwd: string | CreateFlowContext,
-  view: CreateFlowView
+  view: DisplayModeFlowView
 ): AdvanceCreateFlowResult | null =>
   withActiveCreateDisplayContext(contextOrCwd, view, (active) => {
     if (view.buffer.trim().length === 0) {
@@ -835,7 +926,7 @@ const resolveNextCreateFlowStep = (
 
 export const advanceCreateFlow = (
   contextOrCwd: string | CreateFlowContext,
-  view: CreateFlowView,
+  view: CreateModeFlowView,
   options: AdvanceCreateFlowOptions = {}
 ): AdvanceCreateFlowResult | null => {
   const context = normalizeCreateFlowContext(contextOrCwd)

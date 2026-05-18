@@ -5,15 +5,18 @@ import {
   type CreateFlowView,
   type CreateSettingsChoiceDirection,
   createSettingsHint,
+  isCreateFlowRepoStep,
+  isDisplayModeFlowView,
   renderCreateStepLabel,
   renderCreateStepLabelWithBufferPreview,
   resolveCreateDisplaySteps,
-  resolveCreateSettingsChoiceBuffer,
-  resolveCreateInputs
+  resolveCreateInputs,
+  resolveCreateSettingsChoiceBuffer
 } from "../docker-git/menu-create-shared.js"
 import type { CreateStep } from "../docker-git/menu-types.js"
 import { Box, Button, Text, TextInput } from "../ui/primitives.js"
 import { HelpLines } from "../ui/shared.js"
+import type { CreateSubmitMode } from "./app-ready-create.js"
 
 const renderStepColor = (active: boolean): string => active ? "#56f39a" : "#8fa6c4"
 
@@ -49,7 +52,7 @@ const CreatePromptInput = (
     readonly onArrowRight?: () => void
     readonly onBufferChange: (buffer: string) => void
     readonly onCancel: () => void
-    readonly onSubmit: (quickCreate?: boolean) => void
+    readonly onSubmit: (mode: CreateSubmitMode) => void
     readonly promptLabel: string
   }
 ): JSX.Element => (
@@ -63,7 +66,7 @@ const CreatePromptInput = (
       {...(onArrowLeft === undefined ? {} : { onArrowLeft })}
       {...(onArrowRight === undefined ? {} : { onArrowRight })}
       onEnter={(shift) => {
-        onSubmit(isRepoStep ? shift : undefined)
+        onSubmit(isRepoStep && shift ? "quick-create" : "advance")
       }}
       onEscape={onCancel}
       placeholder={isRepoStep ? "https://github.com/org/repo/tree/branch --force --mcp-playwright" : promptLabel}
@@ -91,20 +94,26 @@ export const CreatePanel = (
     readonly projectsRoot: string
     readonly onBufferChange: (buffer: string) => void
     readonly onCancel: () => void
-    readonly onSubmit: (quickCreate?: boolean) => void
+    readonly onSubmit: (mode: CreateSubmitMode) => void
   }
 ): JSX.Element => {
   const prompt = createPrompt({ cwd: controllerCwd, projectsRoot }, createView)
   const steps = resolveCreateDisplaySteps()
-  const activeStep = steps[createView.step] ?? "repoUrl"
-  const isRepoStep = activeStep === "repoUrl"
+  const activeStep = isDisplayModeFlowView(createView) ? steps[createView.step] ?? "repoUrl" : "repoUrl"
+  const isRepoStep = isCreateFlowRepoStep(createView)
   const visibleSteps = compact && isRepoStep ? [activeStep] : steps
-  const leftChoiceBuffer = resolveCreateSettingsChoiceBuffer(createView, "left")
-  const rightChoiceBuffer = resolveCreateSettingsChoiceBuffer(createView, "right")
+  const leftChoiceBuffer = isDisplayModeFlowView(createView)
+    ? resolveCreateSettingsChoiceBuffer(createView, "left")
+    : null
+  const rightChoiceBuffer = isDisplayModeFlowView(createView)
+    ? resolveCreateSettingsChoiceBuffer(createView, "right")
+    : null
   const chooseSettingsBuffer = (direction: CreateSettingsChoiceDirection): void => {
-    const nextBuffer = resolveCreateSettingsChoiceBuffer(createView, direction)
-    if (nextBuffer !== null) {
-      onBufferChange(nextBuffer)
+    if (isDisplayModeFlowView(createView)) {
+      const nextBuffer = resolveCreateSettingsChoiceBuffer(createView, direction)
+      if (nextBuffer !== null) {
+        onBufferChange(nextBuffer)
+      }
     }
   }
 
@@ -124,14 +133,18 @@ export const CreatePanel = (
           isRepoStep={isRepoStep}
           {...(leftChoiceBuffer === null
             ? {}
-            : { onArrowLeft: () => {
-              chooseSettingsBuffer("left")
-            } })}
+            : {
+              onArrowLeft: () => {
+                chooseSettingsBuffer("left")
+              }
+            })}
           {...(rightChoiceBuffer === null
             ? {}
-            : { onArrowRight: () => {
-              chooseSettingsBuffer("right")
-            } })}
+            : {
+              onArrowRight: () => {
+                chooseSettingsBuffer("right")
+              }
+            })}
           onBufferChange={onBufferChange}
           onCancel={onCancel}
           onSubmit={onSubmit}
@@ -144,13 +157,13 @@ export const CreatePanel = (
             <Button
               label="Quick Create"
               onPress={() => {
-                onSubmit(true)
+                onSubmit("quick-create")
               }}
             />
             <Button
               label="Settings"
               onPress={() => {
-                onSubmit(false)
+                onSubmit("advance")
               }}
             />
           </Box>
@@ -160,7 +173,7 @@ export const CreatePanel = (
             <Button
               label="Done"
               onPress={() => {
-                onSubmit(false)
+                onSubmit("complete-settings")
               }}
             />
           </Box>
@@ -172,8 +185,8 @@ export const CreatePanel = (
 
 const CreateStepsList = (
   {
-    activeStep,
     activeBuffer,
+    activeStep,
     defaults,
     visibleSteps
   }: {

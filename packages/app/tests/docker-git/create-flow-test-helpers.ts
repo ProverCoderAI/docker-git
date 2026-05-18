@@ -4,8 +4,11 @@ import { expect } from "vitest"
 import { deriveRepoPathParts, resolveRepoInput } from "../../src/docker-git/frontend-lib/core/domain.js"
 import {
   advanceCreateFlow,
+  createDisplayFlowView,
   type CreateFlowView,
   createInitialFlowView,
+  type CreateModeFlowView,
+  type DisplayModeFlowView,
   resolveCreateDisplaySteps
 } from "../../src/docker-git/menu-create-shared.js"
 import type { CreateStep } from "../../src/docker-git/menu-types.js"
@@ -68,15 +71,36 @@ export const resolveRequiredCreateStepIndex = (stepName: CreateStep): number => 
 
 export const createFeatureRepoSettingsView = (
   contextOrCwd: Parameters<typeof advanceCreateFlow>[0]
-): CreateFlowView =>
-  expectCreateContinueView(advanceCreateFlow(contextOrCwd, createInitialFlowView(featureCreateRepoUrl)))
+): CreateModeFlowView => {
+  const view = expectCreateContinueView(advanceCreateFlow(contextOrCwd, createInitialFlowView(featureCreateRepoUrl)))
+  if (view.mode !== "create") {
+    throw new TypeError("expected create mode flow view")
+  }
+  return view
+}
 
-export const createFlowViewAtStep = (
+export const createFeatureRepoDisplaySettingsView = (
+  contextOrCwd: Parameters<typeof advanceCreateFlow>[0]
+): DisplayModeFlowView => createDisplayFlowView(createFeatureRepoSettingsView(contextOrCwd))
+
+export function createFlowViewAtStep(
+  view: CreateModeFlowView,
+  stepName: CreateStep,
+  buffer?: string
+): CreateModeFlowView
+export function createFlowViewAtStep(
+  view: DisplayModeFlowView,
+  stepName: CreateStep,
+  buffer?: string
+): DisplayModeFlowView
+export function createFlowViewAtStep(
   view: CreateFlowView,
   stepName: CreateStep,
   buffer = "draft"
-): CreateFlowView => ({
-  ...view,
-  buffer,
-  step: resolveRequiredCreateStepIndex(stepName)
-})
+): CreateFlowView {
+  return {
+    ...view,
+    buffer,
+    step: resolveRequiredCreateStepIndex(stepName)
+  }
+}

@@ -20,6 +20,7 @@ import type {
   ProjectSkillScope,
   ProjectSkillsSnapshot
 } from "./api.js"
+import type { CreateSubmitMode } from "./app-ready-create.js"
 import { MainPanels } from "./app-ready-main-panels.js"
 import { Box, Text } from "./elements.js"
 import type { BrowserMenuTag } from "./menu.js"
@@ -63,7 +64,7 @@ export type ReadyLayoutProps = {
   readonly onBackScreen: () => void
   readonly onCreateBufferChange: (buffer: string) => void
   readonly onCreateCancel: () => void
-  readonly onCreateSubmit: (quickCreate?: boolean) => void
+  readonly onCreateSubmit: (mode: CreateSubmitMode) => void
   readonly onCloseProjectPortForward: (targetPort: number) => void
   readonly onDatabaseConnectionInputChange: (value: string) => void
   readonly onDatabaseLabelInputChange: (value: string) => void

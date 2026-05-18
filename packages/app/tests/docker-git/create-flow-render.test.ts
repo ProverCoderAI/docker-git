@@ -8,6 +8,7 @@ import {
   type CreateFlowView,
   createInitialFlowView,
   createSettingsHint,
+  type DisplayModeFlowView,
   renderCreateStepLabel,
   resolveCreateDisplaySteps,
   resolveCreateFlowSteps,
@@ -18,7 +19,7 @@ import { webPrimitives } from "../../src/ui/primitives-web.js"
 import { UiProvider } from "../../src/ui/primitives.js"
 import { CreatePanel } from "../../src/web/panel-create-select.js"
 import {
-  createFeatureRepoSettingsView,
+  createFeatureRepoDisplaySettingsView,
   createFlowViewAtStep,
   featureCreateRepoUrl
 } from "./create-flow-test-helpers.js"
@@ -32,7 +33,7 @@ const renderWithUi = (element: ReactElement): string =>
   renderToStaticMarkup(createElement(UiProvider, { primitives: webPrimitives }, element))
 
 const webCreateSettingsChoiceHint = "←/→ - choose yes/no or GPU"
-const createSettingsView = (): CreateFlowView => createFeatureRepoSettingsView(createContext)
+const createSettingsView = (): DisplayModeFlowView => createFeatureRepoDisplaySettingsView(createContext)
 
 const renderCreatePanel = (
   createView: CreateFlowView,

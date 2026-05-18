@@ -39,6 +39,7 @@ describe("app-ready-create", () => {
     const nextView = requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])
     expect(nextView).toMatchObject({
       step: 1,
+      mode: "display",
       values: {
         force: true,
         outDir: "/home/dev/.docker-git/org/repo",
@@ -60,7 +61,7 @@ describe("app-ready-create", () => {
   it("enters the settings wizard when explicitly requested from the repo URL step", () => {
     const { setCreateViewSpy } = submitCreateBuffer(
       "https://github.com/org/repo/tree/feature-x",
-      { quickCreate: false }
+      { mode: "advance" }
     )
 
     expect(submitCreateInputsMock).not.toHaveBeenCalled()
@@ -75,11 +76,11 @@ describe("app-ready-create", () => {
   })
 
   it("shows an inline error for empty repo URL quick create without submitting", () => {
-    expectEmptyRepoInlineError(submitCreateView, submitCreateInputsMock, true)
+    expectEmptyRepoInlineError(submitCreateView, submitCreateInputsMock, "quick-create")
   })
 
   it("shows an inline error for empty repo URL settings without entering Settings", () => {
-    expectEmptyRepoInlineError(submitCreateView, submitCreateInputsMock, false)
+    expectEmptyRepoInlineError(submitCreateView, submitCreateInputsMock, "advance")
   })
 
   it("shows an inline error for empty repo URL Enter without advancing", () => {
@@ -96,7 +97,7 @@ describe("app-ready-create", () => {
     const createView = createInitialFlowView("")
     const { context, setCreateViewSpy } = runSubmitCreateView(submitCreateView, createView, {
       contextOverrides: {},
-      quickCreate: true
+      mode: "quick-create"
     })
 
     expectCreateViewInputError(setCreateViewSpy, createView)
@@ -130,7 +131,7 @@ describe("app-ready-create", () => {
   it("submits a quick create clone from the Create menu", () => {
     const { setCreateViewSpy } = submitCreateBuffer(
       "https://github.com/octocat/Hello-World/tree/feature-x",
-      { quickCreate: true }
+      { mode: "quick-create" }
     )
 
     expect(submitCreateInputsMock).toHaveBeenCalledTimes(1)
@@ -146,7 +147,7 @@ describe("app-ready-create", () => {
     fc.assert(
       fc.property(repositoryCreateInputArbitrary, ({ expectedRepoRef, repoUrl }) => {
         submitCreateInputsMock.mockReset()
-        const { setCreateViewSpy } = submitCreateBuffer(repoUrl, { quickCreate: true })
+        const { setCreateViewSpy } = submitCreateBuffer(repoUrl, { mode: "quick-create" })
 
         expect(submitCreateInputsMock).toHaveBeenCalledTimes(1)
         expectQuickCreateInputs(submitCreateInputsMock, {

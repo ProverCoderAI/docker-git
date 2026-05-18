@@ -6,9 +6,13 @@ import {
   advanceCreateFlow,
   applyCreateDisplaySettingsStep,
   completeCreateDisplaySettingsFlow,
+  createDisplayFlowView,
   type CreateFlowView,
   createInitialFlowView,
+  type DisplayModeFlowView,
   handleAdvanceCreateFlowResult,
+  isCreateFlowRepoStep,
+  isDisplayModeFlowView,
   moveCreateDisplaySettingsStep,
   resolveCreateSettingsChoiceBuffer
 } from "../docker-git/menu-create-shared.js"
@@ -22,6 +26,8 @@ type Setter<A> = Dispatch<SetStateAction<A>>
 
 const emptyRepoUrlInputError = "Insert URL first"
 
+export type CreateSubmitMode = "advance" | "quick-create" | "complete-settings"
+
 type CreateKeyArgs = {
   readonly context: BrowserActionContext
   readonly controllerCwd: string
@@ -31,7 +37,7 @@ type CreateKeyArgs = {
 }
 
 type CreateSubmitArgs = CreateKeyArgs & {
-  readonly quickCreate?: boolean | undefined
+  readonly mode: CreateSubmitMode
 }
 
 type CreateKeyboardEvent = {
@@ -65,16 +71,15 @@ export const setCreateBuffer = (
 const resolveCreateSubmitResult = (
   createContext: { readonly cwd: string; readonly projectsRoot: string },
   createView: CreateFlowView,
-  quickCreate: boolean | undefined
+  mode: CreateSubmitMode
 ): ReturnType<typeof advanceCreateFlow> => {
-  if (createView.step > 0) {
-    return quickCreate === undefined
+  if (isDisplayModeFlowView(createView)) {
+    return mode === "advance"
       ? applyCreateDisplaySettingsStep(createContext, createView)
       : completeCreateDisplaySettingsFlow(createContext, createView)
   }
-  return quickCreate === undefined
-    ? advanceCreateFlow(createContext, createView)
-    : advanceCreateFlow(createContext, createView, { quickCreate })
+  const next = advanceCreateFlow(createContext, createView, { quickCreate: mode === "quick-create" })
+  return next?._tag === "Continue" ? { ...next, view: createDisplayFlowView(next.view) } : next
 }
 
 export const submitCreateView = (
@@ -82,12 +87,12 @@ export const submitCreateView = (
     context,
     controllerCwd,
     createView,
+    mode,
     projectsRoot,
-    quickCreate,
     setCreateView
   }: CreateSubmitArgs
 ): void => {
-  if (createView.step === 0 && createView.buffer.trim().length === 0) {
+  if (isCreateFlowRepoStep(createView) && createView.buffer.trim().length === 0) {
     setCreateView({ ...createView, inputError: emptyRepoUrlInputError })
     return
   }
@@ -97,7 +102,7 @@ export const submitCreateView = (
   }
 
   const createContext = { cwd: controllerCwd, projectsRoot }
-  const next = resolveCreateSubmitResult(createContext, createView, quickCreate)
+  const next = resolveCreateSubmitResult(createContext, createView, mode)
   handleAdvanceCreateFlowResult(next, {
     onError: (error) => {
       context.setMessage(formatParseError(error))
@@ -126,7 +131,7 @@ export const useCreateMenuReset = (
 
 const handleCreateVerticalArrow = (
   event: CreateKeyboardEvent,
-  createView: CreateFlowView,
+  createView: DisplayModeFlowView,
   setCreateView: Setter<CreateFlowView>,
   context: BrowserActionContext
 ): boolean => {
@@ -142,7 +147,7 @@ const handleCreateVerticalArrow = (
 
 const handleCreateHorizontalArrow = (
   event: CreateKeyboardEvent,
-  createView: CreateFlowView,
+  createView: DisplayModeFlowView,
   setCreateView: Setter<CreateFlowView>,
   context: BrowserActionContext
 ): boolean => {
@@ -169,31 +174,35 @@ const submitCreateFromKeyboard = (
     controllerCwd,
     projectsRoot,
     createView,
-    quickCreate: createView.step > 0 ? undefined : event.shiftKey,
+    mode: event.shiftKey && isCreateFlowRepoStep(createView) ? "quick-create" : "advance",
     setCreateView
   })
 }
 
-export const handleCreateKey = (
+const handleCreateArrowKey = (
   event: CreateKeyboardEvent,
-  { context, controllerCwd, createView, projectsRoot, setCreateView }: CreateKeyArgs
-): boolean => {
-  if (event.key === "Escape") {
-    event.preventDefault()
-    cancelCreate(context, setCreateView)
-    return true
-  }
+  createView: CreateFlowView,
+  setCreateView: Setter<CreateFlowView>,
+  context: BrowserActionContext
+): boolean | null => {
   if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-    return handleCreateVerticalArrow(event, createView, setCreateView, context)
+    return isDisplayModeFlowView(createView)
+      ? handleCreateVerticalArrow(event, createView, setCreateView, context)
+      : false
   }
   if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-    return handleCreateHorizontalArrow(event, createView, setCreateView, context)
+    return isDisplayModeFlowView(createView)
+      ? handleCreateHorizontalArrow(event, createView, setCreateView, context)
+      : false
   }
-  if (event.key === "Enter") {
-    submitCreateFromKeyboard(event, { context, controllerCwd, createView, projectsRoot, setCreateView })
-    return true
-  }
+  return null
+}
 
+const handleCreateTextKey = (
+  event: CreateKeyboardEvent,
+  createView: CreateFlowView,
+  setCreateView: Setter<CreateFlowView>
+): boolean => {
   const nextBuffer = nextBufferValue(
     createCharacterInput(event),
     { backspace: event.key === "Backspace", delete: event.key === "Delete" },
@@ -205,4 +214,24 @@ export const handleCreateKey = (
   event.preventDefault()
   setCreateBuffer(createView, setCreateView, nextBuffer)
   return true
+}
+
+export const handleCreateKey = (
+  event: CreateKeyboardEvent,
+  { context, controllerCwd, createView, projectsRoot, setCreateView }: CreateKeyArgs
+): boolean => {
+  if (event.key === "Escape") {
+    event.preventDefault()
+    cancelCreate(context, setCreateView)
+    return true
+  }
+  const arrowHandled = handleCreateArrowKey(event, createView, setCreateView, context)
+  if (arrowHandled !== null) {
+    return arrowHandled
+  }
+  if (event.key === "Enter") {
+    submitCreateFromKeyboard(event, { context, controllerCwd, createView, projectsRoot, setCreateView })
+    return true
+  }
+  return handleCreateTextKey(event, createView, setCreateView)
 }

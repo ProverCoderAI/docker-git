@@ -5,10 +5,12 @@ import {
   advanceCreateFlow,
   createInitialFlowView,
   moveCreateSettingsStep,
+  resolveCreateDisplaySteps,
   resolveCreateFlowSteps,
   resolveCreateSettingsChoiceBuffer
 } from "../../src/docker-git/menu-create-shared.js"
 import {
+  createFeatureRepoDisplaySettingsView,
   createFeatureRepoSettingsView,
   createFlowViewAtStep,
   expectCreateCompleteInputs,
@@ -192,7 +194,7 @@ describe("menu-create-shared", () => {
   })
 
   it("resolves horizontal choices to buffer tokens for discrete settings rows", () => {
-    const view = createFeatureRepoSettingsView(cwd)
+    const view = createFeatureRepoDisplaySettingsView(cwd)
 
     expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "gpu"), "left")).toBe("none")
     expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "gpu"), "right")).toBe("all")
@@ -205,14 +207,13 @@ describe("menu-create-shared", () => {
   })
 
   it("does not resolve horizontal choices for free-text rows or unknown steps", () => {
-    const view = createFeatureRepoSettingsView(cwd)
+    const view = createFeatureRepoDisplaySettingsView(cwd)
     const unknownStepView = {
       ...view,
-      step: resolveCreateFlowSteps(view.values).length + 1,
+      step: resolveCreateDisplaySteps().length + 1,
       buffer: "draft"
     }
 
-    expect(resolveCreateSettingsChoiceBuffer(createInitialFlowView("https://github.com/org/repo"), "right")).toBeNull()
     expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "cpuLimit"), "left")).toBeNull()
     expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "ramLimit"), "right")).toBeNull()
     expect(resolveCreateSettingsChoiceBuffer(unknownStepView, "left")).toBeNull()

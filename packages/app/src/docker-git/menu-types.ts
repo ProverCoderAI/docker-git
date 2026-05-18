@@ -144,6 +144,7 @@ export type ViewState =
   | { readonly _tag: "Menu" }
   | {
     readonly _tag: "Create"
+    readonly mode: "create"
     readonly step: number
     readonly buffer: string
     readonly inputError: string | null
