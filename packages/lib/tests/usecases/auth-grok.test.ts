@@ -181,6 +181,25 @@ describe("authGrokLogin", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("detects nested oauth user settings as Grok credentials", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const accountPath = path.join(root, "default")
+
+        const detected = yield* _(
+          detectUserSettingsPayload(fs, path, accountPath, {
+            oauth: {
+              meta: {},
+              accessToken: "oauth-token"
+            }
+          })
+        )
+        expect(detected).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("does not treat bootstrap user settings as Grok credentials", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
