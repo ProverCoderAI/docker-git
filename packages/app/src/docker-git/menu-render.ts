@@ -1,7 +1,7 @@
 import React from "react"
 
 import { Box, Text } from "../ui/primitives.js"
-import { renderCreateStepLabel } from "./menu-create-shared.js"
+import { createSettingsHint, renderCreateStepLabel } from "./menu-create-shared.js"
 import { renderLayout } from "./menu-render-layout.js"
 import {
   buildSelectLabels,
@@ -120,9 +120,7 @@ export const renderMenu = (input: MenuRenderInput): React.ReactElement => {
 export const renderCreate = (input: CreateRenderInput): React.ReactElement => {
   const { buffer, defaults, label, message, stepIndex, steps } = input
   const el = React.createElement
-  const hint = stepIndex === 0
-    ? "Enter = next, Shift+Enter = quick create, Esc = cancel."
-    : "Enter = next, Esc = cancel."
+  const hint = stepIndex > 0 ? createSettingsHint : null
   const stepViews = steps.map((step, index) =>
     el(
       Text,
@@ -132,7 +130,7 @@ export const renderCreate = (input: CreateRenderInput): React.ReactElement => {
   )
   return renderLayout(
     "docker-git / Create",
-    [
+    compactElements([
       el(Box, { flexDirection: "column", marginTop: 1 }, ...stepViews),
       el(
         Box,
@@ -140,8 +138,10 @@ export const renderCreate = (input: CreateRenderInput): React.ReactElement => {
         el(Text, null, `${label}: `),
         el(Text, { fg: "green" }, buffer)
       ),
-      el(Box, { marginTop: 1 }, el(Text, { fg: "gray" }, hint))
-    ],
+      hint === null
+        ? null
+        : el(Box, { marginTop: 1 }, el(Text, { fg: "gray" }, hint))
+    ]),
     message
   )
 }

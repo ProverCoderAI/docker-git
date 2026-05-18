@@ -11,6 +11,7 @@ import {
   advanceCreateFlow,
   createInitialFlowView,
   handleAdvanceCreateFlowResult,
+  moveCreateSettingsStep,
   resolveCreateInputs
 } from "./menu-create-shared.js"
 import { resetToMenu } from "./menu-shared.js"
@@ -178,6 +179,8 @@ export const handleCreateInput = (
   input: string,
   key: {
     readonly escape?: boolean
+    readonly upArrow?: boolean
+    readonly downArrow?: boolean
     readonly return?: boolean
     readonly shift?: boolean
     readonly backspace?: boolean
@@ -188,6 +191,14 @@ export const handleCreateInput = (
 ) => {
   if (key.escape) {
     resetToMenu(context)
+    return
+  }
+  if (key.upArrow || key.downArrow) {
+    const nextView = moveCreateSettingsStep(view, key.upArrow ? "up" : "down")
+    if (nextView !== null) {
+      context.setView({ _tag: "Create", ...nextView })
+      context.setMessage(null)
+    }
     return
   }
   if (key.return) {

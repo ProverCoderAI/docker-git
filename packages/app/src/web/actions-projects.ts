@@ -448,7 +448,7 @@ export const runProjectMenuAction = (
   context: BrowserActionContext
 ) => {
   if (currentMenu === "Create") {
-    context.setMessage("Create mode is active. Paste URL or URL + flags, Enter = next, Shift+Enter = quick create.")
+    context.setMessage("Create mode is active. Paste URL or URL + flags, then choose Quick Create or Settings.")
     return
   }
   if (currentMenu === "Select") {

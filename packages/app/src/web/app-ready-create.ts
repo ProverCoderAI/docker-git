@@ -6,7 +6,8 @@ import {
   advanceCreateFlow,
   type CreateFlowView,
   createInitialFlowView,
-  handleAdvanceCreateFlowResult
+  handleAdvanceCreateFlowResult,
+  moveCreateSettingsStep
 } from "../docker-git/menu-create-shared.js"
 import { submitCreateInputs } from "./actions-projects.js"
 import { requireGithubAuthConfigured } from "./actions-shared.js"
@@ -107,6 +108,16 @@ export const handleCreateKey = (
   if (event.key === "Escape") {
     event.preventDefault()
     cancelCreate(context, setCreateView)
+    return true
+  }
+  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+    const nextView = moveCreateSettingsStep(createView, event.key === "ArrowUp" ? "up" : "down")
+    if (nextView === null) {
+      return false
+    }
+    event.preventDefault()
+    setCreateView(nextView)
+    context.setMessage(null)
     return true
   }
   if (event.key === "Enter") {

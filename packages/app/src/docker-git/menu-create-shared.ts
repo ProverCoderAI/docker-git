@@ -43,6 +43,32 @@ type AdvanceCreateFlowOptions = {
   readonly quickCreate?: boolean
 }
 
+/**
+ * Direction over the finite ordered set of unresolved Create settings rows.
+ *
+ * @pure true
+ * @effect none
+ * @invariant value ∈ {"up", "down"}
+ * @precondition n/a
+ * @postcondition navigation direction is total for settings rows
+ * @complexity O(1)
+ */
+export type CreateSettingsNavigationDirection = "up" | "down"
+
+/**
+ * User-facing key guide shown only after Create leaves the repo URL step.
+ *
+ * @pure true
+ * @effect none
+ * @invariant hint contains the complete settings-mode key contract
+ * @precondition CreateFlowView.step > 0
+ * @postcondition no repo-step quick-create guidance is rendered from this value
+ * @complexity O(1)
+ */
+export const createSettingsHint = "↑ - up, ↓ - down, Enter - apply"
+
+const firstCreateSettingsStepIndex = 1
+
 const trimLeftSlash = (value: string): string => {
   let start = 0
   while (start < value.length && value[start] === "/") {
@@ -462,6 +488,65 @@ const continueCreateFlow = (
   }
 })
 
+const clampCreateSettingsStep = (
+  step: number,
+  lastStep: number
+): number => Math.min(Math.max(step, firstCreateSettingsStepIndex), lastStep)
+
+const nextCreateSettingsStep = (
+  step: number,
+  lastStep: number,
+  direction: CreateSettingsNavigationDirection
+): number =>
+  Match.value(direction).pipe(
+    Match.when("up", () => step === firstCreateSettingsStepIndex ? lastStep : step - 1),
+    Match.when("down", () => step === lastStep ? firstCreateSettingsStepIndex : step + 1),
+    Match.exhaustive
+  )
+
+/**
+ * Moves the selected Create settings row without applying the current buffer.
+ *
+ * @pure true
+ * @effect none
+ * @invariant view.step = 0 -> result = null
+ * @invariant result != null -> 1 <= result.step < |resolveCreateFlowSteps(result.values)|
+ * @invariant result != null && result.step != view.step -> result.buffer = ""
+ * @precondition view is a CreateFlowView snapshot
+ * @postcondition result values are identical to the input values
+ * @complexity O(n) where n is the number of unresolved Create steps
+ */
+export const moveCreateSettingsStep = (
+  view: CreateFlowView,
+  direction: CreateSettingsNavigationDirection
+): CreateFlowView | null => {
+  const steps = resolveCreateFlowSteps(view.values)
+  const lastStep = steps.length - 1
+  if (view.step < firstCreateSettingsStepIndex || lastStep < firstCreateSettingsStepIndex) {
+    return null
+  }
+
+  const currentStep = clampCreateSettingsStep(view.step, lastStep)
+  const step = nextCreateSettingsStep(currentStep, lastStep, direction)
+  if (step === view.step) {
+    return view
+  }
+  return {
+    ...view,
+    step,
+    buffer: ""
+  }
+}
+
+const resolveNextCreateFlowStep = (
+  currentStep: CreateStep,
+  currentStepIndex: number,
+  nextSteps: ReadonlyArray<CreateStep>
+): number =>
+  currentStep === "repoUrl"
+    ? firstCreateSettingsStepIndex
+    : clampCreateSettingsStep(currentStepIndex, nextSteps.length - 1)
+
 export const advanceCreateFlow = (
   contextOrCwd: string | CreateFlowContext,
   view: CreateFlowView,
@@ -499,8 +584,8 @@ export const advanceCreateFlow = (
   }
 
   const nextSteps = resolveCreateFlowSteps(nextValues)
-  const nextStep = step === "repoUrl" ? 1 : view.step
-  if (nextStep < nextSteps.length) {
+  const nextStep = resolveNextCreateFlowStep(step, view.step, nextSteps)
+  if (nextSteps.length > firstCreateSettingsStepIndex && nextStep < nextSteps.length) {
     return continueCreateFlow(nextStep, nextValues)
   }
 

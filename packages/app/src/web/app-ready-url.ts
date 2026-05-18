@@ -88,8 +88,7 @@ const activeTerminalReadyPath = (session: ActiveTerminalSession | null): string 
   return projectSshRoutePath(session.browserProjectKey, session.session.id)
 }
 
-const selectReadyPath = (token: string | null): string =>
-  token === null ? "/menu/select" : `/select/${encodePathTail(token)}`
+const selectReadyPath = (token: string | null): string => token === null ? "/menu/select" : projectSshRoutePath(token)
 
 const menuActionReadyPath = (
   activeScreen: BrowserScreen,

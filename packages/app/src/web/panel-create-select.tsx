@@ -3,6 +3,7 @@ import type { JSX } from "react"
 import {
   type CreateFlowContext,
   type CreateFlowView,
+  createSettingsHint,
   renderCreateStepLabel,
   resolveCreateFlowSteps,
   resolveCreateInputs
@@ -25,11 +26,6 @@ const createPrompt = (
     defaults
   }
 }
-
-const createHint = (isRepoStep: boolean): string =>
-  isRepoStep
-    ? "Enter = next, Shift+Enter = quick create, Esc = cancel."
-    : "Enter = next, Esc = cancel."
 
 const CreatePromptInput = (
   {
@@ -111,9 +107,15 @@ export const CreatePanel = (
         ? (
           <Box gap={1} marginTop={1}>
             <Button
-              label="Quick create"
+              label="Quick Create"
               onPress={() => {
                 onSubmit(true)
+              }}
+            />
+            <Button
+              label="Settings"
+              onPress={() => {
+                onSubmit(false)
               }}
             />
           </Box>
@@ -161,8 +163,8 @@ const CreateHintBlock = (
   <HelpLines
     lines={[
       ...(isRepoStep ? ["Repo URL or URL + CLI flags."] : []),
-      createHint(isRepoStep),
-      ...(compact ? ["↑/↓ = menu, ←/→ = project"] : []),
+      ...(isRepoStep ? [] : [createSettingsHint]),
+      ...(compact && isRepoStep ? ["↑/↓ = menu, ←/→ = project"] : []),
       `Current cwd: ${controllerCwd}`
     ]}
   />
