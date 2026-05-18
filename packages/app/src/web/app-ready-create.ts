@@ -124,6 +124,56 @@ export const useCreateMenuReset = (
   }, [currentMenu, setCreateView])
 }
 
+const handleCreateVerticalArrow = (
+  event: CreateKeyboardEvent,
+  createView: CreateFlowView,
+  setCreateView: Setter<CreateFlowView>,
+  context: BrowserActionContext
+): boolean => {
+  const nextView = moveCreateDisplaySettingsStep(createView, event.key === "ArrowUp" ? "up" : "down")
+  if (nextView === null) {
+    return false
+  }
+  event.preventDefault()
+  setCreateView(nextView)
+  context.setMessage(null)
+  return true
+}
+
+const handleCreateHorizontalArrow = (
+  event: CreateKeyboardEvent,
+  createView: CreateFlowView,
+  setCreateView: Setter<CreateFlowView>,
+  context: BrowserActionContext
+): boolean => {
+  const nextBuffer = resolveCreateSettingsChoiceBuffer(
+    createView,
+    event.key === "ArrowLeft" ? "left" : "right"
+  )
+  if (nextBuffer === null) {
+    return false
+  }
+  event.preventDefault()
+  setCreateBuffer(createView, setCreateView, nextBuffer)
+  context.setMessage(null)
+  return true
+}
+
+const submitCreateFromKeyboard = (
+  event: CreateKeyboardEvent,
+  { context, controllerCwd, createView, projectsRoot, setCreateView }: CreateKeyArgs
+): void => {
+  event.preventDefault()
+  submitCreateView({
+    context,
+    controllerCwd,
+    projectsRoot,
+    createView,
+    quickCreate: createView.step > 0 ? undefined : event.shiftKey,
+    setCreateView
+  })
+}
+
 export const handleCreateKey = (
   event: CreateKeyboardEvent,
   { context, controllerCwd, createView, projectsRoot, setCreateView }: CreateKeyArgs
@@ -134,38 +184,13 @@ export const handleCreateKey = (
     return true
   }
   if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-    const nextView = moveCreateDisplaySettingsStep(createView, event.key === "ArrowUp" ? "up" : "down")
-    if (nextView === null) {
-      return false
-    }
-    event.preventDefault()
-    setCreateView(nextView)
-    context.setMessage(null)
-    return true
+    return handleCreateVerticalArrow(event, createView, setCreateView, context)
   }
   if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-    const nextBuffer = resolveCreateSettingsChoiceBuffer(
-      createView,
-      event.key === "ArrowLeft" ? "left" : "right"
-    )
-    if (nextBuffer === null) {
-      return false
-    }
-    event.preventDefault()
-    setCreateBuffer(createView, setCreateView, nextBuffer)
-    context.setMessage(null)
-    return true
+    return handleCreateHorizontalArrow(event, createView, setCreateView, context)
   }
   if (event.key === "Enter") {
-    event.preventDefault()
-    submitCreateView({
-      context,
-      controllerCwd,
-      projectsRoot,
-      createView,
-      quickCreate: createView.step > 0 ? undefined : event.shiftKey,
-      setCreateView
-    })
+    submitCreateFromKeyboard(event, { context, controllerCwd, createView, projectsRoot, setCreateView })
     return true
   }
 

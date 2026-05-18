@@ -1,4 +1,4 @@
-import { createElement, type CSSProperties, type JSX } from "react"
+import { createElement, type CSSProperties, type JSX, type KeyboardEvent } from "react"
 
 import type { UiBoxProps, UiButtonProps, UiTextInputProps, UiTextProps } from "./primitives.js"
 
@@ -127,6 +127,40 @@ const horizontalArrowAction = (
   return null
 }
 
+type TextInputKeyboardHandlers = {
+  readonly onArrowLeft: (() => void) | undefined
+  readonly onArrowRight: (() => void) | undefined
+  readonly onEnter: ((shift: boolean) => void) | undefined
+  readonly onEscape: (() => void) | undefined
+}
+
+const stopTextInputKey = (
+  event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
+): void => {
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+const handleMultilineTextInputKeyDown =
+  ({ onArrowLeft, onArrowRight, onEnter, onEscape }: TextInputKeyboardHandlers) =>
+  (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    const onArrow = horizontalArrowAction(event.key, onArrowLeft, onArrowRight)
+    if (onArrow !== null) {
+      stopTextInputKey(event)
+      onArrow()
+      return
+    }
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      stopTextInputKey(event)
+      onEnter?.(event.shiftKey)
+      return
+    }
+    if (event.key === "Escape") {
+      stopTextInputKey(event)
+      onEscape?.()
+    }
+  }
+
 const MultilineTextInput = (
   {
     ariaLabel,
@@ -149,26 +183,7 @@ const MultilineTextInput = (
       onChange={(event) => {
         onChange(event.currentTarget.value)
       }}
-      onKeyDown={(event) => {
-        const onArrow = horizontalArrowAction(event.key, onArrowLeft, onArrowRight)
-        if (onArrow !== null) {
-          event.preventDefault()
-          event.stopPropagation()
-          onArrow()
-          return
-        }
-        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-          event.preventDefault()
-          event.stopPropagation()
-          onEnter?.(event.shiftKey)
-          return
-        }
-        if (event.key === "Escape") {
-          event.preventDefault()
-          event.stopPropagation()
-          onEscape?.()
-        }
-      }}
+      onKeyDown={handleMultilineTextInputKeyDown({ onArrowLeft, onArrowRight, onEnter, onEscape })}
       placeholder={placeholder}
       rows={rows}
       style={{
