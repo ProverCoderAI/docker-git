@@ -184,14 +184,18 @@ describe("projects service", () => {
           withProjectsRoot(
             projectsRoot,
             withEnvVar(
-              "DOCKER_HOST",
-              "unix:///definitely-missing-docker.sock",
+              "DOCKER_CLIENT_TIMEOUT",
+              "1",
               withWorkingDirectory(
                 root,
-                createProjectFromRequest({
-                  repoUrl: "https://example.com/org/repo.git",
-                  skipGithubAuth: true
-                }).pipe(Effect.flip)
+                withEnvVar(
+                  "DOCKER_HOST",
+                  "tcp://127.0.0.1:1",
+                  createProjectFromRequest({
+                    repoUrl: "https://example.com/org/repo.git",
+                    skipGithubAuth: true
+                  }).pipe(Effect.flip)
+                )
               )
             )
           )
