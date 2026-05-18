@@ -135,6 +135,7 @@ describe("app-ready-shortcuts", () => {
     expect(usesProjectPrimaryNavigation("ProjectAuth")).toBe(true)
     expect(usesProjectPrimaryNavigation("Logs")).toBe(true)
     expect(usesProjectPrimaryNavigation("Create")).toBe(false)
+    expect(usesProjectPrimaryNavigation("Share")).toBe(false)
   })
 
   it("does not move projects in Select until project mode is armed", () => {
@@ -204,6 +205,7 @@ describe("app-ready-shortcuts", () => {
     expect(shouldRefreshProjectDetails("Status", false, "project-a", null)).toBe(true)
     expect(shouldRefreshProjectDetails("Logs", false, "project-a", null)).toBe(true)
     expect(shouldRefreshProjectDetails("Tasks", false, "project-a", null)).toBe(true)
+    expect(shouldRefreshProjectDetails("Share", false, "project-a", null)).toBe(false)
     expect(shouldRefreshProjectDetails("Info", false, null, null)).toBe(false)
   })
 

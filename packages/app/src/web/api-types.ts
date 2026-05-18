@@ -7,6 +7,7 @@ import type {
   CreateProjectAcceptedResponseSchema,
   GithubAuthStatusSchema,
   HealthResponseSchema,
+  PanelCloudflareTunnelSessionSchema,
   ProjectAuthSnapshotSchema,
   ProjectBrowserSessionSchema,
   ProjectDatabaseForwardSchema,
@@ -34,6 +35,7 @@ export type StartProjectTerminalSessionAccepted = Schema.Schema.Type<
   typeof StartProjectTerminalSessionAcceptedResponseSchema
 >
 export type ProjectPortForward = Schema.Schema.Type<typeof ProjectPortForwardSchema>
+export type PanelCloudflareTunnelSession = Schema.Schema.Type<typeof PanelCloudflareTunnelSessionSchema>
 export type ProjectBrowserSession = Schema.Schema.Type<typeof ProjectBrowserSessionSchema>
 export type ProjectDatabaseForward = Schema.Schema.Type<typeof ProjectDatabaseForwardSchema>
 export type ProjectDatabaseProfile = Schema.Schema.Type<typeof ProjectDatabaseProfileSchema>

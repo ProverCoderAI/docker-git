@@ -14,6 +14,7 @@ import { PortForwardPanel } from "./panel-port-forwards.js"
 import { ProjectDetailsPanel } from "./panel-project-details.js"
 import { ProjectPromptsPanel } from "./panel-project-prompts.js"
 import { ProjectSkillsPanel } from "./panel-project-skills.js"
+import { SharePanel } from "./panel-share.js"
 import { TaskPanel } from "./panel-tasks.js"
 import { OutputPanel, ProjectListPanel } from "./panels.js"
 import { visibleTerminalWorkspaceState } from "./terminal-state.js"
@@ -35,6 +36,7 @@ const actionLabels: Record<MainPanelsProps["currentMenu"], string> = {
   Prompts: "Refresh prompts",
   Quit: "Run",
   Select: "Open SSH",
+  Share: "Start tunnel",
   Skills: "Refresh skills",
   Status: "Load status",
   Tasks: "Refresh tasks"
@@ -61,6 +63,9 @@ const screenTitle = (props: Pick<MainPanelsProps, "activeScreen" | "currentMenu"
   }
   if (props.activeScreen.tag === "Auth") {
     return "docker-git / Auth profiles"
+  }
+  if (props.activeScreen.tag === "Share") {
+    return "docker-git / Share"
   }
   if (props.activeScreen.tag === "ProjectAuth") {
     return "docker-git / Project auth"
@@ -453,6 +458,30 @@ const OutputScreen = (props: MainPanelsProps): JSX.Element => (
   </ScreenFrame>
 )
 
+const ShareScreen = (props: MainPanelsProps): JSX.Element => (
+  <ScreenFrame
+    hint="Esc back, R refresh"
+    onBack={props.onBackScreen}
+    title={screenTitle(props)}
+  >
+    <Box
+      flexDirection="column"
+      flexGrow={1}
+      minHeight={0}
+      overflowY="auto"
+      padding={props.viewportLayout.compact ? "6px" : 1}
+    >
+      <SharePanel
+        onCopyPublicUrl={props.onCopyPanelShareTunnelUrl}
+        onRefresh={props.onRefreshPanelShareTunnel}
+        onStart={props.onStartPanelShareTunnel}
+        onStop={props.onStopPanelShareTunnel}
+        tunnel={props.panelCloudflareTunnel}
+      />
+    </Box>
+  </ScreenFrame>
+)
+
 export const MainPanels = (props: MainPanelsProps): JSX.Element => {
   const visibleTerminalWorkspace = visibleTerminalWorkspaceState({
     activeTerminalSessionId: props.activeTerminalSessionId,
@@ -475,6 +504,9 @@ export const MainPanels = (props: MainPanelsProps): JSX.Element => {
   }
   if (props.activeScreen.tag === "Output") {
     return <OutputScreen {...props} />
+  }
+  if (props.activeScreen.tag === "Share") {
+    return <ShareScreen {...props} />
   }
   return <ContentScreen props={props} title={screenTitle(props)} />
 }

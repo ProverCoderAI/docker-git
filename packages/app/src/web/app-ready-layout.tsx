@@ -7,6 +7,7 @@ import type {
   ContainerTaskSnapshot,
   DashboardData,
   GithubAuthStatus,
+  PanelCloudflareTunnelSession,
   ProjectAuthSnapshot,
   ProjectBrowserSession,
   ProjectDatabaseForward,
@@ -71,6 +72,7 @@ export type ReadyLayoutProps = {
   readonly onDeleteProjectSkill: (scope: ProjectSkillScope, name: string) => void
   readonly onCloseDatabaseForward: (profile: ProjectDatabaseProfile) => void
   readonly onExposeDatabaseProfile: (profile: ProjectDatabaseProfile) => void
+  readonly onCopyPanelShareTunnelUrl: (publicUrl: string) => void
   readonly onRunAuthAction: (index: number) => void
   readonly onRunProjectAuthAction: (index: number) => void
   readonly onOpenMenuScreen: (index: number) => void
@@ -90,6 +92,7 @@ export type ReadyLayoutProps = {
   readonly onRefreshProjectPrompts: () => void
   readonly onRefreshProjectSkills: () => void
   readonly onRefreshProjectTasks: () => void
+  readonly onRefreshPanelShareTunnel: () => void
   readonly onProjectTasksIncludeDefaultChange: (includeDefault: boolean) => void
   readonly onRestartProjectDatabaseEditor: () => void
   readonly onSaveDatabaseProfile: () => void
@@ -104,7 +107,10 @@ export type ReadyLayoutProps = {
   readonly onTerminalMessage: (message: string | null) => void
   readonly onLoadProjectTaskLogs: (pid: number) => void
   readonly onStopProjectTask: (pid: number) => void
+  readonly onStartPanelShareTunnel: () => void
+  readonly onStopPanelShareTunnel: () => void
   readonly output: string
+  readonly panelCloudflareTunnel: PanelCloudflareTunnelSession | null
   readonly portForwardInput: string
   readonly portForwards: ReadonlyArray<ProjectPortForward>
   readonly project: ProjectDetails | null

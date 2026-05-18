@@ -56,6 +56,7 @@ type StaticMenuTag = Exclude<
   | "ProjectAuth"
   | "Prompts"
   | "Select"
+  | "Share"
   | "Skills"
   | "Tasks"
 >

@@ -54,6 +54,7 @@ const menuSlugs: Readonly<Record<BrowserMenuTag, string>> = {
   Prompts: "prompts",
   Quit: "quit",
   Select: "select",
+  Share: "share",
   Skills: "skills",
   Status: "status",
   Tasks: "tasks"

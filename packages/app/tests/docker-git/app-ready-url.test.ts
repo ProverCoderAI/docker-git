@@ -41,6 +41,22 @@ describe("app ready URL state", () => {
     })).toBe("/menu/browser")
   })
 
+  it("renders share panel URLs without project selection", () => {
+    expect(readyUrlPath({
+      activeScreen: { tag: "Share" },
+      activeTerminalSession: null,
+      currentMenu: "Share",
+      selectedProjectId: null,
+      selectedProjectSummary: undefined
+    })).toBe("/share")
+    expect(parseReadyUrlNavigation("https://docker-git.local/share", dashboard.projects)).toEqual({
+      activeScreen: { tag: "Share" },
+      menu: "Share",
+      projectNavigationArmed: false,
+      selectedProjectId: null
+    })
+  })
+
   it("renders selected project tabs as readable deep links", () => {
     expect(readyUrlPath({
       activeScreen: { tag: "ProjectPicker" },

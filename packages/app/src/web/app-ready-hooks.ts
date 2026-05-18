@@ -5,9 +5,17 @@ import {
   type BrowserActionContext,
   loadSelectedProjectInfo,
   refreshAuthPanel,
+  refreshPanelCloudflareTunnel,
   refreshProjectAuthPanel
 } from "./actions.js"
-import type { AuthSnapshot, DashboardData, GithubAuthStatus, ProjectAuthSnapshot, ProjectDetails } from "./api.js"
+import type {
+  AuthSnapshot,
+  DashboardData,
+  GithubAuthStatus,
+  PanelCloudflareTunnelSession,
+  ProjectAuthSnapshot,
+  ProjectDetails
+} from "./api.js"
 import { maybeLoadProjectBrowser } from "./app-ready-browser-hook.js"
 import { maybeLoadProjectDatabases } from "./app-ready-databases-hook.js"
 import { maybeLoadProjectPortForwards } from "./app-ready-port-forwards-hook.js"
@@ -43,6 +51,7 @@ type PanelAutoloadArgs = {
   readonly currentMenu: BrowserMenuTag
   readonly dashboardRefreshTick: number
   readonly githubStatus: GithubAuthStatus | null
+  readonly panelCloudflareTunnel: PanelCloudflareTunnelSession | null
   readonly project: ProjectDetails | null
   readonly projectNavigationArmed: boolean
   readonly projectAuthSnapshot: ProjectAuthSnapshot | null
@@ -133,6 +142,14 @@ const maybeRefreshProjectAuthScreen = (
   }
 }
 
+const maybeRefreshShareScreen = (
+  { activeScreen, context, panelCloudflareTunnel }: PanelAutoloadArgs
+): void => {
+  if (activeScreen.tag === "Share" && panelCloudflareTunnel === null) {
+    refreshPanelCloudflareTunnel(context, { silent: true })
+  }
+}
+
 const maybeLoadProjectPickerInfo = (
   { activeScreen, context, currentMenu, project, projectNavigationArmed, selectedProjectId }: PanelAutoloadArgs
 ): void => {
@@ -145,11 +162,12 @@ const maybeLoadProjectPickerInfo = (
 }
 
 const loadReadyPanel = (args: PanelAutoloadArgs): void => {
-  if (maybeRefreshGithubStatus(args)) {
+  if (maybeRefreshGithubStatus(args) && args.currentMenu !== "Share") {
     return
   }
   maybeRefreshAuthScreen(args)
   maybeRefreshProjectAuthScreen(args)
+  maybeRefreshShareScreen(args)
   maybeLoadProjectPickerInfo(args)
   maybeLoadProjectPortForwards(args)
   maybeLoadProjectDatabases(args)
@@ -176,6 +194,7 @@ export const usePanelAutoload = (args: PanelAutoloadArgs) => {
     args.currentMenu,
     args.dashboardRefreshTick,
     args.githubStatus,
+    args.panelCloudflareTunnel,
     args.project?.id,
     args.projectAuthSnapshot,
     args.projectNavigationArmed,

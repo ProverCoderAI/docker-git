@@ -483,6 +483,10 @@ export const runProjectMenuAction = (
     loadSelectedProjectSkills(context)
     return
   }
+  if (currentMenu === "Share") {
+    context.setMessage("Share screen is active.")
+    return
+  }
   runProjectMenuCommand(currentMenu, context)
 }
 
@@ -498,6 +502,7 @@ const runProjectMenuCommand = (
     | "Info"
     | "Ports"
     | "Prompts"
+    | "Share"
     | "Skills"
     | "Tasks"
   >,

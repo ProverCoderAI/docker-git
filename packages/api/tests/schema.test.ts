@@ -21,6 +21,7 @@ import {
   ProjectDatabaseProfileRequestSchema,
   ProjectDatabaseSessionSchema,
   ProjectPortForwardRequestSchema,
+  StartPanelCloudflareTunnelRequestSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
@@ -376,6 +377,38 @@ describe("api schemas", () => {
         onRight: (value) => {
           expect(value.hostPort).toBe(4000)
           expect(value.targetPort).toBe(3000)
+        }
+      })
+    }))
+
+  it.effect("decodes panel Cloudflare tunnel payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(StartPanelCloudflareTunnelRequestSchema)({
+        panelUrl: "http://localhost:4174/"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.panelUrl).toBe("http://localhost:4174/")
+        }
+      })
+    }))
+
+  it.effect("rejects invalid panel Cloudflare tunnel payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(StartPanelCloudflareTunnelRequestSchema)({
+        panelUrl: 123
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          expect(ParseResult.TreeFormatter.formatIssueSync(error.issue)).toContain("Expected string")
+        },
+        onRight: () => {
+          throw new Error("Expected schema decode failure")
         }
       })
     }))

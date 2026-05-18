@@ -2,6 +2,7 @@ export type {
   AuthSnapshot,
   ContainerTaskSnapshot,
   GithubAuthStatus,
+  PanelCloudflareTunnelSession,
   ProjectAuthSnapshot,
   ProjectBrowserSession,
   ProjectDatabaseForward,

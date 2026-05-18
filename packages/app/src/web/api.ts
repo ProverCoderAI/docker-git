@@ -57,6 +57,7 @@ export {
 } from "./api-project-core.js"
 export type { ApplyProjectRequest, ProjectResourceLimitRequest } from "./api-project-core.js"
 export { deleteProjectPrompt, loadProjectPrompts, writeProjectPrompt } from "./api-prompts.js"
+export { loadPanelCloudflareTunnel, startPanelCloudflareTunnel, stopPanelCloudflareTunnel } from "./api-share.js"
 export { deleteProjectSkill, loadProjectSkills, projectSkillScopeToId, writeProjectSkill } from "./api-skills.js"
 export { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api-tasks.js"
 
@@ -333,3 +334,5 @@ export const runProjectAuthFlow = (
   )
 
 export { resolveApiBaseUrl } from "./api-http.js"
+
+export { type PanelCloudflareTunnelSession } from "./api-schema.js"
