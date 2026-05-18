@@ -64,15 +64,19 @@ const appendLogLine = (
 
   record.logLines = trimLogLines([...record.logLines, trimmed])
   const publicUrl = parseTryCloudflareUrl(trimmed)
+  const shouldPromoteToRunning =
+    publicUrl !== null &&
+    !record.stopping &&
+    !isTerminalTunnelSession(record.session)
   updateRecord(
     record,
-    publicUrl === null
-      ? {}
-      : {
+    shouldPromoteToRunning
+      ? {
         error: null,
         publicUrl,
         status: "running"
       }
+      : {}
   )
 }
 
