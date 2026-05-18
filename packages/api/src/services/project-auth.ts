@@ -236,6 +236,28 @@ const hasGeminiAccountCredentials = (
     })
   )
 
+const grokUserSettingsCredentialMarkers: ReadonlyArray<RegExp> = [
+  /"apiKey"\s*:\s*"[^"]+"/u,
+  /"accessToken"\s*:\s*"[^"]+"/u,
+  /"refreshToken"\s*:\s*"[^"]+"/u,
+  /"authToken"\s*:\s*"[^"]+"/u,
+  /"oauth"\s*:/u
+]
+
+const hasGrokUserSettingsCredentials = (
+  fs: FileSystem.FileSystem,
+  settingsPath: string
+): Effect.Effect<boolean, PlatformError> =>
+  Effect.gen(function*(_) {
+    const hasFile = yield* _(hasFileAtPath(fs, settingsPath))
+    if (!hasFile) {
+      return false
+    }
+
+    const settingsText = yield* _(fs.readFileString(settingsPath), Effect.orElseSucceed(() => ""))
+    return grokUserSettingsCredentialMarkers.some((marker) => marker.test(settingsText))
+  })
+
 const hasGrokAccountCredentials = (
   fs: FileSystem.FileSystem,
   accountPath: string
@@ -251,7 +273,7 @@ const hasGrokAccountCredentials = (
           if (hasEnvApiKey) {
             return Effect.succeed(true)
           }
-          return hasNonEmptyOauthToken(fs, `${accountPath}/.grok/user-settings.json`)
+          return hasGrokUserSettingsCredentials(fs, `${accountPath}/.grok/user-settings.json`)
         })
       )
     })

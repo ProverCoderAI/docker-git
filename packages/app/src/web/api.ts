@@ -215,6 +215,26 @@ export const loadProjectTerminalSessions = (projectKey: string) =>
     Effect.map((response) => response.sessions)
   )
 
+export const loadProjectTerminalWorkspace = (projectKey: string) =>
+  requestJson(
+    "GET",
+    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions`,
+    ProjectTerminalSessionsResponseSchema
+  )
+
+export const setProjectActiveTerminalSession = (
+  projectKey: string,
+  sessionId: string
+) =>
+  requestJson(
+    "PUT",
+    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/active`,
+    ProjectTerminalSessionResponseSchema,
+    { sessionId }
+  ).pipe(
+    Effect.map((response) => response.session)
+  )
+
 export const loadProjectTerminalSession = (
   projectKey: string,
   sessionId: string

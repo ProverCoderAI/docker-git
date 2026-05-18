@@ -366,13 +366,14 @@ export const readContainerTaskSnapshot = (
       )
     )
     const tasks = buildContainerTasks(processes, managedAgentPids, includeDefault)
+    const terminalSessions = yield* _(listProjectTerminalSessions(project.id))
     return {
       projectId: project.id,
       containerName: project.containerName,
       generatedAt: new Date().toISOString(),
       sshConnections: distinctSshConnections(tasks),
       tasks,
-      terminalSessions: listProjectTerminalSessions(project.id),
+      terminalSessions,
       agents: listAgents(project.id)
     }
   })

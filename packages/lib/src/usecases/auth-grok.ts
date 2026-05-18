@@ -37,10 +37,11 @@ export const authGrokLogin = (
       const trimmedApiKey = apiKey.trim()
       const apiKeyFilePath = grokApiKeyPath(accountPath)
       yield* _(fs.writeFileString(apiKeyFilePath, `${trimmedApiKey}\n`))
-      yield* _(fs.chmod(apiKeyFilePath, 0o600), Effect.orElseSucceed(() => void 0))
+      yield* _(fs.chmod(apiKeyFilePath, 0o600))
 
       const credentialsDir = grokCredentialsPath(accountPath)
       yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
+      yield* _(fs.chmod(credentialsDir, 0o700))
       yield* _(writeInitialGrokSettings(credentialsDir, fs, trimmedApiKey))
     })).pipe(
       Effect.zipRight(autoSyncState(`chore(state): auth grok ${accountLabel}`))
@@ -75,7 +76,6 @@ export const authGrokLoginOauth = (
     ({ accountPath, cwd, fs }) =>
       Effect.gen(function*(_) {
         const credentialsDir = yield* _(prepareGrokCredentialsDir(cwd, accountPath, fs))
-        yield* _(writeInitialGrokSettings(credentialsDir, fs, null))
 
         yield* _(
           runGrokOauthLoginWithPrompt(cwd, accountPath, {
@@ -83,6 +83,7 @@ export const authGrokLoginOauth = (
             containerPath: grokContainerHomeDir
           })
         )
+        yield* _(writeInitialGrokSettings(credentialsDir, fs, null))
       }),
     { buildImage: true }
   ).pipe(

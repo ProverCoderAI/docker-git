@@ -198,6 +198,7 @@ describe("renderDockerfile", () => {
       "curl -fsSL --retry 5 --retry-all-errors --retry-delay 2",
       "glab --version",
       "ncurses-term jq",
+      "sudo tmux",
       "# Tooling: RTK (Rust Token Killer)",
       "ARG RTK_VERSION=v0.39.0",
       'https://raw.githubusercontent.com/rtk-ai/rtk/${RTK_VERSION}/install.sh',
@@ -219,8 +220,9 @@ describe("renderDockerfile", () => {
 
     expectContainsAll(dockerfile, [
       "npm install -g grok-dev@latest --force",
-      "grok --version >/dev/null || true"
+      "grok --version"
     ])
+    expect(dockerfile).not.toContain("grok --version >/dev/null || true")
   })
 })
 

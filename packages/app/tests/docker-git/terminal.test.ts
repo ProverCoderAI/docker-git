@@ -13,7 +13,13 @@ import {
   shouldShowTerminalTabs
 } from "../../src/web/terminal-mobile-layout.js"
 import { resolveTerminalReconnectDelay } from "../../src/web/terminal-reconnect.js"
-import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "../../src/web/terminal.js"
+import {
+  parseTerminalServerMessage,
+  projectSshRoutePath,
+  resolveTerminalWebSocketUrl,
+  terminalRouteToken,
+  terminalTitleById
+} from "../../src/web/terminal.js"
 import type { TerminalServerMessage } from "../../src/web/terminal.js"
 
 const resolveApiBaseUrlMock = vi.hoisted(() => vi.fn<() => string>())
@@ -77,6 +83,33 @@ describe("browser terminal helpers", () => {
     const parsed = parseTerminalServerMessage(JSON.stringify(readyMessagePayload))
 
     expect(parsed).toEqual(readyMessagePayload)
+  })
+
+  it("builds stable project SSH routes with optional terminal selectors", () => {
+    expect(projectSshRoutePath("octocat/hello-world")).toBe("/ssh/octocat/hello-world")
+    expect(projectSshRoutePath("octocat/hello world", "a5f1c873-358b-4de9-9444-92ee8f8522fb")).toBe(
+      "/ssh/octocat/hello%20world?t=a5f1c873"
+    )
+    expect(projectSshRoutePath("octocat/hello world", "session/1")).toBe("/ssh/octocat/hello%20world?t=session%2F1")
+  })
+
+  it("shortens UUID terminal selectors while preserving non-UUID ids", () => {
+    expect(terminalRouteToken("a5f1c873-358b-4de9-9444-92ee8f8522fb")).toBe("a5f1c873")
+    expect(terminalRouteToken("session-1")).toBe("session-1")
+  })
+
+  it("builds stable human terminal titles from creation order", () => {
+    expect(
+      [
+        ...terminalTitleById([
+          { createdAt: "2026-04-08T10:02:00.000Z", id: "session-b" },
+          { createdAt: "2026-04-08T10:01:00.000Z", id: "session-a" }
+        ]).entries()
+      ]
+    ).toEqual([
+      ["session-a", "Terminal 1"],
+      ["session-b", "Terminal 2"]
+    ])
   })
 
   it("rejects malformed terminal messages", () => {

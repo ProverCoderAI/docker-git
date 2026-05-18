@@ -168,7 +168,11 @@ export const UpProjectRequestSchema = Schema.Struct({
 })
 
 export const StartProjectTerminalSessionRequestSchema = Schema.Struct({
-  requestId: Schema.String
+  requestId: Schema.UUID
+})
+
+export const ActiveProjectTerminalSessionRequestSchema = Schema.Struct({
+  sessionId: Schema.String
 })
 
 export const ProjectPortForwardRequestSchema = Schema.Struct({

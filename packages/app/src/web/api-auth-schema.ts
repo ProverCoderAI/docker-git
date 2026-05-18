@@ -1,19 +1,44 @@
 import * as Schema from "@effect/schema/Schema"
 
-const NullableString = Schema.NullOr(Schema.String)
+import { NullableString } from "./api-project-schema.js"
+
+export const GithubTokenStatusSchema = Schema.Struct({
+  key: Schema.String,
+  label: Schema.String,
+  login: NullableString,
+  status: Schema.Union(
+    Schema.Literal("valid"),
+    Schema.Literal("invalid"),
+    Schema.Literal("unknown")
+  )
+})
+
+export const GithubAuthStatusSchema = Schema.Struct({
+  summary: Schema.String,
+  tokens: Schema.Array(GithubTokenStatusSchema)
+})
+
+export const GithubStatusResponseSchema = Schema.Struct({
+  ok: Schema.optional(Schema.Boolean),
+  status: GithubAuthStatusSchema
+})
+
+const AuthProviderSnapshotFields = {
+  claudeAuthEntries: Schema.Number,
+  claudeAuthPath: Schema.String,
+  geminiAuthEntries: Schema.Number,
+  geminiAuthPath: Schema.String,
+  grokAuthEntries: Schema.Number,
+  grokAuthPath: Schema.String,
+  githubTokenEntries: Schema.Number,
+  gitTokenEntries: Schema.Number
+}
 
 export const AuthSnapshotSchema = Schema.Struct({
-  globalEnvPath: Schema.String,
-  claudeAuthPath: Schema.String,
-  geminiAuthPath: Schema.String,
-  grokAuthPath: Schema.String,
-  totalEntries: Schema.Number,
-  githubTokenEntries: Schema.Number,
-  gitTokenEntries: Schema.Number,
+  ...AuthProviderSnapshotFields,
   gitUserEntries: Schema.Number,
-  claudeAuthEntries: Schema.Number,
-  geminiAuthEntries: Schema.Number,
-  grokAuthEntries: Schema.Number
+  globalEnvPath: Schema.String,
+  totalEntries: Schema.Number
 })
 
 export const AuthSnapshotResponseSchema = Schema.Struct({
@@ -22,23 +47,16 @@ export const AuthSnapshotResponseSchema = Schema.Struct({
 })
 
 export const ProjectAuthSnapshotSchema = Schema.Struct({
-  projectDir: Schema.String,
-  projectName: Schema.String,
-  envGlobalPath: Schema.String,
-  envProjectPath: Schema.String,
-  claudeAuthPath: Schema.String,
-  geminiAuthPath: Schema.String,
-  grokAuthPath: Schema.String,
-  githubTokenEntries: Schema.Number,
-  gitTokenEntries: Schema.Number,
-  claudeAuthEntries: Schema.Number,
-  geminiAuthEntries: Schema.Number,
-  grokAuthEntries: Schema.Number,
-  activeGithubLabel: NullableString,
-  activeGitLabel: NullableString,
   activeClaudeLabel: NullableString,
   activeGeminiLabel: NullableString,
-  activeGrokLabel: NullableString
+  activeGrokLabel: NullableString,
+  activeGithubLabel: NullableString,
+  activeGitLabel: NullableString,
+  ...AuthProviderSnapshotFields,
+  envGlobalPath: Schema.String,
+  envProjectPath: Schema.String,
+  projectDir: Schema.String,
+  projectName: Schema.String
 })
 
 export const ProjectAuthSnapshotResponseSchema = Schema.Struct({

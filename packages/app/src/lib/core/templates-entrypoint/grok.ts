@@ -256,6 +256,18 @@ const renderEntrypointGrokNotice = (config: TemplateConfig): string =>
     .replaceAll("__GROK_HOME__", config.grokHome)
     .replaceAll("__TARGET_DIR__", config.targetDir)
 
+/**
+ * Renders the Grok CLI entrypoint bootstrap for a generated project container.
+ *
+ * @param config Project template configuration with SSH user, Grok home, and target directory paths.
+ * @returns Bash fragment that wires Grok auth labels, config files, profile exports, sudo policy, and managed GROK.md.
+ * @pure true
+ * @effect none; CORE template renderer only constructs a string.
+ * @invariant returned script keeps Grok credentials scoped by GROK_AUTH_LABEL.
+ * @precondition config contains validated container paths from TemplateConfig construction.
+ * @postcondition returned string contains all Grok setup fragments in deterministic order.
+ * @complexity O(1) time / O(1) space.
+ */
 export const renderEntrypointGrokConfig = (config: TemplateConfig): string =>
   [
     renderGrokAuthConfig(config),

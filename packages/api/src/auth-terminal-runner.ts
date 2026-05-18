@@ -4,8 +4,13 @@ import { Effect, Match } from "effect"
 
 type AuthTerminalRunnerFlow = "ClaudeOauth" | "GeminiOauth" | "GrokOauth"
 
-const parseFlow = (value: string | undefined): AuthTerminalRunnerFlow =>
-  value === "ClaudeOauth" || value === "GeminiOauth" || value === "GrokOauth" ? value : "ClaudeOauth"
+const parseFlow = (value: string | undefined): AuthTerminalRunnerFlow => {
+  if (value === "ClaudeOauth" || value === "GeminiOauth" || value === "GrokOauth") {
+    return value
+  }
+  process.stderr.write(`Unsupported auth terminal flow: ${value ?? "<empty>"}\n`)
+  process.exit(2)
+}
 
 const parseLabel = (value: string | undefined): string | null => {
   const trimmed = value?.trim() ?? ""

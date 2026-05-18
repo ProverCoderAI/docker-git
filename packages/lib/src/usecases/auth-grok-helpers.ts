@@ -15,7 +15,7 @@ import { resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 
 export type GrokRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
-export type GrokAuthMethod = "none" | "api-key" | "user-settings"
+export type GrokAuthMethod = "none" | "api-key" | "oauth"
 
 export const grokImageName = "docker-git-auth-grok:latest"
 export const grokImageDir = ".docker-git/.orch/auth/grok/.image"
@@ -60,6 +60,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
   && apt-get install -y --no-install-recommends nodejs \
   && rm -rf /var/lib/apt/lists/*
 RUN npm install -g grok-dev@latest --force
+RUN grok --version
 `
 
 export const ensureGrokOrchLayout = (
@@ -97,6 +98,7 @@ export const withGrokAuth = <A, E>(
       const rootPath = resolvePathFromCwd(path, cwd, command.grokAuthPath)
       const { accountLabel, accountPath } = resolveGrokAccountPath(path, rootPath, command.label)
       yield* _(fs.makeDirectory(accountPath, { recursive: true }))
+      yield* _(fs.chmod(accountPath, 0o700))
       if (options.buildImage === true) {
         yield* _(
           ensureDockerImage(fs, path, cwd, {
@@ -166,8 +168,19 @@ export const hasGrokCredentials = (
       return false
     }
     const content = yield* _(fs.readFileString(grokUserSettingsPath(accountPath)), Effect.orElseSucceed(() => ""))
-    return content.trim().length > 0
+    return hasGrokUserSettingsCredentials(content)
   })
+
+const grokUserSettingsCredentialMarkers: ReadonlyArray<RegExp> = [
+  /"apiKey"\s*:\s*"[^"]+"/u,
+  /"accessToken"\s*:\s*"[^"]+"/u,
+  /"refreshToken"\s*:\s*"[^"]+"/u,
+  /"authToken"\s*:\s*"[^"]+"/u,
+  /"oauth"\s*:/u
+]
+
+const hasGrokUserSettingsCredentials = (content: string): boolean =>
+  grokUserSettingsCredentialMarkers.some((marker) => marker.test(content))
 
 export const resolveGrokAuthMethod = (
   fs: FileSystem.FileSystem,
@@ -179,7 +192,7 @@ export const resolveGrokAuthMethod = (
       return "api-key"
     }
     const hasUserSettings = yield* _(hasGrokCredentials(fs, accountPath))
-    return hasUserSettings ? "user-settings" : "none"
+    return hasUserSettings ? "oauth" : "none"
   })
 
 export const prepareGrokCredentialsDir = (
@@ -195,8 +208,7 @@ export const prepareGrokCredentialsDir = (
         command: "docker",
         args: ["run", "--rm", "-v", `${accountPath}:/target`, "alpine", "rm", "-rf", "/target/.grok"]
       }),
-      Effect.asVoid,
-      Effect.orElse(() => Effect.void)
+      Effect.asVoid
     )
 
     yield* _(
@@ -205,13 +217,7 @@ export const prepareGrokCredentialsDir = (
       )
     )
     yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
-    yield* _(
-      runCommandExitCode({
-        cwd,
-        command: "chmod",
-        args: ["-R", "777", credentialsDir]
-      }).pipe(Effect.orElse(() => Effect.succeed(0)))
-    )
+    yield* _(fs.chmod(credentialsDir, 0o700))
     return credentialsDir
   })
 
@@ -245,13 +251,20 @@ export const writeInitialGrokSettings = (
         JSON.stringify(defaultGrokProjectSettings, null, 2) + "\n"
       )
     )
+    yield* _(fs.chmod(settingsPath, 0o600))
 
     const userSettingsPath = `${credentialsDir}/user-settings.json`
-    yield* _(
-      fs.writeFileString(
-        userSettingsPath,
-        JSON.stringify(defaultGrokUserSettings(apiKey), null, 2) + "\n"
+    const shouldWriteUserSettings = apiKey === null
+      ? !(yield* _(isRegularFile(fs, userSettingsPath)))
+      : true
+    if (shouldWriteUserSettings) {
+      yield* _(
+        fs.writeFileString(
+          userSettingsPath,
+          JSON.stringify(defaultGrokUserSettings(apiKey), null, 2) + "\n"
+        )
       )
-    )
+      yield* _(fs.chmod(userSettingsPath, 0o600))
+    }
     return settingsPath
   })

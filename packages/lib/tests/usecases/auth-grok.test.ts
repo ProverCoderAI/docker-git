@@ -84,6 +84,8 @@ describe("authGrokLogin", () => {
 
           const accountPath = path.join(absoluteGrokAuthPath, accountLabel)
           const apiKey = yield* _(fs.readFileString(path.join(accountPath, ".api-key")))
+          const apiKeyInfo = yield* _(fs.stat(path.join(accountPath, ".api-key")))
+          const credentialsInfo = yield* _(fs.stat(path.join(accountPath, ".grok")))
           const userSettings = JSON.parse(
             yield* _(fs.readFileString(path.join(accountPath, ".grok", "user-settings.json")))
           )
@@ -92,6 +94,8 @@ describe("authGrokLogin", () => {
           )
 
           expect(apiKey).toBe("xai-test-api-key\n")
+          expect(Number(apiKeyInfo.mode ?? 0) & 0o777).toBe(0o600)
+          expect(Number(credentialsInfo.mode ?? 0) & 0o777).toBe(0o700)
           expect(userSettings.apiKey).toBe("xai-test-api-key")
           expect(userSettings.sandboxMode).toBe("off")
           expect(projectSettings.mcpServers.playwright.command).toBe("docker-git-playwright-mcp")
@@ -113,6 +117,27 @@ describe("authGrokLogin", () => {
 
         const detected = yield* _(hasGrokCredentials(fs, accountPath))
         expect(detected).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("does not treat bootstrap user settings as Grok credentials", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const accountPath = path.join(root, "default")
+        const credentialsDir = path.join(accountPath, ".grok")
+
+        yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
+        yield* _(
+          fs.writeFileString(
+            path.join(credentialsDir, "user-settings.json"),
+            "{\"sandboxMode\":\"off\",\"confirmBeforeToolUse\":false}\n"
+          )
+        )
+
+        const detected = yield* _(hasGrokCredentials(fs, accountPath))
+        expect(detected).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

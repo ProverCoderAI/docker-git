@@ -76,6 +76,12 @@ const printOauthInstructions = (): Effect.Effect<void> =>
     process.stderr.write("\n")
   })
 
+const grokAuthPermissionScript = [
+  "chown -R 1000:1000 \"$1\"",
+  "find \"$1\" -type d -exec chmod 700 {} +",
+  "find \"$1\" -type f -exec chmod 600 {} +"
+].join(" && ")
+
 const fixGrokAuthPermissions = (cwd: string, hostPath: string, containerPath: string) =>
   runCommandWithExitCodes(
     {
@@ -87,9 +93,10 @@ const fixGrokAuthPermissions = (cwd: string, hostPath: string, containerPath: st
         "-v",
         `${hostPath}:${containerPath}`,
         "alpine",
-        "chmod",
-        "-R",
-        "777",
+        "sh",
+        "-c",
+        grokAuthPermissionScript,
+        "sh",
         containerPath
       ]
     },

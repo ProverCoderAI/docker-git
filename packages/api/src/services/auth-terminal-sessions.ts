@@ -1,6 +1,6 @@
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
-import { Either, Effect } from "effect"
+import { Either, Effect, Match } from "effect"
 import { randomUUID } from "node:crypto"
 import { fileURLToPath } from "node:url"
 import type { IncomingMessage, Server as HttpServer } from "node:http"
@@ -69,11 +69,12 @@ const nowIso = (): string => new Date().toISOString()
 const resolveCommandLabel = (request: AuthTerminalSessionRequest): string => {
   const label = request.label?.trim()
   const suffix = label === undefined || label.length === 0 ? "" : ` [${label}]`
-  return request.flow === "ClaudeOauth"
-    ? `docker-git menu auth claude oauth${suffix}`
-    : request.flow === "GeminiOauth"
-      ? `docker-git menu auth gemini oauth${suffix}`
-      : `docker-git menu auth grok oauth${suffix}`
+  return Match.value(request.flow).pipe(
+    Match.when("ClaudeOauth", () => `docker-git menu auth claude oauth${suffix}`),
+    Match.when("GeminiOauth", () => `docker-git menu auth gemini oauth${suffix}`),
+    Match.when("GrokOauth", () => `docker-git menu auth grok oauth${suffix}`),
+    Match.exhaustive
+  )
 }
 
 const resolveRunnerArgs = (flow: AuthTerminalFlow, label: string | null | undefined): ReadonlyArray<string> => {
