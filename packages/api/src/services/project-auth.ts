@@ -196,6 +196,20 @@ const hasApiKeyInEnvFile = (
     return false
   })
 
+const hasNonEmptyApiKeyFile = (
+  fs: FileSystem.FileSystem,
+  filePath: string
+): Effect.Effect<boolean, PlatformError> =>
+  Effect.gen(function*(_) {
+    const hasFile = yield* _(hasFileAtPath(fs, filePath))
+    if (!hasFile) {
+      return false
+    }
+
+    const apiKey = yield* _(fs.readFileString(filePath), Effect.orElseSucceed(() => ""))
+    return apiKey.trim().length > 0
+  })
+
 const checkAnyFileExists = (
   fs: FileSystem.FileSystem,
   basePath: string,
@@ -262,7 +276,7 @@ const hasGrokAccountCredentials = (
   fs: FileSystem.FileSystem,
   accountPath: string
 ): Effect.Effect<boolean, PlatformError> =>
-  hasFileAtPath(fs, `${accountPath}/.api-key`).pipe(
+  hasNonEmptyApiKeyFile(fs, `${accountPath}/.api-key`).pipe(
     Effect.flatMap((hasApiKey) => {
       if (hasApiKey) {
         return Effect.succeed(true)
