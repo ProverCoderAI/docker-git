@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest"
 
 import { defaultTemplateConfig, type TemplateConfig } from "../../src/lib/core/domain.js"
 import { planFiles } from "../../src/lib/core/templates.js"
+import { renderDockerfile } from "../../src/lib/core/templates/dockerfile.js"
 
 const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateConfig => ({
   ...defaultTemplateConfig,
@@ -34,6 +35,7 @@ describe("app planFiles", () => {
       (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
         file._tag === "File" && file.relativePath === "docker-git-browser-runtime.sh"
     )
+    const dockerfile = renderDockerfile(makeTemplateConfig({ enableMcpPlaywright: true }))
 
     expect(filePaths).toContain("Dockerfile.browser")
     expect(filePaths).toContain("mcp-playwright-start-extra.sh")
@@ -41,6 +43,12 @@ describe("app planFiles", () => {
     expect(runtime).toBeDefined()
     expect(runtime?.mode).toBe(0o755)
     expect(runtime?.contents).toContain('if [[ "${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
+    expect(runtime?.contents).toContain("docker_git_wait_for_playwright_cdp()")
+    expect(runtime?.contents).toContain("MCP_PLAYWRIGHT_ENABLE=0")
     expect(runtime?.contents).not.toContain('\\${MCP_PLAYWRIGHT_ENABLE:-0}')
+    expect(dockerfile).toContain(
+      "COPY Dockerfile.browser mcp-playwright-start-extra.sh docker-git-browser-runtime.sh /opt/docker-git/browser/"
+    )
+    expect(dockerfile).toContain('MCP_PLAYWRIGHT_CDP_TIMEOUT="${MCP_PLAYWRIGHT_CDP_TIMEOUT:-60000}"')
   })
 })

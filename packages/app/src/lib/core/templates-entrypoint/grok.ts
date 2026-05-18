@@ -151,14 +151,7 @@ const renderGrokAuthConfig = (config: TemplateConfig): string =>
 
 const grokSettingsJsonTemplate = `{
   "sandboxMode": "off",
-  "confirmBeforeToolUse": false,
-  "mcpServers": {
-    "playwright": {
-      "command": "docker-git-playwright-mcp",
-      "args": [],
-      "trust": true
-    }
-  }
+  "confirmBeforeToolUse": false
 }`
 
 const grokUserSettingsJsonTemplate = `{
@@ -188,6 +181,41 @@ GROK_SETTINGS_OWNER_UID="$(id -u "${config.sshUser}" 2>/dev/null || id -u)"
 GROK_SETTINGS_OWNER_GID="$(id -g "${config.sshUser}" 2>/dev/null || id -g)"
 chown -R "$GROK_SETTINGS_OWNER_UID:$GROK_SETTINGS_OWNER_GID" "$GROK_SETTINGS_DIR" || true
 chmod 0600 "$GROK_CONFIG_SETTINGS_FILE" "$GROK_USER_SETTINGS_FILE" 2>/dev/null || true`
+
+const renderGrokMcpPlaywrightConfig = (): string =>
+  String.raw`# Grok CLI: keep Playwright MCP config in sync with container settings
+docker_git_sync_grok_playwright_mcp() {
+  GROK_CONFIG_SETTINGS_FILE="$GROK_CONFIG_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="$MCP_PLAYWRIGHT_ENABLE" node - <<'NODE'
+const fs = require("node:fs")
+const path = require("node:path")
+const settingsPath = process.env.GROK_CONFIG_SETTINGS_FILE
+const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value)
+if (typeof settingsPath !== "string" || settingsPath.length === 0) process.exit(0)
+
+let settings = {}
+try {
+  const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"))
+  if (isRecord(parsed)) settings = parsed
+} catch {}
+
+const nextServers = { ...(isRecord(settings.mcpServers) ? settings.mcpServers : {}) }
+if (process.env.MCP_PLAYWRIGHT_ENABLE === "1") {
+  nextServers.playwright = { command: "docker-git-playwright-mcp", args: [], trust: true }
+} else {
+  delete nextServers.playwright
+}
+
+const nextSettings = { ...settings }
+Object.keys(nextServers).length > 0 ? nextSettings.mcpServers = nextServers : delete nextSettings.mcpServers
+
+if (JSON.stringify(settings) === JSON.stringify(nextSettings)) process.exit(0)
+
+fs.mkdirSync(path.dirname(settingsPath), { recursive: true })
+fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2) + "\n", { mode: 0o600 })
+NODE
+}
+
+docker_git_sync_grok_playwright_mcp`
 
 const renderGrokSudoConfig = (config: TemplateConfig): string =>
   String.raw`# Grok CLI: allow passwordless sudo for agent tasks
@@ -308,6 +336,7 @@ export const renderEntrypointGrokConfig = (config: TemplateConfig): string =>
   [
     renderGrokAuthConfig(config),
     renderGrokPermissionSettingsConfig(config),
+    renderGrokMcpPlaywrightConfig(),
     renderGrokSudoConfig(config),
     renderGrokProfileSetup(config),
     renderEntrypointGrokNotice(config)

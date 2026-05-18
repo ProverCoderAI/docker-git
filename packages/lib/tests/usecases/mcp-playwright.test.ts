@@ -127,17 +127,20 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         const dockerfileAfter = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
         expect(dockerfileAfter).toContain("@playwright/mcp")
 
-        // CHANGE: verify retry logic is included in docker-git-playwright-mcp wrapper
-        // WHY: issue-123 requires retry mechanism to handle nested browser startup delays
-        // QUOTE(issue-123): "Почему MCP сервер лежит с ошибкой?"
-        // REF: issue-123
+        // CHANGE: verify lazy Playwright MCP startup and legacy guarded fallback wiring
+        // WHY: issue-319 requires MCP stdio initialize to answer even when CDP is still starting
+        // QUOTE(issue-319): "MCP startup failed: handshaking with MCP server failed"
+        // REF: issue-319
         expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_RETRY_ATTEMPTS")
         expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_RETRY_DELAY")
         expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_CDP_GUARD")
+        expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_CDP_TIMEOUT")
         expect(dockerfileAfter).toContain('if [[ "${MCP_PLAYWRIGHT_ISOLATED:-0}" == "1" ]]; then')
         expect(dockerfileAfter).toContain("fetch_cdp_version()")
         expect(dockerfileAfter).toContain("waiting for nested browser runtime")
-        expect(dockerfileAfter).toContain('exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT"')
+        expect(dockerfileAfter).toContain(
+          'exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT"'
+        )
         expect(dockerfileAfter).toContain(
           "COPY Dockerfile.browser mcp-playwright-start-extra.sh docker-git-browser-runtime.sh /opt/docker-git/browser/"
         )
@@ -168,6 +171,10 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(browserRuntime).toContain('DOCKER_GIT_BROWSER_BUILD_TIMEOUT_SECONDS:-600')
         expect(browserRuntime).toContain('timeout "$build_timeout" docker build')
         expect(browserRuntime).toContain('cat "$build_log" >&2 || true')
+        expect(browserRuntime).toContain("docker_git_wait_for_playwright_cdp()")
+        expect(browserRuntime).toContain('local attempts="${MCP_PLAYWRIGHT_READY_ATTEMPTS:-60}"')
+        expect(browserRuntime).toContain("MCP_PLAYWRIGHT_ENABLE=0")
+        expect(browserRuntime).toContain('docker_git_disable_playwright_mcp "nested browser started but CDP is unavailable"')
         expect(browserRuntime).toContain('--filter "label=docker-git.browser=1" --filter "label=docker-git.project-container"')
         expect(browserRuntime).toContain('docker inspect --format \'{{ .State.Running }}\' "$project_container"')
         expect(browserRuntime).toContain('if ! docker volume create "$volume_name" >/dev/null 2>&1; then')
