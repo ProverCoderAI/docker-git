@@ -21,7 +21,8 @@ export const grokImageName = "docker-git-auth-grok:latest"
 export const grokImageDir = ".docker-git/.orch/auth/grok/.image"
 export const grokContainerHomeDir = "/grok-home"
 export const grokCredentialsDir = ".grok"
-export const grokDevPackageSpec = "grok-dev@1.1.7"
+export const grokCliInstallScriptUrl = "https://x.ai/cli/install.sh"
+export const grokCliVersion = "0.1.211"
 
 export type GrokAccountContext = {
   readonly accountLabel: string
@@ -40,16 +41,19 @@ export const grokEnvFilePath = (accountPath: string): string => `${accountPath}/
 export const grokCredentialsPath = (accountPath: string): string => `${accountPath}/${grokCredentialsDir}`
 export const grokUserSettingsPath = (accountPath: string): string =>
   `${grokCredentialsPath(accountPath)}/user-settings.json`
+export const grokAuthJsonPath = (accountPath: string): string => `${grokCredentialsPath(accountPath)}/auth.json`
+
+const grokEnvApiKeyNames: ReadonlyArray<string> = ["GROK_DEPLOYMENT_KEY", "GROK_API_KEY", "XAI_API_KEY"]
 
 // CHANGE: render Dockerfile for Grok CLI authentication image
 // WHY: Grok browser/OAuth auth must run in an isolated shell that persists ~/.grok
 // QUOTE(ТЗ): "Signing in with Grok..."
 // REF: issue-304
-// SOURCE: https://www.npmjs.com/package/grok-dev
+// SOURCE: https://x.ai/news/grok-build-cli
 // FORMAT THEOREM: renderGrokDockerfile() -> valid_dockerfile
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: image includes Node.js and a grok executable
+// INVARIANT: image includes the official xAI grok executable
 // COMPLEXITY: O(1)
 export const renderGrokDockerfile = (): string =>
   String.raw`FROM ubuntu:24.04
@@ -57,10 +61,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl bsdutils \
   && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
-  && apt-get install -y --no-install-recommends nodejs \
-  && rm -rf /var/lib/apt/lists/*
-RUN npm install -g ${grokDevPackageSpec}
+RUN set -eu; \
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 ${grokCliInstallScriptUrl} -o /tmp/grok-install.sh; \
+  HOME=/tmp/grok-install-home GROK_BIN_DIR=/usr/local/bin bash /tmp/grok-install.sh ${grokCliVersion}; \
+  install -m 0755 "$(readlink -f /usr/local/bin/grok)" /usr/local/bin/grok.real; \
+  install -m 0755 "$(readlink -f /usr/local/bin/agent)" /usr/local/bin/agent.real; \
+  mv -f /usr/local/bin/grok.real /usr/local/bin/grok; \
+  mv -f /usr/local/bin/agent.real /usr/local/bin/agent; \
+  rm -rf /tmp/grok-install.sh /tmp/grok-install-home
 RUN grok --version
 `
 
@@ -126,12 +134,15 @@ const readApiKeyFromEnvFile = (
     const envContent = yield* _(fs.readFileString(envFilePath), Effect.orElseSucceed(() => ""))
     for (const line of envContent.split("\n")) {
       const trimmed = line.trim()
-      if (!trimmed.startsWith("GROK_API_KEY=")) {
-        continue
-      }
-      const value = trimmed.slice("GROK_API_KEY=".length).replaceAll(/^['"]|['"]$/g, "").trim()
-      if (value.length > 0) {
-        return value
+      for (const key of grokEnvApiKeyNames) {
+        const prefix = `${key}=`
+        if (!trimmed.startsWith(prefix)) {
+          continue
+        }
+        const value = trimmed.slice(prefix.length).replaceAll(/^['"]|['"]$/g, "").trim()
+        if (value.length > 0) {
+          return value
+        }
       }
     }
     return null
@@ -164,6 +175,13 @@ export const hasGrokCredentials = (
     if (apiKey !== null) {
       return true
     }
+    const hasAuthJson = yield* _(isRegularFile(fs, grokAuthJsonPath(accountPath)))
+    if (hasAuthJson) {
+      const authJson = yield* _(fs.readFileString(grokAuthJsonPath(accountPath)), Effect.orElseSucceed(() => ""))
+      if (hasGrokAuthJsonCredentials(authJson)) {
+        return true
+      }
+    }
     const hasUserSettings = yield* _(isRegularFile(fs, grokUserSettingsPath(accountPath)))
     if (!hasUserSettings) {
       return false
@@ -182,6 +200,15 @@ const grokUserSettingsCredentialMarkers: ReadonlyArray<RegExp> = [
 
 const hasGrokUserSettingsCredentials = (content: string): boolean =>
   grokUserSettingsCredentialMarkers.some((marker) => marker.test(content))
+
+const grokAuthJsonCredentialMarkers: ReadonlyArray<RegExp> = [
+  /"key"\s*:\s*"[^"]+"/u,
+  /"token"\s*:\s*"[^"]+"/u,
+  /"accessToken"\s*:\s*"[^"]+"/u
+]
+
+const hasGrokAuthJsonCredentials = (content: string): boolean =>
+  grokAuthJsonCredentialMarkers.some((marker) => marker.test(content))
 
 export const resolveGrokAuthMethod = (
   fs: FileSystem.FileSystem,

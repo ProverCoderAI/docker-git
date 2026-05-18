@@ -219,11 +219,12 @@ describe("renderDockerfile", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
     expectContainsAll(dockerfile, [
-      "npm install -g grok-dev@",
+      "https://x.ai/cli/install.sh",
+      "GROK_BIN_DIR=/usr/local/bin bash /tmp/grok-install.sh 0.1.211",
       "grok --version"
     ])
-    expect(dockerfile).not.toContain("grok-dev@latest")
-    expect(dockerfile).not.toContain("npm install -g grok-dev@latest --force")
+    expect(dockerfile).not.toContain("grok-dev")
+    expect(dockerfile).not.toContain("npm install -g grok-dev")
     expect(dockerfile).not.toContain("grok --version >/dev/null || true")
   })
 })
@@ -490,10 +491,12 @@ describe("renderEntrypoint auth bridge", () => {
 
     expectContainsAll(entrypoint, [
       'if [[ -n "${GROK_API_KEY:-}" ]]; then',
+      'docker_git_upsert_ssh_env "GROK_DEPLOYMENT_KEY" "${GROK_DEPLOYMENT_KEY:-}"',
       'export XAI_API_KEY="${GROK_API_KEY:-}"',
       'docker_git_upsert_ssh_env "GROK_API_KEY" "${GROK_API_KEY:-}"',
       'docker_git_upsert_ssh_env "XAI_API_KEY" "${XAI_API_KEY:-}"'
     ])
+    expect(entrypoint).not.toContain("\\${GROK_DEPLOYMENT_KEY:-}")
     expect(entrypoint).not.toContain("\\${GROK_API_KEY:-}")
     expect(entrypoint).not.toContain("\\${XAI_API_KEY:-}")
     expect(entrypoint).not.toContain('export XAI_API_KEY="$GROK_API_KEY"')

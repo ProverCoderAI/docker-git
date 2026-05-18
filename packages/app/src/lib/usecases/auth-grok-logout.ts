@@ -12,7 +12,7 @@ import { autoSyncState } from "./state-repo.js"
 // WHY: allow revoking Grok CLI access deterministically
 // QUOTE(ТЗ): "Реализовать поддержку авторизации grok"
 // REF: issue-304
-// SOURCE: https://www.npmjs.com/package/grok-dev
+// SOURCE: https://x.ai/news/grok-build-cli
 // FORMAT THEOREM: forall cmd: authGrokLogout(cmd) -> credentials_cleared(cmd)
 // PURITY: SHELL
 // EFFECT: Effect<void, PlatformError | CommandFailedError, GrokRuntime>

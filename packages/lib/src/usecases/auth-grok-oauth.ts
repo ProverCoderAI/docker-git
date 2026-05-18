@@ -10,7 +10,7 @@ import { AuthError, CommandFailedError } from "../shell/errors.js"
 // WHY: issue #304 expects `grok login` style URL handoff and callback paste support
 // QUOTE(ТЗ): "Paste the URL here if it doesn't connect"
 // REF: issue-304
-// SOURCE: https://www.npmjs.com/package/grok-dev
+// SOURCE: https://x.ai/news/grok-build-cli
 // FORMAT THEOREM: forall cmd: runGrokOauthLogin(cmd) -> grok_credentials_stored | error
 // PURITY: SHELL
 // EFFECT: Effect<void, AuthError | CommandFailedError | PlatformError, CommandExecutor>

@@ -198,7 +198,7 @@ const buildGeminiCommand = (action: string, options: AuthOptions): Either.Either
 // WHY: issue #304 requires docker-git auth grok login/status/logout support
 // QUOTE(ТЗ): "Реализовать поддержку авторизации grok"
 // REF: issue-304
-// SOURCE: https://www.npmjs.com/package/grok-dev
+// SOURCE: https://x.ai/news/grok-build-cli
 // FORMAT THEOREM: forall action: buildGrokCommand(action, opts) = AuthCommand | ParseError
 // PURITY: CORE
 // EFFECT: n/a

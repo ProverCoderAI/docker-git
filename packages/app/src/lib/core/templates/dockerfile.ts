@@ -87,8 +87,11 @@ RUN mkdir -p /usr/local/nvm \
 RUN printf "export NVM_DIR=/usr/local/nvm\\n[ -s /usr/local/nvm/nvm.sh ] && . /usr/local/nvm/nvm.sh\\n" \
   > /etc/profile.d/nvm.sh && chmod 0644 /etc/profile.d/nvm.sh`
 
+const grokCliInstallScriptUrl = "https://x.ai/cli/install.sh"
+const grokCliVersion = "0.1.211"
+
 const renderDockerfileBunPrelude = (config: TemplateConfig): string =>
-  `# Tooling: Bun + Codex CLI (bun) + oh-my-opencode (npm + platform binary) + Claude Code CLI (npm) + Grok CLI (npm)
+  `# Tooling: Bun + Codex CLI (bun) + oh-my-opencode (npm + platform binary) + Claude Code CLI (npm) + Grok CLI (xAI installer)
 ENV TERM=xterm-256color
 RUN set -eu; \
   for attempt in 1 2 3 4 5; do \
@@ -119,7 +122,14 @@ RUN npm install -g @anthropic-ai/claude-code@latest
 RUN claude --version
 RUN npm install -g @google/gemini-cli@latest --force
 RUN gemini --version
-RUN npm install -g grok-dev@1.1.7
+RUN set -eu; \
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 ${grokCliInstallScriptUrl} -o /tmp/grok-install.sh; \
+  HOME=/tmp/grok-install-home GROK_BIN_DIR=/usr/local/bin bash /tmp/grok-install.sh ${grokCliVersion}; \
+  install -m 0755 "$(readlink -f /usr/local/bin/grok)" /usr/local/bin/grok.real; \
+  install -m 0755 "$(readlink -f /usr/local/bin/agent)" /usr/local/bin/agent.real; \
+  mv -f /usr/local/bin/grok.real /usr/local/bin/grok; \
+  mv -f /usr/local/bin/agent.real /usr/local/bin/agent; \
+  rm -rf /tmp/grok-install.sh /tmp/grok-install-home
 RUN grok --version`
 
 // CHANGE: install RTK as a real command-output optimizer in generated containers.

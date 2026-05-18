@@ -6,7 +6,12 @@ import { Effect } from "effect"
 import * as fc from "fast-check"
 
 import { authGrokLogin } from "../../src/usecases/auth-grok.js"
-import { hasGrokCredentials } from "../../src/usecases/auth-grok-helpers.js"
+import {
+  grokCliInstallScriptUrl,
+  grokCliVersion,
+  hasGrokCredentials,
+  renderGrokDockerfile
+} from "../../src/usecases/auth-grok-helpers.js"
 
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
@@ -72,6 +77,16 @@ const detectUserSettingsPayload = (
   })
 
 describe("authGrokLogin", () => {
+  it("installs the official xAI Grok CLI in the OAuth helper image", () => {
+    const dockerfile = renderGrokDockerfile()
+
+    expect(dockerfile).toContain(grokCliInstallScriptUrl)
+    expect(dockerfile).toContain(`GROK_BIN_DIR=/usr/local/bin bash /tmp/grok-install.sh ${grokCliVersion}`)
+    expect(dockerfile).toContain("grok --version")
+    expect(dockerfile).not.toContain("grok-dev")
+    expect(dockerfile).not.toContain("npm install -g grok-dev")
+  })
+
   it.effect("stores API key and writes Grok settings with Playwright MCP and no sandbox", () =>
     withTempDir((root) =>
       withPatchedEnv(
@@ -196,6 +211,37 @@ describe("authGrokLogin", () => {
             }
           })
         )
+        expect(detected).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("detects official Grok auth.json as OAuth credentials", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const accountPath = path.join(root, "default")
+        const credentialsDir = path.join(accountPath, ".grok")
+
+        yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(credentialsDir, "auth.json"), "{\"scope\":{\"key\":\"xai-oauth\"}}\n"))
+
+        const detected = yield* _(hasGrokCredentials(fs, accountPath))
+        expect(detected).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("detects official Grok deployment key env files", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const accountPath = path.join(root, "default")
+
+        yield* _(fs.makeDirectory(accountPath, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(accountPath, ".env"), "GROK_DEPLOYMENT_KEY='xai-deploy'\n"))
+
+        const detected = yield* _(hasGrokCredentials(fs, accountPath))
         expect(detected).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))

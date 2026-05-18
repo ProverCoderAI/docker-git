@@ -4,7 +4,7 @@ import type { TemplateConfig } from "../domain.js"
 // WHY: issue #304 requires Grok auth, Playwright MCP and unrestricted agent permissions
 // QUOTE(ТЗ): "Реализовать поддержку авторизации grok"
 // REF: issue-304
-// SOURCE: https://www.npmjs.com/package/grok-dev
+// SOURCE: https://x.ai/news/grok-build-cli
 // FORMAT THEOREM: renderEntrypointGrokConfig(config) -> valid_bash_script
 // PURITY: CORE
 // INVARIANT: Grok credentials are isolated by GROK_AUTH_LABEL
@@ -17,10 +17,11 @@ const grokAuthRootContainerPath = (sshUser: string): string => `/home/${sshUser}
 // QUOTE(ТЗ): "GitHub Actions ... all CI checks are passing"
 // REF: issue-304-ci
 // SOURCE: n/a
-// FORMAT THEOREM: unset(GROK_API_KEY) -> safe_empty_value(GROK_API_KEY)
+// FORMAT THEOREM: unset(GROK_DEPLOYMENT_KEY) -> safe_empty_value(GROK_DEPLOYMENT_KEY)
 // PURITY: CORE
 // INVARIANT: Optional Grok API credentials never require a bound environment variable
 // COMPLEXITY: O(1)
+const grokDeploymentKeyDefaultExpansion = "${GROK_DEPLOYMENT_KEY:-}"
 const grokApiKeyDefaultExpansion = "${GROK_API_KEY:-}"
 const xaiApiKeyDefaultExpansion = "${XAI_API_KEY:-}"
 
@@ -81,6 +82,10 @@ docker_git_prepare_grok_home_dir
 
 docker_git_link_grok_file "$GROK_CONFIG_DIR/.api-key" "$GROK_HOME_DIR/.api-key"
 docker_git_link_grok_file "$GROK_CONFIG_DIR/.env" "$GROK_HOME_DIR/.env"
+docker_git_link_grok_file "$GROK_SHARED_HOME_DIR/auth.json" "$GROK_HOME_DIR/auth.json"
+docker_git_link_grok_file "$GROK_SHARED_HOME_DIR/config.toml" "$GROK_HOME_DIR/config.toml"
+docker_git_link_grok_file "$GROK_SHARED_HOME_DIR/managed_config.toml" "$GROK_HOME_DIR/managed_config.toml"
+docker_git_link_grok_file "$GROK_SHARED_HOME_DIR/requirements.toml" "$GROK_HOME_DIR/requirements.toml"
 docker_git_link_grok_file "$GROK_SHARED_HOME_DIR/user-settings.json" "$GROK_HOME_DIR/user-settings.json"
 docker_git_link_grok_file "$GROK_SHARED_HOME_DIR/settings.json" "$GROK_HOME_DIR/settings.json"
 
@@ -105,15 +110,28 @@ fi
 
 docker_git_refresh_grok_env() {
   if [[ -f "$GROK_HOME_DIR/.api-key" ]]; then
-    export GROK_API_KEY="$(cat "$GROK_HOME_DIR/.api-key" | tr -d '\r\n')"
+    API_KEY="$(cat "$GROK_HOME_DIR/.api-key" | tr -d '\r\n')"
   elif [[ -f "$GROK_HOME_DIR/.env" ]]; then
-    API_KEY="$(grep "^GROK_API_KEY=" "$GROK_HOME_DIR/.env" | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//")"
-    if [[ -n "$API_KEY" ]]; then
-      export GROK_API_KEY="$API_KEY"
-    fi
+    API_KEY="$(grep -E "^(GROK_DEPLOYMENT_KEY|GROK_API_KEY|XAI_API_KEY)=" "$GROK_HOME_DIR/.env" 2>/dev/null | head -n 1 | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//" || true)"
+  else
+    API_KEY=""
+  fi
+  if [[ -n "$API_KEY" ]]; then
+    export GROK_DEPLOYMENT_KEY="$API_KEY"
+    export GROK_API_KEY="$API_KEY"
+    export XAI_API_KEY="$API_KEY"
+  fi
+  if [[ -n "${grokDeploymentKeyDefaultExpansion}" ]]; then
+    export GROK_API_KEY="${grokDeploymentKeyDefaultExpansion}"
+    export XAI_API_KEY="${grokDeploymentKeyDefaultExpansion}"
   fi
   if [[ -n "${grokApiKeyDefaultExpansion}" ]]; then
+    export GROK_DEPLOYMENT_KEY="${grokApiKeyDefaultExpansion}"
     export XAI_API_KEY="${grokApiKeyDefaultExpansion}"
+  fi
+  if [[ -n "${xaiApiKeyDefaultExpansion}" ]]; then
+    export GROK_DEPLOYMENT_KEY="${xaiApiKeyDefaultExpansion}"
+    export GROK_API_KEY="${xaiApiKeyDefaultExpansion}"
   fi
 }
 
@@ -176,13 +194,16 @@ printf "export GROK_HOME=%q\n" "${config.grokHome}" >> "$GROK_PROFILE"
 printf "alias grok='/usr/local/bin/grok-wrapper'\n" >> "$GROK_PROFILE"
 cat <<'EOF' >> "$GROK_PROFILE"
 if [[ -f "$GROK_HOME/.api-key" ]]; then
-  export GROK_API_KEY="$(cat "$GROK_HOME/.api-key" | tr -d '\r\n')"
-  export XAI_API_KEY="${grokApiKeyDefaultExpansion}"
+  API_KEY="$(cat "$GROK_HOME/.api-key" | tr -d '\r\n')"
+  export GROK_DEPLOYMENT_KEY="$API_KEY"
+  export GROK_API_KEY="$API_KEY"
+  export XAI_API_KEY="$API_KEY"
 fi
 EOF
 chmod 0644 "$GROK_PROFILE" || true
 
 docker_git_upsert_ssh_env "GROK_AUTH_LABEL" "$GROK_AUTH_LABEL"
+docker_git_upsert_ssh_env "GROK_DEPLOYMENT_KEY" "${grokDeploymentKeyDefaultExpansion}"
 docker_git_upsert_ssh_env "GROK_API_KEY" "${grokApiKeyDefaultExpansion}"
 docker_git_upsert_ssh_env "XAI_API_KEY" "${xaiApiKeyDefaultExpansion}"`
 

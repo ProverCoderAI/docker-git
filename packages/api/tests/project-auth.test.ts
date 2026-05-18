@@ -130,6 +130,41 @@ describe("project auth service", () => {
 
         expect(snapshot.activeGrokLabel).toBe("default")
         expect(yield* _(fs.readFileString(envProjectPath))).toContain("GROK_AUTH_LABEL=default")
+
+        yield* _(fs.writeFileString(envProjectPath, "# project env\n"))
+        yield* _(fs.remove(path.join(grokDefaultAuth, ".api-key")))
+        yield* _(fs.makeDirectory(path.join(grokDefaultAuth, ".grok"), { recursive: true }))
+        yield* _(fs.writeFileString(path.join(grokDefaultAuth, ".grok", "auth.json"), "{\"scope\":{\"key\":\"xai-oauth\"}}\n"))
+
+        const oauthSnapshot = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            service.runProjectAuthFlow(project, {
+              flow: "ProjectGrokConnect",
+              label: "default"
+            })
+          )
+        )
+
+        expect(oauthSnapshot.activeGrokLabel).toBe("default")
+        expect(yield* _(fs.readFileString(envProjectPath))).toContain("GROK_AUTH_LABEL=default")
+
+        yield* _(fs.writeFileString(envProjectPath, "# project env\n"))
+        yield* _(fs.remove(path.join(grokDefaultAuth, ".grok"), { recursive: true }))
+        yield* _(fs.writeFileString(path.join(grokDefaultAuth, ".env"), "GROK_DEPLOYMENT_KEY='xai-deploy'\n"))
+
+        const envSnapshot = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            service.runProjectAuthFlow(project, {
+              flow: "ProjectGrokConnect",
+              label: "default"
+            })
+          )
+        )
+
+        expect(envSnapshot.activeGrokLabel).toBe("default")
+        expect(yield* _(fs.readFileString(envProjectPath))).toContain("GROK_AUTH_LABEL=default")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

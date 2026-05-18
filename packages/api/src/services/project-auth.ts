@@ -29,6 +29,7 @@ const projectClaudeLabelKey = "CLAUDE_AUTH_LABEL"
 const projectGeminiLabelKey = "GEMINI_AUTH_LABEL"
 const projectGrokLabelKey = "GROK_AUTH_LABEL"
 const defaultGitUser = "x-access-token"
+const grokEnvApiKeyNames: ReadonlyArray<string> = ["GROK_DEPLOYMENT_KEY", "GROK_API_KEY", "XAI_API_KEY"]
 
 const normalizeLabel = (value: string): string => {
   const trimmed = value.trim()
@@ -258,6 +259,12 @@ const grokUserSettingsCredentialMarkers: ReadonlyArray<RegExp> = [
   /"oauth"\s*:\s*\{[\s\S]*?"(?:apiKey|accessToken|access_token|authToken|refreshToken|refresh_token|token)"\s*:\s*"[^"]+"/u
 ]
 
+const grokAuthJsonCredentialMarkers: ReadonlyArray<RegExp> = [
+  /"key"\s*:\s*"[^"]+"/u,
+  /"token"\s*:\s*"[^"]+"/u,
+  /"accessToken"\s*:\s*"[^"]+"/u
+]
+
 const hasGrokUserSettingsCredentials = (
   fs: FileSystem.FileSystem,
   settingsPath: string
@@ -272,6 +279,20 @@ const hasGrokUserSettingsCredentials = (
     return grokUserSettingsCredentialMarkers.some((marker) => marker.test(settingsText))
   })
 
+const hasGrokAuthJsonCredentials = (
+  fs: FileSystem.FileSystem,
+  authJsonPath: string
+): Effect.Effect<boolean, PlatformError> =>
+  Effect.gen(function*(_) {
+    const hasFile = yield* _(hasFileAtPath(fs, authJsonPath))
+    if (!hasFile) {
+      return false
+    }
+
+    const authJsonText = yield* _(fs.readFileString(authJsonPath), Effect.orElseSucceed(() => ""))
+    return grokAuthJsonCredentialMarkers.some((marker) => marker.test(authJsonText))
+  })
+
 const hasGrokAccountCredentials = (
   fs: FileSystem.FileSystem,
   accountPath: string
@@ -282,12 +303,19 @@ const hasGrokAccountCredentials = (
         return Effect.succeed(true)
       }
 
-      return hasApiKeyInEnvFile(fs, `${accountPath}/.env`, "GROK_API_KEY").pipe(
+      return Effect.forEach(grokEnvApiKeyNames, (key) => hasApiKeyInEnvFile(fs, `${accountPath}/.env`, key)).pipe(
+        Effect.map((results) => results.some((result) => result)),
         Effect.flatMap((hasEnvApiKey) => {
           if (hasEnvApiKey) {
             return Effect.succeed(true)
           }
-          return hasGrokUserSettingsCredentials(fs, `${accountPath}/.grok/user-settings.json`)
+          return hasGrokAuthJsonCredentials(fs, `${accountPath}/.grok/auth.json`).pipe(
+            Effect.flatMap((hasAuthJson) =>
+              hasAuthJson
+                ? Effect.succeed(true)
+                : hasGrokUserSettingsCredentials(fs, `${accountPath}/.grok/user-settings.json`)
+            )
+          )
         })
       )
     })

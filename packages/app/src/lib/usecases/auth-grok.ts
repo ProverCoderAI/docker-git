@@ -18,10 +18,10 @@ import { normalizeAccountLabel } from "./auth-helpers.js"
 import { autoSyncState } from "./state-repo.js"
 
 // CHANGE: login to Grok CLI by storing API key and Grok user settings
-// WHY: Grok CLI supports GROK_API_KEY/user-settings based auth while OAuth is handled by the terminal runner
+// WHY: Grok CLI supports GROK_DEPLOYMENT_KEY and ~/.grok/auth.json while OAuth is handled by the terminal runner
 // QUOTE(ТЗ): "Реализовать поддержку авторизации grok"
 // REF: issue-304
-// SOURCE: https://www.npmjs.com/package/grok-dev
+// SOURCE: https://x.ai/news/grok-build-cli
 // FORMAT THEOREM: forall cmd: authGrokLogin(cmd) -> api_key_file_exists(accountPath)
 // PURITY: SHELL
 // EFFECT: Effect<void, PlatformError | CommandFailedError, GrokRuntime>

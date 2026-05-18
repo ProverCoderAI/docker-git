@@ -10,7 +10,7 @@ import type { GrokRuntime } from "./auth-grok-helpers.js"
 // WHY: allow verifying API-key/user-settings presence without exposing credentials
 // QUOTE(ТЗ): "Реализовать поддержку авторизации grok"
 // REF: issue-304
-// SOURCE: https://www.npmjs.com/package/grok-dev
+// SOURCE: https://x.ai/news/grok-build-cli
 // FORMAT THEOREM: forall cmd: authGrokStatus(cmd) -> connected(cmd, method) | disconnected(cmd)
 // PURITY: SHELL
 // EFFECT: Effect<void, PlatformError | CommandFailedError, GrokRuntime>

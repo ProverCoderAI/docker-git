@@ -111,7 +111,7 @@ export interface AuthGeminiLogoutCommand {
 // WHY: issue #304 requires Grok login/status/logout profiles with isolated auth storage
 // QUOTE(ТЗ): "Реализовать поддержку авторизации grok"
 // REF: issue-304
-// SOURCE: https://www.npmjs.com/package/grok-dev
+// SOURCE: https://x.ai/news/grok-build-cli
 // FORMAT THEOREM: forall cmd ∈ AuthGrokCommand: cmd.grokAuthPath is valid path
 // PURITY: CORE
 // EFFECT: n/a
