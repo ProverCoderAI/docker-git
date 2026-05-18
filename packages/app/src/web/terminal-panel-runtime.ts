@@ -240,8 +240,8 @@ export const useTerminalSessionLifecycle = (
 }
 
 export {
-  type TerminalExitInfo,
   type TerminalConnectionState,
+  type TerminalExitInfo,
   type TerminalInputController,
   type TerminalStatus
 } from "./terminal-panel-runtime-types.js"

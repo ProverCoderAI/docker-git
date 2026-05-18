@@ -99,7 +99,7 @@ EOF
   fi
 
   if [[ -z "$MCP_PLAYWRIGHT_CDP_ENDPOINT" ]]; then
-    MCP_PLAYWRIGHT_CDP_ENDPOINT="http://__SERVICE_NAME__-browser:9223"
+    MCP_PLAYWRIGHT_CDP_ENDPOINT="http://127.0.0.1:9223"
   fi
 
   # Replace the docker-git Playwright block to allow upgrades via --force without manual edits.

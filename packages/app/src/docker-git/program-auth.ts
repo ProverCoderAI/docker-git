@@ -9,11 +9,11 @@ import {
   githubLogin,
   githubLogout,
   githubStatus,
-  grokLogout,
-  grokStatus,
   gitlabLogin,
   gitlabLogout,
   gitlabStatus,
+  grokLogout,
+  grokStatus,
   type JsonValue,
   renderJsonPayload
 } from "./api-client.js"
@@ -21,7 +21,7 @@ import { type ControllerRuntime, ensureControllerReady } from "./controller.js"
 import type { Command } from "./frontend-lib/core/domain.js"
 import type { ApiRequestError, CliError } from "./host-errors.js"
 import { terminalAuthTitle } from "./menu-auth-shared.js"
-import { attachTerminalSession } from "./terminal-session-client.js"
+import { attachTerminalSession, type TerminalSessionClientError } from "./terminal-session-client.js"
 
 type OperationalCommand = Exclude<Command, { readonly _tag: "Help" }>
 
@@ -111,7 +111,7 @@ const handleGrokLoginCommand = (
 ) =>
   withControllerReady(
     createAuthTerminalSession("GrokOauth", command.label).pipe(
-      Effect.flatMap((session) =>
+      Effect.flatMap((session): Effect.Effect<void, ApiRequestError | TerminalSessionClientError> =>
         session === null
           ? Effect.fail(missingAuthTerminalSessionError("GrokOauth"))
           : attachTerminalSession({
