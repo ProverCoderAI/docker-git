@@ -170,6 +170,14 @@ const removeTunnelHomeBestEffort = (record: PanelCloudflareTunnelRecord): void =
   }
 }
 
+const discardUnstartedRecord = (record: PanelCloudflareTunnelRecord): Effect.Effect<void> =>
+  Effect.sync(() => {
+    if (currentRecord === record) {
+      currentRecord = null
+    }
+    removeTunnelHomeBestEffort(record)
+  })
+
 const finishStoppedRecord = (
   record: PanelCloudflareTunnelRecord,
   error: string | null = null
@@ -379,7 +387,11 @@ const waitForRecordId = (
 
     const record = createStartingRecord(resolved.panelUrl)
     currentRecord = record
-    yield* _(startCloudflaredProcess(record, resolved.targetUrl))
+    yield* _(
+      startCloudflaredProcess(record, resolved.targetUrl).pipe(
+        Effect.tapError(() => discardUnstartedRecord(record))
+      )
+    )
     return record.session.id
   }).pipe(tunnelRecordLock.withPermits(1))
 
