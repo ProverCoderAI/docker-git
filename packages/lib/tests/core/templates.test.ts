@@ -229,6 +229,20 @@ describe("renderDockerfile", () => {
     expect(dockerfile).not.toContain("npm install -g grok-dev")
     expect(dockerfile).not.toContain("grok --version >/dev/null || true")
   })
+
+  it("renders Playwright MCP without blocking stdio initialization on CDP readiness", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig({ enableMcpPlaywright: true }))
+    const guardedExecIndex = dockerfile.indexOf('if [[ "$MCP_PLAYWRIGHT_CDP_GUARD" == "1" ]]; then')
+    const fetchIndex = dockerfile.indexOf("fetch_cdp_version()")
+
+    expectContainsAll(dockerfile, [
+      'MCP_PLAYWRIGHT_CDP_TIMEOUT="${MCP_PLAYWRIGHT_CDP_TIMEOUT:-60000}"',
+      'exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT"',
+      'exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT"'
+    ])
+    expect(guardedExecIndex).toBeGreaterThanOrEqual(0)
+    expect(fetchIndex).toBeGreaterThan(guardedExecIndex)
+  })
 })
 
 describe("renderPromptScript", () => {
@@ -435,6 +449,9 @@ describe("renderEntrypoint auth bridge", () => {
       "docker_git_detect_claude_project_rules()",
       "docker_git_detect_gemini_project_rules()",
       "docker_git_detect_grok_project_rules()",
+      "docker_git_sync_gemini_playwright_mcp()",
+      "docker_git_sync_grok_playwright_mcp()",
+      'MCP_PLAYWRIGHT_ENABLE="${MCP_PLAYWRIGHT_ENABLE:-0}" node',
       "DOCKER_GIT_RTK_ENABLE=\"${DOCKER_GIT_RTK_ENABLE:-1}\"",
       "DOCKER_GIT_RTK_ENABLE=1",
       "docker_git_rtk_init_as_user()",
@@ -721,6 +738,15 @@ describe("renderDockerCompose", () => {
     expect(runtime).not.toContain('mktemp "\\${TMPDIR:-/tmp}/docker-git-browser-build.XXXXXX.log"')
     expect(runtime).toContain('docker "${args[@]}" "$image_name" >/dev/null || {')
     expect(runtime).not.toContain('docker "\\${args[@]}" "$image_name" >/dev/null || {')
+    expect(runtime).toContain("docker_git_wait_for_playwright_cdp()")
+    expect(runtime).toContain('local attempts="${MCP_PLAYWRIGHT_READY_ATTEMPTS:-60}"')
+    expect(runtime).toContain('local delay="${MCP_PLAYWRIGHT_READY_DELAY:-1}"')
+    expect(runtime).toContain("invalid MCP_PLAYWRIGHT_READY_ATTEMPTS")
+    expect(runtime).toContain("invalid MCP_PLAYWRIGHT_READY_DELAY")
+    expect(runtime).toContain("while (( attempt <= attempts )); do")
+    expect(runtime).not.toContain('for attempt in $(seq 1 "$attempts")')
+    expect(runtime).toContain("MCP_PLAYWRIGHT_ENABLE=0")
+    expect(runtime).toContain('docker_git_disable_playwright_mcp "nested browser started but CDP is unavailable"')
   })
 
   it("plans nested browser runtime artifacts when Playwright is enabled", () => {
@@ -738,6 +764,17 @@ describe("renderDockerCompose", () => {
     expect(runtime?.mode).toBe(0o755)
     expect(runtime?.contents).toContain('if [[ "${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
     expect(runtime?.contents).not.toContain('\\${MCP_PLAYWRIGHT_ENABLE:-0}')
+    expect(runtime?.contents).toContain("docker_git_wait_for_playwright_cdp()")
+    expect(runtime?.contents).toContain("MCP_PLAYWRIGHT_ENABLE=0")
+  })
+
+  it("renders Playwright browser startup before MCP client config", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig({ enableMcpPlaywright: true }))
+    const browserRuntimeIndex = entrypoint.indexOf("docker_git_start_playwright_browser")
+    const mcpConfigIndex = entrypoint.indexOf("[mcp_servers.playwright]")
+
+    expect(browserRuntimeIndex).toBeGreaterThanOrEqual(0)
+    expect(mcpConfigIndex).toBeGreaterThan(browserRuntimeIndex)
   })
 
   it("renders local Docker socket mount only when explicitly enabled", () => {

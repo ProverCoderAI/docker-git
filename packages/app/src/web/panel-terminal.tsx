@@ -9,9 +9,9 @@ import {
   terminalControlCharacterForKey
 } from "./terminal-mobile-controls.js"
 import { resolveTerminalCompactHeaderMode, resolveTerminalTypingMode } from "./terminal-mobile-layout.js"
-import type { TerminalExitInfo } from "./terminal-panel-runtime-types.js"
 import {
   type TerminalConnectionState,
+  type TerminalExitInfo,
   type TerminalInputController,
   type TerminalStatus,
   useTerminalSessionLifecycle

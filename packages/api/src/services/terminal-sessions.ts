@@ -976,10 +976,12 @@ export const renderTmuxAttachCommand = (
     `if ! command -v tmux >/dev/null 2>&1; then printf '%s\\n' ${
       shellQuote(args.missingMessage ?? tmuxMissingMessage)
     } >&2; exit 127; fi`,
-    `tmux has-session -t ${shellQuote(args.tmuxName)} 2>/dev/null || tmux new-session -d -s ${
+    `tmux has-session -t ${shellQuote(args.tmuxName)} 2>/dev/null || tmux start-server \\; set-option -g history-limit 50000 \\; new-session -d -s ${
       shellQuote(args.tmuxName)
     } -c ${shellQuote(args.targetDir)}`,
     `tmux set-option -t ${shellQuote(args.tmuxName)} status off >/dev/null 2>&1 || true`,
+    `tmux set-option -t ${shellQuote(args.tmuxName)} history-limit 50000 >/dev/null 2>&1 || true`,
+    `tmux set-option -t ${shellQuote(args.tmuxName)} mouse on >/dev/null 2>&1 || true`,
     `exec tmux attach-session -t ${shellQuote(args.tmuxName)}`
   ].join("; ")
   return `bash --noprofile --norc -lc ${shellQuote(script)}`

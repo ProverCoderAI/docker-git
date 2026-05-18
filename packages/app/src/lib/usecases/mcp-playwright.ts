@@ -29,7 +29,7 @@ const enableInTemplate = (template: TemplateConfig): TemplateConfig => ({
 })
 
 // CHANGE: enable Playwright MCP in an existing docker-git project directory (files only)
-// WHY: allow adding the browser sidecar + MCP server config without wiping env or volumes
+// WHY: allow adding the nested browser runtime + MCP server config without wiping env or volumes
 // QUOTE(ТЗ): "Добавить возможность поднимать MCP Playrgiht в контейнере который уже создан"
 // REF: issue-29
 // SOURCE: n/a

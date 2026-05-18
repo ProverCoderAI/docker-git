@@ -153,9 +153,10 @@ RUN set -eu; \
 
 const dockerGitSessionSyncPackage = "@prover-coder-ai/docker-git-session-sync@latest"
 
-const dockerfilePlaywrightMcpBlock = String.raw`RUN npm install -g @playwright/mcp@latest
+const dockerfilePlaywrightMcpBlock = String.raw`ARG PLAYWRIGHT_MCP_VERSION=0.0.75
+RUN npm install -g "@playwright/mcp@${"$"}{PLAYWRIGHT_MCP_VERSION}"
 
-# docker-git: wrapper that waits for the guarded CDP endpoint before launching Playwright MCP.
+# docker-git: wrapper that launches the MCP stdio server without blocking initialize on CDP readiness.
 RUN cat <<'EOF' > /usr/local/bin/docker-git-playwright-mcp
 #!/usr/bin/env bash
 set -euo pipefail
@@ -174,19 +175,33 @@ if [[ -z "$CDP_ENDPOINT" ]]; then
   CDP_ENDPOINT="http://127.0.0.1:9223"
 fi
 
-# CHANGE: add retry logic for nested browser runtime startup wait
-# WHY: the browser container may take time to initialize, causing MCP server to fail on first attempt
-# QUOTE(issue-123): "Почему MCP сервер лежит с ошибкой?"
-# REF: issue-123
-# SOURCE: n/a
-# FORMAT THEOREM: forall t in [1..max_attempts]: retry(t) -> eventually(cdp_ready) OR timeout_error
+# CHANGE: keep MCP initialize independent from nested browser readiness
+# WHY: Codex starts MCP servers during boot; blocking here closes stdio before initialize when CDP is slow.
+# QUOTE(issue-319): "handshaking with MCP server failed: connection closed: initialize response"
+# REF: issue-319
+# SOURCE: https://playwright.dev/mcp/configuration/options
+# FORMAT THEOREM: guarded_cdp(endpoint) -> mcp_stdio_ready_before_browser_connection
 # PURITY: SHELL
-# INVARIANT: script exits only after cdp_ready OR all retries exhausted
-# COMPLEXITY: O(max_attempts * timeout_per_attempt)
+# INVARIANT: guarded mode never exits before handing stdio to playwright-mcp
+# COMPLEXITY: O(1)
 MCP_PLAYWRIGHT_RETRY_ATTEMPTS="\${MCP_PLAYWRIGHT_RETRY_ATTEMPTS:-10}"
 MCP_PLAYWRIGHT_RETRY_DELAY="\${MCP_PLAYWRIGHT_RETRY_DELAY:-2}"
 MCP_PLAYWRIGHT_CDP_GUARD="\${MCP_PLAYWRIGHT_CDP_GUARD:-1}"
+MCP_PLAYWRIGHT_CDP_TIMEOUT="\${MCP_PLAYWRIGHT_CDP_TIMEOUT:-60000}"
 
+EXTRA_ARGS=()
+if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-0}" == "1" ]]; then
+  EXTRA_ARGS+=(--isolated)
+fi
+
+# Guarded endpoints are stable HTTP CDP endpoints. Passing the HTTP URL lets Playwright MCP
+# re-resolve /json/version instead of pinning itself to one stale /devtools/browser/<id>.
+if [[ "$MCP_PLAYWRIGHT_CDP_GUARD" == "1" ]]; then
+  exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT" "\${EXTRA_ARGS[@]}" "$@"
+fi
+
+# kechangdev/browser-vnc binds Chromium CDP on 127.0.0.1:9222; it also host-checks HTTP requests.
+# When the guard is disabled, preserve the old behavior by converting the HTTP endpoint to WS.
 fetch_cdp_version() {
   curl -sSf --connect-timeout 3 --max-time 10 -H 'Host: 127.0.0.1:9222' "\${CDP_ENDPOINT%/}/json/version" 2>/dev/null
 }
@@ -207,19 +222,6 @@ if [[ -z "$JSON" ]]; then
   exit 1
 fi
 
-EXTRA_ARGS=()
-if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-0}" == "1" ]]; then
-  EXTRA_ARGS+=(--isolated)
-fi
-
-# Guarded endpoints are stable HTTP CDP endpoints. Passing the HTTP URL lets Playwright MCP
-# re-resolve /json/version instead of pinning itself to one stale /devtools/browser/<id>.
-if [[ "$MCP_PLAYWRIGHT_CDP_GUARD" == "1" ]]; then
-  exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" "\${EXTRA_ARGS[@]}" "$@"
-fi
-
-# kechangdev/browser-vnc binds Chromium CDP on 127.0.0.1:9222; it also host-checks HTTP requests.
-# When the guard is disabled, preserve the old behavior by converting the HTTP endpoint to WS.
 WS_URL="$(printf "%s" "$JSON" | node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.webSocketDebuggerUrl || "")')"
 if [[ -z "$WS_URL" ]]; then
   echo "docker-git-playwright-mcp: webSocketDebuggerUrl missing" >&2
@@ -230,7 +232,7 @@ fi
 BASE_WS="$(CDP_ENDPOINT="$CDP_ENDPOINT" node -e 'const { URL } = require("url"); const u=new URL(process.env.CDP_ENDPOINT); const proto=u.protocol==="https:"?"wss:":"ws:"; process.stdout.write(proto + "//" + u.host)')"
 WS_REWRITTEN="$(BASE_WS="$BASE_WS" WS_URL="$WS_URL" node -e 'const { URL } = require("url"); const base=new URL(process.env.BASE_WS); const ws=new URL(process.env.WS_URL); ws.protocol=base.protocol; ws.host=base.host; process.stdout.write(ws.toString())')"
 
-exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" "\${EXTRA_ARGS[@]}" "$@"
+exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT" "\${EXTRA_ARGS[@]}" "$@"
 EOF
 RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
 

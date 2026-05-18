@@ -31,11 +31,11 @@ export {
   githubLogin,
   githubLogout,
   githubStatus,
-  grokLogout,
-  grokStatus,
   gitlabLogin,
   gitlabLogout,
-  gitlabStatus
+  gitlabStatus,
+  grokLogout,
+  grokStatus
 } from "./api-client-auth.js"
 export {
   type ApiContainerTask,
