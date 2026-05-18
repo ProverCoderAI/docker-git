@@ -17,7 +17,7 @@ const dockerGitBaseImage = "konard/box-js:2.1.1"
 
 // CHANGE: include tmux in generated project images for durable terminal multiplexing.
 // WHY: stable project SSH links attach to persisted tmux sessions instead of one-off shell processes.
-// QUOTE(TZ): n/a
+// QUOTE(ТЗ): n/a
 // REF: PR-309
 // SOURCE: n/a
 // PURITY: CORE

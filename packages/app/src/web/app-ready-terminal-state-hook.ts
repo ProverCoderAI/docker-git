@@ -48,6 +48,16 @@ type ProjectActiveTerminalPersistResult = Either.Either<
   Effect.Effect.Error<SetProjectActiveTerminalSessionEffect>
 >
 
+/**
+ * Returns the project-bound active terminal selection when it is ready to persist.
+ *
+ * @pure true
+ * @effect none; CORE selector reads immutable session state only.
+ * @invariant pending or non-project sessions never produce a persistence request.
+ * @precondition active is either null or an ActiveTerminalSession snapshot.
+ * @postcondition result is null or contains the exact browserProjectKey and session.id from active.
+ * @complexity O(1) time / O(1) space.
+ */
 export const projectActiveTerminalSelection = (
   active: ActiveTerminalSession | null
 ): ProjectActiveTerminalSelection | null =>
@@ -65,6 +75,16 @@ const emptyProjectActiveTerminalPersistenceState = (): ProjectActiveTerminalPers
   persistedSelectionKey: null
 })
 
+/**
+ * Creates a mutable React-compatible ref for active terminal persistence state.
+ *
+ * @pure true
+ * @effect none; factory allocates only local in-memory state.
+ * @invariant new refs start with no in-flight, latest, or persisted selection.
+ * @precondition no external state is required.
+ * @postcondition returned ref.current equals the empty persistence state.
+ * @complexity O(1) time / O(1) space.
+ */
 export const createProjectActiveTerminalPersistenceRef = (): ProjectActiveTerminalPersistenceRef => ({
   current: emptyProjectActiveTerminalPersistenceState()
 })
@@ -125,6 +145,16 @@ const runProjectActiveTerminalPersistRequest = (
   )
 }
 
+/**
+ * Queues and runs latest-wins persistence for the active project terminal selection.
+ *
+ * @pure false
+ * @effect setProjectActiveTerminalSession via Effect.runPromise.
+ * @invariant at most one backend persistence request is in flight per ref.
+ * @precondition persistedSelectionRef was created by createProjectActiveTerminalPersistenceRef.
+ * @postcondition ready project selections become latestRequest and are persisted without older completions winning.
+ * @complexity O(1) time / O(1) space per invocation.
+ */
 export const persistProjectActiveTerminalSelection = (
   state: TerminalWorkspaceState,
   persistedSelectionRef: ProjectActiveTerminalPersistenceRef
