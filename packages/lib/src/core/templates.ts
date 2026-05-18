@@ -3,11 +3,8 @@ import type { ResolvedComposeResourceLimits } from "./resource-limits.js"
 import { renderEntrypoint } from "./templates-entrypoint.js"
 import { type ComposeResourceLimits, renderDockerCompose } from "./templates/docker-compose.js"
 import { renderDockerfile } from "./templates/dockerfile.js"
-import {
-  renderPlaywrightBrowserDockerfile,
-  renderPlaywrightBrowserRuntime,
-  renderPlaywrightStartExtra
-} from "./templates/playwright.js"
+import { renderPlaywrightBrowserRuntime } from "./templates/playwright-browser-runtime.js"
+import { renderPlaywrightBrowserDockerfile, renderPlaywrightStartExtra } from "./templates/playwright.js"
 
 export type FileSpec =
   | { readonly _tag: "File"; readonly relativePath: string; readonly contents: string; readonly mode?: number }

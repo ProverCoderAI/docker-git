@@ -186,7 +186,8 @@ EOF
 chmod 0644 "$DOCKER_GIT_SSHD_CONF" || true`
 
 export const renderEntrypointSshd = (): string =>
-  String.raw`# 5) Run sshd in foreground (log to stderr for CI/debuggability) and stop nested browser on container shutdown
+  String
+    .raw`# 5) Run sshd in foreground (log to stderr for CI/debuggability) and stop nested browser on container shutdown
 docker_git_run_sshd() {
   local sshd_pid=""
 

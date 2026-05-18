@@ -114,9 +114,7 @@ const buildPlaywrightFragments = (
     maybePlaywrightEnv:
       `      MCP_PLAYWRIGHT_ENABLE: "1"\n      MCP_PLAYWRIGHT_CDP_ENDPOINT: "http://127.0.0.1:9223"\n      DOCKER_GIT_PROJECT_CONTAINER_NAME: "${config.containerName}"\n      DOCKER_GIT_BROWSER_CONTAINER_NAME: "${browserContainerName}"\n      DOCKER_GIT_BROWSER_IMAGE_NAME: "${browserImageName}"\n      DOCKER_GIT_BROWSER_VOLUME_NAME: "${browserVolumeName}"\n${
         renderBrowserLimitEnv("DOCKER_GIT_BROWSER_CPU_LIMIT", resourceLimits?.cpuLimit)
-      }${
-        renderBrowserLimitEnv("DOCKER_GIT_BROWSER_RAM_LIMIT", resourceLimits?.ramLimit)
-      }`,
+      }${renderBrowserLimitEnv("DOCKER_GIT_BROWSER_RAM_LIMIT", resourceLimits?.ramLimit)}`,
     maybeBrowserVolume: `  ${browserVolumeName}:`
   }
 }
