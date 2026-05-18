@@ -120,20 +120,20 @@ const processEnv = (
   NO_COLOR: "1"
 })
 
-const readDefaultGatewayIp = (): string | null => {
-  try {
-    return parseLinuxDefaultGatewayIp(readFileSync("/proc/net/route", "utf8"))
-  } catch {
-    return null
-  }
-}
+const readDefaultGatewayIp = (): Effect.Effect<string | null> =>
+  Effect.try({
+    try: () => parseLinuxDefaultGatewayIp(readFileSync("/proc/net/route", "utf8")),
+    catch: () => null
+  }).pipe(Effect.catchAll((fallback) => Effect.succeed(fallback)))
 
-const defaultPanelTunnelLocalhostHost = (): string => {
+const defaultPanelTunnelLocalhostHost = (): Effect.Effect<string> => {
   const configured = process.env["DOCKER_GIT_PANEL_TUNNEL_LOCALHOST_HOST"]?.trim()
   if (configured !== undefined && configured.length > 0) {
-    return configured
+    return Effect.succeed(configured)
   }
-  return existsSync("/.dockerenv") ? readDefaultGatewayIp() ?? "172.17.0.1" : "127.0.0.1"
+  return existsSync("/.dockerenv")
+    ? readDefaultGatewayIp().pipe(Effect.map((gatewayIp) => gatewayIp ?? "172.17.0.1"))
+    : Effect.succeed("127.0.0.1")
 }
 
 const createStartingRecord = (
@@ -371,7 +371,8 @@ const waitForRecordId = (
   request: StartPanelCloudflareTunnelRequest
 ): Effect.Effect<string, PanelCloudflareTunnelError> =>
   Effect.gen(function*(_) {
-    const resolved = resolvePanelTunnelTargetUrl(request.panelUrl, defaultPanelTunnelLocalhostHost())
+    const localhostHost = yield* _(defaultPanelTunnelLocalhostHost())
+    const resolved = resolvePanelTunnelTargetUrl(request.panelUrl, localhostHost)
     if (!resolved.ok) {
       return yield* _(Effect.fail(new ApiBadRequestError({ message: resolved.message })))
     }
@@ -395,9 +396,34 @@ const waitForRecordId = (
     return record.session.id
   }).pipe(tunnelRecordLock.withPermits(1))
 
+/**
+ * Reads the currently tracked panel Cloudflare tunnel session.
+ *
+ * @returns The active session snapshot, or null when no tunnel record exists.
+ * @pure false
+ * @effect Reads shell-owned in-memory tunnel state under tunnelRecordLock.
+ * @invariant Does not start, stop, or mutate the cloudflared process.
+ * @precondition None.
+ * @postcondition Returns null iff no current tunnel record is tracked.
+ * @complexity O(1) time and O(1) space.
+ * @throws Never - this effect has no typed failure channel.
+ */
 export const readPanelCloudflareTunnel = (): Effect.Effect<PanelCloudflareTunnelSession | null> =>
   Effect.sync(() => currentRecord?.session ?? null).pipe(tunnelRecordLock.withPermits(1))
 
+/**
+ * Starts or reuses a Cloudflare Quick Tunnel for the requested panel URL.
+ *
+ * @param request - Start request containing the local or private LAN panelUrl to expose.
+ * @returns The reusable tunnel session, including publicUrl once cloudflared reports it.
+ * @pure false
+ * @effect Performs HTTP preflight, spawns cloudflared, reads env/filesystem state, and mutates tunnel state.
+ * @invariant At most one current tunnel record is created or replaced under tunnelRecordLock.
+ * @precondition request.panelUrl is a valid http(s) URL reachable from the API controller.
+ * @postcondition On success, currentRecord tracks the starting or running tunnel for request.panelUrl.
+ * @complexity O(startWaitAttempts + maxLogTailLines) time and O(maxLogTailLines) space.
+ * @throws Never - failures are typed as PanelCloudflareTunnelError in the Effect error channel.
+ */
 export const startPanelCloudflareTunnel = (
   request: StartPanelCloudflareTunnelRequest
 ): Effect.Effect<PanelCloudflareTunnelSession, PanelCloudflareTunnelError> =>
@@ -406,6 +432,18 @@ export const startPanelCloudflareTunnel = (
     return yield* _(waitForTunnelUrl(id, startWaitAttempts))
   })
 
+/**
+ * Stops the currently tracked panel Cloudflare tunnel if one exists.
+ *
+ * @returns The stopped session snapshot, or null when no tunnel record exists.
+ * @pure false
+ * @effect Sends SIGTERM/SIGKILL to cloudflared, waits for process close, and removes tunnel home state.
+ * @invariant Does not create a new tunnel record and serializes state changes under tunnelRecordLock.
+ * @precondition None.
+ * @postcondition Returns null iff no record existed; otherwise the returned session has status "stopped".
+ * @complexity O(1) space and O(t) time where t is bounded by the process close/SIGKILL timeout.
+ * @throws Never - this effect has no typed failure channel.
+ */
 export const stopPanelCloudflareTunnel = (): Effect.Effect<PanelCloudflareTunnelSession | null> =>
   Effect.gen(function*(_) {
     return currentRecord === null ? null : yield* _(stopRecord(currentRecord))
