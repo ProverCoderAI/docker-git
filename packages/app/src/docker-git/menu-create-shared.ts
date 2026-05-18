@@ -157,6 +157,8 @@ const joinPath = (...parts: ReadonlyArray<string>): string => {
   return cleaned.join("/")
 }
 
+const renderExplicitBooleanChoice = (value: boolean): string => value ? "Y" : "N"
+
 export const renderCreateStepLabel = (step: CreateStep, defaults: CreateInputs): string =>
   Match.value(step).pipe(
     Match.when("repoUrl", () => "Repo URL (optional for empty workspace)"),
@@ -165,19 +167,20 @@ export const renderCreateStepLabel = (step: CreateStep, defaults: CreateInputs):
     Match.when("cpuLimit", () => `CPU limit [${defaults.cpuLimit || "30%"}]`),
     Match.when("ramLimit", () => `RAM limit [${defaults.ramLimit || "30%"}]`),
     Match.when("gpu", () => `GPU access [${defaults.gpu}]`),
-    Match.when("runUp", () => `Run docker compose up now? [${defaults.runUp ? "Y" : "n"}]`),
+    Match.when("runUp", () => `Run docker compose up now? [${renderExplicitBooleanChoice(defaults.runUp)}]`),
     Match.when(
       "mcpPlaywright",
-      () => `Enable Playwright MCP (nested Chromium browser)? [${defaults.enableMcpPlaywright ? "y" : "N"}]`
+      () =>
+        `Enable Playwright MCP (nested Chromium browser)? [${
+          renderExplicitBooleanChoice(defaults.enableMcpPlaywright)
+        }]`
     ),
     Match.when(
       "force",
-      () => `Force recreate (overwrite files + wipe volumes)? [${defaults.force ? "y" : "N"}]`
+      () => `Force recreate (overwrite files + wipe volumes)? [${renderExplicitBooleanChoice(defaults.force)}]`
     ),
     Match.exhaustive
   )
-
-const renderExplicitBooleanChoice = (value: boolean): string => value ? "Y" : "N"
 
 const parseBooleanChoice = (input: string): boolean | null => {
   const normalized = input.trim().toLowerCase()

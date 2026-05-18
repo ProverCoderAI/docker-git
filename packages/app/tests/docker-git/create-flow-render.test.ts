@@ -156,8 +156,8 @@ describe("Create flow rendering", () => {
     }
     const html = renderCreatePanel(createView, { compact: true })
 
-    expect(html).toContain("Enable Playwright MCP (nested Chromium browser)? [y]")
-    expect(html).toContain("Force recreate (overwrite files + wipe volumes)? [y]")
+    expect(html).toContain("Enable Playwright MCP (nested Chromium browser)? [Y]")
+    expect(html).toContain("Force recreate (overwrite files + wipe volumes)? [Y]")
     expect(html).toContain("CPU limit [30%]")
     expect(html).toContain("RAM limit [30%]")
     expect(html).toContain("GPU access [none]")
