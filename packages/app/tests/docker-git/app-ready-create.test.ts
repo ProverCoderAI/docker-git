@@ -12,7 +12,7 @@ import {
 import type { CreateInputs, CreateStep } from "../../src/docker-git/menu-types.js"
 import type { submitCreateInputs } from "../../src/web/actions-projects.js"
 import type { GithubAuthStatus } from "../../src/web/api.js"
-import { handleCreateKey, submitCreateView } from "../../src/web/app-ready-create.js"
+import { handleCreateKey, setCreateBuffer, submitCreateView } from "../../src/web/app-ready-create.js"
 import { makeBrowserActionContext } from "./browser-action-context-fixture.js"
 
 const submitCreateInputsMock = vi.hoisted(() => vi.fn<typeof submitCreateInputs>())
@@ -133,6 +133,7 @@ const createKeyEvent = (
 const createSettingsFlowView = (): CreateFlowView => ({
   step: 1,
   buffer: "30%",
+  inputError: null,
   values: {
     outDir: "/home/dev/.docker-git/org/repo",
     repoRef: "feature-x",
@@ -208,6 +209,31 @@ const expectCreateSideArrowBufferHandling = (
   expect(context.setMessage).toHaveBeenCalledWith(null)
 }
 
+const expectEmptyRepoInlineError = (
+  quickCreate: boolean | undefined
+) => {
+  const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
+  const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
+  const createView = createInitialFlowView("   ")
+
+  submitCreateView({
+    context,
+    controllerCwd: "/workspace",
+    createView,
+    projectsRoot: "/home/dev/.docker-git",
+    quickCreate,
+    setCreateView
+  })
+
+  expect(submitCreateInputsMock).not.toHaveBeenCalled()
+  expect(setCreateViewSpy).toHaveBeenCalledTimes(1)
+  expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual({
+    ...createView,
+    inputError: "Insert URL first"
+  })
+  expect(context.setMessage).not.toHaveBeenCalled()
+}
+
 describe("app-ready-create", () => {
   beforeEach(() => {
     submitCreateInputsMock.mockReset()
@@ -252,6 +278,82 @@ describe("app-ready-create", () => {
         repoRef: "feature-x",
         repoUrl: "https://github.com/org/repo/tree/feature-x"
       }
+    })
+  })
+
+  it("shows an inline error for empty repo URL quick create without submitting", () => {
+    expectEmptyRepoInlineError(true)
+  })
+
+  it("shows an inline error for empty repo URL settings without entering Settings", () => {
+    expectEmptyRepoInlineError(false)
+  })
+
+  it("shows an inline error for empty repo URL Enter without advancing", () => {
+    expectEmptyRepoInlineError(undefined)
+  })
+
+  it("shows an inline error for empty repo URL keyboard submits", () => {
+    for (const shiftKey of [false, true]) {
+      const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
+      const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
+      const createView = createInitialFlowView("")
+      const event = createKeyEvent("Enter", shiftKey)
+
+      const handled = handleCreateKey(event, {
+        context,
+        controllerCwd: "/workspace",
+        createView,
+        projectsRoot: "/home/dev/.docker-git",
+        setCreateView
+      })
+
+      expect(handled).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalledTimes(1)
+      expect(submitCreateInputsMock).not.toHaveBeenCalled()
+      expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual({
+        ...createView,
+        inputError: "Insert URL first"
+      })
+      expect(context.setMessage).not.toHaveBeenCalled()
+    }
+  })
+
+  it("validates empty repo URL before GitHub auth", () => {
+    const { context } = makeBrowserActionContext()
+    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
+    const createView = createInitialFlowView("")
+
+    submitCreateView({
+      context,
+      controllerCwd: "/workspace",
+      createView,
+      projectsRoot: "/home/dev/.docker-git",
+      quickCreate: true,
+      setCreateView
+    })
+
+    expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual({
+      ...createView,
+      inputError: "Insert URL first"
+    })
+    expect(context.setMessage).not.toHaveBeenCalled()
+    expect(context.setActiveScreen).not.toHaveBeenCalled()
+  })
+
+  it("clears the inline repo URL error after editing the buffer", () => {
+    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
+    const createView: CreateFlowView = {
+      ...createInitialFlowView(""),
+      inputError: "Insert URL first"
+    }
+
+    setCreateBuffer(createView, setCreateView, "https://github.com/org/repo")
+
+    expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual({
+      ...createView,
+      buffer: "https://github.com/org/repo",
+      inputError: null
     })
   })
 

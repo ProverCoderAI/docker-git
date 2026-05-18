@@ -110,6 +110,32 @@ describe("Create flow rendering", () => {
     expect(compactHtml).not.toContain("Shift+Enter")
   })
 
+  it("renders repo URL inline errors in red", () => {
+    const html = renderCreatePanel({
+      ...createInitialFlowView(""),
+      inputError: "Insert URL first"
+    })
+
+    expect(html).toContain("Insert URL first")
+    expect(html).toContain("#ff6b6b")
+  })
+
+  it("omits repo URL inline errors when there is no error", () => {
+    const html = renderCreatePanel(createInitialFlowView(""))
+
+    expect(html).not.toContain("Insert URL first")
+    expect(html).not.toContain("#ff6b6b")
+  })
+
+  it("does not render repo URL inline errors in Settings mode", () => {
+    const html = renderCreatePanel({
+      ...createSettingsView(),
+      inputError: "Insert URL first"
+    }, { compact: true })
+
+    expect(html).not.toContain("Insert URL first")
+  })
+
   it("keeps the compact repo URL step focused on the repo input and action buttons", () => {
     const createView = createInitialFlowView(repoUrl)
     const html = renderCreatePanel(createView, { compact: true })

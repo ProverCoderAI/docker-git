@@ -53,21 +53,26 @@ const CreatePromptInput = (
     readonly promptLabel: string
   }
 ): JSX.Element => (
-  <TextInput
-    ariaLabel={promptLabel}
-    autoFocus={true}
-    onChange={(value) => {
-      onBufferChange(value)
-    }}
-    {...(onArrowLeft === undefined ? {} : { onArrowLeft })}
-    {...(onArrowRight === undefined ? {} : { onArrowRight })}
-    onEnter={(shift) => {
-      onSubmit(isRepoStep ? shift : undefined)
-    }}
-    onEscape={onCancel}
-    placeholder={isRepoStep ? "https://github.com/org/repo/tree/branch --force --mcp-playwright" : promptLabel}
-    value={createView.buffer}
-  />
+  <>
+    <TextInput
+      ariaLabel={promptLabel}
+      autoFocus={true}
+      onChange={(value) => {
+        onBufferChange(value)
+      }}
+      {...(onArrowLeft === undefined ? {} : { onArrowLeft })}
+      {...(onArrowRight === undefined ? {} : { onArrowRight })}
+      onEnter={(shift) => {
+        onSubmit(isRepoStep ? shift : undefined)
+      }}
+      onEscape={onCancel}
+      placeholder={isRepoStep ? "https://github.com/org/repo/tree/branch --force --mcp-playwright" : promptLabel}
+      value={createView.buffer}
+    />
+    {createView.inputError === null || !isRepoStep
+      ? null
+      : <Text fg="#ff6b6b">{createView.inputError}</Text>}
+  </>
 )
 
 export const CreatePanel = (

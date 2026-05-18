@@ -19,6 +19,7 @@ const createSettingsView = (): CreateView => ({
   _tag: "Create",
   step: 1,
   buffer: "30%",
+  inputError: null,
   values: settingsValues
 })
 
@@ -73,7 +74,12 @@ describe("menu-create", () => {
     Effect.sync(() => {
       const context = createContext()
 
-      handleCreateInput("", { downArrow: true }, { _tag: "Create", step: 0, buffer: "", values: {} }, context)
+      handleCreateInput(
+        "",
+        { downArrow: true },
+        { _tag: "Create", step: 0, buffer: "", inputError: null, values: {} },
+        context
+      )
 
       expect(context.setViewMock).not.toHaveBeenCalled()
     }))

@@ -20,6 +20,8 @@ import { menuScreen } from "./screen.js"
 
 type Setter<A> = Dispatch<SetStateAction<A>>
 
+const emptyRepoUrlInputError = "Insert URL first"
+
 type CreateKeyArgs = {
   readonly context: BrowserActionContext
   readonly controllerCwd: string
@@ -57,7 +59,7 @@ export const setCreateBuffer = (
   setCreateView: Setter<CreateFlowView>,
   buffer: string
 ) => {
-  setCreateView({ ...createView, buffer })
+  setCreateView({ ...createView, buffer, inputError: null })
 }
 
 const resolveCreateSubmitResult = (
@@ -85,6 +87,11 @@ export const submitCreateView = (
     setCreateView
   }: CreateSubmitArgs
 ): void => {
+  if (createView.step === 0 && createView.buffer.trim().length === 0) {
+    setCreateView({ ...createView, inputError: emptyRepoUrlInputError })
+    return
+  }
+
   if (!requireGithubAuthConfigured(context)) {
     return
   }

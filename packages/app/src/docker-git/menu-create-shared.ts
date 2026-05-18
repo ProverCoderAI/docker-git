@@ -25,6 +25,7 @@ export type CreateFlowContext = {
 export type CreateFlowView = {
   readonly step: number
   readonly buffer: string
+  readonly inputError: string | null
   readonly values: Partial<CreateInputs>
 }
 
@@ -567,6 +568,7 @@ const applyCreateStep = (input: {
 export const createInitialFlowView = (buffer = ""): CreateFlowView => ({
   step: 0,
   buffer,
+  inputError: null,
   values: {}
 })
 
@@ -585,6 +587,7 @@ const continueCreateFlow = (
   view: {
     step: nextStep,
     buffer: "",
+    inputError: null,
     values: nextValues
   }
 })
@@ -683,7 +686,8 @@ export const moveCreateSettingsStep = (
   return {
     ...view,
     step,
-    buffer: ""
+    buffer: "",
+    inputError: null
   }
 }
 
@@ -717,7 +721,8 @@ export const moveCreateDisplaySettingsStep = (
   return {
     ...view,
     step,
-    buffer: ""
+    buffer: "",
+    inputError: null
   }
 }
 
