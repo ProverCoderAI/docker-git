@@ -257,6 +257,28 @@ describe("terminal sessions service", () => {
     expect(command).toContain("tmux attach-session -t")
     expect(command).toContain("docker-git-session-1")
     expect(command).toContain("/home/dev/project with spaces")
+
+    const startServerIndex = command.indexOf("tmux start-server")
+    const globalHistoryLimitIndex = command.indexOf("set-option -g history-limit 50000")
+    const newSessionIndex = command.indexOf("new-session -d -s")
+    const statusOffIndex = command.indexOf("status off")
+    const sessionHistoryLimitIndex = command.lastIndexOf("history-limit 50000")
+    const mouseOnIndex = command.indexOf("mouse on")
+    const attachSessionIndex = command.indexOf("tmux attach-session -t")
+
+    expect(startServerIndex).toBeGreaterThanOrEqual(0)
+    expect(globalHistoryLimitIndex).toBeGreaterThanOrEqual(0)
+    expect(newSessionIndex).toBeGreaterThanOrEqual(0)
+    expect(statusOffIndex).toBeGreaterThanOrEqual(0)
+    expect(sessionHistoryLimitIndex).toBeGreaterThanOrEqual(0)
+    expect(mouseOnIndex).toBeGreaterThanOrEqual(0)
+    expect(attachSessionIndex).toBeGreaterThanOrEqual(0)
+    expect(startServerIndex).toBeLessThan(globalHistoryLimitIndex)
+    expect(globalHistoryLimitIndex).toBeLessThan(newSessionIndex)
+    expect(newSessionIndex).toBeLessThan(statusOffIndex)
+    expect(statusOffIndex).toBeLessThan(sessionHistoryLimitIndex)
+    expect(sessionHistoryLimitIndex).toBeLessThan(mouseOnIndex)
+    expect(mouseOnIndex).toBeLessThan(attachSessionIndex)
   })
 
   it("fails before creating a durable session when tmux is unavailable", async () => {
