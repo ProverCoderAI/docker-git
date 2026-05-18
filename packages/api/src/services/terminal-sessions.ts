@@ -3,6 +3,7 @@ import {
   listProjectItems,
   prepareProjectSsh,
   probeProjectSshReady,
+  recordProjectRuntimeActivity,
   renderError,
   waitForProjectSshReady
 } from "@effect-template/lib"
@@ -111,6 +112,7 @@ type DurableTerminalSessionFile = {
 
 const records = new Map<string, TerminalRecord>()
 const terminalSessionPersistenceQueues = new Map<string, Promise<void>>()
+const terminalActivityWrites = new Map<string, number>()
 const terminalWsPathPattern = /^(?:\/api)?\/projects\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
 const terminalWsByKeyPathPattern = /^(?:\/api)?\/projects\/by-key\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
 const terminalSessionStateRelativePath: ReadonlyArray<string> = [".orch", "state", "terminal-sessions.json"]
@@ -177,9 +179,11 @@ export const clearTerminalSessionRuntimeForTest = (): void => {
   }
   records.clear()
   terminalSessionPersistenceQueues.clear()
+  terminalActivityWrites.clear()
 }
 
 const nowIso = (): string => new Date().toISOString()
+const terminalActivityWriteIntervalMs = 30_000
 
 const requestSessionId = (requestId: string | undefined): string | undefined =>
   requestId !== undefined && uuidPattern.test(requestId) ? requestId : undefined
@@ -462,6 +466,27 @@ const attachedClientCount = (record: TerminalRecord): number => {
 
 const syncAttachedClientCount = (record: TerminalRecord): void => {
   updateSession(record, { attachedClients: attachedClientCount(record) })
+}
+
+const touchProjectInteractiveActivity = (projectId: string): void => {
+  const now = Date.now()
+  const lastWrite = terminalActivityWrites.get(projectId) ?? 0
+  if (now - lastWrite < terminalActivityWriteIntervalMs) {
+    return
+  }
+  terminalActivityWrites.set(projectId, now)
+  Effect.runFork(
+    recordProjectRuntimeActivity(projectId, "interactive").pipe(
+      Effect.provide(NodeContext.layer),
+      Effect.catchAll((error) =>
+        Effect.logWarning(
+          `[terminal-sessions] Failed to record interactive activity for project ${projectId}: ${
+            error instanceof Error ? error.message : describeUnknown(error)
+          }`
+        )
+      )
+    )
+  )
 }
 
 const toApiInternalError = (error: unknown): ApiInternalError =>
@@ -1090,7 +1115,21 @@ const prepareRuntimeRecord = (
   projectItem: ProjectItem
 ): Effect.Effect<TerminalRecord, ApiInternalError, TerminalSessionRuntime> =>
   Effect.gen(function*(_) {
-    const reachableProjectItem = yield* _(resolveControllerReachableProject(projectItem).pipe(Effect.mapError(toApiInternalError)))
+    const initialReachableProjectItem = yield* _(
+      resolveControllerReachableProject(projectItem).pipe(
+        Effect.catchAll(() => Effect.succeed(projectItem))
+      )
+    )
+    const sshReady = yield* _(probeProjectSshReady(initialReachableProjectItem).pipe(Effect.orElseSucceed(() => false)))
+    const runningProjectItem = sshReady
+      ? initialReachableProjectItem
+      : yield* _(
+        upProject(projectItem.projectDir, undefined, true, { startupMode: "resume" }).pipe(
+          Effect.zipRight(getProjectItemById(projectItem.projectDir)),
+          Effect.mapError(toApiInternalError)
+        )
+      )
+    const reachableProjectItem = yield* _(resolveControllerReachableProject(runningProjectItem).pipe(Effect.mapError(toApiInternalError)))
     yield* _(normalizeSshKeyPermissions(reachableProjectItem.sshKeyPath))
     return registerHydratedRecord(durable, prepareProjectSsh(reachableProjectItem), reachableProjectItem)
   })
@@ -1499,14 +1538,17 @@ const handleSocketMessage = (record: TerminalRecord, socket: WebSocket, raw: Raw
     return
   }
   if (message.type === "input") {
+    touchProjectInteractiveActivity(record.projectId)
     writePtyInput(record.pty, message.data)
     return
   }
   if (message.type === "resize") {
+    touchProjectInteractiveActivity(record.projectId)
     resizePty(record.pty, clampTerminalSize(message.cols, 120), clampTerminalSize(message.rows, 32))
     return
   }
   if (message.type === "image") {
+    touchProjectInteractiveActivity(record.projectId)
     handleImagePasteMessage(record, message)
     return
   }
@@ -1522,6 +1564,7 @@ const attachSocketToRecord = (
   clearAttachTimeout(record)
   clearDetachTimeout(record)
   record.sockets.add(socket)
+  touchProjectInteractiveActivity(record.projectId)
   attachWebSocketHeartbeat(socket)
   startTerminalPty(record, cols, rows)
   syncAttachedClientCount(record)
@@ -1617,3 +1660,12 @@ export const verifyTerminalSession = (
   sessionId: string
 ): Effect.Effect<TerminalSession, ApiInternalError | ApiNotFoundError, TerminalSessionStateRuntime> =>
   getProjectTerminalSession(projectId, sessionId)
+
+export const hasLiveProjectTerminalSession = (projectId: string): boolean => {
+  for (const record of records.values()) {
+    if (record.projectId === projectId && attachedClientCount(record) > 0) {
+      return true
+    }
+  }
+  return false
+}

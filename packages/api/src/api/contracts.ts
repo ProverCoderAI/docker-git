@@ -357,6 +357,10 @@ export type UpProjectRequest = {
 }
 
 export type ApplyProjectRequest = {
+  readonly cpuLimit?: string | undefined
+  readonly ramLimit?: string | undefined
+  readonly playwrightCpuLimit?: string | undefined
+  readonly playwrightRamLimit?: string | undefined
   readonly gpu?: "none" | "all" | undefined
 }
 
@@ -385,6 +389,8 @@ export type CreateProjectRequest = {
   readonly codexHome?: string | undefined
   readonly cpuLimit?: string | undefined
   readonly ramLimit?: string | undefined
+  readonly playwrightCpuLimit?: string | undefined
+  readonly playwrightRamLimit?: string | undefined
   readonly gpu?: "none" | "all" | undefined
   readonly dockerNetworkMode?: string | undefined
   readonly dockerSharedNetworkName?: string | undefined

@@ -82,7 +82,7 @@ export const renderCreateStepLabel = (step: CreateStep, defaults: CreateInputs):
     Match.when("runUp", () => `Run docker compose up now? [${defaults.runUp ? "Y" : "n"}]`),
     Match.when(
       "mcpPlaywright",
-      () => `Enable Playwright MCP (Chromium sidecar)? [${defaults.enableMcpPlaywright ? "y" : "N"}]`
+      () => `Enable Playwright MCP (nested Chromium browser)? [${defaults.enableMcpPlaywright ? "y" : "N"}]`
     ),
     Match.when(
       "force",

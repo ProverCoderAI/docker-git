@@ -7,6 +7,8 @@ import { Effect } from "effect"
 import {
   projectRuntimeStateRelativePath,
   readProjectRuntimeState,
+  recordProjectRuntimeActivity,
+  recordProjectRuntimeResourceProfile,
   recordProjectRuntimeStarted,
   recordProjectRuntimeStopped
 } from "../../src/usecases/project-runtime-state.js"
@@ -40,6 +42,12 @@ describe("project runtime state", () => {
           lastStartedAtEpochMs: null,
           lastStartAction: null,
           lastKnownStatus: "unknown",
+          lastAgentSeenAtIso: null,
+          lastAgentSeenAtEpochMs: null,
+          lastInteractiveSeenAtIso: null,
+          lastInteractiveSeenAtEpochMs: null,
+          resourceProfile: "normal",
+          lastStopReason: null,
           updatedAtIso: null
         })
 
@@ -52,6 +60,12 @@ describe("project runtime state", () => {
           lastStartedAtEpochMs: null,
           lastStartAction: null,
           lastKnownStatus: "unknown",
+          lastAgentSeenAtIso: null,
+          lastAgentSeenAtEpochMs: null,
+          lastInteractiveSeenAtIso: null,
+          lastInteractiveSeenAtEpochMs: null,
+          resourceProfile: "normal",
+          lastStopReason: null,
           updatedAtIso: null
         })
       })
@@ -75,16 +89,31 @@ describe("project runtime state", () => {
           lastStartedAtIso: startedAtIso,
           lastStartedAtEpochMs: startedAtEpochMs,
           lastStartAction: "up",
-          lastKnownStatus: "running"
+          lastKnownStatus: "running",
+          resourceProfile: "normal",
+          lastStopReason: null
         })
 
-        const stopped = yield* _(recordProjectRuntimeStopped(projectDir))
+        const agentActivity = yield* _(recordProjectRuntimeActivity(projectDir, "agent"))
+        expect(agentActivity.lastAgentSeenAtEpochMs).not.toBeNull()
+
+        const throttled = yield* _(recordProjectRuntimeResourceProfile(projectDir, "interactive-idle-throttled"))
+        expect(throttled.resourceProfile).toBe("interactive-idle-throttled")
+
+        const agentActivityWhileThrottled = yield* _(recordProjectRuntimeActivity(projectDir, "agent"))
+        expect(agentActivityWhileThrottled.lastAgentSeenAtEpochMs).not.toBeNull()
+        expect(agentActivityWhileThrottled.resourceProfile).toBe("interactive-idle-throttled")
+
+        const stopped = yield* _(recordProjectRuntimeStopped(projectDir, "auto-suspend"))
         expect(stopped).toMatchObject({
           lastStartedAtIso: startedAtIso,
           lastStartedAtEpochMs: startedAtEpochMs,
           lastStartAction: "up",
-          lastKnownStatus: "stopped"
+          lastKnownStatus: "stopped",
+          resourceProfile: "normal",
+          lastStopReason: "auto-suspend"
         })
+        expect(stopped.lastAgentSeenAtEpochMs).toBe(agentActivityWhileThrottled.lastAgentSeenAtEpochMs)
 
         const reread = yield* _(readProjectRuntimeState(projectDir))
         expect(reread).toMatchObject(stopped)

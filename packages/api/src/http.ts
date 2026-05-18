@@ -92,6 +92,8 @@ import {
   readProjectLogs,
   readProjectPs,
   recreateProject,
+  resumeProject,
+  suspendProject,
   upProject
 } from "./services/projects.js"
 import { readProjectAuthSnapshot, runProjectAuthFlow } from "./services/project-auth.js"
@@ -1375,7 +1377,7 @@ export const makeRouter = () => {
     )
   )
 
-  const withProjectLifecycle = withProjectDatabases.pipe(
+  const withProjectLifecycleBase = withProjectDatabases.pipe(
     HttpRouter.del(
       "/projects/:projectId",
       projectParams.pipe(
@@ -1397,17 +1399,33 @@ export const makeRouter = () => {
         Effect.catchAll(errorResponse)
       )
     ),
-  HttpRouter.post(
-    "/projects/:projectId/apply",
-    Effect.gen(function*(_) {
-      const { projectId } = yield* _(projectParams)
-      const request = yield* _(readApplyProjectRequest())
-      const project = yield* _(applyProjectById(projectId, request))
-      return yield* _(jsonResponse({ ok: true, project }, 200))
-    }).pipe(
-      Effect.catchAll(errorResponse)
-    )
-  ),
+    HttpRouter.post(
+      "/projects/:projectId/resume",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => resumeProject(projectId)),
+        Effect.flatMap((project) => jsonResponse({ ok: true, project }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/apply",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(readApplyProjectRequest())
+        const project = yield* _(applyProjectById(projectId, request))
+        return yield* _(jsonResponse({ ok: true, project }, 200))
+      }).pipe(
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/suspend",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => suspendProject(projectId)),
+        Effect.flatMap((project) => jsonResponse({ ok: true, project }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
     HttpRouter.post(
       "/projects/:projectId/down",
       projectParams.pipe(
@@ -1415,7 +1433,10 @@ export const makeRouter = () => {
         Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
         Effect.catchAll(errorResponse)
       )
-    ),
+    )
+  )
+
+  const withProjectLifecycle = withProjectLifecycleBase.pipe(
     HttpRouter.post(
       "/projects/by-key/:projectKey/terminal-sessions",
       projectKeyParams.pipe(

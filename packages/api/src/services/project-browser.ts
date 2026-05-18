@@ -1,3 +1,4 @@
+import { recordProjectRuntimeActivity } from "@effect-template/lib"
 import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
 import { parseInspectNetworkEntry } from "@effect-template/lib/shell/docker-inspect-parse"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
@@ -50,6 +51,11 @@ type ContainerNetworkEntry = {
   readonly name: string
 }
 
+type BrowserNetworkInspection = {
+  readonly networkMode: string
+  readonly networks: ReadonlyArray<ContainerNetworkEntry>
+}
+
 type BrowserProxyUpstream = {
   readonly headers: Record<string, string>
   readonly projectId: string
@@ -71,10 +77,12 @@ type BrowserWebSocketUpstream =
     readonly _tag: "Tcp"
     readonly host: string
     readonly port: number
+    readonly projectId: string
   }
   | {
     readonly _tag: "WebSocket"
     readonly headers: Record<string, string>
+    readonly projectId: string
     readonly url: string
   }
 
@@ -85,6 +93,9 @@ type PendingWebSocketMessage = {
 
 const dockerOkExit = [0]
 const cdpHostHeader = "127.0.0.1:9222"
+const browserActivityWriteIntervalMs = 30_000
+const browserActivityWrites = new Map<string, number>()
+const browserWebSocketCounts = new Map<string, number>()
 
 const hopByHopRequestHeaders = new Set([
   "connection",
@@ -113,6 +124,41 @@ const hopByHopResponseHeaders = new Set([
 ])
 
 const dockerGitApiContainerName = (): string => process.env["DOCKER_GIT_API_CONTAINER_NAME"]?.trim() || "docker-git-api"
+
+const touchProjectBrowserActivity = (projectId: string): void => {
+  const now = Date.now()
+  const lastWrite = browserActivityWrites.get(projectId) ?? 0
+  if (now - lastWrite < browserActivityWriteIntervalMs) {
+    return
+  }
+  browserActivityWrites.set(projectId, now)
+  Effect.runFork(
+    recordProjectRuntimeActivity(projectId, "interactive").pipe(
+      Effect.provide(NodeContext.layer),
+      Effect.catchAll((error) =>
+        Effect.logWarning(
+          `[project-browser] Failed to record browser activity for project ${projectId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      )
+    )
+  )
+}
+
+const incrementBrowserWebSocket = (projectId: string): void => {
+  browserWebSocketCounts.set(projectId, (browserWebSocketCounts.get(projectId) ?? 0) + 1)
+  touchProjectBrowserActivity(projectId)
+}
+
+const decrementBrowserWebSocket = (projectId: string): void => {
+  const next = Math.max(0, (browserWebSocketCounts.get(projectId) ?? 0) - 1)
+  if (next === 0) {
+    browserWebSocketCounts.delete(projectId)
+    return
+  }
+  browserWebSocketCounts.set(projectId, next)
+}
 
 const dockerCapture = (
   cwd: string,
@@ -200,6 +246,28 @@ const inspectContainerNetworks = (
     Effect.mapError((error) => new ApiInternalError({ message: `Failed to inspect browser networks: ${containerName}`, cause: error }))
   )
 
+const inspectContainerNetworkMode = (
+  cwd: string,
+  containerName: string
+) =>
+  dockerCapture(
+    cwd,
+    ["inspect", "-f", "{{.HostConfig.NetworkMode}}", containerName],
+    "docker inspect network mode"
+  ).pipe(
+    Effect.map((output) => output.trim()),
+    Effect.mapError((error) => new ApiInternalError({ message: `Failed to inspect container network mode: ${containerName}`, cause: error }))
+  )
+
+const inspectBrowserNetwork = (
+  cwd: string,
+  containerName: string
+) =>
+  Effect.all({
+    networkMode: inspectContainerNetworkMode(cwd, containerName),
+    networks: inspectContainerNetworks(cwd, containerName)
+  })
+
 const connectContainerToNetwork = (
   cwd: string,
   networkName: string,
@@ -220,12 +288,23 @@ const selectReachableNetwork = (
   entries: ReadonlyArray<ContainerNetworkEntry>
 ): ContainerNetworkEntry | null => entries.find((entry) => entry.name !== "bridge") ?? entries[0] ?? null
 
-const ensureBrowserReachableIp = (
+const containerNetworkModeTarget = (networkMode: string): string | null => {
+  const prefix = "container:"
+  return networkMode.startsWith(prefix) ? networkMode.slice(prefix.length) : null
+}
+
+const shouldProxyBrowserViaProjectContainer = (
+  projectContainerName: string,
+  inspection: BrowserNetworkInspection
+): boolean =>
+  inspection.networks.length === 0 || containerNetworkModeTarget(inspection.networkMode) === projectContainerName
+
+const ensureReachableIpFromNetworks = (
   cwd: string,
-  containerName: string
+  containerName: string,
+  entries: ReadonlyArray<ContainerNetworkEntry>
 ): Effect.Effect<string, ApiInternalError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
-    const entries = yield* _(inspectContainerNetworks(cwd, containerName))
     yield* _(
       Effect.forEach(
         entries.filter((entry) => entry.name !== "bridge"),
@@ -235,9 +314,23 @@ const ensureBrowserReachableIp = (
     )
     const selected = selectReachableNetwork(entries)
     if (selected === null || selected.ipAddress.length === 0) {
-      return yield* _(Effect.fail(new ApiInternalError({ message: `Browser container has no reachable IP: ${containerName}` })))
+      return yield* _(Effect.fail(new ApiInternalError({ message: `Container has no reachable IP: ${containerName}` })))
     }
     return selected.ipAddress
+  })
+
+const ensureBrowserReachableIp = (
+  cwd: string,
+  browserContainerNameValue: string,
+  projectContainerName: string
+): Effect.Effect<string, ApiInternalError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const browserNetwork = yield* _(inspectBrowserNetwork(cwd, browserContainerNameValue))
+    if (shouldProxyBrowserViaProjectContainer(projectContainerName, browserNetwork)) {
+      const projectNetworks = yield* _(inspectContainerNetworks(cwd, projectContainerName))
+      return yield* _(ensureReachableIpFromNetworks(cwd, projectContainerName, projectNetworks))
+    }
+    return yield* _(ensureReachableIpFromNetworks(cwd, browserContainerNameValue, browserNetwork.networks))
   })
 
 const resolveProjectByKey = (
@@ -365,7 +458,7 @@ const resolveBrowserProxyUpstream = (
     if (state.status !== "running") {
       return yield* _(Effect.fail(new ApiBadRequestError({ message: `Browser container is not running: ${containerName}` })))
     }
-    const ipAddress = yield* _(ensureBrowserReachableIp(project.projectDir, containerName))
+    const ipAddress = yield* _(ensureBrowserReachableIp(project.projectDir, containerName, project.containerName))
     const port = target._tag === "Cdp" ? browserCdpPort : browserNoVncPort
     const proxyPath = target._tag === "Cdp"
       ? `/b/${target.projectKey}/cdp/`
@@ -459,6 +552,7 @@ export const proxyProjectBrowser = (
 > =>
   Effect.gen(function*(_) {
     const upstream = yield* _(resolveBrowserProxyUpstream(target, request.url))
+    yield* _(Effect.sync(() => touchProjectBrowserActivity(upstream.projectId)))
     if (target._tag === "NoVnc" && target.upstreamPath === "/") {
       return browserRedirectResponse(upstream.projectId)
     }
@@ -509,7 +603,8 @@ const resolveBrowserWebSocketUpstream = (
         return {
           _tag: "Tcp" as const,
           host: upstream.upstreamUrl.hostname,
-          port: browserVncPort
+          port: browserVncPort,
+          projectId: upstream.projectId
         }
       }
       const wsUrl = new URL(upstream.upstreamUrl.toString())
@@ -517,6 +612,7 @@ const resolveBrowserWebSocketUpstream = (
       return {
         _tag: "WebSocket" as const,
         headers: upstream.headers,
+        projectId: upstream.projectId,
         url: wsUrl.toString()
       }
     })
@@ -644,6 +740,10 @@ const connectBrowserWebSocket = (
   target: BrowserWebSocketUpstream
 ): void => {
   webSocketServer.handleUpgrade(request, socket, head, (clientSocket) => {
+    incrementBrowserWebSocket(target.projectId)
+    clientSocket.on("close", () => {
+      decrementBrowserWebSocket(target.projectId)
+    })
     if (target._tag === "Tcp") {
       const upstream = createConnection({ host: target.host, port: target.port })
       bridgeSocketToTcp(clientSocket, upstream)
@@ -664,6 +764,9 @@ const connectBrowserWebSocket = (
     }
   })
 }
+
+export const hasLiveProjectBrowserSession = (projectId: string): boolean =>
+  (browserWebSocketCounts.get(projectId) ?? 0) > 0
 
 export const attachProjectBrowserWebSocketServer = (server: HttpServer): void => {
   const webSocketServer = new WebSocketServer({ noServer: true })

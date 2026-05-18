@@ -118,13 +118,17 @@ describe("enableMcpPlaywrightProjectFiles", () => {
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
         expect(composeAfter).toContain("dg-test-browser")
+        expect(composeAfter).not.toContain("\n  dg-test-browser:\n")
         expect(composeAfter).toContain('MCP_PLAYWRIGHT_ENABLE: "1"')
+        expect(composeAfter).toContain('MCP_PLAYWRIGHT_CDP_ENDPOINT: "http://127.0.0.1:9223"')
+        expect(composeAfter).toContain('DOCKER_GIT_BROWSER_CONTAINER_NAME: "dg-test-browser"')
+        expect(composeAfter).toContain("      - /var/run/docker.sock:/var/run/docker.sock")
 
         const dockerfileAfter = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
         expect(dockerfileAfter).toContain("@playwright/mcp")
 
         // CHANGE: verify retry logic is included in docker-git-playwright-mcp wrapper
-        // WHY: issue-123 requires retry mechanism to handle browser sidecar startup delays
+        // WHY: issue-123 requires retry mechanism to handle nested browser startup delays
         // QUOTE(issue-123): "Почему MCP сервер лежит с ошибкой?"
         // REF: issue-123
         expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_RETRY_ATTEMPTS")
@@ -132,15 +136,21 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_CDP_GUARD")
         expect(dockerfileAfter).toContain('if [[ "${MCP_PLAYWRIGHT_ISOLATED:-0}" == "1" ]]; then')
         expect(dockerfileAfter).toContain("fetch_cdp_version()")
-        expect(dockerfileAfter).toContain("waiting for browser sidecar")
+        expect(dockerfileAfter).toContain("waiting for nested browser runtime")
         expect(dockerfileAfter).toContain('exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT"')
+        expect(dockerfileAfter).toContain(
+          "COPY Dockerfile.browser mcp-playwright-start-extra.sh docker-git-browser-runtime.sh /opt/docker-git/browser/"
+        )
 
         const browserDockerfileExists = yield* _(fs.exists(path.join(outDir, "Dockerfile.browser")))
         const startExtraExists = yield* _(fs.exists(path.join(outDir, "mcp-playwright-start-extra.sh")))
+        const browserRuntimeExists = yield* _(fs.exists(path.join(outDir, "docker-git-browser-runtime.sh")))
         expect(browserDockerfileExists).toBe(true)
         expect(startExtraExists).toBe(true)
+        expect(browserRuntimeExists).toBe(true)
         const browserDockerfile = yield* _(fs.readFileString(path.join(outDir, "Dockerfile.browser")))
         const startExtra = yield* _(fs.readFileString(path.join(outDir, "mcp-playwright-start-extra.sh")))
+        const browserRuntime = yield* _(fs.readFileString(path.join(outDir, "docker-git-browser-runtime.sh")))
         expect(browserDockerfile).toContain("docker-git-cdp-guard")
         expect(browserDockerfile).toContain("ws@8.18.3")
         expect(browserDockerfile).toContain("Browser.close")
@@ -148,6 +158,19 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(startExtra).toContain('MCP_PLAYWRIGHT_CDP_GUARD:-1')
         expect(startExtra).toContain("docker-git-cdp-guard")
         expect(startExtra).toContain("socat TCP-LISTEN:9223")
+        expect(browserRuntime).toContain('--network "container:$main_container"')
+        expect(browserRuntime).toContain("docker_git_cleanup_orphaned_playwright_browsers")
+        expect(browserRuntime).toContain("docker_git_browser_cleanup_temp_files")
+        expect(browserRuntime).toContain('mktemp "\\${TMPDIR:-/tmp}/docker-git-browser-build.XXXXXX.log"')
+        expect(browserRuntime).toContain('DOCKER_GIT_BROWSER_BUILD_TIMEOUT_SECONDS:-600')
+        expect(browserRuntime).toContain('timeout "$build_timeout" docker build')
+        expect(browserRuntime).toContain('cat "$build_log" >&2 || true')
+        expect(browserRuntime).toContain('--filter "label=docker-git.browser=1" --filter "label=docker-git.project-container"')
+        expect(browserRuntime).toContain('docker inspect --format \'{{ .State.Running }}\' "$project_container"')
+        expect(browserRuntime).toContain('if ! docker volume create "$volume_name" >/dev/null 2>&1; then')
+        expect(browserRuntime).toContain('failed to create browser data volume $volume_name; continuing')
+        expect(browserRuntime).toContain('args+=(--cpus "$DOCKER_GIT_BROWSER_CPU_LIMIT")')
+        expect(browserRuntime).toContain('args+=(--memory "$DOCKER_GIT_BROWSER_RAM_LIMIT" --memory-swap "$DOCKER_GIT_BROWSER_RAM_LIMIT")')
 
         const configAfterText = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         const configAfter = yield* _(Effect.sync((): unknown => JSON.parse(configAfterText)))

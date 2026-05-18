@@ -22,7 +22,7 @@ export const unsupportedOperationalCommands: Record<
   ScrapImport: { command: "scrap import", message: "Scrap import is disabled in API-only host mode." },
   McpPlaywrightUp: {
     command: "mcp-playwright",
-    message: "Playwright sidecar management is disabled in API-only host mode."
+    message: "Playwright browser management is disabled in API-only host mode."
   },
   Apply: {
     command: "Apply",
