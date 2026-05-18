@@ -125,7 +125,8 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(composeAfter).toContain("      - /var/run/docker.sock:/var/run/docker.sock")
 
         const dockerfileAfter = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
-        expect(dockerfileAfter).toContain("@playwright/mcp")
+        expect(dockerfileAfter).toContain("ARG PLAYWRIGHT_MCP_VERSION=0.0.75")
+        expect(dockerfileAfter).toContain('RUN npm install -g "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"')
 
         // CHANGE: verify lazy Playwright MCP startup and legacy guarded fallback wiring
         // WHY: issue-319 requires MCP stdio initialize to answer even when CDP is still starting
@@ -173,6 +174,9 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(browserRuntime).toContain('cat "$build_log" >&2 || true')
         expect(browserRuntime).toContain("docker_git_wait_for_playwright_cdp()")
         expect(browserRuntime).toContain('local attempts="${MCP_PLAYWRIGHT_READY_ATTEMPTS:-60}"')
+        expect(browserRuntime).toContain("invalid MCP_PLAYWRIGHT_READY_ATTEMPTS")
+        expect(browserRuntime).toContain("while (( attempt <= attempts )); do")
+        expect(browserRuntime).not.toContain('for attempt in $(seq 1 "$attempts")')
         expect(browserRuntime).toContain("MCP_PLAYWRIGHT_ENABLE=0")
         expect(browserRuntime).toContain('docker_git_disable_playwright_mcp "nested browser started but CDP is unavailable"')
         expect(browserRuntime).toContain('--filter "label=docker-git.browser=1" --filter "label=docker-git.project-container"')

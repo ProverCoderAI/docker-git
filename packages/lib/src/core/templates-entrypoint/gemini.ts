@@ -199,7 +199,7 @@ fi`
 const renderGeminiMcpPlaywrightConfig = (): string =>
   String.raw`# Gemini CLI: keep Playwright MCP config in sync with container settings
 docker_git_sync_gemini_playwright_mcp() {
-  GEMINI_CONFIG_SETTINGS_FILE="$GEMINI_CONFIG_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="$MCP_PLAYWRIGHT_ENABLE" node - <<'NODE'
+  GEMINI_CONFIG_SETTINGS_FILE="$GEMINI_CONFIG_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="${"$"}{MCP_PLAYWRIGHT_ENABLE:-0}" node - <<'NODE'
 const fs = require("node:fs")
 const path = require("node:path")
 const settingsPath = process.env.GEMINI_CONFIG_SETTINGS_FILE

@@ -47,16 +47,26 @@ docker_git_wait_for_playwright_cdp() {
   local delay="\${MCP_PLAYWRIGHT_READY_DELAY:-1}"
   local endpoint
   endpoint="$(docker_git_playwright_cdp_endpoint)"
+  if [[ ! "$attempts" =~ ^[0-9]+$ ]] || (( attempts < 1 )); then
+    docker_git_browser_log "invalid MCP_PLAYWRIGHT_READY_ATTEMPTS=$attempts; using 60"
+    attempts=60
+  fi
+  if [[ ! "$delay" =~ ^[0-9]+$ ]]; then
+    docker_git_browser_log "invalid MCP_PLAYWRIGHT_READY_DELAY=$delay; using 1"
+    delay=1
+  fi
 
-  for attempt in $(seq 1 "$attempts"); do
+  local attempt=1
+  while (( attempt <= attempts )); do
     if docker_git_fetch_playwright_cdp_version; then
       docker_git_browser_log "CDP endpoint is ready: $endpoint"
       return 0
     fi
-    if [[ "$attempt" -lt "$attempts" ]]; then
+    if (( attempt < attempts )); then
       docker_git_browser_log "waiting for CDP endpoint $endpoint (attempt $attempt/$attempts)"
       sleep "$delay"
     fi
+    attempt=$((attempt + 1))
   done
 
   docker_git_browser_log "CDP endpoint did not become ready: $endpoint"

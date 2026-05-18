@@ -153,7 +153,8 @@ RUN set -eu; \
 
 const dockerGitSessionSyncPackage = "@prover-coder-ai/docker-git-session-sync@latest"
 
-const dockerfilePlaywrightMcpBlock = String.raw`RUN npm install -g @playwright/mcp@latest
+const dockerfilePlaywrightMcpBlock = String.raw`ARG PLAYWRIGHT_MCP_VERSION=0.0.75
+RUN npm install -g "@playwright/mcp@${"$"}{PLAYWRIGHT_MCP_VERSION}"
 
 # docker-git: wrapper that launches the MCP stdio server without blocking initialize on CDP readiness.
 RUN cat <<'EOF' > /usr/local/bin/docker-git-playwright-mcp

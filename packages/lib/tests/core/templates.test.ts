@@ -451,7 +451,7 @@ describe("renderEntrypoint auth bridge", () => {
       "docker_git_detect_grok_project_rules()",
       "docker_git_sync_gemini_playwright_mcp()",
       "docker_git_sync_grok_playwright_mcp()",
-      'MCP_PLAYWRIGHT_ENABLE="$MCP_PLAYWRIGHT_ENABLE" node',
+      'MCP_PLAYWRIGHT_ENABLE="${MCP_PLAYWRIGHT_ENABLE:-0}" node',
       "DOCKER_GIT_RTK_ENABLE=\"${DOCKER_GIT_RTK_ENABLE:-1}\"",
       "DOCKER_GIT_RTK_ENABLE=1",
       "docker_git_rtk_init_as_user()",
@@ -741,6 +741,10 @@ describe("renderDockerCompose", () => {
     expect(runtime).toContain("docker_git_wait_for_playwright_cdp()")
     expect(runtime).toContain('local attempts="${MCP_PLAYWRIGHT_READY_ATTEMPTS:-60}"')
     expect(runtime).toContain('local delay="${MCP_PLAYWRIGHT_READY_DELAY:-1}"')
+    expect(runtime).toContain("invalid MCP_PLAYWRIGHT_READY_ATTEMPTS")
+    expect(runtime).toContain("invalid MCP_PLAYWRIGHT_READY_DELAY")
+    expect(runtime).toContain("while (( attempt <= attempts )); do")
+    expect(runtime).not.toContain('for attempt in $(seq 1 "$attempts")')
     expect(runtime).toContain("MCP_PLAYWRIGHT_ENABLE=0")
     expect(runtime).toContain('docker_git_disable_playwright_mcp "nested browser started but CDP is unavailable"')
   })

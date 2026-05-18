@@ -193,7 +193,7 @@ const renderClaudeMcpPlaywrightConfig = (): string =>
   String.raw`# Claude Code: keep Playwright MCP config in sync with container settings
 CLAUDE_SETTINGS_FILE="${"$"}{CLAUDE_HOME_JSON:-$CLAUDE_CONFIG_DIR/.claude.json}"
 docker_git_sync_claude_playwright_mcp() {
-  CLAUDE_SETTINGS_FILE="$CLAUDE_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="$MCP_PLAYWRIGHT_ENABLE" node - <<'NODE'
+  CLAUDE_SETTINGS_FILE="$CLAUDE_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="${"$"}{MCP_PLAYWRIGHT_ENABLE:-0}" node - <<'NODE'
 const fs = require("node:fs")
 const path = require("node:path")
 

@@ -185,7 +185,7 @@ chmod 0600 "$GROK_CONFIG_SETTINGS_FILE" "$GROK_USER_SETTINGS_FILE" 2>/dev/null |
 const renderGrokMcpPlaywrightConfig = (): string =>
   String.raw`# Grok CLI: keep Playwright MCP config in sync with container settings
 docker_git_sync_grok_playwright_mcp() {
-  GROK_CONFIG_SETTINGS_FILE="$GROK_CONFIG_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="$MCP_PLAYWRIGHT_ENABLE" node - <<'NODE'
+  GROK_CONFIG_SETTINGS_FILE="$GROK_CONFIG_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="${"$"}{MCP_PLAYWRIGHT_ENABLE:-0}" node - <<'NODE'
 const fs = require("node:fs")
 const path = require("node:path")
 const settingsPath = process.env.GROK_CONFIG_SETTINGS_FILE
