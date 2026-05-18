@@ -2,9 +2,9 @@ import * as fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
 import type { DashboardData } from "../../src/web/api.js"
-import { parseReadyUrlNavigation, readyUrlPath } from "../../src/web/app-ready-url.js"
-import type { BrowserMenuTag } from "../../src/web/menu.js"
-import type { BrowserScreen } from "../../src/web/screen.js"
+import { activeScreenFromMenu, parseReadyUrlNavigation, readyUrlPath } from "../../src/web/app-ready-url.js"
+import { browserMenuOrder, type BrowserMenuTag } from "../../src/web/menu.js"
+import { browserProjectMenuTags, isProjectMenu, menuScreen, outputScreen } from "../../src/web/screen.js"
 
 type ReadyUrlPathInput = Parameters<typeof readyUrlPath>[0]
 type ParsedReadyNavigation = NonNullable<ReturnType<typeof parseReadyUrlNavigation>>
@@ -45,93 +45,41 @@ const dashboard: DashboardData = {
 
 const selectedProjectSummary = dashboard.projects[0]
 
-const menuScreen: BrowserScreen = { tag: "Menu" }
-const outputScreen: BrowserScreen = { tag: "Output" }
-const projectPickerScreen: BrowserScreen = { tag: "ProjectPicker" }
+const projectActionMenuTags = browserProjectMenuTags.filter((menu) => menu !== "Select")
+const nonProjectMenuTags = browserMenuOrder.filter((menu) => !isProjectMenu(menu))
 
-const menuTags: ReadonlyArray<BrowserMenuTag> = [
-  "Create",
-  "Select",
-  "Auth",
-  "ProjectAuth",
-  "Prompts",
-  "Skills",
-  "Info",
-  "Share",
-  "Ports",
-  "Databases",
-  "Tasks",
-  "Browser",
-  "Status",
-  "Logs",
-  "Down",
-  "DownAll",
-  "Delete",
-  "Quit"
-]
+const emptyProjectSelection: ProjectSelection = {
+  expectedSelectedProjectId: null,
+  selectedProjectId: null,
+  selectedProjectSummary: undefined
+}
 
-const projectMenuTags: ReadonlyArray<BrowserMenuTag> = [
-  "Browser",
-  "Databases",
-  "Delete",
-  "Down",
-  "Info",
-  "Logs",
-  "Ports",
-  "ProjectAuth",
-  "Prompts",
-  "Select",
-  "Skills",
-  "Status",
-  "Tasks"
-]
-
-const nonProjectMenuTags: ReadonlyArray<BrowserMenuTag> = ["Auth", "Create", "DownAll", "Quit", "Share"]
-
-const parsedScreenByMenu: Readonly<Record<BrowserMenuTag, BrowserScreen>> = {
-  Auth: { tag: "Auth" },
-  Browser: projectPickerScreen,
-  Create: { tag: "Create" },
-  Databases: projectPickerScreen,
-  Delete: projectPickerScreen,
-  Down: projectPickerScreen,
-  DownAll: menuScreen,
-  Info: projectPickerScreen,
-  Logs: projectPickerScreen,
-  Ports: projectPickerScreen,
-  ProjectAuth: { tag: "ProjectAuth" },
-  Prompts: projectPickerScreen,
-  Quit: menuScreen,
-  Select: projectPickerScreen,
-  Share: { tag: "Share" },
-  Skills: projectPickerScreen,
-  Status: projectPickerScreen,
-  Tasks: projectPickerScreen
+const selectedProjectSelection: ProjectSelection = {
+  expectedSelectedProjectId: "project-1",
+  selectedProjectId: "project-1",
+  selectedProjectSummary
 }
 
 const projectSelectionArbitrary: fc.Arbitrary<ProjectSelection> = fc.constantFrom(
-  {
-    expectedSelectedProjectId: null,
-    selectedProjectId: null,
-    selectedProjectSummary: undefined
-  },
-  {
-    expectedSelectedProjectId: "project-1",
-    selectedProjectId: "project-1",
-    selectedProjectSummary
-  }
+  emptyProjectSelection,
+  selectedProjectSelection
 )
 
-const readyUrlMenuRoundTripArbitrary: fc.Arbitrary<ReadyUrlRoundTripCase> = fc.constantFrom(...menuTags)
+const projectActionCaseArbitrary = fc.oneof(
+  fc.tuple(fc.constantFrom(...projectActionMenuTags), projectSelectionArbitrary),
+  fc.tuple(fc.constant<BrowserMenuTag>("Select"), fc.constant(selectedProjectSelection))
+)
+
+const readyUrlMenuRoundTripArbitrary: fc.Arbitrary<ReadyUrlRoundTripCase> = fc.constantFrom(...browserMenuOrder)
   .map((menu) => ({
     expected: {
-      activeScreen: menuScreen,
+      activeScreen: menuScreen(),
       menu,
       projectNavigationArmed: false,
       selectedProjectId: null
     },
     state: {
-      activeScreen: menuScreen,
+      activeScreen: menuScreen(),
       activeTerminalSession: null,
       currentMenu: menu,
       selectedProjectId: null,
@@ -142,30 +90,28 @@ const readyUrlMenuRoundTripArbitrary: fc.Arbitrary<ReadyUrlRoundTripCase> = fc.c
 const readyUrlActionRoundTripArbitrary: fc.Arbitrary<ReadyUrlRoundTripCase> = fc.oneof(
   fc.constantFrom(...nonProjectMenuTags).map((menu) => ({
     expected: {
-      activeScreen: parsedScreenByMenu[menu],
+      activeScreen: activeScreenFromMenu(menu, false),
       menu,
       projectNavigationArmed: false,
       selectedProjectId: null
     },
     state: {
-      activeScreen: parsedScreenByMenu[menu],
+      activeScreen: activeScreenFromMenu(menu, false),
       activeTerminalSession: null,
       currentMenu: menu,
       selectedProjectId: null,
       selectedProjectSummary: undefined
     }
   })),
-  fc.tuple(fc.constantFrom(...projectMenuTags), projectSelectionArbitrary).map(([menu, selection]) => ({
+  projectActionCaseArbitrary.map(([menu, selection]) => ({
     expected: {
-      activeScreen: menu === "Select" && selection.expectedSelectedProjectId === null
-        ? menuScreen
-        : parsedScreenByMenu[menu],
+      activeScreen: activeScreenFromMenu(menu, false),
       menu,
       projectNavigationArmed: false,
       selectedProjectId: selection.expectedSelectedProjectId
     },
     state: {
-      activeScreen: projectPickerScreen,
+      activeScreen: activeScreenFromMenu(menu, false),
       activeTerminalSession: null,
       currentMenu: menu,
       selectedProjectId: selection.selectedProjectId,
@@ -174,13 +120,13 @@ const readyUrlActionRoundTripArbitrary: fc.Arbitrary<ReadyUrlRoundTripCase> = fc
   })),
   fc.tuple(fc.constantFrom<BrowserMenuTag>("Logs", "Status"), projectSelectionArbitrary).map(([menu, selection]) => ({
     expected: {
-      activeScreen: outputScreen,
+      activeScreen: outputScreen(),
       menu,
       projectNavigationArmed: false,
       selectedProjectId: selection.expectedSelectedProjectId
     },
     state: {
-      activeScreen: outputScreen,
+      activeScreen: outputScreen(),
       activeTerminalSession: null,
       currentMenu: menu,
       selectedProjectId: selection.selectedProjectId,
@@ -301,16 +247,20 @@ describe("app ready URL state", () => {
     )
   })
 
+  /**
+   * THEOREM (ready URL round-trip):
+   * For all generated ValidNavigationState values, parsing readyUrlPath(state)
+   * returns normalize(state), where activeTerminalSession and
+   * selectedProjectSummary are URL construction inputs, not persisted fields.
+   */
   it("preserves ready URL round-trip invariants for valid navigation states", () => {
     fc.assert(
       fc.property(readyUrlRoundTripArbitrary, ({ expected, state }) => {
         const path = readyUrlPath(state)
 
-        expect(path).not.toBeNull()
         if (path === null) {
-          return
+          throw new Error("readyUrlPath returned null for a generated valid navigation state")
         }
-
         expect(parseReadyUrlNavigation(`https://docker-git.local${path}`, dashboard.projects)).toEqual(expected)
       }),
       { numRuns: 75 }
