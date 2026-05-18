@@ -87,7 +87,7 @@ const MainMenuRoute = (
 ): JSX.Element => (
   <ScreenFrame
     hint="↑/↓ choose, Enter open, R refresh"
-    title="docker-git browser"
+    title="docker-git menu"
   >
     <MainMenuScreen {...props} />
   </ScreenFrame>

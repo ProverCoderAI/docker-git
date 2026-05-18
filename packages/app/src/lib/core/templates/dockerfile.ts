@@ -15,6 +15,15 @@ import { renderDockerfileGitleaks, renderDockerfileOpenCode } from "./tools.js"
 // COMPLEXITY: O(1)/O(1)
 const dockerGitBaseImage = "konard/box-js:2.1.1"
 
+// CHANGE: include tmux in generated project images for durable terminal multiplexing.
+// WHY: stable project SSH links attach to persisted tmux sessions instead of one-off shell processes.
+// QUOTE(ТЗ): n/a
+// REF: PR-309
+// SOURCE: n/a
+// PURITY: CORE
+// INVARIANT: generated base image contains the terminal multiplexer required by project SSH sessions.
+// COMPLEXITY: O(1)/O(1)
+
 /**
  * Renders the base image, root user, apt mirror, core packages, and sudo prelude.
  *
@@ -56,7 +65,7 @@ RUN set -eu; \
     sleep $((attempt * 2)); \
   done; \
   apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-    openssh-server git gh ca-certificates curl unzip bsdutils sudo \
+    openssh-server git gh ca-certificates curl unzip bsdutils sudo tmux \
     make docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
     ncurses-term jq \
  && rm -rf /var/lib/apt/lists/*

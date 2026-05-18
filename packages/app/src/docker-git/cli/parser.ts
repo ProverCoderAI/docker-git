@@ -19,6 +19,7 @@ import { usageText } from "./usage.js"
 const isHelpFlag = (token: string): boolean => token === "--help" || token === "-h"
 
 const helpCommand: Command = { _tag: "Help", message: usageText }
+const menuCommand: Command = { _tag: "Menu" }
 const browserCommand: Command = { _tag: "Browser" }
 const statusCommand: Command = { _tag: "Status" }
 const downAllCommand: Command = { _tag: "DownAll" }
@@ -52,7 +53,7 @@ const parseCreate = (args: ReadonlyArray<string>): Either.Either<Command, ParseE
 // COMPLEXITY: O(n) where n = |argv|
 export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> => {
   if (args.length === 0) {
-    return Either.right(helpCommand)
+    return Either.right(menuCommand)
   }
 
   if (args.some((arg) => isHelpFlag(arg))) {
@@ -84,10 +85,13 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("status", () => Either.right(statusCommand)),
       Match.when("down-all", () => Either.right(downAllCommand)),
       Match.when("stop-all", () => Either.right(downAllCommand)),
-      Match.when("kill-all", () => Either.right(downAllCommand))
+      Match.when("kill-all", () => Either.right(downAllCommand)),
+      Match.when("menu", () => Either.right(menuCommand)),
+      Match.when("ui", () => Either.right(menuCommand))
     )
     .pipe(
       Match.when("browser", () => Either.right(browserCommand)),
+      Match.when("web", () => Either.right(browserCommand)),
       Match.when("apply-all", () => parseApplyAll(rest)),
       Match.when("update-all", () => parseApplyAll(rest)),
       Match.when("auth", () => parseAuth(rest)),

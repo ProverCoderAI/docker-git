@@ -1,5 +1,5 @@
-import { type AuthMenuAction, authViewSteps, authViewTitle } from "./auth-flow.js"
-import { type ProjectAuthMenuAction, projectAuthViewSteps } from "./project-auth-flow.js"
+import { type AuthMenuAction, authViewSteps, authViewTitle } from "../docker-git/menu-auth-shared.js"
+import { type ProjectAuthMenuAction, projectAuthViewSteps } from "../docker-git/menu-project-auth-shared.js"
 
 export type ActionPromptStep = {
   readonly key: string

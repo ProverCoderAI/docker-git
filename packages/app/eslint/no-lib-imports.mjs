@@ -13,9 +13,11 @@ const isRelativeLocalLibImport = (value) => /^(?:\.\.\/|\.\/)+(?:src\/)?lib(?:\/
 /** @param {string | undefined} filePath */
 const isFrontendSurfaceFile = (filePath) => {
   const normalized = (filePath ?? "").replaceAll("\\", "/")
-  return normalized.startsWith("src/docker-git/") ||
+  return normalized.startsWith("src/app/") ||
+    normalized.startsWith("src/docker-git/") ||
     normalized.startsWith("src/web/") ||
     normalized.startsWith("tests/") ||
+    normalized.includes("/src/app/") ||
     normalized.includes("/src/docker-git/") ||
     normalized.includes("/src/web/") ||
     normalized.includes("/tests/")

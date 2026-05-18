@@ -6,8 +6,8 @@ import {
   renderCreateStepLabel,
   resolveCreateFlowSteps,
   resolveCreateInputs
-} from "./create-flow.js"
-import type { CreateStep } from "./create-types.js"
+} from "../docker-git/menu-create-shared.js"
+import type { CreateStep } from "../docker-git/menu-types.js"
 import { Box, Button, Text, TextInput } from "../ui/primitives.js"
 import { HelpLines } from "../ui/shared.js"
 

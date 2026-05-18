@@ -5,12 +5,12 @@ import {
   authViewSteps,
   authViewTitle,
   successMessage as authSuccessMessage
-} from "./auth-flow.js"
+} from "../docker-git/menu-auth-shared.js"
 import {
   type ProjectAuthMenuAction,
   projectAuthSuccessMessage,
   projectAuthViewSteps
-} from "./project-auth-flow.js"
+} from "../docker-git/menu-project-auth-shared.js"
 import {
   type ActionPromptState,
   createAuthActionPrompt,

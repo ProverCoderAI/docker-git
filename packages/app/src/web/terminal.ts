@@ -73,6 +73,45 @@ type ProjectTerminalSessionBase = Pick<
 
 export const terminalSessionRoutePath = (sessionId: string): string => `/ssh/session/${encodeURIComponent(sessionId)}`
 
+const encodeProjectKeyPath = (projectKey: string): string =>
+  projectKey.split("/").map((segment) => encodeURIComponent(segment)).join("/")
+
+const terminalUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+
+export const terminalRouteToken = (sessionId: string): string =>
+  terminalUuidPattern.test(sessionId) ? sessionId.slice(0, 8) : sessionId
+
+export const projectSshRoutePath = (projectKey: string, terminalId?: string): string => {
+  const path = `/ssh/${encodeProjectKeyPath(projectKey)}`
+  return terminalId === undefined ? path : `${path}?t=${encodeURIComponent(terminalRouteToken(terminalId))}`
+}
+
+type TerminalLabelSession = {
+  readonly createdAt: string
+  readonly id: string
+}
+
+const compareTerminalLabelSession = (left: TerminalLabelSession, right: TerminalLabelSession): number => {
+  const byCreatedAt = left.createdAt.localeCompare(right.createdAt)
+  return byCreatedAt === 0 ? left.id.localeCompare(right.id) : byCreatedAt
+}
+
+export const terminalTitle = (index: number): string => `Terminal ${index + 1}`
+
+const terminalTitleEntry = (
+  session: TerminalLabelSession,
+  index: number
+): readonly [string, string] => [session.id, terminalTitle(index)]
+
+export const terminalTitleById = (
+  sessions: ReadonlyArray<TerminalLabelSession>
+): ReadonlyMap<string, string> =>
+  new Map(
+    sessions
+      .toSorted(compareTerminalLabelSession)
+      .map((session, index) => terminalTitleEntry(session, index))
+  )
+
 export const isPendingActiveTerminalSession = (
   session: ActiveTerminalSession
 ): session is PendingActiveTerminalSession => session.pendingConnection !== undefined
@@ -110,7 +149,7 @@ export const buildProjectActiveTerminalSession = (
     ...(onReady === undefined ? {} : { onReady }),
     pendingDeleteMessage: `Terminal session was closed before attach: ${projectDisplayName}.`,
     session,
-    sessionPath: terminalSessionRoutePath(session.id),
+    sessionPath: projectSshRoutePath(projectKey, session.id),
     subtitle: session.sshCommand
   }
 }
@@ -164,7 +203,7 @@ export const buildPendingProjectActiveTerminalSession = (
       sshCommand: "Preparing SSH session...",
       status: phase === "error" ? "failed" : "ready"
     },
-    sessionPath: terminalSessionRoutePath(pendingSessionId),
+    sessionPath: projectSshRoutePath(projectKey, pendingSessionId),
     subtitle: resolvedMessage
   }
 }

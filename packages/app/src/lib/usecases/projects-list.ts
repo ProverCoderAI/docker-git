@@ -66,7 +66,7 @@ export const listProjects: Effect.Effect<
 )
 
 // CHANGE: collect docker-git connection info lines without logging
-// WHY: allow API and browser flows to render connection info inline
+// WHY: allow TUI to render connection info inline
 // QUOTE(ТЗ): "А кнопка \"Show connection info\" ничего не отображает"
 // REF: user-request-2026-02-01-tui-info
 // SOURCE: n/a
@@ -130,7 +130,7 @@ export const listProjectSummaries: Effect.Effect<
   ListProjectsContext
 > = listProjectValues(loadProjectSummary, renderProjectSummary, emptySummaries)
 
-// CHANGE: load docker-git projects for structured selection
+// CHANGE: load docker-git projects for TUI selection
 // WHY: provide structured project data without noisy logs
 // QUOTE(ТЗ): "А ты можешь сделать удобный выбор проектов?"
 // REF: user-request-2026-02-02-select-project

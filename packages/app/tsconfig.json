@@ -17,7 +17,7 @@
 		"eslint/**/*",
 		"src/**/*",
 		"tests/**/*",
-		"vite.docker-git.config.ts",
+		"vite.config.ts",
 		"vite.web.config.ts",
 		"vitest.config.ts"
 	],

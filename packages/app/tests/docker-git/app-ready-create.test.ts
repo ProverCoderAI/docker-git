@@ -3,11 +3,15 @@ import type { Dispatch, SetStateAction } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { deriveRepoPathParts, resolveRepoInput } from "../../src/docker-git/frontend-lib/core/domain.js"
+import {
+  type CreateFlowView,
+  createInitialFlowView,
+  resolveCreateFlowSteps
+} from "../../src/docker-git/menu-create-shared.js"
+import type { CreateInputs } from "../../src/docker-git/menu-types.js"
 import type { submitCreateInputs } from "../../src/web/actions-projects.js"
 import type { GithubAuthStatus } from "../../src/web/api.js"
 import { submitCreateView } from "../../src/web/app-ready-create.js"
-import { type CreateFlowView, createInitialFlowView, resolveCreateFlowSteps } from "../../src/web/create-flow.js"
-import type { CreateInputs } from "../../src/web/create-types.js"
 import { makeBrowserActionContext } from "./browser-action-context-fixture.js"
 
 const submitCreateInputsMock = vi.hoisted(() => vi.fn<typeof submitCreateInputs>())

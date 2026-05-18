@@ -1,7 +1,7 @@
 import { Match } from "effect"
 import type { JSX } from "react"
 
-import type { CreateFlowView } from "./create-flow.js"
+import type { CreateFlowView } from "../docker-git/menu-create-shared.js"
 import type { ActionPromptState } from "./action-prompt.js"
 import type { AuthSnapshot, GithubAuthStatus, ProjectAuthSnapshot, ProjectDetails, ProjectSummary } from "./api.js"
 import { Box, Text } from "./elements.js"

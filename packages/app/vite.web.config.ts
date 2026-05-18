@@ -3,6 +3,7 @@ import type { IncomingMessage } from "node:http"
 import type { Duplex } from "node:stream"
 import { fileURLToPath } from "node:url"
 
+import { gridlandWebPlugin } from "@gridland/web/vite-plugin"
 import react from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type PluginOption } from "vite"
 import { type RawData, WebSocket, WebSocketServer } from "ws"
@@ -165,6 +166,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       terminalWebSocketProxyPlugin(apiTarget),
+      ...gridlandWebPlugin(),
       react()
     ],
     publicDir: false,

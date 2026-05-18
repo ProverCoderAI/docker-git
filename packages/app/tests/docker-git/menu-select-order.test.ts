@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest"
 
-import type { ProjectItem } from "../../src/docker-git/project-item.js"
+import { buildSelectLabels, buildSelectListWindow } from "../../src/docker-git/menu-render-select.js"
+import { filterProjectItemsByQuery } from "../../src/docker-git/menu-select-filter.js"
+import { sortItemsByLaunchTime, sortSelectItemsByLaunchTime } from "../../src/docker-git/menu-select-order.js"
+import type { SelectProjectRuntime } from "../../src/docker-git/menu-types.js"
 import type { ProjectSummary } from "../../src/web/api-schema.js"
 import { sortDashboardProjects } from "../../src/web/api.js"
 import { filterProjectSummariesByQuery } from "../../src/web/project-search.js"
-import { sortSelectItemsByLaunchTime } from "../../src/web/project-select-order.js"
-import { buildSelectLabels, buildSelectListWindow } from "../../src/web/project-select-presenter.js"
-import { filterSelectItemsByQuery } from "../../src/web/project-select-search.js"
-import type { SelectProjectRuntime } from "../../src/web/project-select-types.js"
 import { makeProjectItem } from "./fixtures/project-item.js"
 
 const makeRuntime = (
@@ -41,29 +40,7 @@ const makeProjectSummary = (
   ...overrides
 })
 
-const sortProjectItemsByLaunchTime = (
-  items: ReadonlyArray<ProjectItem>,
-  runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
-): ReadonlyArray<ProjectItem> =>
-  sortSelectItemsByLaunchTime(items, runtimeByProject, {
-    displayName: (item) => item.displayName,
-    projectKey: (item) => item.projectDir
-  })
-
-const filterProjectItemsByQuery = (
-  items: ReadonlyArray<ProjectItem>,
-  query: string
-): ReadonlyArray<ProjectItem> =>
-  filterSelectItemsByQuery(items, query, {
-    clonedOnHostname: (item) => item.clonedOnHostname,
-    containerName: (item) => item.containerName,
-    displayName: (item) => item.displayName,
-    projectKey: (item) => item.projectDir,
-    repoRef: (item) => item.repoRef,
-    repoUrl: (item) => item.repoUrl
-  })
-
-describe("project select helpers", () => {
+describe("menu-select order", () => {
   it("sorts projects by last container start time (newest first)", () => {
     const newest = makeProjectItem({ projectDir: "/home/dev/.docker-git/newest", displayName: "org/newest" })
     const older = makeProjectItem({ projectDir: "/home/dev/.docker-git/older", displayName: "org/older" })
@@ -86,7 +63,7 @@ describe("project select helpers", () => {
       [neverStarted.projectDir]: makeRuntime()
     }
 
-    const sorted = sortProjectItemsByLaunchTime([neverStarted, older, newest], runtimeByProject)
+    const sorted = sortItemsByLaunchTime([neverStarted, older, newest], runtimeByProject)
     expect(sorted.map((item) => item.projectDir)).toEqual([
       newest.projectDir,
       older.projectDir,
@@ -159,7 +136,7 @@ describe("project select helpers", () => {
     ])
   })
 
-  it("filters project items by container name", () => {
+  it("filters CLI Select projects by container name", () => {
     const api = makeProjectItem({
       projectDir: "/home/dev/.docker-git/api",
       displayName: "org/api",

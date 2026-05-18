@@ -137,10 +137,10 @@ const restoreSttySnapshot = (snapshot: string): Effect.Effect<boolean, never, Co
     )
     : Effect.succeed(false)
 
-// CHANGE: share the low-level tty repair across interactive terminal launches
-// WHY: terminal sessions must reset the same controlling terminal before interactive output
+// CHANGE: share the low-level tty repair across SSH launch and TUI suspend/resume
+// WHY: both paths must reset the same controlling terminal before interactive output
 // QUOTE(ТЗ): "при подключении по SSH контейнер забаганный. Кривокосо печатается текст"
-// REF: user-request-2026-04-20-ssh-terminal
+// REF: user-request-2026-04-20-menu-select-ssh-terminal
 // SOURCE: n/a
 // FORMAT THEOREM: forall t: interactive(t) -> sane_tty(t)
 // PURITY: SHELL

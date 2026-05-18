@@ -11,7 +11,7 @@ vi.mock("../../src/docker-git/controller.js", () => ({
   resolveApiBaseUrl: resolveApiBaseUrlMock
 }))
 
-vi.mock("../../src/docker-git/terminal-output.js", () => ({
+vi.mock("../../src/docker-git/menu-shared.js", () => ({
   writeToTerminal: writeToTerminalMock
 }))
 

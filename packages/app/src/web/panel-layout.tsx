@@ -45,7 +45,7 @@ const menuListTopMargin = (compact: boolean): number | string => compact ? "6px"
 
 const MenuHeader = ({ compact }: Pick<MenuSidebarProps, "compact">): JSX.Element => (
   <Box flexWrap="wrap" gap={1} justifyContent="space-between">
-    <Text bold={true} fg="#8be9fd">{compact ? "docker-git browser" : "bun run docker-git -- browser"}</Text>
+    <Text bold={true} fg="#8be9fd">{compact ? "docker-git menu" : "bun run docker-git"}</Text>
     {compact ? null : <Text fg="#7ba6cc">browser inheritance shell</Text>}
   </Box>
 )

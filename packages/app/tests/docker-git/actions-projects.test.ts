@@ -145,11 +145,11 @@ describe("web project actions", () => {
 
   it.effect("adds a new SSH terminal session instead of replacing terminal state", () =>
     Effect.gen(function*(_) {
-      vi.stubGlobal("crypto", { randomUUID: () => "pending-session-id" })
-      startProjectTerminalSessionMock.mockImplementation(() =>
-        Effect.succeed(startTerminalAccepted("pending-session-id"))
-      )
-      loadProjectTerminalSessionMock.mockImplementation(() => Effect.succeed(session))
+      const pendingSessionId = "00000000-0000-4000-8000-000000000002"
+      vi.stubGlobal("crypto", { randomUUID: () => pendingSessionId })
+      startProjectTerminalSessionMock.mockImplementation(() => Effect.succeed(startTerminalAccepted(pendingSessionId)))
+      const acceptedSession = { ...session, id: pendingSessionId }
+      loadProjectTerminalSessionMock.mockImplementation(() => Effect.succeed(acceptedSession))
       openProjectEventStreamMock.mockImplementation(() => ({ close: eventStreamCloseMock }))
       const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
       const closeTerminalSession = vi.fn<(sessionId: string) => void>()
@@ -163,8 +163,8 @@ describe("web project actions", () => {
         at: "2026-04-21T10:00:01.000Z",
         payload: {
           phase: "created",
-          requestId: "pending-session-id",
-          sessionId: "session-1"
+          requestId: pendingSessionId,
+          sessionId: pendingSessionId
         },
         projectId: "project-1",
         seq: 8,
@@ -179,8 +179,8 @@ describe("web project actions", () => {
       if (pendingSession === undefined) {
         throw new Error("missing pending terminal session")
       }
-      expect(startProjectTerminalSessionMock).toHaveBeenCalledWith("octocat/hello-world", "pending-session-id")
-      expect(loadProjectTerminalSessionMock).toHaveBeenCalledWith("octocat/hello-world", "session-1")
+      expect(startProjectTerminalSessionMock).toHaveBeenCalledWith("octocat/hello-world", pendingSessionId)
+      expect(loadProjectTerminalSessionMock).toHaveBeenCalledWith("octocat/hello-world", pendingSessionId)
       expect(context.setSelectedProjectId).toHaveBeenCalledWith("project-1")
       expect(pendingSession).toMatchObject({
         browserProjectId: "project-1",
@@ -197,17 +197,17 @@ describe("web project actions", () => {
         browserProjectId: "project-1",
         browserProjectKey: "octocat/hello-world",
         browserProjectName: "octocat/hello-world",
-        closePath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1",
+        closePath: `/projects/by-key/octocat%2Fhello-world/terminal-sessions/${pendingSessionId}`,
         exitMessage: "SSH session ended.",
         header: "SSH terminal: octocat/hello-world",
         onExit: reloadDashboard,
         onReady: reloadDashboard,
         pendingDeleteMessage: "Terminal session was closed before attach: octocat/hello-world.",
         readyMessage: "SSH connected: octocat/hello-world.",
-        session,
-        sessionPath: "/ssh/session/session-1",
+        session: acceptedSession,
+        sessionPath: `/ssh/octocat/hello-world?t=${pendingSessionId.slice(0, 8)}`,
         subtitle: "ssh -p 22 dev@172.18.0.7",
-        websocketPath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1/ws"
+        websocketPath: `/projects/by-key/octocat%2Fhello-world/terminal-sessions/${pendingSessionId}/ws`
       })
       expect(eventStreamCloseMock).toHaveBeenCalledTimes(1)
       expect(setMessage).toHaveBeenLastCalledWith(
@@ -217,7 +217,6 @@ describe("web project actions", () => {
 
   it.effect("starts SSH terminal creation from getRandomValues when randomUUID is unavailable", () =>
     Effect.gen(function*(_) {
-      const dateNowMock = vi.spyOn(Date, "now").mockReturnValue(0x1_9A_11_7B_D6_1F)
       vi.stubGlobal("crypto", {
         getRandomValues: (values: Uint8Array): Uint8Array => {
           values.set([0x10, 0x32, 0x54, 0x76, 0x98, 0xBA, 0xDC, 0xFE])
@@ -236,10 +235,9 @@ describe("web project actions", () => {
       yield* _(connectProjectAndWaitForStream(context))
       expect(startProjectTerminalSessionMock).toHaveBeenCalledTimes(1)
       const requestId = startProjectTerminalSessionMock.mock.calls[0]?.[1]
-      expect(requestId).toBe("pending-19a117bd61f-1032547698badcfe")
+      expect(requestId).toBe("10325476-98ba-4cfe-8000-000000000000")
       expect(addTerminalSession).toHaveBeenCalledTimes(1)
       expect(openProjectEventStreamMock).toHaveBeenCalledTimes(1)
-      dateNowMock.mockRestore()
     }))
 
   it.effect("applies a selected project through the project apply endpoint", () =>

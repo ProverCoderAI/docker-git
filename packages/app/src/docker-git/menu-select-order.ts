@@ -1,4 +1,6 @@
-import type { SelectProjectRuntime } from "./project-select-types.js"
+import type { ProjectItem } from "./project-item.js"
+
+import type { SelectProjectRuntime } from "./menu-types.js"
 
 const defaultRuntime = (): SelectProjectRuntime => ({
   running: false,
@@ -20,12 +22,12 @@ const runtimeForKey = (
   projectKey: string
 ): SelectProjectRuntime => runtimeByProject[projectKey] ?? defaultRuntime()
 
-// CHANGE: make browser project selection order use one pure comparator
-// WHY: project lists must present the same launch-time ordering across browser panels
+// CHANGE: make CLI and WEB select order share one pure comparator
+// WHY: `/select/` must present projects in the same order as the TUI select view
 // QUOTE(ТЗ): "мы можем иметь 1 в 1 логику что в CLI что на WEB?"
 // REF: user-message-2026-04-21-unify-cli-web-select
 // SOURCE: n/a
-// FORMAT THEOREM: forall xs: sort_browser(xs) is deterministic when accessors identify the same project/runtime fields
+// FORMAT THEOREM: forall xs: sort_web(xs) = sort_cli(xs) when accessors identify the same project/runtime fields
 // PURITY: CORE
 // EFFECT: none
 // INVARIANT: newer launch timestamps sort first; missing timestamps sort last
@@ -52,4 +54,13 @@ export const sortSelectItemsByLaunchTime = <A>(
 
     const displayNameOrder = accessors.displayName(left).localeCompare(accessors.displayName(right))
     return displayNameOrder === 0 ? leftKey.localeCompare(rightKey) : displayNameOrder
+  })
+
+export const sortItemsByLaunchTime = (
+  items: ReadonlyArray<ProjectItem>,
+  runtimeByProject: Readonly<Record<string, SelectProjectRuntime>>
+): ReadonlyArray<ProjectItem> =>
+  sortSelectItemsByLaunchTime(items, runtimeByProject, {
+    displayName: (item) => item.displayName,
+    projectKey: (item) => item.projectDir
   })

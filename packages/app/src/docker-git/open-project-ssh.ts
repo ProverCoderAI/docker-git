@@ -11,7 +11,7 @@ import { CommandFailedError } from "./frontend-lib/shell/errors.js"
 import { withPreservedTerminalState } from "./frontend-lib/shell/terminal-cursor.js"
 import { findSshPrivateKey } from "./frontend-lib/usecases/path-helpers.js"
 import type { HostError } from "./host-errors.js"
-import { writeToTerminal } from "./terminal-output.js"
+import { writeToTerminal } from "./menu-shared.js"
 import { type ProjectItem, projectItemFromApiDetails } from "./project-item.js"
 import { attachTerminalSession } from "./terminal-session-client.js"
 

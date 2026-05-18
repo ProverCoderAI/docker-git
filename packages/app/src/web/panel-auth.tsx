@@ -1,6 +1,6 @@
 import type { JSX } from "react"
 
-import { authMenuActionByIndex, authMenuLabels } from "./auth-flow.js"
+import { authMenuActionByIndex, authMenuLabels } from "../docker-git/menu-auth-shared.js"
 import type { ActionPromptState } from "./action-prompt.js"
 import type { AuthSnapshot, GithubAuthStatus } from "./api.js"
 import { Box, Text } from "./elements.js"

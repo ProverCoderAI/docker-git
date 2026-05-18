@@ -1,6 +1,6 @@
 import type { JSX } from "react"
 
-import { projectAuthMenuLabels } from "./project-auth-flow.js"
+import { projectAuthMenuLabels } from "../docker-git/menu-project-auth-shared.js"
 import type { ActionPromptState } from "./action-prompt.js"
 import type { ProjectAuthSnapshot } from "./api.js"
 import { Box, Text } from "./elements.js"

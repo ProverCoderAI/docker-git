@@ -37,6 +37,7 @@ export default defineConfig({
     sourcemap: true,
     ssr: "src/docker-git/main.ts",
     rollupOptions: {
+      external: ["@gridland/bun"],
       output: {
         format: "es",
         entryFileNames: "src/docker-git/main.js"

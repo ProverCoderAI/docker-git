@@ -1,6 +1,6 @@
 {
   "name": "@prover-coder-ai/docker-git-session-sync",
-  "version": "1.0.16",
+  "version": "1.0.18",
   "description": "Standalone docker-git AI agent session synchronization tool",
   "main": "dist/docker-git-session-sync.js",
   "bin": {
@@ -39,7 +39,7 @@
   "devDependencies": {
     "@effect/vitest": "^0.29.0",
     "@types/node": "^25.8.0",
-    "@vitejs/plugin-react": "^6.0.1",
+    "@vitejs/plugin-react": "^6.0.2",
     "typescript": "^6.0.3",
     "vite": "^8.0.13",
     "vitest": "^4.1.6"

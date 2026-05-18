@@ -1,8 +1,8 @@
-import { filterSelectItemsByQuery } from "./project-select-search.js"
+import { filterSelectItemsByQuery } from "../docker-git/menu-select-filter.js"
 import type { DashboardData, ProjectSummary } from "./api.js"
 
-// CHANGE: use shared browser project search semantics
-// WHY: container-name search must be identical across browser project pickers
+// CHANGE: use Select search semantics for WEB project search
+// WHY: container-name search must be identical in CLI Select and WEB ProjectPicker
 // QUOTE(ТЗ): "Можешь добавить ещё поиск контейнеров по имени?"
 // REF: user-message-2026-04-22-container-name-search
 // SOURCE: n/a

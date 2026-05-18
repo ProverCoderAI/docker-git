@@ -1,14 +1,6 @@
 import { Match } from "effect"
 
-export type ProjectAuthFlow =
-  | "ProjectGithubConnect"
-  | "ProjectGithubDisconnect"
-  | "ProjectGitConnect"
-  | "ProjectGitDisconnect"
-  | "ProjectClaudeConnect"
-  | "ProjectClaudeDisconnect"
-  | "ProjectGeminiConnect"
-  | "ProjectGeminiDisconnect"
+import type { ProjectAuthFlow } from "./menu-types.js"
 
 export type ProjectAuthMenuAction = ProjectAuthFlow | "Refresh" | "Back"
 

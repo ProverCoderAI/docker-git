@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
+import { createInitialFlowView } from "../../src/docker-git/menu-create-shared.js"
 import type { DashboardData } from "../../src/web/api.js"
 import { type BrowserShortcutArgs, dispatchBrowserShortcut } from "../../src/web/app-ready-shortcut-runtime.js"
 import {
@@ -10,7 +11,6 @@ import {
   shouldRefreshProjectDetails,
   usesProjectPrimaryNavigation
 } from "../../src/web/app-ready-shortcuts.js"
-import { createInitialFlowView } from "../../src/web/create-flow.js"
 import { makeBrowserActionContext } from "./browser-action-context-fixture.js"
 
 const makeEvent = (key: string): ShortcutKeyboardEvent => {

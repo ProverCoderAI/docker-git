@@ -21,6 +21,8 @@ export type {
   AuthGitlabLogoutCommand,
   AuthGitlabStatusCommand
 } from "./auth-domain.js"
+export type { MenuAction, ParseError } from "./menu.js"
+export { parseMenuSelection } from "./menu.js"
 export { deriveRepoPathParts, deriveRepoSlug, resolveRepoInput } from "./repo.js"
 export type {
   SessionsCommand,
@@ -69,14 +71,6 @@ export const sshUserNamePatternDescription = "^[a-z_][a-z0-9_-]{0,31}$"
 // INVARIANT: accepted user names contain only lowercase Linux account-name characters
 // COMPLEXITY: O(n)/O(1) where n = |value|
 export const isUnixUserName = (value: string): boolean => unixUserNamePattern.test(value)
-
-export type ParseError =
-  | { readonly _tag: "UnknownCommand"; readonly command: string }
-  | { readonly _tag: "UnknownOption"; readonly option: string }
-  | { readonly _tag: "MissingOptionValue"; readonly option: string }
-  | { readonly _tag: "MissingRequiredOption"; readonly option: string }
-  | { readonly _tag: "InvalidOption"; readonly option: string; readonly reason: string }
-  | { readonly _tag: "UnexpectedArgument"; readonly value: string }
 
 export interface TemplateConfig {
   readonly containerName: string
@@ -130,6 +124,10 @@ export interface CreateCommand {
   readonly forceEnv: boolean
   readonly waitForClone: boolean
   readonly openSsh: boolean
+}
+
+export interface MenuCommand {
+  readonly _tag: "Menu"
 }
 
 export interface AttachCommand {
@@ -230,6 +228,7 @@ export type ScrapCommand =
 
 export type Command =
   | CreateCommand
+  | MenuCommand
   | AttachCommand
   | OpenCommand
   | PanesCommand

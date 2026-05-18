@@ -8,11 +8,12 @@ import {
   type SelectPurpose,
   selectTitle,
   stoppedRuntime
-} from "./project-select-presenter.js"
+} from "../docker-git/menu-select-presenter.js"
 import { Box, Text } from "../ui/primitives.js"
 import { HelpLines } from "../ui/shared.js"
 import { loadProjectTerminalSessions, type ProjectDetails, type ProjectSummary, type TerminalSession } from "./api.js"
 import type { BrowserMenuTag } from "./menu.js"
+import { terminalTitleById } from "./terminal.js"
 
 type ProjectTerminalSessionsState = {
   readonly error: string | null
@@ -123,7 +124,8 @@ const ProjectTerminalSessionRow = (
     projectId,
     projectKey,
     projectName,
-    session
+    session,
+    title
   }: {
     readonly onAttachProjectTerminalSession: (
       projectId: string,
@@ -136,11 +138,12 @@ const ProjectTerminalSessionRow = (
     readonly projectKey: string
     readonly projectName: string
     readonly session: TerminalSession
+    readonly title: string
   }
 ): JSX.Element => (
   <Box border={true} borderColor="#3a4652" flexDirection="column" gap={1} padding={1}>
     <Box alignItems="center" flexWrap="wrap" gap={1} justifyContent="space-between">
-      <Text bold={true} fg="#d6e5f7">session {session.id.slice(0, 12)}</Text>
+      <Text bold={true} fg="#d6e5f7">{title}</Text>
       <Text fg={terminalStatusColor(session.status)}>
         {session.status}
         {typeof session.attachedClients === "number" ? ` • clients ${session.attachedClients}` : ""}
@@ -215,17 +218,21 @@ const ProjectTerminalSessionsSection = (
       ? <Text fg="#8fa6c4" marginTop={1}>No live SSH terminals. Start one with `new terminal`.</Text>
       : null}
     <Box flexDirection="column" gap={1} marginTop={1}>
-      {sortedTerminalSessions(sessionsState.sessions).map((session) => (
-        <ProjectTerminalSessionRow
-          key={session.id}
-          onAttachProjectTerminalSession={onAttachProjectTerminalSession}
-          onKillProjectTerminalSession={onKillProjectTerminalSession}
-          projectId={project.id}
-          projectKey={project.projectKey}
-          projectName={project.displayName}
-          session={session}
-        />
-      ))}
+      {(() => {
+        const terminalLabels = terminalTitleById(sessionsState.sessions)
+        return sortedTerminalSessions(sessionsState.sessions).map((session) => (
+          <ProjectTerminalSessionRow
+            key={session.id}
+            onAttachProjectTerminalSession={onAttachProjectTerminalSession}
+            onKillProjectTerminalSession={onKillProjectTerminalSession}
+            projectId={project.id}
+            projectKey={project.projectKey}
+            projectName={project.displayName}
+            session={session}
+            title={terminalLabels.get(session.id) ?? "Terminal"}
+          />
+        ))
+      })()}
     </Box>
   </Box>
 )

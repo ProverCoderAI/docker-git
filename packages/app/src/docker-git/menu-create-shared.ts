@@ -7,13 +7,13 @@ import {
   isGpuMode,
   type ParseError,
   resolveRepoInput
-} from "../docker-git/frontend-lib/core/domain.js"
-import { defaultProjectsRoot } from "../docker-git/frontend-lib/usecases/menu-helpers.js"
+} from "./frontend-lib/core/domain.js"
+import { defaultProjectsRoot } from "./frontend-lib/usecases/menu-helpers.js"
 
-import { buildCreateCommand } from "../docker-git/cli/parser-create.js"
-import { parseRawOptions } from "../docker-git/cli/parser-options.js"
-import { splitPositionalRepo } from "../docker-git/cli/parser-shared.js"
-import { type CreateInputs, type CreateStep, createSteps } from "./create-types.js"
+import { buildCreateCommand } from "./cli/parser-create.js"
+import { parseRawOptions } from "./cli/parser-options.js"
+import { splitPositionalRepo } from "./cli/parser-shared.js"
+import { type CreateInputs, type CreateStep, createSteps } from "./menu-types.js"
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
 

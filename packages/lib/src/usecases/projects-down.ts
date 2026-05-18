@@ -11,7 +11,7 @@ import { renderError } from "./errors.js"
 import { forEachProjectStatus, loadProjectIndex, renderProjectStatusHeader } from "./projects-core.js"
 
 // CHANGE: provide a "stop all" helper for docker-git managed projects
-// WHY: allow quickly stopping all running docker-git containers from CLI/API callers
+// WHY: allow quickly stopping all running docker-git containers from the CLI/TUI
 // QUOTE(ТЗ): "Выведи сюда возможность убивать все контейнеры"
 // REF: user-request-2026-02-06-stop-all
 // SOURCE: n/a

@@ -1,4 +1,4 @@
-import { authMenuActionByIndex } from "./auth-flow.js"
+import { authMenuActionByIndex } from "../docker-git/menu-auth-shared.js"
 
 import type { ActionPromptState } from "./action-prompt.js"
 import type { GithubAuthStatus } from "./api.js"

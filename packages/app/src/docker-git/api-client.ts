@@ -107,7 +107,7 @@ export const listProjects = () =>
   )
 
 // CHANGE: expose DB-only project details already returned by GET /projects
-// WHY: project selection and open flows must not issue N follow-up project reads for the same `.docker-git` inventory
+// WHY: TUI Select/Open must not issue N follow-up project reads for the same `.docker-git` inventory
 // QUOTE(ТЗ): "А должен ходить только в .docker-git папку и читать данные из неё если необходимо"
 // REF: user-message-2026-04-21-db-only-project-list
 // SOURCE: n/a

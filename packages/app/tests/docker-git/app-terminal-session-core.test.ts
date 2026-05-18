@@ -20,15 +20,10 @@ const lookup: ProjectTerminalSessionLookup = {
 }
 
 describe("terminal-only SSH route core", () => {
-  it("routes direct SSH session URLs outside the dashboard", () => {
-    expect(resolveWebAppRoute("/ssh/session/session-1")).toEqual({
-      tag: "TerminalSession",
-      sessionId: "session-1"
-    })
-    expect(resolveWebAppRoute("/ssh/session/session%2Fencoded")).toEqual({
-      tag: "TerminalSession",
-      sessionId: "session/encoded"
-    })
+  it("keeps legacy SSH session URLs on the dashboard route for project workspace attach", () => {
+    expect(resolveWebAppRoute("/ssh/session/session-1")).toEqual({ tag: "Dashboard" })
+    expect(resolveWebAppRoute("/ssh/session/session%2Fencoded")).toEqual({ tag: "Dashboard" })
+    expect(readTerminalSessionRoute("/ssh/session/session%2Fencoded")).toBe("session/encoded")
   })
 
   it("keeps dashboard and project SSH links on the dashboard route", () => {
@@ -49,7 +44,7 @@ describe("terminal-only SSH route core", () => {
       browserProjectKey: "octocat/hello-world",
       browserProjectName: "octocat/hello-world",
       closePath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1",
-      sessionPath: "/ssh/session/session-1",
+      sessionPath: "/ssh/octocat/hello-world?t=session-1",
       websocketPath: "/projects/by-key/octocat%2Fhello-world/terminal-sessions/session-1/ws"
     })
     expect("onReady" in session).toBe(false)
