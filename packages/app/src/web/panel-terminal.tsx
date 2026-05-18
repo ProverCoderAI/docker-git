@@ -3,13 +3,13 @@ import "xterm/css/xterm.css"
 import { type CSSProperties, type JSX, useCallback, useEffect, useRef, useState } from "react"
 
 import {
-  type TerminalExitInfo,
   isModifierOnlyTerminalKey,
   type MobileTerminalKey,
   mobileTerminalKeyInput,
   terminalControlCharacterForKey
 } from "./terminal-mobile-controls.js"
 import { resolveTerminalCompactHeaderMode, resolveTerminalTypingMode } from "./terminal-mobile-layout.js"
+import type { TerminalExitInfo } from "./terminal-panel-runtime-types.js"
 import {
   type TerminalConnectionState,
   type TerminalInputController,

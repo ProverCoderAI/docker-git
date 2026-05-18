@@ -15,6 +15,7 @@ import {
   gitlabLogout,
   gitlabStatus,
   type JsonValue,
+  type ApiTerminalSession,
   renderJsonPayload
 } from "./api-client.js"
 import { type ControllerRuntime, ensureControllerReady } from "./controller.js"
@@ -24,6 +25,7 @@ import { terminalAuthTitle } from "./menu-auth-shared.js"
 import { attachTerminalSession } from "./terminal-session-client.js"
 
 type OperationalCommand = Exclude<Command, { readonly _tag: "Help" }>
+type RoutedAuthEffect = Effect.Effect<void, CliError, ControllerRuntime>
 
 export type RoutedAuthCommand = Extract<
   OperationalCommand,
@@ -45,7 +47,9 @@ export type RoutedAuthCommand = Extract<
   }
 >
 
-const withControllerReady = <E, R>(effect: Effect.Effect<void, E, R>) =>
+const withControllerReady = <E extends CliError, R>(
+  effect: Effect.Effect<void, E, R>
+): Effect.Effect<void, CliError, ControllerRuntime | R> =>
   pipe(ensureControllerReady(), Effect.zipRight(effect))
 
 const renderAuthPayload = (payload: JsonValue) => Effect.log(renderJsonPayload(payload))
@@ -106,21 +110,22 @@ const handleCodexLoginCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthCodexLogin" }>
 ) => withControllerReady(codexLogin(command))
 
+const attachGrokAuthTerminalSession = (
+  session: ApiTerminalSession | null
+): Effect.Effect<void, CliError> =>
+  session === null
+    ? Effect.fail(missingAuthTerminalSessionError("GrokOauth"))
+    : attachTerminalSession({
+      header: terminalAuthTitle("GrokOauth"),
+      session,
+      websocketPath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}/ws`
+    })
+
 const handleGrokLoginCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthGrokLogin" }>
 ) =>
   withControllerReady(
-    createAuthTerminalSession("GrokOauth", command.label).pipe(
-      Effect.flatMap((session) =>
-        session === null
-          ? Effect.fail(missingAuthTerminalSessionError("GrokOauth"))
-          : attachTerminalSession({
-            header: terminalAuthTitle("GrokOauth"),
-            session,
-            websocketPath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}/ws`
-          })
-      )
-    )
+    createAuthTerminalSession("GrokOauth", command.label).pipe(Effect.flatMap(attachGrokAuthTerminalSession))
   )
 
 const handleCodexImportCommand = (
@@ -151,7 +156,7 @@ const handleCodexLogoutCommand = (
 
 export const dispatchRoutedAuthCommand = (
   command: RoutedAuthCommand
-): Effect.Effect<void, CliError, ControllerRuntime> =>
+): RoutedAuthEffect =>
   Match.value(command).pipe(
     Match.when({ _tag: "AuthGithubLogin" }, handleGithubLoginCommand),
     Match.when({ _tag: "AuthGithubStatus" }, handleGithubStatusCommand),

@@ -737,6 +737,7 @@ describe("renderDockerCompose", () => {
     expect(runtime).toBeDefined()
     expect(runtime?.mode).toBe(0o755)
     expect(runtime?.contents).toContain('if [[ "${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
+    expect(runtime?.contents).not.toContain('\\${MCP_PLAYWRIGHT_ENABLE:-0}')
   })
 
   it("renders local Docker socket mount only when explicitly enabled", () => {

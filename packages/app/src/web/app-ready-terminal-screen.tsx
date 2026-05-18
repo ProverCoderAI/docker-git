@@ -521,6 +521,7 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
             <TerminalPane
               key={terminalSessionId(activeSession)}
               onApplyProjectById={props.onApplyProjectById}
+              onAuthTerminalExitSuccess={props.onAuthTerminalExitSuccess}
               onCloseTaskManager={() => {
                 setTerminalView("terminal")
               }}
