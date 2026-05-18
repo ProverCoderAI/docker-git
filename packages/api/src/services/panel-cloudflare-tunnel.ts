@@ -17,6 +17,7 @@ type PanelCloudflareTunnelRecord = {
   readonly homeDir: string
   logLines: ReadonlyArray<string>
   process: ChildProcess | null
+  processClosed: boolean
   session: PanelCloudflareTunnelSession
   stderrRemainder: string
   stopFiber: Fiber.RuntimeFiber<PanelCloudflareTunnelSession> | null
@@ -150,6 +151,7 @@ const createStartingRecord = (
     homeDir,
     logLines: [],
     process: null,
+    processClosed: false,
     session: {
       error: null,
       id,
@@ -199,12 +201,16 @@ const finishStoppedRecord = (
   return session
 }
 
-const waitForChildClose = (child: ChildProcess): Effect.Effect<void> => {
-  if (child.exitCode !== null || child.signalCode !== null) {
+const waitForChildClose = (
+  record: PanelCloudflareTunnelRecord,
+  child: ChildProcess
+): Effect.Effect<void> => {
+  if (record.processClosed) {
     return Effect.void
   }
 
   return Effect.async((resume) => {
+    const alreadyExited = child.exitCode !== null || child.signalCode !== null
     let completed = false
     let killTimer: ReturnType<typeof setTimeout> | null = null
     const complete = (): void => {
@@ -214,7 +220,6 @@ const waitForChildClose = (child: ChildProcess): Effect.Effect<void> => {
       completed = true
       child.off("close", complete)
       child.off("error", complete)
-      child.off("exit", complete)
       if (killTimer !== null) {
         clearTimeout(killTimer)
       }
@@ -223,8 +228,7 @@ const waitForChildClose = (child: ChildProcess): Effect.Effect<void> => {
 
     child.once("close", complete)
     child.once("error", complete)
-    child.once("exit", complete)
-    if (!child.killed) {
+    if (!alreadyExited && !child.killed) {
       try {
         child.kill("SIGTERM")
       } catch {
@@ -232,16 +236,18 @@ const waitForChildClose = (child: ChildProcess): Effect.Effect<void> => {
         return
       }
     }
-    killTimer = setTimeout(() => {
-      try {
-        if (child.exitCode === null && child.signalCode === null) {
-          child.kill("SIGKILL")
+    if (!alreadyExited) {
+      killTimer = setTimeout(() => {
+        try {
+          if (child.exitCode === null && child.signalCode === null) {
+            child.kill("SIGKILL")
+          }
+        } catch {
+          complete()
         }
-      } catch {
-        complete()
-      }
-    }, 2_000)
-    killTimer.unref()
+      }, 2_000)
+      killTimer.unref()
+    }
   })
 }
 
@@ -255,7 +261,7 @@ const stopRecord = (
 
   const child = record.process
   record.stopping = true
-  const stopFiber = Effect.runFork((child === null ? Effect.void : waitForChildClose(child)).pipe(
+  const stopFiber = Effect.runFork((child === null ? Effect.void : waitForChildClose(record, child)).pipe(
     Effect.map(() => finishStoppedRecord(record, error))
   ))
   record.stopFiber = stopFiber
@@ -277,6 +283,7 @@ const attachProcessHandlers = (
   child: ChildProcess
 ): void => {
   record.process = child
+  record.processClosed = false
   child.stdout?.on("data", (chunk: Buffer) => {
     consumeChunk(record, "stdout", chunk)
   })
@@ -287,6 +294,7 @@ const attachProcessHandlers = (
     runStopRecord(record, `cloudflared failed to start: ${error.message}`)
   })
   child.on("close", (exitCode, signal) => {
+    record.processClosed = true
     flushRemainder(record, "stdout")
     flushRemainder(record, "stderr")
     if (record.stopping || record.session.status === "stopped" || record.session.status === "failed") {
