@@ -34,7 +34,7 @@ Commands:
   ps, status          Show docker compose status for all docker-git projects
   apply-all           Apply docker-git config and refresh all containers (docker compose up); use --active to restrict to running containers only
   down-all            Stop all docker-git containers (docker compose down)
-  auth                Manage GitHub/GitLab/Codex/Claude Code auth for docker-git
+  auth                Manage GitHub/GitLab/Codex/Claude Code/Gemini/Grok auth for docker-git
   state               Manage docker-git state directory via git (sync across machines)
 
 Options:
@@ -70,6 +70,8 @@ Options:
   --gh-skip                 Skip GitHub auth for public clone/create and force anonymous HTTPS clone
   --codex-token <label>     Codex auth label for clone/create (maps to CODEX_AUTH_LABEL, example: agien)
   --claude-token <label>    Claude auth label for clone/create (maps to CLAUDE_AUTH_LABEL, example: agien)
+  --gemini-token <label>    Gemini auth label for clone/create (maps to GEMINI_AUTH_LABEL, example: agien)
+  --grok-token <label>      Grok auth label for clone/create (maps to GROK_AUTH_LABEL, example: agien)
   --wipe | --no-wipe        Wipe workspace before scrap import (default: --wipe)
   --lines <n>               Tail last N lines for sessions logs (default: 200)
   --include-default         Show default/system processes in sessions list
@@ -109,6 +111,8 @@ Auth providers:
   gitlab             GitLab CLI auth (tokens saved to env file)
   codex             Codex CLI auth (stored under .orch/auth/codex)
   claude, cc        Claude Code CLI auth (OAuth cache stored under .orch/auth/claude)
+  gemini            Gemini CLI auth (stored under .orch/auth/gemini)
+  grok              Grok CLI auth via the official xAI CLI (stored under .orch/auth/grok)
 
 Auth actions:
   login             Run login flow and store credentials
@@ -123,6 +127,8 @@ Auth options:
   --scopes <scopes>      GitHub scopes (login only, default: repo,workflow,read:org)
   --env-global <path>    Env file path for GitHub/GitLab tokens (default: <projectsRoot>/.orch/env/global.env)
   --codex-auth <path>    Codex auth root path (default: <projectsRoot>/.orch/auth/codex)
+  --gemini-auth <path>   Gemini auth root path (default: <projectsRoot>/.orch/auth/gemini)
+  --grok-auth <path>     Grok auth root path (default: <projectsRoot>/.orch/auth/grok)
 
 State actions:
   state path                         Print current projects root (default: ~/.docker-git; override via DOCKER_GIT_PROJECTS_ROOT)

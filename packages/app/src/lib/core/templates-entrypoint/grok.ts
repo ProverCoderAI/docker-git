@@ -24,11 +24,12 @@ const grokAuthRootContainerPath = (sshUser: string): string => `/home/${sshUser}
 // COMPLEXITY: O(1)
 const grokDeploymentKeyDefaultExpansion = "${GROK_DEPLOYMENT_KEY:-}"
 const grokApiKeyDefaultExpansion = "${GROK_API_KEY:-}"
+const grokAuthLabelDefaultExpansion = "${GROK_AUTH_LABEL:-}"
 const xaiApiKeyDefaultExpansion = "${XAI_API_KEY:-}"
 
 const grokAuthConfigTemplate = String
   .raw`# Grok CLI: keep ~/.grok as a real home directory while sharing auth files from ~/.docker-git/.orch/auth/grok
-GROK_LABEL_RAW="$GROK_AUTH_LABEL"
+GROK_LABEL_RAW="${grokAuthLabelDefaultExpansion}"
 if [[ -z "$GROK_LABEL_RAW" ]]; then
   GROK_LABEL_RAW="default"
 fi
@@ -39,6 +40,7 @@ GROK_LABEL_NORM="$(printf "%s" "$GROK_LABEL_RAW" \
 if [[ -z "$GROK_LABEL_NORM" ]]; then
   GROK_LABEL_NORM="default"
 fi
+export GROK_AUTH_LABEL="$GROK_LABEL_NORM"
 
 GROK_AUTH_ROOT="__GROK_AUTH_ROOT__"
 export GROK_CONFIG_DIR="$GROK_AUTH_ROOT/$GROK_LABEL_NORM"
@@ -58,7 +60,9 @@ docker_git_link_grok_file() {
       cp "$link_path" "$source_path" || true
       chmod 0600 "$source_path" || true
     fi
-    return 0
+    if [[ -d "$link_path" ]]; then
+      return 0
+    fi
   fi
 
   ln -sfn "$source_path" "$link_path" || true

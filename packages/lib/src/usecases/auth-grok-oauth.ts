@@ -114,8 +114,7 @@ const fixGrokAuthPermissions = (cwd: string, hostPath: string, containerPath: st
     [0],
     (exitCode) => new CommandFailedError({ command: "chmod grok auth", exitCode })
   ).pipe(
-    Effect.tapError((err) => Effect.logWarning(`Failed to fix Grok auth permissions: ${String(err)}`)),
-    Effect.orElse(() => Effect.void)
+    Effect.tapError((err) => Effect.logWarning(`Failed to fix Grok auth permissions: ${String(err)}`))
   )
 
 /**
@@ -129,7 +128,7 @@ const fixGrokAuthPermissions = (cwd: string, hostPath: string, containerPath: st
  * @effect CommandExecutor; invokes Docker and writes credentials under the selected account path.
  * @invariant successful completion leaves credentials scoped to accountPath and not to project source files.
  * @precondition Docker is available and options.image contains the official Grok CLI binary.
- * @postcondition accountPath permissions are best-effort normalized for the project SSH user.
+ * @postcondition accountPath permissions are normalized for the project SSH user or a typed error is returned.
  * @complexity O(n) local argument construction plus unbounded external OAuth interaction time.
  * @throws Never - failures are modeled as AuthError, CommandFailedError, or PlatformError in the Effect type.
  */

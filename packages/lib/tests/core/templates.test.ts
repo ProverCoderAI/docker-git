@@ -490,6 +490,8 @@ describe("renderEntrypoint auth bridge", () => {
     const entrypoint = renderAuthEntrypoint()
 
     expectContainsAll(entrypoint, [
+      'GROK_LABEL_RAW="${GROK_AUTH_LABEL:-}"',
+      'export GROK_AUTH_LABEL="$GROK_LABEL_NORM"',
       'elif [[ -n "${GROK_DEPLOYMENT_KEY:-}" ]]; then',
       'elif [[ -n "${GROK_API_KEY:-}" ]]; then',
       'elif [[ -n "${XAI_API_KEY:-}" ]]; then',
@@ -499,6 +501,7 @@ describe("renderEntrypoint auth bridge", () => {
       'docker_git_upsert_ssh_env "GROK_API_KEY" "${GROK_API_KEY:-}"',
       'docker_git_upsert_ssh_env "XAI_API_KEY" "${XAI_API_KEY:-}"'
     ])
+    expect(entrypoint).not.toContain('GROK_LABEL_RAW="$GROK_AUTH_LABEL"')
     expect(entrypoint).not.toContain("\\${GROK_DEPLOYMENT_KEY:-}")
     expect(entrypoint).not.toContain("\\${GROK_API_KEY:-}")
     expect(entrypoint).not.toContain("\\${XAI_API_KEY:-}")
@@ -521,6 +524,25 @@ describe("renderEntrypoint auth bridge", () => {
     ])
     expect(entrypoint).not.toContain('chown -R 1000:1000 "$GROK_SETTINGS_DIR"')
     expect(entrypoint).not.toContain('chown 1000:1000 "$GROK_MD_PATH"')
+  })
+
+  it("replaces migrated Grok home files with selected-label symlinks", () => {
+    const entrypoint = renderAuthEntrypoint()
+    const copyIndex = entrypoint.indexOf('cp "$link_path" "$source_path" || true')
+    const dirGuardIndex = entrypoint.indexOf('if [[ -d "$link_path" ]]; then', copyIndex)
+    const linkIndex = entrypoint.indexOf('ln -sfn "$source_path" "$link_path" || true', dirGuardIndex)
+
+    expectContainsAll(entrypoint, [
+      'cp "$link_path" "$source_path" || true',
+      'chmod 0600 "$source_path" || true',
+      'if [[ -d "$link_path" ]]; then',
+      'ln -sfn "$source_path" "$link_path" || true',
+      'docker_git_link_grok_file "$GROK_CONFIG_DIR/.api-key" "$GROK_HOME_DIR/.api-key"',
+      'docker_git_link_grok_file "$GROK_SHARED_HOME_DIR/auth.json" "$GROK_HOME_DIR/auth.json"'
+    ])
+    expect(copyIndex).toBeGreaterThanOrEqual(0)
+    expect(dirGuardIndex).toBeGreaterThan(copyIndex)
+    expect(linkIndex).toBeGreaterThan(dirGuardIndex)
   })
 
   it("renders system-prompt override hooks for codex/claude/gemini/grok", () => {
