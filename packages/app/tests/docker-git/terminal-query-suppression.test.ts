@@ -123,7 +123,11 @@ const ADDED_CSI_IDENTIFIERS: ReadonlyArray<FunctionIdentifier> = [
   { final: "t" }
 ]
 
-const SUPPRESSED_MODES: ReadonlyArray<number> = [1000, 1002, 1003, 1004, 1006, 1015, 1016]
+const MOUSE_TRACKING_MODES: ReadonlyArray<number> = [1000, 1002, 1003, 1006, 1015, 1016]
+
+const FOCUS_REPORTING_MODE = 1004
+
+const SUPPRESSED_MODES: ReadonlyArray<number> = [...MOUSE_TRACKING_MODES, FOCUS_REPORTING_MODE]
 
 const PASS_THROUGH_MODES: ReadonlyArray<number> = [25, 1007, 1049, 2004, 2026]
 
@@ -216,6 +220,20 @@ describe("terminal query suppression", () => {
     for (const mode of SUPPRESSED_MODES) {
       expect(resetHandler.callback([mode])).toBe(true)
     }
+  })
+
+  it("allows DEC private mouse tracking when explicitly enabled for tmux project terminals", () => {
+    const mock = createMockTerminal()
+    installTerminalQuerySuppression(mock.terminal, { allowMouseTracking: true })
+    const setHandler = findCsi(mock, { final: "h", prefix: "?" })
+    const resetHandler = findCsi(mock, { final: "l", prefix: "?" })
+
+    for (const mode of MOUSE_TRACKING_MODES) {
+      expect(setHandler.callback([mode])).toBe(false)
+      expect(resetHandler.callback([mode])).toBe(false)
+    }
+    expect(setHandler.callback([FOCUS_REPORTING_MODE])).toBe(true)
+    expect(resetHandler.callback([FOCUS_REPORTING_MODE])).toBe(true)
   })
 
   it("lets benign DEC private modes fall through to the built-in handler", () => {

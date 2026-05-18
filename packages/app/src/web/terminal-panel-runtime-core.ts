@@ -30,13 +30,17 @@ import type {
   TerminalSocketListenerArgs,
   TerminalSocketRef
 } from "./terminal-panel-runtime-types.js"
-import { installTerminalQuerySuppression } from "./terminal-query-suppression.js"
+import { installTerminalQuerySuppression, type TerminalQuerySuppressionOptions } from "./terminal-query-suppression.js"
 import { resolveTerminalReconnectDelay, terminalReconnectGraceMs } from "./terminal-reconnect.js"
 import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "./terminal.js"
 
 type TerminalClientMessage =
   | { readonly data: string; readonly type: "input" }
   | { readonly cols: number; readonly rows: number; readonly type: "resize" }
+
+type TerminalRuntimeOptions = {
+  readonly querySuppression?: TerminalQuerySuppressionOptions
+}
 
 type TerminalInlineImageFetchError = {
   readonly _tag: "TerminalInlineImageFetchError"
@@ -76,16 +80,20 @@ const clearReconnectTimer = (lifecycle: TerminalLifecycleState): void => {
   }
 }
 
-export const createTerminalRuntime = (host: HTMLDivElement): TerminalRuntime => {
+export const createTerminalRuntime = (
+  host: HTMLDivElement,
+  options: TerminalRuntimeOptions = {}
+): TerminalRuntime => {
   const terminal = new Terminal({
     allowProposedApi: true,
     convertEol: false,
     cursorBlink: true,
     fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
     fontSize: 14,
+    scrollback: 50_000,
     theme: { background: "#080a0d", foreground: "#f4f7fb" }
   })
-  installTerminalQuerySuppression(terminal)
+  installTerminalQuerySuppression(terminal, options.querySuppression)
   const fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(host)
