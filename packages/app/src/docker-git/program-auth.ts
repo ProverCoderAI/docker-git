@@ -1,6 +1,7 @@
 import { Effect, Match, pipe } from "effect"
 
 import {
+  type ApiTerminalSession,
   codexImport,
   codexLogin,
   codexLogout,
@@ -19,7 +20,7 @@ import {
 } from "./api-client.js"
 import { type ControllerRuntime, ensureControllerReady } from "./controller.js"
 import type { Command } from "./frontend-lib/core/domain.js"
-import type { ApiRequestError, CliError } from "./host-errors.js"
+import type { ApiRequestError, CliError, ControllerBootstrapError } from "./host-errors.js"
 import { terminalAuthTitle } from "./menu-auth-shared.js"
 import { attachTerminalSession, type TerminalSessionClientError } from "./terminal-session-client.js"
 
@@ -45,7 +46,9 @@ export type RoutedAuthCommand = Extract<
   }
 >
 
-const withControllerReady = <E, R>(effect: Effect.Effect<void, E, R>) =>
+const withControllerReady = <E extends CliError, R>(
+  effect: Effect.Effect<void, E, R>
+): Effect.Effect<void, E | ControllerBootstrapError, R | ControllerRuntime> =>
   pipe(ensureControllerReady(), Effect.zipRight(effect))
 
 const renderAuthPayload = (payload: JsonValue) => Effect.log(renderJsonPayload(payload))
@@ -56,6 +59,17 @@ const missingAuthTerminalSessionError = (provider: "GrokOauth"): ApiRequestError
   path: "/auth/terminal-sessions",
   message: `Controller did not create a terminal session for ${provider}.`
 })
+
+const attachGrokTerminalSession = (
+  session: ApiTerminalSession | null
+): Effect.Effect<void, ApiRequestError | TerminalSessionClientError> =>
+  session === null
+    ? Effect.fail(missingAuthTerminalSessionError("GrokOauth"))
+    : attachTerminalSession({
+      header: terminalAuthTitle("GrokOauth"),
+      session,
+      websocketPath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}/ws`
+    })
 
 const routedAuthTags: Readonly<Record<string, true>> = {
   AuthCodexImport: true,
@@ -111,15 +125,7 @@ const handleGrokLoginCommand = (
 ) =>
   withControllerReady(
     createAuthTerminalSession("GrokOauth", command.label).pipe(
-      Effect.flatMap((session): Effect.Effect<void, ApiRequestError | TerminalSessionClientError> =>
-        session === null
-          ? Effect.fail(missingAuthTerminalSessionError("GrokOauth"))
-          : attachTerminalSession({
-            header: terminalAuthTitle("GrokOauth"),
-            session,
-            websocketPath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}/ws`
-          })
-      )
+      Effect.flatMap((session) => attachGrokTerminalSession(session))
     )
   )
 
