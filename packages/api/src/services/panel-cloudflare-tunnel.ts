@@ -322,6 +322,13 @@ const startCloudflaredProcess = (
       })
   })
 
+const closeResponseBody = (response: Response): Effect.Effect<void> => {
+  const body = response.body
+  return body === null
+    ? Effect.void
+    : Effect.tryPromise(() => body.cancel()).pipe(Effect.orElse(() => Effect.void))
+}
+
 const preflightPanelTarget = (
   targetUrl: string
 ): Effect.Effect<void, ApiBadRequestError> =>
@@ -337,7 +344,10 @@ const preflightPanelTarget = (
         message: `Panel URL is not reachable from the API controller: ${targetUrl}`,
         details: cause
       })
-  }).pipe(Effect.asVoid)
+  }).pipe(
+    Effect.flatMap(closeResponseBody),
+    Effect.asVoid
+  )
 
 const waitForTunnelUrl = (
   record: PanelCloudflareTunnelRecord,
