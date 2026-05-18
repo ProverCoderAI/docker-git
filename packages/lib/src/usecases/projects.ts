@@ -1,10 +1,15 @@
 export {
   emptyProjectRuntimeState,
+  type ProjectRuntimeActivityKind,
   type ProjectRuntimeKnownStatus,
+  type ProjectRuntimeResourceProfile,
   type ProjectRuntimeStartAction,
   type ProjectRuntimeState,
+  type ProjectRuntimeStopReason,
   projectRuntimeStateRelativePath,
   readProjectRuntimeState,
+  recordProjectRuntimeActivity,
+  recordProjectRuntimeResourceProfile,
   recordProjectRuntimeStarted,
   type RecordProjectRuntimeStartedInput,
   recordProjectRuntimeStopped

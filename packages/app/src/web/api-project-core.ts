@@ -4,6 +4,19 @@ import { requestJson } from "./api-http.js"
 import type { CreateProjectDraft } from "./api-schema.js"
 import { OutputResponseSchema, ProjectResponseSchema } from "./api-schema.js"
 
+export type ProjectResourceLimitRequest = {
+  readonly cpuLimit?: string | undefined
+  readonly ramLimit?: string | undefined
+  readonly playwrightCpuLimit?: string | undefined
+  readonly playwrightRamLimit?: string | undefined
+}
+
+type CreateProjectRequestDraft = CreateProjectDraft & ProjectResourceLimitRequest
+
+export type ApplyProjectRequest = ProjectResourceLimitRequest & {
+  readonly gpu?: "none" | "all" | undefined
+}
+
 export const loadProjectDetails = (projectId: string) =>
   requestJson("GET", `/projects/${encodeURIComponent(projectId)}`, ProjectResponseSchema).pipe(
     Effect.map((response) => response.project)
@@ -21,9 +34,7 @@ export const loadProjectLogs = (projectId: string) =>
 
 export const applyProject = (
   projectId: string,
-  request?: {
-    readonly gpu?: "none" | "all" | undefined
-  }
+  request?: ApplyProjectRequest
 ) =>
   requestJson(
     "POST",
@@ -34,7 +45,7 @@ export const applyProject = (
     Effect.map((response) => response.project)
   )
 
-export const createProject = (draft: CreateProjectDraft) =>
+export const createProject = (draft: CreateProjectRequestDraft) =>
   requestJson(
     "POST",
     "/projects",
@@ -50,6 +61,24 @@ export const upProject = (projectId: string) =>
     `/projects/${encodeURIComponent(projectId)}/up`,
     ProjectResponseSchema,
     { useManagedAuthorizedKeys: true }
+  ).pipe(
+    Effect.map((response) => response.project)
+  )
+
+export const resumeProject = (projectId: string) =>
+  requestJson(
+    "POST",
+    `/projects/${encodeURIComponent(projectId)}/resume`,
+    ProjectResponseSchema
+  ).pipe(
+    Effect.map((response) => response.project)
+  )
+
+export const suspendProject = (projectId: string) =>
+  requestJson(
+    "POST",
+    `/projects/${encodeURIComponent(projectId)}/suspend`,
+    ProjectResponseSchema
   ).pipe(
     Effect.map((response) => response.project)
   )

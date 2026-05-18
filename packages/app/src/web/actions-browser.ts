@@ -5,7 +5,7 @@ import { openUrl } from "./open-url.js"
 const browserStatusMessage = (browser: ProjectBrowserSession): string =>
   browser.status === "running"
     ? `Browser is available at ${projectBrowserNoVncUrl(browser)}.`
-    : `Browser sidecar is ${browser.status} for ${browser.projectKey}.`
+    : `Browser runtime is ${browser.status} for ${browser.projectKey}.`
 
 export const loadProjectBrowserById = (
   projectId: string,
@@ -53,7 +53,7 @@ export const openProjectBrowserById = (projectId: string, context: BrowserAction
     onSuccess: (browser) => {
       context.setProjectBrowser(browser)
       if (browser.status !== "running") {
-        context.setMessage(`Browser sidecar is ${browser.status}. Enable Playwright MCP and start the project first.`)
+        context.setMessage(`Browser runtime is ${browser.status}. Enable Playwright MCP and start the project first.`)
         return
       }
       const noVncUrl = projectBrowserNoVncUrl(browser)

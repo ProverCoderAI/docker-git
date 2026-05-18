@@ -546,6 +546,7 @@ describe("renderDockerCompose", () => {
 
     expect(compose).toContain("name: dg-test")
     expect(compose).toContain("container_name: dg-test")
+    expect(compose).not.toContain("restart:")
     expect(compose).toContain("    env_file:\n      - /workspace/.orch/env/global.env\n      - /workspace/.orch/env/project.env\n")
     expect(compose).toContain('DOCKER_GIT_PROJECT_DOCKER_HOST: "${DOCKER_GIT_PROJECT_DOCKER_HOST:-}"')
     expect(compose).toContain('- "${DOCKER_GIT_PROJECT_SSH_BIND_HOST:-127.0.0.1}:2222:22"')
@@ -564,12 +565,11 @@ describe("renderDockerCompose", () => {
         gpu: "all"
       })
     )
-    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
 
     expect(compose).toContain("    gpus: all\n")
     expect((compose.match(/\n    gpus: all\n/g) ?? []).length).toBe(1)
-    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
-    expect(compose.slice(browserServiceIndex)).not.toContain("    gpus: all\n")
+    expect(compose).toContain('DOCKER_GIT_BROWSER_CONTAINER_NAME: "dg-test-browser"')
+    expect(compose).not.toContain("\n  dg-test-browser:\n")
   })
 
   it("persists explicit Docker host into login and SSH environments before socket fallback", () => {
@@ -582,7 +582,7 @@ describe("renderDockerCompose", () => {
     expect(entrypoint).toContain('docker_git_upsert_ssh_env "DOCKER_HOST" "unix:///var/run/docker.sock"')
   })
 
-  it("renders fallback DNS servers for the browser sidecar when Playwright is enabled", () => {
+  it("renders nested browser runtime configuration when Playwright is enabled", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({
         enableMcpPlaywright: true,
@@ -593,23 +593,23 @@ describe("renderDockerCompose", () => {
         ramLimit: "2g"
       }
     )
-    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
-    const browserDnsIndex = compose.indexOf(
-      '    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1\n    volumes:\n      - dg-test-home-browser:/data\n',
-      browserServiceIndex
-    )
 
-    expect(compose).toContain('MCP_PLAYWRIGHT_CDP_ENDPOINT: "http://dg-test-browser:9223"')
-    expect(compose).toContain("dg-test-browser:\n    build:")
-    expect(compose.slice(browserServiceIndex)).toContain(
-      "    env_file:\n      - /workspace/.orch/env/global.env\n      - /workspace/.orch/env/project.env\n"
-    )
-    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
-    expect(browserDnsIndex).toBeGreaterThan(browserServiceIndex)
-    expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(2)
+    expect(compose).toContain('MCP_PLAYWRIGHT_CDP_ENDPOINT: "http://127.0.0.1:9223"')
+    expect(compose).toContain('DOCKER_GIT_PROJECT_CONTAINER_NAME: "dg-test"')
+    expect(compose).toContain('DOCKER_GIT_BROWSER_CONTAINER_NAME: "dg-test-browser"')
+    expect(compose).toContain('DOCKER_GIT_BROWSER_IMAGE_NAME: "dg-test-browser:docker-git-browser"')
+    expect(compose).toContain('DOCKER_GIT_BROWSER_VOLUME_NAME: "dg-test-home-browser"')
+    expect(compose).toContain('DOCKER_GIT_BROWSER_CPU_LIMIT: "${DOCKER_GIT_BROWSER_CPU_LIMIT:-1.5}"')
+    expect(compose).toContain('DOCKER_GIT_BROWSER_RAM_LIMIT: "${DOCKER_GIT_BROWSER_RAM_LIMIT:-2g}"')
+    expect(compose).toContain("      - /var/run/docker.sock:/var/run/docker.sock")
+    expect(compose).toContain("  dg-test-home-browser:")
+    expect(compose).not.toContain("\n  dg-test-browser:\n")
+    expect(compose).not.toContain("dg-test-browser:\n    build:")
+    expect(compose).not.toContain("restart:")
+    expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
   })
 
-  it("applies separate resource limits for the browser sidecar when provided", () => {
+  it("applies separate resource limits for the nested browser runtime when provided", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({
         enableMcpPlaywright: true,
@@ -620,20 +620,16 @@ describe("renderDockerCompose", () => {
         playwright: { cpuLimit: 0.5, ramLimit: "1g" }
       }
     )
-    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
-    const browserSection = compose.slice(browserServiceIndex)
-    const mainSection = compose.slice(0, browserServiceIndex)
 
-    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
-    expect(mainSection).toContain("    cpus: 2\n")
-    expect(mainSection).toContain('    mem_limit: "4g"\n')
-    expect(mainSection).toContain('    memswap_limit: "4g"\n')
-    expect(browserSection).toContain("    cpus: 0.5\n")
-    expect(browserSection).toContain('    mem_limit: "1g"\n')
-    expect(browserSection).toContain('    memswap_limit: "1g"\n')
+    expect(compose).not.toContain("\n  dg-test-browser:\n")
+    expect(compose).toContain("    cpus: 2\n")
+    expect(compose).toContain('    mem_limit: "4g"\n')
+    expect(compose).toContain('    memswap_limit: "4g"\n')
+    expect(compose).toContain('DOCKER_GIT_BROWSER_CPU_LIMIT: "${DOCKER_GIT_BROWSER_CPU_LIMIT:-0.5}"')
+    expect(compose).toContain('DOCKER_GIT_BROWSER_RAM_LIMIT: "${DOCKER_GIT_BROWSER_RAM_LIMIT:-1g}"')
   })
 
-  it("backward-compatibly applies single resource limit shape to both services", () => {
+  it("backward-compatibly applies single resource limit shape to main and nested browser", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({
         enableMcpPlaywright: true,
@@ -644,12 +640,12 @@ describe("renderDockerCompose", () => {
         ramLimit: "2g"
       }
     )
-    const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
-    const browserSection = compose.slice(browserServiceIndex)
 
-    expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
-    expect(browserSection).toContain("    cpus: 1.5\n")
-    expect(browserSection).toContain('    mem_limit: "2g"\n')
+    expect(compose).not.toContain("\n  dg-test-browser:\n")
+    expect(compose).toContain("    cpus: 1.5\n")
+    expect(compose).toContain('    mem_limit: "2g"\n')
+    expect(compose).toContain('DOCKER_GIT_BROWSER_CPU_LIMIT: "${DOCKER_GIT_BROWSER_CPU_LIMIT:-1.5}"')
+    expect(compose).toContain('DOCKER_GIT_BROWSER_RAM_LIMIT: "${DOCKER_GIT_BROWSER_RAM_LIMIT:-2g}"')
   })
 
   it("renders explicit anonymous GitHub clone override for public repos", () => {

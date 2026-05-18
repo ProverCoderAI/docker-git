@@ -3,7 +3,11 @@ import type { ResolvedComposeResourceLimits } from "./resource-limits.js"
 import { renderEntrypoint } from "./templates-entrypoint.js"
 import { type ComposeResourceLimits, renderDockerCompose } from "./templates/docker-compose.js"
 import { renderDockerfile } from "./templates/dockerfile.js"
-import { renderPlaywrightBrowserDockerfile, renderPlaywrightStartExtra } from "./templates/playwright.js"
+import {
+  renderPlaywrightBrowserDockerfile,
+  renderPlaywrightBrowserRuntime,
+  renderPlaywrightStartExtra
+} from "./templates/playwright.js"
 
 export type FileSpec =
   | { readonly _tag: "File"; readonly relativePath: string; readonly contents: string; readonly mode?: number }
@@ -54,6 +58,12 @@ export const planFiles = (
         _tag: "File",
         relativePath: "mcp-playwright-start-extra.sh",
         contents: renderPlaywrightStartExtra(),
+        mode: 0o755
+      },
+      {
+        _tag: "File",
+        relativePath: "docker-git-browser-runtime.sh",
+        contents: renderPlaywrightBrowserRuntime(),
         mode: 0o755
       }
     ] satisfies ReadonlyArray<FileSpec>)

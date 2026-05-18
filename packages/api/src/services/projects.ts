@@ -37,6 +37,7 @@ import { ApiAuthRequiredError, ApiConflictError, ApiInternalError, ApiNotFoundEr
 import { ensureGithubAuthForCreate, ensureGitlabAuthForCreate } from "./auth.js"
 import { clearProjectEvents, emitProjectEvent, latestProjectCursor } from "./events.js"
 import { resolveCreateAuthorizedKeysContents, resolveManagedAuthorizedKeysContents } from "./project-authorized-keys.js"
+import { stopProjectBrowserRuntime, suspendProjectRuntime } from "./project-lifecycle-resources.js"
 import { projectShortKey } from "./project-port-proxy-core.js"
 import { loadProjectRuntimeByProject, runtimeForProject } from "./project-runtime.js"
 
@@ -424,6 +425,8 @@ const toCreateRawOptions = (request: CreateProjectRequest): RawOptions => ({
   ...(request.codexHome === undefined ? {} : { codexHome: request.codexHome }),
   ...(request.cpuLimit === undefined ? {} : { cpuLimit: request.cpuLimit }),
   ...(request.ramLimit === undefined ? {} : { ramLimit: request.ramLimit }),
+  ...(request.playwrightCpuLimit === undefined ? {} : { playwrightCpuLimit: request.playwrightCpuLimit }),
+  ...(request.playwrightRamLimit === undefined ? {} : { playwrightRamLimit: request.playwrightRamLimit }),
   ...(request.gpu === undefined ? {} : { gpu: request.gpu }),
   ...(request.dockerNetworkMode === undefined ? {} : { dockerNetworkMode: request.dockerNetworkMode }),
   ...(request.dockerSharedNetworkName === undefined
@@ -606,6 +609,10 @@ export const applyProjectById = (
         applyProjectConfig({
           _tag: "Apply",
           projectDir: project.projectDir,
+          ...(request.cpuLimit === undefined ? {} : { cpuLimit: request.cpuLimit }),
+          ...(request.ramLimit === undefined ? {} : { ramLimit: request.ramLimit }),
+          ...(request.playwrightCpuLimit === undefined ? {} : { playwrightCpuLimit: request.playwrightCpuLimit }),
+          ...(request.playwrightRamLimit === undefined ? {} : { playwrightRamLimit: request.playwrightRamLimit }),
           ...(request.gpu === undefined ? {} : { gpu: request.gpu }),
           runUp: true
         })
@@ -670,8 +677,26 @@ const markDeployment = (projectId: string, phase: string, message: string) =>
   })
 
 type UpProjectOptions = {
-  readonly startupMode?: "default" | "ssh-open"
+  readonly startupMode?: "default" | "resume" | "ssh-open"
 }
+
+const upProjectPhase = (startupMode: NonNullable<UpProjectOptions["startupMode"]>): string =>
+  startupMode === "ssh-open" ? "ssh.compose-up" : startupMode === "resume" ? "resume" : "build"
+
+const upProjectMessage = (startupMode: NonNullable<UpProjectOptions["startupMode"]>): string =>
+  startupMode === "ssh-open"
+    ? "docker compose up -d for SSH terminal"
+    : startupMode === "resume"
+      ? "docker compose up -d for resume"
+      : "docker compose up -d --build"
+
+const upProjectComposeOptions = (startupMode: NonNullable<UpProjectOptions["startupMode"]>) =>
+  startupMode === "default"
+    ? undefined
+    : {
+      buildMode: "reuse" as const,
+      waitForPostStart: false
+    }
 
 const syncContainerAuthorizedKeys = (
   project: ProjectItem
@@ -757,19 +782,10 @@ export const upProject = (
       resolveRequestedAuthorizedKeysContents(authorizedKeysContents, useManagedAuthorizedKeys === true)
     )
     yield* _(seedAuthorizedKeysForCreate(project.projectDir, resolvedAuthorizedKeysContents))
-    yield* _(markDeployment(
-      projectId,
-      startupMode === "ssh-open" ? "ssh.compose-up" : "build",
-      startupMode === "ssh-open" ? "docker compose up -d for SSH terminal" : "docker compose up -d --build"
-    ))
+    yield* _(markDeployment(projectId, upProjectPhase(startupMode), upProjectMessage(startupMode)))
     yield* _(runDockerComposeUpWithPortCheck(
       project.projectDir,
-      startupMode === "ssh-open"
-        ? {
-          buildMode: "reuse",
-          waitForPostStart: false
-        }
-        : undefined
+      upProjectComposeOptions(startupMode)
     ))
     if ((resolvedAuthorizedKeysContents ?? "").trim().length > 0) {
       yield* _(syncContainerAuthorizedKeys(project))
@@ -780,6 +796,22 @@ export const upProject = (
     return details
   }).pipe(Effect.mapError(toProjectApiError))
 
+export const resumeProject = (
+  projectId: string
+) =>
+  upProject(projectId, undefined, true, { startupMode: "resume" })
+
+export const suspendProject = (
+  projectId: string
+) =>
+  Effect.gen(function*(_) {
+    const project = yield* _(findProjectById(projectId))
+    yield* _(markDeployment(projectId, "suspend", "docker compose stop"))
+    yield* _(suspendProjectRuntime(project, "manual"))
+    yield* _(markDeployment(projectId, "idle", "Container suspended"))
+    return yield* _(getProject(project.projectDir))
+  }).pipe(Effect.mapError(toProjectApiError))
+
 export const downProject = (
   projectId: string
 ) =>
@@ -787,8 +819,9 @@ export const downProject = (
     const project = yield* _(findProjectById(projectId))
     yield* _(markDeployment(projectId, "down", "docker compose down"))
     yield* _(runComposeCapture(projectId, project.projectDir, ["down"], [0, 1]))
+    yield* _(stopProjectBrowserRuntime(project))
     yield* _(markDeployment(projectId, "idle", "Container stopped"))
-    yield* _(recordProjectRuntimeStopped(project.projectDir))
+    yield* _(recordProjectRuntimeStopped(project.projectDir, "down"))
   }).pipe(Effect.mapError(toProjectApiError))
 
 export const recreateProject = (
@@ -814,6 +847,7 @@ export const recreateProject = (
     )
 
     yield* _(runComposeCapture(projectId, project.projectDir, ["down"], [0, 1]))
+    yield* _(stopProjectBrowserRuntime(project))
     yield* _(runDockerComposeUpWithPortCheck(project.projectDir))
     const details = yield* _(runtimeProjectDetails(project))
     yield* _(recordProjectStartedFromDetails(project, details, "recreate"))

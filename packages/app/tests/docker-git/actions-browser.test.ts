@@ -65,7 +65,7 @@ describe("web browser actions", () => {
       )
     }))
 
-  it.effect("reports browser sidecar status instead of opening non-running browsers", () =>
+  it.effect("reports browser runtime status instead of opening non-running browsers", () =>
     Effect.gen(function*(_) {
       const openMock = vi.fn<NonNullable<typeof globalThis.open>>(() => null)
       vi.stubGlobal("open", openMock)
@@ -84,7 +84,7 @@ describe("web browser actions", () => {
 
       expect(openMock).not.toHaveBeenCalled()
       expect(setMessage).toHaveBeenLastCalledWith(
-        "Browser sidecar is missing. Enable Playwright MCP and start the project first."
+        "Browser runtime is missing. Enable Playwright MCP and start the project first."
       )
     }))
 

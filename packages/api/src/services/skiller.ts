@@ -3,6 +3,7 @@ import { chownSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, st
 import { createServer } from "node:net"
 import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
+import { recordProjectRuntimeActivity } from "@effect-template/lib"
 import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
@@ -464,6 +465,22 @@ const rememberSessionScope = (sessionId: string | undefined, scope: SkillerConta
   }
 }
 
+const touchSkillerActivity = (
+  scope: SkillerContainerScope | null
+): Effect.Effect<void, never, never> =>
+  scope === null
+    ? Effect.void
+    : recordProjectRuntimeActivity(scope.projectId, "interactive").pipe(
+      Effect.provide(NodeContext.layer),
+      Effect.catchAll((error) =>
+        Effect.logWarning(
+          `[skiller] Failed to record Skiller activity for project ${scope.projectId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      )
+    )
+
 export const openSkiller = (
   projectKey?: string,
   sessionId?: string
@@ -474,6 +491,7 @@ export const openSkiller = (
 > =>
   Effect.gen(function*(_) {
     const scope = yield* _(resolveRequestedSkillerScope(projectKey))
+    yield* _(touchSkillerActivity(scope))
     rememberSessionScope(sessionId, scope)
     if (currentProcess !== null && isRunning(currentProcess.process)) {
       if (sameSkillerScope(currentProcess.scope, scope)) {
@@ -512,6 +530,11 @@ export const openSkiller = (
     yield* _(registerSkillerProject(trpcPort, scope))
     return sessionId === undefined || currentProcess === null ? launch : toLaunch(currentProcess, false, sessionId)
   })
+
+export const hasLiveProjectSkillerSession = (projectId: string): boolean =>
+  currentProcess !== null &&
+  isRunning(currentProcess.process) &&
+  currentProcess.scope?.projectId === projectId
 
 export const openSkillerForTerminalSession = (
   projectKey: string,

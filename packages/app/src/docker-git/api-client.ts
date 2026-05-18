@@ -82,6 +82,17 @@ type ResolvedCreateRequestPaths = {
   readonly authorizedKeysContents?: string | undefined
 }
 
+type ProjectResourceLimitRequest = {
+  readonly cpuLimit?: string | undefined
+  readonly ramLimit?: string | undefined
+  readonly playwrightCpuLimit?: string | undefined
+  readonly playwrightRamLimit?: string | undefined
+}
+
+type ApplyProjectRequest = ProjectResourceLimitRequest & {
+  readonly gpu?: "none" | "all" | undefined
+}
+
 const createProjectAsync = (
   command: CreateCommand,
   resolvedPaths: ResolvedCreateRequestPaths
@@ -189,6 +200,30 @@ export const upProject = (projectId: string) =>
   withProjectEventPolling(
     projectId,
     request("POST", projectPath(projectId, "/up"), { useManagedAuthorizedKeys: true }).pipe(
+      Effect.map((payload) => decodeProjectResponse(payload))
+    )
+  )
+
+export const applyProject = (projectId: string, applyRequest: ApplyProjectRequest = {}) =>
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/apply"), applyRequest).pipe(
+      Effect.map((payload) => decodeProjectResponse(payload))
+    )
+  )
+
+export const resumeProject = (projectId: string) =>
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/resume")).pipe(
+      Effect.map((payload) => decodeProjectResponse(payload))
+    )
+  )
+
+export const suspendProject = (projectId: string) =>
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/suspend")).pipe(
       Effect.map((payload) => decodeProjectResponse(payload))
     )
   )

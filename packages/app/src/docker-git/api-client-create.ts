@@ -35,6 +35,8 @@ export const buildCreateProjectRequest = (
     codexHome: config.codexHome,
     cpuLimit: config.cpuLimit,
     ramLimit: config.ramLimit,
+    playwrightCpuLimit: config.playwrightCpuLimit,
+    playwrightRamLimit: config.playwrightRamLimit,
     gpu: config.gpu,
     dockerNetworkMode: config.dockerNetworkMode,
     dockerSharedNetworkName: config.dockerSharedNetworkName,

@@ -1,11 +1,13 @@
+import { recordProjectRuntimeActivity } from "@effect-template/lib"
 import { runCommandWithExitCodes } from "@effect-template/lib/shell/command-runner"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/path-helpers"
+import { NodeContext } from "@effect/platform-node"
 import { Effect } from "effect"
+import { spawn, type ChildProcess } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { spawn, type ChildProcess } from "node:child_process"
 
 import type {
   AgentLogLine,
@@ -192,6 +194,21 @@ const persistSnapshotBestEffort = (): void => {
   void persistSnapshot().catch(() => {
     // best effort snapshot persistence
   })
+}
+
+const recordAgentActivityBestEffort = (projectId: string): void => {
+  Effect.runFork(
+    recordProjectRuntimeActivity(projectId, "agent").pipe(
+      Effect.provide(NodeContext.layer),
+      Effect.catchAll((error) =>
+        Effect.logWarning(
+          `[agents] Failed to record agent activity for project ${projectId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      )
+    )
+  )
 }
 
 const updateSession = (
@@ -428,6 +445,7 @@ export const startAgent = (
         label,
         command
       })
+      recordAgentActivityBestEffort(project.id)
 
       child.stdout.on("data", (chunk: Buffer) => {
         consumeChunk(record, "stdout", chunk)

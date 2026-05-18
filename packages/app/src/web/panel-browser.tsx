@@ -116,7 +116,7 @@ export const BrowserPanel = (
     <Box flexDirection="column">
       <Text bold={true} fg="#8be9fd">Browser</Text>
       <Text fg="#d6e5f7" wrap="wrap">
-        Open the Playwright browser sidecar for the selected project.
+        Open the Playwright browser runtime for the selected project.
       </Text>
       <Text fg="#8fa6c4" marginTop={1} wrap="truncate">
         Project: {selectedProjectSummary?.displayName ?? "not selected"}

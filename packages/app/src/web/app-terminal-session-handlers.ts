@@ -46,7 +46,7 @@ const confirmApplyProject = (label: string): boolean => {
 
 const browserStatusMessage = (browser: ProjectBrowserSession): string => {
   if (browser.status !== "running") {
-    return `Browser sidecar is ${browser.status}. Enable Playwright MCP and start the project first.`
+    return `Browser runtime is ${browser.status}. Enable Playwright MCP and start the project first.`
   }
   const noVncUrl = projectBrowserNoVncUrl(browser)
   return openUrl(noVncUrl)
