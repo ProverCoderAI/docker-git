@@ -1,6 +1,7 @@
 import { Effect, Match, pipe } from "effect"
 
 import {
+  type ApiTerminalSession,
   codexImport,
   codexLogin,
   codexLogout,
@@ -9,13 +10,12 @@ import {
   githubLogin,
   githubLogout,
   githubStatus,
-  grokLogout,
-  grokStatus,
   gitlabLogin,
   gitlabLogout,
   gitlabStatus,
+  grokLogout,
+  grokStatus,
   type JsonValue,
-  type ApiTerminalSession,
   renderJsonPayload
 } from "./api-client.js"
 import { type ControllerRuntime, ensureControllerReady } from "./controller.js"
@@ -49,8 +49,7 @@ export type RoutedAuthCommand = Extract<
 
 const withControllerReady = <E extends CliError, R>(
   effect: Effect.Effect<void, E, R>
-): Effect.Effect<void, CliError, ControllerRuntime | R> =>
-  pipe(ensureControllerReady(), Effect.zipRight(effect))
+): Effect.Effect<void, CliError, ControllerRuntime | R> => pipe(ensureControllerReady(), Effect.zipRight(effect))
 
 const renderAuthPayload = (payload: JsonValue) => Effect.log(renderJsonPayload(payload))
 
@@ -125,7 +124,9 @@ const handleGrokLoginCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthGrokLogin" }>
 ) =>
   withControllerReady(
-    createAuthTerminalSession("GrokOauth", command.label).pipe(Effect.flatMap(attachGrokAuthTerminalSession))
+    createAuthTerminalSession("GrokOauth", command.label).pipe(
+      Effect.flatMap((session) => attachGrokAuthTerminalSession(session))
+    )
   )
 
 const handleCodexImportCommand = (

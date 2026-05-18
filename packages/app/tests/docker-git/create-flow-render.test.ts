@@ -14,8 +14,8 @@ import {
   resolveCreateFlowSteps,
   resolveCreateInputs
 } from "../../src/docker-git/menu-create-shared.js"
-import type { CreateStep } from "../../src/docker-git/menu-types.js"
 import { renderCreate } from "../../src/docker-git/menu-render.js"
+import type { CreateStep } from "../../src/docker-git/menu-types.js"
 import { webPrimitives } from "../../src/ui/primitives-web.js"
 import { UiProvider } from "../../src/ui/primitives.js"
 import { CreatePanel } from "../../src/web/panel-create-select.js"
@@ -75,7 +75,7 @@ const createSettingsViewAtStep = (
 ): CreateFlowView => {
   const createView = createSettingsView()
   const step = resolveCreateDisplaySteps().indexOf(stepName)
-  if (step < 0) {
+  if (step === -1) {
     throw new TypeError(`expected Create step: ${stepName}`)
   }
   return { ...createView, buffer, step }
