@@ -159,6 +159,9 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(startExtra).toContain("docker-git-cdp-guard")
         expect(startExtra).toContain("socat TCP-LISTEN:9223")
         expect(browserRuntime).toContain('--network "container:$main_container"')
+        expect(browserRuntime).toContain("docker_git_cleanup_orphaned_playwright_browsers")
+        expect(browserRuntime).toContain('--filter "label=docker-git.browser=1" --filter "label=docker-git.project-container"')
+        expect(browserRuntime).toContain('docker inspect --format \'{{ .State.Running }}\' "$project_container"')
         expect(browserRuntime).toContain('args+=(--cpus "$DOCKER_GIT_BROWSER_CPU_LIMIT")')
         expect(browserRuntime).toContain('args+=(--memory "$DOCKER_GIT_BROWSER_RAM_LIMIT" --memory-swap "$DOCKER_GIT_BROWSER_RAM_LIMIT")')
 

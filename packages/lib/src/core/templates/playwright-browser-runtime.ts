@@ -24,6 +24,37 @@ docker_git_stop_playwright_browser() {
   docker rm -f "$container_name" >/dev/null 2>&1 || true
 }
 
+docker_git_cleanup_orphaned_playwright_browsers() {
+  if ! docker_git_browser_has_docker; then
+    return 0
+  fi
+
+  local browser_id
+  while IFS= read -r browser_id; do
+    if [[ -z "$browser_id" ]]; then
+      continue
+    fi
+
+    local project_container
+    project_container="$(docker inspect --format '{{ index .Config.Labels "docker-git.project-container" }}' "$browser_id" 2>/dev/null || true)"
+
+    local project_running
+    project_running="false"
+    if [[ -n "$project_container" && "$project_container" != "<no value>" ]]; then
+      project_running="$(docker inspect --format '{{ .State.Running }}' "$project_container" 2>/dev/null || true)"
+    fi
+
+    if [[ "$project_running" == "true" ]]; then
+      continue
+    fi
+
+    local browser_name
+    browser_name="$(docker inspect --format '{{ .Name }}' "$browser_id" 2>/dev/null | sed 's#^/##' || true)"
+    docker_git_browser_log "removing orphaned browser container \${browser_name:-$browser_id}"
+    docker rm -f "$browser_id" >/dev/null 2>&1 || true
+  done < <(docker ps -a -q --filter "label=docker-git.browser=1" --filter "label=docker-git.project-container")
+}
+
 docker_git_start_playwright_browser() {
   if [[ "\${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then
     docker_git_stop_playwright_browser || true
@@ -50,13 +81,15 @@ docker_git_start_playwright_browser() {
     return 0
   fi
 
+  docker_git_stop_playwright_browser || true
+  docker_git_cleanup_orphaned_playwright_browsers || true
+
   docker_git_browser_log "building $image_name"
   docker build -t "$image_name" -f "$context_dir/Dockerfile.browser" "$context_dir" >/var/log/docker-git-browser-build.log 2>&1 || {
     docker_git_browser_log "browser image build failed; see /var/log/docker-git-browser-build.log"
     return 0
   }
 
-  docker_git_stop_playwright_browser || true
   docker volume create "$volume_name" >/dev/null
 
   local args=(
@@ -96,6 +129,6 @@ docker_git_start_playwright_browser() {
 // FORMAT THEOREM: start(main) -> running(browser) with network(browser) = container:main OR logged_warning
 // PURITY: SHELL
 // EFFECT: shell commands executed by generated entrypoint
-// INVARIANT: browser data volume is preserved; runtime cleanup removes only the browser container
-// COMPLEXITY: O(build + docker-run)/O(1)
+// INVARIANT: browser data volume is preserved; runtime cleanup removes only browser-labeled containers
+// COMPLEXITY: O(b + build + docker-run)/O(1), where b = browser-labeled containers
 export const renderPlaywrightBrowserRuntime = (): string => playwrightBrowserRuntimeScript

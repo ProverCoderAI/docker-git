@@ -1,7 +1,11 @@
 import type { TemplateConfig } from "./domain.js"
 import type { ResolvedComposeResourceLimits } from "./resource-limits.js"
 import { renderEntrypoint } from "./templates-entrypoint.js"
-import { type ComposeResourceLimits, renderDockerCompose } from "./templates/docker-compose.js"
+import {
+  type ComposeResourceLimits,
+  type DockerComposeRenderOptions,
+  renderDockerCompose
+} from "./templates/docker-compose.js"
 import { renderDockerfile } from "./templates/dockerfile.js"
 import { renderPlaywrightBrowserRuntime } from "./templates/playwright-browser-runtime.js"
 import { renderPlaywrightBrowserDockerfile, renderPlaywrightStartExtra } from "./templates/playwright.js"
@@ -9,6 +13,14 @@ import { renderPlaywrightBrowserDockerfile, renderPlaywrightStartExtra } from ".
 export type FileSpec =
   | { readonly _tag: "File"; readonly relativePath: string; readonly contents: string; readonly mode?: number }
   | { readonly _tag: "Dir"; readonly relativePath: string }
+
+export type TemplateRenderOptions = {
+  readonly compose: DockerComposeRenderOptions
+}
+
+const defaultTemplateRenderOptions: TemplateRenderOptions = {
+  compose: { enableLocalDockerSocket: false }
+}
 
 const renderGitignore = (): string =>
   `# docker-git project files
@@ -46,7 +58,8 @@ const renderConfigJson = (config: TemplateConfig): string =>
 
 export const planFiles = (
   config: TemplateConfig,
-  composeResourceLimits?: ResolvedComposeResourceLimits | ComposeResourceLimits
+  composeResourceLimits?: ResolvedComposeResourceLimits | ComposeResourceLimits,
+  options: TemplateRenderOptions = defaultTemplateRenderOptions
 ): ReadonlyArray<FileSpec> => {
   const maybePlaywrightFiles = config.enableMcpPlaywright
     ? ([
@@ -72,7 +85,7 @@ export const planFiles = (
     {
       _tag: "File",
       relativePath: "docker-compose.yml",
-      contents: renderDockerCompose(config, composeResourceLimits)
+      contents: renderDockerCompose(config, composeResourceLimits, options.compose)
     },
     { _tag: "File", relativePath: ".dockerignore", contents: renderDockerignore() },
     { _tag: "File", relativePath: "docker-git.json", contents: renderConfigJson(config) },

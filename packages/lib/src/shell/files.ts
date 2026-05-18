@@ -11,6 +11,7 @@ import {
   withDefaultResourceLimitIntent
 } from "../core/resource-limits.js"
 import { type FileSpec, planFiles } from "../core/templates.js"
+import { resolveDockerEnvValue } from "./docker-auth.js"
 import { FileExistsError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
 import { resolveWorkspaceRoot } from "./workspace-root.js"
@@ -44,6 +45,8 @@ const loadHostResources = (): Effect.Effect<
   )
 
 const isFileSpec = (spec: FileSpec): spec is Extract<FileSpec, { readonly _tag: "File" }> => spec._tag === "File"
+
+const shouldMountLocalDockerSocket = (): boolean => resolveDockerEnvValue("DOCKER_GIT_PROJECT_DOCKER_HOST") === null
 
 const resolveSpecPath = (
   path: Path.Path,
@@ -242,7 +245,9 @@ export const writeProjectFiles = (
       main: resolveComposeResourceLimits(normalizedConfig, hostResources),
       playwright: resolvePlaywrightComposeResourceLimits(normalizedConfig, hostResources)
     }
-    const specs = planFiles(normalizedConfig, composeResourceLimits)
+    const specs = planFiles(normalizedConfig, composeResourceLimits, {
+      compose: { enableLocalDockerSocket: shouldMountLocalDockerSocket() }
+    })
     const created: Array<string> = []
     const existingFilePaths = force ? [] : yield* _(collectExistingFilePaths(fs, path, baseDir, specs))
     const existingSet = new Set(existingFilePaths)

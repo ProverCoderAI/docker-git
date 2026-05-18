@@ -306,6 +306,31 @@ describe("prepareProjectFiles", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("omits local Docker socket mount when project Docker host is injected", () =>
+    withTempDir((root) =>
+      withPatchedEnv(
+        { DOCKER_GIT_PROJECT_DOCKER_HOST: "tcp://docker-controller:2375" },
+        Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const outDir = path.join(root, "project-docker-host")
+          const globalConfig = makeGlobalConfig(root, path)
+          const projectConfig = makeProjectConfig(outDir, true, path)
+
+          yield* _(
+            prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+              force: false,
+              forceEnv: false
+            })
+          )
+
+          const compose = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+          expect(compose).toContain('DOCKER_GIT_PROJECT_DOCKER_HOST: "${DOCKER_GIT_PROJECT_DOCKER_HOST:-}"')
+          expect(compose).not.toContain("      - /var/run/docker.sock:/var/run/docker.sock")
+        })
+      )
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("renders project-scoped network when dockerNetworkMode=project", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {

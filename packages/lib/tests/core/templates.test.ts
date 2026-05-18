@@ -601,12 +601,28 @@ describe("renderDockerCompose", () => {
     expect(compose).toContain('DOCKER_GIT_BROWSER_VOLUME_NAME: "dg-test-home-browser"')
     expect(compose).toContain('DOCKER_GIT_BROWSER_CPU_LIMIT: "${DOCKER_GIT_BROWSER_CPU_LIMIT:-1.5}"')
     expect(compose).toContain('DOCKER_GIT_BROWSER_RAM_LIMIT: "${DOCKER_GIT_BROWSER_RAM_LIMIT:-2g}"')
-    expect(compose).toContain("      - /var/run/docker.sock:/var/run/docker.sock")
+    expect(compose).not.toContain("      - /var/run/docker.sock:/var/run/docker.sock")
     expect(compose).toContain("  dg-test-home-browser:")
     expect(compose).not.toContain("\n  dg-test-browser:\n")
     expect(compose).not.toContain("dg-test-browser:\n    build:")
     expect(compose).not.toContain("restart:")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
+  })
+
+  it("renders local Docker socket mount only when explicitly enabled", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        enableMcpPlaywright: true,
+        gpu: "none",
+      }),
+      {
+        cpuLimit: 1.5,
+        ramLimit: "2g"
+      },
+      { enableLocalDockerSocket: true }
+    )
+
+    expect(compose).toContain("      - /var/run/docker.sock:/var/run/docker.sock")
   })
 
   it("applies separate resource limits for the nested browser runtime when provided", () => {

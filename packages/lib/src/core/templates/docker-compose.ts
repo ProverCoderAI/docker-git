@@ -30,11 +30,16 @@ type PlaywrightFragments = Pick<
   "maybeDependsOn" | "maybeDockerSocketMount" | "maybePlaywrightEnv" | "maybeBrowserVolume"
 >
 
+export type DockerComposeRenderOptions = {
+  readonly enableLocalDockerSocket: boolean
+}
+
 export type ComposeResourceLimits = {
   readonly main: ResolvedComposeResourceLimits | undefined
   readonly playwright: ResolvedComposeResourceLimits | undefined
 }
 
+const defaultDockerComposeRenderOptions: DockerComposeRenderOptions = { enableLocalDockerSocket: false }
 const sharedCodexVolumeKey = "docker_git_shared_codex"
 const sharedCacheVolumeKey = "docker_git_shared_cache"
 const bootstrapVolumeKey = "docker_git_bootstrap"
@@ -81,7 +86,10 @@ const renderGpu = (gpu: TemplateConfig["gpu"]): string =>
 
 const renderBootstrapMounts = (): string => `      - ${bootstrapVolumeKey}:/opt/docker-git/bootstrap/source:ro`
 
-const renderOptionalDockerSocketMount = (): string => `      - /var/run/docker.sock:/var/run/docker.sock`
+const renderOptionalDockerSocketMount = (enableLocalDockerSocket: boolean): string =>
+  enableLocalDockerSocket
+    ? `      - /var/run/docker.sock:/var/run/docker.sock`
+    : ""
 
 const renderEnvFiles = (config: TemplateConfig): string =>
   `    env_file:\n      - ${config.envGlobalPath}\n      - ${config.envProjectPath}\n`
@@ -93,7 +101,8 @@ const renderBrowserLimitEnv = (
 
 const buildPlaywrightFragments = (
   config: TemplateConfig,
-  resourceLimits: ResolvedComposeResourceLimits | undefined
+  resourceLimits: ResolvedComposeResourceLimits | undefined,
+  options: DockerComposeRenderOptions
 ): PlaywrightFragments => {
   if (!config.enableMcpPlaywright) {
     return {
@@ -110,7 +119,7 @@ const buildPlaywrightFragments = (
 
   return {
     maybeDependsOn: "",
-    maybeDockerSocketMount: renderOptionalDockerSocketMount(),
+    maybeDockerSocketMount: renderOptionalDockerSocketMount(options.enableLocalDockerSocket),
     maybePlaywrightEnv:
       `      MCP_PLAYWRIGHT_ENABLE: "1"\n      MCP_PLAYWRIGHT_CDP_ENDPOINT: "http://127.0.0.1:9223"\n      DOCKER_GIT_PROJECT_CONTAINER_NAME: "${config.containerName}"\n      DOCKER_GIT_BROWSER_CONTAINER_NAME: "${browserContainerName}"\n      DOCKER_GIT_BROWSER_IMAGE_NAME: "${browserImageName}"\n      DOCKER_GIT_BROWSER_VOLUME_NAME: "${browserVolumeName}"\n${
         renderBrowserLimitEnv("DOCKER_GIT_BROWSER_CPU_LIMIT", resourceLimits?.cpuLimit)
@@ -137,7 +146,8 @@ const normalizeComposeResourceLimits = (
 
 const buildComposeFragments = (
   config: TemplateConfig,
-  resourceLimits: ComposeResourceLimits
+  resourceLimits: ComposeResourceLimits,
+  options: DockerComposeRenderOptions
 ): ComposeFragments => {
   const networkMode = config.dockerNetworkMode
   const networkName = resolveComposeNetworkName(config)
@@ -151,7 +161,7 @@ const buildComposeFragments = (
   const maybeClaudeAuthLabelEnv = renderClaudeAuthLabelEnv(claudeAuthLabel)
   const maybeAgentModeEnv = renderAgentModeEnv(config.agentMode)
   const maybeAgentAutoEnv = renderAgentAutoEnv(config.agentAuto)
-  const playwright = buildPlaywrightFragments(config, resourceLimits.playwright)
+  const playwright = buildPlaywrightFragments(config, resourceLimits.playwright, options)
 
   return {
     networkMode,
@@ -243,10 +253,11 @@ const renderComposeVolumes = (config: TemplateConfig, maybeBrowserVolume: string
 
 export const renderDockerCompose = (
   config: TemplateConfig,
-  resourceLimits?: ResolvedComposeResourceLimits | ComposeResourceLimits
+  resourceLimits?: ResolvedComposeResourceLimits | ComposeResourceLimits,
+  options: DockerComposeRenderOptions = defaultDockerComposeRenderOptions
 ): string => {
   const limits = normalizeComposeResourceLimits(resourceLimits)
-  const fragments = buildComposeFragments(config, limits)
+  const fragments = buildComposeFragments(config, limits, options)
   return [
     `name: ${resolveComposeProjectName(config)}`,
     renderComposeServices(config, fragments, limits),
