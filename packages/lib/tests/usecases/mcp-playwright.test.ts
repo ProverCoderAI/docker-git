@@ -162,6 +162,8 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(browserRuntime).toContain("docker_git_cleanup_orphaned_playwright_browsers")
         expect(browserRuntime).toContain('--filter "label=docker-git.browser=1" --filter "label=docker-git.project-container"')
         expect(browserRuntime).toContain('docker inspect --format \'{{ .State.Running }}\' "$project_container"')
+        expect(browserRuntime).toContain('if ! docker volume create "$volume_name" >/dev/null 2>&1; then')
+        expect(browserRuntime).toContain('failed to create browser data volume $volume_name; continuing')
         expect(browserRuntime).toContain('args+=(--cpus "$DOCKER_GIT_BROWSER_CPU_LIMIT")')
         expect(browserRuntime).toContain('args+=(--memory "$DOCKER_GIT_BROWSER_RAM_LIMIT" --memory-swap "$DOCKER_GIT_BROWSER_RAM_LIMIT")')
 

@@ -90,7 +90,9 @@ docker_git_start_playwright_browser() {
     return 0
   }
 
-  docker volume create "$volume_name" >/dev/null
+  if ! docker volume create "$volume_name" >/dev/null 2>&1; then
+    docker_git_browser_log "failed to create browser data volume $volume_name; continuing"
+  fi
 
   local args=(
     run
