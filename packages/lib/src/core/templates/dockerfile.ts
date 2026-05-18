@@ -160,7 +160,7 @@ RUN cat <<'EOF' > /usr/local/bin/docker-git-playwright-mcp
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Fast-path for help/version (avoid waiting for the browser sidecar).
+# Fast-path for help/version (avoid waiting for the nested browser runtime).
 for arg in "$@"; do
   case "$arg" in
     -h|--help|-V|--version)
@@ -171,10 +171,10 @@ done
 
 CDP_ENDPOINT="\${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"
 if [[ -z "$CDP_ENDPOINT" ]]; then
-  CDP_ENDPOINT="http://__SERVICE_NAME__-browser:9223"
+  CDP_ENDPOINT="http://127.0.0.1:9223"
 fi
 
-# CHANGE: add retry logic for browser sidecar startup wait
+# CHANGE: add retry logic for nested browser runtime startup wait
 # WHY: the browser container may take time to initialize, causing MCP server to fail on first attempt
 # QUOTE(issue-123): "Почему MCP сервер лежит с ошибкой?"
 # REF: issue-123
@@ -197,7 +197,7 @@ for attempt in $(seq 1 "$MCP_PLAYWRIGHT_RETRY_ATTEMPTS"); do
     break
   fi
   if [[ "$attempt" -lt "$MCP_PLAYWRIGHT_RETRY_ATTEMPTS" ]]; then
-    echo "docker-git-playwright-mcp: waiting for browser sidecar (attempt $attempt/$MCP_PLAYWRIGHT_RETRY_ATTEMPTS)..." >&2
+    echo "docker-git-playwright-mcp: waiting for nested browser runtime (attempt $attempt/$MCP_PLAYWRIGHT_RETRY_ATTEMPTS)..." >&2
     sleep "$MCP_PLAYWRIGHT_RETRY_DELAY"
   fi
 done
@@ -233,6 +233,13 @@ WS_REWRITTEN="$(BASE_WS="$BASE_WS" WS_URL="$WS_URL" node -e 'const { URL } = req
 exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" "\${EXTRA_ARGS[@]}" "$@"
 EOF
 RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
+
+const renderDockerfilePlaywrightRuntime = (config: TemplateConfig): string =>
+  config.enableMcpPlaywright
+    ? `# docker-git nested Playwright browser runtime context
+COPY Dockerfile.browser mcp-playwright-start-extra.sh docker-git-browser-runtime.sh /opt/docker-git/browser/
+RUN chmod +x /opt/docker-git/browser/mcp-playwright-start-extra.sh /opt/docker-git/browser/docker-git-browser-runtime.sh`
+    : ""
 
 /**
  * Renders /etc/profile.d/bun.sh with a runtime-relative PATH extension.
@@ -391,6 +398,7 @@ export const renderDockerfile = (config: TemplateConfig): string =>
     renderDockerfilePrompt(),
     renderDockerfileNode(),
     renderDockerfileBun(config),
+    renderDockerfilePlaywrightRuntime(config),
     renderDockerfileRtk(),
     renderDockerfileOpenCode(),
     renderDockerfileGitleaks(),

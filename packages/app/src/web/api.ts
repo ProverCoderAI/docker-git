@@ -51,8 +51,11 @@ export {
   loadProjectDetails,
   loadProjectLogs,
   loadProjectPs,
+  resumeProject,
+  suspendProject,
   upProject
 } from "./api-project-core.js"
+export type { ApplyProjectRequest, ProjectResourceLimitRequest } from "./api-project-core.js"
 export { deleteProjectPrompt, loadProjectPrompts, writeProjectPrompt } from "./api-prompts.js"
 export { deleteProjectSkill, loadProjectSkills, projectSkillScopeToId, writeProjectSkill } from "./api-skills.js"
 export { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api-tasks.js"

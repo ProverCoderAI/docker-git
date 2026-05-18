@@ -3,6 +3,7 @@ import { Effect, Either, ParseResult, Schema } from "effect"
 
 import {
   ApplyAllRequestSchema,
+  ApplyProjectRequestSchema,
   CodexAuthImportRequestSchema,
   CodexAuthLoginRequestSchema,
   CodexAuthLogoutRequestSchema,
@@ -37,6 +38,8 @@ describe("api schemas", () => {
         skipGithubAuth: true,
         up: true,
         force: false,
+        playwrightCpuLimit: "0.5",
+        playwrightRamLimit: "1g",
         async: true
       })
 
@@ -48,8 +51,34 @@ describe("api schemas", () => {
           expect(value.repoRef).toBe("main")
           expect(value.authorizedKeysContents).toContain("ssh-ed25519")
           expect(value.skipGithubAuth).toBe(true)
+          expect(value.playwrightCpuLimit).toBe("0.5")
+          expect(value.playwrightRamLimit).toBe("1g")
           expect(value.up).toBe(true)
           expect(value.async).toBe(true)
+        }
+      })
+    }))
+
+  it.effect("decodes apply project playwright resource limits", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(ApplyProjectRequestSchema)({
+        cpuLimit: "2",
+        ramLimit: "4g",
+        playwrightCpuLimit: "0.5",
+        playwrightRamLimit: "1g",
+        gpu: "none"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.cpuLimit).toBe("2")
+          expect(value.ramLimit).toBe("4g")
+          expect(value.playwrightCpuLimit).toBe("0.5")
+          expect(value.playwrightRamLimit).toBe("1g")
+          expect(value.gpu).toBe("none")
         }
       })
     }))

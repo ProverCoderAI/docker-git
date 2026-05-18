@@ -42,7 +42,6 @@ import {
   UpProjectRequestSchema
 } from "./api/schema.js"
 import type { UpProjectRequestInput } from "./api/schema.js"
-import { uiHtml, uiScript, uiStyles } from "./ui.js"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import { resolveWorkspaceRoot } from "@effect-template/lib/shell/workspace-root"
 import {
@@ -93,6 +92,8 @@ import {
   readProjectLogs,
   readProjectPs,
   recreateProject,
+  resumeProject,
+  suspendProject,
   upProject
 } from "./services/projects.js"
 import { readProjectAuthSnapshot, runProjectAuthFlow } from "./services/project-auth.js"
@@ -755,16 +756,7 @@ const projectProxyResponse = Effect.gen(function*(_) {
 })
 
 export const makeRouter = () => {
-  const withUi = HttpRouter.empty.pipe(
-    HttpRouter.get("/", 
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        console.log("GET / request:", request.url, "headers:", request.headers)
-        return yield* _(textResponse(uiHtml, "text/html; charset=utf-8", 200))
-      }).pipe(Effect.catchAll(errorResponse))
-    ),
-    HttpRouter.get("/ui/styles.css", textResponse(uiStyles, "text/css; charset=utf-8", 200)),
-    HttpRouter.get("/ui/app.js", textResponse(uiScript, "application/javascript; charset=utf-8", 200)),
+  const withCoreRoutes = HttpRouter.empty.pipe(
     HttpRouter.get(
       "/health",
       Effect.gen(function*(_) {
@@ -798,7 +790,7 @@ export const makeRouter = () => {
     )
   )
 
-  const withAuth = withUi.pipe(
+  const withAuth = withCoreRoutes.pipe(
     HttpRouter.get(
       "/auth/github/status",
       Effect.gen(function*(_) {
@@ -1373,7 +1365,7 @@ export const makeRouter = () => {
     )
   )
 
-  const withProjectLifecycle = withProjectDatabases.pipe(
+  const withProjectLifecycleBase = withProjectDatabases.pipe(
     HttpRouter.del(
       "/projects/:projectId",
       projectParams.pipe(
@@ -1395,17 +1387,33 @@ export const makeRouter = () => {
         Effect.catchAll(errorResponse)
       )
     ),
-  HttpRouter.post(
-    "/projects/:projectId/apply",
-    Effect.gen(function*(_) {
-      const { projectId } = yield* _(projectParams)
-      const request = yield* _(readApplyProjectRequest())
-      const project = yield* _(applyProjectById(projectId, request))
-      return yield* _(jsonResponse({ ok: true, project }, 200))
-    }).pipe(
-      Effect.catchAll(errorResponse)
-    )
-  ),
+    HttpRouter.post(
+      "/projects/:projectId/resume",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => resumeProject(projectId)),
+        Effect.flatMap((project) => jsonResponse({ ok: true, project }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/apply",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(readApplyProjectRequest())
+        const project = yield* _(applyProjectById(projectId, request))
+        return yield* _(jsonResponse({ ok: true, project }, 200))
+      }).pipe(
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/suspend",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => suspendProject(projectId)),
+        Effect.flatMap((project) => jsonResponse({ ok: true, project }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
     HttpRouter.post(
       "/projects/:projectId/down",
       projectParams.pipe(
@@ -1413,7 +1421,10 @@ export const makeRouter = () => {
         Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
         Effect.catchAll(errorResponse)
       )
-    ),
+    )
+  )
+
+  const withProjectLifecycle = withProjectLifecycleBase.pipe(
     HttpRouter.post(
       "/projects/by-key/:projectKey/terminal-sessions",
       projectKeyParams.pipe(

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "@effect/vitest"
 
-import { runDockerComposeDownVolumes, dockerComposeUpRecreateArgs, parseDockerPublishedHostPorts } from "../../src/shell/docker.js"
+import {
+  dockerComposeUpRecreateArgs,
+  parseDockerPublishedHostPorts,
+  runDockerComposeDownVolumes,
+  runDockerComposeStop
+} from "../../src/shell/docker.js"
 
 import * as Command from "@effect/platform/Command"
 import * as CommandExecutor from "@effect/platform/CommandExecutor"
@@ -69,6 +74,27 @@ it.effect("passes docker compose down -v --remove-orphans", () =>
         (entry) =>
           entry.command === "docker" &&
           includesArgsInOrder(entry.args, ["compose", "down", "-v", "--remove-orphans"])
+      )
+    ).toBe(true)
+    expect(command).toBeUndefined()
+  })
+)
+
+it.effect("passes docker compose stop for reversible project suspend", () =>
+  Effect.gen(function*(_) {
+    const recorded: Array<RecordedCommand> = []
+    const executor = makeCommandRecorder(recorded)
+    const command = yield* _(
+      runDockerComposeStop("/tmp").pipe(
+        Effect.provideService(CommandExecutor.CommandExecutor, executor)
+      )
+    )
+
+    expect(
+      recorded.some(
+        (entry) =>
+          entry.command === "docker" &&
+          includesArgsInOrder(entry.args, ["compose", "stop"])
       )
     ).toBe(true)
     expect(command).toBeUndefined()

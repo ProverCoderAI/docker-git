@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 
+import type { ApplyProjectRequest } from "../shared/project-resource-request.js"
 import { buildCreateProjectRequest } from "./api-client-create.js"
 import {
   readProjectEventCursor,
@@ -189,6 +190,30 @@ export const upProject = (projectId: string) =>
   withProjectEventPolling(
     projectId,
     request("POST", projectPath(projectId, "/up"), { useManagedAuthorizedKeys: true }).pipe(
+      Effect.map((payload) => decodeProjectResponse(payload))
+    )
+  )
+
+export const applyProject = (projectId: string, applyRequest: ApplyProjectRequest = {}) =>
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/apply"), applyRequest).pipe(
+      Effect.map((payload) => decodeProjectResponse(payload))
+    )
+  )
+
+export const resumeProject = (projectId: string) =>
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/resume")).pipe(
+      Effect.map((payload) => decodeProjectResponse(payload))
+    )
+  )
+
+export const suspendProject = (projectId: string) =>
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/suspend")).pipe(
       Effect.map((payload) => decodeProjectResponse(payload))
     )
   )

@@ -26,7 +26,7 @@ Commands:
   clone               Create + run container and clone repo
   open                Open an existing docker-git project by selector, URL, or path
   apply               Apply docker-git config to an existing project/container (current dir by default)
-  mcp-playwright      Enable Playwright MCP + Chromium sidecar for an existing project dir
+  mcp-playwright      Enable Playwright MCP + nested Chromium browser for an existing project dir
   attach, tmux        Attach to an existing docker-git project workspace with tmux
   panes, terms        List tmux panes for a docker-git project
   scrap               Export/import project scrap (session snapshot + rebuildable deps)
@@ -57,8 +57,8 @@ Options:
   --controller-cpu <value>  Controller CPU cap intent: percent or cores (default: 90%)
   --controller-ram <value>  Controller RAM cap intent: percent or size (default: 90%)
   --controller-pids <n>     Controller PID cap (default: 4096)
-  --playwright-cpu <value>  CPU limit for the MCP Playwright browser sidecar (default: 30% or --cpu when set)
-  --playwright-ram <value>  RAM limit for the MCP Playwright browser sidecar (default: 30% or --ram when set)
+  --playwright-cpu <value>  CPU limit for the MCP Playwright browser runtime (default: 30% or --cpu when set)
+  --playwright-ram <value>  RAM limit for the MCP Playwright browser runtime (default: 30% or --ram when set)
   --gpu <mode>              GPU mode for the workspace container: none|all (default: none)
   --network-mode <mode>     Compose network mode: shared|project (default: shared)
   --shared-network <name>   Shared Docker network name when network-mode=shared (default: docker-git-shared)
@@ -75,7 +75,7 @@ Options:
   --include-default         Show default/system processes in sessions list
   --up | --no-up            Run docker compose up after init (default: --up)
   --ssh | --no-ssh          Auto-open SSH after create/clone (default: clone=--ssh, create=--no-ssh)
-  --mcp-playwright | --no-mcp-playwright  Enable Playwright MCP + Chromium sidecar (default: --no-mcp-playwright)
+  --mcp-playwright | --no-mcp-playwright  Enable Playwright MCP + nested Chromium browser (default: --no-mcp-playwright)
   --auto[=claude|codex|gemini|grok]  Auto-execute an agent; without value picks by auth, random if multiple are available
   --active                  apply-all: apply only to currently running containers (skip stopped ones)
   --force                   Overwrite existing files, replace conflicting docker-git projects/containers, and wipe compose volumes
@@ -101,7 +101,7 @@ Container runtime env (set via .orch/env/project.env):
   MCP_PLAYWRIGHT_CDP_GUARD=1|0          Guard CDP so MCP cannot close/crash shared Chromium (default: 1)
   MCP_PLAYWRIGHT_BLOCK_BROWSER_CLOSE=1|0  Block destructive Browser.close/crash CDP methods (default: 1)
   MCP_PLAYWRIGHT_CDP_ENDPOINT=http://...  Override CDP endpoint (default: http://dg-<repo>-browser:9223)
-  MCP_PLAYWRIGHT_RETRY_ATTEMPTS=<n>     Retry attempts for browser sidecar startup wait (default: 10)
+  MCP_PLAYWRIGHT_RETRY_ATTEMPTS=<n>     Retry attempts for nested browser startup wait (default: 10)
   MCP_PLAYWRIGHT_RETRY_DELAY=<seconds>  Delay between retry attempts (default: 2)
 
 Auth providers:

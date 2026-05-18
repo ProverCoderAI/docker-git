@@ -23,6 +23,8 @@ export const CreateProjectRequestSchema = Schema.Struct({
   codexHome: OptionalString,
   cpuLimit: OptionalString,
   ramLimit: OptionalString,
+  playwrightCpuLimit: OptionalString,
+  playwrightRamLimit: OptionalString,
   gpu: Schema.optional(Schema.Literal("none", "all")),
   dockerNetworkMode: OptionalString,
   dockerSharedNetworkName: OptionalString,
@@ -159,6 +161,10 @@ export const ApplyAllRequestSchema = Schema.Struct({
 })
 
 export const ApplyProjectRequestSchema = Schema.Struct({
+  cpuLimit: OptionalString,
+  ramLimit: OptionalString,
+  playwrightCpuLimit: OptionalString,
+  playwrightRamLimit: OptionalString,
   gpu: Schema.optional(Schema.Literal("none", "all"))
 })
 
