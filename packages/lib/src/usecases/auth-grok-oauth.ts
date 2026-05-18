@@ -76,6 +76,16 @@ export const buildDockerGrokAuthArgs = (spec: DockerGrokAuthSpec): ReadonlyArray
   return [...base, spec.image, "grok", "login", "--device-auth"]
 }
 
+const printDeviceAuthInstructions = (): Effect.Effect<void> =>
+  Effect.sync(() => {
+    process.stderr.write("\n")
+    process.stderr.write("Grok CLI Device Authentication\n")
+    process.stderr.write("1. Copy the device code printed by the Grok CLI.\n")
+    process.stderr.write("2. Open the verification URL printed by the CLI in a browser.\n")
+    process.stderr.write("3. Complete approval; this terminal continues after the CLI writes credentials.\n")
+    process.stderr.write("\n")
+  })
+
 const grokAuthPermissionScript = [
   "target_uid=\"${CHOWN_UID:-$(stat -c %u \"$1\" 2>/dev/null || id -u)}\"",
   "target_gid=\"${CHOWN_GID:-$(stat -c %g \"$1\" 2>/dev/null || id -g)}\"",
@@ -135,6 +145,7 @@ export const runGrokOauthLoginWithPrompt = (
   }
 ): Effect.Effect<void, AuthError | CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
+    yield* _(printDeviceAuthInstructions())
     const hostPath = yield* _(resolveDockerVolumeHostPath(cwd, accountPath))
     const spec = buildDockerGrokAuthSpec(cwd, hostPath, options.image, options.containerPath)
     yield* _(
