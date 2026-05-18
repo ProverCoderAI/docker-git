@@ -115,6 +115,9 @@ const resolveNormalizedSecretsRoot = (value: string | undefined): string | undef
   return trimmed.length === 0 ? undefined : normalizeSecretsRoot(trimmed)
 }
 
+const joinSecretsRootPath = (root: string, child: string): string =>
+  root.endsWith("/") || root.endsWith("\\") ? `${root}${child}` : `${root}/${child}`
+
 const buildDefaultPathConfig = (
   normalizedSecretsRoot: string | undefined
 ): DefaultPathConfig =>
@@ -133,11 +136,11 @@ const buildDefaultPathConfig = (
       // `.cache/git-mirrors` remain outside the secrets dir.
       dockerGitPath: defaultTemplateConfig.dockerGitPath,
       authorizedKeysPath: defaultTemplateConfig.authorizedKeysPath,
-      envGlobalPath: `${normalizedSecretsRoot}/global.env`,
+      envGlobalPath: joinSecretsRootPath(normalizedSecretsRoot, "global.env"),
       envProjectPath: defaultTemplateConfig.envProjectPath,
-      codexAuthPath: `${normalizedSecretsRoot}/codex`,
-      geminiAuthPath: `${normalizedSecretsRoot}/gemini`,
-      grokAuthPath: `${normalizedSecretsRoot}/grok`
+      codexAuthPath: joinSecretsRootPath(normalizedSecretsRoot, "codex"),
+      geminiAuthPath: joinSecretsRootPath(normalizedSecretsRoot, "gemini"),
+      grokAuthPath: joinSecretsRootPath(normalizedSecretsRoot, "grok")
     }
 
 const resolvePaths = (

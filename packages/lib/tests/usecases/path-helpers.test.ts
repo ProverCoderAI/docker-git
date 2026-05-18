@@ -64,6 +64,30 @@ describe("path helpers", () => {
       })
     ))
 
+  it.effect("uses Unix root HOME without a double separator", () =>
+    withPatchedEnv(
+      {
+        HOME: "/",
+        USERPROFILE: undefined,
+        DOCKER_GIT_PROJECTS_ROOT: undefined
+      },
+      Effect.sync(() => {
+        expect(defaultProjectsRoot("/workspace")).toBe("/.docker-git")
+      })
+    ))
+
+  it.effect("uses Windows drive root USERPROFILE without a double separator", () =>
+    withPatchedEnv(
+      {
+        HOME: undefined,
+        USERPROFILE: "C:\\",
+        DOCKER_GIT_PROJECTS_ROOT: undefined
+      },
+      Effect.sync(() => {
+        expect(defaultProjectsRoot("C:\\workspace")).toBe("C:\\.docker-git")
+      })
+    ))
+
   it.effect("expands Windows home-relative projects root overrides", () =>
     withPatchedEnv(
       {

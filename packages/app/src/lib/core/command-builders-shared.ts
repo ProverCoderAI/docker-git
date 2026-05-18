@@ -30,9 +30,41 @@ const parsePort = (value: string): Either.Either<number, ParseError> => {
   return Either.right(parsed)
 }
 
+const isAsciiLetterCode = (code: number): boolean => (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+
+const isPathSeparator = (value: string | undefined): boolean => value === "/" || value === "\\"
+
+const rootPathLength = (value: string): number => {
+  if (isPathSeparator(value[0])) {
+    return 1
+  }
+  if (
+    value.length >= 3 &&
+    isAsciiLetterCode(value.codePointAt(0) ?? 0) &&
+    value[1] === ":" &&
+    isPathSeparator(value[2])
+  ) {
+    return 3
+  }
+  return 0
+}
+
+/**
+ * Removes redundant trailing path separators while preserving filesystem roots.
+ *
+ * @param value - Path text decoded from CLI/config input.
+ * @returns The input without trailing `/` or `\\` separators unless the input is a root path.
+ * @pure true
+ * @effect none; CORE helper only scans the provided string.
+ * @invariant roots `/`, `\\`, `C:\\`, and `C:/` remain non-empty root paths.
+ * @precondition value is a string and may be empty or contain mixed separators.
+ * @postcondition non-root results do not end with `/` or `\\`; root results are preserved.
+ * @complexity O(n) time / O(1) space where n = |value|.
+ */
 export const trimTrailingPathSeparators = (value: string): string => {
   let end = value.length
-  while (end > 0 && (value[end - 1] === "/" || value[end - 1] === "\\")) {
+  const minEnd = rootPathLength(value)
+  while (end > minEnd && isPathSeparator(value[end - 1])) {
     end -= 1
   }
   return value.slice(0, end)

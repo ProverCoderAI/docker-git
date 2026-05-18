@@ -54,7 +54,9 @@ const homePathSeparator = (home: string): string => home.includes("\\") && !home
 
 const joinHomePath = (home: string, child: string): string => {
   const root = trimTrailingSlash(home)
-  return `${root}${homePathSeparator(root)}${child}`
+  return root.endsWith("/") || root.endsWith("\\")
+    ? `${root}${child}`
+    : `${root}${homePathSeparator(root)}${child}`
 }
 
 export const defaultProjectsRoot = (cwd: string): string => {
