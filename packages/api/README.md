@@ -36,14 +36,6 @@ Diagnostic classification + remediation messages live in
 `packages/app/src/docker-git/controller-docker-diagnostics.ts` and are
 covered by `packages/app/tests/docker-git/controller-docker-diagnostics.test.ts`.
 
-## UI wrapper
-
-After API startup open:
-
-- `http://localhost:3334/`
-
-This page is a built-in UI shell for manual API checks without CLI.
-
 ## Run (local)
 
 ```bash
