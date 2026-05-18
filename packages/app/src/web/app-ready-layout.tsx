@@ -102,6 +102,7 @@ export type ReadyLayoutProps = {
   readonly onSelectMenu: (index: number) => void
   readonly onSelectProject: (projectId: string) => void
   readonly onRunCurrentMenuAction: () => void
+  readonly onAuthTerminalExitSuccess: () => void
   readonly onSelectTerminal: (sessionId: string) => void
   readonly onTerminalClose: (sessionId: string) => void
   readonly onTerminalMessage: (message: string | null) => void
@@ -201,6 +202,27 @@ const StatusHeader = (
   </Box>
 )
 
+const TerminalWorkspaceStatus = (
+  { busyLabel, message }: Pick<ReadyLayoutProps, "busyLabel" | "message">
+): JSX.Element | null =>
+  busyLabel === null && message === null
+    ? null
+    : (
+      <Box
+        backgroundColor="#101317"
+        border={true}
+        borderColor="#3a4652"
+        borderStyle="rounded"
+        flexShrink={0}
+        gap="8px"
+        marginBottom="6px"
+        padding="6px"
+      >
+        <StatusText busyLabel={busyLabel} />
+        {message === null ? null : <Text fg="#f6d27b" wrap="truncate">message: {message}</Text>}
+      </Box>
+    )
+
 export const ReadyLayout = ({ busyLabel, message, ...props }: ReadyLayoutProps): JSX.Element => (
   hasVisibleTerminalWorkspace(props)
     ? (
@@ -212,6 +234,7 @@ export const ReadyLayout = ({ busyLabel, message, ...props }: ReadyLayoutProps):
         padding={terminalWorkspacePadding(props.viewportLayout)}
         width="100%"
       >
+        <TerminalWorkspaceStatus busyLabel={busyLabel} message={message} />
         <MainPanels {...props} />
       </Box>
     )

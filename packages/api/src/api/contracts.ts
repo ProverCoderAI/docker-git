@@ -257,6 +257,18 @@ export type CodexAuthStatus = {
   readonly account: string | null
 }
 
+export type GrokAuthStatus = {
+  readonly label: string
+  readonly message: string
+  readonly connected: boolean
+  readonly authPath: string
+  readonly method: "none" | "api-key" | "oauth"
+}
+
+export type GrokAuthLogoutRequest = {
+  readonly label?: string | null | undefined
+}
+
 export type CodexAuthLogoutRequest = {
   readonly label?: string | null | undefined
 }

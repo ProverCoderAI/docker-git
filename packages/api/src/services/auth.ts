@@ -6,6 +6,7 @@ import { defaultTemplateConfig } from "@effect-template/lib/core/template-defaul
 import { parseGithubRepoUrl, parseGitlabRepoUrl } from "@effect-template/lib/core/repo"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { authCodexLogin as runCodexLogin } from "@effect-template/lib/usecases/auth-codex"
+import { authGrokLogout as runGrokLogout } from "@effect-template/lib/usecases/auth-grok-logout"
 import { authGitlabLogin as runGitlabLogin, authGitlabLogout as runGitlabLogout, listGitlabTokens } from "@effect-template/lib/usecases/auth-gitlab"
 import { authGithubLogin as runGithubLogin, authGithubLogout as runGithubLogout } from "@effect-template/lib/usecases/auth-github"
 import { readEnvText } from "@effect-template/lib/usecases/env-file"
@@ -25,6 +26,7 @@ import {
   resolveGithubCloneAuthToken
 } from "@effect-template/lib/usecases/github-token-preflight"
 import { validateGithubToken, type GithubTokenValidationResult } from "@effect-template/lib/usecases/github-token-validation"
+import { resolveGrokAccountPath, resolveGrokAuthMethod } from "@effect-template/lib/usecases/auth-grok-helpers"
 import { normalizeAccountLabel } from "@effect-template/lib/usecases/auth-helpers"
 import { resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
 import { Effect, Logger, Match } from "effect"
@@ -34,6 +36,8 @@ import type {
   CodexAuthLoginRequest,
   CodexAuthLogoutRequest,
   CodexAuthStatus,
+  GrokAuthLogoutRequest,
+  GrokAuthStatus,
   GitlabAuthLoginRequest,
   GitlabAuthLogoutRequest,
   GitlabAuthStatus,
@@ -57,6 +61,7 @@ export const gitlabAuthRequiredMessage = [
 ].join("\n")
 export const githubAuthEnvGlobalPath = defaultTemplateConfig.envGlobalPath
 export const codexAuthPath = defaultTemplateConfig.codexAuthPath
+export const grokAuthPath = defaultTemplateConfig.grokAuthPath
 
 const githubTokenKey = "GITHUB_TOKEN"
 const githubTokenPrefix = "GITHUB_TOKEN__"
@@ -70,6 +75,7 @@ type GithubTokenEntry = {
 type JsonRecord = Readonly<Record<string, unknown>>
 type CodexRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 type CodexCommandError = CommandFailedError | PlatformError
+type GrokCommandError = CommandFailedError | PlatformError
 
 const labelFromKey = (key: string): string =>
   key.startsWith(githubTokenPrefix) ? key.slice(githubTokenPrefix.length) : "default"
@@ -129,6 +135,16 @@ const gitlabAuthError = (message: string): ApiAuthRequiredError =>
   })
 
 const toCodexApiError = (error: CodexCommandError): ApiBadRequestError | ApiInternalError =>
+  error._tag === "CommandFailedError"
+    ? new ApiBadRequestError({
+      message: `${error.command} failed (exit ${error.exitCode}).`
+    })
+    : new ApiInternalError({
+      message: String(error),
+      cause: error
+    })
+
+const toGrokApiError = (error: GrokCommandError): ApiBadRequestError | ApiInternalError =>
   error._tag === "CommandFailedError"
     ? new ApiBadRequestError({
       message: `${error.command} failed (exit ${error.exitCode}).`
@@ -406,6 +422,32 @@ const codexAuthStatus = (
   account
 })
 
+const grokAuthStatus = (
+  label: string,
+  authPath: string,
+  method: GrokAuthStatus["method"]
+): GrokAuthStatus => ({
+  label,
+  message: method === "none"
+    ? `Grok not connected (${label}).`
+    : `Grok connected (${label}, ${method}).`,
+  connected: method !== "none",
+  authPath,
+  method
+})
+
+export const readGrokAuthStatus = (
+  label?: string | null | undefined
+): Effect.Effect<GrokAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const rootPath = resolvePathFromCwd(path, process.cwd(), grokAuthPath)
+    const { accountLabel, accountPath } = resolveGrokAccountPath(path, rootPath, label ?? null)
+    const method = yield* _(resolveGrokAuthMethod(fs, accountPath))
+    return grokAuthStatus(accountLabel, accountPath, method)
+  })
+
 export const readCodexAuthStatus = (
   label?: string | null | undefined
 ): Effect.Effect<CodexAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
@@ -487,6 +529,25 @@ export const logoutCodexAuth = (
     }
 
     return yield* _(readCodexAuthStatus(request.label))
+  })
+
+export const logoutGrokAuth = (
+  request: GrokAuthLogoutRequest
+): Effect.Effect<
+  GrokAuthStatus,
+  PlatformError | ApiBadRequestError | ApiInternalError,
+  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+> =>
+  Effect.gen(function*(_) {
+    yield* _(
+      runGrokLogout({
+        _tag: "AuthGrokLogout",
+        label: request.label ?? null,
+        grokAuthPath
+      }).pipe(Effect.mapError(toGrokApiError))
+    )
+
+    return yield* _(readGrokAuthStatus(request.label))
   })
 
 export const ensureGithubAuthForCreate = (config: {

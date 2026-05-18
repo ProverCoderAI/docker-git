@@ -5,8 +5,10 @@ import { Effect, pipe } from "effect"
 import * as fc from "fast-check"
 
 import { defaultTemplateConfig, type TemplateConfig } from "../../src/core/domain.js"
+import { planFiles } from "../../src/core/templates.js"
 import { renderDockerCompose } from "../../src/core/templates/docker-compose.js"
 import { renderDockerfile } from "../../src/core/templates/dockerfile.js"
+import { renderPlaywrightBrowserRuntime } from "../../src/core/templates/playwright-browser-runtime.js"
 import { renderEntrypoint } from "../../src/core/templates-entrypoint.js"
 import { renderEntrypointDnsRepair } from "../../src/core/templates-entrypoint/dns-repair.js"
 import { renderEntrypointGitHooks } from "../../src/core/templates-entrypoint/git.js"
@@ -706,6 +708,35 @@ describe("renderDockerCompose", () => {
     expect(compose).not.toContain("dg-test-browser:\n    build:")
     expect(compose).not.toContain("restart:")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
+  })
+
+  it("renders live shell expansion in the nested browser runtime script", () => {
+    const runtime = renderPlaywrightBrowserRuntime()
+
+    expect(runtime).toContain('if [[ "${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
+    expect(runtime).not.toContain('if [[ "\\${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
+    expect(runtime).toContain('printf \'%s\\n\' "${DOCKER_GIT_BROWSER_CONTEXT_DIR:-/opt/docker-git/browser}"')
+    expect(runtime).not.toContain('printf \'%s\\n\' "\\${DOCKER_GIT_BROWSER_CONTEXT_DIR:-/opt/docker-git/browser}"')
+    expect(runtime).toContain('mktemp "${TMPDIR:-/tmp}/docker-git-browser-build.XXXXXX.log"')
+    expect(runtime).not.toContain('mktemp "\\${TMPDIR:-/tmp}/docker-git-browser-build.XXXXXX.log"')
+    expect(runtime).toContain('docker "${args[@]}" "$image_name" >/dev/null || {')
+    expect(runtime).not.toContain('docker "\\${args[@]}" "$image_name" >/dev/null || {')
+  })
+
+  it("plans nested browser runtime artifacts when Playwright is enabled", () => {
+    const files = planFiles(makeTemplateConfig({ enableMcpPlaywright: true }))
+    const filePaths = files.flatMap((file) => file._tag === "File" ? [file.relativePath] : [])
+    const runtime = files.find(
+      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+        file._tag === "File" && file.relativePath === "docker-git-browser-runtime.sh"
+    )
+
+    expect(filePaths).toContain("Dockerfile.browser")
+    expect(filePaths).toContain("mcp-playwright-start-extra.sh")
+    expect(filePaths).toContain("docker-git-browser-runtime.sh")
+    expect(runtime).toBeDefined()
+    expect(runtime?.mode).toBe(0o755)
+    expect(runtime?.contents).toContain('if [[ "${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
   })
 
   it("renders local Docker socket mount only when explicitly enabled", () => {

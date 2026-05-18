@@ -79,6 +79,7 @@ const createTerminalMessageHandlers = (
   connectionRef: args.connectionRef,
   inlineImagePreviewsEnabledRef: args.inlineImagePreviewsEnabledRef,
   lifecycle,
+  notifyExit: args.notifyExit,
   notifyMessage: args.notifyMessage,
   session: args.session,
   setStatus: args.setStatus,
@@ -206,6 +207,7 @@ export const useTerminalSessionLifecycle = (
     connectionRef,
     hostRef,
     inlineImagePreviewsEnabledRef,
+    notifyExit,
     notifyMessage,
     onAttachFailure,
     runtimeRef,
@@ -218,6 +220,7 @@ export const useTerminalSessionLifecycle = (
       connectionRef,
       hostRef,
       inlineImagePreviewsEnabledRef,
+      notifyExit,
       notifyMessage,
       onAttachFailure,
       runtimeRef,
@@ -228,6 +231,7 @@ export const useTerminalSessionLifecycle = (
     connectionRef,
     hostRef,
     notifyMessage,
+    notifyExit,
     onAttachFailure,
     runtimeRef,
     session,
@@ -236,6 +240,7 @@ export const useTerminalSessionLifecycle = (
 }
 
 export {
+  type TerminalExitInfo,
   type TerminalConnectionState,
   type TerminalInputController,
   type TerminalStatus

@@ -9,6 +9,11 @@ import type { ActiveTerminalSession } from "./terminal.js"
 
 export type TerminalStatus = "attached" | "connecting" | "error" | "exited" | "reconnecting"
 
+export type TerminalExitInfo = {
+  readonly exitCode: number | null
+  readonly signal: number | null
+}
+
 export type TerminalConnectionState = { closing: boolean; opened: boolean }
 
 export type TerminalRuntime = { readonly fitAddon: FitAddon; readonly terminal: Terminal }
@@ -43,6 +48,7 @@ export type TerminalMessageHandlers = {
   readonly connectionRef: { current: TerminalConnectionState }
   readonly inlineImagePreviewsEnabledRef: TerminalInlineImagePreviewsEnabledRef
   readonly lifecycle: TerminalLifecycleState
+  readonly notifyExit: (info: TerminalExitInfo) => void
   readonly notifyMessage: (message: string) => void
   readonly session: ActiveTerminalSession
   readonly setStatus: (status: TerminalStatus) => void
@@ -68,6 +74,7 @@ export type TerminalLifecycleArgs = {
   readonly connectionRef: { current: TerminalConnectionState }
   readonly hostRef: { readonly current: HTMLDivElement | null }
   readonly inlineImagePreviewsEnabledRef: TerminalInlineImagePreviewsEnabledRef
+  readonly notifyExit: (info: TerminalExitInfo) => void
   readonly notifyMessage: (message: string) => void
   readonly onAttachFailure: () => void
   readonly runtimeRef: { current: TerminalInputController | null }

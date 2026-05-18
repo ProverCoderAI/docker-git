@@ -123,7 +123,7 @@ const resolveProjectId = (
   return project?.id ?? null
 }
 
-const activeScreenFromMenu = (menu: BrowserMenuTag, outputRequested: boolean): BrowserScreen => {
+export const activeScreenFromMenu = (menu: BrowserMenuTag, outputRequested: boolean): BrowserScreen => {
   if (outputRequested && (menu === "Logs" || menu === "Status")) {
     return outputScreen()
   }

@@ -20,6 +20,7 @@ import {
 import type { TerminalInlineImageEntry } from "./terminal-inline-images.js"
 import type {
   TerminalCleanupArgs,
+  TerminalExitInfo,
   TerminalInputController,
   TerminalLifecycleState,
   TerminalMessageHandlers,
@@ -189,7 +190,8 @@ const endTerminalSession = (
   handlers: TerminalMessageHandlers,
   status: "error" | "exited",
   line: string,
-  message: string
+  message: string,
+  exitInfo?: TerminalExitInfo
 ): void => {
   handlers.lifecycle.terminalEnded = true
   clearReconnectTimer(handlers.lifecycle)
@@ -197,6 +199,9 @@ const endTerminalSession = (
   handlers.setStatus(status)
   handlers.notifyMessage(message)
   if (status === "exited") {
+    if (exitInfo !== undefined) {
+      handlers.notifyExit(exitInfo)
+    }
     handlers.session.onExit?.()
   }
 }
@@ -408,7 +413,10 @@ const handleTerminalServerMessage = (
     endTerminalSession(handlers, "error", `\r\n[error] ${message.message}`, message.message)
     return
   }
-  endTerminalSession(handlers, "exited", "\r\n[session ended]", handlers.session.exitMessage)
+  endTerminalSession(handlers, "exited", "\r\n[session ended]", handlers.session.exitMessage, {
+    exitCode: message.exitCode,
+    signal: message.signal
+  })
 }
 
 const attachTerminalSocketListeners = (

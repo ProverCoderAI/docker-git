@@ -28,6 +28,7 @@ import {
   ExchangeSubscribeRequestSchema,
   GitlabAuthLoginRequestSchema,
   GitlabAuthLogoutRequestSchema,
+  GrokAuthLogoutRequestSchema,
   GithubAuthLoginRequestSchema,
   GithubAuthLogoutRequestSchema,
   ProjectDatabaseProfileRequestSchema,
@@ -50,9 +51,11 @@ import {
   loginGitlabAuth,
   loginGithubAuth,
   logoutCodexAuth,
+  logoutGrokAuth,
   logoutGitlabAuth,
   logoutGithubAuth,
   readCodexAuthStatus,
+  readGrokAuthStatus,
   readGitlabAuthStatus,
   readGithubAuthStatus,
 } from "./services/auth.js"
@@ -426,6 +429,7 @@ const readAuthMenuRequest = () => HttpServerRequest.schemaBodyJson(AuthMenuReque
 const readAuthTerminalSessionRequest = () => HttpServerRequest.schemaBodyJson(AuthTerminalSessionRequestSchema)
 const readCodexAuthImportRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthImportRequestSchema)
 const readCodexAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLoginRequestSchema)
+const readGrokAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GrokAuthLogoutRequestSchema)
 const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLogoutRequestSchema)
 const readProjectAuthRequest = () => HttpServerRequest.schemaBodyJson(ProjectAuthRequestSchema)
 const readProjectPromptUpdateRequest = () => HttpServerRequest.schemaBodyJson(ProjectPromptUpdateRequestSchema)
@@ -836,6 +840,15 @@ export const makeRouter = () => {
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.get(
+      "/auth/grok/status",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const label = new URL(request.url, "http://localhost").searchParams.get("label")
+        const status = yield* _(readGrokAuthStatus(label))
+        return yield* _(jsonResponse({ status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
       "/auth/menu",
       Effect.gen(function*(_) {
         const snapshot = yield* _(readAuthMenuSnapshot())
@@ -935,6 +948,14 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(readGitlabAuthLogoutRequest())
         const status = yield* _(logoutGitlabAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/grok/logout",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGrokAuthLogoutRequest())
+        const status = yield* _(logoutGrokAuth(request))
         return yield* _(jsonResponse({ ok: true, status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),

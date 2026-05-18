@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 const playwrightBrowserRuntimeScript = `#!/usr/bin/env bash
 set -euo pipefail
 
@@ -160,3 +161,4 @@ docker_git_start_playwright_browser() {
 // INVARIANT: browser data volume is preserved; runtime cleanup removes only browser-labeled containers
 // COMPLEXITY: O(b + build + docker-run)/O(1), where b = browser-labeled containers
 export const renderPlaywrightBrowserRuntime = (): string => playwrightBrowserRuntimeScript
+/* jscpd:ignore-end */
