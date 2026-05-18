@@ -15,6 +15,7 @@ import { federationJsonLdResponseContentType, type ApplyProjectRequest } from ".
 import {
   AuthMenuRequestSchema,
   AuthTerminalSessionRequestSchema,
+  ActiveProjectTerminalSessionRequestSchema,
   ApplyProjectRequestSchema,
   ApplyAllRequestSchema,
   CodexAuthImportRequestSchema,
@@ -138,7 +139,9 @@ import {
   getProjectTerminalSession,
   listProjectTerminalSessions,
   lookupTerminalSessionById,
+  readProjectTerminalSessions,
   readProjectTerminalImage,
+  setProjectActiveTerminalSession,
   startTerminalSession
 } from "./services/terminal-sessions.js"
 import {
@@ -420,6 +423,8 @@ const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexA
 const readProjectAuthRequest = () => HttpServerRequest.schemaBodyJson(ProjectAuthRequestSchema)
 const readProjectPromptUpdateRequest = () => HttpServerRequest.schemaBodyJson(ProjectPromptUpdateRequestSchema)
 const readProjectSkillUpdateRequest = () => HttpServerRequest.schemaBodyJson(ProjectSkillUpdateRequestSchema)
+const readActiveProjectTerminalSessionRequest = () =>
+  HttpServerRequest.schemaBodyJson(ActiveProjectTerminalSessionRequestSchema)
 
 const skillScopeFromId = (scopeId: string): ProjectSkillScope | null => {
   switch (scopeId) {
@@ -1438,7 +1443,7 @@ export const makeRouter = () => {
       projectKeyParams.pipe(
         Effect.flatMap(({ projectKey }) =>
           getProjectItemByKey(projectKey).pipe(
-            Effect.map((project) => ({ sessions: listProjectTerminalSessions(project.projectDir) }))
+            Effect.flatMap((project) => readProjectTerminalSessions(project.projectDir))
           )
         ),
         Effect.flatMap((body) => jsonResponse(body, 200)),
@@ -1484,7 +1489,11 @@ export const makeRouter = () => {
     HttpRouter.get(
       "/projects/:projectId/terminal-sessions",
       projectParams.pipe(
-        Effect.flatMap(({ projectId }) => Effect.succeed({ sessions: listProjectTerminalSessions(projectId) })),
+        Effect.flatMap(({ projectId }) =>
+          listProjectTerminalSessions(projectId).pipe(
+            Effect.map((sessions) => ({ sessions }))
+          )
+        ),
         Effect.flatMap((body) => jsonResponse(body, 200)),
         Effect.catchAll(errorResponse)
       )
@@ -1567,6 +1576,18 @@ export const makeRouter = () => {
   )
 
   const withProjectTerminalStart = withProjectLifecycle.pipe(
+    HttpRouter.put(
+      "/projects/by-key/:projectKey/terminal-sessions/active",
+      Effect.gen(function*(_) {
+        const { projectKey } = yield* _(projectKeyParams)
+        const request = yield* _(readActiveProjectTerminalSessionRequest())
+        const project = yield* _(getProjectItemByKey(projectKey))
+        const session = yield* _(setProjectActiveTerminalSession(project.projectDir, request.sessionId))
+        return yield* _(jsonResponse({ ok: true, session }, 200))
+      }).pipe(
+        Effect.catchAll(errorResponse)
+      )
+    ),
     HttpRouter.post(
       "/projects/by-key/:projectKey/terminal-sessions/start",
       projectKeyParams.pipe(
