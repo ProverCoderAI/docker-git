@@ -126,6 +126,17 @@ describe("app ready URL state", () => {
     )
   })
 
+  it("parses Select project URLs back into app navigation state", () => {
+    expect(parseReadyUrlNavigation("https://docker-git.local/select/octocat/hello-world", dashboard.projects)).toEqual(
+      {
+        activeScreen: { tag: "ProjectPicker" },
+        menu: "Select",
+        projectNavigationArmed: false,
+        selectedProjectId: "project-1"
+      }
+    )
+  })
+
   it("keeps /ssh links owned by SSH auto-connect flow", () => {
     expect(parseReadyUrlNavigation("https://docker-git.local/ssh/octocat/hello-world", dashboard.projects)).toBeNull()
     expect(parseReadyUrlNavigation("https://docker-git.local/?ssh=octocat/hello-world", dashboard.projects)).toBeNull()
