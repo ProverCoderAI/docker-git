@@ -168,6 +168,9 @@ const resolveMountHost = (
   return hostRef.current
 }
 
+const shouldAllowTerminalMouseTracking = (session: TerminalLifecycleArgs["session"]): boolean =>
+  session.browserProjectId !== undefined
+
 const mountTerminalSession = (args: TerminalLifecycleArgs): (() => void) | undefined => {
   const host = resolveMountHost(args)
   if (host === null) {
@@ -177,7 +180,11 @@ const mountTerminalSession = (args: TerminalLifecycleArgs): (() => void) | undef
   args.connectionRef.current = { closing: false, opened: false }
   const lifecycle = createLifecycleState()
   const socketRef: TerminalSocketRef = { current: null }
-  const { fitAddon, terminal } = createTerminalRuntime(host)
+  const { fitAddon, terminal } = createTerminalRuntime(host, {
+    querySuppression: {
+      allowMouseTracking: shouldAllowTerminalMouseTracking(args.session)
+    }
+  })
   const terminalInputController = createTerminalInputController(terminal, socketRef)
   const pasteGuard = createTerminalPasteGuard()
   const sendResize = (): void => {
