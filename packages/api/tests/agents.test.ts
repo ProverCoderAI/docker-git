@@ -17,6 +17,13 @@ describe("agent service", () => {
     )
   })
 
+  it("starts default Grok agents with isolated Playwright MCP and unrestricted sandbox", () => {
+    expect(buildCommand({ provider: "grok" })).toBe("MCP_PLAYWRIGHT_ISOLATED=1 grok --no-sandbox")
+    expect(buildCommand({ provider: "grok", args: ["-p", "hello world"] })).toBe(
+      "MCP_PLAYWRIGHT_ISOLATED=1 grok --no-sandbox '-p' 'hello world'"
+    )
+  })
+
   it("starts default OpenCode agents without extra env assignments", () => {
     expect(buildCommand({ provider: "opencode" })).toBe("opencode")
   })

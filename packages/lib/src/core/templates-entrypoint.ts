@@ -23,6 +23,7 @@ import {
 import { renderEntrypointDnsRepair } from "./templates-entrypoint/dns-repair.js"
 import { renderEntrypointGeminiConfig } from "./templates-entrypoint/gemini.js"
 import { renderEntrypointGitConfig, renderEntrypointGitHooks } from "./templates-entrypoint/git.js"
+import { renderEntrypointGrokConfig } from "./templates-entrypoint/grok.js"
 import { renderEntrypointDockerGitBootstrap } from "./templates-entrypoint/nested-docker-git.js"
 import { renderEntrypointOpenCodeConfig } from "./templates-entrypoint/opencode.js"
 import { renderEntrypointPlaywrightBrowserRuntime } from "./templates-entrypoint/playwright-browser.js"
@@ -63,6 +64,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointGitConfig(config),
     renderEntrypointClaudeConfig(config),
     renderEntrypointGeminiConfig(config),
+    renderEntrypointGrokConfig(config),
     renderEntrypointRtkConfig(config),
     renderEntrypointGitHooks(),
     renderEntrypointBackgroundTasks(config),

@@ -1,8 +1,8 @@
 // CHANGE: separate project rule preparation by active agent mode
-// WHY: Codex, Claude Code, and Gemini CLI each have different native project-level config models
+// WHY: Codex, Claude Code, Gemini CLI, and Grok CLI each have different native project-level config models
 // REF: issue-207
 // PURITY: CORE
-// INVARIANT: Codex gets a bridge for skills that live outside CODEX_HOME; Claude/Gemini stay on native project-local discovery
+// INVARIANT: Codex gets a bridge for skills that live outside CODEX_HOME; Claude/Gemini/Grok stay on native project-local discovery
 // COMPLEXITY: O(1)
 const entrypointProjectAgentRulesTemplate = String
   .raw`# Prepare project-local rules using each agent's native conventions.
@@ -38,6 +38,22 @@ docker_git_detect_gemini_project_rules() {
   fi
 }
 
+docker_git_detect_grok_project_rules() {
+  local project_dir="${"$"}{TARGET_DIR:-}"
+
+  if [[ -z "$project_dir" || ! -d "$project_dir" ]]; then
+    return 0
+  fi
+
+  if [[ -f "$project_dir/GROK.md" \
+    || -f "$project_dir/.grok/settings.json" \
+    || -d "$project_dir/.grok/commands" \
+    || -d "$project_dir/.grok/skills" \
+    || -d "$project_dir/.agents/skills" ]]; then
+    echo "[grok] project-local Grok rules available in $project_dir"
+  fi
+}
+
 docker_git_prepare_active_agent_project_rules() {
   case "$AGENT_MODE" in
     "codex")
@@ -49,10 +65,14 @@ docker_git_prepare_active_agent_project_rules() {
     "gemini")
       docker_git_detect_gemini_project_rules
       ;;
+    "grok")
+      docker_git_detect_grok_project_rules
+      ;;
     *)
       docker_git_sync_project_codex_skills
       docker_git_detect_claude_project_rules
       docker_git_detect_gemini_project_rules
+      docker_git_detect_grok_project_rules
       ;;
   esac
 }`

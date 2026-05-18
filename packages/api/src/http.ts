@@ -1,4 +1,4 @@
-import { Chunk, Duration, Effect, Ref } from "effect"
+import { Chunk, Duration, Effect, Match, Ref } from "effect"
 import * as Stream from "effect/Stream"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as HttpBody from "@effect/platform/HttpBody"
@@ -182,7 +182,7 @@ const ProjectDatabaseProfileParamsSchema = Schema.Struct({
 
 const ProjectPromptParamsSchema = Schema.Struct({
   projectId: Schema.String,
-  kind: Schema.Literal("claude", "codex", "gemini")
+  kind: Schema.Literal("claude", "codex", "gemini", "grok")
 })
 
 const ProjectSkillParamsSchema = Schema.Struct({
@@ -427,55 +427,43 @@ const readProjectSkillUpdateRequest = () => HttpServerRequest.schemaBodyJson(Pro
 const readActiveProjectTerminalSessionRequest = () =>
   HttpServerRequest.schemaBodyJson(ActiveProjectTerminalSessionRequestSchema)
 
-const skillScopeFromId = (scopeId: string): ProjectSkillScope | null => {
-  switch (scopeId) {
-    case "skills":
-      return "skills"
-    case "agents-skills":
-      return "agents/skills"
-    case "agents-dot-skills":
-      return "agents/.skills"
-    case "claude-skills":
-      return "claude/skills"
-    case "codex-skills":
-      return "codex/skills"
-    case "gemini-skills":
-      return "gemini/skills"
-    default:
-      return null
-  }
-}
+const projectSkillScope = (scope: ProjectSkillScope): ProjectSkillScope => scope
 
-export const skillScopeToId = (scope: ProjectSkillScope): string => {
-  switch (scope) {
-    case "skills":
-      return "skills"
-    case "agents/skills":
-      return "agents-skills"
-    case "agents/.skills":
-      return "agents-dot-skills"
-    case "claude/skills":
-      return "claude-skills"
-    case "codex/skills":
-      return "codex-skills"
-    case "gemini/skills":
-      return "gemini-skills"
-  }
-}
+const skillScopeFromId = (scopeId: string): ProjectSkillScope | null =>
+  Match.value(scopeId).pipe(
+    Match.when("skills", () => projectSkillScope("skills")),
+    Match.when("agents-skills", () => projectSkillScope("agents/skills")),
+    Match.when("agents-dot-skills", () => projectSkillScope("agents/.skills")),
+    Match.when("claude-skills", () => projectSkillScope("claude/skills")),
+    Match.when("codex-skills", () => projectSkillScope("codex/skills")),
+    Match.when("gemini-skills", () => projectSkillScope("gemini/skills")),
+    Match.when("grok-skills", () => projectSkillScope("grok/skills")),
+    Match.orElse(() => null)
+  )
 
-const skillScopeFromBody = (scope: string): ProjectSkillScope | null => {
-  switch (scope) {
-    case "skills":
-    case "agents/skills":
-    case "agents/.skills":
-    case "claude/skills":
-    case "codex/skills":
-    case "gemini/skills":
-      return scope as ProjectSkillScope
-    default:
-      return null
-  }
-}
+export const skillScopeToId = (scope: ProjectSkillScope): string =>
+  Match.value(scope).pipe(
+    Match.when("skills", () => "skills"),
+    Match.when("agents/skills", () => "agents-skills"),
+    Match.when("agents/.skills", () => "agents-dot-skills"),
+    Match.when("claude/skills", () => "claude-skills"),
+    Match.when("codex/skills", () => "codex-skills"),
+    Match.when("gemini/skills", () => "gemini-skills"),
+    Match.when("grok/skills", () => "grok-skills"),
+    Match.exhaustive
+  )
+
+const skillScopeFromBody = (scope: string): ProjectSkillScope | null =>
+  Match.value(scope).pipe(
+    Match.when("skills", () => projectSkillScope("skills")),
+    Match.when("agents/skills", () => projectSkillScope("agents/skills")),
+    Match.when("agents/.skills", () => projectSkillScope("agents/.skills")),
+    Match.when("claude/skills", () => projectSkillScope("claude/skills")),
+    Match.when("codex/skills", () => projectSkillScope("codex/skills")),
+    Match.when("gemini/skills", () => projectSkillScope("gemini/skills")),
+    Match.when("grok/skills", () => projectSkillScope("grok/skills")),
+    Match.orElse(() => null)
+  )
 const readProjectPortForwardRequest = () => HttpServerRequest.schemaBodyJson(ProjectPortForwardRequestSchema)
 const readProjectDatabaseProfileRequest = () => HttpServerRequest.schemaBodyJson(ProjectDatabaseProfileRequestSchema)
 const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitRequestSchema)

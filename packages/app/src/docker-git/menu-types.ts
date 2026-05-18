@@ -90,17 +90,22 @@ export type AuthFlow =
   | "GeminiOauth"
   | "GeminiApiKey"
   | "GeminiLogout"
+  | "GrokOauth"
+  | "GrokApiKey"
+  | "GrokLogout"
 
 export interface AuthSnapshot {
   readonly globalEnvPath: string
   readonly claudeAuthPath: string
   readonly geminiAuthPath: string
+  readonly grokAuthPath: string
   readonly totalEntries: number
   readonly githubTokenEntries: number
   readonly gitTokenEntries: number
   readonly gitUserEntries: number
   readonly claudeAuthEntries: number
   readonly geminiAuthEntries: number
+  readonly grokAuthEntries: number
 }
 
 export type ProjectAuthFlow =
@@ -112,6 +117,8 @@ export type ProjectAuthFlow =
   | "ProjectClaudeDisconnect"
   | "ProjectGeminiConnect"
   | "ProjectGeminiDisconnect"
+  | "ProjectGrokConnect"
+  | "ProjectGrokDisconnect"
 
 export interface ProjectAuthSnapshot {
   readonly projectDir: string
@@ -120,14 +127,17 @@ export interface ProjectAuthSnapshot {
   readonly envProjectPath: string
   readonly claudeAuthPath: string
   readonly geminiAuthPath: string
+  readonly grokAuthPath: string
   readonly githubTokenEntries: number
   readonly gitTokenEntries: number
   readonly claudeAuthEntries: number
   readonly geminiAuthEntries: number
+  readonly grokAuthEntries: number
   readonly activeGithubLabel: string | null
   readonly activeGitLabel: string | null
   readonly activeClaudeLabel: string | null
   readonly activeGeminiLabel: string | null
+  readonly activeGrokLabel: string | null
 }
 
 export type ViewState =

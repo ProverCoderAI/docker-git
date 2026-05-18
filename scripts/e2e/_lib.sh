@@ -134,6 +134,73 @@ dg_ensure_node_gyp() {
   export PATH="$node_gyp_bin:$PATH"
 }
 
+dg_pick_free_port() {
+  local first_port="$1"
+  local last_port="$2"
+  local host="${3:-127.0.0.1}"
+
+  if ! command -v node >/dev/null 2>&1; then
+    echo "e2e: node is required to pick a free TCP port" >&2
+    return 1
+  fi
+
+  node - "$first_port" "$last_port" "$host" <<'NODE'
+const net = require("node:net")
+
+const [firstRaw, lastRaw, host] = process.argv.slice(2)
+const first = Number.parseInt(firstRaw, 10)
+const last = Number.parseInt(lastRaw, 10)
+
+if (!Number.isInteger(first) || !Number.isInteger(last) || first < 1 || last > 65535 || first > last) {
+  console.error(`e2e: invalid port range: ${firstRaw}-${lastRaw}`)
+  process.exit(1)
+}
+
+const canListen = (port) =>
+  new Promise((resolve) => {
+    const server = net.createServer()
+    server.unref()
+    server.once("error", () => resolve(false))
+    server.listen({ host, port, exclusive: true }, () => {
+      server.close(() => resolve(true))
+    })
+  })
+
+;(async () => {
+  const count = last - first + 1
+  const start = Math.floor(Math.random() * count)
+
+  for (let offset = 0; offset < count; offset += 1) {
+    const port = first + ((start + offset) % count)
+    if (await canListen(port)) {
+      console.log(port)
+      return
+    }
+  }
+
+  console.error(`e2e: no free TCP port on ${host} in range ${first}-${last}`)
+  process.exit(1)
+})().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+})
+NODE
+}
+
+dg_require_free_port() {
+  local first_port="$1"
+  local last_port="$2"
+  local label="${3:-TCP}"
+  local port
+
+  if ! port="$(dg_pick_free_port "$first_port" "$last_port")" || [[ -z "$port" ]]; then
+    echo "e2e: failed to pick free ${label} port in range ${first_port}-${last_port}" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$port"
+}
+
 dg_controller_container_name() {
   printf '%s\n' "${DOCKER_GIT_API_CONTAINER_NAME:-docker-git-api}"
 }

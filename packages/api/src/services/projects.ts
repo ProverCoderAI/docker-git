@@ -438,6 +438,8 @@ const toCreateRawOptions = (request: CreateProjectRequest): RawOptions => ({
   ...(request.skipGithubAuth === undefined ? {} : { skipGithubAuth: request.skipGithubAuth }),
   ...(request.codexTokenLabel === undefined ? {} : { codexTokenLabel: request.codexTokenLabel }),
   ...(request.claudeTokenLabel === undefined ? {} : { claudeTokenLabel: request.claudeTokenLabel }),
+  ...(request.geminiTokenLabel === undefined ? {} : { geminiTokenLabel: request.geminiTokenLabel }),
+  ...(request.grokTokenLabel === undefined ? {} : { grokTokenLabel: request.grokTokenLabel }),
   ...(request.agentAutoMode === undefined ? {} : { agentAutoMode: request.agentAutoMode }),
   ...(request.up === undefined ? {} : { up: request.up }),
   ...(request.openSsh === undefined ? {} : { openSsh: request.openSsh }),

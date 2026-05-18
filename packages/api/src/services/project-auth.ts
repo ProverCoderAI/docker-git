@@ -9,6 +9,7 @@ import { renderError, type AppError } from "@effect-template/lib/usecases/errors
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import { autoSyncState } from "@effect-template/lib/usecases/state-repo"
 import { normalizeAccountLabel } from "@effect-template/lib/usecases/auth-helpers"
+import { hasGrokAuthJsonCredentialText, hasGrokUserSettingsCredentialText } from "@effect-template/lib/usecases/auth-grok-credential-text"
 
 import type { ProjectAuthFlow, ProjectAuthRequest, ProjectAuthSnapshot, ProjectDetails } from "../api/contracts.js"
 import { ApiBadRequestError } from "../api/errors.js"
@@ -17,6 +18,7 @@ type ProjectAuthRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.Co
 
 const claudeAuthRoot = `${defaultProjectsRoot(process.cwd())}/.orch/auth/claude`
 const geminiAuthRoot = `${defaultProjectsRoot(process.cwd())}/.orch/auth/gemini`
+const grokAuthRoot = `${defaultProjectsRoot(process.cwd())}/.orch/auth/grok`
 const globalEnvPath = `${defaultProjectsRoot(process.cwd())}/.orch/env/global.env`
 
 const githubTokenBaseKey = "GITHUB_TOKEN"
@@ -26,7 +28,9 @@ const projectGithubLabelKey = "GITHUB_AUTH_LABEL"
 const projectGitLabelKey = "GIT_AUTH_LABEL"
 const projectClaudeLabelKey = "CLAUDE_AUTH_LABEL"
 const projectGeminiLabelKey = "GEMINI_AUTH_LABEL"
+const projectGrokLabelKey = "GROK_AUTH_LABEL"
 const defaultGitUser = "x-access-token"
+const grokEnvApiKeyNames: ReadonlyArray<string> = ["GROK_DEPLOYMENT_KEY", "GROK_API_KEY", "XAI_API_KEY"]
 
 const normalizeLabel = (value: string): string => {
   const trimmed = value.trim()
@@ -170,7 +174,8 @@ const hasClaudeAccountCredentials = (
 
 const hasApiKeyInEnvFile = (
   fs: FileSystem.FileSystem,
-  envFilePath: string
+  envFilePath: string,
+  key: string
 ): Effect.Effect<boolean, PlatformError> =>
   Effect.gen(function*(_) {
     const hasFile = yield* _(hasFileAtPath(fs, envFilePath))
@@ -179,17 +184,32 @@ const hasApiKeyInEnvFile = (
     }
 
     const envContent = yield* _(fs.readFileString(envFilePath), Effect.orElseSucceed(() => ""))
+    const prefix = `${key}=`
     for (const line of envContent.split("\n")) {
       const trimmed = line.trim()
-      if (!trimmed.startsWith("GEMINI_API_KEY=")) {
+      if (!trimmed.startsWith(prefix)) {
         continue
       }
-      const value = trimmed.slice("GEMINI_API_KEY=".length).replaceAll(/^['"]|['"]$/g, "").trim()
+      const value = trimmed.slice(prefix.length).replaceAll(/^['"]|['"]$/g, "").trim()
       if (value.length > 0) {
         return true
       }
     }
     return false
+  })
+
+const hasNonEmptyApiKeyFile = (
+  fs: FileSystem.FileSystem,
+  filePath: string
+): Effect.Effect<boolean, PlatformError> =>
+  Effect.gen(function*(_) {
+    const hasFile = yield* _(hasFileAtPath(fs, filePath))
+    if (!hasFile) {
+      return false
+    }
+
+    const apiKey = yield* _(fs.readFileString(filePath), Effect.orElseSucceed(() => ""))
+    return apiKey.trim().length > 0
   })
 
 const checkAnyFileExists = (
@@ -217,7 +237,7 @@ const hasGeminiAccountCredentials = (
         return Effect.succeed(true)
       }
 
-      return hasApiKeyInEnvFile(fs, `${accountPath}/.env`).pipe(
+      return hasApiKeyInEnvFile(fs, `${accountPath}/.env`, "GEMINI_API_KEY").pipe(
         Effect.flatMap((hasEnvApiKey) => {
           if (hasEnvApiKey) {
             return Effect.succeed(true)
@@ -227,6 +247,62 @@ const hasGeminiAccountCredentials = (
             "credentials.json",
             "application_default_credentials.json"
           ])
+        })
+      )
+    })
+  )
+
+const hasGrokUserSettingsCredentials = (
+  fs: FileSystem.FileSystem,
+  settingsPath: string
+): Effect.Effect<boolean, PlatformError> =>
+  Effect.gen(function*(_) {
+    const hasFile = yield* _(hasFileAtPath(fs, settingsPath))
+    if (!hasFile) {
+      return false
+    }
+
+    const settingsText = yield* _(fs.readFileString(settingsPath), Effect.orElseSucceed(() => ""))
+    return hasGrokUserSettingsCredentialText(settingsText)
+  })
+
+const hasGrokAuthJsonCredentials = (
+  fs: FileSystem.FileSystem,
+  authJsonPath: string
+): Effect.Effect<boolean, PlatformError> =>
+  Effect.gen(function*(_) {
+    const hasFile = yield* _(hasFileAtPath(fs, authJsonPath))
+    if (!hasFile) {
+      return false
+    }
+
+    const authJsonText = yield* _(fs.readFileString(authJsonPath), Effect.orElseSucceed(() => ""))
+    return hasGrokAuthJsonCredentialText(authJsonText)
+  })
+
+const hasGrokAccountCredentials = (
+  fs: FileSystem.FileSystem,
+  accountPath: string
+): Effect.Effect<boolean, PlatformError> =>
+  hasNonEmptyApiKeyFile(fs, `${accountPath}/.api-key`).pipe(
+    Effect.flatMap((hasApiKey) => {
+      if (hasApiKey) {
+        return Effect.succeed(true)
+      }
+
+      return Effect.forEach(grokEnvApiKeyNames, (key) => hasApiKeyInEnvFile(fs, `${accountPath}/.env`, key)).pipe(
+        Effect.map((results) => results.some((result) => result)),
+        Effect.flatMap((hasEnvApiKey) => {
+          if (hasEnvApiKey) {
+            return Effect.succeed(true)
+          }
+          return hasGrokAuthJsonCredentials(fs, `${accountPath}/.grok/auth.json`).pipe(
+            Effect.flatMap((hasAuthJson) =>
+              hasAuthJson
+                ? Effect.succeed(true)
+                : hasGrokUserSettingsCredentials(fs, `${accountPath}/.grok/user-settings.json`)
+            )
+          )
         })
       )
     })
@@ -298,23 +374,27 @@ export const readProjectAuthSnapshot = (
     Effect.flatMap(({ fs, path, globalEnvText, projectEnvText }) =>
       Effect.all({
         claudeAuthEntries: countAuthAccountDirectories(fs, path, claudeAuthRoot),
-        geminiAuthEntries: countAuthAccountDirectories(fs, path, geminiAuthRoot)
+        geminiAuthEntries: countAuthAccountDirectories(fs, path, geminiAuthRoot),
+        grokAuthEntries: countAuthAccountDirectories(fs, path, grokAuthRoot)
       }).pipe(
-        Effect.map(({ claudeAuthEntries, geminiAuthEntries }) => ({
+        Effect.map(({ claudeAuthEntries, geminiAuthEntries, grokAuthEntries }) => ({
           projectDir: project.projectDir,
           projectName: project.displayName,
           envGlobalPath: globalEnvPath,
           envProjectPath: project.envProjectPath,
           claudeAuthPath: claudeAuthRoot,
           geminiAuthPath: geminiAuthRoot,
+          grokAuthPath: grokAuthRoot,
           githubTokenEntries: countKeyEntries(globalEnvText, githubTokenBaseKey),
           gitTokenEntries: countKeyEntries(globalEnvText, gitTokenBaseKey),
           claudeAuthEntries,
           geminiAuthEntries,
+          grokAuthEntries,
           activeGithubLabel: findEnvValue(projectEnvText, projectGithubLabelKey),
           activeGitLabel: findEnvValue(projectEnvText, projectGitLabelKey),
           activeClaudeLabel: findEnvValue(projectEnvText, projectClaudeLabelKey),
-          activeGeminiLabel: findEnvValue(projectEnvText, projectGeminiLabelKey)
+          activeGeminiLabel: findEnvValue(projectEnvText, projectGeminiLabelKey),
+          activeGrokLabel: findEnvValue(projectEnvText, projectGrokLabelKey)
         }))
       )
     )
@@ -330,6 +410,8 @@ const resolveSyncMessage = (flow: ProjectAuthFlow, label: string, displayName: s
     Match.when("ProjectClaudeDisconnect", () => `chore(state): project auth claude logout ${displayName}`),
     Match.when("ProjectGeminiConnect", () => `chore(state): project auth gemini ${label} ${displayName}`),
     Match.when("ProjectGeminiDisconnect", () => `chore(state): project auth gemini logout ${displayName}`),
+    Match.when("ProjectGrokConnect", () => `chore(state): project auth grok ${label} ${displayName}`),
+    Match.when("ProjectGrokDisconnect", () => `chore(state): project auth grok logout ${displayName}`),
     Match.exhaustive
   )
 
@@ -404,6 +486,21 @@ const resolveProjectEnvUpdate = (
           )),
         Match.when("ProjectGeminiDisconnect", () =>
           Effect.succeed(upsertEnvKey(projectEnvText, projectGeminiLabelKey, ""))
+        ),
+        Match.when("ProjectGrokConnect", () =>
+          findFirstCredentialsMatch(
+            fs,
+            resolveAccountCandidates(grokAuthRoot, normalizeAccountLabel(request.label ?? null, "default")),
+            hasGrokAccountCredentials
+          ).pipe(
+            Effect.flatMap((matched) =>
+              matched === null
+                ? Effect.fail(missingSecret("Grok credentials (.api-key, GROK_DEPLOYMENT_KEY, or auth.json)", normalizedLabel, grokAuthRoot))
+                : Effect.succeed(upsertEnvKey(projectEnvText, projectGrokLabelKey, normalizedLabel))
+            )
+          )),
+        Match.when("ProjectGrokDisconnect", () =>
+          Effect.succeed(upsertEnvKey(projectEnvText, projectGrokLabelKey, ""))
         ),
         Match.exhaustive
       )

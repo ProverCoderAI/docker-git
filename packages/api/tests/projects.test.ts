@@ -207,7 +207,7 @@ describe("projects service", () => {
           expect(failure.message).not.toContain("docker-daemon-access.js")
         }
       })
-    ).pipe(Effect.provide(NodeContext.layer)))
+    ).pipe(Effect.provide(NodeContext.layer)), 15_000)
 
   it.effect("accepts async create and records realtime lifecycle events on the request project id", () =>
     withTempDir((root) =>

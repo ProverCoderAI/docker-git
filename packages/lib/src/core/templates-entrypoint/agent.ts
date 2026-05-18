@@ -1,7 +1,7 @@
 import { Match } from "effect"
 import type { TemplateConfig } from "../domain.js"
 
-type AgentMode = "claude" | "codex" | "gemini"
+type AgentMode = "claude" | "codex" | "gemini" | "grok"
 
 const indentBlock = (block: string, size = 2): string => {
   const prefix = " ".repeat(size)
@@ -40,6 +40,7 @@ AGENT_ENV_FILE="/run/docker-git/agent-env.sh"
   [[ -f /etc/profile.d/gh-token.sh ]] && cat /etc/profile.d/gh-token.sh
   [[ -f /etc/profile.d/claude-config.sh ]] && cat /etc/profile.d/claude-config.sh
   [[ -f /etc/profile.d/gemini-config.sh ]] && cat /etc/profile.d/gemini-config.sh
+  [[ -f /etc/profile.d/grok-config.sh ]] && cat /etc/profile.d/grok-config.sh
 } > "$AGENT_ENV_FILE" 2>/dev/null || true
 chmod 644 "$AGENT_ENV_FILE"`,
     renderAgentPrompt(),
@@ -60,6 +61,8 @@ const renderAgentPromptCommand = (mode: AgentMode): string =>
     ),
     Match.when("codex", () => String.raw`MCP_PLAYWRIGHT_ISOLATED=1 codex exec \"\$(cat \"$AGENT_PROMPT_FILE\")\"`),
     Match.when("gemini", () => String.raw`gemini --approval-mode=yolo \"\$(cat \"$AGENT_PROMPT_FILE\")\"`),
+    Match.when("grok", () =>
+      String.raw`MCP_PLAYWRIGHT_ISOLATED=1 grok --no-sandbox -p \"\$(cat \"$AGENT_PROMPT_FILE\")\"`),
     Match.exhaustive
   )
 
@@ -98,6 +101,7 @@ const renderAgentModeCase = (config: TemplateConfig): string =>
     indentBlock(renderAgentModeBlock(config, "claude")),
     indentBlock(renderAgentModeBlock(config, "codex")),
     indentBlock(renderAgentModeBlock(config, "gemini")),
+    indentBlock(renderAgentModeBlock(config, "grok")),
     indentBlock(
       String.raw`*)
   echo "[agent] unknown agent mode: $AGENT_MODE"

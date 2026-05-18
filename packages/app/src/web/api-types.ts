@@ -79,6 +79,8 @@ export type AuthMenuFlow =
   | "ClaudeLogout"
   | "GeminiApiKey"
   | "GeminiLogout"
+  | "GrokApiKey"
+  | "GrokLogout"
 
 export type ProjectAuthFlow =
   | "ProjectGithubConnect"
@@ -89,5 +91,7 @@ export type ProjectAuthFlow =
   | "ProjectClaudeDisconnect"
   | "ProjectGeminiConnect"
   | "ProjectGeminiDisconnect"
+  | "ProjectGrokConnect"
+  | "ProjectGrokDisconnect"
 
 export { type TerminalServerMessage, type TerminalSession } from "../shared/terminal-session-schema.js"

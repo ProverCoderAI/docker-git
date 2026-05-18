@@ -6,7 +6,7 @@ import { Effect, pipe } from "effect"
 import type { ProjectDetails } from "../api/contracts.js"
 import { ApiBadRequestError } from "../api/errors.js"
 
-export type ProjectPromptKind = "claude" | "codex" | "gemini"
+export type ProjectPromptKind = "claude" | "codex" | "gemini" | "grok"
 
 export type ProjectPromptFile = {
   readonly kind: ProjectPromptKind
@@ -28,7 +28,8 @@ export type ProjectPromptsSnapshot = {
 const promptDescriptors: ReadonlyArray<{ kind: ProjectPromptKind; fileName: string }> = [
   { kind: "claude", fileName: "CLAUDE.md" },
   { kind: "codex", fileName: "AGENTS.md" },
-  { kind: "gemini", fileName: "GEMINI.md" }
+  { kind: "gemini", fileName: "GEMINI.md" },
+  { kind: "grok", fileName: "GROK.md" }
 ]
 
 const maxPromptBytes = 1024 * 256

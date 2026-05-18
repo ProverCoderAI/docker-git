@@ -27,6 +27,7 @@ const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateCo
   codexAuthPath: "/workspace/.orch/auth/codex",
   codexSharedAuthPath: "/workspace/.orch/auth/codex-shared",
   geminiAuthPath: "/workspace/.orch/auth/gemini",
+  grokAuthPath: "/workspace/.orch/auth/grok",
   gpu: "none",
   ...overrides
 })
@@ -212,6 +213,19 @@ describe("renderDockerfile", () => {
       "install -m 0755 /opt/docker-git/tools/docker-git-session-sync /usr/local/bin/docker-git-session-sync"
     ])
     expect(dockerfile).not.toContain("glab_1.93.0_linux_\\$GLAB_ARCH.deb")
+  })
+
+  it("installs Grok CLI for generated project containers", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expectContainsAll(dockerfile, [
+      "https://x.ai/cli/install.sh",
+      "GROK_BIN_DIR=/usr/local/bin bash /tmp/grok-install.sh 0.1.211",
+      "grok --version"
+    ])
+    expect(dockerfile).not.toContain("grok-dev")
+    expect(dockerfile).not.toContain("npm install -g grok-dev")
+    expect(dockerfile).not.toContain("grok --version >/dev/null || true")
   })
 })
 
@@ -407,7 +421,7 @@ describe("renderEntrypoint auth bridge", () => {
     ])
   })
 
-  it("renders Codex and Gemini project rules wiring", () => {
+  it("renders Codex, Gemini and Grok project rules wiring", () => {
     const entrypoint = renderAuthEntrypoint()
 
     expectContainsAll(entrypoint, [
@@ -418,6 +432,7 @@ describe("renderEntrypoint auth bridge", () => {
       "docker_git_prepare_active_agent_project_rules()",
       "docker_git_detect_claude_project_rules()",
       "docker_git_detect_gemini_project_rules()",
+      "docker_git_detect_grok_project_rules()",
       "DOCKER_GIT_RTK_ENABLE=\"${DOCKER_GIT_RTK_ENABLE:-1}\"",
       "DOCKER_GIT_RTK_ENABLE=1",
       "docker_git_rtk_init_as_user()",
@@ -430,6 +445,7 @@ describe("renderEntrypoint auth bridge", () => {
       "\"codex\")",
       "\"claude\")",
       "\"gemini\")",
+      "\"grok\")",
       'MCP_PLAYWRIGHT_ISOLATED="${MCP_PLAYWRIGHT_ISOLATED:-0}"',
       "\"20-agents-skills::.agents/skills\"",
       "\"30-agents-dot-skills::.agents/.skills\"",
@@ -440,8 +456,12 @@ describe("renderEntrypoint auth bridge", () => {
       "$project_dir/.gemini/settings.json",
       "$project_dir/.gemini/commands",
       "$project_dir/.gemini/skills",
+      "$project_dir/.grok/settings.json",
+      "$project_dir/.grok/commands",
+      "$project_dir/.grok/skills",
       "MCP_PLAYWRIGHT_ISOLATED=1 codex exec",
-      "MCP_PLAYWRIGHT_ISOLATED=1 claude --dangerously-skip-permissions -p"
+      "MCP_PLAYWRIGHT_ISOLATED=1 claude --dangerously-skip-permissions -p",
+      "MCP_PLAYWRIGHT_ISOLATED=1 grok --no-sandbox -p"
     ])
     expect(entrypoint).not.toContain("codex --approval-mode full-auto")
     expect(entrypoint).not.toContain("\"40-claude-skills::.claude/skills\"")
@@ -466,7 +486,66 @@ describe("renderEntrypoint auth bridge", () => {
     expect(entrypoint.split("SUBAGENTS_LINE=").length - 1).toBeGreaterThanOrEqual(1)
   })
 
-  it("renders system-prompt override hooks for codex/claude/gemini", () => {
+  it("renders Grok API env expansion without escaping bash defaults", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      'GROK_LABEL_RAW="${GROK_AUTH_LABEL:-}"',
+      'export GROK_AUTH_LABEL="$GROK_LABEL_NORM"',
+      'elif [[ -n "${GROK_DEPLOYMENT_KEY:-}" ]]; then',
+      'elif [[ -n "${GROK_API_KEY:-}" ]]; then',
+      'elif [[ -n "${XAI_API_KEY:-}" ]]; then',
+      "Priority: selected account files, then GROK_DEPLOYMENT_KEY, GROK_API_KEY, XAI_API_KEY.",
+      'docker_git_upsert_ssh_env "GROK_DEPLOYMENT_KEY" "${GROK_DEPLOYMENT_KEY:-}"',
+      'export GROK_DEPLOYMENT_KEY="$RESOLVED_GROK_API_KEY"',
+      'docker_git_upsert_ssh_env "GROK_API_KEY" "${GROK_API_KEY:-}"',
+      'docker_git_upsert_ssh_env "XAI_API_KEY" "${XAI_API_KEY:-}"'
+    ])
+    expect(entrypoint).not.toContain('GROK_LABEL_RAW="$GROK_AUTH_LABEL"')
+    expect(entrypoint).not.toContain("\\${GROK_DEPLOYMENT_KEY:-}")
+    expect(entrypoint).not.toContain("\\${GROK_API_KEY:-}")
+    expect(entrypoint).not.toContain("\\${XAI_API_KEY:-}")
+    expect(entrypoint).not.toContain('export XAI_API_KEY="$GROK_API_KEY"')
+    expect(entrypoint).not.toContain('export GROK_DEPLOYMENT_KEY="${GROK_API_KEY:-}"')
+    expect(entrypoint).not.toContain('export GROK_API_KEY="${XAI_API_KEY:-}"')
+  })
+
+  it("renders Grok file ownership from the configured SSH user", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      'GROK_SETTINGS_OWNER_UID="$(id -u "dev" 2>/dev/null || id -u)"',
+      'GROK_SETTINGS_OWNER_GID="$(id -g "dev" 2>/dev/null || id -g)"',
+      'chown -R "$GROK_SETTINGS_OWNER_UID:$GROK_SETTINGS_OWNER_GID" "$GROK_SETTINGS_DIR" || true',
+      'GROK_NOTICE_OWNER_UID="$(id -u "dev" 2>/dev/null || id -u)"',
+      'GROK_NOTICE_OWNER_GID="$(id -g "dev" 2>/dev/null || id -g)"',
+      'chown "$GROK_NOTICE_OWNER_UID:$GROK_NOTICE_OWNER_GID" "$GROK_MD_PATH" || true',
+      "Risk rationale: Grok runs inside an isolated per-project container."
+    ])
+    expect(entrypoint).not.toContain('chown -R 1000:1000 "$GROK_SETTINGS_DIR"')
+    expect(entrypoint).not.toContain('chown 1000:1000 "$GROK_MD_PATH"')
+  })
+
+  it("replaces migrated Grok home files with selected-label symlinks", () => {
+    const entrypoint = renderAuthEntrypoint()
+    const copyIndex = entrypoint.indexOf('cp "$link_path" "$source_path" || true')
+    const dirGuardIndex = entrypoint.indexOf('if [[ -d "$link_path" ]]; then', copyIndex)
+    const linkIndex = entrypoint.indexOf('ln -sfn "$source_path" "$link_path" || true', dirGuardIndex)
+
+    expectContainsAll(entrypoint, [
+      'cp "$link_path" "$source_path" || true',
+      'chmod 0600 "$source_path" || true',
+      'if [[ -d "$link_path" ]]; then',
+      'ln -sfn "$source_path" "$link_path" || true',
+      'docker_git_link_grok_file "$GROK_CONFIG_DIR/.api-key" "$GROK_HOME_DIR/.api-key"',
+      'docker_git_link_grok_file "$GROK_SHARED_HOME_DIR/auth.json" "$GROK_HOME_DIR/auth.json"'
+    ])
+    expect(copyIndex).toBeGreaterThanOrEqual(0)
+    expect(dirGuardIndex).toBeGreaterThan(copyIndex)
+    expect(linkIndex).toBeGreaterThan(dirGuardIndex)
+  })
+
+  it("renders system-prompt override hooks for codex/claude/gemini/grok", () => {
     const entrypoint = renderAuthEntrypoint()
 
     expectContainsAll(entrypoint, [
@@ -487,7 +566,13 @@ describe("renderEntrypoint auth bridge", () => {
       "GEMINI_DEFAULT_PROMPT_BODY=\"$(docker_git_decode_unicode_escapes \"$GEMINI_DEFAULT_PROMPT_BODY\")\"",
       "GEMINI_PROMPT_BODY=\"$(cat \"$GEMINI_SYSTEM_PROMPT_OVERRIDE_FILE\")\"",
       "GEMINI_PROMPT_BODY=\"$GEMINI_SYSTEM_PROMPT_OVERRIDE\"",
-      "GEMINI_PROMPT_BODY=\"$GEMINI_DEFAULT_PROMPT_BODY\""
+      "GEMINI_PROMPT_BODY=\"$GEMINI_DEFAULT_PROMPT_BODY\"",
+      "GROK_SYSTEM_PROMPT_OVERRIDE_FILE=\"${GROK_SYSTEM_PROMPT_OVERRIDE_FILE:-}\"",
+      "GROK_SYSTEM_PROMPT_OVERRIDE=\"${GROK_SYSTEM_PROMPT_OVERRIDE:-}\"",
+      "GROK_DEFAULT_PROMPT_BODY=\"$(docker_git_decode_unicode_escapes \"$GROK_DEFAULT_PROMPT_BODY\")\"",
+      "GROK_PROMPT_BODY=\"$(cat \"$GROK_SYSTEM_PROMPT_OVERRIDE_FILE\")\"",
+      "GROK_PROMPT_BODY=\"$GROK_SYSTEM_PROMPT_OVERRIDE\"",
+      "GROK_PROMPT_BODY=\"$GROK_DEFAULT_PROMPT_BODY\""
     ])
   })
 

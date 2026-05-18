@@ -52,6 +52,13 @@ const TemplateConfigInputSchema = Schema.Struct({
   geminiHome: Schema.optionalWith(Schema.String, {
     default: () => defaultTemplateConfig.geminiHome
   }),
+  grokAuthLabel: Schema.optional(Schema.String),
+  grokAuthPath: Schema.optionalWith(Schema.String, {
+    default: () => defaultTemplateConfig.grokAuthPath
+  }),
+  grokHome: Schema.optionalWith(Schema.String, {
+    default: () => defaultTemplateConfig.grokHome
+  }),
   cpuLimit: Schema.optionalWith(Schema.String, {
     default: () => defaultTemplateConfig.cpuLimit
   }),

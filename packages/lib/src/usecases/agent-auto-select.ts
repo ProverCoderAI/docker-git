@@ -4,6 +4,7 @@ import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
 import type { AgentMode, ParseError, TemplateConfig } from "../core/domain.js"
+import { hasGrokCredentials } from "./auth-grok-helpers.js"
 import { normalizeAccountLabel } from "./auth-helpers.js"
 import { hasNonEmptyFile } from "./auth-sync-helpers.js"
 
@@ -12,6 +13,16 @@ const autoOptionError = (reason: string): ParseError => ({
   option: "--auto",
   reason
 })
+
+type AvailableAgentAuth = {
+  readonly claudeAvailable: boolean
+  readonly codexAvailable: boolean
+  readonly grokAvailable: boolean
+}
+
+const claudeMode: ReadonlyArray<AgentMode> = ["claude"]
+const codexMode: ReadonlyArray<AgentMode> = ["codex"]
+const grokMode: ReadonlyArray<AgentMode> = ["grok"]
 
 const isRegularFile = (
   fs: FileSystem.FileSystem,
@@ -36,6 +47,15 @@ const hasCodexAuth = (
     ? `${rootPath}/auth.json`
     : `${rootPath}/${normalized}/auth.json`
   return hasNonEmptyFile(fs, authPath)
+}
+
+const hasGrokAuth = (
+  fs: FileSystem.FileSystem,
+  rootPath: string,
+  label: string | undefined
+): Effect.Effect<boolean, PlatformError> => {
+  const normalized = normalizeAccountLabel(label ?? null, "default")
+  return hasGrokCredentials(fs, `${rootPath}/${normalized}`)
 }
 
 const resolveClaudeAccountPath = (rootPath: string, label: string | undefined): ReadonlyArray<string> => {
@@ -77,18 +97,22 @@ const resolveClaudeRoot = (codexSharedAuthPath: string): string =>
 
 const resolveAvailableAgentAuth = (
   fs: FileSystem.FileSystem,
-  config: Pick<TemplateConfig, "claudeAuthLabel" | "codexAuthLabel" | "codexSharedAuthPath">
-): Effect.Effect<{ readonly claudeAvailable: boolean; readonly codexAvailable: boolean }, PlatformError> =>
+  config: Pick<
+    TemplateConfig,
+    "claudeAuthLabel" | "codexAuthLabel" | "codexSharedAuthPath" | "grokAuthLabel" | "grokAuthPath"
+  >
+): Effect.Effect<AvailableAgentAuth, PlatformError> =>
   Effect.gen(function*(_) {
     const claudeAvailable = yield* _(
       hasClaudeAuth(fs, resolveClaudeRoot(config.codexSharedAuthPath), config.claudeAuthLabel)
     )
     const codexAvailable = yield* _(hasCodexAuth(fs, config.codexSharedAuthPath, config.codexAuthLabel))
-    return { claudeAvailable, codexAvailable }
+    const grokAvailable = yield* _(hasGrokAuth(fs, config.grokAuthPath, config.grokAuthLabel))
+    return { claudeAvailable, codexAvailable, grokAvailable }
   })
 
 const resolveExplicitAutoAgentMode = (
-  available: { readonly claudeAvailable: boolean; readonly codexAvailable: boolean },
+  available: AvailableAgentAuth,
   mode: AgentMode | undefined
 ): Effect.Effect<AgentMode | undefined, ParseError> => {
   if (mode === "claude") {
@@ -101,26 +125,43 @@ const resolveExplicitAutoAgentMode = (
       ? Effect.succeed("codex")
       : Effect.fail(autoOptionError("Codex auth not found"))
   }
+  if (mode === "grok") {
+    return available.grokAvailable
+      ? Effect.succeed("grok")
+      : Effect.fail(autoOptionError("Grok auth not found"))
+  }
   return Effect.sync(() => mode)
 }
 
-const pickRandomAutoAgentMode = (
-  available: { readonly claudeAvailable: boolean; readonly codexAvailable: boolean }
-): Effect.Effect<AgentMode, ParseError> => {
-  if (!available.claudeAvailable && !available.codexAvailable) {
-    return Effect.fail(autoOptionError("no Claude or Codex auth found"))
+const availableAgentModes = (available: AvailableAgentAuth): ReadonlyArray<AgentMode> => [
+  ...(available.claudeAvailable ? claudeMode : []),
+  ...(available.codexAvailable ? codexMode : []),
+  ...(available.grokAvailable ? grokMode : [])
+]
+
+const pickRandomAutoAgentMode = (available: AvailableAgentAuth): Effect.Effect<AgentMode, ParseError> => {
+  const modes = availableAgentModes(available)
+  const firstMode = modes[0]
+  if (firstMode === undefined) {
+    return Effect.fail(autoOptionError("no Claude, Codex or Grok auth found"))
   }
-  if (available.claudeAvailable && !available.codexAvailable) {
-    return Effect.succeed("claude")
+  if (modes.length === 1) {
+    return Effect.succeed(firstMode)
   }
-  if (!available.claudeAvailable && available.codexAvailable) {
-    return Effect.succeed("codex")
-  }
-  return Effect.sync(() => (process.hrtime.bigint() % 2n === 0n ? "claude" : "codex"))
+  return Effect.sync(() => modes[Number(process.hrtime.bigint() % BigInt(modes.length))] ?? firstMode)
 }
 
 export const resolveAutoAgentMode = (
-  config: Pick<TemplateConfig, "agentAuto" | "agentMode" | "claudeAuthLabel" | "codexAuthLabel" | "codexSharedAuthPath">
+  config: Pick<
+    TemplateConfig,
+    | "agentAuto"
+    | "agentMode"
+    | "claudeAuthLabel"
+    | "codexAuthLabel"
+    | "codexSharedAuthPath"
+    | "grokAuthLabel"
+    | "grokAuthPath"
+  >
 ): Effect.Effect<AgentMode | undefined, ParseError | PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)

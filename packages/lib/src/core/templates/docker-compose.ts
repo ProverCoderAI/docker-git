@@ -15,6 +15,8 @@ type ComposeFragments = {
   readonly maybeGitTokenLabelEnv: string
   readonly maybeCodexAuthLabelEnv: string
   readonly maybeClaudeAuthLabelEnv: string
+  readonly maybeGeminiAuthLabelEnv: string
+  readonly maybeGrokAuthLabelEnv: string
   readonly maybeAgentModeEnv: string
   readonly maybeAgentAutoEnv: string
   readonly maybeDependsOn: string
@@ -29,6 +31,17 @@ type PlaywrightFragments = Pick<
   ComposeFragments,
   "maybeDependsOn" | "maybeDockerSocketMount" | "maybePlaywrightEnv" | "maybeBrowserVolume"
 >
+
+type AuthEnvFragments = Pick<
+  ComposeFragments,
+  | "maybeGitTokenLabelEnv"
+  | "maybeCodexAuthLabelEnv"
+  | "maybeClaudeAuthLabelEnv"
+  | "maybeGeminiAuthLabelEnv"
+  | "maybeGrokAuthLabelEnv"
+>
+
+type AgentEnvFragments = Pick<ComposeFragments, "maybeAgentModeEnv" | "maybeAgentAutoEnv">
 
 export type DockerComposeRenderOptions = {
   readonly enableLocalDockerSocket: boolean
@@ -64,6 +77,16 @@ const renderClaudeAuthLabelEnv = (claudeAuthLabel: string): string =>
     ? `      CLAUDE_AUTH_LABEL: "${claudeAuthLabel}"\n`
     : ""
 
+const renderGeminiAuthLabelEnv = (geminiAuthLabel: string): string =>
+  geminiAuthLabel.length > 0
+    ? `      GEMINI_AUTH_LABEL: "${geminiAuthLabel}"\n`
+    : ""
+
+const renderGrokAuthLabelEnv = (grokAuthLabel: string): string =>
+  grokAuthLabel.length > 0
+    ? `      GROK_AUTH_LABEL: "${grokAuthLabel}"\n`
+    : ""
+
 const renderAgentModeEnv = (agentMode: string | undefined): string =>
   agentMode !== undefined && agentMode.length > 0
     ? `      AGENT_MODE: "${agentMode}"\n`
@@ -93,6 +116,21 @@ const renderOptionalDockerSocketMount = (enableLocalDockerSocket: boolean): stri
 
 const renderEnvFiles = (config: TemplateConfig): string =>
   `    env_file:\n      - ${config.envGlobalPath}\n      - ${config.envProjectPath}\n`
+
+const optionalTrimmed = (value: string | undefined): string => value?.trim() ?? ""
+
+const buildAuthEnvFragments = (config: TemplateConfig): AuthEnvFragments => ({
+  maybeGitTokenLabelEnv: renderGitTokenLabelEnv(optionalTrimmed(config.gitTokenLabel)),
+  maybeCodexAuthLabelEnv: renderCodexAuthLabelEnv(optionalTrimmed(config.codexAuthLabel)),
+  maybeClaudeAuthLabelEnv: renderClaudeAuthLabelEnv(optionalTrimmed(config.claudeAuthLabel)),
+  maybeGeminiAuthLabelEnv: renderGeminiAuthLabelEnv(optionalTrimmed(config.geminiAuthLabel)),
+  maybeGrokAuthLabelEnv: renderGrokAuthLabelEnv(optionalTrimmed(config.grokAuthLabel))
+})
+
+const buildAgentEnvFragments = (config: TemplateConfig): AgentEnvFragments => ({
+  maybeAgentModeEnv: renderAgentModeEnv(config.agentMode),
+  maybeAgentAutoEnv: renderAgentAutoEnv(config.agentAuto)
+})
 
 const renderBrowserLimitEnv = (
   key: string,
@@ -153,25 +191,16 @@ const buildComposeFragments = (
   const networkName = resolveComposeNetworkName(config)
   const forkRepoUrl = config.forkRepoUrl ?? ""
   const maybeGithubAuthSkipEnv = renderGithubAuthSkipEnv(config.skipGithubAuth)
-  const gitTokenLabel = config.gitTokenLabel?.trim() ?? ""
-  const codexAuthLabel = config.codexAuthLabel?.trim() ?? ""
-  const claudeAuthLabel = config.claudeAuthLabel?.trim() ?? ""
-  const maybeGitTokenLabelEnv = renderGitTokenLabelEnv(gitTokenLabel)
-  const maybeCodexAuthLabelEnv = renderCodexAuthLabelEnv(codexAuthLabel)
-  const maybeClaudeAuthLabelEnv = renderClaudeAuthLabelEnv(claudeAuthLabel)
-  const maybeAgentModeEnv = renderAgentModeEnv(config.agentMode)
-  const maybeAgentAutoEnv = renderAgentAutoEnv(config.agentAuto)
+  const authEnv = buildAuthEnvFragments(config)
+  const agentEnv = buildAgentEnvFragments(config)
   const playwright = buildPlaywrightFragments(config, resourceLimits.playwright, options)
 
   return {
     networkMode,
     networkName,
     maybeGithubAuthSkipEnv,
-    maybeGitTokenLabelEnv,
-    maybeCodexAuthLabelEnv,
-    maybeClaudeAuthLabelEnv,
-    maybeAgentModeEnv,
-    maybeAgentAutoEnv,
+    ...authEnv,
+    ...agentEnv,
     maybeDependsOn: playwright.maybeDependsOn,
     maybeDockerSocketMount: playwright.maybeDockerSocketMount,
     maybePlaywrightEnv: playwright.maybePlaywrightEnv,
@@ -200,7 +229,9 @@ ${renderGpu(config.gpu)}${
 ${fragments.maybeGithubAuthSkipEnv}      # Optional anonymous public GitHub clone override
 ${fragments.maybeGitTokenLabelEnv}      # Optional token label selector (maps to GITHUB_TOKEN__<LABEL>/GIT_AUTH_TOKEN__<LABEL>)
 ${fragments.maybeCodexAuthLabelEnv}      # Optional Codex account label selector (maps to CODEX_AUTH_LABEL)
-${fragments.maybeClaudeAuthLabelEnv}${fragments.maybeAgentModeEnv}${fragments.maybeAgentAutoEnv}      # Optional Claude account label selector (maps to CLAUDE_AUTH_LABEL)
+${fragments.maybeClaudeAuthLabelEnv}      # Optional Claude account label selector (maps to CLAUDE_AUTH_LABEL)
+${fragments.maybeGeminiAuthLabelEnv}      # Optional Gemini account label selector (maps to GEMINI_AUTH_LABEL)
+${fragments.maybeGrokAuthLabelEnv}${fragments.maybeAgentModeEnv}${fragments.maybeAgentAutoEnv}      # Optional Grok account label selector (maps to GROK_AUTH_LABEL)
       # Optional isolated Docker daemon endpoint injected by the API controller.
       DOCKER_GIT_PROJECT_DOCKER_HOST: "\${DOCKER_GIT_PROJECT_DOCKER_HOST:-}"
       TARGET_DIR: "${config.targetDir}"

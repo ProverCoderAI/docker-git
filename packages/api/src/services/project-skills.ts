@@ -13,6 +13,7 @@ export type ProjectSkillScope =
   | "claude/skills"
   | "codex/skills"
   | "gemini/skills"
+  | "grok/skills"
 
 export type ProjectSkillFile = {
   readonly id: string
@@ -39,7 +40,8 @@ const skillScopes: ReadonlyArray<{ scope: ProjectSkillScope; relativeRoot: strin
   { scope: "agents/.skills", relativeRoot: ".agents/.skills" },
   { scope: "claude/skills", relativeRoot: ".claude/skills" },
   { scope: "codex/skills", relativeRoot: ".codex/skills" },
-  { scope: "gemini/skills", relativeRoot: ".gemini/skills" }
+  { scope: "gemini/skills", relativeRoot: ".gemini/skills" },
+  { scope: "grok/skills", relativeRoot: ".grok/skills" }
 ]
 
 const skillFileName = "SKILL.md"

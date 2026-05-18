@@ -33,6 +33,8 @@ export const parseApply = (
       gitTokenLabel: raw.gitTokenLabel,
       codexTokenLabel: raw.codexTokenLabel,
       claudeTokenLabel: raw.claudeTokenLabel,
+      geminiTokenLabel: raw.geminiTokenLabel,
+      grokTokenLabel: raw.grokTokenLabel,
       cpuLimit,
       ramLimit,
       playwrightCpuLimit,

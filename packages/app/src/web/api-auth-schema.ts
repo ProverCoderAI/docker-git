@@ -23,13 +23,19 @@ export const GithubStatusResponseSchema = Schema.Struct({
   status: GithubAuthStatusSchema
 })
 
-export const AuthSnapshotSchema = Schema.Struct({
+const AuthProviderSnapshotFields = {
   claudeAuthEntries: Schema.Number,
   claudeAuthPath: Schema.String,
   geminiAuthEntries: Schema.Number,
   geminiAuthPath: Schema.String,
+  grokAuthEntries: Schema.Number,
+  grokAuthPath: Schema.String,
   githubTokenEntries: Schema.Number,
-  gitTokenEntries: Schema.Number,
+  gitTokenEntries: Schema.Number
+}
+
+export const AuthSnapshotSchema = Schema.Struct({
+  ...AuthProviderSnapshotFields,
   gitUserEntries: Schema.Number,
   globalEnvPath: Schema.String,
   totalEntries: Schema.Number
@@ -43,16 +49,12 @@ export const AuthSnapshotResponseSchema = Schema.Struct({
 export const ProjectAuthSnapshotSchema = Schema.Struct({
   activeClaudeLabel: NullableString,
   activeGeminiLabel: NullableString,
+  activeGrokLabel: NullableString,
   activeGithubLabel: NullableString,
   activeGitLabel: NullableString,
-  claudeAuthEntries: Schema.Number,
-  claudeAuthPath: Schema.String,
+  ...AuthProviderSnapshotFields,
   envGlobalPath: Schema.String,
   envProjectPath: Schema.String,
-  geminiAuthEntries: Schema.Number,
-  geminiAuthPath: Schema.String,
-  githubTokenEntries: Schema.Number,
-  gitTokenEntries: Schema.Number,
   projectDir: Schema.String,
   projectName: Schema.String
 })

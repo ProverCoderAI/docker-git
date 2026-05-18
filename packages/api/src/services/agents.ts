@@ -69,6 +69,9 @@ const pickDefaultCommand = (provider: CreateAgentRequest["provider"]): string =>
   if (provider === "claude") {
     return "MCP_PLAYWRIGHT_ISOLATED=1 claude"
   }
+  if (provider === "grok") {
+    return "MCP_PLAYWRIGHT_ISOLATED=1 grok --no-sandbox"
+  }
   return ""
 }
 

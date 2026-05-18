@@ -25,7 +25,13 @@ bun run docker-git --help
 docker-git auth github login --web
 docker-git auth codex login --web
 docker-git auth claude login --web
+docker-git auth grok login --web
 ```
+
+Grok support uses the official xAI CLI installer from `https://x.ai/cli/install.sh`
+and the CLI device-code login flow. API-key auth can also be stored under the
+selected Grok account label via `GROK_DEPLOYMENT_KEY`, `GROK_API_KEY`, or
+`XAI_API_KEY`.
 
 ## CLI пример
 
@@ -44,8 +50,8 @@ docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force 
 docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122 --force --auto
 ```
 
-- `--auto` сам выбирает Claude или Codex по доступной авторизации. Если доступны оба, выбор случайный.
-- `--auto=claude` или `--auto=codex` принудительно выбирает агента.
+- `--auto` сам выбирает Claude, Codex, Gemini или Grok по доступной авторизации. Если доступно несколько, выбор случайный.
+- `--auto=claude`, `--auto=codex`, `--auto=gemini` или `--auto=grok` принудительно выбирает агента.
 - В auto-режиме агент сам выполняет задачу, создаёт PR и после завершения контейнер очищается.
 
 Применение конфигурации:

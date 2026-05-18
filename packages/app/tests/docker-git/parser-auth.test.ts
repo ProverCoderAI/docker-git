@@ -19,6 +19,27 @@ const expectGitlabLoginCommand = (
   })
 
 describe("parse auth commands", () => {
+  it.effect("parses grok auth commands into the controller-owned auth directory", () =>
+    Effect.sync(() => {
+      const login = parseOrThrow(["auth", "grok", "login", "--label", "Team A", "--web"])
+      const status = parseOrThrow(["auth", "grok", "status", "--label", "Team A"])
+      const logout = parseOrThrow(["auth", "grok", "logout", "--label", "Team A"])
+
+      expect(login._tag).toBe("AuthGrokLogin")
+      expect(status._tag).toBe("AuthGrokStatus")
+      expect(logout._tag).toBe("AuthGrokLogout")
+
+      if (login._tag !== "AuthGrokLogin" || status._tag !== "AuthGrokStatus" || logout._tag !== "AuthGrokLogout") {
+        throw new Error("expected AuthGrok commands")
+      }
+
+      expect(login.label).toBe("Team A")
+      expect(login.grokAuthPath).toBe(".docker-git/.orch/auth/grok")
+      expect(login.isWeb).toBe(true)
+      expect(status.grokAuthPath).toBe(".docker-git/.orch/auth/grok")
+      expect(logout.grokAuthPath).toBe(".docker-git/.orch/auth/grok")
+    }))
+
   it.effect("parses codex auth import into the controller-owned auth directory", () =>
     Effect.sync(() => {
       const command = parseOrThrow(["auth", "codex", "import"])
