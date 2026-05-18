@@ -37,8 +37,6 @@ const buildDockerGrokAuthSpec = (
   containerPath,
   env: [
     `HOME=${containerPath}`,
-    "NO_BROWSER=true",
-    "GROK_NO_BROWSER=true",
     "MCP_PLAYWRIGHT_ISOLATED=1"
   ]
 })
@@ -63,7 +61,7 @@ export const buildDockerGrokAuthArgs = (spec: DockerGrokAuthSpec): ReadonlyArray
     }
     base.push("-e", trimmed)
   }
-  return [...base, spec.image, "grok", "login"]
+  return [...base, spec.image, "grok", "login", "--device-auth"]
 }
 
 const printOauthInstructions = (): Effect.Effect<void> =>

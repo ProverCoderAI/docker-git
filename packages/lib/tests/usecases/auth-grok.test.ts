@@ -6,6 +6,7 @@ import { Effect } from "effect"
 import * as fc from "fast-check"
 
 import { authGrokLogin } from "../../src/usecases/auth-grok.js"
+import { buildDockerGrokAuthArgs } from "../../src/usecases/auth-grok-oauth.js"
 import {
   grokCliInstallScriptUrl,
   grokCliVersion,
@@ -76,6 +77,9 @@ const detectUserSettingsPayload = (
     return yield* _(hasGrokCredentials(fs, accountPath))
   })
 
+const grokOidcAuthScope = "https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828"
+const grokLegacyAuthScope = "https://accounts.x.ai/sign-in"
+
 describe("authGrokLogin", () => {
   it("installs the official xAI Grok CLI in the OAuth helper image", () => {
     const dockerfile = renderGrokDockerfile()
@@ -85,6 +89,21 @@ describe("authGrokLogin", () => {
     expect(dockerfile).toContain("grok --version")
     expect(dockerfile).not.toContain("grok-dev")
     expect(dockerfile).not.toContain("npm install -g grok-dev")
+  })
+
+  it("uses the official Grok device-auth login mode", () => {
+    const args = buildDockerGrokAuthArgs({
+      cwd: "/workspace",
+      image: "docker-git-auth-grok:latest",
+      hostPath: "/host/grok",
+      containerPath: "/grok-home",
+      env: ["HOME=/grok-home", "MCP_PLAYWRIGHT_ISOLATED=1"]
+    })
+
+    expect(args).toContain("MCP_PLAYWRIGHT_ISOLATED=1")
+    expect(args).not.toContain("NO_BROWSER=true")
+    expect(args).not.toContain("GROK_NO_BROWSER=true")
+    expect(args.slice(-4)).toEqual(["docker-git-auth-grok:latest", "grok", "login", "--device-auth"])
   })
 
   it.effect("stores API key and writes Grok settings with Playwright MCP and no sandbox", () =>
@@ -224,10 +243,35 @@ describe("authGrokLogin", () => {
         const credentialsDir = path.join(accountPath, ".grok")
 
         yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
-        yield* _(fs.writeFileString(path.join(credentialsDir, "auth.json"), "{\"scope\":{\"key\":\"xai-oauth\"}}\n"))
+        yield* _(
+          fs.writeFileString(path.join(credentialsDir, "auth.json"), `${JSON.stringify({ [grokOidcAuthScope]: { key: "xai-oauth" } })}\n`)
+        )
 
         const detected = yield* _(hasGrokCredentials(fs, accountPath))
         expect(detected).toBe(true)
+
+        yield* _(
+          fs.writeFileString(path.join(credentialsDir, "auth.json"), `${JSON.stringify({ [grokLegacyAuthScope]: { key: "xai-legacy" } })}\n`)
+        )
+
+        const legacyDetected = yield* _(hasGrokCredentials(fs, accountPath))
+        expect(legacyDetected).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("does not treat unrelated auth.json tokens as Grok credentials", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const accountPath = path.join(root, "default")
+        const credentialsDir = path.join(accountPath, ".grok")
+
+        yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(credentialsDir, "auth.json"), "{\"scope\":{\"key\":\"xai-oauth\"},\"token\":\"nope\"}\n"))
+
+        const detected = yield* _(hasGrokCredentials(fs, accountPath))
+        expect(detected).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -267,6 +311,27 @@ describe("authGrokLogin", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("does not treat empty oauth with unrelated token as Grok credentials", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const accountPath = path.join(root, "default")
+        const credentialsDir = path.join(accountPath, ".grok")
+
+        yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
+        yield* _(
+          fs.writeFileString(
+            path.join(credentialsDir, "user-settings.json"),
+            "{\"oauth\":{},\"telemetry\":{\"token\":\"not-oauth\"}}\n"
+          )
+        )
+
+        const detected = yield* _(hasGrokCredentials(fs, accountPath))
+        expect(detected).toBe(false)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("detects generated user settings with apiKey as Grok credentials", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
@@ -281,7 +346,7 @@ describe("authGrokLogin", () => {
               fc.assert(
                 fc.asyncProperty(
                   fc.tuple(
-                    fc.string({ minLength: 1 }),
+                    fc.string({ minLength: 1 }).filter((value) => value.trim().length > 0),
                     fc.boolean(),
                     fc.constantFrom("off", "on")
                   ),

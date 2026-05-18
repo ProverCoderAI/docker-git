@@ -6,8 +6,8 @@ import { Effect, Either } from "effect"
 
 type CopyDecision = "skip" | "copy"
 type JsonPrimitive = boolean | number | string | null
-type JsonValue = JsonPrimitive | JsonRecord | ReadonlyArray<JsonValue>
-type JsonRecord = Readonly<{ [key: string]: JsonValue }>
+export type JsonValue = JsonPrimitive | JsonRecord | ReadonlyArray<JsonValue>
+export type JsonRecord = Readonly<{ [key: string]: JsonValue }>
 
 const JsonValueSchema: Schema.Schema<JsonValue> = Schema.suspend(() =>
   Schema.Union(
@@ -115,11 +115,14 @@ export const shouldCopyEnv = (sourceText: string, targetText: string): CopyDecis
   return "skip"
 }
 
-export const parseJsonRecord = (text: string): Effect.Effect<JsonRecord | null> =>
+export const parseJsonRecordOrNull = (text: string): JsonRecord | null =>
   Either.match(ParseResult.decodeUnknownEither(JsonRecordFromStringSchema)(text), {
-    onLeft: () => Effect.succeed(null),
-    onRight: (record) => Effect.succeed(record)
+    onLeft: () => null,
+    onRight: (record) => record
   })
+
+export const parseJsonRecord = (text: string): Effect.Effect<JsonRecord | null> =>
+  Effect.succeed(parseJsonRecordOrNull(text))
 
 export const hasClaudeOauthAccount = (record: JsonRecord | null): boolean =>
   record !== null && typeof record["oauthAccount"] === "object" && record["oauthAccount"] !== null

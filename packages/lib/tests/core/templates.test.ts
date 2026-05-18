@@ -490,9 +490,12 @@ describe("renderEntrypoint auth bridge", () => {
     const entrypoint = renderAuthEntrypoint()
 
     expectContainsAll(entrypoint, [
-      'if [[ -n "${GROK_API_KEY:-}" ]]; then',
+      'elif [[ -n "${GROK_DEPLOYMENT_KEY:-}" ]]; then',
+      'elif [[ -n "${GROK_API_KEY:-}" ]]; then',
+      'elif [[ -n "${XAI_API_KEY:-}" ]]; then',
+      "Priority: selected account files, then GROK_DEPLOYMENT_KEY, GROK_API_KEY, XAI_API_KEY.",
       'docker_git_upsert_ssh_env "GROK_DEPLOYMENT_KEY" "${GROK_DEPLOYMENT_KEY:-}"',
-      'export XAI_API_KEY="${GROK_API_KEY:-}"',
+      'export GROK_DEPLOYMENT_KEY="$RESOLVED_GROK_API_KEY"',
       'docker_git_upsert_ssh_env "GROK_API_KEY" "${GROK_API_KEY:-}"',
       'docker_git_upsert_ssh_env "XAI_API_KEY" "${XAI_API_KEY:-}"'
     ])
@@ -500,6 +503,8 @@ describe("renderEntrypoint auth bridge", () => {
     expect(entrypoint).not.toContain("\\${GROK_API_KEY:-}")
     expect(entrypoint).not.toContain("\\${XAI_API_KEY:-}")
     expect(entrypoint).not.toContain('export XAI_API_KEY="$GROK_API_KEY"')
+    expect(entrypoint).not.toContain('export GROK_DEPLOYMENT_KEY="${GROK_API_KEY:-}"')
+    expect(entrypoint).not.toContain('export GROK_API_KEY="${XAI_API_KEY:-}"')
   })
 
   it("renders system-prompt override hooks for codex/claude/gemini/grok", () => {

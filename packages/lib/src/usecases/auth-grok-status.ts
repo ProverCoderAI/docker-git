@@ -1,5 +1,5 @@
 import type { PlatformError } from "@effect/platform/Error"
-import { Effect } from "effect"
+import { Effect, Match } from "effect"
 
 import type { AuthGrokStatusCommand } from "../core/domain.js"
 import type { CommandFailedError } from "../shell/errors.js"
@@ -22,9 +22,12 @@ export const authGrokStatus = (
   withGrokAuth(command, ({ accountLabel, accountPath, fs }) =>
     Effect.gen(function*(_) {
       const authMethod = yield* _(resolveGrokAuthMethod(fs, accountPath))
-      if (authMethod === "none") {
-        yield* _(Effect.log(`Grok not connected (${accountLabel}).`))
-        return
-      }
-      yield* _(Effect.log(`Grok connected (${accountLabel}, ${authMethod}).`))
+      yield* _(
+        Match.value(authMethod).pipe(
+          Match.when("none", () => Effect.log(`Grok not connected (${accountLabel}).`)),
+          Match.when("api-key", () => Effect.log(`Grok connected (${accountLabel}, api-key).`)),
+          Match.when("oauth", () => Effect.log(`Grok connected (${accountLabel}, oauth).`)),
+          Match.exhaustive
+        )
+      )
     }))

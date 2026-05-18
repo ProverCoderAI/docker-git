@@ -187,6 +187,20 @@ const canListen = (port) =>
 NODE
 }
 
+dg_require_free_port() {
+  local first_port="$1"
+  local last_port="$2"
+  local label="${3:-TCP}"
+  local port
+
+  if ! port="$(dg_pick_free_port "$first_port" "$last_port")" || [[ -z "$port" ]]; then
+    echo "e2e: failed to pick free ${label} port in range ${first_port}-${last_port}" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$port"
+}
+
 dg_controller_container_name() {
   printf '%s\n' "${DOCKER_GIT_API_CONTAINER_NAME:-docker-git-api}"
 }

@@ -5,9 +5,13 @@ import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as Scope from "effect/Scope"
+import fc from "fast-check"
 import { vi } from "vitest"
 
 import type { ProjectDetails } from "../src/api/contracts.js"
+
+const grokOidcAuthScope = "https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828"
+const grokLegacyAuthScope = "https://accounts.x.ai/sign-in"
 
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
@@ -73,7 +77,90 @@ const buildProjectDetails = (projectDir: string, envProjectPath: string, envGlob
   codexHome: "/home/dev/.codex"
 })
 
+const runGrokApiKeyConnectCase = (apiKey: string) =>
+  withTempDir((root) =>
+    Effect.gen(function*(_) {
+      const fs = yield* _(FileSystem.FileSystem)
+      const path = yield* _(Path.Path)
+      const projectsRoot = path.join(root, ".docker-git")
+      const envDir = path.join(projectsRoot, ".orch", "env")
+      const grokDefaultAuth = path.join(projectsRoot, ".orch", "auth", "grok", "default")
+      const projectDir = path.join(projectsRoot, "org", "repo")
+      const envGlobalPath = path.join(envDir, "global.env")
+      const envProjectPath = path.join(projectDir, ".env")
+      const project = buildProjectDetails(projectDir, envProjectPath, envGlobalPath)
+
+      yield* _(fs.makeDirectory(grokDefaultAuth, { recursive: true }))
+      yield* _(fs.makeDirectory(projectDir, { recursive: true }))
+      yield* _(fs.makeDirectory(envDir, { recursive: true }))
+      yield* _(fs.writeFileString(path.join(grokDefaultAuth, ".api-key"), apiKey))
+      yield* _(fs.writeFileString(envGlobalPath, "# docker-git env\n"))
+      yield* _(fs.writeFileString(envProjectPath, "# project env\n"))
+
+      const service = yield* _(
+        withProjectsRoot(
+          projectsRoot,
+          Effect.gen(function*(_) {
+            yield* _(Effect.sync(() => vi.resetModules()))
+            return yield* _(Effect.promise(() => import("../src/services/project-auth.js")))
+          })
+        )
+      )
+      const result = yield* _(
+        withProjectsRoot(
+          projectsRoot,
+          service.runProjectAuthFlow(project, {
+            flow: "ProjectGrokConnect",
+            label: "default"
+          })
+        ).pipe(
+          Effect.match({
+            onFailure: (error) => ({ _tag: "failure" as const, errorTag: error._tag }),
+            onSuccess: (snapshot) => ({ _tag: "success" as const, activeGrokLabel: snapshot.activeGrokLabel })
+          })
+        )
+      )
+      const envText = yield* _(fs.readFileString(envProjectPath))
+
+      return { result, envText }
+    })
+  )
+
 describe("project auth service", () => {
+  it.effect("preserves Grok project API-key connect invariants", () =>
+    Effect.tryPromise({
+      catch: (error) => error,
+      try: () =>
+        fc.assert(
+          fc.asyncProperty(
+            fc.oneof(fc.string(), fc.constant(""), fc.constant(" "), fc.constant("\t\n")),
+            (apiKey) =>
+              Effect.runPromise(
+                runGrokApiKeyConnectCase(apiKey).pipe(
+                  Effect.provide(NodeContext.layer),
+                  Effect.map(({ result, envText }) => {
+                    if (apiKey.trim().length === 0) {
+                      expect(result._tag).toBe("failure")
+                      if (result._tag === "failure") {
+                        expect(result.errorTag).toBe("ApiBadRequestError")
+                      }
+                      expect(envText).not.toContain("GROK_AUTH_LABEL=default")
+                      return
+                    }
+
+                    expect(result._tag).toBe("success")
+                    if (result._tag === "success") {
+                      expect(result.activeGrokLabel).toBe("default")
+                    }
+                    expect(envText).toContain("GROK_AUTH_LABEL=default")
+                  })
+                )
+              )
+          ),
+          { numRuns: 20 }
+        )
+    }))
+
   it.effect("requires a non-empty Grok .api-key before connecting an account", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
@@ -114,7 +201,7 @@ describe("project auth service", () => {
         )
 
         expect(failure._tag).toBe("ApiBadRequestError")
-        expect(failure.message).toContain("Grok CLI login not connected")
+        expect(failure.message).toContain("Grok credentials")
         expect(yield* _(fs.readFileString(envProjectPath))).not.toContain("GROK_AUTH_LABEL=default")
 
         yield* _(fs.writeFileString(path.join(grokDefaultAuth, ".api-key"), "live-token\n"))
@@ -134,7 +221,12 @@ describe("project auth service", () => {
         yield* _(fs.writeFileString(envProjectPath, "# project env\n"))
         yield* _(fs.remove(path.join(grokDefaultAuth, ".api-key")))
         yield* _(fs.makeDirectory(path.join(grokDefaultAuth, ".grok"), { recursive: true }))
-        yield* _(fs.writeFileString(path.join(grokDefaultAuth, ".grok", "auth.json"), "{\"scope\":{\"key\":\"xai-oauth\"}}\n"))
+        yield* _(
+          fs.writeFileString(
+            path.join(grokDefaultAuth, ".grok", "auth.json"),
+            `${JSON.stringify({ [grokOidcAuthScope]: { key: "xai-oauth" } })}\n`
+          )
+        )
 
         const oauthSnapshot = yield* _(
           withProjectsRoot(
@@ -148,6 +240,43 @@ describe("project auth service", () => {
 
         expect(oauthSnapshot.activeGrokLabel).toBe("default")
         expect(yield* _(fs.readFileString(envProjectPath))).toContain("GROK_AUTH_LABEL=default")
+
+        yield* _(fs.writeFileString(envProjectPath, "# project env\n"))
+        yield* _(
+          fs.writeFileString(
+            path.join(grokDefaultAuth, ".grok", "auth.json"),
+            `${JSON.stringify({ [grokLegacyAuthScope]: { key: "xai-legacy" } })}\n`
+          )
+        )
+
+        const legacyOauthSnapshot = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            service.runProjectAuthFlow(project, {
+              flow: "ProjectGrokConnect",
+              label: "default"
+            })
+          )
+        )
+
+        expect(legacyOauthSnapshot.activeGrokLabel).toBe("default")
+        expect(yield* _(fs.readFileString(envProjectPath))).toContain("GROK_AUTH_LABEL=default")
+
+        yield* _(fs.writeFileString(envProjectPath, "# project env\n"))
+        yield* _(fs.writeFileString(path.join(grokDefaultAuth, ".grok", "auth.json"), "{\"scope\":{\"key\":\"xai-oauth\"}}\n"))
+
+        const arbitraryAuthJsonFailure = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            service.runProjectAuthFlow(project, {
+              flow: "ProjectGrokConnect",
+              label: "default"
+            }).pipe(Effect.flip)
+          )
+        )
+
+        expect(arbitraryAuthJsonFailure._tag).toBe("ApiBadRequestError")
+        expect(yield* _(fs.readFileString(envProjectPath))).not.toContain("GROK_AUTH_LABEL=default")
 
         yield* _(fs.writeFileString(envProjectPath, "# project env\n"))
         yield* _(fs.remove(path.join(grokDefaultAuth, ".grok"), { recursive: true }))
@@ -165,6 +294,29 @@ describe("project auth service", () => {
 
         expect(envSnapshot.activeGrokLabel).toBe("default")
         expect(yield* _(fs.readFileString(envProjectPath))).toContain("GROK_AUTH_LABEL=default")
+
+        yield* _(fs.writeFileString(envProjectPath, "# project env\n"))
+        yield* _(fs.remove(path.join(grokDefaultAuth, ".env")))
+        yield* _(fs.makeDirectory(path.join(grokDefaultAuth, ".grok"), { recursive: true }))
+        yield* _(
+          fs.writeFileString(
+            path.join(grokDefaultAuth, ".grok", "user-settings.json"),
+            "{\"oauth\":{},\"telemetry\":{\"token\":\"not-oauth\"}}\n"
+          )
+        )
+
+        const falsePositiveFailure = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            service.runProjectAuthFlow(project, {
+              flow: "ProjectGrokConnect",
+              label: "default"
+            }).pipe(Effect.flip)
+          )
+        )
+
+        expect(falsePositiveFailure._tag).toBe("ApiBadRequestError")
+        expect(yield* _(fs.readFileString(envProjectPath))).not.toContain("GROK_AUTH_LABEL=default")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

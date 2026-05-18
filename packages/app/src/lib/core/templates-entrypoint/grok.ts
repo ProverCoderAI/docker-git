@@ -110,29 +110,31 @@ EOF
 fi
 
 docker_git_refresh_grok_env() {
+  local RESOLVED_GROK_API_KEY
   if [[ -f "$GROK_HOME_DIR/.api-key" ]]; then
-    API_KEY="$(cat "$GROK_HOME_DIR/.api-key" | tr -d '\r\n')"
+    RESOLVED_GROK_API_KEY="$(cat "$GROK_HOME_DIR/.api-key" | tr -d '\r\n')"
   elif [[ -f "$GROK_HOME_DIR/.env" ]]; then
-    API_KEY="$(grep -E "^(GROK_DEPLOYMENT_KEY|GROK_API_KEY|XAI_API_KEY)=" "$GROK_HOME_DIR/.env" 2>/dev/null | head -n 1 | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//" || true)"
+    RESOLVED_GROK_API_KEY="$(grep -E "^GROK_DEPLOYMENT_KEY=" "$GROK_HOME_DIR/.env" 2>/dev/null | head -n 1 | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//" || true)"
+    if [[ -z "$RESOLVED_GROK_API_KEY" ]]; then
+      RESOLVED_GROK_API_KEY="$(grep -E "^GROK_API_KEY=" "$GROK_HOME_DIR/.env" 2>/dev/null | head -n 1 | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//" || true)"
+    fi
+    if [[ -z "$RESOLVED_GROK_API_KEY" ]]; then
+      RESOLVED_GROK_API_KEY="$(grep -E "^XAI_API_KEY=" "$GROK_HOME_DIR/.env" 2>/dev/null | head -n 1 | cut -d'=' -f2- | sed "s/^['\"]//;s/['\"]$//" || true)"
+    fi
+  elif [[ -n "${grokDeploymentKeyDefaultExpansion}" ]]; then
+    RESOLVED_GROK_API_KEY="${grokDeploymentKeyDefaultExpansion}"
+  elif [[ -n "${grokApiKeyDefaultExpansion}" ]]; then
+    RESOLVED_GROK_API_KEY="${grokApiKeyDefaultExpansion}"
+  elif [[ -n "${xaiApiKeyDefaultExpansion}" ]]; then
+    RESOLVED_GROK_API_KEY="${xaiApiKeyDefaultExpansion}"
   else
-    API_KEY=""
+    RESOLVED_GROK_API_KEY=""
   fi
-  if [[ -n "$API_KEY" ]]; then
-    export GROK_DEPLOYMENT_KEY="$API_KEY"
-    export GROK_API_KEY="$API_KEY"
-    export XAI_API_KEY="$API_KEY"
-  fi
-  if [[ -n "${grokDeploymentKeyDefaultExpansion}" ]]; then
-    export GROK_API_KEY="${grokDeploymentKeyDefaultExpansion}"
-    export XAI_API_KEY="${grokDeploymentKeyDefaultExpansion}"
-  fi
-  if [[ -n "${grokApiKeyDefaultExpansion}" ]]; then
-    export GROK_DEPLOYMENT_KEY="${grokApiKeyDefaultExpansion}"
-    export XAI_API_KEY="${grokApiKeyDefaultExpansion}"
-  fi
-  if [[ -n "${xaiApiKeyDefaultExpansion}" ]]; then
-    export GROK_DEPLOYMENT_KEY="${xaiApiKeyDefaultExpansion}"
-    export GROK_API_KEY="${xaiApiKeyDefaultExpansion}"
+  # Priority: selected account files, then GROK_DEPLOYMENT_KEY, GROK_API_KEY, XAI_API_KEY.
+  if [[ -n "$RESOLVED_GROK_API_KEY" ]]; then
+    export GROK_DEPLOYMENT_KEY="$RESOLVED_GROK_API_KEY"
+    export GROK_API_KEY="$RESOLVED_GROK_API_KEY"
+    export XAI_API_KEY="$RESOLVED_GROK_API_KEY"
   fi
 }
 

@@ -9,6 +9,7 @@ import type { AuthGrokLoginCommand, AuthGrokLogoutCommand, AuthGrokStatusCommand
 import { defaultTemplateConfig } from "../core/domain.js"
 import { runCommandExitCode } from "../shell/command-runner.js"
 import { CommandFailedError } from "../shell/errors.js"
+import { hasGrokAuthJsonCredentialText, hasGrokUserSettingsCredentialText } from "./auth-grok-credential-text.js"
 import { isRegularFile, normalizeAccountLabel } from "./auth-helpers.js"
 import { migrateLegacyOrchLayout } from "./auth-sync.js"
 import { ensureDockerImage } from "./docker-image.js"
@@ -179,7 +180,7 @@ export const hasGrokCredentials = (
     const hasAuthJson = yield* _(isRegularFile(fs, grokAuthJsonPath(accountPath)))
     if (hasAuthJson) {
       const authJson = yield* _(fs.readFileString(grokAuthJsonPath(accountPath)), Effect.orElseSucceed(() => ""))
-      if (hasGrokAuthJsonCredentials(authJson)) {
+      if (hasGrokAuthJsonCredentialText(authJson)) {
         return true
       }
     }
@@ -188,28 +189,8 @@ export const hasGrokCredentials = (
       return false
     }
     const content = yield* _(fs.readFileString(grokUserSettingsPath(accountPath)), Effect.orElseSucceed(() => ""))
-    return hasGrokUserSettingsCredentials(content)
+    return hasGrokUserSettingsCredentialText(content)
   })
-
-const grokUserSettingsCredentialMarkers: ReadonlyArray<RegExp> = [
-  /"apiKey"\s*:\s*"[^"]+"/u,
-  /"accessToken"\s*:\s*"[^"]+"/u,
-  /"refreshToken"\s*:\s*"[^"]+"/u,
-  /"authToken"\s*:\s*"[^"]+"/u,
-  /"oauth"\s*:\s*\{[\s\S]*?"(?:apiKey|accessToken|access_token|authToken|refreshToken|refresh_token|token)"\s*:\s*"[^"]+"/u
-]
-
-const hasGrokUserSettingsCredentials = (content: string): boolean =>
-  grokUserSettingsCredentialMarkers.some((marker) => marker.test(content))
-
-const grokAuthJsonCredentialMarkers: ReadonlyArray<RegExp> = [
-  /"key"\s*:\s*"[^"]+"/u,
-  /"token"\s*:\s*"[^"]+"/u,
-  /"accessToken"\s*:\s*"[^"]+"/u
-]
-
-const hasGrokAuthJsonCredentials = (content: string): boolean =>
-  grokAuthJsonCredentialMarkers.some((marker) => marker.test(content))
 
 export const resolveGrokAuthMethod = (
   fs: FileSystem.FileSystem,

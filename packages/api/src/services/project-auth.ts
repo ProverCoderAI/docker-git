@@ -9,6 +9,7 @@ import { renderError, type AppError } from "@effect-template/lib/usecases/errors
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import { autoSyncState } from "@effect-template/lib/usecases/state-repo"
 import { normalizeAccountLabel } from "@effect-template/lib/usecases/auth-helpers"
+import { hasGrokAuthJsonCredentialText, hasGrokUserSettingsCredentialText } from "@effect-template/lib/usecases/auth-grok-credential-text"
 
 import type { ProjectAuthFlow, ProjectAuthRequest, ProjectAuthSnapshot, ProjectDetails } from "../api/contracts.js"
 import { ApiBadRequestError } from "../api/errors.js"
@@ -251,20 +252,6 @@ const hasGeminiAccountCredentials = (
     })
   )
 
-const grokUserSettingsCredentialMarkers: ReadonlyArray<RegExp> = [
-  /"apiKey"\s*:\s*"[^"]+"/u,
-  /"accessToken"\s*:\s*"[^"]+"/u,
-  /"refreshToken"\s*:\s*"[^"]+"/u,
-  /"authToken"\s*:\s*"[^"]+"/u,
-  /"oauth"\s*:\s*\{[\s\S]*?"(?:apiKey|accessToken|access_token|authToken|refreshToken|refresh_token|token)"\s*:\s*"[^"]+"/u
-]
-
-const grokAuthJsonCredentialMarkers: ReadonlyArray<RegExp> = [
-  /"key"\s*:\s*"[^"]+"/u,
-  /"token"\s*:\s*"[^"]+"/u,
-  /"accessToken"\s*:\s*"[^"]+"/u
-]
-
 const hasGrokUserSettingsCredentials = (
   fs: FileSystem.FileSystem,
   settingsPath: string
@@ -276,7 +263,7 @@ const hasGrokUserSettingsCredentials = (
     }
 
     const settingsText = yield* _(fs.readFileString(settingsPath), Effect.orElseSucceed(() => ""))
-    return grokUserSettingsCredentialMarkers.some((marker) => marker.test(settingsText))
+    return hasGrokUserSettingsCredentialText(settingsText)
   })
 
 const hasGrokAuthJsonCredentials = (
@@ -290,7 +277,7 @@ const hasGrokAuthJsonCredentials = (
     }
 
     const authJsonText = yield* _(fs.readFileString(authJsonPath), Effect.orElseSucceed(() => ""))
-    return grokAuthJsonCredentialMarkers.some((marker) => marker.test(authJsonText))
+    return hasGrokAuthJsonCredentialText(authJsonText)
   })
 
 const hasGrokAccountCredentials = (
@@ -508,7 +495,7 @@ const resolveProjectEnvUpdate = (
           ).pipe(
             Effect.flatMap((matched) =>
               matched === null
-                ? Effect.fail(missingSecret("Grok CLI login", normalizedLabel, grokAuthRoot))
+                ? Effect.fail(missingSecret("Grok credentials (.api-key, GROK_DEPLOYMENT_KEY, or auth.json)", normalizedLabel, grokAuthRoot))
                 : Effect.succeed(upsertEnvKey(projectEnvText, projectGrokLabelKey, normalizedLabel))
             )
           )),

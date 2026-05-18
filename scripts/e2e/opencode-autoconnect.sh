@@ -24,7 +24,8 @@ SSH_PORT="$(dg_pick_free_port 20000 20999)"
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_PROJECTS_ROOT_VOLUME="docker-git-e2e-opencode-$RUN_ID-projects"
 export DOCKER_GIT_API_CONTAINER_NAME="docker-git-e2e-opencode-$RUN_ID-api"
-export DOCKER_GIT_API_PORT="$(dg_pick_free_port 34000 34999)"
+DOCKER_GIT_API_PORT="$(dg_require_free_port 34000 34999 "opencode API")"
+export DOCKER_GIT_API_PORT
 export COMPOSE_PROJECT_NAME="docker-git-e2e-opencode-$RUN_ID"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
 
