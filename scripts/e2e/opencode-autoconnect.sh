@@ -19,12 +19,12 @@ OUT_DIR="$ROOT/e2e/opencode-autoconnect-$RUN_ID"
 CONTAINER_NAME="dg-e2e-opencode-$RUN_ID"
 SERVICE_NAME="dg-e2e-opencode-$RUN_ID"
 VOLUME_NAME="dg-e2e-opencode-$RUN_ID-home"
-SSH_PORT="$(( (RANDOM % 1000) + 20000 ))"
+SSH_PORT="$(dg_pick_free_port 20000 20999)"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_PROJECTS_ROOT_VOLUME="docker-git-e2e-opencode-$RUN_ID-projects"
 export DOCKER_GIT_API_CONTAINER_NAME="docker-git-e2e-opencode-$RUN_ID-api"
-export DOCKER_GIT_API_PORT="$(( (RANDOM % 1000) + 34000 ))"
+export DOCKER_GIT_API_PORT="$(dg_pick_free_port 34000 34999)"
 export COMPOSE_PROJECT_NAME="docker-git-e2e-opencode-$RUN_ID"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
 

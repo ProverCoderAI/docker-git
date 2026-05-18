@@ -126,7 +126,8 @@ run_clone_case() {
   local container_name="dg-e2e-cache-${case_name}-${RUN_ID}"
   local service_name="dg-e2e-cache-${case_name}-${RUN_ID}"
   local volume_name="dg-e2e-cache-${case_name}-${RUN_ID}-home"
-  local ssh_port="$(( (RANDOM % 1000) + 22000 ))"
+  local ssh_port
+  ssh_port="$(dg_pick_free_port 22000 22999)"
   local log_path="$ROOT/clone-cache-${case_name}.log"
   local host_log_path="$ROOT/clone-cache-${case_name}-host.log"
 

@@ -85,7 +85,8 @@ run_case() {
   local container_name="dg-e2e-login-${case_name}-${RUN_ID}"
   local service_name="dg-e2e-login-${case_name}-${RUN_ID}"
   local volume_name="dg-e2e-login-${case_name}-${RUN_ID}-home"
-  local ssh_port="$(( (RANDOM % 1000) + 21000 ))"
+  local ssh_port
+  ssh_port="$(dg_pick_free_port 21000 21999)"
   local login_log="/tmp/docker-git-login-context-${RUN_ID}-${case_name}.log"
   local probe_script="$ROOT/login-context-${case_name}-probe.sh"
 

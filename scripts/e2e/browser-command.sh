@@ -21,8 +21,8 @@ BROWSER_STARTUP_ATTEMPTS="${DOCKER_GIT_E2E_BROWSER_STARTUP_ATTEMPTS:-240}"
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_PROJECTS_ROOT_VOLUME="docker-git-e2e-browser-$RUN_ID-projects"
 export DOCKER_GIT_API_CONTAINER_NAME="docker-git-e2e-browser-$RUN_ID-api"
-export DOCKER_GIT_API_PORT="$(( (RANDOM % 1000) + 34000 ))"
-export DOCKER_GIT_WEB_PORT="$(( (RANDOM % 1000) + 41000 ))"
+export DOCKER_GIT_API_PORT="$(dg_pick_free_port 34000 34999)"
+export DOCKER_GIT_WEB_PORT="$(dg_pick_free_port 41000 41999)"
 export COMPOSE_PROJECT_NAME="docker-git-e2e-browser-$RUN_ID"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
 
