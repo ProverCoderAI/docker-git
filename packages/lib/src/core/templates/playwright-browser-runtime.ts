@@ -1,8 +1,21 @@
 const playwrightBrowserRuntimeScript = String.raw`#!/usr/bin/env bash
 set -euo pipefail
 
+declare -a DOCKER_GIT_BROWSER_TEMP_FILES=()
+
 docker_git_browser_log() {
   printf '%s\n' "[docker-git-browser] $*" >&2
+}
+
+docker_git_browser_cleanup_temp_files() {
+  if (( \${#DOCKER_GIT_BROWSER_TEMP_FILES[@]} > 0 )); then
+    rm -f -- "\${DOCKER_GIT_BROWSER_TEMP_FILES[@]}" || true
+  fi
+}
+
+docker_git_browser_register_temp_file() {
+  DOCKER_GIT_BROWSER_TEMP_FILES+=("$1")
+  trap docker_git_browser_cleanup_temp_files EXIT
 }
 
 docker_git_browser_has_docker() {
@@ -84,11 +97,22 @@ docker_git_start_playwright_browser() {
   docker_git_stop_playwright_browser || true
   docker_git_cleanup_orphaned_playwright_browsers || true
 
+  local build_log
+  if ! build_log="$(mktemp "\${TMPDIR:-/tmp}/docker-git-browser-build.XXXXXX.log" 2>/dev/null)"; then
+    docker_git_browser_log "failed to create browser build log; skipping nested browser start"
+    return 0
+  fi
+  docker_git_browser_register_temp_file "$build_log"
+
+  local build_timeout
+  build_timeout="\${DOCKER_GIT_BROWSER_BUILD_TIMEOUT_SECONDS:-600}"
+
   docker_git_browser_log "building $image_name"
-  docker build -t "$image_name" -f "$context_dir/Dockerfile.browser" "$context_dir" >/var/log/docker-git-browser-build.log 2>&1 || {
-    docker_git_browser_log "browser image build failed; see /var/log/docker-git-browser-build.log"
+  timeout "$build_timeout" docker build -t "$image_name" -f "$context_dir/Dockerfile.browser" "$context_dir" >"$build_log" 2>&1 || {
+    docker_git_browser_log "browser image build failed or timed out after \${build_timeout}s; see $build_log"
     return 0
   }
+  rm -f -- "$build_log"
 
   if ! docker volume create "$volume_name" >/dev/null 2>&1; then
     docker_git_browser_log "failed to create browser data volume $volume_name; continuing"
