@@ -329,24 +329,20 @@ const preflightPanelTarget = (
   }).pipe(Effect.asVoid)
 
 const waitForTunnelUrl = (
-  id: string,
+  record: PanelCloudflareTunnelRecord,
   remainingAttempts: number
 ): Effect.Effect<PanelCloudflareTunnelSession, never> =>
   Effect.gen(function*(_) {
-    const session = currentRecord?.session
-    if (session === undefined || session.id !== id) {
-      return stoppedMissingSession(id)
-    }
+    const session = record.session
     if (
       session.publicUrl !== null ||
-      session.status === "failed" ||
-      session.status === "stopped" ||
+      isTerminalTunnelSession(session) ||
       remainingAttempts <= 0
     ) {
       return session
     }
     yield* _(Effect.sleep(Duration.millis(250)))
-    return yield* _(waitForTunnelUrl(id, remainingAttempts - 1))
+    return yield* _(waitForTunnelUrl(record, remainingAttempts - 1))
   })
 
 const isReusableRecord = (
@@ -356,20 +352,13 @@ const isReusableRecord = (
   record.session.panelUrl === panelUrl &&
   (record.session.status === "starting" || record.session.status === "running")
 
-const stoppedMissingSession = (id: string): PanelCloudflareTunnelSession => ({
-  error: null,
-  id,
-  logTail: [],
-  panelUrl: "",
-  publicUrl: null,
-  startedAt: nowIso(),
-  status: "stopped",
-  stoppedAt: nowIso()
-})
+const isTerminalTunnelSession = (
+  session: PanelCloudflareTunnelSession
+): boolean => session.status === "failed" || session.status === "stopped"
 
-const waitForRecordId = (
+const waitForRecord = (
   request: StartPanelCloudflareTunnelRequest
-): Effect.Effect<string, PanelCloudflareTunnelError> =>
+): Effect.Effect<PanelCloudflareTunnelRecord, PanelCloudflareTunnelError> =>
   Effect.gen(function*(_) {
     const localhostHost = yield* _(defaultPanelTunnelLocalhostHost())
     const resolved = resolvePanelTunnelTargetUrl(request.panelUrl, localhostHost)
@@ -378,7 +367,7 @@ const waitForRecordId = (
     }
 
     if (currentRecord !== null && isReusableRecord(currentRecord, resolved.panelUrl)) {
-      return currentRecord.session.id
+      return currentRecord
     }
 
     yield* _(preflightPanelTarget(resolved.targetUrl))
@@ -393,7 +382,7 @@ const waitForRecordId = (
         Effect.tapError(() => discardUnstartedRecord(record))
       )
     )
-    return record.session.id
+    return record
   }).pipe(tunnelRecordLock.withPermits(1))
 
 /**
@@ -428,23 +417,29 @@ export const startPanelCloudflareTunnel = (
   request: StartPanelCloudflareTunnelRequest
 ): Effect.Effect<PanelCloudflareTunnelSession, PanelCloudflareTunnelError> =>
   Effect.gen(function*(_) {
-    const id = yield* _(waitForRecordId(request))
-    return yield* _(waitForTunnelUrl(id, startWaitAttempts))
+    const record = yield* _(waitForRecord(request))
+    return yield* _(waitForTunnelUrl(record, startWaitAttempts))
   })
 
 /**
  * Stops the currently tracked panel Cloudflare tunnel if one exists.
  *
- * @returns The stopped session snapshot, or null when no tunnel record exists.
+ * @returns The current terminal session snapshot, stopped session snapshot, or null when no tunnel record exists.
  * @pure false
  * @effect Sends SIGTERM/SIGKILL to cloudflared, waits for process close, and removes tunnel home state.
  * @invariant Does not create a new tunnel record and serializes state changes under tunnelRecordLock.
  * @precondition None.
- * @postcondition Returns null iff no record existed; otherwise the returned session has status "stopped".
+ * @postcondition Returns null iff no record existed; terminal records are returned unchanged, otherwise status is "stopped".
  * @complexity O(1) space and O(t) time where t is bounded by the process close/SIGKILL timeout.
  * @throws Never - this effect has no typed failure channel.
  */
 export const stopPanelCloudflareTunnel = (): Effect.Effect<PanelCloudflareTunnelSession | null> =>
   Effect.gen(function*(_) {
-    return currentRecord === null ? null : yield* _(stopRecord(currentRecord))
+    if (currentRecord === null) {
+      return null
+    }
+    if (isTerminalTunnelSession(currentRecord.session)) {
+      return currentRecord.session
+    }
+    return yield* _(stopRecord(currentRecord))
   }).pipe(tunnelRecordLock.withPermits(1))
