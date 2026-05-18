@@ -89,7 +89,7 @@ const activeTerminalReadyPath = (session: ActiveTerminalSession | null): string 
 }
 
 const selectReadyPath = (token: string | null): string =>
-  token === null ? "/menu/select" : `/ssh/${encodePathTail(token)}`
+  token === null ? "/menu/select" : `/select/${encodePathTail(token)}`
 
 const menuActionReadyPath = (
   activeScreen: BrowserScreen,
