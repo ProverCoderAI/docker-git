@@ -150,6 +150,10 @@ const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   databaseSession: state.databaseSession,
   githubStatus: state.githubStatus,
   message: state.message,
+  onAuthTerminalExitSuccess: () => {
+    state.setAuthSnapshot(null)
+    state.setGithubStatus(null)
+  },
   onSelectTerminal: state.selectTerminalSession,
   onSelectMenu: state.setSelectedMenuIndex,
   onSelectProject: state.setSelectedProjectId,

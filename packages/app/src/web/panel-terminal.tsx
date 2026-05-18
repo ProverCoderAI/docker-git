@@ -3,6 +3,7 @@ import "xterm/css/xterm.css"
 import { type CSSProperties, type JSX, useCallback, useEffect, useRef, useState } from "react"
 
 import {
+  type TerminalExitInfo,
   isModifierOnlyTerminalKey,
   type MobileTerminalKey,
   mobileTerminalKeyInput,
@@ -23,6 +24,7 @@ type TerminalPanelProps = {
   readonly onAttachFailure: () => void
   readonly onApplyProject?: (() => void) | undefined
   readonly onDetach: () => void
+  readonly onExit?: ((info: TerminalExitInfo) => void) | undefined
   readonly onKill: () => void
   readonly onMessage: (message: string) => void
   readonly onOpenBrowser?: (() => void) | undefined
@@ -593,6 +595,7 @@ export const TerminalPanel = (
     onApplyProject,
     onAttachFailure,
     onDetach,
+    onExit,
     onKill,
     onMessage,
     onOpenBrowser,
@@ -612,10 +615,14 @@ export const TerminalPanel = (
   const [mobileCtrlArmed, setMobileCtrlArmed] = useState(false)
   const terminalSessionId = session.session.id
   const onAttachFailureRef = useRef(onAttachFailure)
+  const onExitRef = useRef(onExit)
   const onMessageRef = useRef(onMessage)
   useEffect(() => {
     onAttachFailureRef.current = onAttachFailure
   }, [onAttachFailure])
+  useEffect(() => {
+    onExitRef.current = onExit
+  }, [onExit])
   useEffect(() => {
     onMessageRef.current = onMessage
   }, [onMessage])
@@ -628,6 +635,9 @@ export const TerminalPanel = (
   }, [terminalSessionId])
   const notifyAttachFailure = useCallback(() => {
     onAttachFailureRef.current()
+  }, [])
+  const notifyExit = useCallback((info: TerminalExitInfo) => {
+    onExitRef.current?.(info)
   }, [])
   const notifyMessage = useCallback((message: string) => {
     onMessageRef.current(message)
@@ -689,6 +699,7 @@ export const TerminalPanel = (
     connectionRef,
     hostRef,
     inlineImagePreviewsEnabledRef,
+    notifyExit,
     notifyMessage,
     onAttachFailure: notifyAttachFailure,
     runtimeRef,

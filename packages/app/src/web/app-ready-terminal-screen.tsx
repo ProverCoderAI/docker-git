@@ -7,6 +7,7 @@ import type { ReadyLayoutProps } from "./app-ready-layout.js"
 import { Box, Text } from "./elements.js"
 import { TaskPanel } from "./panel-tasks.js"
 import { TerminalPanel } from "./panel-terminal.js"
+import type { TerminalExitInfo } from "./terminal-panel-runtime-types.js"
 import { type BrowserScreen, projectPickerScreen } from "./screen.js"
 import { shouldShowTerminalTabs } from "./terminal-mobile-layout.js"
 import { terminalSessionId } from "./terminal-state.js"
@@ -22,6 +23,7 @@ type TerminalScreenProps = Pick<
   | "onOpenProjectTaskManagerById"
   | "onOpenProjectTerminalById"
   | "onOpenSkiller"
+  | "onAuthTerminalExitSuccess"
   | "onLoadProjectTaskLogs"
   | "onProjectTasksIncludeDefaultChange"
   | "onRefreshProjectTasks"
@@ -48,6 +50,7 @@ type TerminalPaneProps =
     | "onOpenProjectTaskManagerById"
     | "onOpenProjectTerminalById"
     | "onOpenSkiller"
+    | "onAuthTerminalExitSuccess"
     | "onLoadProjectTaskLogs"
     | "onProjectTasksIncludeDefaultChange"
     | "onRefreshProjectTasks"
@@ -368,6 +371,7 @@ const TerminalTabs = (
 const TerminalPane = (
   {
     onApplyProjectById,
+    onAuthTerminalExitSuccess,
     onCloseTaskManager,
     onLoadProjectTaskLogs,
     onOpenProjectBrowserById,
@@ -422,6 +426,16 @@ const TerminalPane = (
       onSetActiveScreen(terminalReturnScreen(terminalSession))
     }
   }
+  const handleTerminalExit = (exitInfo: TerminalExitInfo): void => {
+    if (!terminalSession.closePath.startsWith("/auth/")) {
+      return
+    }
+    if (exitInfo.exitCode !== 0) {
+      return
+    }
+    onAuthTerminalExitSuccess()
+    detachTerminalSession()
+  }
   return (
     <div style={activeTerminalPaneStyle}>
       <TerminalPanel
@@ -437,6 +451,7 @@ const TerminalPane = (
             `${pendingSession ? "Closed pending" : "Detached"} SSH terminal: ${terminalSession.session.id}.`
           )
         }}
+        onExit={handleTerminalExit}
         onKill={() => {
           if (!pendingSession) {
             requestTerminalSessionClose(terminalSession.closePath)

@@ -99,6 +99,10 @@ export const CodexAuthLoginRequestSchema = Schema.Struct({
   label: OptionalNullableString
 })
 
+export const GrokAuthLogoutRequestSchema = Schema.Struct({
+  label: OptionalNullableString
+})
+
 export const CodexAuthLogoutRequestSchema = Schema.Struct({
   label: OptionalNullableString
 })
@@ -345,6 +349,7 @@ export type GithubAuthLogoutRequestInput = Schema.Schema.Type<typeof GithubAuthL
 export type GitlabAuthLogoutRequestInput = Schema.Schema.Type<typeof GitlabAuthLogoutRequestSchema>
 export type CodexAuthImportRequestInput = Schema.Schema.Type<typeof CodexAuthImportRequestSchema>
 export type CodexAuthLoginRequestInput = Schema.Schema.Type<typeof CodexAuthLoginRequestSchema>
+export type GrokAuthLogoutRequestInput = Schema.Schema.Type<typeof GrokAuthLogoutRequestSchema>
 export type CodexAuthLogoutRequestInput = Schema.Schema.Type<typeof CodexAuthLogoutRequestSchema>
 export type ProjectAuthRequestInput = Schema.Schema.Type<typeof ProjectAuthRequestSchema>
 export type ProjectPromptKindInput = Schema.Schema.Type<typeof ProjectPromptKindSchema>

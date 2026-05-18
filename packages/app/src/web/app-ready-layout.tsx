@@ -102,6 +102,7 @@ export type ReadyLayoutProps = {
   readonly onSelectMenu: (index: number) => void
   readonly onSelectProject: (projectId: string) => void
   readonly onRunCurrentMenuAction: () => void
+  readonly onAuthTerminalExitSuccess: () => void
   readonly onSelectTerminal: (sessionId: string) => void
   readonly onTerminalClose: (sessionId: string) => void
   readonly onTerminalMessage: (message: string | null) => void

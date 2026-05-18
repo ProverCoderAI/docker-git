@@ -16,7 +16,9 @@ import {
   ensureGitlabAuthForCreate,
   importCodexAuth,
   logoutCodexAuth,
+  logoutGrokAuth,
   readCodexAuthStatus,
+  readGrokAuthStatus,
   readGitlabAuthStatus,
   readGithubAuthStatus
 } from "../src/services/auth.js"
@@ -480,6 +482,59 @@ describe("api auth", () => {
         expect(removed.account).toBeNull()
         expect(removed.label).toBe("team-a")
         expect(removed.authPath).toBe(path.join(labeledAuthDir, "auth.json"))
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("reads labeled Grok auth status from controller state", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const accountDir = path.join(projectsRoot, ".orch", "auth", "grok", "team-a")
+
+        yield* _(fs.makeDirectory(accountDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(accountDir, ".api-key"), "xai-test-key\n"))
+
+        const status = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(root, readGrokAuthStatus("team-a"))
+          )
+        )
+
+        expect(status.connected).toBe(true)
+        expect(status.label).toBe("team-a")
+        expect(status.method).toBe("api-key")
+        expect(status.authPath).toBe(accountDir)
+        expect(status.message).toBe("Grok connected (team-a, api-key).")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("removes labeled Grok auth from controller state", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const accountDir = path.join(projectsRoot, ".orch", "auth", "grok", "team-a")
+
+        yield* _(fs.makeDirectory(path.join(accountDir, ".grok"), { recursive: true }))
+        yield* _(fs.writeFileString(path.join(accountDir, ".api-key"), "xai-test-key\n"))
+        yield* _(fs.writeFileString(path.join(accountDir, ".grok", "user-settings.json"), "{\"apiKey\":\"xai-test-key\"}\n"))
+
+        const status = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(root, logoutGrokAuth({ label: "team-a" }))
+          )
+        )
+
+        expect(status.connected).toBe(false)
+        expect(status.label).toBe("team-a")
+        expect(status.method).toBe("none")
+        expect(status.authPath).toBe(accountDir)
+        expect(status.message).toBe("Grok not connected (team-a).")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

@@ -25,6 +25,8 @@ import type {
   AuthGithubLoginCommand,
   AuthGithubLogoutCommand,
   AuthGithubStatusCommand,
+  AuthGrokLogoutCommand,
+  AuthGrokStatusCommand,
   AuthGitlabLoginCommand,
   AuthGitlabLogoutCommand,
   AuthGitlabStatusCommand
@@ -192,6 +194,16 @@ export const codexStatus = (command: AuthCodexStatusCommand) => {
   const query = command.label === null ? "" : `?label=${encodeURIComponent(command.label)}`
   return request("GET", `/auth/codex/status${query}`)
 }
+
+export const grokStatus = (command: AuthGrokStatusCommand) => {
+  const query = command.label === null ? "" : `?label=${encodeURIComponent(command.label)}`
+  return request("GET", `/auth/grok/status${query}`)
+}
+
+export const grokLogout = (command: AuthGrokLogoutCommand) =>
+  requestVoid("POST", "/auth/grok/logout", {
+    label: command.label
+  })
 
 export const codexLogout = (command: AuthCodexLogoutCommand) =>
   requestVoid("POST", "/auth/codex/logout", {

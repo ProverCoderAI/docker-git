@@ -31,6 +31,8 @@ export {
   githubLogin,
   githubLogout,
   githubStatus,
+  grokLogout,
+  grokStatus,
   gitlabLogin,
   gitlabLogout,
   gitlabStatus

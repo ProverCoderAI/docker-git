@@ -153,10 +153,6 @@ const runTerminalOnlyAuthAction = (
         closePath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}`,
         exitMessage: `${provider} finished (${sessionLabel}).`,
         header: provider,
-        onExit: () => {
-          context.setAuthSnapshot(null)
-          context.setGithubStatus(null)
-        },
         pendingDeleteMessage: `${provider} was closed before attach.`,
         readyMessage: `${provider} started (${sessionLabel}).`,
         session,
