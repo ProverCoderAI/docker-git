@@ -79,6 +79,15 @@ export const copyPanelShareTunnelUrl = (
   context: BrowserActionContext,
   publicUrl: string
 ) => {
-  void globalThis.navigator.clipboard.writeText(publicUrl)
-  context.setMessage("Tunnel URL copied.")
+  withBusy({
+    context,
+    effect: Effect.tryPromise({
+      try: () => globalThis.navigator.clipboard.writeText(publicUrl),
+      catch: () => "Failed to copy tunnel URL."
+    }),
+    label: "Copying tunnel URL",
+    onSuccess: () => {
+      context.setMessage("Tunnel URL copied.")
+    }
+  })
 }

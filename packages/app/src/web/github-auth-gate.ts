@@ -29,6 +29,7 @@ export const shouldBlockMenuForGithubAuth = (
 ): boolean =>
   currentMenu !== "Auth" &&
   currentMenu !== "Quit" &&
+  // Share is intentionally available before GitHub auth so a user can expose the current dashboard state.
   currentMenu !== "Share" &&
   (githubStatus === null || shouldRequireGithubAuth(githubStatus))
 

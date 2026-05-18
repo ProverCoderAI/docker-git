@@ -26,6 +26,23 @@ describe("panel Cloudflare tunnel core", () => {
     expect(isLocalPanelHostname("::1")).toBe(true)
   })
 
+  it("allows private LAN panel URLs without remapping them", () => {
+    expect(resolvePanelTunnelTargetUrl("http://192.168.0.206:4174/share", "172.17.0.1")).toEqual({
+      ok: true,
+      panelUrl: "http://192.168.0.206:4174/",
+      targetUrl: "http://192.168.0.206:4174/"
+    })
+    expect(isLocalPanelHostname("172.19.0.59")).toBe(true)
+  })
+
+  it("rejects non-panel public hosts", () => {
+    expect(isTryCloudflareHostname("example.com")).toBe(false)
+    expect(resolvePanelTunnelTargetUrl("https://example.com/", "172.17.0.1")).toEqual({
+      ok: false,
+      message: "panelUrl must point to localhost or a private LAN address."
+    })
+  })
+
   it("rejects trycloudflare targets to avoid tunnel loops", () => {
     expect(isTryCloudflareHostname("abc.trycloudflare.com")).toBe(true)
     expect(resolvePanelTunnelTargetUrl("https://abc.trycloudflare.com/", "172.17.0.1")).toEqual({

@@ -26,6 +26,7 @@ type PanelCloudflareTunnelError = ApiBadRequestError | ApiInternalError
 
 const maxLogTailLines = 80
 const startWaitAttempts = 60
+const tunnelRecordLock = Effect.unsafeMakeSemaphore(1)
 let currentRecord: PanelCloudflareTunnelRecord | null = null
 
 const nowIso = (): string => new Date().toISOString()
@@ -254,24 +255,16 @@ const waitForTunnelUrl = (
 ): Effect.Effect<PanelCloudflareTunnelSession, never> =>
   Effect.gen(function*(_) {
     const session = currentRecord?.session
+    if (session === undefined || session.id !== id) {
+      return stoppedMissingSession(id)
+    }
     if (
-      session === undefined ||
-      session.id !== id ||
       session.publicUrl !== null ||
       session.status === "failed" ||
       session.status === "stopped" ||
       remainingAttempts <= 0
     ) {
-      return session ?? {
-        error: null,
-        id,
-        logTail: [],
-        panelUrl: "",
-        publicUrl: null,
-        startedAt: nowIso(),
-        status: "stopped",
-        stoppedAt: nowIso()
-      }
+      return session
     }
     yield* _(Effect.sleep(Duration.millis(250)))
     return yield* _(waitForTunnelUrl(id, remainingAttempts - 1))
@@ -284,12 +277,20 @@ const isReusableRecord = (
   record.session.panelUrl === panelUrl &&
   (record.session.status === "starting" || record.session.status === "running")
 
-export const readPanelCloudflareTunnel = (): Effect.Effect<PanelCloudflareTunnelSession | null> =>
-  Effect.sync(() => currentRecord?.session ?? null)
+const stoppedMissingSession = (id: string): PanelCloudflareTunnelSession => ({
+  error: null,
+  id,
+  logTail: [],
+  panelUrl: "",
+  publicUrl: null,
+  startedAt: nowIso(),
+  status: "stopped",
+  stoppedAt: nowIso()
+})
 
-export const startPanelCloudflareTunnel = (
+const waitForRecordId = (
   request: StartPanelCloudflareTunnelRequest
-): Effect.Effect<PanelCloudflareTunnelSession, PanelCloudflareTunnelError> =>
+): Effect.Effect<string, PanelCloudflareTunnelError> =>
   Effect.gen(function*(_) {
     const resolved = resolvePanelTunnelTargetUrl(request.panelUrl, defaultPanelTunnelLocalhostHost())
     if (!resolved.ok) {
@@ -297,19 +298,30 @@ export const startPanelCloudflareTunnel = (
     }
 
     if (currentRecord !== null && isReusableRecord(currentRecord, resolved.panelUrl)) {
-      return yield* _(waitForTunnelUrl(currentRecord.session.id, startWaitAttempts))
+      return currentRecord.session.id
     }
 
+    yield* _(preflightPanelTarget(resolved.targetUrl))
     if (currentRecord !== null) {
       stopRecord(currentRecord)
     }
 
-    yield* _(preflightPanelTarget(resolved.targetUrl))
     const record = createStartingRecord(resolved.panelUrl)
     currentRecord = record
     yield* _(startCloudflaredProcess(record, resolved.targetUrl))
-    return yield* _(waitForTunnelUrl(record.session.id, startWaitAttempts))
+    return record.session.id
+  }).pipe(tunnelRecordLock.withPermits(1))
+
+export const readPanelCloudflareTunnel = (): Effect.Effect<PanelCloudflareTunnelSession | null> =>
+  Effect.sync(() => currentRecord?.session ?? null).pipe(tunnelRecordLock.withPermits(1))
+
+export const startPanelCloudflareTunnel = (
+  request: StartPanelCloudflareTunnelRequest
+): Effect.Effect<PanelCloudflareTunnelSession, PanelCloudflareTunnelError> =>
+  Effect.gen(function*(_) {
+    const id = yield* _(waitForRecordId(request))
+    return yield* _(waitForTunnelUrl(id, startWaitAttempts))
   })
 
 export const stopPanelCloudflareTunnel = (): Effect.Effect<PanelCloudflareTunnelSession | null> =>
-  Effect.sync(() => currentRecord === null ? null : stopRecord(currentRecord))
+  Effect.sync(() => currentRecord === null ? null : stopRecord(currentRecord)).pipe(tunnelRecordLock.withPermits(1))

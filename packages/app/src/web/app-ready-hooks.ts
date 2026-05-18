@@ -120,8 +120,8 @@ export const useProjectNavigationReset = (
   }, [currentMenu, setProjectNavigationArmed])
 }
 
-const maybeRefreshGithubStatus = ({ context, currentMenu, githubStatus }: PanelAutoloadArgs): boolean => {
-  if (githubStatus !== null || currentMenu === "Share") {
+const maybeRefreshGithubStatus = ({ context, githubStatus }: PanelAutoloadArgs): boolean => {
+  if (githubStatus !== null) {
     return false
   }
   refreshAuthPanel(context)
@@ -162,7 +162,7 @@ const maybeLoadProjectPickerInfo = (
 }
 
 const loadReadyPanel = (args: PanelAutoloadArgs): void => {
-  if (maybeRefreshGithubStatus(args)) {
+  if (maybeRefreshGithubStatus(args) && args.currentMenu !== "Share") {
     return
   }
   maybeRefreshAuthScreen(args)

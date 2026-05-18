@@ -34,17 +34,18 @@ RUN set -eu; \
     xvfb libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libgtk-3-0 \
     libnss3 libpango-1.0-0 libx11-xcb1 libxcb-dri3-0 libxcomposite1 libxdamage1 libxfixes3 \
     libxkbcommon0 libxrandr2 libxshmfence1 \
- && curl --location --output /tmp/cloudflared.deb "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$(dpkg --print-architecture).deb" \
- && dpkg -i /tmp/cloudflared.deb \
- && rm -f /tmp/cloudflared.deb \
  && mkdir -p /usr/share/keyrings \
+ && curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
+    | gpg --dearmor -o /usr/share/keyrings/cloudflare-main.gpg \
+ && echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" \
+    > /etc/apt/sources.list.d/cloudflared.list \
  && curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
     | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
  && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
     | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
     > /etc/apt/sources.list.d/nvidia-container-toolkit.list \
  && apt-get -o Acquire::Retries=3 update \
- && apt-get -o Acquire::Retries=3 install -y --no-install-recommends nvidia-container-toolkit \
+ && apt-get -o Acquire::Retries=3 install -y --no-install-recommends cloudflared nvidia-container-toolkit \
  && nvidia-ctk runtime configure --runtime=docker \
  && rm -rf /var/lib/apt/lists/*
 

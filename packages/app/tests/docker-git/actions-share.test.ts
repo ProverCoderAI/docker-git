@@ -3,6 +3,7 @@ import { Effect } from "effect"
 import { afterEach, beforeEach, vi } from "vitest"
 
 import {
+  copyPanelShareTunnelUrl,
   refreshPanelCloudflareTunnel,
   startPanelShareTunnel,
   stopPanelShareTunnel
@@ -35,6 +36,31 @@ const runningTunnel: PanelCloudflareTunnelSession = {
   status: "running",
   stoppedAt: null
 }
+
+type ClipboardWriteText = typeof globalThis.navigator.clipboard.writeText
+
+const copyTunnelWithClipboard = (implementation: ClipboardWriteText) => {
+  const writeText = vi.fn(implementation)
+  vi.stubGlobal("navigator", { clipboard: { writeText } })
+  const { context, setMessage } = makeBrowserActionContext()
+
+  copyPanelShareTunnelUrl(context, runningTunnel.publicUrl ?? "")
+
+  return { setMessage, writeText }
+}
+
+const expectCopyTunnelMessage = (
+  implementation: ClipboardWriteText,
+  expectedMessage: string
+) =>
+  Effect.gen(function*(_) {
+    const { setMessage, writeText } = copyTunnelWithClipboard(implementation)
+
+    yield* _(waitForAssertion(() => {
+      expect(writeText).toHaveBeenCalledWith("https://shared-panel.trycloudflare.com")
+      expect(setMessage).toHaveBeenLastCalledWith(expectedMessage)
+    }))
+  })
 
 describe("web share actions", () => {
   beforeEach(() => {
@@ -100,4 +126,16 @@ describe("web share actions", () => {
         stoppedAt: "2026-05-18T00:01:00.000Z"
       })
     }))
+
+  it.effect("copies the public tunnel URL after clipboard success", () =>
+    expectCopyTunnelMessage(
+      () => Effect.runPromise(Effect.void),
+      "Tunnel URL copied."
+    ))
+
+  it.effect("reports clipboard copy failures", () =>
+    expectCopyTunnelMessage(
+      () => Effect.runPromise(Effect.fail(new Error("denied"))),
+      "Failed to copy tunnel URL."
+    ))
 })

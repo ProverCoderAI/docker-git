@@ -368,6 +368,22 @@ describe("api schemas", () => {
       })
     }))
 
+  it.effect("rejects invalid panel Cloudflare tunnel payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(StartPanelCloudflareTunnelRequestSchema)({
+        panelUrl: 123
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          expect(ParseResult.TreeFormatter.formatIssueSync(error.issue)).toContain("Expected string")
+        },
+        onRight: () => {
+          throw new Error("Expected schema decode failure")
+        }
+      })
+    }))
+
   it.effect("decodes project browser session payload", () =>
     Effect.sync(() => {
       const result = Schema.decodeUnknownEither(ProjectBrowserSessionSchema)({

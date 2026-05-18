@@ -145,6 +145,9 @@ export const SharePanel = (
         <ActionButton fg="#7fdfff" label="refresh" onClick={onRefresh} />
         <ActionButton fg="#ff8aa0" label="stop" onClick={onStop} />
       </Box>
+      <Text fg="#ffd166" marginTop={1} wrap="wrap">
+        Anyone with the public URL can access the current dashboard.
+      </Text>
       <Text fg="#8fa6c4" marginTop={1} wrap="truncate">
         Panel: {tunnelPanelUrl(tunnel)}
       </Text>
