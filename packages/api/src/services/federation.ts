@@ -1695,7 +1695,7 @@ const resolveAgentProvider = (
   subscription: FollowSubscription | undefined
 ): AgentProvider => {
   const raw = subscription?.agentProvider ?? process.env["DOCKER_GIT_EXCHANGE_AGENT_PROVIDER"]
-  return raw === "claude" || raw === "opencode" || raw === "custom" ? raw : "codex"
+  return raw === "claude" || raw === "opencode" || raw === "grok" || raw === "custom" ? raw : "codex"
 }
 
 const buildTaskPrompt = (issue: FederationIssueRecord): string => {
@@ -1729,6 +1729,9 @@ const buildAgentCommand = (
   }
   if (provider === "opencode") {
     return `opencode run ${shellEscape(prompt)}`
+  }
+  if (provider === "grok") {
+    return `MCP_PLAYWRIGHT_ISOLATED=1 grok --no-sandbox -p ${shellEscape(prompt)}`
   }
   if (provider === "custom") {
     return `sh -lc ${shellEscape(`printf '%s\n' ${shellEscape(prompt)}`)}`

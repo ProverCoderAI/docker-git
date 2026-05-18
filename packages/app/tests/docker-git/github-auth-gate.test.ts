@@ -54,6 +54,7 @@ describe("github-auth-gate", () => {
     expect(shouldBlockMenuForGithubAuth(status, "Create")).toBe(true)
     expect(shouldBlockMenuForGithubAuth(status, "Auth")).toBe(false)
     expect(shouldBlockMenuForGithubAuth(status, "Quit")).toBe(false)
+    expect(shouldBlockMenuForGithubAuth(status, "Share")).toBe(false)
   })
 
   it("keeps the first auth menu action mapped to GitHub OAuth", () => {

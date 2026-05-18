@@ -7,7 +7,6 @@ import { loadDashboard, resolveApiBaseUrl } from "./api.js"
 import { createDashboardRefreshReducer, type DashboardState } from "./app-dashboard-state.js"
 import { AppReady } from "./app-ready.js"
 import { resolveWebAppRoute } from "./app-terminal-session-core.js"
-import { AppTerminalSession } from "./app-terminal-session.js"
 import { ErrorScreen, LoadingScreen } from "./panels.js"
 import { resolveViewportLayout, type ViewportLayout, type ViewportSize } from "./viewport-layout.js"
 
@@ -207,10 +206,6 @@ export const App = (): JSX.Element => {
     <AppFrame viewport={viewport}>
       {Match.value(route).pipe(
         Match.when({ tag: "Dashboard" }, () => <AppDashboard viewport={viewport} />),
-        Match.when(
-          { tag: "TerminalSession" },
-          ({ sessionId }) => <AppTerminalSession sessionId={sessionId} viewportLayout={viewport} />
-        ),
         Match.exhaustive
       )}
     </AppFrame>

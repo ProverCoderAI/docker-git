@@ -124,6 +124,11 @@ export const runDockerComposeDown = (
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCompose(cwd, ["down"], [Number(ExitCode(0))])
 
+export const runDockerComposeStop = (
+  cwd: string
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runCompose(cwd, ["stop"], [Number(ExitCode(0))])
+
 export const runDockerComposeDownVolumes = (
   cwd: string
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>

@@ -33,6 +33,8 @@ interface ValueOptionSpec {
     | "gitTokenLabel"
     | "codexTokenLabel"
     | "claudeTokenLabel"
+    | "geminiTokenLabel"
+    | "grokTokenLabel"
     | "token"
     | "scopes"
     | "message"
@@ -76,6 +78,8 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--git-token", key: "gitTokenLabel" },
   { flag: "--codex-token", key: "codexTokenLabel" },
   { flag: "--claude-token", key: "claudeTokenLabel" },
+  { flag: "--gemini-token", key: "geminiTokenLabel" },
+  { flag: "--grok-token", key: "grokTokenLabel" },
   { flag: "--token", key: "token" },
   { flag: "--scopes", key: "scopes" },
   { flag: "--message", key: "message" },
@@ -137,6 +141,8 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   gitTokenLabel: (raw, value) => ({ ...raw, gitTokenLabel: value }),
   codexTokenLabel: (raw, value) => ({ ...raw, codexTokenLabel: value }),
   claudeTokenLabel: (raw, value) => ({ ...raw, claudeTokenLabel: value }),
+  geminiTokenLabel: (raw, value) => ({ ...raw, geminiTokenLabel: value }),
+  grokTokenLabel: (raw, value) => ({ ...raw, grokTokenLabel: value }),
   token: (raw, value) => ({ ...raw, token: value }),
   scopes: (raw, value) => ({ ...raw, scopes: value }),
   message: (raw, value) => ({ ...raw, message: value }),

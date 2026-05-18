@@ -25,6 +25,8 @@ const projectAuthMenuItems: ReadonlyArray<ProjectAuthMenuItem> = [
   { action: "ProjectClaudeDisconnect", label: "Project: Claude disconnect" },
   { action: "ProjectGeminiConnect", label: "Project: Gemini connect label" },
   { action: "ProjectGeminiDisconnect", label: "Project: Gemini disconnect" },
+  { action: "ProjectGrokConnect", label: "Project: Grok connect label" },
+  { action: "ProjectGrokDisconnect", label: "Project: Grok disconnect" },
   { action: "Refresh", label: "Refresh snapshot" },
   { action: "Back", label: "Back to main menu" }
 ]
@@ -45,7 +47,11 @@ const flowSteps: Readonly<Record<ProjectAuthFlow, ReadonlyArray<ProjectAuthPromp
   ProjectGeminiConnect: [
     { key: "label", label: "Label (empty = default)", required: false, secret: false }
   ],
-  ProjectGeminiDisconnect: []
+  ProjectGeminiDisconnect: [],
+  ProjectGrokConnect: [
+    { key: "label", label: "Label (empty = default)", required: false, secret: false }
+  ],
+  ProjectGrokDisconnect: []
 }
 
 export const projectAuthSuccessMessage = (
@@ -61,6 +67,8 @@ export const projectAuthSuccessMessage = (
     Match.when("ProjectClaudeDisconnect", () => "Disconnected Claude from project."),
     Match.when("ProjectGeminiConnect", () => `Connected Gemini label (${label}) to project.`),
     Match.when("ProjectGeminiDisconnect", () => "Disconnected Gemini from project."),
+    Match.when("ProjectGrokConnect", () => `Connected Grok label (${label}) to project.`),
+    Match.when("ProjectGrokDisconnect", () => "Disconnected Grok from project."),
     Match.exhaustive
   )
 

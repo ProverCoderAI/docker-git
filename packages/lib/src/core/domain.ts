@@ -19,7 +19,10 @@ export type {
   AuthGithubStatusCommand,
   AuthGitlabLoginCommand,
   AuthGitlabLogoutCommand,
-  AuthGitlabStatusCommand
+  AuthGitlabStatusCommand,
+  AuthGrokLoginCommand,
+  AuthGrokLogoutCommand,
+  AuthGrokStatusCommand
 } from "./auth-domain.js"
 export type { MenuAction, ParseError } from "./menu.js"
 export { parseMenuSelection } from "./menu.js"
@@ -52,7 +55,7 @@ export {
   dockerGitSharedCodexVolumeName
 } from "./template-defaults.js"
 
-export type AgentMode = "claude" | "codex" | "gemini"
+export type AgentMode = "claude" | "codex" | "gemini" | "grok"
 
 export type DockerNetworkMode = "shared" | "project"
 export type GpuMode = "none" | "all"
@@ -96,6 +99,9 @@ export interface TemplateConfig {
   readonly geminiAuthLabel?: string | undefined
   readonly geminiAuthPath: string
   readonly geminiHome: string
+  readonly grokAuthLabel?: string | undefined
+  readonly grokAuthPath: string
+  readonly grokHome: string
   readonly cpuLimit?: string | undefined
   readonly ramLimit?: string | undefined
   readonly playwrightCpuLimit?: string | undefined
@@ -187,6 +193,7 @@ export interface ApplyCommand {
   readonly codexTokenLabel?: string | undefined
   readonly claudeTokenLabel?: string | undefined
   readonly geminiTokenLabel?: string | undefined
+  readonly grokTokenLabel?: string | undefined
   readonly cpuLimit?: string | undefined
   readonly ramLimit?: string | undefined
   readonly playwrightCpuLimit?: string | undefined

@@ -15,6 +15,15 @@ import { renderDockerfileGitleaks, renderDockerfileOpenCode } from "./tools.js"
 // COMPLEXITY: O(1)/O(1)
 const dockerGitBaseImage = "konard/box-js:2.1.1"
 
+// CHANGE: include tmux in generated project images for durable terminal multiplexing.
+// WHY: stable project SSH links attach to persisted tmux sessions instead of one-off shell processes.
+// QUOTE(ТЗ): n/a
+// REF: PR-309
+// SOURCE: n/a
+// PURITY: CORE
+// INVARIANT: generated base image contains the terminal multiplexer required by project SSH sessions.
+// COMPLEXITY: O(1)/O(1)
+
 /**
  * Renders the base image, root user, apt mirror, core packages, and sudo prelude.
  *
@@ -56,7 +65,7 @@ RUN set -eu; \
     sleep $((attempt * 2)); \
   done; \
   apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-    openssh-server git gh ca-certificates curl unzip bsdutils sudo \
+    openssh-server git gh ca-certificates curl unzip bsdutils sudo tmux \
     make docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
     ncurses-term jq \
  && rm -rf /var/lib/apt/lists/*
@@ -78,8 +87,11 @@ RUN mkdir -p /usr/local/nvm \
 RUN printf "export NVM_DIR=/usr/local/nvm\\n[ -s /usr/local/nvm/nvm.sh ] && . /usr/local/nvm/nvm.sh\\n" \
   > /etc/profile.d/nvm.sh && chmod 0644 /etc/profile.d/nvm.sh`
 
+const grokCliInstallScriptUrl = "https://x.ai/cli/install.sh"
+const grokCliVersion = "0.1.211"
+
 const renderDockerfileBunPrelude = (config: TemplateConfig): string =>
-  `# Tooling: Bun + Codex CLI (bun) + oh-my-opencode (npm + platform binary) + Claude Code CLI (npm)
+  `# Tooling: Bun + Codex CLI (bun) + oh-my-opencode (npm + platform binary) + Claude Code CLI (npm) + Grok CLI (xAI installer)
 ENV TERM=xterm-256color
 RUN set -eu; \
   for attempt in 1 2 3 4 5; do \
@@ -109,7 +121,16 @@ RUN oh-my-opencode --version
 RUN npm install -g @anthropic-ai/claude-code@latest
 RUN claude --version
 RUN npm install -g @google/gemini-cli@latest --force
-RUN gemini --version`
+RUN gemini --version
+RUN set -eu; \
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 ${grokCliInstallScriptUrl} -o /tmp/grok-install.sh; \
+  HOME=/tmp/grok-install-home GROK_BIN_DIR=/usr/local/bin bash /tmp/grok-install.sh ${grokCliVersion}; \
+  install -m 0755 "$(readlink -f /usr/local/bin/grok)" /usr/local/bin/grok.real; \
+  install -m 0755 "$(readlink -f /usr/local/bin/agent)" /usr/local/bin/agent.real; \
+  mv -f /usr/local/bin/grok.real /usr/local/bin/grok; \
+  mv -f /usr/local/bin/agent.real /usr/local/bin/agent; \
+  rm -rf /tmp/grok-install.sh /tmp/grok-install-home
+RUN grok --version`
 
 // CHANGE: install RTK as a real command-output optimizer in generated containers.
 // WHY: issue-266 asks for out-of-the-box RTK behavior, not only a session-sync estimate.
@@ -349,6 +370,8 @@ RUN set -eu; \
 RUN mkdir -p /opt/docker-git/bootstrap/.orch/auth/codex \
   /opt/docker-git/bootstrap/.orch/auth/codex-shared \
   /opt/docker-git/bootstrap/.orch/auth/claude \
+  /opt/docker-git/bootstrap/.orch/auth/gemini \
+  /opt/docker-git/bootstrap/.orch/auth/grok \
   /opt/docker-git/bootstrap/.orch/env \
   && touch /opt/docker-git/bootstrap/authorized_keys \
   /opt/docker-git/bootstrap/.orch/env/global.env \

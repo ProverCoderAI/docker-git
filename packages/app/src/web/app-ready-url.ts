@@ -4,7 +4,7 @@ import type { DashboardData } from "./api.js"
 import type { BrowserShortcutArgs } from "./app-ready-shortcut-runtime.js"
 import { browserMenuIndex, browserMenuItems, type BrowserMenuTag } from "./menu.js"
 import { type BrowserScreen, isProjectMenu, menuScreen, outputScreen, screenForMenu } from "./screen.js"
-import { type ActiveTerminalSession, terminalSessionRoutePath } from "./terminal.js"
+import { type ActiveTerminalSession, projectSshRoutePath } from "./terminal.js"
 
 type ReadyUrlNavigation = {
   readonly activeScreen: BrowserScreen
@@ -54,6 +54,7 @@ const menuSlugs: Readonly<Record<BrowserMenuTag, string>> = {
   Prompts: "prompts",
   Quit: "quit",
   Select: "select",
+  Share: "share",
   Skills: "skills",
   Status: "status",
   Tasks: "tasks"
@@ -81,10 +82,10 @@ const projectToken = (project: DashboardData["projects"][number] | undefined, fa
   project?.projectKey ?? fallback
 
 const activeTerminalReadyPath = (session: ActiveTerminalSession | null): string | null => {
-  if (session?.browserProjectId === undefined) {
+  if (session?.browserProjectId === undefined || session.browserProjectKey === undefined) {
     return null
   }
-  return session.sessionPath ?? terminalSessionRoutePath(session.session.id)
+  return projectSshRoutePath(session.browserProjectKey, session.session.id)
 }
 
 const selectReadyPath = (token: string | null): string =>

@@ -4,7 +4,9 @@ import {
   type AuthMenuAction,
   authViewSteps,
   authViewTitle,
-  successMessage as authSuccessMessage
+  successMessage as authSuccessMessage,
+  type TerminalAuthFlow,
+  terminalAuthTitle
 } from "../docker-git/menu-auth-shared.js"
 import {
   type ProjectAuthMenuAction,
@@ -39,7 +41,14 @@ import { projectPickerScreen } from "./screen.js"
 
 type SupportedAuthMutation = Extract<
   AuthMenuAction,
-  "GithubRemove" | "GitSet" | "GitRemove" | "ClaudeLogout" | "GeminiApiKey" | "GeminiLogout"
+  | "GithubRemove"
+  | "GitSet"
+  | "GitRemove"
+  | "ClaudeLogout"
+  | "GeminiApiKey"
+  | "GeminiLogout"
+  | "GrokApiKey"
+  | "GrokLogout"
 >
 
 type SupportedProjectMutation = Extract<
@@ -52,6 +61,8 @@ type SupportedProjectMutation = Extract<
   | "ProjectClaudeDisconnect"
   | "ProjectGeminiConnect"
   | "ProjectGeminiDisconnect"
+  | "ProjectGrokConnect"
+  | "ProjectGrokDisconnect"
 >
 
 export const refreshAuthPanel = (context: BrowserActionContext) => {
@@ -125,11 +136,11 @@ const runSupportedAuthMutation = (
 }
 
 const runTerminalOnlyAuthAction = (
-  action: Extract<AuthMenuAction, "ClaudeOauth" | "GeminiOauth">,
+  action: TerminalAuthFlow,
   values: Readonly<Record<string, string>>,
   context: BrowserActionContext
 ) => {
-  const provider = action === "ClaudeOauth" ? "Claude Code OAuth" : "Gemini CLI OAuth"
+  const provider = terminalAuthTitle(action)
   const label = nullableValue(values["label"])
   const sessionLabel = defaultLabel(values["label"])
   withBusy({
@@ -276,7 +287,7 @@ export const submitBrowserActionPrompt = (
       runSupportedAuthMutation(prompt.action, prompt.values, context)
       return
     }
-    if (prompt.action === "ClaudeOauth" || prompt.action === "GeminiOauth") {
+    if (prompt.action === "ClaudeOauth" || prompt.action === "GeminiOauth" || prompt.action === "GrokOauth") {
       runTerminalOnlyAuthAction(prompt.action, prompt.values, context)
       return
     }

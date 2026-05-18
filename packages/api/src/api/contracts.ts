@@ -1,6 +1,6 @@
 export type ProjectStatus = "running" | "stopped" | "unknown"
 
-export type AgentProvider = "codex" | "opencode" | "claude" | "custom"
+export type AgentProvider = "codex" | "opencode" | "claude" | "grok" | "custom"
 
 export type AgentStatus = "starting" | "running" | "stopping" | "stopped" | "exited" | "failed"
 
@@ -72,6 +72,23 @@ export type ProjectPortForward = {
 export type ProjectPortForwardRequest = {
   readonly targetPort: number
   readonly hostPort?: number | undefined
+}
+
+export type PanelCloudflareTunnelStatus = "starting" | "running" | "stopped" | "failed"
+
+export type PanelCloudflareTunnelSession = {
+  readonly error: string | null
+  readonly id: string
+  readonly logTail: ReadonlyArray<string>
+  readonly panelUrl: string
+  readonly publicUrl: string | null
+  readonly startedAt: string
+  readonly status: PanelCloudflareTunnelStatus
+  readonly stoppedAt: string | null
+}
+
+export type StartPanelCloudflareTunnelRequest = {
+  readonly panelUrl: string
 }
 
 export type ProjectBrowserStatus = "running" | "stopped" | "missing" | "unknown"
@@ -183,19 +200,23 @@ export type AuthMenuFlow =
   | "ClaudeLogout"
   | "GeminiApiKey"
   | "GeminiLogout"
+  | "GrokApiKey"
+  | "GrokLogout"
 
-export type AuthTerminalFlow = "ClaudeOauth" | "GeminiOauth"
+export type AuthTerminalFlow = "ClaudeOauth" | "GeminiOauth" | "GrokOauth"
 
 export type AuthSnapshot = {
   readonly globalEnvPath: string
   readonly claudeAuthPath: string
   readonly geminiAuthPath: string
+  readonly grokAuthPath: string
   readonly totalEntries: number
   readonly githubTokenEntries: number
   readonly gitTokenEntries: number
   readonly gitUserEntries: number
   readonly claudeAuthEntries: number
   readonly geminiAuthEntries: number
+  readonly grokAuthEntries: number
 }
 
 export type AuthMenuRequest = {
@@ -249,6 +270,8 @@ export type ProjectAuthFlow =
   | "ProjectClaudeDisconnect"
   | "ProjectGeminiConnect"
   | "ProjectGeminiDisconnect"
+  | "ProjectGrokConnect"
+  | "ProjectGrokDisconnect"
 
 export type ProjectAuthSnapshot = {
   readonly projectDir: string
@@ -257,14 +280,17 @@ export type ProjectAuthSnapshot = {
   readonly envProjectPath: string
   readonly claudeAuthPath: string
   readonly geminiAuthPath: string
+  readonly grokAuthPath: string
   readonly githubTokenEntries: number
   readonly gitTokenEntries: number
   readonly claudeAuthEntries: number
   readonly geminiAuthEntries: number
+  readonly grokAuthEntries: number
   readonly activeGithubLabel: string | null
   readonly activeGitLabel: string | null
   readonly activeClaudeLabel: string | null
   readonly activeGeminiLabel: string | null
+  readonly activeGrokLabel: string | null
 }
 
 export type ProjectAuthRequest = {
@@ -272,7 +298,7 @@ export type ProjectAuthRequest = {
   readonly label?: string | null | undefined
 }
 
-export type ProjectPromptKind = "claude" | "codex" | "gemini"
+export type ProjectPromptKind = "claude" | "codex" | "gemini" | "grok"
 
 export type ProjectPromptFile = {
   readonly kind: ProjectPromptKind
@@ -302,6 +328,7 @@ export type ProjectSkillScope =
   | "claude/skills"
   | "codex/skills"
   | "gemini/skills"
+  | "grok/skills"
 
 export type ProjectSkillFile = {
   readonly id: string
@@ -357,6 +384,10 @@ export type UpProjectRequest = {
 }
 
 export type ApplyProjectRequest = {
+  readonly cpuLimit?: string | undefined
+  readonly ramLimit?: string | undefined
+  readonly playwrightCpuLimit?: string | undefined
+  readonly playwrightRamLimit?: string | undefined
   readonly gpu?: "none" | "all" | undefined
 }
 
@@ -385,6 +416,8 @@ export type CreateProjectRequest = {
   readonly codexHome?: string | undefined
   readonly cpuLimit?: string | undefined
   readonly ramLimit?: string | undefined
+  readonly playwrightCpuLimit?: string | undefined
+  readonly playwrightRamLimit?: string | undefined
   readonly gpu?: "none" | "all" | undefined
   readonly dockerNetworkMode?: string | undefined
   readonly dockerSharedNetworkName?: string | undefined
@@ -394,6 +427,8 @@ export type CreateProjectRequest = {
   readonly skipGithubAuth?: boolean | undefined
   readonly codexTokenLabel?: string | undefined
   readonly claudeTokenLabel?: string | undefined
+  readonly geminiTokenLabel?: string | undefined
+  readonly grokTokenLabel?: string | undefined
   readonly agentAutoMode?: string | undefined
   readonly up?: boolean | undefined
   readonly openSsh?: boolean | undefined

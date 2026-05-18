@@ -35,6 +35,8 @@ const ProjectAuthSnapshotSection = ({ snapshot }: { readonly snapshot: ProjectAu
         <SnapshotLine label="Git label" value={snapshot.activeGitLabel ?? "not set"} />
         <SnapshotLine label="Claude label" value={snapshot.activeClaudeLabel ?? "not set"} />
         <SnapshotLine label="Gemini label" value={snapshot.activeGeminiLabel ?? "not set"} />
+        <SnapshotLine label="Grok label" value={snapshot.activeGrokLabel ?? "not set"} />
+        <SnapshotLine label="Grok accounts" value={snapshot.grokAuthEntries} />
       </Box>
     )
 

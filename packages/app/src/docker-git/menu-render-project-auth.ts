@@ -31,6 +31,8 @@ export const renderProjectAuthMenu = (
       el(Text, { fg: "gray" }, `Project env: ${snapshot.envProjectPath}`),
       el(Text, { fg: "gray" }, `Global env: ${snapshot.envGlobalPath}`),
       el(Text, { fg: "gray" }, `Claude auth: ${snapshot.claudeAuthPath}`),
+      el(Text, { fg: "gray" }, `Gemini auth: ${snapshot.geminiAuthPath}`),
+      el(Text, { fg: "gray" }, `Grok auth: ${snapshot.grokAuthPath}`),
       el(
         Box,
         { marginTop: 1, flexDirection: "column" },
@@ -39,7 +41,11 @@ export const renderProjectAuthMenu = (
         el(Text, { fg: "gray" }, `Git label: ${renderActiveLabel(snapshot.activeGitLabel)}`),
         el(Text, { fg: "gray" }, renderCountLine("Available Git tokens", snapshot.gitTokenEntries)),
         el(Text, { fg: "gray" }, `Claude label: ${renderActiveLabel(snapshot.activeClaudeLabel)}`),
-        el(Text, { fg: "gray" }, renderCountLine("Available Claude logins", snapshot.claudeAuthEntries))
+        el(Text, { fg: "gray" }, renderCountLine("Available Claude logins", snapshot.claudeAuthEntries)),
+        el(Text, { fg: "gray" }, `Gemini label: ${renderActiveLabel(snapshot.activeGeminiLabel)}`),
+        el(Text, { fg: "gray" }, renderCountLine("Available Gemini logins", snapshot.geminiAuthEntries)),
+        el(Text, { fg: "gray" }, `Grok label: ${renderActiveLabel(snapshot.activeGrokLabel)}`),
+        el(Text, { fg: "gray" }, renderCountLine("Available Grok logins", snapshot.grokAuthEntries))
       ),
       el(Box, { flexDirection: "column", marginTop: 1 }, ...list),
       renderMenuHelp("Use arrows + Enter, or type a number from the list.")

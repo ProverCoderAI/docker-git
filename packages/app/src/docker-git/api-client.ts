@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 
+import type { ApplyProjectRequest } from "../shared/project-resource-request.js"
 import { buildCreateProjectRequest } from "./api-client-create.js"
 import {
   readProjectEventCursor,
@@ -193,6 +194,30 @@ export const upProject = (projectId: string) =>
     )
   )
 
+export const applyProject = (projectId: string, applyRequest: ApplyProjectRequest = {}) =>
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/apply"), applyRequest).pipe(
+      Effect.map((payload) => decodeProjectResponse(payload))
+    )
+  )
+
+export const resumeProject = (projectId: string) =>
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/resume")).pipe(
+      Effect.map((payload) => decodeProjectResponse(payload))
+    )
+  )
+
+export const suspendProject = (projectId: string) =>
+  withProjectEventPolling(
+    projectId,
+    request("POST", projectPath(projectId, "/suspend")).pipe(
+      Effect.map((payload) => decodeProjectResponse(payload))
+    )
+  )
+
 export const downProject = (projectId: string) =>
   withProjectEventPolling(projectId, requestVoid("POST", projectPath(projectId, "/down")))
 
@@ -233,7 +258,7 @@ export const createProjectTerminalSession = (projectId: string) =>
   )
 
 export const createAuthTerminalSession = (
-  flow: "ClaudeOauth" | "GeminiOauth",
+  flow: "ClaudeOauth" | "GeminiOauth" | "GrokOauth",
   label: string | null
 ) =>
   request("POST", "/auth/terminal-sessions", { flow, label: label ?? undefined }).pipe(

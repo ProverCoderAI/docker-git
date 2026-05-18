@@ -6,7 +6,7 @@ import type { TemplateConfig } from "../domain.js"
 // QUOTE(TASK): "make it work out of the box for docker-git"
 // REF: issue-266
 // SOURCE: https://github.com/rtk-ai/rtk/blob/develop/README.md
-// FORMAT THEOREM: forall start: RTK_ENABLED(start) -> configured(codex, claude, gemini, opencode)
+// FORMAT THEOREM: forall start: RTK_ENABLED(start) -> configured(codex, claude, gemini, grok, opencode)
 // PURITY: CORE (pure template renderer)
 // INVARIANT: RTK init runs as the non-root SSH user and never blocks container startup.
 // COMPLEXITY: O(1)
@@ -28,8 +28,8 @@ docker_git_rtk_init_as_user() {
     return 0
   fi
 
-  mkdir -p "$CLAUDE_CONFIG_DIR" "__CODEX_HOME__" "/home/__SSH_USER__/.config/opencode" "/home/__SSH_USER__/.gemini" || true
-  chown -R 1000:1000 "$CLAUDE_CONFIG_DIR" "__CODEX_HOME__" "/home/__SSH_USER__/.config" "/home/__SSH_USER__/.gemini" 2>/dev/null || true
+  mkdir -p "$CLAUDE_CONFIG_DIR" "__CODEX_HOME__" "/home/__SSH_USER__/.config/opencode" "/home/__SSH_USER__/.gemini" "/home/__SSH_USER__/.grok" || true
+  chown -R 1000:1000 "$CLAUDE_CONFIG_DIR" "__CODEX_HOME__" "/home/__SSH_USER__/.config" "/home/__SSH_USER__/.gemini" "/home/__SSH_USER__/.grok" 2>/dev/null || true
 
   if su - __SSH_USER__ -s /bin/bash -c "$command" </dev/null; then
     echo "[rtk] configured $label"

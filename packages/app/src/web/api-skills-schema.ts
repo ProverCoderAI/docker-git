@@ -8,7 +8,8 @@ export const ProjectSkillScopeSchema = Schema.Union(
   Schema.Literal("agents/.skills"),
   Schema.Literal("claude/skills"),
   Schema.Literal("codex/skills"),
-  Schema.Literal("gemini/skills")
+  Schema.Literal("gemini/skills"),
+  Schema.Literal("grok/skills")
 )
 
 export const ProjectSkillFileSchema = Schema.Struct({

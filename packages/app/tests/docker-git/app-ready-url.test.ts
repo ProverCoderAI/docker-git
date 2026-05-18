@@ -41,6 +41,22 @@ describe("app ready URL state", () => {
     })).toBe("/menu/browser")
   })
 
+  it("renders share panel URLs without project selection", () => {
+    expect(readyUrlPath({
+      activeScreen: { tag: "Share" },
+      activeTerminalSession: null,
+      currentMenu: "Share",
+      selectedProjectId: null,
+      selectedProjectSummary: undefined
+    })).toBe("/share")
+    expect(parseReadyUrlNavigation("https://docker-git.local/share", dashboard.projects)).toEqual({
+      activeScreen: { tag: "Share" },
+      menu: "Share",
+      projectNavigationArmed: false,
+      selectedProjectId: null
+    })
+  })
+
   it("renders selected project tabs as readable deep links", () => {
     expect(readyUrlPath({
       activeScreen: { tag: "ProjectPicker" },
@@ -61,7 +77,7 @@ describe("app ready URL state", () => {
     })).toBe("/databases/octocat/hello-world")
   })
 
-  it("renders active SSH project terminals as SSH deep links", () => {
+  it("renders active SSH project terminals as stable project SSH links", () => {
     expect(readyUrlPath({
       activeScreen: { tag: "ProjectPicker" },
       activeTerminalSession: {
@@ -86,7 +102,7 @@ describe("app ready URL state", () => {
       currentMenu: "Select",
       selectedProjectId: "project-1",
       selectedProjectSummary
-    })).toBe("/ssh/session/session-1")
+    })).toBe("/ssh/octocat/hello-world?t=session-1")
   })
 
   it("renders SSH project selection as a project terminal list deep link", () => {

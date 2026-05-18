@@ -11,6 +11,7 @@ import {
   loadSelectedProjectSkills,
   loadSelectedProjectTasks,
   refreshAuthPanel,
+  refreshPanelCloudflareTunnel,
   refreshProjectAuthPanel,
   runBrowserMenuAction
 } from "./actions.js"
@@ -105,6 +106,7 @@ const resolveRefreshAction = (
     Match.when("Databases", () => loadSelectedProjectDatabases),
     Match.when("Ports", () => loadSelectedProjectPorts),
     Match.when("Prompts", () => loadSelectedProjectPrompts),
+    Match.when("Share", () => refreshPanelCloudflareTunnel),
     Match.when("Skills", () => loadSelectedProjectSkills),
     Match.when("Tasks", () => loadSelectedProjectTasks),
     Match.when("ProjectAuth", () => refreshProjectAuthPanel),

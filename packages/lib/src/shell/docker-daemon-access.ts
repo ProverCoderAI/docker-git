@@ -20,6 +20,12 @@ const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
 const formatDockerFallbackFailure = (dockerHost: string, details: string): string =>
   `Fallback DOCKER_HOST=${dockerHost} failed: ${details}`
 
+const dockerInfoPlatformError = (error: PlatformError): DockerAccessError =>
+  new DockerAccessError({
+    issue: "DaemonUnavailable",
+    details: String(error)
+  })
+
 const resolveDockerHostFallbackCandidates = (): ReadonlyArray<string> => {
   if (process.env["DOCKER_HOST"] !== undefined) {
     return []
@@ -97,14 +103,14 @@ export const classifyDockerAccessIssue = (message: string): DockerAccessIssue =>
 // FORMAT THEOREM: ∀cwd: access(cwd)=ok ∨ DockerAccessError
 // PURITY: SHELL
 // EFFECT: Effect<void, DockerAccessError | PlatformError, CommandExecutor>
-// INVARIANT: non-zero docker info exit always maps to DockerAccessError
+// INVARIANT: non-zero docker info exit or spawn failure always maps to DockerAccessError
 // COMPLEXITY: O(command)
 export const ensureDockerDaemonAccess = (
   cwd: string
 ): Effect.Effect<void, DockerAccessError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.scoped(
     Effect.gen(function*(_) {
-      const primaryResult = yield* _(runDockerInfoCommand(cwd))
+      const primaryResult = yield* _(runDockerInfoCommand(cwd).pipe(Effect.mapError(dockerInfoPlatformError)))
       if (primaryResult.exitCode === 0) {
         return
       }
@@ -128,7 +134,7 @@ export const ensureDockerDaemonAccess = (
           runDockerInfoCommand(cwd, {
             ...process.env,
             DOCKER_HOST: fallbackHost
-          })
+          }).pipe(Effect.mapError(dockerInfoPlatformError))
         )
 
         if (fallbackResult.exitCode === 0) {

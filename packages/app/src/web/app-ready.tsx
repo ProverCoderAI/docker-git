@@ -44,6 +44,7 @@ type ReadyLayoutRenderArgs = {
     readonly onOpenProjectTaskManagerById: (projectId: string) => void
     readonly onOpenSkiller: (projectKey?: string, sessionId?: string) => void
     readonly onCloseProjectPortForward: (targetPort: number) => void
+    readonly onCopyPanelShareTunnelUrl: (publicUrl: string) => void
     readonly onKillProjectTerminalSession: (projectId: string, projectKey: string, sessionId: string) => void
     readonly onOpenProjectPortForward: () => void
     readonly onOpenProjectTerminalById: (projectId: string, projectKey?: string) => void
@@ -55,6 +56,7 @@ type ReadyLayoutRenderArgs = {
     readonly onRefreshProjectPrompts: () => void
     readonly onRefreshProjectSkills: () => void
     readonly onRefreshProjectTasks: () => void
+    readonly onRefreshPanelShareTunnel: () => void
     readonly onProjectTasksIncludeDefaultChange: (includeDefault: boolean) => void
     readonly onRestartProjectDatabaseEditor: () => void
     readonly onRunAuthAction: (index: number) => void
@@ -64,6 +66,8 @@ type ReadyLayoutRenderArgs = {
     readonly onSaveProjectPrompt: ReturnType<typeof useReadyController>["onSaveProjectPrompt"]
     readonly onSaveProjectSkill: ReturnType<typeof useReadyController>["onSaveProjectSkill"]
     readonly onLoadProjectTaskLogs: (pid: number) => void
+    readonly onStartPanelShareTunnel: () => void
+    readonly onStopPanelShareTunnel: () => void
     readonly onStopProjectTask: (pid: number) => void
   }
   readonly currentMenu: ReturnType<typeof useReadyController>["currentMenu"]
@@ -73,6 +77,13 @@ type ReadyLayoutRenderArgs = {
   readonly state: ReturnType<typeof useReadyController>["state"]
   readonly viewportLayout: ViewportLayout
 }
+
+const readyShareActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
+  onCopyPanelShareTunnelUrl: actions.onCopyPanelShareTunnelUrl,
+  onRefreshPanelShareTunnel: actions.onRefreshPanelShareTunnel,
+  onStartPanelShareTunnel: actions.onStartPanelShareTunnel,
+  onStopPanelShareTunnel: actions.onStopPanelShareTunnel
+})
 
 const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onActionPromptCancel: actions.onActionPromptCancel,
@@ -120,7 +131,8 @@ const readyActionProps = (actions: ReadyLayoutRenderArgs["actions"]) => ({
   onSaveProjectPrompt: actions.onSaveProjectPrompt,
   onSaveProjectSkill: actions.onSaveProjectSkill,
   onLoadProjectTaskLogs: actions.onLoadProjectTaskLogs,
-  onStopProjectTask: actions.onStopProjectTask
+  onStopProjectTask: actions.onStopProjectTask,
+  ...readyShareActionProps(actions)
 })
 
 const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
@@ -145,6 +157,7 @@ const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   onTerminalClose: state.closeTerminalSession,
   onTerminalMessage: state.setMessage,
   output: state.output,
+  panelCloudflareTunnel: state.panelCloudflareTunnel,
   portForwardInput: state.portForwardInput,
   portForwards: state.portForwards,
   project: state.project,

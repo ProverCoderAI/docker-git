@@ -11,6 +11,9 @@ export type UnsupportedOperationalCommandTag =
   | "AuthGeminiLogin"
   | "AuthGeminiStatus"
   | "AuthGeminiLogout"
+  | "AuthGrokLogin"
+  | "AuthGrokStatus"
+  | "AuthGrokLogout"
 
 export const unsupportedOperationalCommands: Record<
   UnsupportedOperationalCommandTag,
@@ -22,7 +25,7 @@ export const unsupportedOperationalCommands: Record<
   ScrapImport: { command: "scrap import", message: "Scrap import is disabled in API-only host mode." },
   McpPlaywrightUp: {
     command: "mcp-playwright",
-    message: "Playwright sidecar management is disabled in API-only host mode."
+    message: "Playwright browser management is disabled in API-only host mode."
   },
   Apply: {
     command: "Apply",
@@ -50,6 +53,18 @@ export const unsupportedOperationalCommands: Record<
   },
   AuthGeminiLogout: {
     command: "auth gemini logout",
+    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
+  },
+  AuthGrokLogin: {
+    command: "auth grok login",
+    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
+  },
+  AuthGrokStatus: {
+    command: "auth grok status",
+    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
+  },
+  AuthGrokLogout: {
+    command: "auth grok logout",
     message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
   }
 }

@@ -23,6 +23,8 @@ export const CreateProjectRequestSchema = Schema.Struct({
   codexHome: OptionalString,
   cpuLimit: OptionalString,
   ramLimit: OptionalString,
+  playwrightCpuLimit: OptionalString,
+  playwrightRamLimit: OptionalString,
   gpu: Schema.optional(Schema.Literal("none", "all")),
   dockerNetworkMode: OptionalString,
   dockerSharedNetworkName: OptionalString,
@@ -32,6 +34,8 @@ export const CreateProjectRequestSchema = Schema.Struct({
   skipGithubAuth: OptionalBoolean,
   codexTokenLabel: OptionalString,
   claudeTokenLabel: OptionalString,
+  geminiTokenLabel: OptionalString,
+  grokTokenLabel: OptionalString,
   agentAutoMode: OptionalString,
   up: OptionalBoolean,
   openSsh: OptionalBoolean,
@@ -58,10 +62,12 @@ export const AuthMenuFlowSchema = Schema.Literal(
   "GitRemove",
   "ClaudeLogout",
   "GeminiApiKey",
-  "GeminiLogout"
+  "GeminiLogout",
+  "GrokApiKey",
+  "GrokLogout"
 )
 
-export const AuthTerminalFlowSchema = Schema.Literal("ClaudeOauth", "GeminiOauth")
+export const AuthTerminalFlowSchema = Schema.Literal("ClaudeOauth", "GeminiOauth", "GrokOauth")
 
 export const AuthMenuRequestSchema = Schema.Struct({
   flow: AuthMenuFlowSchema,
@@ -105,7 +111,9 @@ export const ProjectAuthFlowSchema = Schema.Literal(
   "ProjectClaudeConnect",
   "ProjectClaudeDisconnect",
   "ProjectGeminiConnect",
-  "ProjectGeminiDisconnect"
+  "ProjectGeminiDisconnect",
+  "ProjectGrokConnect",
+  "ProjectGrokDisconnect"
 )
 
 export const ProjectAuthRequestSchema = Schema.Struct({
@@ -113,7 +121,7 @@ export const ProjectAuthRequestSchema = Schema.Struct({
   label: OptionalNullableString
 })
 
-export const ProjectPromptKindSchema = Schema.Literal("claude", "codex", "gemini")
+export const ProjectPromptKindSchema = Schema.Literal("claude", "codex", "gemini", "grok")
 
 export const ProjectPromptUpdateRequestSchema = Schema.Struct({
   content: Schema.String
@@ -125,7 +133,8 @@ export const ProjectSkillScopeSchema = Schema.Literal(
   "agents/.skills",
   "claude/skills",
   "codex/skills",
-  "gemini/skills"
+  "gemini/skills",
+  "grok/skills"
 )
 
 export const ProjectSkillUpdateRequestSchema = Schema.Struct({
@@ -152,6 +161,10 @@ export const ApplyAllRequestSchema = Schema.Struct({
 })
 
 export const ApplyProjectRequestSchema = Schema.Struct({
+  cpuLimit: OptionalString,
+  ramLimit: OptionalString,
+  playwrightCpuLimit: OptionalString,
+  playwrightRamLimit: OptionalString,
   gpu: Schema.optional(Schema.Literal("none", "all"))
 })
 
@@ -161,12 +174,20 @@ export const UpProjectRequestSchema = Schema.Struct({
 })
 
 export const StartProjectTerminalSessionRequestSchema = Schema.Struct({
-  requestId: Schema.String
+  requestId: Schema.UUID
+})
+
+export const ActiveProjectTerminalSessionRequestSchema = Schema.Struct({
+  sessionId: Schema.String
 })
 
 export const ProjectPortForwardRequestSchema = Schema.Struct({
   hostPort: Schema.optional(Schema.Number),
   targetPort: Schema.Number
+})
+
+export const StartPanelCloudflareTunnelRequestSchema = Schema.Struct({
+  panelUrl: Schema.String
 })
 
 export const ProjectBrowserStatusSchema = Schema.Literal("running", "stopped", "missing", "unknown")
@@ -236,7 +257,7 @@ export const ProjectDatabaseForwardSchema = Schema.Struct({
   targetPort: Schema.Number
 })
 
-export const AgentProviderSchema = Schema.Literal("codex", "opencode", "claude", "custom")
+export const AgentProviderSchema = Schema.Literal("codex", "opencode", "claude", "grok", "custom")
 
 export const AgentEnvVarSchema = Schema.Struct({
   key: Schema.String,

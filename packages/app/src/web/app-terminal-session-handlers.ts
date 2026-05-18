@@ -14,7 +14,7 @@ import {
   stopProjectTask
 } from "./api.js"
 import { openUrl } from "./open-url.js"
-import { terminalSessionRoutePath } from "./terminal.js"
+import { projectSshRoutePath } from "./terminal.js"
 
 export type StateMessageUpdater = (message: string | null) => void
 
@@ -46,7 +46,7 @@ const confirmApplyProject = (label: string): boolean => {
 
 const browserStatusMessage = (browser: ProjectBrowserSession): string => {
   if (browser.status !== "running") {
-    return `Browser sidecar is ${browser.status}. Enable Playwright MCP and start the project first.`
+    return `Browser runtime is ${browser.status}. Enable Playwright MCP and start the project first.`
   }
   const noVncUrl = projectBrowserNoVncUrl(browser)
   return openUrl(noVncUrl)
@@ -91,8 +91,11 @@ const runApplyProject = (
   )
 }
 
-const handleTerminalCreated = (sessionId: string, setMessage: StateMessageUpdater): void => {
-  const targetUrl = `${globalThis.location.origin}${terminalSessionRoutePath(sessionId)}`
+export const newProjectTerminalUrl = (origin: string, projectKey: string, sessionId: string): string =>
+  `${origin}${projectSshRoutePath(projectKey, sessionId)}`
+
+const handleTerminalCreated = (projectKey: string, sessionId: string, setMessage: StateMessageUpdater): void => {
+  const targetUrl = newProjectTerminalUrl(globalThis.location.origin, projectKey, sessionId)
   if (!openUrl(targetUrl)) {
     setMessage(`New terminal popup was blocked. Open ${targetUrl} manually.`)
   }
@@ -106,7 +109,7 @@ const runOpenTerminal = (projectKey: string, setMessage: StateMessageUpdater): v
           setMessage(`Failed to open new terminal: ${error}`)
         },
         onSuccess: (created) => {
-          handleTerminalCreated(created.session.id, setMessage)
+          handleTerminalCreated(projectKey, created.session.id, setMessage)
         }
       })
     )

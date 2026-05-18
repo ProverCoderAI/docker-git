@@ -248,7 +248,7 @@ describe("prepareProjectFiles", () => {
           "if [[ \"$CLONE_OK\" -eq 1 ]]; then\n  docker_git_prepare_active_agent_project_rules\nfi"
         )
         expect(composeBefore).toContain("container_name: dg-test")
-        expect(composeBefore).toContain("restart: unless-stopped")
+        expect(composeBefore).not.toContain("restart:")
         expect(composeBefore).not.toContain(":/home/dev/.docker-git\n")
         expect(composeBefore).toContain("docker_git_shared_cache:/home/dev/.docker-git/.cache")
         expect(composeBefore).toContain("docker_git_shared_codex:/home/dev/.codex-shared")
@@ -285,8 +285,13 @@ describe("prepareProjectFiles", () => {
         expect(composeAfter).toContain('CODEX_AUTH_LABEL: "agien-codex"')
         expect(composeAfter).toContain('CLAUDE_AUTH_LABEL: "agien-claude"')
         expect(composeAfter).toContain("container_name: dg-test")
-        expect(composeAfter).toContain("container_name: dg-test-browser")
-        expect(composeAfter).toContain("container_name: dg-test-browser\n    restart: unless-stopped")
+        expect(composeAfter).toContain('DOCKER_GIT_BROWSER_CONTAINER_NAME: "dg-test-browser"')
+        expect(composeAfter).toContain('DOCKER_GIT_BROWSER_VOLUME_NAME: "dg-test-home-browser"')
+        expect(composeAfter).toContain('MCP_PLAYWRIGHT_CDP_ENDPOINT: "http://127.0.0.1:9223"')
+        expect(composeAfter).toContain("      - /var/run/docker.sock:/var/run/docker.sock")
+        expect(composeAfter).toContain("  dg-test-home-browser:")
+        expect(composeAfter).not.toContain("\n  dg-test-browser:\n")
+        expect(composeAfter).not.toContain("restart:")
         expect(composeAfter).toContain(`      - '${path.join(outDir, ".orch/env/global.env")}'`)
         expect(composeAfter).toContain(`      - '${path.join(outDir, ".orch/env/project.env")}'`)
         expect(envProjectAfter).toContain("MCP_PLAYWRIGHT_ISOLATED=0")
@@ -294,11 +299,36 @@ describe("prepareProjectFiles", () => {
         expect(envProjectAfter).toContain("MCP_PLAYWRIGHT_BLOCK_BROWSER_CLOSE=1")
         expect(composeAfter).toContain("docker-git-shared")
         expect(composeAfter).toContain("external: true")
-        expect(countOccurrences(composeAfter, dnsBlock)).toBe(2)
+        expect(countOccurrences(composeAfter, dnsBlock)).toBe(1)
         expect(readEnableMcpPlaywrightFlag(configAfter)).toBe(true)
         expect(configAfterText).toContain('"cpuLimit": "30%"')
         expect(configAfterText).toContain('"ramLimit": "30%"')
       })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("omits local Docker socket mount when project Docker host is injected", () =>
+    withTempDir((root) =>
+      withPatchedEnv(
+        { DOCKER_GIT_PROJECT_DOCKER_HOST: "tcp://docker-controller:2375" },
+        Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const outDir = path.join(root, "project-docker-host")
+          const globalConfig = makeGlobalConfig(root, path)
+          const projectConfig = makeProjectConfig(outDir, true, path)
+
+          yield* _(
+            prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+              force: false,
+              forceEnv: false
+            })
+          )
+
+          const compose = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
+          expect(compose).toContain('DOCKER_GIT_PROJECT_DOCKER_HOST: "${DOCKER_GIT_PROJECT_DOCKER_HOST:-}"')
+          expect(compose).not.toContain("      - /var/run/docker.sock:/var/run/docker.sock")
+        })
+      )
     ).pipe(Effect.provide(NodeContext.layer)))
 
   it.effect("renders project-scoped network when dockerNetworkMode=project", () =>

@@ -43,6 +43,7 @@ export type BrowserActionContext = {
   readonly addTerminalSession: (session: ActiveTerminalSession) => void
   readonly closeTerminalSession: (sessionId: string) => void
   readonly githubStatus: ApiTypes.GithubAuthStatus | null
+  readonly panelCloudflareTunnel: ApiTypes.PanelCloudflareTunnelSession | null
   readonly portForwardInput: string
   readonly projectTasksIncludeDefault: boolean
   readonly reloadDashboard: () => void
@@ -61,6 +62,7 @@ export type BrowserActionContext = {
   readonly setGithubStatus: Setter<ApiTypes.GithubAuthStatus | null>
   readonly setMessage: Setter<string | null>
   readonly setOutput: Setter<string>
+  readonly setPanelCloudflareTunnel: Setter<ApiTypes.PanelCloudflareTunnelSession | null>
   readonly setPortForwardInput: Setter<string>
   readonly setPortForwards: Setter<ReadonlyArray<ApiTypes.ProjectPortForward>>
   readonly setProjectAuthSnapshot: Setter<ApiTypes.ProjectAuthSnapshot | null>

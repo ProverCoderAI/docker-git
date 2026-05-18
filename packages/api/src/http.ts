@@ -1,4 +1,4 @@
-import { Chunk, Duration, Effect, Ref } from "effect"
+import { Chunk, Duration, Effect, Match, Ref } from "effect"
 import * as Stream from "effect/Stream"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as HttpBody from "@effect/platform/HttpBody"
@@ -15,6 +15,7 @@ import { federationJsonLdResponseContentType, type ApplyProjectRequest } from ".
 import {
   AuthMenuRequestSchema,
   AuthTerminalSessionRequestSchema,
+  ActiveProjectTerminalSessionRequestSchema,
   ApplyProjectRequestSchema,
   ApplyAllRequestSchema,
   CodexAuthImportRequestSchema,
@@ -35,13 +36,13 @@ import {
   ProjectPromptUpdateRequestSchema,
   ProjectSkillUpdateRequestSchema,
   StartProjectTerminalSessionRequestSchema,
+  StartPanelCloudflareTunnelRequestSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
   UpProjectRequestSchema
 } from "./api/schema.js"
 import type { UpProjectRequestInput } from "./api/schema.js"
-import { uiHtml, uiScript, uiStyles } from "./ui.js"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import { resolveWorkspaceRoot } from "@effect-template/lib/shell/workspace-root"
 import {
@@ -92,6 +93,8 @@ import {
   readProjectLogs,
   readProjectPs,
   recreateProject,
+  resumeProject,
+  suspendProject,
   upProject
 } from "./services/projects.js"
 import { readProjectAuthSnapshot, runProjectAuthFlow } from "./services/project-auth.js"
@@ -109,6 +112,11 @@ import {
 import type { ProjectSkillScope } from "./services/project-skills.js"
 import { readProjectBrowserSession, proxyProjectBrowser } from "./services/project-browser.js"
 import { parseProjectBrowserProxyPath } from "./services/project-browser-core.js"
+import {
+  readPanelCloudflareTunnel,
+  startPanelCloudflareTunnel,
+  stopPanelCloudflareTunnel
+} from "./services/panel-cloudflare-tunnel.js"
 import {
   deleteProjectDatabaseForward,
   deleteProjectDatabaseProfile,
@@ -138,7 +146,9 @@ import {
   getProjectTerminalSession,
   listProjectTerminalSessions,
   lookupTerminalSessionById,
+  readProjectTerminalSessions,
   readProjectTerminalImage,
+  setProjectActiveTerminalSession,
   startTerminalSession
 } from "./services/terminal-sessions.js"
 import {
@@ -178,7 +188,7 @@ const ProjectDatabaseProfileParamsSchema = Schema.Struct({
 
 const ProjectPromptParamsSchema = Schema.Struct({
   projectId: Schema.String,
-  kind: Schema.Literal("claude", "codex", "gemini")
+  kind: Schema.Literal("claude", "codex", "gemini", "grok")
 })
 
 const ProjectSkillParamsSchema = Schema.Struct({
@@ -420,57 +430,49 @@ const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexA
 const readProjectAuthRequest = () => HttpServerRequest.schemaBodyJson(ProjectAuthRequestSchema)
 const readProjectPromptUpdateRequest = () => HttpServerRequest.schemaBodyJson(ProjectPromptUpdateRequestSchema)
 const readProjectSkillUpdateRequest = () => HttpServerRequest.schemaBodyJson(ProjectSkillUpdateRequestSchema)
+const readActiveProjectTerminalSessionRequest = () =>
+  HttpServerRequest.schemaBodyJson(ActiveProjectTerminalSessionRequestSchema)
 
-const skillScopeFromId = (scopeId: string): ProjectSkillScope | null => {
-  switch (scopeId) {
-    case "skills":
-      return "skills"
-    case "agents-skills":
-      return "agents/skills"
-    case "agents-dot-skills":
-      return "agents/.skills"
-    case "claude-skills":
-      return "claude/skills"
-    case "codex-skills":
-      return "codex/skills"
-    case "gemini-skills":
-      return "gemini/skills"
-    default:
-      return null
-  }
-}
+const projectSkillScope = (scope: ProjectSkillScope): ProjectSkillScope => scope
 
-export const skillScopeToId = (scope: ProjectSkillScope): string => {
-  switch (scope) {
-    case "skills":
-      return "skills"
-    case "agents/skills":
-      return "agents-skills"
-    case "agents/.skills":
-      return "agents-dot-skills"
-    case "claude/skills":
-      return "claude-skills"
-    case "codex/skills":
-      return "codex-skills"
-    case "gemini/skills":
-      return "gemini-skills"
-  }
-}
+const skillScopeFromId = (scopeId: string): ProjectSkillScope | null =>
+  Match.value(scopeId).pipe(
+    Match.when("skills", () => projectSkillScope("skills")),
+    Match.when("agents-skills", () => projectSkillScope("agents/skills")),
+    Match.when("agents-dot-skills", () => projectSkillScope("agents/.skills")),
+    Match.when("claude-skills", () => projectSkillScope("claude/skills")),
+    Match.when("codex-skills", () => projectSkillScope("codex/skills")),
+    Match.when("gemini-skills", () => projectSkillScope("gemini/skills")),
+    Match.when("grok-skills", () => projectSkillScope("grok/skills")),
+    Match.orElse(() => null)
+  )
 
-const skillScopeFromBody = (scope: string): ProjectSkillScope | null => {
-  switch (scope) {
-    case "skills":
-    case "agents/skills":
-    case "agents/.skills":
-    case "claude/skills":
-    case "codex/skills":
-    case "gemini/skills":
-      return scope as ProjectSkillScope
-    default:
-      return null
-  }
-}
+export const skillScopeToId = (scope: ProjectSkillScope): string =>
+  Match.value(scope).pipe(
+    Match.when("skills", () => "skills"),
+    Match.when("agents/skills", () => "agents-skills"),
+    Match.when("agents/.skills", () => "agents-dot-skills"),
+    Match.when("claude/skills", () => "claude-skills"),
+    Match.when("codex/skills", () => "codex-skills"),
+    Match.when("gemini/skills", () => "gemini-skills"),
+    Match.when("grok/skills", () => "grok-skills"),
+    Match.exhaustive
+  )
+
+const skillScopeFromBody = (scope: string): ProjectSkillScope | null =>
+  Match.value(scope).pipe(
+    Match.when("skills", () => projectSkillScope("skills")),
+    Match.when("agents/skills", () => projectSkillScope("agents/skills")),
+    Match.when("agents/.skills", () => projectSkillScope("agents/.skills")),
+    Match.when("claude/skills", () => projectSkillScope("claude/skills")),
+    Match.when("codex/skills", () => projectSkillScope("codex/skills")),
+    Match.when("gemini/skills", () => projectSkillScope("gemini/skills")),
+    Match.when("grok/skills", () => projectSkillScope("grok/skills")),
+    Match.orElse(() => null)
+  )
 const readProjectPortForwardRequest = () => HttpServerRequest.schemaBodyJson(ProjectPortForwardRequestSchema)
+const readStartPanelCloudflareTunnelRequest = () =>
+  HttpServerRequest.schemaBodyJson(StartPanelCloudflareTunnelRequestSchema)
 const readProjectDatabaseProfileRequest = () => HttpServerRequest.schemaBodyJson(ProjectDatabaseProfileRequestSchema)
 const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitRequestSchema)
 const readStateCommitRequest = () => HttpServerRequest.schemaBodyJson(StateCommitRequestSchema)
@@ -762,16 +764,7 @@ const projectProxyResponse = Effect.gen(function*(_) {
 })
 
 export const makeRouter = () => {
-  const withUi = HttpRouter.empty.pipe(
-    HttpRouter.get("/", 
-      Effect.gen(function*(_) {
-        const request = yield* _(HttpServerRequest.HttpServerRequest)
-        console.log("GET / request:", request.url, "headers:", request.headers)
-        return yield* _(textResponse(uiHtml, "text/html; charset=utf-8", 200))
-      }).pipe(Effect.catchAll(errorResponse))
-    ),
-    HttpRouter.get("/ui/styles.css", textResponse(uiStyles, "text/css; charset=utf-8", 200)),
-    HttpRouter.get("/ui/app.js", textResponse(uiScript, "application/javascript; charset=utf-8", 200)),
+  const withCoreRoutes = HttpRouter.empty.pipe(
     HttpRouter.get(
       "/health",
       Effect.gen(function*(_) {
@@ -802,10 +795,32 @@ export const makeRouter = () => {
         Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
         Effect.catchAll(errorResponse)
       )
+    ),
+    HttpRouter.get(
+      "/cloudflare-tunnels/panel",
+      readPanelCloudflareTunnel().pipe(
+        Effect.flatMap((tunnel) => jsonResponse({ tunnel }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/cloudflare-tunnels/panel",
+      Effect.gen(function*(_) {
+        const request = yield* _(readStartPanelCloudflareTunnelRequest())
+        const tunnel = yield* _(startPanelCloudflareTunnel(request))
+        return yield* _(jsonResponse({ tunnel }, 202))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.del(
+      "/cloudflare-tunnels/panel",
+      stopPanelCloudflareTunnel().pipe(
+        Effect.flatMap((tunnel) => jsonResponse({ tunnel }, 200)),
+        Effect.catchAll(errorResponse)
+      )
     )
   )
 
-  const withAuth = withUi.pipe(
+  const withAuth = withCoreRoutes.pipe(
     HttpRouter.get(
       "/auth/github/status",
       Effect.gen(function*(_) {
@@ -1380,7 +1395,7 @@ export const makeRouter = () => {
     )
   )
 
-  const withProjectLifecycle = withProjectDatabases.pipe(
+  const withProjectLifecycleBase = withProjectDatabases.pipe(
     HttpRouter.del(
       "/projects/:projectId",
       projectParams.pipe(
@@ -1402,17 +1417,33 @@ export const makeRouter = () => {
         Effect.catchAll(errorResponse)
       )
     ),
-  HttpRouter.post(
-    "/projects/:projectId/apply",
-    Effect.gen(function*(_) {
-      const { projectId } = yield* _(projectParams)
-      const request = yield* _(readApplyProjectRequest())
-      const project = yield* _(applyProjectById(projectId, request))
-      return yield* _(jsonResponse({ ok: true, project }, 200))
-    }).pipe(
-      Effect.catchAll(errorResponse)
-    )
-  ),
+    HttpRouter.post(
+      "/projects/:projectId/resume",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => resumeProject(projectId)),
+        Effect.flatMap((project) => jsonResponse({ ok: true, project }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/apply",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(readApplyProjectRequest())
+        const project = yield* _(applyProjectById(projectId, request))
+        return yield* _(jsonResponse({ ok: true, project }, 200))
+      }).pipe(
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/suspend",
+      projectParams.pipe(
+        Effect.flatMap(({ projectId }) => suspendProject(projectId)),
+        Effect.flatMap((project) => jsonResponse({ ok: true, project }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
     HttpRouter.post(
       "/projects/:projectId/down",
       projectParams.pipe(
@@ -1420,7 +1451,10 @@ export const makeRouter = () => {
         Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
         Effect.catchAll(errorResponse)
       )
-    ),
+    )
+  )
+
+  const withProjectLifecycle = withProjectLifecycleBase.pipe(
     HttpRouter.post(
       "/projects/by-key/:projectKey/terminal-sessions",
       projectKeyParams.pipe(
@@ -1438,7 +1472,7 @@ export const makeRouter = () => {
       projectKeyParams.pipe(
         Effect.flatMap(({ projectKey }) =>
           getProjectItemByKey(projectKey).pipe(
-            Effect.map((project) => ({ sessions: listProjectTerminalSessions(project.projectDir) }))
+            Effect.flatMap((project) => readProjectTerminalSessions(project.projectDir))
           )
         ),
         Effect.flatMap((body) => jsonResponse(body, 200)),
@@ -1484,7 +1518,11 @@ export const makeRouter = () => {
     HttpRouter.get(
       "/projects/:projectId/terminal-sessions",
       projectParams.pipe(
-        Effect.flatMap(({ projectId }) => Effect.succeed({ sessions: listProjectTerminalSessions(projectId) })),
+        Effect.flatMap(({ projectId }) =>
+          listProjectTerminalSessions(projectId).pipe(
+            Effect.map((sessions) => ({ sessions }))
+          )
+        ),
         Effect.flatMap((body) => jsonResponse(body, 200)),
         Effect.catchAll(errorResponse)
       )
@@ -1567,6 +1605,18 @@ export const makeRouter = () => {
   )
 
   const withProjectTerminalStart = withProjectLifecycle.pipe(
+    HttpRouter.put(
+      "/projects/by-key/:projectKey/terminal-sessions/active",
+      Effect.gen(function*(_) {
+        const { projectKey } = yield* _(projectKeyParams)
+        const request = yield* _(readActiveProjectTerminalSessionRequest())
+        const project = yield* _(getProjectItemByKey(projectKey))
+        const session = yield* _(setProjectActiveTerminalSession(project.projectDir, request.sessionId))
+        return yield* _(jsonResponse({ ok: true, session }, 200))
+      }).pipe(
+        Effect.catchAll(errorResponse)
+      )
+    ),
     HttpRouter.post(
       "/projects/by-key/:projectKey/terminal-sessions/start",
       projectKeyParams.pipe(

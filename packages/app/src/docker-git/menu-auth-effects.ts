@@ -2,6 +2,7 @@ import { Effect, Match, pipe } from "effect"
 
 import { createAuthTerminalSession, githubLogin } from "./api-client.js"
 import { readAuthSnapshot, successMessage, writeAuthFlow } from "./menu-auth-data.js"
+import { terminalAuthTitle } from "./menu-auth-shared.js"
 import type { MenuError } from "./menu-errors.js"
 import type { AuthSnapshot, MenuEnv, MenuRunner, MenuViewContext, ViewState } from "./menu-types.js"
 import { attachTerminalSession } from "./terminal-session-client.js"
@@ -15,7 +16,9 @@ type AuthEffectContext = MenuViewContext & {
   readonly cwd: string
 }
 
-const missingAuthTerminalSessionError = (provider: "ClaudeOauth" | "GeminiOauth"): MenuError => ({
+type TerminalAuthProvider = "ClaudeOauth" | "GeminiOauth" | "GrokOauth"
+
+const missingAuthTerminalSessionError = (provider: TerminalAuthProvider): MenuError => ({
   _tag: "ApiRequestError",
   method: "POST",
   path: "/auth/terminal-sessions",
@@ -28,7 +31,7 @@ const resolveLabelOption = (values: Readonly<Record<string, string>>): string | 
 }
 
 const resolveTerminalAuthEffect = (
-  provider: "ClaudeOauth" | "GeminiOauth",
+  provider: TerminalAuthProvider,
   labelOption: string | null
 ): Effect.Effect<void, MenuError, MenuEnv> =>
   createAuthTerminalSession(provider, labelOption).pipe(
@@ -36,7 +39,7 @@ const resolveTerminalAuthEffect = (
       session === null
         ? Effect.fail(missingAuthTerminalSessionError(provider))
         : attachTerminalSession({
-          header: provider === "ClaudeOauth" ? "Claude Code OAuth" : "Gemini CLI OAuth",
+          header: terminalAuthTitle(provider),
           session,
           websocketPath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}/ws`
         })
@@ -63,6 +66,9 @@ export const resolveAuthPromptEffect = (
     Match.when("GeminiOauth", () => resolveTerminalAuthEffect("GeminiOauth", labelOption)),
     Match.when("GeminiApiKey", (flow) => writeAuthFlow(cwd, flow, values)),
     Match.when("GeminiLogout", (flow) => writeAuthFlow(cwd, flow, values)),
+    Match.when("GrokOauth", () => resolveTerminalAuthEffect("GrokOauth", labelOption)),
+    Match.when("GrokApiKey", (flow) => writeAuthFlow(cwd, flow, values)),
+    Match.when("GrokLogout", (flow) => writeAuthFlow(cwd, flow, values)),
     Match.when("GithubRemove", (flow) => writeAuthFlow(cwd, flow, values)),
     Match.when("GitSet", (flow) => writeAuthFlow(cwd, flow, values)),
     Match.when("GitRemove", (flow) => writeAuthFlow(cwd, flow, values)),

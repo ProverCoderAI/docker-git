@@ -41,6 +41,8 @@ export interface RawOptions {
   readonly gitTokenLabel?: string
   readonly codexTokenLabel?: string
   readonly claudeTokenLabel?: string
+  readonly geminiTokenLabel?: string
+  readonly grokTokenLabel?: string
   readonly token?: string
   readonly scopes?: string
   readonly message?: string

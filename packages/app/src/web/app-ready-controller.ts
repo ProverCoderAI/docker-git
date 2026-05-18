@@ -2,11 +2,15 @@ import { updateActionPromptValue } from "./action-prompt.js"
 import {
   cancelBrowserActionPrompt,
   closeSelectedProjectPort,
+  copyPanelShareTunnelUrl,
   loadSelectedProjectBrowser,
   loadSelectedProjectPorts,
   openProjectBrowserById,
   openSelectedProjectBrowser,
   openSelectedProjectPort,
+  refreshPanelCloudflareTunnel,
+  startPanelShareTunnel,
+  stopPanelShareTunnel,
   submitBrowserActionPrompt
 } from "./actions.js"
 import type { DashboardData } from "./api.js"
@@ -122,6 +126,7 @@ const useReadyAutoloadEffects = (args: ReadySideEffectsArgs) => {
     currentMenu: args.currentMenu,
     dashboardRefreshTick: args.dashboardRefreshTick,
     githubStatus: args.state.githubStatus,
+    panelCloudflareTunnel: args.state.panelCloudflareTunnel,
     project: args.state.project,
     projectNavigationArmed: args.state.projectNavigationArmed,
     selectedProjectId: args.state.selectedProjectId,
@@ -256,6 +261,23 @@ const bindBrowserActions = (
   }
 })
 
+const bindShareActions = (
+  actionContext: ReturnType<typeof createActionContext>
+) => ({
+  onRefreshPanelShareTunnel: () => {
+    refreshPanelCloudflareTunnel(actionContext)
+  },
+  onCopyPanelShareTunnelUrl: (publicUrl: string) => {
+    copyPanelShareTunnelUrl(actionContext, publicUrl)
+  },
+  onStartPanelShareTunnel: () => {
+    startPanelShareTunnel(actionContext)
+  },
+  onStopPanelShareTunnel: () => {
+    stopPanelShareTunnel(actionContext)
+  }
+})
+
 export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDashboard }: ReadyControllerArgs) => {
   const state = useReadyState()
   const currentMenu = resolveCurrentMenu(state.selectedMenuIndex)
@@ -272,6 +294,7 @@ export const useReadyController = ({ dashboard, dashboardRefreshTick, refreshDas
     ...bindPromptActions(actionContext),
     ...bindSkillActions(actionContext),
     ...bindBrowserActions(actionContext),
+    ...bindShareActions(actionContext),
     ...bindTerminalActions(actionContext, state),
     ...bindSkillerActions(actionContext),
     ...bindTaskActions(actionContext),

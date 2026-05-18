@@ -51,9 +51,13 @@ export {
   loadProjectDetails,
   loadProjectLogs,
   loadProjectPs,
+  resumeProject,
+  suspendProject,
   upProject
 } from "./api-project-core.js"
+export type { ApplyProjectRequest, ProjectResourceLimitRequest } from "./api-project-core.js"
 export { deleteProjectPrompt, loadProjectPrompts, writeProjectPrompt } from "./api-prompts.js"
+export { loadPanelCloudflareTunnel, startPanelCloudflareTunnel, stopPanelCloudflareTunnel } from "./api-share.js"
 export { deleteProjectSkill, loadProjectSkills, projectSkillScopeToId, writeProjectSkill } from "./api-skills.js"
 export { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api-tasks.js"
 
@@ -182,7 +186,7 @@ export const startProjectTerminalSession = (
   )
 
 export const createAuthTerminalSession = (
-  flow: "ClaudeOauth" | "GeminiOauth",
+  flow: "ClaudeOauth" | "GeminiOauth" | "GrokOauth",
   label: string | null
 ) =>
   requestJson(
@@ -213,6 +217,26 @@ export const loadProjectTerminalSessions = (projectKey: string) =>
     ProjectTerminalSessionsResponseSchema
   ).pipe(
     Effect.map((response) => response.sessions)
+  )
+
+export const loadProjectTerminalWorkspace = (projectKey: string) =>
+  requestJson(
+    "GET",
+    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions`,
+    ProjectTerminalSessionsResponseSchema
+  )
+
+export const setProjectActiveTerminalSession = (
+  projectKey: string,
+  sessionId: string
+) =>
+  requestJson(
+    "PUT",
+    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/active`,
+    ProjectTerminalSessionResponseSchema,
+    { sessionId }
+  ).pipe(
+    Effect.map((response) => response.session)
   )
 
 export const loadProjectTerminalSession = (
@@ -310,3 +334,5 @@ export const runProjectAuthFlow = (
   )
 
 export { resolveApiBaseUrl } from "./api-http.js"
+
+export { type PanelCloudflareTunnelSession } from "./api-schema.js"

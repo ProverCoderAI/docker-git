@@ -13,12 +13,12 @@ export const resolveAutoAgentFlags = (
   if (requested === "auto") {
     return Either.right({ agentMode: undefined, agentAuto: true })
   }
-  if (requested === "claude" || requested === "codex") {
+  if (requested === "claude" || requested === "codex" || requested === "gemini" || requested === "grok") {
     return Either.right({ agentMode: requested, agentAuto: true })
   }
   return Either.left({
     _tag: "InvalidOption",
     option: "--auto",
-    reason: "expected one of: claude, codex"
+    reason: "expected one of: claude, codex, gemini, grok"
   })
 }

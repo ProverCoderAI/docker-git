@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { type ProjectHandlers, useProjectActionHandlers } from "../../src/web/app-terminal-session-handlers.js"
+import {
+  newProjectTerminalUrl,
+  type ProjectHandlers,
+  useProjectActionHandlers
+} from "../../src/web/app-terminal-session-handlers.js"
 
 const noopMessage = (_message: string | null): void => {}
 const noopOpenTaskManager = (): void => {}
@@ -18,6 +22,12 @@ const buildHandlers = (
   })
 
 describe("useProjectActionHandlers", () => {
+  it("builds new terminal popups as project SSH links with a terminal selector", () => {
+    expect(
+      newProjectTerminalUrl("https://docker-git.local", "octocat/hello-world", "session-1")
+    ).toBe("https://docker-git.local/ssh/octocat/hello-world?t=session-1")
+  })
+
   it("returns all four project action handlers when project context is present", () => {
     const handlers = buildHandlers()
     expect(typeof handlers.onApplyProject).toBe("function")

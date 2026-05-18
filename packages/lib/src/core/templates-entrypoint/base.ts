@@ -24,6 +24,7 @@ fi
 CLAUDE_AUTH_LABEL="\${CLAUDE_AUTH_LABEL:-}"
 CODEX_AUTH_LABEL="\${CODEX_AUTH_LABEL:-}"
 GEMINI_AUTH_LABEL="\${GEMINI_AUTH_LABEL:-}"
+GROK_AUTH_LABEL="\${GROK_AUTH_LABEL:-}"
 GIT_AUTH_USER="\${GIT_AUTH_USER:-\${GITHUB_USER:-}}"
 GITLAB_TOKEN="\${GITLAB_TOKEN:-}"
 GIT_AUTH_TOKEN="\${GIT_AUTH_TOKEN:-\${GITHUB_TOKEN:-\${GH_TOKEN:-}}}"
@@ -186,4 +187,25 @@ EOF
 chmod 0644 "$DOCKER_GIT_SSHD_CONF" || true`
 
 export const renderEntrypointSshd = (): string =>
-  `# 5) Run sshd in foreground (log to stderr for CI/debuggability)\nexec /usr/sbin/sshd -D -e`
+  String
+    .raw`# 5) Run sshd in foreground (log to stderr for CI/debuggability) and stop nested browser on container shutdown
+docker_git_run_sshd() {
+  local sshd_pid=""
+
+  docker_git_shutdown() {
+    docker_git_stop_playwright_browser || true
+    if [[ -n "$sshd_pid" ]]; then
+      kill "$sshd_pid" >/dev/null 2>&1 || true
+    fi
+  }
+
+  trap docker_git_shutdown TERM INT
+  /usr/sbin/sshd -D -e &
+  sshd_pid="$!"
+  local exit_code="0"
+  wait "$sshd_pid" || exit_code="$?"
+  docker_git_stop_playwright_browser || true
+  return "$exit_code"
+}
+
+docker_git_run_sshd`

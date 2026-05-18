@@ -11,9 +11,9 @@ import {
   parseSshUser,
   trimTrailingPathSeparators
 } from "./command-builders-shared.js"
+import { buildTemplateConfig } from "./command-builders-template.js"
 import { type RawOptions } from "./command-options.js"
 import {
-  type AgentMode,
   type CreateCommand,
   defaultTemplateConfig,
   deriveRepoPathParts,
@@ -28,7 +28,7 @@ export { nonEmpty } from "./command-builders-shared.js"
 
 const normalizeSecretsRoot = trimTrailingPathSeparators
 
-type RepoBasics = {
+export type RepoBasics = {
   readonly repoUrl: string
   readonly repoSlug: string
   readonly projectSlug: string
@@ -62,7 +62,7 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
     return { repoUrl, repoSlug, projectSlug, repoPath, repoRef, targetDir, sshUser, sshPort }
   })
 
-type NameConfig = {
+export type NameConfig = {
   readonly containerName: string
   readonly serviceName: string
   readonly volumeName: string
@@ -85,7 +85,7 @@ const resolveNames = (
     return { containerName, serviceName, volumeName }
   })
 
-type PathConfig = {
+export type PathConfig = {
   readonly dockerGitPath: string
   readonly authorizedKeysPath: string
   readonly envGlobalPath: string
@@ -95,6 +95,8 @@ type PathConfig = {
   readonly codexHome: string
   readonly geminiAuthPath: string
   readonly geminiHome: string
+  readonly grokAuthPath: string
+  readonly grokHome: string
   readonly outDir: string
 }
 
@@ -105,6 +107,7 @@ type DefaultPathConfig = {
   readonly envProjectPath: string
   readonly codexAuthPath: string
   readonly geminiAuthPath: string
+  readonly grokAuthPath: string
 }
 
 const resolveNormalizedSecretsRoot = (value: string | undefined): string | undefined => {
@@ -122,7 +125,8 @@ const buildDefaultPathConfig = (
       envGlobalPath: defaultTemplateConfig.envGlobalPath,
       envProjectPath: defaultTemplateConfig.envProjectPath,
       codexAuthPath: defaultTemplateConfig.codexAuthPath,
-      geminiAuthPath: defaultTemplateConfig.geminiAuthPath
+      geminiAuthPath: defaultTemplateConfig.geminiAuthPath,
+      grokAuthPath: defaultTemplateConfig.grokAuthPath
     }
     : {
       // NOTE: Keep docker-git root mount stable (projects root) so caches like
@@ -132,7 +136,8 @@ const buildDefaultPathConfig = (
       envGlobalPath: `${normalizedSecretsRoot}/global.env`,
       envProjectPath: defaultTemplateConfig.envProjectPath,
       codexAuthPath: `${normalizedSecretsRoot}/codex`,
-      geminiAuthPath: `${normalizedSecretsRoot}/gemini`
+      geminiAuthPath: `${normalizedSecretsRoot}/gemini`,
+      grokAuthPath: `${normalizedSecretsRoot}/grok`
     }
 
 const resolvePaths = (
@@ -157,6 +162,8 @@ const resolvePaths = (
     const codexHome = yield* _(nonEmpty("--codex-home", raw.codexHome, defaultTemplateConfig.codexHome))
     const geminiAuthPath = defaults.geminiAuthPath
     const geminiHome = defaultTemplateConfig.geminiHome
+    const grokAuthPath = defaults.grokAuthPath
+    const grokHome = defaultTemplateConfig.grokHome
     const outDir = yield* _(nonEmpty("--out-dir", raw.outDir, `.docker-git/${repoPath}`))
 
     return {
@@ -169,6 +176,8 @@ const resolvePaths = (
       codexHome,
       geminiAuthPath,
       geminiHome,
+      grokAuthPath,
+      grokHome,
       outDir
     }
   })
@@ -191,86 +200,20 @@ const resolveCreateBehavior = (raw: RawOptions): CreateBehavior => ({
   enableMcpPlaywright: raw.enableMcpPlaywright ?? false
 })
 
-type BuildTemplateConfigInput = {
-  readonly repo: RepoBasics
-  readonly names: NameConfig
-  readonly paths: PathConfig
-  readonly cpuLimit: string | undefined
-  readonly ramLimit: string | undefined
-  readonly playwrightCpuLimit: string | undefined
-  readonly playwrightRamLimit: string | undefined
-  readonly gpu: CreateCommand["config"]["gpu"]
-  readonly dockerNetworkMode: CreateCommand["config"]["dockerNetworkMode"]
-  readonly dockerSharedNetworkName: string
+type TokenLabelConfig = {
   readonly gitTokenLabel: string | undefined
-  readonly skipGithubAuth: boolean
   readonly codexAuthLabel: string | undefined
   readonly claudeAuthLabel: string | undefined
-  readonly enableMcpPlaywright: boolean
-  readonly agentMode: AgentMode | undefined
-  readonly agentAuto: boolean
-  readonly clonedOnHostname?: string | undefined
+  readonly geminiAuthLabel: string | undefined
+  readonly grokAuthLabel: string | undefined
 }
 
-const buildTemplateConfigBase = (
-  input: Pick<BuildTemplateConfigInput, "repo" | "names" | "paths">
-): Pick<
-  CreateCommand["config"],
-  | "containerName"
-  | "serviceName"
-  | "sshUser"
-  | "sshPort"
-  | "repoUrl"
-  | "repoRef"
-  | "targetDir"
-  | "volumeName"
-  | "dockerGitPath"
-  | "authorizedKeysPath"
-  | "envGlobalPath"
-  | "envProjectPath"
-  | "codexAuthPath"
-  | "codexSharedAuthPath"
-  | "codexHome"
-  | "geminiAuthPath"
-  | "geminiHome"
-> => ({
-  containerName: input.names.containerName,
-  serviceName: input.names.serviceName,
-  sshUser: input.repo.sshUser,
-  sshPort: input.repo.sshPort,
-  repoUrl: input.repo.repoUrl,
-  repoRef: input.repo.repoRef,
-  targetDir: input.repo.targetDir,
-  volumeName: input.names.volumeName,
-  dockerGitPath: input.paths.dockerGitPath,
-  authorizedKeysPath: input.paths.authorizedKeysPath,
-  envGlobalPath: input.paths.envGlobalPath,
-  envProjectPath: input.paths.envProjectPath,
-  codexAuthPath: input.paths.codexAuthPath,
-  codexSharedAuthPath: input.paths.codexSharedAuthPath,
-  codexHome: input.paths.codexHome,
-  geminiAuthPath: input.paths.geminiAuthPath,
-  geminiHome: input.paths.geminiHome
-})
-
-const buildTemplateConfig = (input: BuildTemplateConfigInput): CreateCommand["config"] => ({
-  ...buildTemplateConfigBase(input),
-  gitTokenLabel: input.gitTokenLabel,
-  skipGithubAuth: input.skipGithubAuth,
-  codexAuthLabel: input.codexAuthLabel,
-  claudeAuthLabel: input.claudeAuthLabel,
-  cpuLimit: input.cpuLimit,
-  ramLimit: input.ramLimit,
-  playwrightCpuLimit: input.playwrightCpuLimit,
-  playwrightRamLimit: input.playwrightRamLimit,
-  gpu: input.gpu,
-  dockerNetworkMode: input.dockerNetworkMode,
-  dockerSharedNetworkName: input.dockerSharedNetworkName,
-  enableMcpPlaywright: input.enableMcpPlaywright,
-  bunVersion: defaultTemplateConfig.bunVersion,
-  agentMode: input.agentMode,
-  agentAuto: input.agentAuto,
-  clonedOnHostname: input.clonedOnHostname
+const resolveTokenLabels = (raw: RawOptions): TokenLabelConfig => ({
+  gitTokenLabel: normalizeGitTokenLabel(raw.gitTokenLabel),
+  codexAuthLabel: normalizeAuthLabel(raw.codexTokenLabel),
+  claudeAuthLabel: normalizeAuthLabel(raw.claudeTokenLabel),
+  geminiAuthLabel: normalizeAuthLabel(raw.geminiTokenLabel),
+  grokAuthLabel: normalizeAuthLabel(raw.grokTokenLabel)
 })
 
 // CHANGE: build a typed create command from raw options (CLI or API)
@@ -291,9 +234,7 @@ export const buildCreateCommand = (
     const names = yield* _(resolveNames(raw, repo.projectSlug))
     const paths = yield* _(resolvePaths(raw, repo.repoPath))
     const behavior = resolveCreateBehavior(raw)
-    const gitTokenLabel = normalizeGitTokenLabel(raw.gitTokenLabel)
-    const codexAuthLabel = normalizeAuthLabel(raw.codexTokenLabel)
-    const claudeAuthLabel = normalizeAuthLabel(raw.claudeTokenLabel)
+    const tokenLabels = resolveTokenLabels(raw)
     const limits = yield* _(resolveResourceLimitsIntent(raw))
     const gpu = yield* _(parseGpuMode(raw.gpu))
     const dockerNetworkMode = yield* _(parseDockerNetworkMode(raw.dockerNetworkMode))
@@ -321,10 +262,8 @@ export const buildCreateCommand = (
         gpu,
         dockerNetworkMode,
         dockerSharedNetworkName,
-        gitTokenLabel,
+        ...tokenLabels,
         skipGithubAuth: behavior.skipGithubAuth,
-        codexAuthLabel,
-        claudeAuthLabel,
         enableMcpPlaywright: behavior.enableMcpPlaywright,
         agentMode,
         agentAuto
