@@ -133,6 +133,7 @@ export const TerminalOnlyTerminalPanel = (
     onKill={callbacks.onKill}
     onMessage={callbacks.onMessage}
     onOpenBrowser={handlers.onOpenBrowser}
+    onOpenSkiller={handlers.onOpenSkiller}
     onOpenTaskManager={handlers.onOpenTaskManager}
     onOpenTerminal={handlers.onOpenTerminal}
     session={session}

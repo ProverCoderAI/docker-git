@@ -1,12 +1,12 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { beforeEach, vi } from "vitest"
+import { afterEach, beforeEach, vi } from "vitest"
 
 import { openSkillerApp } from "../../src/web/actions-skiller.js"
 import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
+import { type BrowserOpenMockWindow, makeBrowserOpenMockWindow, stubBrowserOpen } from "./browser-open-fixture.js"
 
 const openSkillerMock = vi.hoisted(() => vi.fn())
-const openUrlMock = vi.hoisted(() => vi.fn())
 
 const proofScope = {
   containerCodexSkillsPath: "/home/dev/.codex/skills",
@@ -54,7 +54,6 @@ const skillerLaunch = (
 })
 
 const mockScopedSkillerLaunch = (): void => {
-  openUrlMock.mockReturnValue(true)
   openSkillerMock.mockImplementation(() =>
     Effect.succeed(skillerLaunch({
       alreadyRunning: true,
@@ -67,28 +66,35 @@ vi.mock("../../src/web/api.js", () => ({
   openSkiller: openSkillerMock
 }))
 
-vi.mock("../../src/web/open-url.js", () => ({
-  openUrl: openUrlMock
-}))
-
 describe("web Skiller actions", () => {
+  let openedWindow: BrowserOpenMockWindow = makeBrowserOpenMockWindow()
+  let browserOpenMock: ReturnType<typeof vi.fn> = vi.fn()
+
   beforeEach(() => {
     vi.clearAllMocks()
+    openedWindow = makeBrowserOpenMockWindow()
+    browserOpenMock = stubBrowserOpen(openedWindow)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it.effect("opens Skiller through the docker-git API", () =>
     Effect.gen(function*(_) {
-      openUrlMock.mockReturnValue(true)
       openSkillerMock.mockImplementation(() => Effect.succeed(skillerLaunch()))
       const { context, setMessage } = makeBrowserActionContext()
 
       openSkillerApp(context)
 
+      expect(browserOpenMock).toHaveBeenCalledWith("about:blank", "_blank", "noopener")
+      expect(setMessage).toHaveBeenCalledWith("Opening Skiller...")
       yield* _(waitForAssertion(() => {
         expect(openSkillerMock).toHaveBeenCalledWith(undefined, undefined)
       }))
       yield* _(waitForAssertion(() => {
-        expect(openUrlMock).toHaveBeenCalledWith("/api/skiller/app/")
+        expect(openedWindow.location.href).toBe("/api/skiller/app/")
+        expect(openedWindow.focus).toHaveBeenCalledOnce()
         expect(setMessage).toHaveBeenCalledWith(
           "Skiller launch started (pid 1234). Log: /home/dev/.docker-git/logs/skiller.log. Opened /api/skiller/app/."
         )
@@ -119,7 +125,6 @@ describe("web Skiller actions", () => {
       let completeLaunch = (_launch: ReturnType<typeof skillerLaunch>): void => {
         throw new Error("Expected Skiller launch effect to be subscribed.")
       }
-      openUrlMock.mockReturnValue(true)
       openSkillerMock.mockImplementation(() =>
         Effect.async<ReturnType<typeof skillerLaunch>>((resume) => {
           completeLaunch = (launch) => {
@@ -131,7 +136,8 @@ describe("web Skiller actions", () => {
 
       openSkillerApp(context, "abc123", "terminal-proof")
 
-      expect(openUrlMock).not.toHaveBeenCalled()
+      expect(browserOpenMock).toHaveBeenCalledOnce()
+      expect(openedWindow.location.href).toBe("")
       yield* _(waitForAssertion(() => {
         expect(openSkillerMock).toHaveBeenCalledWith("abc123", "terminal-proof")
       }))
@@ -142,11 +148,25 @@ describe("web Skiller actions", () => {
         trpcBasePath: "/api/ssh/session/terminal-proof/skiller"
       }))
       yield* _(waitForAssertion(() => {
-        expect(openUrlMock).toHaveBeenCalledWith("/api/ssh/session/terminal-proof/skiller/app/")
+        expect(openedWindow.location.href).toBe("/api/ssh/session/terminal-proof/skiller/app/")
         expect(setMessage).toHaveBeenCalledWith(
           "Skiller is already running (pid 1234). Log: /home/dev/.docker-git/logs/skiller.log. Container FS: dg-project:/home/dev/app. Opened /api/ssh/session/terminal-proof/skiller/app/."
         )
       }))
-      expect(openUrlMock).toHaveBeenCalledTimes(1)
+      expect(openedWindow.focus).toHaveBeenCalledOnce()
+    }))
+
+  it.effect("closes the prepared Skiller popup when launch fails", () =>
+    Effect.gen(function*(_) {
+      openSkillerMock.mockImplementation(() => Effect.fail("Skiller failed"))
+      const { context, setMessage } = makeBrowserActionContext()
+
+      openSkillerApp(context, "abc123", "terminal-proof")
+
+      yield* _(waitForAssertion(() => {
+        expect(openedWindow.close).toHaveBeenCalledOnce()
+        expect(openedWindow.location.href).toBe("")
+        expect(setMessage).toHaveBeenCalledWith("Skiller failed")
+      }))
     }))
 })

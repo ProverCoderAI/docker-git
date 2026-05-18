@@ -1,6 +1,7 @@
 import { Effect } from "effect"
 import { type Dispatch, type SetStateAction, useCallback, useState } from "react"
 
+import { openPreparedSkillerLaunch } from "./actions-skiller.js"
 import {
   applyProject,
   type ContainerTaskSnapshot,
@@ -8,12 +9,13 @@ import {
   loadProjectBrowser,
   loadProjectTaskLogs,
   loadProjectTasks,
+  openSkiller,
   projectBrowserCdpUrl,
   projectBrowserNoVncUrl,
   type ProjectBrowserSession,
   stopProjectTask
 } from "./api.js"
-import { openUrl } from "./open-url.js"
+import { openUrl, prepareOpenUrl } from "./open-url.js"
 import { projectSshRoutePath } from "./terminal.js"
 
 export type StateMessageUpdater = (message: string | null) => void
@@ -21,6 +23,7 @@ export type StateMessageUpdater = (message: string | null) => void
 export type ProjectHandlers = {
   readonly onApplyProject: (() => void) | undefined
   readonly onOpenBrowser: (() => void) | undefined
+  readonly onOpenSkiller: (() => void) | undefined
   readonly onOpenTaskManager: (() => void) | undefined
   readonly onOpenTerminal: (() => void) | undefined
 }
@@ -116,29 +119,89 @@ const runOpenTerminal = (projectKey: string, setMessage: StateMessageUpdater): v
   )
 }
 
+const runOpenSkiller = (
+  projectKey: string,
+  terminalSessionId: string,
+  setMessage: StateMessageUpdater
+): void => {
+  const preparedUrl = prepareOpenUrl()
+  setMessage("Opening Skiller...")
+  void Effect.runPromise(
+    openSkiller(projectKey, terminalSessionId).pipe(
+      Effect.match({
+        onFailure: (error) => {
+          preparedUrl.close()
+          setMessage(`Failed to open Skiller: ${error}`)
+        },
+        onSuccess: (launch) => {
+          setMessage(openPreparedSkillerLaunch(launch, preparedUrl))
+        }
+      })
+    )
+  )
+}
+
 export type ProjectActionHandlersArgs = {
   readonly onOpenTaskManagerRequest: () => void
   readonly projectId: string | undefined
   readonly projectKey: string | undefined
   readonly projectLabel: string
   readonly setMessage: StateMessageUpdater
+  readonly terminalSessionId: string | undefined
 }
 
-export const useProjectActionHandlers = (
-  { onOpenTaskManagerRequest, projectId, projectKey, projectLabel, setMessage }: ProjectActionHandlersArgs
-): ProjectHandlers => ({
-  onApplyProject: projectId === undefined ? undefined : () => {
-    runApplyProject(projectId, projectLabel, setMessage)
-  },
-  onOpenBrowser: projectId === undefined ? undefined : () => {
-    runOpenBrowser(projectId, setMessage)
-  },
-  onOpenTaskManager: projectId === undefined ? undefined : onOpenTaskManagerRequest,
-  onOpenTerminal: projectId === undefined || projectKey === undefined
+const projectAction = (
+  projectId: string | undefined,
+  action: (projectId: string) => void
+): (() => void) | undefined =>
+  projectId === undefined
     ? undefined
     : () => {
-      runOpenTerminal(projectKey, setMessage)
+      action(projectId)
     }
+
+const projectKeyAction = (
+  projectId: string | undefined,
+  projectKey: string | undefined,
+  action: (projectKey: string) => void
+): (() => void) | undefined =>
+  projectId === undefined || projectKey === undefined
+    ? undefined
+    : () => {
+      action(projectKey)
+    }
+
+const projectTerminalAction = (
+  projectId: string | undefined,
+  projectKey: string | undefined,
+  terminalSessionId: string | undefined,
+  action: (projectKey: string, terminalSessionId: string) => void
+): (() => void) | undefined =>
+  projectId === undefined || projectKey === undefined || terminalSessionId === undefined
+    ? undefined
+    : () => {
+      action(projectKey, terminalSessionId)
+    }
+
+export const useProjectActionHandlers = (
+  { onOpenTaskManagerRequest, projectId, projectKey, projectLabel, setMessage, terminalSessionId }:
+    ProjectActionHandlersArgs
+): ProjectHandlers => ({
+  onApplyProject: projectAction(projectId, (resolvedProjectId) => {
+    runApplyProject(resolvedProjectId, projectLabel, setMessage)
+  }),
+  onOpenBrowser: projectAction(projectId, (resolvedProjectId) => {
+    runOpenBrowser(resolvedProjectId, setMessage)
+  }),
+  onOpenSkiller: projectTerminalAction(projectId, projectKey, terminalSessionId, (resolvedProjectKey, sessionId) => {
+    runOpenSkiller(resolvedProjectKey, sessionId, setMessage)
+  }),
+  onOpenTaskManager: projectAction(projectId, () => {
+    onOpenTaskManagerRequest()
+  }),
+  onOpenTerminal: projectKeyAction(projectId, projectKey, (resolvedProjectKey) => {
+    runOpenTerminal(resolvedProjectKey, setMessage)
+  })
 })
 
 const runRefreshTasks = (
