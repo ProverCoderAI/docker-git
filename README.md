@@ -147,10 +147,13 @@ project (or the controller itself) cannot consume the entire system.
 - **Per-project containers** ship with a default limit of `30%` CPU and
   `30%` RAM (resolved against the host on `apply`). Override via
   `--cpu` / `--ram` (or per-project `docker-git.json`).
+  Docker Compose `memswap_limit` is resolved separately as the total
+  RAM+swap ceiling, defaulting to twice the resolved RAM limit.
 - **Controller container** (`docker-git-api`) is capped in
   `docker-compose.yml` and `docker-compose.api.yml`. When started through
   `docker-git` or `./ctl`, the default CPU/RAM cap is resolved to `90%` of
-  host resources. Override with global CLI flags:
+  host resources and memory swap defaults to twice the resolved RAM limit.
+  Override with global CLI flags:
 
   ```bash
   docker-git --controller-cpu 75% --controller-ram 8g --controller-pids 8192 ps
@@ -163,5 +166,6 @@ project (or the controller itself) cannot consume the entire system.
   | Variable                       | Default | Purpose                              |
   | ------------------------------ | ------- | ------------------------------------ |
   | `DOCKER_GIT_CONTROLLER_CPUS`   | `90%`   | CPU percent or cores for the controller |
-  | `DOCKER_GIT_CONTROLLER_MEMORY` | `90%`   | RAM percent or size; swap is matched |
+  | `DOCKER_GIT_CONTROLLER_MEMORY` | `90%`   | RAM percent or size for `mem_limit`  |
+  | `DOCKER_GIT_CONTROLLER_MEMORY_SWAP` | derived from RAM | Total RAM+swap size for `memswap_limit`; use Docker size units such as `16g` |
   | `DOCKER_GIT_CONTROLLER_PIDS`   | `4096`  | Maximum PIDs inside the controller   |

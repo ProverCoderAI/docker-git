@@ -3,8 +3,49 @@ import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import * as fc from "fast-check"
 
 import { defaultProjectsRoot, findAuthorizedKeysSource, findSshPrivateKey } from "../../src/usecases/path-helpers.js"
+
+type GeneratedHomeEnv = {
+  readonly key: "HOME" | "USERPROFILE"
+  readonly separator: "/" | "\\"
+  readonly value: string
+}
+
+const pathSegmentCharArbitrary = fc.constantFrom(
+  ..."abcdefghijklmnopqrstuvwxyz0123456789-_".split("")
+)
+
+const pathSegmentArbitrary = fc
+  .array(pathSegmentCharArbitrary, { minLength: 1, maxLength: 12 })
+  .map((chars) => chars.join(""))
+
+const generatedHomeEnvArbitrary: fc.Arbitrary<GeneratedHomeEnv> = fc.oneof(
+  fc.constant({ key: "HOME", separator: "/", value: "/" }),
+  fc.constant({ key: "USERPROFILE", separator: "\\", value: "C:\\" }),
+  fc
+    .tuple(
+      fc.array(pathSegmentArbitrary, { minLength: 1, maxLength: 4 }),
+      fc.constantFrom("", "/", "//")
+    )
+    .map(([segments, trailing]): GeneratedHomeEnv => ({
+      key: "HOME",
+      separator: "/",
+      value: `/${segments.join("/")}${trailing}`
+    })),
+  fc
+    .tuple(
+      fc.constantFrom("C", "D", "Z"),
+      fc.array(pathSegmentArbitrary, { minLength: 1, maxLength: 4 }),
+      fc.constantFrom("", "\\", "\\\\")
+    )
+    .map(([drive, segments, trailing]): GeneratedHomeEnv => ({
+      key: "USERPROFILE",
+      separator: "\\",
+      value: `${drive}:\\${segments.join("\\")}${trailing}`
+    }))
+)
 
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
@@ -87,6 +128,31 @@ describe("path helpers", () => {
         expect(defaultProjectsRoot("C:\\workspace")).toBe("C:\\.docker-git")
       })
     ))
+
+  it("preserves generated home separator invariants for default projects root", () => {
+    fc.assert(
+      fc.property(generatedHomeEnvArbitrary, (homeEnv) => {
+        const patch = homeEnv.key === "HOME"
+          ? {
+            HOME: homeEnv.value,
+            USERPROFILE: undefined,
+            DOCKER_GIT_PROJECTS_ROOT: undefined
+          }
+          : {
+            HOME: undefined,
+            USERPROFILE: homeEnv.value,
+            DOCKER_GIT_PROJECTS_ROOT: undefined
+          }
+        const evaluate = (cwd: string): string =>
+          Effect.runSync(withPatchedEnv(patch, Effect.sync(() => defaultProjectsRoot(cwd))))
+        const result = evaluate("/workspace")
+
+        expect(result.endsWith(`${homeEnv.separator}.docker-git`)).toBe(true)
+        expect(result.includes(`${homeEnv.separator}${homeEnv.separator}.docker-git`)).toBe(false)
+        expect(evaluate("/workspace/")).toBe(result)
+      })
+    )
+  })
 
   it.effect("expands Windows home-relative projects root overrides", () =>
     withPatchedEnv(
