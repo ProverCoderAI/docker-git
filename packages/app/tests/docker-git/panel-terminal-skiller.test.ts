@@ -36,7 +36,9 @@ const session: ActiveTerminalSession = {
   websocketPath: "/projects/by-key/0a278e578d69/terminal-sessions/proof-terminal/ws"
 }
 
-const renderTerminalPanel = (): string =>
+type TerminalPanelRenderOverrides = Partial<Parameters<typeof TerminalPanel>[0]>
+
+const renderTerminalPanel = (overrides: TerminalPanelRenderOverrides = {}): string =>
   renderToStaticMarkup(createElement(TerminalPanel, {
     keyboardOpen: false,
     mobileMode: false,
@@ -49,7 +51,8 @@ const renderTerminalPanel = (): string =>
     onOpenSkiller: vi.fn(),
     onOpenTaskManager: vi.fn(),
     onOpenTerminal: vi.fn(),
-    session
+    session,
+    ...overrides
   }))
 
 describe("TerminalPanel Skiller action", () => {
@@ -63,5 +66,24 @@ describe("TerminalPanel Skiller action", () => {
     expect(openBrowserIndex).toBeGreaterThanOrEqual(0)
     expect(skillerIndex).toBeGreaterThan(openBrowserIndex)
     expect(applyIndex).toBeGreaterThan(skillerIndex)
+  })
+
+  it("renders automatic image previews enabled by default in the terminal header action row", () => {
+    const html = renderTerminalPanel()
+
+    const imagesIndex = html.indexOf("Images on")
+    const detachIndex = html.indexOf("Detach")
+
+    expect(imagesIndex).toBeGreaterThanOrEqual(0)
+    expect(detachIndex).toBeGreaterThan(imagesIndex)
+    expect(html).toContain("aria-pressed=\"true\"")
+    expect(html).toContain("title=\"Automatic image previews enabled\"")
+  })
+
+  it("uses a compact image preview toggle label in compact terminal headers", () => {
+    const html = renderTerminalPanel({ mobileMode: true })
+
+    expect(html).toContain("Img on")
+    expect(html).not.toContain("Images on")
   })
 })

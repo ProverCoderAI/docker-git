@@ -4,7 +4,11 @@ import { Terminal } from "xterm"
 import { FitAddon } from "xterm-addon-fit"
 
 import { resolveTerminalImageFetchUrl } from "./terminal-image-url.js"
-import { splitTerminalInlineImageOutput, type TerminalInlineImageOutputSegment } from "./terminal-inline-images-core.js"
+import {
+  splitTerminalInlineImageOutput,
+  type TerminalInlineImageOutputSegment,
+  writeTerminalOutputSegment
+} from "./terminal-inline-images-core.js"
 import {
   appendTerminalInlineImagePreview,
   cachedTerminalInlineImageEntry,
@@ -353,18 +357,23 @@ const flushTerminalOutputQueue = (handlers: TerminalMessageHandlers): void => {
   }
 
   handlers.lifecycle.outputWriting = true
-  handlers.terminal.write(segment.text, () => {
-    if (segment.imagePaths.length === 0) {
-      handlers.lifecycle.outputWriting = false
-      flushTerminalOutputQueue(handlers)
-      return
+  writeTerminalOutputSegment({
+    inlineImagePreviewsEnabledRef: handlers.inlineImagePreviewsEnabledRef,
+    segment,
+    writer: {
+      writePreviewLineBreak: (outputSegment, onComplete) => {
+        writeLineBreakBeforePreview(handlers, outputSegment, onComplete)
+      },
+      writePreviews: (paths, onComplete) => {
+        writeInlineImagePreviews(handlers, paths, onComplete)
+      },
+      writeText: (text, onComplete) => {
+        handlers.terminal.write(text, onComplete)
+      }
     }
-    writeLineBreakBeforePreview(handlers, segment, () => {
-      writeInlineImagePreviews(handlers, segment.imagePaths, () => {
-        handlers.lifecycle.outputWriting = false
-        flushTerminalOutputQueue(handlers)
-      })
-    })
+  }, () => {
+    handlers.lifecycle.outputWriting = false
+    flushTerminalOutputQueue(handlers)
   })
 }
 

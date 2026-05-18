@@ -14,7 +14,9 @@ import {
 } from "./terminal-panel-runtime-core.js"
 import type {
   TerminalLifecycleArgs,
+  TerminalLifecycleState,
   TerminalMessageHandlers,
+  TerminalPasteGuard,
   TerminalSocketConnectArgs,
   TerminalSocketRef
 } from "./terminal-panel-runtime-types.js"
@@ -69,6 +71,93 @@ const attachGlobalResizeListeners = (sendResize: () => void): void => {
   globalThis.visualViewport?.addEventListener("scroll", sendResize)
 }
 
+const createTerminalMessageHandlers = (
+  args: TerminalLifecycleArgs,
+  lifecycle: TerminalLifecycleState,
+  terminal: TerminalMessageHandlers["terminal"]
+): TerminalMessageHandlers => ({
+  connectionRef: args.connectionRef,
+  inlineImagePreviewsEnabledRef: args.inlineImagePreviewsEnabledRef,
+  lifecycle,
+  notifyMessage: args.notifyMessage,
+  session: args.session,
+  setStatus: args.setStatus,
+  terminal
+})
+
+type MountedTerminalDisposables = {
+  readonly imageLinkDisposable: { readonly dispose: () => void }
+  readonly imagePasteDisposable: { readonly dispose: () => void }
+  readonly inputDisposable: { readonly dispose: () => void }
+}
+
+type MountedTerminalCleanupArgs = {
+  readonly args: TerminalLifecycleArgs
+  readonly disposables: MountedTerminalDisposables
+  readonly lifecycle: TerminalLifecycleState
+  readonly resizeObserver: ResizeObserver | null
+  readonly sendResize: () => void
+  readonly socketRef: TerminalSocketRef
+  readonly terminal: TerminalMessageHandlers["terminal"]
+}
+
+const createMountedTerminalDisposables = (
+  args: TerminalLifecycleArgs,
+  host: HTMLDivElement,
+  pasteGuard: TerminalPasteGuard,
+  socketRef: TerminalSocketRef,
+  terminal: TerminalMessageHandlers["terminal"]
+): MountedTerminalDisposables => ({
+  imageLinkDisposable: attachTerminalImageLinks(terminal, args.session),
+  imagePasteDisposable: attachTerminalImagePaste({
+    host,
+    notifyMessage: args.notifyMessage,
+    pasteGuard,
+    socketRef,
+    terminal
+  }),
+  inputDisposable: attachTerminalInput(terminal, socketRef, pasteGuard)
+})
+
+const createMountedTerminalConnector = (
+  args: TerminalLifecycleArgs,
+  lifecycle: TerminalLifecycleState,
+  socketRef: TerminalSocketRef,
+  terminal: TerminalMessageHandlers["terminal"],
+  sendResize: () => void
+): () => void =>
+  createConnectSocket({
+    handlers: createTerminalMessageHandlers(args, lifecycle, terminal),
+    lifecycle,
+    notifyMessage: args.notifyMessage,
+    onAttachFailure: args.onAttachFailure,
+    sendResize,
+    session: args.session,
+    setStatus: args.setStatus,
+    socketRef,
+    terminal
+  })
+
+const createMountedTerminalCleanup = (
+  { args, disposables, lifecycle, resizeObserver, sendResize, socketRef, terminal }: MountedTerminalCleanupArgs
+): () => void =>
+  createTerminalCleanup({
+    cleanupArgs: {
+      connectionRef: args.connectionRef,
+      lifecycle,
+      notifyMessage: args.notifyMessage,
+      resizeObserver,
+      runtimeRef: args.runtimeRef,
+      session: args.session,
+      socketRef,
+      terminal
+    },
+    imageLinkDisposable: disposables.imageLinkDisposable,
+    imagePasteDisposable: disposables.imagePasteDisposable,
+    inputDisposable: disposables.inputDisposable,
+    sendResize
+  })
+
 const resolveMountHost = (
   { hostRef, session }: Pick<TerminalLifecycleArgs, "hostRef" | "session">
 ): HTMLDivElement | null => {
@@ -78,74 +167,72 @@ const resolveMountHost = (
   return hostRef.current
 }
 
-const mountTerminalSession = (
-  { connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus }: TerminalLifecycleArgs
-): (() => void) | undefined => {
-  const host = resolveMountHost({ hostRef, session })
+const mountTerminalSession = (args: TerminalLifecycleArgs): (() => void) | undefined => {
+  const host = resolveMountHost(args)
   if (host === null) {
     return undefined
   }
 
-  connectionRef.current = { closing: false, opened: false }
+  args.connectionRef.current = { closing: false, opened: false }
   const lifecycle = createLifecycleState()
   const socketRef: TerminalSocketRef = { current: null }
   const { fitAddon, terminal } = createTerminalRuntime(host)
   const terminalInputController = createTerminalInputController(terminal, socketRef)
   const pasteGuard = createTerminalPasteGuard()
-  const sendResize = () => {
+  const sendResize = (): void => {
     sendTerminalResize(fitAddon, socketRef, terminal)
   }
   const resizeObserver = observeTerminalResize(host, sendResize)
-  const inputDisposable = attachTerminalInput(terminal, socketRef, pasteGuard)
-  const imagePasteDisposable = attachTerminalImagePaste({ host, notifyMessage, pasteGuard, socketRef, terminal })
-  const imageLinkDisposable = attachTerminalImageLinks(terminal, session)
-  const handlers: TerminalMessageHandlers = {
-    connectionRef,
-    lifecycle,
-    notifyMessage,
-    session,
-    setStatus,
-    terminal
-  }
-  const connectSocket = createConnectSocket({
-    handlers,
-    lifecycle,
-    notifyMessage,
-    onAttachFailure,
-    sendResize,
-    session,
-    setStatus,
-    socketRef,
-    terminal
-  })
+  const disposables = createMountedTerminalDisposables(args, host, pasteGuard, socketRef, terminal)
+  const connectSocket = createMountedTerminalConnector(args, lifecycle, socketRef, terminal, sendResize)
 
-  runtimeRef.current = terminalInputController
+  args.runtimeRef.current = terminalInputController
   attachGlobalResizeListeners(sendResize)
   connectSocket()
 
-  return createTerminalCleanup({
-    cleanupArgs: { connectionRef, lifecycle, notifyMessage, resizeObserver, runtimeRef, session, socketRef, terminal },
-    imageLinkDisposable,
-    imagePasteDisposable,
-    inputDisposable,
-    sendResize
+  return createMountedTerminalCleanup({
+    args,
+    disposables,
+    lifecycle,
+    resizeObserver,
+    sendResize,
+    socketRef,
+    terminal
   })
 }
 
 export const useTerminalSessionLifecycle = (
-  { connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus }: TerminalLifecycleArgs
+  {
+    connectionRef,
+    hostRef,
+    inlineImagePreviewsEnabledRef,
+    notifyMessage,
+    onAttachFailure,
+    runtimeRef,
+    session,
+    setStatus
+  }: TerminalLifecycleArgs
 ): void => {
   useEffect(() => {
     return mountTerminalSession({
       connectionRef,
       hostRef,
+      inlineImagePreviewsEnabledRef,
       notifyMessage,
       onAttachFailure,
       runtimeRef,
       session,
       setStatus
     })
-  }, [connectionRef, hostRef, notifyMessage, onAttachFailure, runtimeRef, session, setStatus])
+  }, [
+    connectionRef,
+    hostRef,
+    notifyMessage,
+    onAttachFailure,
+    runtimeRef,
+    session,
+    setStatus
+  ])
 }
 
 export {

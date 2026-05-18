@@ -3,7 +3,13 @@ import { Either } from "effect"
 
 import { expandContainerHome } from "../usecases/scrap-path.js"
 import { resolveAutoAgentFlags } from "./auto-agent-flags.js"
-import { nonEmpty, parseDockerNetworkMode, parseGpuMode, parseSshPort } from "./command-builders-shared.js"
+import {
+  nonEmpty,
+  parseDockerNetworkMode,
+  parseGpuMode,
+  parseSshPort,
+  parseSshUser
+} from "./command-builders-shared.js"
 import { type RawOptions } from "./command-options.js"
 import {
   type AgentMode,
@@ -46,7 +52,7 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
     const repoRef = yield* _(
       nonEmpty("--repo-ref", raw.repoRef ?? resolvedRepo.repoRef, defaultTemplateConfig.repoRef)
     )
-    const sshUser = yield* _(nonEmpty("--ssh-user", raw.sshUser, defaultTemplateConfig.sshUser))
+    const sshUser = yield* _(parseSshUser(raw.sshUser))
     const rawTargetDir = yield* _(
       nonEmpty("--target-dir", raw.targetDir, defaultTemplateConfig.targetDir)
     )

@@ -8,11 +8,11 @@ import { renderZshConfig as renderZshConfigTemplate } from "./templates-zsh.js"
 // FORMAT THEOREM: forall s in InteractiveShells: prompt(s) -> includes(time, path, branch|empty)
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: script is deterministic
+// INVARIANT: script is deterministic and does not touch TTY state outside interactive shells
 // COMPLEXITY: O(1)
 const dockerGitTerminalSanitizeShell = String.raw`docker_git_terminal_write_escape() {
   if [ -c /dev/tty ]; then
-    printf "\033[0m\033[?25h\033[?1l\033>\033[?1000l\033[?1002l\033[?1003l\033[?1005l\033[?1006l\033[?1015l\033[?1007l\033[?1004l\033[?2004l\033[>4;0m\033[>4m\033[<u" > /dev/tty 2>/dev/null && return 0
+    { printf "\033[0m\033[?25h\033[?1l\033>\033[?1000l\033[?1002l\033[?1003l\033[?1005l\033[?1006l\033[?1015l\033[?1007l\033[?1004l\033[?2004l\033[>4;0m\033[>4m\033[<u" > /dev/tty; } 2>/dev/null && return 0
   fi
   if [ -t 1 ]; then
     printf "\033[0m\033[?25h\033[?1l\033>\033[?1000l\033[?1002l\033[?1003l\033[?1005l\033[?1006l\033[?1015l\033[?1007l\033[?1004l\033[?2004l\033[>4;0m\033[>4m\033[<u"
@@ -23,7 +23,7 @@ const dockerGitTerminalSanitizeShell = String.raw`docker_git_terminal_write_esca
 docker_git_terminal_sanitize() {
   # Recover interactive TTY settings after abrupt exits from fullscreen/raw-mode tools.
   if [ -c /dev/tty ]; then
-    stty sane < /dev/tty > /dev/tty 2>/dev/null || stty sane < /dev/tty 2>/dev/null || true
+    { stty sane < /dev/tty > /dev/tty; } 2>/dev/null || { stty sane < /dev/tty; } 2>/dev/null || true
   elif [ -t 0 ]; then
     stty sane 2>/dev/null || true
   fi
@@ -31,6 +31,11 @@ docker_git_terminal_sanitize() {
 }`
 
 const dockerGitPromptScript = `${dockerGitTerminalSanitizeShell}
+case "$-" in
+  *i*) ;;
+  *) return 0 2>/dev/null || exit 0 ;;
+esac
+
 docker_git_branch() { git rev-parse --abbrev-ref HEAD 2>/dev/null; }
 docker_git_short_pwd() {
   local full_path
@@ -96,8 +101,8 @@ docker_git_prompt_apply() {
     PS1="\${base}> "
   fi
 }
-if [ -n "$PROMPT_COMMAND" ]; then
-  PROMPT_COMMAND="docker_git_prompt_apply;$PROMPT_COMMAND"
+if [ -n "\${PROMPT_COMMAND-}" ]; then
+  PROMPT_COMMAND="docker_git_prompt_apply;\${PROMPT_COMMAND}"
 else
   PROMPT_COMMAND="docker_git_prompt_apply"
 fi
@@ -190,7 +195,7 @@ export const renderZshConfig = (): string => renderZshConfigTemplate(dockerGitTe
 // FORMAT THEOREM: forall s in InteractiveShells: prompt(s) -> includes(time, path, branch|empty)
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: only interactive shells source /etc/profile.d/zz-prompt.sh
+// INVARIANT: only interactive shells mutate prompt or TTY state
 // COMPLEXITY: O(1)
 export const renderDockerfilePrompt = (): string =>
   String.raw`# Shell prompt: show git branch for interactive sessions
@@ -228,7 +233,7 @@ EOF`
 // FORMAT THEOREM: forall s in InteractiveShells: prompt(s) -> includes(time, path, branch|empty)
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: /etc/profile.d/zz-prompt.sh is non-empty after entrypoint
+// INVARIANT: /etc/profile.d/zz-prompt.sh is non-empty after entrypoint and inert for non-interactive shells
 // COMPLEXITY: O(1)
 export const renderEntrypointPrompt = (): string =>
   String.raw`# Ensure docker-git prompt is configured for interactive shells

@@ -7,7 +7,12 @@ import * as Schema from "@effect/schema/Schema"
 import * as TreeFormatter from "@effect/schema/TreeFormatter"
 import { Effect, Either } from "effect"
 
-import { defaultTemplateConfig, type ProjectConfig } from "../core/domain.js"
+import {
+  defaultTemplateConfig,
+  isUnixUserName,
+  type ProjectConfig,
+  sshUserNamePatternDescription
+} from "../core/domain.js"
 import { ConfigDecodeError, ConfigNotFoundError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
 
@@ -86,6 +91,19 @@ const normalizeLegacyProjectConfig = (
   }
 }
 
+const validateProjectConfig = (
+  path: string,
+  config: ProjectConfig
+): Effect.Effect<ProjectConfig, ConfigDecodeError> =>
+  isUnixUserName(config.template.sshUser)
+    ? Effect.succeed(config)
+    : Effect.fail(
+      new ConfigDecodeError({
+        path,
+        message: `template.sshUser must match ${sshUserNamePatternDescription}`
+      })
+    )
+
 const ProjectConfigInputSchema = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   template: TemplateConfigInputSchema
@@ -105,7 +123,7 @@ const decodeProjectConfig = (
           message: TreeFormatter.formatIssueSync(issue)
         })
       ),
-    onRight: (value) => Effect.succeed(normalizeLegacyProjectConfig(value))
+    onRight: (value) => validateProjectConfig(path, normalizeLegacyProjectConfig(value))
   })
 
 // CHANGE: read and decode docker-git.json from disk

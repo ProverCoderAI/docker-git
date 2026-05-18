@@ -1,0 +1,25 @@
+name: Free Docker disk
+description: Remove unused hosted-runner toolchains before Docker image E2E builds.
+
+runs:
+  using: composite
+  steps:
+    - name: Free disk for Docker builds
+      shell: bash
+      run: |
+        set -euxo pipefail
+
+        df -h
+        docker system df || true
+
+        sudo rm -rf \
+          /opt/ghc \
+          /opt/hostedtoolcache/CodeQL \
+          /usr/local/.ghcup \
+          /usr/local/lib/android \
+          /usr/share/dotnet
+
+        docker system prune -af --volumes || true
+
+        df -h
+        docker system df || true

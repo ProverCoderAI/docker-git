@@ -263,16 +263,22 @@ const TerminalActionButton = (
   {
     children,
     compactTypingMode,
-    onClick
+    onClick,
+    pressed,
+    title
   }: {
     readonly children: string
     readonly compactTypingMode: boolean
     readonly onClick: () => void
+    readonly pressed?: boolean
+    readonly title?: string
   }
 ): JSX.Element => (
   <button
+    aria-pressed={pressed}
     onClick={onClick}
     style={compactTypingMode ? compactCloseButtonStyle : closeButtonStyle}
+    title={title}
     type="button"
   >
     {children}
@@ -307,6 +313,7 @@ const OptionalTerminalActionButton = (
 const TerminalHeaderActions = (
   {
     compactHeaderMode,
+    inlineImagePreviewsEnabled,
     onApplyProject,
     onDetach,
     onKill,
@@ -314,6 +321,7 @@ const TerminalHeaderActions = (
     onOpenSkiller,
     onOpenTaskManager,
     onOpenTerminal,
+    onToggleInlineImagePreviews,
     session
   }:
     & Pick<
@@ -329,9 +337,16 @@ const TerminalHeaderActions = (
     >
     & {
       readonly compactHeaderMode: boolean
+      readonly inlineImagePreviewsEnabled: boolean
+      readonly onToggleInlineImagePreviews: () => void
     }
 ): JSX.Element => {
   const hasProjectActions = session.browserProjectId !== undefined
+  const imageToggleLabel = inlineImagePreviewsEnabled ? "Images on" : "Images off"
+  const compactImageToggleLabel = inlineImagePreviewsEnabled ? "Img on" : "Img off"
+  const imageToggleTitle = inlineImagePreviewsEnabled
+    ? "Automatic image previews enabled"
+    : "Automatic image previews disabled"
 
   return (
     <div style={compactHeaderMode ? compactHeaderActionsStyle : headerActionsStyle}>
@@ -370,6 +385,14 @@ const TerminalHeaderActions = (
         label="New terminal"
         onClick={onOpenTerminal}
       />
+      <TerminalActionButton
+        compactTypingMode={compactHeaderMode}
+        onClick={onToggleInlineImagePreviews}
+        pressed={inlineImagePreviewsEnabled}
+        title={imageToggleTitle}
+      >
+        {compactHeaderMode ? compactImageToggleLabel : imageToggleLabel}
+      </TerminalActionButton>
       <TerminalActionButton compactTypingMode={compactHeaderMode} onClick={onDetach}>
         Detach
       </TerminalActionButton>
@@ -383,6 +406,7 @@ const TerminalHeaderActions = (
 const TerminalHeader = (
   {
     compactHeaderMode,
+    inlineImagePreviewsEnabled,
     onApplyProject,
     onDetach,
     onKill,
@@ -390,6 +414,7 @@ const TerminalHeader = (
     onOpenSkiller,
     onOpenTaskManager,
     onOpenTerminal,
+    onToggleInlineImagePreviews,
     session,
     status
   }:
@@ -406,6 +431,8 @@ const TerminalHeader = (
     >
     & {
       readonly compactHeaderMode: boolean
+      readonly inlineImagePreviewsEnabled: boolean
+      readonly onToggleInlineImagePreviews: () => void
       readonly status: TerminalStatus
     }
 ): JSX.Element => (
@@ -413,6 +440,7 @@ const TerminalHeader = (
     <TerminalHeaderTitle compactHeaderMode={compactHeaderMode} session={session} status={status} />
     <TerminalHeaderActions
       compactHeaderMode={compactHeaderMode}
+      inlineImagePreviewsEnabled={inlineImagePreviewsEnabled}
       onApplyProject={onApplyProject}
       onDetach={onDetach}
       onKill={onKill}
@@ -420,6 +448,7 @@ const TerminalHeader = (
       onOpenSkiller={onOpenSkiller}
       onOpenTaskManager={onOpenTaskManager}
       onOpenTerminal={onOpenTerminal}
+      onToggleInlineImagePreviews={onToggleInlineImagePreviews}
       session={session}
     />
   </div>
@@ -575,10 +604,13 @@ export const TerminalPanel = (
 ): JSX.Element => {
   const connectionRef = useRef<TerminalConnectionState>({ closing: false, opened: false })
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const inlineImagePreviewsEnabledRef = useRef(true)
   const runtimeRef = useRef<TerminalInputController | null>(null)
   const [status, setStatus] = useState<TerminalStatus>(() => resolveInitialTerminalStatus(session))
+  const [inlineImagePreviewsEnabled, setInlineImagePreviewsEnabled] = useState(true)
   const [mobileControlsCollapsed, setMobileControlsCollapsed] = useState(false)
   const [mobileCtrlArmed, setMobileCtrlArmed] = useState(false)
+  const terminalSessionId = session.session.id
   const onAttachFailureRef = useRef(onAttachFailure)
   const onMessageRef = useRef(onMessage)
   useEffect(() => {
@@ -590,11 +622,23 @@ export const TerminalPanel = (
   useEffect(() => {
     setStatus(resolveInitialTerminalStatus(session))
   }, [session])
+  useEffect(() => {
+    inlineImagePreviewsEnabledRef.current = true
+    setInlineImagePreviewsEnabled(true)
+  }, [terminalSessionId])
   const notifyAttachFailure = useCallback(() => {
     onAttachFailureRef.current()
   }, [])
   const notifyMessage = useCallback((message: string) => {
     onMessageRef.current(message)
+  }, [])
+  const toggleInlineImagePreviews = useCallback(() => {
+    setInlineImagePreviewsEnabled((current) => {
+      const next = !current
+      inlineImagePreviewsEnabledRef.current = next
+      return next
+    })
+    retainTerminalFocus(runtimeRef.current)
   }, [])
   const compactHeaderMode = resolveTerminalCompactHeaderMode(mobileMode)
   const compactTypingMode = resolveTerminalTypingMode(mobileMode, keyboardOpen)
@@ -644,6 +688,7 @@ export const TerminalPanel = (
   useTerminalSessionLifecycle({
     connectionRef,
     hostRef,
+    inlineImagePreviewsEnabledRef,
     notifyMessage,
     onAttachFailure: notifyAttachFailure,
     runtimeRef,
@@ -655,6 +700,7 @@ export const TerminalPanel = (
     <div style={terminalPanelStyle(mobileMode, keyboardOpen)}>
       <TerminalHeader
         compactHeaderMode={compactHeaderMode}
+        inlineImagePreviewsEnabled={inlineImagePreviewsEnabled}
         onApplyProject={onApplyProject}
         onDetach={() => {
           connectionRef.current.closing = true
@@ -668,6 +714,7 @@ export const TerminalPanel = (
         onOpenSkiller={onOpenSkiller}
         onOpenTaskManager={onOpenTaskManager}
         onOpenTerminal={onOpenTerminal}
+        onToggleInlineImagePreviews={toggleInlineImagePreviews}
         session={session}
         status={status}
       />

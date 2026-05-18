@@ -39,11 +39,11 @@
   "devDependencies": {
     "@effect/vitest": "^0.29.0",
     "@eslint/js": "10.0.1",
-    "@types/node": "^25.7.0",
+    "@types/node": "^25.8.0",
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.59.3",
     "@typescript-eslint/parser": "^8.59.3",
-    "eslint": "^10.3.0",
+    "eslint": "^10.4.0",
     "fast-check": "4.8.0",
     "globals": "^17.6.0",
     "typescript": "^6.0.3",

@@ -1,4 +1,8 @@
+import * as Command from "@effect/platform/Command"
+import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
+import { Effect, pipe } from "effect"
+import * as fc from "fast-check"
 
 import { defaultTemplateConfig, type TemplateConfig } from "../../src/core/domain.js"
 import { renderDockerCompose } from "../../src/core/templates/docker-compose.js"
@@ -6,6 +10,7 @@ import { renderDockerfile } from "../../src/core/templates/dockerfile.js"
 import { renderEntrypoint } from "../../src/core/templates-entrypoint.js"
 import { renderEntrypointDnsRepair } from "../../src/core/templates-entrypoint/dns-repair.js"
 import { renderEntrypointGitHooks } from "../../src/core/templates-entrypoint/git.js"
+import { renderPromptScript } from "../../src/core/templates-prompt.js"
 
 const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateConfig => ({
   ...defaultTemplateConfig,
@@ -32,6 +37,28 @@ const expectContainsAll = (value: string, snippets: ReadonlyArray<string>): void
   }
 }
 
+const generatedTemplateConfigArbitrary: fc.Arbitrary<TemplateConfig> = fc
+  .record({
+    gpu: fc.constantFrom<TemplateConfig["gpu"]>("none", "all"),
+    projectIndex: fc.integer({ min: 1, max: 100_000 }),
+    sshPort: fc.integer({ min: 1_024, max: 65_535 }),
+    sshUserIndex: fc.integer({ min: 1, max: 100_000 })
+  })
+  .map(({ gpu, projectIndex, sshPort, sshUserIndex }) => {
+    const sshUser = `dev${sshUserIndex}`
+    const projectName = `repo-${projectIndex}`
+
+    return makeTemplateConfig({
+      containerName: `dg-test-${projectIndex}`,
+      gpu,
+      serviceName: `dg-test-${projectIndex}`,
+      sshPort,
+      sshUser,
+      targetDir: `/home/${sshUser}/org/${projectName}`,
+      volumeName: `dg-test-${projectIndex}-home`
+    })
+  })
+
 describe("renderEntrypointDnsRepair", () => {
   it("renders the fallback nameserver repair block", () => {
     const dnsRepair = renderEntrypointDnsRepair()
@@ -55,6 +82,111 @@ describe("renderEntrypointDnsRepair", () => {
 })
 
 describe("renderDockerfile", () => {
+  it("uses the shared JS box image as the project container base", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expect(dockerfile).toContain("ARG DOCKER_GIT_BASE_IMAGE=konard/box-js:2.1.1")
+    expect(dockerfile).toContain("FROM ${DOCKER_GIT_BASE_IMAGE}")
+    expect(dockerfile).toContain(
+      "#checkov:skip=CKV_DOCKER_8: docker-git entrypoint must start as root to prepare SSH/auth/bootstrap and run sshd"
+    )
+    expect(dockerfile).toContain("USER root")
+    expect(dockerfile).not.toContain("FROM ubuntu:24.04")
+  })
+
+  it("renames the UID 1000 base user to the configured SSH user before the box fallback", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expect(dockerfile).toContain("for BASE_USER in ubuntu box; do")
+    expect(dockerfile).toContain('if [ "$BASE_USER" != "dev" ] && id -u "$BASE_USER" >/dev/null 2>&1; then')
+    expect(dockerfile).toContain('usermod -l dev -d /home/dev -m -s /usr/bin/zsh "$BASE_USER" || true')
+  })
+
+  it("normalizes inherited box image HOME and workdir to the configured SSH user", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expectContainsAll(dockerfile, [
+      "ENV HOME=/home/dev",
+      "ENV PATH=/usr/local/bun/bin:/home/dev/.deno/bin:/home/dev/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "WORKDIR /home/dev"
+    ])
+  })
+
+  it("preserves HOME/PATH/WORKDIR normalization for generated configs", () => {
+    fc.assert(
+      fc.property(generatedTemplateConfigArbitrary, (config) => {
+        const dockerfile = renderDockerfile(config)
+        const home = `/home/${config.sshUser}`
+
+        expectContainsAll(dockerfile, [
+          `ENV HOME=${home}`,
+          `ENV PATH=/usr/local/bun/bin:${home}/.deno/bin:${home}/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
+          `WORKDIR ${home}`
+        ])
+        expect(dockerfile).not.toContain("ENV HOME=/home/box")
+        expect(dockerfile).not.toContain("ENV HOME=/home/ubuntu")
+        expect(dockerfile).not.toContain("WORKDIR /home/box")
+        expect(dockerfile).not.toContain("WORKDIR /home/ubuntu")
+        expect(dockerfile).not.toContain("ENV PATH=/usr/local/bun/bin:/home/box/")
+        expect(dockerfile).not.toContain("ENV PATH=/usr/local/bun/bin:/home/ubuntu/")
+      })
+    )
+  })
+
+  it("rewrites inherited login rc files away from the base image home", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expectContainsAll(dockerfile, [
+      "find /home/dev -maxdepth 2 -type f",
+      '-name ".profile" -o -name ".bash_profile" -o -name ".bashrc" -o -name ".zprofile" -o -name ".zshenv" -o -name ".zshrc"',
+      '-exec sed -i -e "s|/home/box|/home/dev|g" -e "s|/home/ubuntu|/home/dev|g" {} +;'
+    ])
+  })
+
+  it("keeps the runtime PATH extension relative to the login shell environment", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig())
+
+    expect(dockerfile).toContain('RUN printf "export PATH=/usr/local/bun/bin:\\$PATH\\n"')
+    expect(dockerfile).not.toContain('RUN printf "export PATH=/usr/local/bun/bin:$PATH\\n"')
+  })
+
+  it("does not recursively chown the inherited home directory from the base image", () => {
+    const config = makeTemplateConfig()
+    const dockerfile = renderDockerfile(config)
+
+    expect(dockerfile).toContain('chown 1000:1000 "$HOME_DIR"')
+    expect(dockerfile).toContain('TARGET_DIR_CANON="$TARGET_DIR"')
+    expect(dockerfile).toContain('HOME_DIR_CANON="$HOME_DIR"')
+    expect(dockerfile).toContain('chown -R 1000:1000 "$TARGET_DIR"')
+    expect(dockerfile).toContain(
+      'if [ "$TARGET_DIR_CANON" != "/" ] && [ "$TARGET_DIR_CANON" != "$HOME_DIR_CANON" ]; then chown -R 1000:1000 "$TARGET_DIR"; fi'
+    )
+    expect(dockerfile).not.toContain("chown -R 1000:1000 /home/dev")
+    expect(dockerfile).not.toContain(`chown -R 1000:1000 /home/${config.sshUser}`)
+    expect(dockerfile).not.toContain('if [ "$TARGET_DIR" != "/" ] && [ "$TARGET_DIR" != "$HOME_DIR" ]')
+  })
+
+  it("normalizes trailing slashes before deciding whether to chown the target directory", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig({ targetDir: "/home/dev/" }))
+
+    expectContainsAll(dockerfile, [
+      "TARGET_DIR='/home/dev/';",
+      'while [ "${TARGET_DIR_CANON%/}" != "$TARGET_DIR_CANON" ]; do TARGET_DIR_CANON="${TARGET_DIR_CANON%/}"; done;',
+      '[ -n "$TARGET_DIR_CANON" ] || TARGET_DIR_CANON="/";',
+      'if [ "$TARGET_DIR_CANON" != "/" ] && [ "$TARGET_DIR_CANON" != "$HOME_DIR_CANON" ]; then chown -R 1000:1000 "$TARGET_DIR"; fi'
+    ])
+  })
+
+  it("renders targetDir as a single-quoted shell literal in workspace setup", () => {
+    const config = makeTemplateConfig({
+      targetDir: "/home/dev/org/repo'$(touch-pwned)`echo-pwned`"
+    })
+    const dockerfile = renderDockerfile(config)
+
+    expect(dockerfile).toContain("TARGET_DIR='/home/dev/org/repo'\"'\"'$(touch-pwned)`echo-pwned`';")
+    expect(dockerfile).not.toContain("TARGET_DIR=\"/home/dev/org/repo'$(touch-pwned)`echo-pwned`\"")
+  })
+
   it("installs session sync from npmjs with a local fallback", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig())
 
@@ -83,7 +215,54 @@ describe("renderDockerfile", () => {
   })
 })
 
+describe("renderPromptScript", () => {
+  it.effect("is silent when sourced by a non-interactive shell without a controlling TTY", () =>
+    pipe(
+      Command.make(
+        "bash",
+        "-lc",
+        String.raw`set -euo pipefail; { source <(printf '%s' "$DOCKER_GIT_PROMPT_SCRIPT"); } 2>&1; printf ok`
+      ),
+      Command.env({ DOCKER_GIT_PROMPT_SCRIPT: renderPromptScript() }),
+      Command.stdout("pipe"),
+      Command.stderr("pipe"),
+      Command.string,
+      Effect.tap((output) => Effect.sync(() => expect(output).toBe("ok"))),
+      Effect.asVoid,
+      Effect.provide(NodeContext.layer)
+    )
+  )
+
+  it("keeps interactive prompt mutations behind the non-interactive guard", () => {
+    const nonInteractiveGuard = "*) return 0 2>/dev/null || exit 0 ;;"
+
+    fc.assert(
+      fc.property(
+        fc.constantFrom("PROMPT_COMMAND=", "PS1=", "trap 'docker_git_terminal_sanitize' EXIT INT TERM"),
+        (interactiveMutation) => {
+          const script = renderPromptScript()
+          const guardIndex = script.indexOf(nonInteractiveGuard)
+
+          expect(guardIndex).toBeGreaterThanOrEqual(0)
+          expect(script.indexOf(interactiveMutation)).toBeGreaterThan(guardIndex)
+        }
+      )
+    )
+  })
+})
+
 describe("renderEntrypoint clone cache", () => {
+  it("renders the default targetDir as a shell literal without evaluating substitutions", () => {
+    const config = makeTemplateConfig({
+      targetDir: "/home/dev/org/repo'$(touch-pwned)`echo-pwned`"
+    })
+    const entrypoint = renderEntrypoint(config)
+
+    expect(entrypoint).toContain('TARGET_DIR="${TARGET_DIR:-}"')
+    expect(entrypoint).toContain("TARGET_DIR='/home/dev/org/repo'\"'\"'$(touch-pwned)`echo-pwned`'")
+    expect(entrypoint).not.toContain('TARGET_DIR="${TARGET_DIR:-/home/dev/org/repo')
+  })
+
   it("refreshes mirrors without broad remote refs", () => {
     const entrypoint = renderEntrypoint(makeTemplateConfig())
 
@@ -93,6 +272,24 @@ describe("renderEntrypoint clone cache", () => {
     expect(entrypoint).not.toContain("'+refs/*:refs/*'")
     expect(entrypoint).not.toContain("'+refs/pull/*:refs/pull/*'")
     expect(entrypoint).not.toContain("'+refs/merge-requests/*:refs/merge-requests/*'")
+  })
+
+  it("preserves branch/tag-only clone-cache refspecs for generated configs", () => {
+    fc.assert(
+      fc.property(generatedTemplateConfigArbitrary, (config) => {
+        const entrypoint = renderEntrypoint(config)
+        const cloneCacheFetch = entrypoint
+          .split("\n")
+          .find((line) => line.includes("git --git-dir '$CACHE_REPO_DIR' fetch"))
+
+        expect(cloneCacheFetch).toBeDefined()
+        expect(cloneCacheFetch).toContain("'+refs/heads/*:refs/heads/*'")
+        expect(cloneCacheFetch).toContain("'+refs/tags/*:refs/tags/*'")
+        expect(cloneCacheFetch).not.toContain("'+refs/*:refs/*'")
+        expect(cloneCacheFetch).not.toContain("refs/pull")
+        expect(cloneCacheFetch).not.toContain("refs/merge-requests")
+      })
+    )
   })
 })
 
@@ -310,7 +507,8 @@ describe("renderEntrypoint auth bridge", () => {
     const entrypoint = renderAuthEntrypoint()
 
     expectContainsAll(entrypoint, [
-      "stty sane < /dev/tty > /dev/tty 2>/dev/null",
+      "{ stty sane < /dev/tty > /dev/tty; } 2>/dev/null",
+      '*) return 0 2>/dev/null || exit 0 ;;',
       "docker_git_terminal_sanitize",
       "trap 'docker_git_terminal_sanitize' EXIT INT TERM",
       "add-zsh-hook zshexit docker_git_terminal_on_exit",
@@ -318,6 +516,15 @@ describe("renderEntrypoint auth bridge", () => {
       'if [[ "${DOCKER_GIT_ZSH_AUTOSUGGEST:-0}" == "1" ]]',
       "DOCKER_GIT_ZSH_AUTOSUGGEST=0"
     ])
+  })
+
+  it("refreshes clone cache mirrors without fetching GitHub pull request refs", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expect(entrypoint).toContain(
+      "git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'"
+    )
+    expect(entrypoint).not.toContain("'+refs/*:refs/*'")
   })
 })
 

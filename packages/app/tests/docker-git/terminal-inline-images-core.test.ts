@@ -1,7 +1,10 @@
 import { describe, expect, it } from "@effect/vitest"
 import { vi } from "vitest"
 
-import { splitTerminalInlineImageOutput } from "../../src/web/terminal-inline-images-core.js"
+import {
+  splitTerminalInlineImageOutput,
+  writeTerminalOutputSegment
+} from "../../src/web/terminal-inline-images-core.js"
 import {
   cachedTerminalInlineImageEntry,
   cacheTerminalInlineImageBlob,
@@ -64,6 +67,43 @@ describe("terminal inline image output", () => {
   it("keeps inline image previews compact in the terminal output stream", () => {
     expect(terminalInlineImagePreviewRows).toBe(4)
     expect(terminalInlineImageSpacer).toBe("\r\n\r\n\r\n\r\n")
+  })
+
+  it("writes detected image paths as plain terminal text when automatic previews are disabled", () => {
+    const textWrites: Array<string> = []
+    const previewWrites: Array<ReadonlyArray<string>> = []
+    const previewLineBreaks = { count: 0 }
+    const completions = { count: 0 }
+
+    writeTerminalOutputSegment({
+      inlineImagePreviewsEnabledRef: { current: false },
+      segment: {
+        endedWithLineBreak: false,
+        imagePaths: [issue250ImagePath],
+        text: issue250DeleteCommand
+      },
+      writer: {
+        writePreviewLineBreak: (_segment, onComplete) => {
+          previewLineBreaks.count += 1
+          onComplete()
+        },
+        writePreviews: (paths, onComplete) => {
+          previewWrites.push(paths)
+          onComplete()
+        },
+        writeText: (text, onComplete) => {
+          textWrites.push(text)
+          onComplete()
+        }
+      }
+    }, () => {
+      completions.count += 1
+    })
+
+    expect(textWrites).toEqual([issue250DeleteCommand])
+    expect(previewLineBreaks.count).toBe(0)
+    expect(previewWrites).toEqual([])
+    expect(completions.count).toBe(1)
   })
 
   it("caches successful image fetch blobs as reusable object urls", () => {

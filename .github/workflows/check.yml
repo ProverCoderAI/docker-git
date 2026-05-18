@@ -159,6 +159,8 @@ jobs:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Free Docker disk
+        uses: ./.github/actions/free-docker-disk
       - name: Docker info
         run: docker version && docker compose version
       - name: Browser command startup
@@ -174,6 +176,8 @@ jobs:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Free Docker disk
+        uses: ./.github/actions/free-docker-disk
       - name: Docker info
         run: docker version && docker compose version
       - name: OpenCode autoconnect
@@ -189,6 +193,8 @@ jobs:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Free Docker disk
+        uses: ./.github/actions/free-docker-disk
       - name: Docker info
         run: docker version && docker compose version
       - name: Clone cache reuse
@@ -204,6 +210,8 @@ jobs:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Free Docker disk
+        uses: ./.github/actions/free-docker-disk
       - name: Docker info
         run: docker version && docker compose version
       - name: Login context notice
@@ -219,6 +227,8 @@ jobs:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Free Docker disk
+        uses: ./.github/actions/free-docker-disk
       - name: Docker info
         run: docker version && docker compose version
       - name: Runtime volumes + host SSH CLI
@@ -234,6 +244,8 @@ jobs:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Free Docker disk
+        uses: ./.github/actions/free-docker-disk
       - name: Docker info
         run: docker version && docker compose version
       - name: Clone auto-open SSH

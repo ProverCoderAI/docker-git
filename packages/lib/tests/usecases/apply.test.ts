@@ -191,7 +191,8 @@ describe("applyProjectFiles", () => {
         expect(configAfter).toContain('"ramLimit": "30%"')
 
         const dockerfileAfter = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
-        expect(dockerfileAfter).toContain(`RUN mkdir -p ${updatedTargetDir}`)
+        expect(dockerfileAfter).toContain(`TARGET_DIR='${updatedTargetDir}'`)
+        expect(dockerfileAfter).toContain('mkdir -p "$HOME_DIR" "$TARGET_DIR"')
 
         const envAfter = yield* _(fs.readFileString(envProjectPath))
         expect(envAfter).toContain("CUSTOM_KEY=1")
