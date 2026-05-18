@@ -180,11 +180,17 @@ ${grokUserSettingsJsonTemplate}
 EOF
 fi
 
-chown -R 1000:1000 "$GROK_SETTINGS_DIR" || true
+GROK_SETTINGS_OWNER_UID="$(id -u "${config.sshUser}" 2>/dev/null || id -u)"
+GROK_SETTINGS_OWNER_GID="$(id -g "${config.sshUser}" 2>/dev/null || id -g)"
+chown -R "$GROK_SETTINGS_OWNER_UID:$GROK_SETTINGS_OWNER_GID" "$GROK_SETTINGS_DIR" || true
 chmod 0600 "$GROK_CONFIG_SETTINGS_FILE" "$GROK_USER_SETTINGS_FILE" 2>/dev/null || true`
 
 const renderGrokSudoConfig = (config: TemplateConfig): string =>
   String.raw`# Grok CLI: allow passwordless sudo for agent tasks
+# Risk rationale: Grok runs inside an isolated per-project container. The sshUser
+# value is validated as a Unix username before TemplateConfig construction, and
+# passwordless sudo matches the broad container-local privileges expected for
+# docker-git coding agents that need to install packages or manage services.
 if [[ -d /etc/sudoers.d ]]; then
   echo "${config.sshUser} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/grok-agent
   chmod 0440 /etc/sudoers.d/grok-agent
@@ -272,11 +278,14 @@ cat <<EOF > "$GROK_MD_PATH"
 $GROK_PROMPT_BODY
 <!-- /docker-git-managed:grok-md -->
 EOF
-chown 1000:1000 "$GROK_MD_PATH" || true`
+GROK_NOTICE_OWNER_UID="$(id -u "__SSH_USER__" 2>/dev/null || id -u)"
+GROK_NOTICE_OWNER_GID="$(id -g "__SSH_USER__" 2>/dev/null || id -g)"
+chown "$GROK_NOTICE_OWNER_UID:$GROK_NOTICE_OWNER_GID" "$GROK_MD_PATH" || true`
 
 const renderEntrypointGrokNotice = (config: TemplateConfig): string =>
   entrypointGrokNoticeTemplate
     .replaceAll("__GROK_HOME__", config.grokHome)
+    .replaceAll("__SSH_USER__", config.sshUser)
     .replaceAll("__TARGET_DIR__", config.targetDir)
 
 /**

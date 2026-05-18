@@ -41,6 +41,19 @@ const buildDockerGrokAuthSpec = (
   ]
 })
 
+/**
+ * Builds the Docker CLI argument vector for the official Grok device-code login flow.
+ *
+ * @param spec Docker auth container paths, image, working directory, and environment bindings.
+ * @returns Immutable Docker argument vector ending with `grok login --device-auth`.
+ * @pure true
+ * @effect none; CORE argument builder only transforms immutable input data.
+ * @invariant every non-empty environment binding is emitted as an adjacent `-e` argument pair.
+ * @precondition spec.hostPath and spec.containerPath identify the selected Grok auth account directory.
+ * @postcondition returned args execute the official headless Grok login mode documented by xAI.
+ * @complexity O(n) time / O(n) space, where n is spec.env.length.
+ * @throws Never - invalid process execution is represented by callers through typed Effect errors.
+ */
 export const buildDockerGrokAuthArgs = (spec: DockerGrokAuthSpec): ReadonlyArray<string> => {
   const base: Array<string> = [
     "run",
@@ -105,6 +118,21 @@ const fixGrokAuthPermissions = (cwd: string, hostPath: string, containerPath: st
     Effect.orElse(() => Effect.void)
   )
 
+/**
+ * Runs the Grok OAuth device login inside the docker-git auth container.
+ *
+ * @param cwd Working directory used for Docker command execution.
+ * @param accountPath Selected docker-git Grok account directory.
+ * @param options Auth container image and in-container home path.
+ * @returns Effect that completes after Grok writes credentials and permissions are normalized.
+ * @pure false
+ * @effect CommandExecutor; invokes Docker and writes credentials under the selected account path.
+ * @invariant successful completion leaves credentials scoped to accountPath and not to project source files.
+ * @precondition Docker is available and options.image contains the official Grok CLI binary.
+ * @postcondition accountPath permissions are best-effort normalized for the project SSH user.
+ * @complexity O(n) local argument construction plus unbounded external OAuth interaction time.
+ * @throws Never - failures are modeled as AuthError, CommandFailedError, or PlatformError in the Effect type.
+ */
 export const runGrokOauthLoginWithPrompt = (
   cwd: string,
   accountPath: string,

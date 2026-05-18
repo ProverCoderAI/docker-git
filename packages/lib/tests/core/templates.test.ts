@@ -507,6 +507,22 @@ describe("renderEntrypoint auth bridge", () => {
     expect(entrypoint).not.toContain('export GROK_API_KEY="${XAI_API_KEY:-}"')
   })
 
+  it("renders Grok file ownership from the configured SSH user", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      'GROK_SETTINGS_OWNER_UID="$(id -u "dev" 2>/dev/null || id -u)"',
+      'GROK_SETTINGS_OWNER_GID="$(id -g "dev" 2>/dev/null || id -g)"',
+      'chown -R "$GROK_SETTINGS_OWNER_UID:$GROK_SETTINGS_OWNER_GID" "$GROK_SETTINGS_DIR" || true',
+      'GROK_NOTICE_OWNER_UID="$(id -u "dev" 2>/dev/null || id -u)"',
+      'GROK_NOTICE_OWNER_GID="$(id -g "dev" 2>/dev/null || id -g)"',
+      'chown "$GROK_NOTICE_OWNER_UID:$GROK_NOTICE_OWNER_GID" "$GROK_MD_PATH" || true',
+      "Risk rationale: Grok runs inside an isolated per-project container."
+    ])
+    expect(entrypoint).not.toContain('chown -R 1000:1000 "$GROK_SETTINGS_DIR"')
+    expect(entrypoint).not.toContain('chown 1000:1000 "$GROK_MD_PATH"')
+  })
+
   it("renders system-prompt override hooks for codex/claude/gemini/grok", () => {
     const entrypoint = renderAuthEntrypoint()
 
