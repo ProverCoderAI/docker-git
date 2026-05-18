@@ -16,7 +16,9 @@ import {
   createFeatureRepoDisplaySettingsView,
   createFlowViewAtStep,
   expectCreateCompleteInputs,
-  expectCreateContinueView
+  expectCreateContinueView,
+  expectCreateNavigationResult,
+  expectedWrappedCreateNavigationStep
 } from "./create-flow-test-helpers.js"
 
 const expectDisplayModeView = (view: ReturnType<typeof expectCreateContinueView>): DisplayModeFlowView => {
@@ -25,17 +27,6 @@ const expectDisplayModeView = (view: ReturnType<typeof expectCreateContinueView>
     throw new TypeError("expected display mode CreateFlowView")
   }
   return view
-}
-
-const expectedDisplayNavigationStep = (
-  step: number,
-  direction: "up" | "down",
-  lastStep: number
-): number => {
-  if (direction === "up") {
-    return step === 1 ? lastStep : step - 1
-  }
-  return step === lastStep ? 1 : step + 1
 }
 
 describe("menu-create-shared display settings", () => {
@@ -175,10 +166,11 @@ describe("menu-create-shared display settings", () => {
           const view = { ...createFeatureRepoDisplaySettingsView(cwd), step, buffer: "preview" }
           const next = moveCreateDisplaySettingsStep(view, direction)
 
-          expect(next).not.toBeNull()
-          expect(next?.step).toBe(expectedDisplayNavigationStep(step, direction, lastStep))
-          expect(next?.buffer).toBe("")
-          expect(next?.values).toEqual(view.values)
+          expectCreateNavigationResult(
+            next,
+            expectedWrappedCreateNavigationStep(step, direction, lastStep),
+            view.values
+          )
         }
       )
     )

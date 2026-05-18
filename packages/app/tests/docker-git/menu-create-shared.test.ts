@@ -15,6 +15,8 @@ import {
   createFlowViewAtStep,
   expectCreateCompleteInputs,
   expectCreateContinueView,
+  expectCreateNavigationResult,
+  expectedWrappedCreateNavigationStep,
   featureCreateRepoUrl
 } from "./create-flow-test-helpers.js"
 
@@ -29,17 +31,6 @@ const expectFeatureRepoDefaults = (
   expect(value.repoUrl).toBe(featureCreateRepoUrl)
   expect(value.repoRef).toBe("feature-x")
   expect(value.outDir).toBe(defaultRoot)
-}
-
-const expectedSettingsStep = (
-  step: number,
-  direction: "up" | "down",
-  lastStep: number
-): number => {
-  if (direction === "up") {
-    return step === 1 ? lastStep : step - 1
-  }
-  return step === lastStep ? 1 : step + 1
 }
 
 describe("menu-create-shared", () => {
@@ -172,10 +163,7 @@ describe("menu-create-shared", () => {
       fc.property(fc.integer({ min: 1, max: lastStep }), settingsDirectionArbitrary, (step, direction) => {
         const next = moveCreateSettingsStep({ ...view, step, buffer: "draft" }, direction)
 
-        expect(next).not.toBeNull()
-        expect(next?.step).toBe(expectedSettingsStep(step, direction, lastStep))
-        expect(next?.buffer).toBe("")
-        expect(next?.values).toEqual(view.values)
+        expectCreateNavigationResult(next, expectedWrappedCreateNavigationStep(step, direction, lastStep), view.values)
       })
     )
   })

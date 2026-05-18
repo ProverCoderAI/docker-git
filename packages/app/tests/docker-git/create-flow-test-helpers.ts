@@ -69,6 +69,28 @@ export const resolveRequiredCreateStepIndex = (stepName: CreateStep): number => 
   return step
 }
 
+export const expectedWrappedCreateNavigationStep = (
+  step: number,
+  direction: "up" | "down",
+  lastStep: number
+): number => {
+  if (direction === "up") {
+    return step === 1 ? lastStep : step - 1
+  }
+  return step === lastStep ? 1 : step + 1
+}
+
+export const expectCreateNavigationResult = (
+  next: CreateFlowView | null,
+  expectedStep: number,
+  expectedValues: CreateFlowView["values"]
+): void => {
+  expect(next).not.toBeNull()
+  expect(next?.step).toBe(expectedStep)
+  expect(next?.buffer).toBe("")
+  expect(next?.values).toEqual(expectedValues)
+}
+
 export const createFeatureRepoSettingsView = (
   contextOrCwd: Parameters<typeof advanceCreateFlow>[0]
 ): CreateModeFlowView => {
