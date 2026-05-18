@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 
+import type { ApplyProjectRequest } from "../shared/project-resource-request.js"
 import { buildCreateProjectRequest } from "./api-client-create.js"
 import {
   readProjectEventCursor,
@@ -80,17 +81,6 @@ const invalidCreateAcceptedResponse = (): ApiRequestError => ({
 type ResolvedCreateRequestPaths = {
   readonly authorizedKeysPath: string
   readonly authorizedKeysContents?: string | undefined
-}
-
-type ProjectResourceLimitRequest = {
-  readonly cpuLimit?: string | undefined
-  readonly ramLimit?: string | undefined
-  readonly playwrightCpuLimit?: string | undefined
-  readonly playwrightRamLimit?: string | undefined
-}
-
-type ApplyProjectRequest = ProjectResourceLimitRequest & {
-  readonly gpu?: "none" | "all" | undefined
 }
 
 const createProjectAsync = (

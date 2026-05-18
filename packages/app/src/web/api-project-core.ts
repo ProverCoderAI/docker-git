@@ -1,21 +1,13 @@
 import { Effect } from "effect"
 
+import type { ApplyProjectRequest, ProjectResourceLimitRequest } from "../shared/project-resource-request.js"
 import { requestJson } from "./api-http.js"
 import type { CreateProjectDraft } from "./api-schema.js"
 import { OutputResponseSchema, ProjectResponseSchema } from "./api-schema.js"
 
-export type ProjectResourceLimitRequest = {
-  readonly cpuLimit?: string | undefined
-  readonly ramLimit?: string | undefined
-  readonly playwrightCpuLimit?: string | undefined
-  readonly playwrightRamLimit?: string | undefined
-}
+export type { ApplyProjectRequest, ProjectResourceLimitRequest } from "../shared/project-resource-request.js"
 
 type CreateProjectRequestDraft = CreateProjectDraft & ProjectResourceLimitRequest
-
-export type ApplyProjectRequest = ProjectResourceLimitRequest & {
-  readonly gpu?: "none" | "all" | undefined
-}
 
 export const loadProjectDetails = (projectId: string) =>
   requestJson("GET", `/projects/${encodeURIComponent(projectId)}`, ProjectResponseSchema).pipe(
