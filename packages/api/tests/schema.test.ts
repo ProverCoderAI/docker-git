@@ -20,6 +20,7 @@ import {
   ProjectDatabaseProfileRequestSchema,
   ProjectDatabaseSessionSchema,
   ProjectPortForwardRequestSchema,
+  StartPanelCloudflareTunnelRequestSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
@@ -347,6 +348,22 @@ describe("api schemas", () => {
         onRight: (value) => {
           expect(value.hostPort).toBe(4000)
           expect(value.targetPort).toBe(3000)
+        }
+      })
+    }))
+
+  it.effect("decodes panel Cloudflare tunnel payload", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(StartPanelCloudflareTunnelRequestSchema)({
+        panelUrl: "http://localhost:4174/"
+      })
+
+      Either.match(result, {
+        onLeft: (error) => {
+          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+        },
+        onRight: (value) => {
+          expect(value.panelUrl).toBe("http://localhost:4174/")
         }
       })
     }))

@@ -34,6 +34,9 @@ RUN set -eu; \
     xvfb libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libgtk-3-0 \
     libnss3 libpango-1.0-0 libx11-xcb1 libxcb-dri3-0 libxcomposite1 libxdamage1 libxfixes3 \
     libxkbcommon0 libxrandr2 libxshmfence1 \
+ && curl --location --output /tmp/cloudflared.deb "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$(dpkg --print-architecture).deb" \
+ && dpkg -i /tmp/cloudflared.deb \
+ && rm -f /tmp/cloudflared.deb \
  && mkdir -p /usr/share/keyrings \
  && curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
     | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \

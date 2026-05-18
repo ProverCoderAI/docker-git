@@ -34,6 +34,7 @@ const compactMenuLabels: Readonly<Record<BrowserMenuTag, string>> = {
   Prompts: "Prompts",
   Quit: "Quit",
   Select: "Select",
+  Share: "Share",
   Skills: "Skills",
   Status: "Status",
   Tasks: "Tasks"

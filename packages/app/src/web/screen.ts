@@ -21,6 +21,7 @@ export type BrowserScreen =
   | { readonly tag: "Menu" }
   | { readonly tag: "Create" }
   | { readonly tag: "Auth" }
+  | { readonly tag: "Share" }
   | { readonly tag: "ProjectPicker" }
   | { readonly tag: "ProjectAuth" }
   | { readonly tag: "Output" }
@@ -55,6 +56,9 @@ export const screenForMenu = (menu: BrowserMenuTag): BrowserScreen => {
   }
   if (menu === "Auth") {
     return { tag: "Auth" }
+  }
+  if (menu === "Share") {
+    return { tag: "Share" }
   }
   if (isProjectMenu(menu)) {
     return projectPickerScreen()

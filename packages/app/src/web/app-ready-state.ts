@@ -7,6 +7,7 @@ import type {
   AuthSnapshot,
   ContainerTaskSnapshot,
   GithubAuthStatus,
+  PanelCloudflareTunnelSession,
   ProjectAuthSnapshot,
   ProjectBrowserSession,
   ProjectDatabaseForward,
@@ -40,6 +41,7 @@ type ReadyStateSetters = Pick<
   | "setGithubStatus"
   | "setMessage"
   | "setOutput"
+  | "setPanelCloudflareTunnel"
   | "setPortForwardInput"
   | "setPortForwards"
   | "setProjectAuthSnapshot"
@@ -68,6 +70,7 @@ export type ReadyState = ReadyStateSetters & TerminalWorkspaceReadyState & {
   readonly githubStatus: GithubAuthStatus | null
   readonly message: string | null
   readonly output: string
+  readonly panelCloudflareTunnel: PanelCloudflareTunnelSession | null
   readonly portForwardInput: string
   readonly portForwards: ReadonlyArray<ProjectPortForward>
   readonly project: ProjectDetails | null
@@ -111,6 +114,7 @@ const useReadyPanelState = () => {
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [authSnapshot, setAuthSnapshot] = useState<AuthSnapshot | null>(null)
   const [githubStatus, setGithubStatus] = useState<GithubAuthStatus | null>(null)
+  const [panelCloudflareTunnel, setPanelCloudflareTunnel] = useState<PanelCloudflareTunnelSession | null>(null)
   const [createView, setCreateView] = useState<CreateFlowView>(resetCreateView())
   const terminalWorkspaceState = useTerminalWorkspaceState()
 
@@ -122,6 +126,7 @@ const useReadyPanelState = () => {
     githubStatus,
     message,
     output,
+    panelCloudflareTunnel,
     setActionPrompt,
     setAuthSnapshot,
     setBusyLabel,
@@ -129,6 +134,7 @@ const useReadyPanelState = () => {
     setGithubStatus,
     setMessage,
     setOutput,
+    setPanelCloudflareTunnel,
     ...terminalWorkspaceState
   }
 }

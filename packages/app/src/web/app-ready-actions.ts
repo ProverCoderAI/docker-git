@@ -11,6 +11,7 @@ type ActionContextArgs = {
   readonly addTerminalSession: BrowserActionContext["addTerminalSession"]
   readonly closeTerminalSession: BrowserActionContext["closeTerminalSession"]
   readonly githubStatus: BrowserActionContext["githubStatus"]
+  readonly panelCloudflareTunnel: BrowserActionContext["panelCloudflareTunnel"]
   readonly portForwardInput: BrowserActionContext["portForwardInput"]
   readonly projectTasksIncludeDefault: BrowserActionContext["projectTasksIncludeDefault"]
   readonly refreshDashboard: () => void
@@ -29,6 +30,7 @@ type ActionContextArgs = {
   readonly setGithubStatus: BrowserActionContext["setGithubStatus"]
   readonly setMessage: BrowserActionContext["setMessage"]
   readonly setOutput: BrowserActionContext["setOutput"]
+  readonly setPanelCloudflareTunnel: BrowserActionContext["setPanelCloudflareTunnel"]
   readonly setPortForwardInput: BrowserActionContext["setPortForwardInput"]
   readonly setPortForwards: BrowserActionContext["setPortForwards"]
   readonly setProjectAuthSnapshot: BrowserActionContext["setProjectAuthSnapshot"]
@@ -52,6 +54,7 @@ export const createActionContext = (args: ActionContextArgs): BrowserActionConte
   databaseConnectionInput: args.databaseConnectionInput,
   databaseLabelInput: args.databaseLabelInput,
   githubStatus: args.githubStatus,
+  panelCloudflareTunnel: args.panelCloudflareTunnel,
   portForwardInput: args.portForwardInput,
   projectTasksIncludeDefault: args.projectTasksIncludeDefault,
   reloadDashboard: args.refreshDashboard,
@@ -70,6 +73,7 @@ export const createActionContext = (args: ActionContextArgs): BrowserActionConte
   setGithubStatus: args.setGithubStatus,
   setMessage: args.setMessage,
   setOutput: args.setOutput,
+  setPanelCloudflareTunnel: args.setPanelCloudflareTunnel,
   setPortForwardInput: args.setPortForwardInput,
   setPortForwards: args.setPortForwards,
   setProjectAuthSnapshot: args.setProjectAuthSnapshot,

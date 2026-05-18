@@ -94,6 +94,28 @@ export const ProjectPortForwardResponseSchema = Schema.Struct({
   forward: ProjectPortForwardSchema
 })
 
+export const PanelCloudflareTunnelStatusSchema = Schema.Union(
+  Schema.Literal("starting"),
+  Schema.Literal("running"),
+  Schema.Literal("stopped"),
+  Schema.Literal("failed")
+)
+
+export const PanelCloudflareTunnelSessionSchema = Schema.Struct({
+  error: NullableString,
+  id: Schema.String,
+  logTail: Schema.Array(Schema.String),
+  panelUrl: Schema.String,
+  publicUrl: NullableString,
+  startedAt: Schema.String,
+  status: PanelCloudflareTunnelStatusSchema,
+  stoppedAt: NullableString
+})
+
+export const PanelCloudflareTunnelResponseSchema = Schema.Struct({
+  tunnel: Schema.NullOr(PanelCloudflareTunnelSessionSchema)
+})
+
 const ProjectSidecarStatusSchema = Schema.Union(
   Schema.Literal("running"),
   Schema.Literal("stopped"),
@@ -199,6 +221,7 @@ export type {
   CreateProjectDraft,
   DashboardData,
   GithubAuthStatus,
+  PanelCloudflareTunnelSession,
   ProjectAuthFlow,
   ProjectAuthSnapshot,
   ProjectBrowserSession,

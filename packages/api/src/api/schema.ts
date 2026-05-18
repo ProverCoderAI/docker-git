@@ -173,6 +173,10 @@ export const ProjectPortForwardRequestSchema = Schema.Struct({
   targetPort: Schema.Number
 })
 
+export const StartPanelCloudflareTunnelRequestSchema = Schema.Struct({
+  panelUrl: Schema.String
+})
+
 export const ProjectBrowserStatusSchema = Schema.Literal("running", "stopped", "missing", "unknown")
 
 export const ProjectBrowserSessionSchema = Schema.Struct({

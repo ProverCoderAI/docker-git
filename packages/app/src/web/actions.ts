@@ -1,5 +1,6 @@
 import { refreshAuthPanel, refreshProjectAuthPanel } from "./actions-auth.js"
 import { runProjectMenuAction } from "./actions-projects.js"
+import { startPanelShareTunnel } from "./actions-share.js"
 import { type BrowserActionContext, requireGithubAuthConfigured } from "./actions-shared.js"
 import { shouldBlockMenuForGithubAuth } from "./github-auth-gate.js"
 import type { BrowserMenuTag } from "./menu.js"
@@ -43,6 +44,12 @@ export {
   loadSelectedProjectPrompts,
   saveSelectedProjectPrompt
 } from "./actions-prompts.js"
+export {
+  copyPanelShareTunnelUrl,
+  refreshPanelCloudflareTunnel,
+  startPanelShareTunnel,
+  stopPanelShareTunnel
+} from "./actions-share.js"
 export { openSkillerApp } from "./actions-skiller.js"
 export { deleteSelectedProjectSkill, loadSelectedProjectSkills, saveSelectedProjectSkill } from "./actions-skills.js"
 export {
@@ -66,6 +73,10 @@ export const runBrowserMenuAction = (
   }
   if (currentMenu === "ProjectAuth") {
     refreshProjectAuthPanel(context)
+    return
+  }
+  if (currentMenu === "Share") {
+    startPanelShareTunnel(context)
     return
   }
   runProjectMenuAction(currentMenu, context)

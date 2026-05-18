@@ -27,6 +27,9 @@ export const shouldBlockMenuForGithubAuth = (
   githubStatus: GithubAuthStatus | null,
   currentMenu: BrowserMenuTag
 ): boolean =>
-  currentMenu !== "Auth" && currentMenu !== "Quit" && (githubStatus === null || shouldRequireGithubAuth(githubStatus))
+  currentMenu !== "Auth" &&
+  currentMenu !== "Quit" &&
+  currentMenu !== "Share" &&
+  (githubStatus === null || shouldRequireGithubAuth(githubStatus))
 
 export const isGithubOauthAuthMenuIndex = (index: number): boolean => authMenuActionByIndex(index) === "GithubOauth"

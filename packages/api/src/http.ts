@@ -36,6 +36,7 @@ import {
   ProjectPromptUpdateRequestSchema,
   ProjectSkillUpdateRequestSchema,
   StartProjectTerminalSessionRequestSchema,
+  StartPanelCloudflareTunnelRequestSchema,
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
@@ -109,6 +110,11 @@ import {
 import type { ProjectSkillScope } from "./services/project-skills.js"
 import { readProjectBrowserSession, proxyProjectBrowser } from "./services/project-browser.js"
 import { parseProjectBrowserProxyPath } from "./services/project-browser-core.js"
+import {
+  readPanelCloudflareTunnel,
+  startPanelCloudflareTunnel,
+  stopPanelCloudflareTunnel
+} from "./services/panel-cloudflare-tunnel.js"
 import {
   deleteProjectDatabaseForward,
   deleteProjectDatabaseProfile,
@@ -475,6 +481,8 @@ const skillScopeFromBody = (scope: string): ProjectSkillScope | null => {
   }
 }
 const readProjectPortForwardRequest = () => HttpServerRequest.schemaBodyJson(ProjectPortForwardRequestSchema)
+const readStartPanelCloudflareTunnelRequest = () =>
+  HttpServerRequest.schemaBodyJson(StartPanelCloudflareTunnelRequestSchema)
 const readProjectDatabaseProfileRequest = () => HttpServerRequest.schemaBodyJson(ProjectDatabaseProfileRequestSchema)
 const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitRequestSchema)
 const readStateCommitRequest = () => HttpServerRequest.schemaBodyJson(StateCommitRequestSchema)
@@ -795,6 +803,28 @@ export const makeRouter = () => {
       terminalSessionByProjectKeyParams.pipe(
         Effect.flatMap(({ projectKey, sessionId }) => openSkillerForTerminalSession(projectKey, sessionId)),
         Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/cloudflare-tunnels/panel",
+      readPanelCloudflareTunnel().pipe(
+        Effect.flatMap((tunnel) => jsonResponse({ tunnel }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.post(
+      "/cloudflare-tunnels/panel",
+      Effect.gen(function*(_) {
+        const request = yield* _(readStartPanelCloudflareTunnelRequest())
+        const tunnel = yield* _(startPanelCloudflareTunnel(request))
+        return yield* _(jsonResponse({ tunnel }, 202))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.del(
+      "/cloudflare-tunnels/panel",
+      stopPanelCloudflareTunnel().pipe(
+        Effect.flatMap((tunnel) => jsonResponse({ tunnel }, 200)),
         Effect.catchAll(errorResponse)
       )
     )

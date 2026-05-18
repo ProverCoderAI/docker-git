@@ -74,6 +74,23 @@ export type ProjectPortForwardRequest = {
   readonly hostPort?: number | undefined
 }
 
+export type PanelCloudflareTunnelStatus = "starting" | "running" | "stopped" | "failed"
+
+export type PanelCloudflareTunnelSession = {
+  readonly error: string | null
+  readonly id: string
+  readonly logTail: ReadonlyArray<string>
+  readonly panelUrl: string
+  readonly publicUrl: string | null
+  readonly startedAt: string
+  readonly status: PanelCloudflareTunnelStatus
+  readonly stoppedAt: string | null
+}
+
+export type StartPanelCloudflareTunnelRequest = {
+  readonly panelUrl: string
+}
+
 export type ProjectBrowserStatus = "running" | "stopped" | "missing" | "unknown"
 
 export type ProjectBrowserSession = {
