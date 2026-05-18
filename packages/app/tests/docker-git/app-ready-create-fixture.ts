@@ -1,7 +1,11 @@
 import type { Dispatch, SetStateAction } from "react"
 import { expect, vi } from "vitest"
 
-import { type CreateFlowView, createInitialFlowView } from "../../src/docker-git/menu-create-shared.js"
+import {
+  type CreateFlowView,
+  createInitialFlowView,
+  resolveCreateDisplaySteps
+} from "../../src/docker-git/menu-create-shared.js"
 import type { CreateInputs, CreateStep } from "../../src/docker-git/menu-types.js"
 import type { submitCreateInputs } from "../../src/web/actions-projects.js"
 import type { GithubAuthStatus } from "../../src/web/api.js"
@@ -165,7 +169,7 @@ export const createSettingsFlowViewAtStep = (
 ): CreateFlowView => ({
   ...createSettingsFlowView(),
   buffer,
-  step: resolveRequiredCreateStepIndex(stepName)
+  step: resolveRequiredCreateStepIndex(stepName, resolveCreateDisplaySteps())
 })
 
 const createActionFrame = (

@@ -9,7 +9,8 @@ import {
   createInitialFlowView,
   type CreateModeFlowView,
   type DisplayModeFlowView,
-  resolveCreateDisplaySteps
+  resolveCreateDisplaySteps,
+  resolveCreateFlowSteps
 } from "../../src/docker-git/menu-create-shared.js"
 import type { CreateStep } from "../../src/docker-git/menu-types.js"
 
@@ -38,8 +39,8 @@ export const repositoryCreateInputArbitrary = fc.record({
     : `https://github.com/${owner}/${repo}/tree/${branch}`
 }))
 
-export const expectedOutDirForRepoUrl = (repoUrl: string): string =>
-  `/home/dev/.docker-git/${deriveRepoPathParts(resolveRepoInput(repoUrl).repoUrl).pathParts.join("/")}`
+export const expectedOutDirForRepoUrl = (repoUrl: string, projectsRoot: string): string =>
+  `${projectsRoot}/${deriveRepoPathParts(resolveRepoInput(repoUrl).repoUrl).pathParts.join("/")}`
 
 export const expectCreateContinueView = (
   next: ReturnType<typeof advanceCreateFlow>
@@ -61,8 +62,11 @@ export const expectCreateCompleteInputs = (
   return next.inputs
 }
 
-export const resolveRequiredCreateStepIndex = (stepName: CreateStep): number => {
-  const step = resolveCreateDisplaySteps().indexOf(stepName)
+export const resolveRequiredCreateStepIndex = (
+  stepName: CreateStep,
+  steps: ReadonlyArray<CreateStep>
+): number => {
+  const step = steps.indexOf(stepName)
   if (step === -1) {
     throw new TypeError(`expected Create step: ${stepName}`)
   }
@@ -120,9 +124,12 @@ export function createFlowViewAtStep(
   stepName: CreateStep,
   buffer = "draft"
 ): CreateFlowView {
+  const steps = view.mode === "display"
+    ? resolveCreateDisplaySteps()
+    : resolveCreateFlowSteps(view.values)
   return {
     ...view,
     buffer,
-    step: resolveRequiredCreateStepIndex(stepName)
+    step: resolveRequiredCreateStepIndex(stepName, steps)
   }
 }

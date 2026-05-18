@@ -20,6 +20,7 @@ import {
 import { expectedOutDirForRepoUrl, repositoryCreateInputArbitrary } from "./create-flow-test-helpers.js"
 
 const submitCreateInputsMock = vi.hoisted(() => vi.fn<typeof submitCreateInputs>())
+const testProjectsRoot = "/home/dev/.docker-git"
 
 vi.mock("../../src/web/actions-projects.js", () => ({
   submitCreateInputs: submitCreateInputsMock
@@ -151,7 +152,7 @@ describe("app-ready-create", () => {
 
         expect(submitCreateInputsMock).toHaveBeenCalledTimes(1)
         expectQuickCreateInputs(submitCreateInputsMock, {
-          outDir: expectedOutDirForRepoUrl(repoUrl),
+          outDir: expectedOutDirForRepoUrl(repoUrl, testProjectsRoot),
           repoRef: expectedRepoRef,
           repoUrl
         })
