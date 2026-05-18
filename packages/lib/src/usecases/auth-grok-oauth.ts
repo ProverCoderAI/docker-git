@@ -41,15 +41,15 @@ const buildDockerGrokAuthSpec = (
 })
 
 /**
- * Builds the Docker CLI argument vector for the standard interactive Grok login flow.
+ * Builds the Docker CLI argument vector for the official Grok device-code login flow.
  *
  * @param spec Docker auth container paths, image, working directory, and environment bindings.
- * @returns Immutable Docker argument vector ending with `grok login`.
+ * @returns Immutable Docker argument vector ending with `grok login --device-auth`.
  * @pure true
  * @effect none; CORE argument builder only transforms immutable input data.
  * @invariant every non-empty environment binding is emitted as an adjacent `-e` argument pair.
  * @precondition spec.hostPath and spec.containerPath identify the selected Grok auth account directory.
- * @postcondition returned args execute the standard Grok CLI browser login flow.
+ * @postcondition returned args execute the official headless Grok login mode documented by xAI.
  * @complexity O(n) time / O(n) space, where n is spec.env.length.
  * @throws Never - invalid process execution is represented by callers through typed Effect errors.
  */
@@ -73,7 +73,7 @@ export const buildDockerGrokAuthArgs = (spec: DockerGrokAuthSpec): ReadonlyArray
     }
     base.push("-e", trimmed)
   }
-  return [...base, spec.image, "grok", "login"]
+  return [...base, spec.image, "grok", "login", "--device-auth"]
 }
 
 const grokAuthPermissionScript = [
