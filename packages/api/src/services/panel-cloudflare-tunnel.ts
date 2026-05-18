@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 
-import { Duration, Effect, Match } from "effect"
+import { Duration, Effect, Fiber, Match } from "effect"
 
 import type { PanelCloudflareTunnelSession, StartPanelCloudflareTunnelRequest } from "../api/contracts.js"
 import { ApiBadRequestError, ApiInternalError } from "../api/errors.js"
@@ -19,6 +19,7 @@ type PanelCloudflareTunnelRecord = {
   process: ChildProcess | null
   session: PanelCloudflareTunnelSession
   stderrRemainder: string
+  stopFiber: Fiber.RuntimeFiber<PanelCloudflareTunnelSession> | null
   stopping: boolean
   stdoutRemainder: string
 }
@@ -156,6 +157,7 @@ const createStartingRecord = (
       stoppedAt: null
     },
     stderrRemainder: "",
+    stopFiber: null,
     stopping: false,
     stdoutRemainder: ""
   }
@@ -182,6 +184,7 @@ const finishStoppedRecord = (
   error: string | null = null
 ): PanelCloudflareTunnelSession => {
   record.process = null
+  record.stopFiber = null
   record.stopping = false
   const session = updateRecord(record, {
     error,
@@ -242,12 +245,17 @@ const stopRecord = (
   record: PanelCloudflareTunnelRecord,
   error: string | null = null
 ): Effect.Effect<PanelCloudflareTunnelSession> => {
+  if (record.stopFiber !== null) {
+    return Fiber.join(record.stopFiber)
+  }
+
   const child = record.process
-  record.process = null
   record.stopping = true
-  return (child === null ? Effect.void : waitForChildClose(child)).pipe(
+  const stopFiber = Effect.runFork((child === null ? Effect.void : waitForChildClose(child)).pipe(
     Effect.map(() => finishStoppedRecord(record, error))
-  )
+  ))
+  record.stopFiber = stopFiber
+  return Fiber.join(stopFiber)
 }
 
 const runStopRecord = (
