@@ -62,6 +62,7 @@ describe("resolveComposeResourceLimits", () => {
 
     expect(resolved.cpuLimit).toBe(2.4)
     expect(resolved.ramLimit).toBe("4915m")
+    expect(resolved.swapLimit).toBe("9830m")
   })
 
   it("applies minimum caps for small hosts", () => {
@@ -78,6 +79,7 @@ describe("resolveComposeResourceLimits", () => {
 
     expect(resolved.cpuLimit).toBe(0.3)
     expect(resolved.ramLimit).toBe("512m")
+    expect(resolved.swapLimit).toBe("1024m")
   })
 
   it("keeps absolute intent as-is", () => {
@@ -94,6 +96,7 @@ describe("resolveComposeResourceLimits", () => {
 
     expect(resolved.cpuLimit).toBe(1.25)
     expect(resolved.ramLimit).toBe("3g")
+    expect(resolved.swapLimit).toBe("6144m")
   })
 })
 
@@ -114,6 +117,7 @@ describe("resolvePlaywrightComposeResourceLimits", () => {
 
     expect(resolved.cpuLimit).toBe(0.5)
     expect(resolved.ramLimit).toBe("1g")
+    expect(resolved.swapLimit).toBe("2048m")
   })
 
   it("falls back to main intent when playwright intent is missing", () => {
@@ -130,6 +134,7 @@ describe("resolvePlaywrightComposeResourceLimits", () => {
 
     expect(resolved.cpuLimit).toBe(1.5)
     expect(resolved.ramLimit).toBe("2g")
+    expect(resolved.swapLimit).toBe("4096m")
   })
 
   it("falls back to default 30% when neither playwright nor main intent is set", () => {
@@ -143,6 +148,7 @@ describe("resolvePlaywrightComposeResourceLimits", () => {
 
     expect(resolved.cpuLimit).toBe(2.4)
     expect(resolved.ramLimit).toBe("4915m")
+    expect(resolved.swapLimit).toBe("9830m")
   })
 
   it("supports percent intent for playwright independently", () => {
@@ -161,5 +167,6 @@ describe("resolvePlaywrightComposeResourceLimits", () => {
 
     expect(resolved.cpuLimit).toBe(0.8)
     expect(resolved.ramLimit).toBe("1638m")
+    expect(resolved.swapLimit).toBe("3276m")
   })
 })

@@ -9,7 +9,7 @@ import * as Stream from "effect/Stream"
 
 import { stripAnsi, writeChunkToFd } from "../shell/ansi-strip.js"
 import { runCommandCapture, runCommandExitCode } from "../shell/command-runner.js"
-import { resolveDockerVolumeHostPath } from "../shell/docker-auth.js"
+import { buildDockerBindMountArg, resolveDockerVolumeHostPath } from "../shell/docker-auth.js"
 import { AuthError, CommandFailedError } from "../shell/errors.js"
 
 // CHANGE: add Gemini CLI OAuth authentication flow
@@ -112,8 +112,8 @@ export const buildDockerGeminiAuthArgs = (spec: DockerGeminiAuthSpec): ReadonlyA
     "--init",
     "-i",
     "-t",
-    "-v",
-    `${spec.hostPath}:${spec.containerPath}`,
+    "--mount",
+    buildDockerBindMountArg({ hostPath: spec.hostPath, containerPath: spec.containerPath }),
     "-p",
     `${spec.callbackPort}:${spec.callbackPort}`,
     "-w",
@@ -281,8 +281,8 @@ const fixGeminiAuthPermissions = (hostPath: string, containerPath: string) =>
     args: [
       "run",
       "--rm",
-      "-v",
-      `${hostPath}:${containerPath}`,
+      "--mount",
+      buildDockerBindMountArg({ hostPath, containerPath }),
       "alpine",
       "chmod",
       "-R",

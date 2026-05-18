@@ -18,8 +18,8 @@ const glabPackageBaseUrl = `https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/
 export const renderGlabDockerfile = (): string =>
   String.raw`FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl git bsdutils \
+RUN apt-get -o Acquire::Retries=3 update \
+  && apt-get -o Acquire::Retries=3 install -y --no-install-recommends ca-certificates curl git bsdutils \
   && ARCH="$(dpkg --print-architecture)" \
   && case "$ARCH" in \
       amd64) GLAB_ARCH="amd64" ;; \

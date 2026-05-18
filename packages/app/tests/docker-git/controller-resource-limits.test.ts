@@ -7,6 +7,7 @@ import { Effect, Either } from "effect"
 import {
   controllerCpuLimitEnvKey,
   controllerMemoryLimitEnvKey,
+  controllerMemorySwapLimitEnvKey,
   controllerPidsLimitEnvKey,
   controllerResourceLimitEnvAssignments,
   controllerResourceLimitsForceRecreateEnvKey,
@@ -36,11 +37,11 @@ describe("controller compose resource limits", () => {
           expect(contents).toContain("cpus: ${DOCKER_GIT_CONTROLLER_CPUS:-0.9}")
         }))
 
-      it.effect("caps controller memory and swap together", () =>
+      it.effect("caps controller memory and swap separately", () =>
         Effect.gen(function*(_) {
           const contents = yield* _(readComposeFile(composeFile))
           expect(contents).toContain("mem_limit: ${DOCKER_GIT_CONTROLLER_MEMORY:-921m}")
-          expect(contents).toContain("memswap_limit: ${DOCKER_GIT_CONTROLLER_MEMORY:-921m}")
+          expect(contents).toContain("memswap_limit: ${DOCKER_GIT_CONTROLLER_MEMORY_SWAP:-1842m}")
         }))
 
       it.effect("caps controller PIDs to prevent fork bombs", () =>
@@ -71,6 +72,7 @@ describe("controller resource limit resolution", () => {
           expect(env).toEqual({
             cpus: "7.2",
             memory: "14745m",
+            memorySwap: "29490m",
             pids: "4096"
           })
         }
@@ -118,6 +120,7 @@ describe("controller resource limit resolution", () => {
         { key: controllerPidsLimitEnvKey, value: "8192" },
         { key: controllerResourceLimitsForceRecreateEnvKey, value: "1" }
       ])
+      expect(controllerMemorySwapLimitEnvKey).toBe("DOCKER_GIT_CONTROLLER_MEMORY_SWAP")
     }))
 
   it.effect("forces controller recreate for either CLI or env limit intent", () =>

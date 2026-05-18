@@ -100,7 +100,7 @@ const renderAgentAutoEnv = (agentAuto: boolean | undefined): string =>
 const renderResourceLimits = (resourceLimits: ResolvedComposeResourceLimits | undefined): string =>
   resourceLimits === undefined
     ? ""
-    : `    cpus: ${resourceLimits.cpuLimit}\n    mem_limit: "${resourceLimits.ramLimit}"\n    memswap_limit: "${resourceLimits.ramLimit}"\n`
+    : `    cpus: ${resourceLimits.cpuLimit}\n    mem_limit: "${resourceLimits.ramLimit}"\n    memswap_limit: "${resourceLimits.swapLimit}"\n`
 
 const renderGpu = (gpu: TemplateConfig["gpu"]): string =>
   gpu === "all"
@@ -109,13 +109,17 @@ const renderGpu = (gpu: TemplateConfig["gpu"]): string =>
 
 const renderBootstrapMounts = (): string => `      - ${bootstrapVolumeKey}:/opt/docker-git/bootstrap/source:ro`
 
+const renderYamlSingleQuoted = (value: string): string => `'${value.replaceAll("'", "''")}'`
+
 const renderOptionalDockerSocketMount = (enableLocalDockerSocket: boolean): string =>
   enableLocalDockerSocket
     ? `      - /var/run/docker.sock:/var/run/docker.sock`
     : ""
 
 const renderEnvFiles = (config: TemplateConfig): string =>
-  `    env_file:\n      - ${config.envGlobalPath}\n      - ${config.envProjectPath}\n`
+  `    env_file:\n      - ${renderYamlSingleQuoted(config.envGlobalPath)}\n      - ${
+    renderYamlSingleQuoted(config.envProjectPath)
+  }\n`
 
 const optionalTrimmed = (value: string | undefined): string => value?.trim() ?? ""
 
@@ -168,7 +172,7 @@ const buildPlaywrightFragments = (
 
 const isResolvedComposeResourceLimits = (
   value: ResolvedComposeResourceLimits | ComposeResourceLimits
-): value is ResolvedComposeResourceLimits => "cpuLimit" in value && "ramLimit" in value
+): value is ResolvedComposeResourceLimits => "cpuLimit" in value && "ramLimit" in value && "swapLimit" in value
 
 const normalizeComposeResourceLimits = (
   resourceLimits: ResolvedComposeResourceLimits | ComposeResourceLimits | undefined

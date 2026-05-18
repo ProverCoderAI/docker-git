@@ -6,6 +6,7 @@ import type { Path } from "@effect/platform/Path"
 import { Effect, pipe } from "effect"
 
 import { runCommandWithExitCodes } from "../shell/command-runner.js"
+import { resolveDockerEnvValue } from "../shell/docker-auth.js"
 import { CommandFailedError } from "../shell/errors.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
 
@@ -14,6 +15,26 @@ export type DockerImageSpec = {
   readonly imageDir: string
   readonly dockerfile: string
   readonly buildLabel: string
+  readonly buildNetwork?: string
+}
+
+const resolveDockerImageBuildNetwork = (buildNetwork: string | undefined): string | null => {
+  const explicit = buildNetwork?.trim() ?? ""
+  return explicit.length > 0 ? explicit : resolveDockerEnvValue("DOCKER_GIT_IMAGE_BUILD_NETWORK")
+}
+
+export const buildDockerImageBuildArgs = (
+  spec: DockerImageSpec,
+  imagePath: string
+): ReadonlyArray<string> => {
+  const dockerNetwork = resolveDockerImageBuildNetwork(spec.buildNetwork)
+  return [
+    "build",
+    ...(dockerNetwork === null ? [] : ["--network", dockerNetwork]),
+    "-t",
+    spec.imageName,
+    imagePath
+  ]
 }
 
 // CHANGE: ensure a docker image is available locally
@@ -67,7 +88,7 @@ export const ensureDockerImage = (
     yield* _(Effect.log(`Building ${spec.buildLabel} image (${spec.imageName})...`))
     yield* _(
       runCommandWithExitCodes(
-        { cwd, command: "docker", args: ["build", "-t", spec.imageName, imagePath] },
+        { cwd, command: "docker", args: buildDockerImageBuildArgs(spec, imagePath) },
         [0],
         (exitCode) => new CommandFailedError({ command: `docker build (${spec.buildLabel})`, exitCode })
       )

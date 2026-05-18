@@ -7,6 +7,7 @@ import { Effect, pipe } from "effect"
 import type { AuthGeminiLoginCommand, AuthGeminiLogoutCommand, AuthGeminiStatusCommand } from "../core/domain.js"
 import { defaultTemplateConfig } from "../core/domain.js"
 import { runCommandExitCode } from "../shell/command-runner.js"
+import { buildDockerBindMountArg } from "../shell/docker-auth.js"
 import type { CommandFailedError } from "../shell/errors.js"
 import { isRegularFile, normalizeAccountLabel } from "./auth-helpers.js"
 import { migrateLegacyOrchLayout } from "./auth-sync.js"
@@ -215,7 +216,16 @@ export const prepareGeminiCredentialsDir = (
       runCommandExitCode({
         cwd,
         command: "docker",
-        args: ["run", "--rm", "-v", `${accountPath}:/target`, "alpine", "rm", "-rf", "/target/.gemini"]
+        args: [
+          "run",
+          "--rm",
+          "--mount",
+          buildDockerBindMountArg({ hostPath: accountPath, containerPath: "/target" }),
+          "alpine",
+          "rm",
+          "-rf",
+          "/target/.gemini"
+        ]
       }),
       Effect.asVoid,
       Effect.orElse(() => Effect.void)

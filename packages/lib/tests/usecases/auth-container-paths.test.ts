@@ -185,8 +185,8 @@ describe("auth container paths", () => {
         expect(tokenCommand).toBeDefined()
         expect(
           includesArgsInOrder(loginCommand?.args ?? [], [
-            "-v",
-            `${accountPath}:/gh-auth`,
+            "--mount",
+            `type=bind,source=${accountPath},target=/gh-auth`,
             "-e",
             "BROWSER=echo",
             "-e",
@@ -198,8 +198,8 @@ describe("auth container paths", () => {
         ).toBe(true)
         expect(
           includesArgsInOrder(tokenCommand?.args ?? [], [
-            "-v",
-            `${accountPath}:/gh-auth`,
+            "--mount",
+            `type=bind,source=${accountPath},target=/gh-auth`,
             "-e",
             "GH_CONFIG_DIR=/gh-auth",
             "docker-git-auth-gh:latest",
@@ -241,7 +241,9 @@ describe("auth container paths", () => {
         )
 
         expect(loginCommand).toBeDefined()
-        expect(loginCommand?.args.some((arg) => arg.endsWith(":/codex-home")) ?? false).toBe(true)
+        expect(
+          loginCommand?.args.some((arg) => arg.endsWith(",target=/codex-home")) ?? false
+        ).toBe(true)
         expect(loginCommand?.args.includes("CODEX_HOME=/codex-home") ?? false).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))

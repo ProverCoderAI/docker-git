@@ -244,7 +244,7 @@ describe("applyProjectFiles", () => {
         expect(composeAfter).toContain('CLAUDE_AUTH_LABEL: "team-b"')
         expect(composeAfter).toContain("cpus: 2")
         expect(composeAfter).toContain('mem_limit: "4g"')
-        expect(composeAfter).toContain('memswap_limit: "4g"')
+        expect(composeAfter).toContain('memswap_limit: "8192m"')
         expect(composeAfter).toContain('MCP_PLAYWRIGHT_ENABLE: "1"')
         expect(composeAfter).toContain("dg-test-browser")
 

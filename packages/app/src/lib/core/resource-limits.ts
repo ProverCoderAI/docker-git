@@ -14,6 +14,7 @@ import {
 const mebibyte = 1024 ** 2
 const minimumResolvedCpuLimit = 0.25
 const minimumResolvedRamLimitMib = 512
+const minimumResolvedSwapLimitMib = 1
 const precisionScale = 100
 
 type HostResources = {
@@ -24,11 +25,25 @@ type HostResources = {
 export type ResolvedComposeResourceLimits = {
   readonly cpuLimit: number
   readonly ramLimit: string
+  readonly swapLimit: string
 }
 
 const cpuAbsolutePattern = /^\d+(?:\.\d+)?$/u
+const ramLimitPattern = /^(\d+(?:\.\d+)?)(b|k|kb|m|mb|g|gb|t|tb)$/iu
 const ramAbsolutePattern = /^\d+(?:\.\d+)?(?:b|k|kb|m|mb|g|gb|t|tb)$/iu
 const percentPattern = /^\d+(?:\.\d+)?%$/u
+
+const ramUnitMibFactors: Readonly<Record<string, number>> = {
+  b: 1 / mebibyte,
+  k: 1 / 1024,
+  kb: 1 / 1024,
+  m: 1,
+  mb: 1,
+  g: 1024,
+  gb: 1024,
+  t: 1024 * 1024,
+  tb: 1024 * 1024
+}
 
 const normalizePrecision = (value: number): number => Math.round(value * precisionScale) / precisionScale
 
@@ -134,6 +149,34 @@ const resolvePercentRamLimit = (percent: number, totalMemoryBytes: number): stri
   return `${targetMib}m`
 }
 
+const parseRamLimitMib = (value: string): number | null => {
+  const match = ramLimitPattern.exec(value)
+  if (match === null) {
+    return null
+  }
+
+  const amount = Number(match[1] ?? "0")
+  const unit = (match[2] ?? "m").toLowerCase()
+  const factor = ramUnitMibFactors[unit]
+  return !Number.isFinite(amount) || amount <= 0 || factor === undefined
+    ? null
+    : amount * factor
+}
+
+// CHANGE: allow project containers to use WSL swap without removing hard RAM limits
+// WHY: Docker Compose `memswap_limit` is RAM+swap total; setting it equal to RAM disables extra swap
+// SOURCE: n/a
+// FORMAT THEOREM: forall r: valid_ram(r) -> swap_limit(r) >= 2 * ram_limit(r)
+// PURITY: CORE
+// INVARIANT: generated containers keep a finite memory+swap ceiling
+// COMPLEXITY: O(1)/O(1)
+const resolveSwapLimit = (ramLimit: string): string => {
+  const ramMib = parseRamLimitMib(ramLimit)
+  return ramMib === null
+    ? ramLimit
+    : `${Math.max(minimumResolvedSwapLimitMib, Math.ceil(ramMib * 2))}m`
+}
+
 export const resolveComposeResourceLimits = (
   template: Pick<TemplateConfig, "cpuLimit" | "ramLimit">,
   hostResources: HostResources
@@ -143,13 +186,16 @@ export const resolveComposeResourceLimits = (
   const cpuPercent = parsePercent(cpuLimitIntent)
   const ramPercent = parsePercent(ramLimitIntent)
 
+  const ramLimit = ramPercent === null
+    ? ramLimitIntent
+    : resolvePercentRamLimit(ramPercent, hostResources.totalMemoryBytes)
+
   return {
     cpuLimit: cpuPercent === null
       ? Number(cpuLimitIntent)
       : resolvePercentCpuLimit(cpuPercent, hostResources.cpuCount),
-    ramLimit: ramPercent === null
-      ? ramLimitIntent
-      : resolvePercentRamLimit(ramPercent, hostResources.totalMemoryBytes)
+    ramLimit,
+    swapLimit: resolveSwapLimit(ramLimit)
   }
 }
 

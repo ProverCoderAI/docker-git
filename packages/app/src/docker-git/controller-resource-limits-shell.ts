@@ -3,6 +3,7 @@ import { Effect, Either } from "effect"
 import {
   controllerCpuLimitEnvKey,
   controllerMemoryLimitEnvKey,
+  controllerMemorySwapLimitEnvKey,
   controllerPidsLimitEnvKey,
   controllerResourceLimitsForceRecreateEnvKey,
   resolveControllerResourceLimitEnv
@@ -78,6 +79,7 @@ export const prepareControllerResourceLimitEnv = (): Effect.Effect<void, Control
       Effect.sync(() => {
         process.env[controllerCpuLimitEnvKey] = resolved.right.cpus
         process.env[controllerMemoryLimitEnvKey] = resolved.right.memory
+        process.env[controllerMemorySwapLimitEnvKey] = resolved.right.memorySwap
         process.env[controllerPidsLimitEnvKey] = resolved.right.pids
       })
     )

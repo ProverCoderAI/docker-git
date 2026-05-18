@@ -34,6 +34,12 @@ const expandHome = (value: string, home: string | null): string => {
 const trimTrailingSlash = (value: string): string => {
   let end = value.length
   while (end > 0) {
+    if (end === 1 && value[0] === "/") {
+      break
+    }
+    if (end === 3 && /^[a-z]:[\\/]/iu.test(value.slice(0, end))) {
+      break
+    }
     const char = value[end - 1]
     if (char !== "/" && char !== "\\") {
       break
@@ -43,6 +49,15 @@ const trimTrailingSlash = (value: string): string => {
   return value.slice(0, end)
 }
 
+const homePathSeparator = (home: string): string => home.includes("\\") && !home.includes("/") ? "\\" : "/"
+
+const joinHomePath = (home: string, child: string): string => {
+  const root = trimTrailingSlash(home)
+  return root.endsWith("/") || root.endsWith("\\")
+    ? `${root}${child}`
+    : `${root}${homePathSeparator(root)}${child}`
+}
+
 export const defaultProjectsRoot = (cwd: string): string => {
   const home = resolveHomeDir()
   const explicit = process.env["DOCKER_GIT_PROJECTS_ROOT"]?.trim()
@@ -50,7 +65,7 @@ export const defaultProjectsRoot = (cwd: string): string => {
     return expandHome(explicit, home)
   }
   if (home !== null) {
-    return `${trimTrailingSlash(home)}/.docker-git`
+    return joinHomePath(home, ".docker-git")
   }
   return `${cwd}/.docker-git`
 }

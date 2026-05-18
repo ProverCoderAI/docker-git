@@ -631,8 +631,8 @@ describe("renderDockerCompose", () => {
 
     expect(compose).toContain("name: dg-test")
     expect(compose).toContain("container_name: dg-test")
+    expect(compose).toContain("    env_file:\n      - '/workspace/.orch/env/global.env'\n      - '/workspace/.orch/env/project.env'\n")
     expect(compose).not.toContain("restart:")
-    expect(compose).toContain("    env_file:\n      - /workspace/.orch/env/global.env\n      - /workspace/.orch/env/project.env\n")
     expect(compose).toContain('DOCKER_GIT_PROJECT_DOCKER_HOST: "${DOCKER_GIT_PROJECT_DOCKER_HOST:-}"')
     expect(compose).toContain('- "${DOCKER_GIT_PROJECT_SSH_BIND_HOST:-127.0.0.1}:2222:22"')
     expect(compose).toContain('    extra_hosts:\n      - "host.docker.internal:host-gateway"')
@@ -641,6 +641,19 @@ describe("renderDockerCompose", () => {
     expect(compose).not.toContain("dg-test-browser")
     expect(compose).not.toContain("/var/run/docker.sock:/var/run/docker.sock")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
+  })
+
+  it("quotes env_file paths so Windows paths and spaces remain YAML scalars", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        envGlobalPath: "C:\\Users\\Dev\\Docker Git\\global.env",
+        envProjectPath: "/workspace/it'test/project.env"
+      })
+    )
+
+    expect(compose).toContain(
+      "    env_file:\n      - 'C:\\Users\\Dev\\Docker Git\\global.env'\n      - '/workspace/it''test/project.env'\n"
+    )
   })
 
   it("renders GPU access only on the main service when explicitly enabled", () => {
@@ -675,7 +688,8 @@ describe("renderDockerCompose", () => {
       }),
       {
         cpuLimit: 1.5,
-        ramLimit: "2g"
+        ramLimit: "2g",
+        swapLimit: "4g"
       }
     )
 
@@ -717,15 +731,15 @@ describe("renderDockerCompose", () => {
         gpu: "none",
       }),
       {
-        main: { cpuLimit: 2, ramLimit: "4g" },
-        playwright: { cpuLimit: 0.5, ramLimit: "1g" }
+        main: { cpuLimit: 2, ramLimit: "4g", swapLimit: "8g" },
+        playwright: { cpuLimit: 0.5, ramLimit: "1g", swapLimit: "2g" }
       }
     )
 
     expect(compose).not.toContain("\n  dg-test-browser:\n")
     expect(compose).toContain("    cpus: 2\n")
     expect(compose).toContain('    mem_limit: "4g"\n')
-    expect(compose).toContain('    memswap_limit: "4g"\n')
+    expect(compose).toContain('    memswap_limit: "8g"\n')
     expect(compose).toContain('DOCKER_GIT_BROWSER_CPU_LIMIT: "${DOCKER_GIT_BROWSER_CPU_LIMIT:-0.5}"')
     expect(compose).toContain('DOCKER_GIT_BROWSER_RAM_LIMIT: "${DOCKER_GIT_BROWSER_RAM_LIMIT:-1g}"')
   })
@@ -738,13 +752,15 @@ describe("renderDockerCompose", () => {
       }),
       {
         cpuLimit: 1.5,
-        ramLimit: "2g"
+        ramLimit: "2g",
+        swapLimit: "4g"
       }
     )
 
     expect(compose).not.toContain("\n  dg-test-browser:\n")
     expect(compose).toContain("    cpus: 1.5\n")
     expect(compose).toContain('    mem_limit: "2g"\n')
+    expect(compose).toContain('    memswap_limit: "4g"\n')
     expect(compose).toContain('DOCKER_GIT_BROWSER_CPU_LIMIT: "${DOCKER_GIT_BROWSER_CPU_LIMIT:-1.5}"')
     expect(compose).toContain('DOCKER_GIT_BROWSER_RAM_LIMIT: "${DOCKER_GIT_BROWSER_RAM_LIMIT:-2g}"')
   })
