@@ -18,13 +18,13 @@ import {
   unavailableTerminalInlineImageEntry
 } from "./terminal-inline-images.js"
 import type { TerminalInlineImageEntry } from "./terminal-inline-images.js"
+import { sendTerminalClientMessage } from "./terminal-panel-input.js"
 import type {
   TerminalCleanupArgs,
   TerminalExitInfo,
   TerminalInputController,
   TerminalLifecycleState,
   TerminalMessageHandlers,
-  TerminalPasteGuard,
   TerminalRuntime,
   TerminalSocketConnectArgs,
   TerminalSocketListenerArgs,
@@ -34,9 +34,7 @@ import { installTerminalQuerySuppression, type TerminalQuerySuppressionOptions }
 import { resolveTerminalReconnectDelay, terminalReconnectGraceMs } from "./terminal-reconnect.js"
 import { parseTerminalServerMessage, resolveTerminalWebSocketUrl } from "./terminal.js"
 
-type TerminalClientMessage =
-  | { readonly data: string; readonly type: "input" }
-  | { readonly cols: number; readonly rows: number; readonly type: "resize" }
+export { attachTerminalInput, isTerminalMouseReportInput } from "./terminal-panel-input.js"
 
 type TerminalRuntimeOptions = {
   readonly querySuppression?: TerminalQuerySuppressionOptions
@@ -90,7 +88,9 @@ export const createTerminalRuntime = (
     cursorBlink: true,
     fontFamily: "'IBM Plex Mono', 'SFMono-Regular', monospace",
     fontSize: 14,
+    macOptionClickForcesSelection: true,
     scrollback: 50_000,
+    scrollOnUserInput: false,
     theme: { background: "#080a0d", foreground: "#f4f7fb" }
   })
   installTerminalQuerySuppression(terminal, options.querySuppression)
@@ -122,17 +122,6 @@ const createTerminalSocket = (
   terminal: Terminal
 ): WebSocket => new WebSocket(resolveTerminalWebSocketUrl(session.websocketPath, terminal.cols, terminal.rows))
 
-const sendTerminalClientMessage = (
-  socketRef: TerminalSocketRef,
-  message: TerminalClientMessage
-): void => {
-  const socket = socketRef.current
-  if (socket === null || socket.readyState !== WebSocket.OPEN) {
-    return
-  }
-  socket.send(JSON.stringify(message))
-}
-
 export const sendTerminalResize = (
   fitAddon: FitAddon,
   socketRef: TerminalSocketRef,
@@ -163,18 +152,6 @@ export const observeTerminalResize = (
   resizeObserver.observe(host)
   return resizeObserver
 }
-
-export const attachTerminalInput = (
-  terminal: Terminal,
-  socketRef: TerminalSocketRef,
-  pasteGuard: TerminalPasteGuard
-) =>
-  terminal.onData((data) => {
-    if (pasteGuard.shouldSuppressTerminalInput(data)) {
-      return
-    }
-    sendTerminalClientMessage(socketRef, { data, type: "input" })
-  })
 
 const notifyTerminalReady = (
   handlers: TerminalMessageHandlers

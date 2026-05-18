@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 
+import { attachTerminalCopyInteraction } from "./terminal-copy-interaction.js"
 import { attachTerminalImagePaste, createTerminalPasteGuard } from "./terminal-image-paste.js"
 import { attachTerminalImageLinks } from "./terminal-inline-images.js"
 import {
@@ -22,19 +23,29 @@ import type {
 } from "./terminal-panel-runtime-types.js"
 import { isPendingActiveTerminalSession } from "./terminal.js"
 
+type TerminalDisposable = { readonly dispose: () => void }
+
 type TerminalCleanupFactoryArgs = {
   readonly cleanupArgs: Omit<
     Parameters<typeof cleanupTerminalResources>[0],
     "removeImageLinks" | "removeImagePaste" | "removeInput" | "removeResize"
   >
-  readonly imageLinkDisposable: { readonly dispose: () => void }
-  readonly imagePasteDisposable: { readonly dispose: () => void }
-  readonly inputDisposable: { readonly dispose: () => void }
+  readonly copyInteractionDisposable: TerminalDisposable
+  readonly imageLinkDisposable: TerminalDisposable
+  readonly imagePasteDisposable: TerminalDisposable
+  readonly inputDisposable: TerminalDisposable
   readonly sendResize: () => void
 }
 
 const createTerminalCleanup = (
-  { cleanupArgs, imageLinkDisposable, imagePasteDisposable, inputDisposable, sendResize }: TerminalCleanupFactoryArgs
+  {
+    cleanupArgs,
+    copyInteractionDisposable,
+    imageLinkDisposable,
+    imagePasteDisposable,
+    inputDisposable,
+    sendResize
+  }: TerminalCleanupFactoryArgs
 ): () => void =>
 (): void => {
   cleanupTerminalResources({
@@ -46,6 +57,7 @@ const createTerminalCleanup = (
       imagePasteDisposable.dispose()
     },
     removeInput: () => {
+      copyInteractionDisposable.dispose()
       inputDisposable.dispose()
     },
     removeResize: () => {
@@ -87,9 +99,10 @@ const createTerminalMessageHandlers = (
 })
 
 type MountedTerminalDisposables = {
-  readonly imageLinkDisposable: { readonly dispose: () => void }
-  readonly imagePasteDisposable: { readonly dispose: () => void }
-  readonly inputDisposable: { readonly dispose: () => void }
+  readonly copyInteractionDisposable: TerminalDisposable
+  readonly imageLinkDisposable: TerminalDisposable
+  readonly imagePasteDisposable: TerminalDisposable
+  readonly inputDisposable: TerminalDisposable
 }
 
 type MountedTerminalCleanupArgs = {
@@ -109,6 +122,7 @@ const createMountedTerminalDisposables = (
   socketRef: TerminalSocketRef,
   terminal: TerminalMessageHandlers["terminal"]
 ): MountedTerminalDisposables => ({
+  copyInteractionDisposable: attachTerminalCopyInteraction({ host, terminal }),
   imageLinkDisposable: attachTerminalImageLinks(terminal, args.session),
   imagePasteDisposable: attachTerminalImagePaste({
     host,
@@ -153,6 +167,7 @@ const createMountedTerminalCleanup = (
       socketRef,
       terminal
     },
+    copyInteractionDisposable: disposables.copyInteractionDisposable,
     imageLinkDisposable: disposables.imageLinkDisposable,
     imagePasteDisposable: disposables.imagePasteDisposable,
     inputDisposable: disposables.inputDisposable,
