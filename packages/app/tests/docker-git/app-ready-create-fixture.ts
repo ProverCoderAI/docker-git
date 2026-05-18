@@ -1,18 +1,13 @@
-import * as fc from "fast-check"
 import type { Dispatch, SetStateAction } from "react"
 import { expect, vi } from "vitest"
 
-import { deriveRepoPathParts, resolveRepoInput } from "../../src/docker-git/frontend-lib/core/domain.js"
-import {
-  type CreateFlowView,
-  createInitialFlowView,
-  resolveCreateDisplaySteps
-} from "../../src/docker-git/menu-create-shared.js"
+import { type CreateFlowView, createInitialFlowView } from "../../src/docker-git/menu-create-shared.js"
 import type { CreateInputs, CreateStep } from "../../src/docker-git/menu-types.js"
 import type { submitCreateInputs } from "../../src/web/actions-projects.js"
 import type { GithubAuthStatus } from "../../src/web/api.js"
 import type * as AppReadyCreate from "../../src/web/app-ready-create.js"
 import { makeBrowserActionContext } from "./browser-action-context-fixture.js"
+import { featureCreateRepoUrl, resolveRequiredCreateStepIndex } from "./create-flow-test-helpers.js"
 
 export {
   createInitialFlowView,
@@ -24,33 +19,13 @@ export type { CreateStep } from "../../src/docker-git/menu-types.js"
 
 type HandleCreateKey = typeof AppReadyCreate.handleCreateKey
 type SubmitCreateView = typeof AppReadyCreate.submitCreateView
+type BrowserActionContextOverrides = Parameters<typeof makeBrowserActionContext>[0]
 export type SubmitCreateInputsMock = ReturnType<typeof vi.fn<typeof submitCreateInputs>>
 
 export const validGithubStatus: GithubAuthStatus = {
   summary: "valid",
   tokens: [{ key: "default", label: "default", login: "octocat", status: "valid" }]
 }
-
-const githubNameChars = "abcdefghijklmnopqrstuvwxyz0123456789-"
-const githubNameCharArbitrary = fc
-  .integer({ min: 0, max: githubNameChars.length - 1 })
-  .map((index) => githubNameChars[index] ?? "a")
-
-const githubSegmentArbitrary = fc
-  .array(githubNameCharArbitrary, { minLength: 1, maxLength: 12 })
-  .map((chars) => chars.join(""))
-  .filter((value) => !value.startsWith("-") && !value.endsWith("-"))
-
-export const repositoryCreateInputArbitrary = fc.record({
-  branch: fc.option(githubSegmentArbitrary, { nil: null }),
-  owner: githubSegmentArbitrary,
-  repo: githubSegmentArbitrary
-}).map(({ branch, owner, repo }) => ({
-  expectedRepoRef: branch ?? "main",
-  repoUrl: branch === null
-    ? `https://github.com/${owner}/${repo}`
-    : `https://github.com/${owner}/${repo}/tree/${branch}`
-}))
 
 const defaultQuickCreateInputs = {
   cpuLimit: "",
@@ -79,23 +54,35 @@ export const requireCreateViewValue = (
   return value
 }
 
+export const expectCreateViewUpdate = (
+  setCreateViewSpy: SetCreateViewSpy,
+  expected: CreateFlowView,
+  callIndex = 0
+) => {
+  expect(requireCreateViewValue(setCreateViewSpy.mock.calls[callIndex]?.[0])).toEqual(expected)
+}
+
+export const expectCreateViewInputError = (
+  setCreateViewSpy: SetCreateViewSpy,
+  createView: CreateFlowView
+) => {
+  expectCreateViewUpdate(setCreateViewSpy, {
+    ...createView,
+    inputError: "Insert URL first"
+  })
+}
+
 export const submitCreateBuffer = (
   submitCreateView: SubmitCreateView,
   buffer: string,
   options: { readonly quickCreate?: boolean } = {}
 ) => {
-  const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-  const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
   const quickCreate = options.quickCreate === undefined ? {} : { quickCreate: options.quickCreate }
-
-  submitCreateView({
-    context,
-    controllerCwd: "/workspace",
-    createView: createInitialFlowView(buffer),
-    projectsRoot: "/home/dev/.docker-git",
-    ...quickCreate,
-    setCreateView
-  })
+  const { context, setCreateViewSpy } = runSubmitCreateView(
+    submitCreateView,
+    createInitialFlowView(buffer),
+    quickCreate
+  )
 
   return { context, setCreateViewSpy }
 }
@@ -125,7 +112,7 @@ export const expectQuickCreateInputs = (
 export const expectCreateViewReset = (
   setCreateViewSpy: SetCreateViewSpy
 ) => {
-  expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual(createInitialFlowView())
+  expectCreateViewUpdate(setCreateViewSpy, createInitialFlowView())
 }
 
 export const createSubmitCreateBuffer = (submitCreateView: SubmitCreateView) =>
@@ -133,9 +120,6 @@ export const createSubmitCreateBuffer = (submitCreateView: SubmitCreateView) =>
   buffer: string,
   options: { readonly quickCreate?: boolean } = {}
 ) => submitCreateBuffer(submitCreateView, buffer, options)
-
-export const expectedOutDirForRepoUrl = (repoUrl: string): string =>
-  `/home/dev/.docker-git/${deriveRepoPathParts(resolveRepoInput(repoUrl).repoUrl).pathParts.join("/")}`
 
 export const createKeyEvent = (
   key: string,
@@ -156,20 +140,86 @@ export const createSettingsFlowView = (): CreateFlowView => ({
   values: {
     outDir: "/home/dev/.docker-git/org/repo",
     repoRef: "feature-x",
-    repoUrl: "https://github.com/org/repo/tree/feature-x"
+    repoUrl: featureCreateRepoUrl
   }
 })
 
 export const createSettingsFlowViewAtStep = (
   stepName: CreateStep,
   buffer = "draft"
-): CreateFlowView => {
-  const view = createSettingsFlowView()
-  const step = resolveCreateDisplaySteps().indexOf(stepName)
-  if (step === -1) {
-    throw new TypeError(`expected Create step: ${stepName}`)
-  }
-  return { ...view, step, buffer }
+): CreateFlowView => ({
+  ...createSettingsFlowView(),
+  buffer,
+  step: resolveRequiredCreateStepIndex(stepName)
+})
+
+const createActionFrame = (
+  contextOverrides?: BrowserActionContextOverrides
+) => {
+  const { context } = makeBrowserActionContext(contextOverrides ?? { githubStatus: validGithubStatus })
+  const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
+  return { context, setCreateView, setCreateViewSpy }
+}
+
+export const runCreateKey = (
+  handleCreateKey: HandleCreateKey,
+  createView: CreateFlowView,
+  key: string,
+  options: {
+    readonly contextOverrides?: BrowserActionContextOverrides
+    readonly shiftKey?: boolean
+  } = {}
+) => {
+  const frame = createActionFrame(options.contextOverrides)
+  const event = createKeyEvent(key, options.shiftKey ?? false)
+  const handled = handleCreateKey(event, {
+    context: frame.context,
+    controllerCwd: "/workspace",
+    createView,
+    projectsRoot: "/home/dev/.docker-git",
+    setCreateView: frame.setCreateView
+  })
+  return { ...frame, event, handled }
+}
+
+const expectHandledCreateKey = (
+  result: Pick<ReturnType<typeof runCreateKey>, "event" | "handled">
+) => {
+  expect(result.handled).toBe(true)
+  expect(result.event.preventDefault).toHaveBeenCalledTimes(1)
+}
+
+export const expectIgnoredCreateKey = (
+  handleCreateKey: HandleCreateKey,
+  createView: CreateFlowView,
+  key: "ArrowDown" | "ArrowLeft" | "ArrowRight"
+) => {
+  const result = runCreateKey(handleCreateKey, createView, key)
+
+  expect(result.handled).toBe(false)
+  expect(result.event.preventDefault).not.toHaveBeenCalled()
+  expect(result.setCreateViewSpy).not.toHaveBeenCalled()
+  expect(result.context.setMessage).not.toHaveBeenCalled()
+}
+
+export const runSubmitCreateView = (
+  submitCreateView: SubmitCreateView,
+  createView: CreateFlowView,
+  options: {
+    readonly contextOverrides?: BrowserActionContextOverrides
+    readonly quickCreate?: boolean
+  } = {}
+) => {
+  const frame = createActionFrame(options.contextOverrides)
+  submitCreateView({
+    context: frame.context,
+    controllerCwd: "/workspace",
+    createView,
+    projectsRoot: "/home/dev/.docker-git",
+    quickCreate: options.quickCreate,
+    setCreateView: frame.setCreateView
+  })
+  return frame
 }
 
 export const expectCreateArrowHandling = (
@@ -177,27 +227,15 @@ export const expectCreateArrowHandling = (
   key: "ArrowDown" | "ArrowUp",
   expectedStep: (view: CreateFlowView) => number
 ) => {
-  const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-  const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-  const event = createKeyEvent(key)
   const createView = createSettingsFlowView()
+  const result = runCreateKey(handleCreateKey, createView, key)
+  const nextView = requireCreateViewValue(result.setCreateViewSpy.mock.calls[0]?.[0])
 
-  const handled = handleCreateKey(event, {
-    context,
-    controllerCwd: "/workspace",
-    createView,
-    projectsRoot: "/home/dev/.docker-git",
-    setCreateView
-  })
-
-  expect(handled).toBe(true)
-  expect(event.preventDefault).toHaveBeenCalledTimes(1)
-  expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual({
-    ...createView,
-    step: expectedStep(createView),
-    buffer: ""
-  })
-  expect(context.setMessage).toHaveBeenCalledWith(null)
+  expectHandledCreateKey(result)
+  expect(nextView.step).toBe(expectedStep(createView))
+  expect(nextView.buffer).toBe("")
+  expect(nextView.values).toEqual(createView.values)
+  expect(result.context.setMessage).toHaveBeenCalledWith(null)
 }
 
 export const expectCreateSideArrowBufferHandling = (
@@ -207,22 +245,12 @@ export const expectCreateSideArrowBufferHandling = (
   stepName: CreateStep,
   expectedBuffer: string
 ) => {
-  const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-  const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-  const event = createKeyEvent(key)
   const createView = createSettingsFlowViewAtStep(stepName, "typed")
+  const result = runCreateKey(handleCreateKey, createView, key)
+  const { context, setCreateViewSpy } = result
 
-  const handled = handleCreateKey(event, {
-    context,
-    controllerCwd: "/workspace",
-    createView,
-    projectsRoot: "/home/dev/.docker-git",
-    setCreateView
-  })
-
-  expect(handled).toBe(true)
-  expect(event.preventDefault).toHaveBeenCalledTimes(1)
-  expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual({
+  expectHandledCreateKey(result)
+  expectCreateViewUpdate(setCreateViewSpy, {
     ...createView,
     buffer: expectedBuffer
   })
@@ -236,24 +264,27 @@ export const expectEmptyRepoInlineError = (
   submitCreateInputsMock: SubmitCreateInputsMock,
   quickCreate?: boolean
 ) => {
-  const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-  const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
   const createView = createInitialFlowView("   ")
-
-  submitCreateView({
-    context,
-    controllerCwd: "/workspace",
-    createView,
-    projectsRoot: "/home/dev/.docker-git",
-    quickCreate,
-    setCreateView
-  })
+  const quickCreateOption = quickCreate === undefined ? {} : { quickCreate }
+  const { context, setCreateViewSpy } = runSubmitCreateView(submitCreateView, createView, quickCreateOption)
 
   expect(submitCreateInputsMock).not.toHaveBeenCalled()
   expect(setCreateViewSpy).toHaveBeenCalledTimes(1)
-  expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual({
-    ...createView,
-    inputError: "Insert URL first"
-  })
+  expectCreateViewInputError(setCreateViewSpy, createView)
+  expect(context.setMessage).not.toHaveBeenCalled()
+}
+
+export const expectEmptyRepoKeyboardInlineError = (
+  handleCreateKey: HandleCreateKey,
+  submitCreateInputsMock: SubmitCreateInputsMock,
+  shiftKey: boolean
+) => {
+  const createView = createInitialFlowView("")
+  const result = runCreateKey(handleCreateKey, createView, "Enter", { shiftKey })
+  const { context, setCreateViewSpy } = result
+
+  expectHandledCreateKey(result)
+  expect(submitCreateInputsMock).not.toHaveBeenCalled()
+  expectCreateViewInputError(setCreateViewSpy, createView)
   expect(context.setMessage).not.toHaveBeenCalled()
 }

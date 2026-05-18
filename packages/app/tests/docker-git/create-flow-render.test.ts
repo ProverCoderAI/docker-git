@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 
 import {
-  advanceCreateFlow,
   type CreateFlowContext,
   type CreateFlowView,
   createInitialFlowView,
@@ -15,10 +14,14 @@ import {
   resolveCreateInputs
 } from "../../src/docker-git/menu-create-shared.js"
 import { renderCreate } from "../../src/docker-git/menu-render.js"
-import type { CreateStep } from "../../src/docker-git/menu-types.js"
 import { webPrimitives } from "../../src/ui/primitives-web.js"
 import { UiProvider } from "../../src/ui/primitives.js"
 import { CreatePanel } from "../../src/web/panel-create-select.js"
+import {
+  createFeatureRepoSettingsView,
+  createFlowViewAtStep,
+  featureCreateRepoUrl
+} from "./create-flow-test-helpers.js"
 
 const createContext: CreateFlowContext = {
   cwd: "/workspace",
@@ -28,16 +31,8 @@ const createContext: CreateFlowContext = {
 const renderWithUi = (element: ReactElement): string =>
   renderToStaticMarkup(createElement(UiProvider, { primitives: webPrimitives }, element))
 
-const repoUrl = "https://github.com/org/repo/tree/feature-x"
 const webCreateSettingsChoiceHint = "←/→ - choose yes/no or GPU"
-
-const createSettingsView = (): CreateFlowView => {
-  const next = advanceCreateFlow(createContext, createInitialFlowView(repoUrl))
-  if (next === null || next._tag !== "Continue") {
-    throw new TypeError("expected settings view")
-  }
-  return next.view
-}
+const createSettingsView = (): CreateFlowView => createFeatureRepoSettingsView(createContext)
 
 const renderCreatePanel = (
   createView: CreateFlowView,
@@ -70,16 +65,9 @@ const renderSettingsStepLabels = (createView: CreateFlowView): ReadonlyArray<str
 }
 
 const createSettingsViewAtStep = (
-  stepName: CreateStep,
+  stepName: Parameters<typeof createFlowViewAtStep>[1],
   buffer: string
-): CreateFlowView => {
-  const createView = createSettingsView()
-  const step = resolveCreateDisplaySteps().indexOf(stepName)
-  if (step === -1) {
-    throw new TypeError(`expected Create step: ${stepName}`)
-  }
-  return { ...createView, buffer, step }
-}
+): CreateFlowView => createFlowViewAtStep(createSettingsView(), stepName, buffer)
 
 const renderTerminalCreate = (createView: CreateFlowView): string => {
   const defaults = resolveCreateInputs(createContext, createView.values)
@@ -97,8 +85,8 @@ const renderTerminalCreate = (createView: CreateFlowView): string => {
 
 describe("Create flow rendering", () => {
   it("renders Quick Create and Settings on the repo URL step without the old micro-guide", () => {
-    const html = renderCreatePanel(createInitialFlowView(repoUrl))
-    const compactHtml = renderCreatePanel(createInitialFlowView(repoUrl), { compact: true })
+    const html = renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))
+    const compactHtml = renderCreatePanel(createInitialFlowView(featureCreateRepoUrl), { compact: true })
 
     expect(html).toContain("Quick Create")
     expect(html).toContain("Settings")
@@ -137,7 +125,7 @@ describe("Create flow rendering", () => {
   })
 
   it("keeps the compact repo URL step focused on the repo input and action buttons", () => {
-    const createView = createInitialFlowView(repoUrl)
+    const createView = createInitialFlowView(featureCreateRepoUrl)
     const html = renderCreatePanel(createView, { compact: true })
 
     expect(html).toContain("Repo URL (optional for empty workspace)")
@@ -211,14 +199,14 @@ describe("Create flow rendering", () => {
   })
 
   it("renders the settings navigation hint only after leaving the repo URL step", () => {
-    expect(renderCreatePanel(createInitialFlowView(repoUrl))).not.toContain(createSettingsHint)
-    expect(renderCreatePanel(createInitialFlowView(repoUrl))).not.toContain(webCreateSettingsChoiceHint)
+    expect(renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))).not.toContain(createSettingsHint)
+    expect(renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))).not.toContain(webCreateSettingsChoiceHint)
     expect(renderCreatePanel(createSettingsView())).toContain(createSettingsHint)
     expect(renderCreatePanel(createSettingsView())).toContain(webCreateSettingsChoiceHint)
   })
 
   it("renders terminal Create hints with the same repo/settings split", () => {
-    const repoHtml = renderTerminalCreate(createInitialFlowView(repoUrl))
+    const repoHtml = renderTerminalCreate(createInitialFlowView(featureCreateRepoUrl))
     const settingsHtml = renderTerminalCreate(createSettingsView())
 
     expect(repoHtml).not.toContain("Enter = next, Esc = cancel.")
@@ -233,7 +221,7 @@ describe("Create flow rendering", () => {
 
     fc.assert(
       fc.property(fc.integer({ min: 0, max: lastStep }), (step) => {
-        const view = step === 0 ? createInitialFlowView(repoUrl) : { ...settingsView, step }
+        const view = step === 0 ? createInitialFlowView(featureCreateRepoUrl) : { ...settingsView, step }
         const isSettings = step > 0
         const panelHtml = renderCreatePanel(view)
         const compactPanelHtml = renderCreatePanel(view, { compact: true })

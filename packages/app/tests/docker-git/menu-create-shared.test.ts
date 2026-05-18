@@ -5,31 +5,16 @@ import {
   advanceCreateFlow,
   createInitialFlowView,
   moveCreateSettingsStep,
-  resolveCreateDisplaySteps,
   resolveCreateFlowSteps,
   resolveCreateSettingsChoiceBuffer
 } from "../../src/docker-git/menu-create-shared.js"
-import type { CreateStep } from "../../src/docker-git/menu-types.js"
-
-const expectContinueResult = (
-  next: ReturnType<typeof advanceCreateFlow>
-) => {
-  expect(next?._tag).toBe("Continue")
-  if (next === null || next._tag !== "Continue") {
-    throw new TypeError("expected continue create flow result")
-  }
-  return next.view
-}
-
-const expectCompleteResult = (
-  next: ReturnType<typeof advanceCreateFlow>
-) => {
-  expect(next?._tag).toBe("Complete")
-  if (next === null || next._tag !== "Complete") {
-    throw new TypeError("expected complete create flow result")
-  }
-  return next.inputs
-}
+import {
+  createFeatureRepoSettingsView,
+  createFlowViewAtStep,
+  expectCreateCompleteInputs,
+  expectCreateContinueView,
+  featureCreateRepoUrl
+} from "./create-flow-test-helpers.js"
 
 const expectFeatureRepoDefaults = (
   value: {
@@ -39,7 +24,7 @@ const expectFeatureRepoDefaults = (
   },
   defaultRoot: string
 ) => {
-  expect(value.repoUrl).toBe("https://github.com/org/repo/tree/feature-x")
+  expect(value.repoUrl).toBe(featureCreateRepoUrl)
   expect(value.repoRef).toBe("feature-x")
   expect(value.outDir).toBe(defaultRoot)
 }
@@ -55,26 +40,15 @@ const expectedSettingsStep = (
   return step === lastStep ? 1 : step + 1
 }
 
-const viewForStep = (
-  view: ReturnType<typeof expectContinueResult>,
-  stepName: CreateStep
-): ReturnType<typeof expectContinueResult> => {
-  const step = resolveCreateDisplaySteps().indexOf(stepName)
-  if (step === -1) {
-    throw new TypeError(`expected Create step: ${stepName}`)
-  }
-  return { ...view, step, buffer: "draft" }
-}
-
 describe("menu-create-shared", () => {
   const cwd = process.cwd()
   const defaultRoot = `${process.env["HOME"] ?? cwd}/.docker-git/org/repo`
   const settingsDirectionArbitrary: fc.Arbitrary<"up" | "down"> = fc.constantFrom("up", "down")
 
   it("advances from repo URL into the wizard by default", () => {
-    const view = expectContinueResult(advanceCreateFlow(
+    const view = expectCreateContinueView(advanceCreateFlow(
       cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
+      createInitialFlowView(featureCreateRepoUrl)
     ))
 
     expect(view.step).toBe(1)
@@ -92,9 +66,9 @@ describe("menu-create-shared", () => {
   })
 
   it("quick-creates from repo URL only when requested explicitly", () => {
-    const inputs = expectCompleteResult(advanceCreateFlow(
+    const inputs = expectCreateCompleteInputs(advanceCreateFlow(
       cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x"),
+      createInitialFlowView(featureCreateRepoUrl),
       { quickCreate: true }
     ))
 
@@ -103,9 +77,9 @@ describe("menu-create-shared", () => {
   })
 
   it("prefills create values from inline CLI flags on the repo step", () => {
-    const view = expectContinueResult(advanceCreateFlow(
+    const view = expectCreateContinueView(advanceCreateFlow(
       cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x --force --mcp-playwright --no-up")
+      createInitialFlowView(`${featureCreateRepoUrl} --force --mcp-playwright --no-up`)
     ))
 
     expectFeatureRepoDefaults(view.values, defaultRoot)
@@ -121,10 +95,10 @@ describe("menu-create-shared", () => {
   })
 
   it("completes immediately when every remaining prompt was passed inline", () => {
-    const inputs = expectCompleteResult(advanceCreateFlow(
+    const inputs = expectCreateCompleteInputs(advanceCreateFlow(
       cwd,
       createInitialFlowView(
-        "https://github.com/org/repo/tree/feature-x --cpu 25% --ram 4g --gpu all --no-up --mcp-playwright --force"
+        `${featureCreateRepoUrl} --cpu 25% --ram 4g --gpu all --no-up --mcp-playwright --force`
       )
     ))
 
@@ -155,22 +129,19 @@ describe("menu-create-shared", () => {
   })
 
   it("uses server-provided projectsRoot in browser mode", () => {
-    const view = expectContinueResult(advanceCreateFlow(
+    const view = expectCreateContinueView(advanceCreateFlow(
       {
         cwd: "/repo/packages/api",
         projectsRoot: "/home/dev/.docker-git"
       },
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
+      createInitialFlowView(featureCreateRepoUrl)
     ))
 
     expect(view.values.outDir).toBe("/home/dev/.docker-git/org/repo")
   })
 
   it("moves between remaining settings rows and clears the input buffer", () => {
-    const view = expectContinueResult(advanceCreateFlow(
-      cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
-    ))
+    const view = createFeatureRepoSettingsView(cwd)
     const editingView = { ...view, buffer: "stale" }
     const lastStep = resolveCreateFlowSteps(view.values).length - 1
 
@@ -192,10 +163,7 @@ describe("menu-create-shared", () => {
   })
 
   it("preserves settings navigation wraparound and buffer invariants", () => {
-    const view = expectContinueResult(advanceCreateFlow(
-      cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
-    ))
+    const view = createFeatureRepoSettingsView(cwd)
     const lastStep = resolveCreateFlowSteps(view.values).length - 1
 
     fc.assert(
@@ -224,26 +192,20 @@ describe("menu-create-shared", () => {
   })
 
   it("resolves horizontal choices to buffer tokens for discrete settings rows", () => {
-    const view = expectContinueResult(advanceCreateFlow(
-      cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
-    ))
+    const view = createFeatureRepoSettingsView(cwd)
 
-    expect(resolveCreateSettingsChoiceBuffer(viewForStep(view, "gpu"), "left")).toBe("none")
-    expect(resolveCreateSettingsChoiceBuffer(viewForStep(view, "gpu"), "right")).toBe("all")
-    expect(resolveCreateSettingsChoiceBuffer(viewForStep(view, "runUp"), "left")).toBe("n")
-    expect(resolveCreateSettingsChoiceBuffer(viewForStep(view, "runUp"), "right")).toBe("y")
-    expect(resolveCreateSettingsChoiceBuffer(viewForStep(view, "mcpPlaywright"), "left")).toBe("n")
-    expect(resolveCreateSettingsChoiceBuffer(viewForStep(view, "mcpPlaywright"), "right")).toBe("y")
-    expect(resolveCreateSettingsChoiceBuffer(viewForStep(view, "force"), "left")).toBe("n")
-    expect(resolveCreateSettingsChoiceBuffer(viewForStep(view, "force"), "right")).toBe("y")
+    expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "gpu"), "left")).toBe("none")
+    expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "gpu"), "right")).toBe("all")
+    expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "runUp"), "left")).toBe("n")
+    expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "runUp"), "right")).toBe("y")
+    expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "mcpPlaywright"), "left")).toBe("n")
+    expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "mcpPlaywright"), "right")).toBe("y")
+    expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "force"), "left")).toBe("n")
+    expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "force"), "right")).toBe("y")
   })
 
   it("does not resolve horizontal choices for free-text rows or unknown steps", () => {
-    const view = expectContinueResult(advanceCreateFlow(
-      cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
-    ))
+    const view = createFeatureRepoSettingsView(cwd)
     const unknownStepView = {
       ...view,
       step: resolveCreateFlowSteps(view.values).length + 1,
@@ -251,23 +213,20 @@ describe("menu-create-shared", () => {
     }
 
     expect(resolveCreateSettingsChoiceBuffer(createInitialFlowView("https://github.com/org/repo"), "right")).toBeNull()
-    expect(resolveCreateSettingsChoiceBuffer(viewForStep(view, "cpuLimit"), "left")).toBeNull()
-    expect(resolveCreateSettingsChoiceBuffer(viewForStep(view, "ramLimit"), "right")).toBeNull()
+    expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "cpuLimit"), "left")).toBeNull()
+    expect(resolveCreateSettingsChoiceBuffer(createFlowViewAtStep(view, "ramLimit"), "right")).toBeNull()
     expect(resolveCreateSettingsChoiceBuffer(unknownStepView, "left")).toBeNull()
   })
 
   it("continues after applying a navigated setting while earlier settings remain unresolved", () => {
-    const view = expectContinueResult(advanceCreateFlow(
-      cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
-    ))
+    const view = createFeatureRepoSettingsView(cwd)
     const forceView = moveCreateSettingsStep(view, "up")
 
     if (forceView === null) {
       throw new TypeError("expected settings navigation result")
     }
 
-    const next = expectContinueResult(advanceCreateFlow(
+    const next = expectCreateContinueView(advanceCreateFlow(
       cwd,
       {
         ...forceView,

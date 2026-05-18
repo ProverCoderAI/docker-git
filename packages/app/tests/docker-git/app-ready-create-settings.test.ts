@@ -5,31 +5,31 @@ import { handleCreateKey, submitCreateView } from "../../src/web/app-ready-creat
 import {
   type CreateFlowView,
   createInitialFlowView,
-  createKeyEvent,
-  createSetCreateViewSpy,
   createSettingsFlowView,
   createSettingsFlowViewAtStep,
   type CreateStep,
   expectCreateArrowHandling,
   expectCreateSideArrowBufferHandling,
   expectCreateViewReset,
+  expectIgnoredCreateKey,
   requireCreateViewValue,
   requireSubmittedCreateInputs,
   resolveCreateDisplaySteps,
   resolveCreateFlowSteps,
-  validGithubStatus
+  runCreateKey,
+  runSubmitCreateView
 } from "./app-ready-create-fixture.js"
-import { makeBrowserActionContext } from "./browser-action-context-fixture.js"
 
-const mocks = vi.hoisted(() => ({
-  submitCreateInputsMock: vi.fn<typeof submitCreateInputs>()
+const actionSpies = vi.hoisted(() => ({
+  submitProjectCreate: vi.fn<typeof submitCreateInputs>()
 }))
 
-vi.mock("../../src/web/actions-projects.js", () => ({
-  submitCreateInputs: mocks.submitCreateInputsMock
-}))
+vi.mock("../../src/web/actions-projects.js", () => {
+  const actionsProjectModule = { submitCreateInputs: actionSpies.submitProjectCreate }
+  return actionsProjectModule
+})
 
-const submitCreateInputsMock = mocks.submitCreateInputsMock
+const submitCreateInputsMock = actionSpies.submitProjectCreate
 
 describe("app-ready-create settings", () => {
   beforeEach(() => {
@@ -67,33 +67,14 @@ describe("app-ready-create settings", () => {
   })
 
   it("applies a side-arrow choice only after Enter", () => {
-    const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-    const createView = createSettingsFlowViewAtStep("gpu", "typed")
-    const arrowEvent = createKeyEvent("ArrowRight")
+    const arrowResult = runCreateKey(handleCreateKey, createSettingsFlowViewAtStep("gpu", "typed"), "ArrowRight")
+    const arrowView = requireCreateViewValue(arrowResult.setCreateViewSpy.mock.calls[0]?.[0])
+    const enterResult = runCreateKey(handleCreateKey, arrowView, "Enter")
+    const enteredView = requireCreateViewValue(enterResult.setCreateViewSpy.mock.calls[0]?.[0])
 
-    const arrowHandled = handleCreateKey(arrowEvent, {
-      context,
-      controllerCwd: "/workspace",
-      createView,
-      projectsRoot: "/home/dev/.docker-git",
-      setCreateView
-    })
-    const arrowView = requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])
-    const enterEvent = createKeyEvent("Enter")
-
-    const enterHandled = handleCreateKey(enterEvent, {
-      context,
-      controllerCwd: "/workspace",
-      createView: arrowView,
-      projectsRoot: "/home/dev/.docker-git",
-      setCreateView
-    })
-    const enteredView = requireCreateViewValue(setCreateViewSpy.mock.calls[1]?.[0])
-
-    expect(arrowHandled).toBe(true)
+    expect(arrowResult.handled).toBe(true)
     expect(arrowView.values.gpu).toBeUndefined()
-    expect(enterHandled).toBe(true)
+    expect(enterResult.handled).toBe(true)
     expect(enteredView.values.gpu).toBe("all")
     expect(enteredView.step).toBe(resolveCreateDisplaySteps().indexOf("gpu"))
     expect(enteredView.buffer).toBe("")
@@ -101,8 +82,6 @@ describe("app-ready-create settings", () => {
   })
 
   it("keeps an applied settings row selected and visible instead of submitting", () => {
-    const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
     const createView: CreateFlowView = {
       ...createSettingsFlowViewAtStep("force", "y"),
       values: {
@@ -114,15 +93,7 @@ describe("app-ready-create settings", () => {
         runUp: false
       }
     }
-    const event = createKeyEvent("Enter")
-
-    const handled = handleCreateKey(event, {
-      context,
-      controllerCwd: "/workspace",
-      createView,
-      projectsRoot: "/home/dev/.docker-git",
-      setCreateView
-    })
+    const { handled, setCreateViewSpy } = runCreateKey(handleCreateKey, createView, "Enter")
     const enteredView = requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])
 
     expect(handled).toBe(true)
@@ -133,49 +104,20 @@ describe("app-ready-create settings", () => {
   })
 
   it("navigates to the next visible row after applying a settings row", () => {
-    const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-    const createView = createSettingsFlowViewAtStep("mcpPlaywright", "y")
-    const enterEvent = createKeyEvent("Enter")
+    const enterResult = runCreateKey(handleCreateKey, createSettingsFlowViewAtStep("mcpPlaywright", "y"), "Enter")
+    const enteredView = requireCreateViewValue(enterResult.setCreateViewSpy.mock.calls[0]?.[0])
+    const downResult = runCreateKey(handleCreateKey, enteredView, "ArrowDown")
+    const downView = requireCreateViewValue(downResult.setCreateViewSpy.mock.calls[0]?.[0])
 
-    handleCreateKey(enterEvent, {
-      context,
-      controllerCwd: "/workspace",
-      createView,
-      projectsRoot: "/home/dev/.docker-git",
-      setCreateView
-    })
-    const enteredView = requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])
-    const downEvent = createKeyEvent("ArrowDown")
-
-    const handled = handleCreateKey(downEvent, {
-      context,
-      controllerCwd: "/workspace",
-      createView: enteredView,
-      projectsRoot: "/home/dev/.docker-git",
-      setCreateView
-    })
-    const downView = requireCreateViewValue(setCreateViewSpy.mock.calls[1]?.[0])
-
-    expect(handled).toBe(true)
+    expect(downResult.handled).toBe(true)
     expect(downView.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
     expect(downView.values.enableMcpPlaywright).toBe(true)
     expect(downView.buffer).toBe("")
   })
 
   it("clears an unconfirmed preview when navigating away from a settings row", () => {
-    const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
     const createView = createSettingsFlowViewAtStep("mcpPlaywright", "y")
-    const event = createKeyEvent("ArrowDown")
-
-    const handled = handleCreateKey(event, {
-      context,
-      controllerCwd: "/workspace",
-      createView,
-      projectsRoot: "/home/dev/.docker-git",
-      setCreateView
-    })
+    const { handled, setCreateViewSpy } = runCreateKey(handleCreateKey, createView, "ArrowDown")
     const nextView = requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])
 
     expect(handled).toBe(true)
@@ -185,17 +127,11 @@ describe("app-ready-create settings", () => {
   })
 
   it("submits settings Done with a valid active preview applied first", () => {
-    const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-
-    submitCreateView({
-      context,
-      controllerCwd: "/workspace",
-      createView: createSettingsFlowViewAtStep("mcpPlaywright", "y"),
-      projectsRoot: "/home/dev/.docker-git",
-      quickCreate: false,
-      setCreateView
-    })
+    const { setCreateViewSpy } = runSubmitCreateView(
+      submitCreateView,
+      createSettingsFlowViewAtStep("mcpPlaywright", "y"),
+      { quickCreate: false }
+    )
 
     expect(submitCreateInputsMock).toHaveBeenCalledTimes(1)
     expect(requireSubmittedCreateInputs(submitCreateInputsMock).enableMcpPlaywright).toBe(true)
@@ -203,17 +139,11 @@ describe("app-ready-create settings", () => {
   })
 
   it("shows a parse error when settings Done has an invalid active preview", () => {
-    const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-
-    submitCreateView({
-      context,
-      controllerCwd: "/workspace",
-      createView: createSettingsFlowViewAtStep("gpu", "bogus"),
-      projectsRoot: "/home/dev/.docker-git",
-      quickCreate: false,
-      setCreateView
-    })
+    const { context, setCreateViewSpy } = runSubmitCreateView(
+      submitCreateView,
+      createSettingsFlowViewAtStep("gpu", "bogus"),
+      { quickCreate: false }
+    )
 
     expect(submitCreateInputsMock).not.toHaveBeenCalled()
     expect(setCreateViewSpy).not.toHaveBeenCalled()
@@ -221,22 +151,11 @@ describe("app-ready-create settings", () => {
   })
 
   it("ignores settings arrows before the Settings flow starts", () => {
-    const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-    const event = createKeyEvent("ArrowDown")
-
-    const handled = handleCreateKey(event, {
-      context,
-      controllerCwd: "/workspace",
-      createView: createInitialFlowView("https://github.com/org/repo"),
-      projectsRoot: "/home/dev/.docker-git",
-      setCreateView
-    })
-
-    expect(handled).toBe(false)
-    expect(event.preventDefault).not.toHaveBeenCalled()
-    expect(setCreateViewSpy).not.toHaveBeenCalled()
-    expect(context.setMessage).not.toHaveBeenCalled()
+    expectIgnoredCreateKey(
+      handleCreateKey,
+      createInitialFlowView("https://github.com/org/repo"),
+      "ArrowDown"
+    )
   })
 
   it("ignores side arrows before Settings and on free-text settings", () => {
@@ -249,22 +168,7 @@ describe("app-ready-create settings", () => {
 
     for (const key of keys) {
       for (const createView of views) {
-        const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-        const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-        const event = createKeyEvent(key)
-
-        const handled = handleCreateKey(event, {
-          context,
-          controllerCwd: "/workspace",
-          createView,
-          projectsRoot: "/home/dev/.docker-git",
-          setCreateView
-        })
-
-        expect(handled).toBe(false)
-        expect(event.preventDefault).not.toHaveBeenCalled()
-        expect(setCreateViewSpy).not.toHaveBeenCalled()
-        expect(context.setMessage).not.toHaveBeenCalled()
+        expectIgnoredCreateKey(handleCreateKey, createView, key)
       }
     }
   })

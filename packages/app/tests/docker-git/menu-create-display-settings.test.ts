@@ -1,48 +1,20 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  advanceCreateFlow,
   applyCreateDisplaySettingsStep,
   completeCreateDisplaySettingsFlow,
-  createInitialFlowView,
   moveCreateDisplaySettingsStep,
   renderCreateStepLabelWithBufferPreview,
   resolveCreateDisplaySteps,
   resolveCreateInputs,
   resolveCreateSettingsChoiceBuffer
 } from "../../src/docker-git/menu-create-shared.js"
-import type { CreateStep } from "../../src/docker-git/menu-types.js"
-
-const expectContinueResult = (
-  next: ReturnType<typeof advanceCreateFlow>
-) => {
-  expect(next?._tag).toBe("Continue")
-  if (next === null || next._tag !== "Continue") {
-    throw new TypeError("expected continue create flow result")
-  }
-  return next.view
-}
-
-const expectCompleteResult = (
-  next: ReturnType<typeof advanceCreateFlow>
-) => {
-  expect(next?._tag).toBe("Complete")
-  if (next === null || next._tag !== "Complete") {
-    throw new TypeError("expected complete create flow result")
-  }
-  return next.inputs
-}
-
-const viewForStep = (
-  view: ReturnType<typeof expectContinueResult>,
-  stepName: CreateStep
-): ReturnType<typeof expectContinueResult> => {
-  const step = resolveCreateDisplaySteps().indexOf(stepName)
-  if (step === -1) {
-    throw new TypeError(`expected Create step: ${stepName}`)
-  }
-  return { ...view, step, buffer: "draft" }
-}
+import {
+  createFeatureRepoSettingsView,
+  createFlowViewAtStep,
+  expectCreateCompleteInputs,
+  expectCreateContinueView
+} from "./create-flow-test-helpers.js"
 
 describe("menu-create-shared display settings", () => {
   const cwd = process.cwd()
@@ -69,12 +41,8 @@ describe("menu-create-shared display settings", () => {
   })
 
   it("applies a browser display setting in place", () => {
-    const view = expectContinueResult(advanceCreateFlow(
-      cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
-    ))
-    const mcpView = viewForStep(view, "mcpPlaywright")
-    const next = expectContinueResult(applyCreateDisplaySettingsStep(cwd, { ...mcpView, buffer: "y" }))
+    const mcpView = createFlowViewAtStep(createFeatureRepoSettingsView(cwd), "mcpPlaywright")
+    const next = expectCreateContinueView(applyCreateDisplaySettingsStep(cwd, { ...mcpView, buffer: "y" }))
 
     expect(next.step).toBe(mcpView.step)
     expect(next.buffer).toBe("")
@@ -83,13 +51,10 @@ describe("menu-create-shared display settings", () => {
   })
 
   it("navigates browser display settings without skipping applied rows", () => {
-    const view = expectContinueResult(advanceCreateFlow(
+    const view = createFeatureRepoSettingsView(cwd)
+    const applied = expectCreateContinueView(applyCreateDisplaySettingsStep(
       cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
-    ))
-    const applied = expectContinueResult(applyCreateDisplaySettingsStep(
-      cwd,
-      { ...viewForStep(view, "mcpPlaywright"), buffer: "y" }
+      { ...createFlowViewAtStep(view, "mcpPlaywright"), buffer: "y" }
     ))
     const down = moveCreateDisplaySettingsStep(applied, "down")
     const up = moveCreateDisplaySettingsStep(applied, "up")
@@ -101,13 +66,9 @@ describe("menu-create-shared display settings", () => {
   })
 
   it("resolves horizontal choices against applied browser display rows", () => {
-    const view = expectContinueResult(advanceCreateFlow(
+    const applied = expectCreateContinueView(applyCreateDisplaySettingsStep(
       cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
-    ))
-    const applied = expectContinueResult(applyCreateDisplaySettingsStep(
-      cwd,
-      { ...viewForStep(view, "mcpPlaywright"), buffer: "y" }
+      { ...createFlowViewAtStep(createFeatureRepoSettingsView(cwd), "mcpPlaywright"), buffer: "y" }
     ))
 
     expect(resolveCreateSettingsChoiceBuffer(applied, "left")).toBe("n")
@@ -115,13 +76,9 @@ describe("menu-create-shared display settings", () => {
   })
 
   it("completes browser display settings with a valid active buffer", () => {
-    const view = expectContinueResult(advanceCreateFlow(
+    const complete = expectCreateCompleteInputs(completeCreateDisplaySettingsFlow(
       cwd,
-      createInitialFlowView("https://github.com/org/repo/tree/feature-x")
-    ))
-    const complete = expectCompleteResult(completeCreateDisplaySettingsFlow(
-      cwd,
-      { ...viewForStep(view, "mcpPlaywright"), buffer: "y" }
+      { ...createFlowViewAtStep(createFeatureRepoSettingsView(cwd), "mcpPlaywright"), buffer: "y" }
     ))
 
     expect(complete.enableMcpPlaywright).toBe(true)

@@ -6,29 +6,25 @@ import { handleCreateKey, setCreateBuffer, submitCreateView } from "../../src/we
 import {
   type CreateFlowView,
   createInitialFlowView,
-  createKeyEvent,
   createSetCreateViewSpy,
   createSubmitCreateBuffer,
+  expectCreateViewInputError,
   expectCreateViewReset,
-  expectedOutDirForRepoUrl,
   expectEmptyRepoInlineError,
+  expectEmptyRepoKeyboardInlineError,
   expectQuickCreateInputs,
-  repositoryCreateInputArbitrary,
   requireCreateViewValue,
   resolveCreateFlowSteps,
-  validGithubStatus
+  runSubmitCreateView
 } from "./app-ready-create-fixture.js"
-import { makeBrowserActionContext } from "./browser-action-context-fixture.js"
+import { expectedOutDirForRepoUrl, repositoryCreateInputArbitrary } from "./create-flow-test-helpers.js"
 
-const mocks = vi.hoisted(() => ({
-  submitCreateInputsMock: vi.fn<typeof submitCreateInputs>()
-}))
+const submitCreateInputsMock = vi.hoisted(() => vi.fn<typeof submitCreateInputs>())
 
 vi.mock("../../src/web/actions-projects.js", () => ({
-  submitCreateInputs: mocks.submitCreateInputsMock
+  submitCreateInputs: submitCreateInputsMock
 }))
 
-const submitCreateInputsMock = mocks.submitCreateInputsMock
 const submitCreateBuffer = createSubmitCreateBuffer(submitCreateView)
 
 describe("app-ready-create", () => {
@@ -92,48 +88,18 @@ describe("app-ready-create", () => {
 
   it("shows an inline error for empty repo URL keyboard submits", () => {
     for (const shiftKey of [false, true]) {
-      const { context } = makeBrowserActionContext({ githubStatus: validGithubStatus })
-      const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-      const createView = createInitialFlowView("")
-      const event = createKeyEvent("Enter", shiftKey)
-
-      const handled = handleCreateKey(event, {
-        context,
-        controllerCwd: "/workspace",
-        createView,
-        projectsRoot: "/home/dev/.docker-git",
-        setCreateView
-      })
-
-      expect(handled).toBe(true)
-      expect(event.preventDefault).toHaveBeenCalledTimes(1)
-      expect(submitCreateInputsMock).not.toHaveBeenCalled()
-      expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual({
-        ...createView,
-        inputError: "Insert URL first"
-      })
-      expect(context.setMessage).not.toHaveBeenCalled()
+      expectEmptyRepoKeyboardInlineError(handleCreateKey, submitCreateInputsMock, shiftKey)
     }
   })
 
   it("validates empty repo URL before GitHub auth", () => {
-    const { context } = makeBrowserActionContext()
-    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
     const createView = createInitialFlowView("")
-
-    submitCreateView({
-      context,
-      controllerCwd: "/workspace",
-      createView,
-      projectsRoot: "/home/dev/.docker-git",
-      quickCreate: true,
-      setCreateView
+    const { context, setCreateViewSpy } = runSubmitCreateView(submitCreateView, createView, {
+      contextOverrides: {},
+      quickCreate: true
     })
 
-    expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual({
-      ...createView,
-      inputError: "Insert URL first"
-    })
+    expectCreateViewInputError(setCreateViewSpy, createView)
     expect(context.setMessage).not.toHaveBeenCalled()
     expect(context.setActiveScreen).not.toHaveBeenCalled()
   })
