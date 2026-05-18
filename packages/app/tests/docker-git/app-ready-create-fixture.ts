@@ -3,6 +3,7 @@ import { expect, vi } from "vitest"
 
 import {
   type CreateFlowView,
+  type DisplayModeFlowView,
   createInitialFlowView,
   resolveCreateDisplaySteps
 } from "../../src/docker-git/menu-create-shared.js"
@@ -150,7 +151,7 @@ export const createKeyEvent = (
 }
 
 /** @pure true @effect none @invariant mode is display and repo values are committed @precondition n/a @postcondition settings tests start after the repo step @complexity O(1) */
-export const createSettingsFlowView = (): CreateFlowView => ({
+export const createSettingsFlowView = (): DisplayModeFlowView => ({
   mode: "display",
   step: 1,
   buffer: "30%",
@@ -166,7 +167,7 @@ export const createSettingsFlowView = (): CreateFlowView => ({
 export const createSettingsFlowViewAtStep = (
   stepName: CreateStep,
   buffer = "draft"
-): CreateFlowView => ({
+): DisplayModeFlowView => ({
   ...createSettingsFlowView(),
   buffer,
   step: resolveRequiredCreateStepIndex(stepName, resolveCreateDisplaySteps())

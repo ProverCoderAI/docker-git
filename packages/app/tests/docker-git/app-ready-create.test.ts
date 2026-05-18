@@ -67,6 +67,7 @@ describe("app-ready-create", () => {
 
     expect(submitCreateInputsMock).not.toHaveBeenCalled()
     expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toMatchObject({
+      mode: "display",
       step: 1,
       values: {
         outDir: "/home/dev/.docker-git/org/repo",
