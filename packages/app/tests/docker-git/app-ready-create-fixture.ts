@@ -29,6 +29,8 @@ type BrowserActionContextOverrides = Parameters<typeof makeBrowserActionContext>
 type SubmitCreateOptions = { readonly mode?: CreateSubmitMode }
 export type SubmitCreateInputsMock = ReturnType<typeof vi.fn<typeof submitCreateInputs>>
 
+export const EMPTY_REPO_URL_ERROR = "Insert URL first"
+
 /** @pure true @effect none @invariant exposes one valid GitHub token @precondition n/a @postcondition auth gate accepts Create actions @complexity O(1) */
 export const validGithubStatus: GithubAuthStatus = {
   summary: "valid",
@@ -80,7 +82,7 @@ export const expectCreateViewInputError = (
 ) => {
   expectCreateViewUpdate(setCreateViewSpy, {
     ...createView,
-    inputError: "Insert URL first"
+    inputError: EMPTY_REPO_URL_ERROR
   })
 }
 

@@ -8,6 +8,7 @@ import {
   createInitialFlowView,
   createSetCreateViewSpy,
   createSubmitCreateBuffer,
+  EMPTY_REPO_URL_ERROR,
   expectCreateViewInputError,
   expectCreateViewReset,
   expectEmptyRepoInlineError,
@@ -89,10 +90,11 @@ describe("app-ready-create", () => {
     expectEmptyRepoInlineError(submitCreateView, submitCreateInputsMock)
   })
 
-  it("shows an inline error for empty repo URL keyboard submits", () => {
-    for (const shiftKey of [false, true]) {
-      expectEmptyRepoKeyboardInlineError(handleCreateKey, submitCreateInputsMock, shiftKey)
-    }
+  it.each([
+    { name: "Enter", shiftKey: false },
+    { name: "Shift+Enter", shiftKey: true }
+  ])("shows an inline error for empty repo URL keyboard submit on $name", ({ shiftKey }) => {
+    expectEmptyRepoKeyboardInlineError(handleCreateKey, submitCreateInputsMock, shiftKey)
   })
 
   it("validates empty repo URL before GitHub auth", () => {
@@ -111,7 +113,7 @@ describe("app-ready-create", () => {
     const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
     const createView: CreateFlowView = {
       ...createInitialFlowView(""),
-      inputError: "Insert URL first"
+      inputError: EMPTY_REPO_URL_ERROR
     }
 
     setCreateBuffer(createView, setCreateView, "https://github.com/org/repo")
