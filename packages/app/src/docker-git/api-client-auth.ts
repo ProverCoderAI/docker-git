@@ -25,11 +25,11 @@ import type {
   AuthGithubLoginCommand,
   AuthGithubLogoutCommand,
   AuthGithubStatusCommand,
-  AuthGrokLogoutCommand,
-  AuthGrokStatusCommand,
   AuthGitlabLoginCommand,
   AuthGitlabLogoutCommand,
-  AuthGitlabStatusCommand
+  AuthGitlabStatusCommand,
+  AuthGrokLogoutCommand,
+  AuthGrokStatusCommand
 } from "./frontend-lib/core/domain.js"
 import { resolvePathFromCwd } from "./frontend-lib/usecases/path-helpers.js"
 import type { ApiAuthRequiredError, ApiRequestError } from "./host-errors.js"
