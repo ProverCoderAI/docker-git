@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const rootDir = join(scriptDir, "..")
@@ -18,7 +18,7 @@ const parseRange = (value) => {
   }
 }
 
-const parsePatch = (patchText) => {
+export const parsePatch = (patchText) => {
   const lines = patchText.split(/\r?\n/u)
   const files = []
   let index = 0
@@ -72,11 +72,12 @@ const parsePatch = (patchText) => {
 // WHY: Windows submodule checkouts can contain CRLF while docker-git patch files are LF-based
 // SOURCE: n/a
 // INVARIANT: patch matching depends on line content, not host checkout end-of-line policy
-const splitText = (text) => {
+export const splitText = (text) => {
   const normalized = text.replace(/\r\n/gu, "\n")
+  const finalNewline = normalized.endsWith("\n")
   return {
-    finalNewline: normalized.endsWith("\n"),
-    lines: normalized.endsWith("\n") ? normalized.slice(0, -1).split("\n") : normalized.split("\n")
+    finalNewline,
+    lines: finalNewline ? normalized.slice(0, -1).split("\n") : normalized.split("\n")
   }
 }
 
@@ -91,7 +92,7 @@ const hunkLines = (hunk, direction, side) =>
         : side === "from" ? kind === "+" : kind === "-"))
     .map(({ text }) => text)
 
-const applyFilePatch = (content, filePatch, direction) => {
+export const applyFilePatch = (content, filePatch, direction) => {
   const parsed = splitText(content)
   const lines = [...parsed.lines]
   let offset = 0
@@ -132,26 +133,32 @@ const applyPatchSet = (patches, direction, write) => {
   return true
 }
 
-if (!existsSync(join(skillerDir, "package.json"))) {
-  console.error(`Skiller submodule is not initialized at ${skillerDir}.`)
-  process.exit(1)
-}
-
-for (const patchFile of patchFiles) {
-  if (!existsSync(patchFile)) {
-    console.error(`Skiller docker-git patch is missing: ${patchFile}`)
+const main = () => {
+  if (!existsSync(join(skillerDir, "package.json"))) {
+    console.error(`Skiller submodule is not initialized at ${skillerDir}.`)
     process.exit(1)
   }
-  const patches = parsePatch(readFileSync(patchFile, "utf8"))
-  if (applyPatchSet(patches, "forward", false)) {
-    applyPatchSet(patches, "forward", true)
-    console.log(`Applied Skiller docker-git patch: ${patchFile}`)
-    continue
+
+  for (const patchFile of patchFiles) {
+    if (!existsSync(patchFile)) {
+      console.error(`Skiller docker-git patch is missing: ${patchFile}`)
+      process.exit(1)
+    }
+    const patches = parsePatch(readFileSync(patchFile, "utf8"))
+    if (applyPatchSet(patches, "forward", false)) {
+      applyPatchSet(patches, "forward", true)
+      console.log(`Applied Skiller docker-git patch: ${patchFile}`)
+      continue
+    }
+    if (applyPatchSet(patches, "reverse", false)) {
+      console.log(`Skiller docker-git patch already applied: ${patchFile}`)
+      continue
+    }
+    console.error(`Skiller docker-git patch does not match submodule contents: ${patchFile}`)
+    process.exit(1)
   }
-  if (applyPatchSet(patches, "reverse", false)) {
-    console.log(`Skiller docker-git patch already applied: ${patchFile}`)
-    continue
-  }
-  console.error(`Skiller docker-git patch does not match submodule contents: ${patchFile}`)
-  process.exit(1)
+}
+
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main()
 }

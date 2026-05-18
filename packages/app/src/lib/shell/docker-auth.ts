@@ -44,12 +44,27 @@ export const trimDockerPathTrailingSlash = (value: string): string => {
   return value.slice(0, end)
 }
 
-const pathStartsWith = (candidate: string, prefix: string): boolean =>
-  candidate === prefix || candidate.startsWith(`${prefix}/`) || candidate.startsWith(`${prefix}\\`)
+const windowsDrivePathPattern = /^[a-z]:(?:\/|\\|$)/iu
+
+const normalizeDockerPathForCompare = (value: string): string => {
+  const withoutTrailingSlash = trimDockerPathTrailingSlash(value.trim())
+  const normalized = withoutTrailingSlash.replaceAll("\\", "/")
+  return windowsDrivePathPattern.test(normalized)
+    ? normalized.toLowerCase()
+    : normalized
+}
+
+const originalPrefixLength = (prefix: string): number => trimDockerPathTrailingSlash(prefix.trim()).length
+
+const pathStartsWith = (candidate: string, prefix: string): boolean => {
+  const normalizedCandidate = normalizeDockerPathForCompare(candidate)
+  const normalizedPrefix = normalizeDockerPathForCompare(prefix)
+  return normalizedCandidate === normalizedPrefix || normalizedCandidate.startsWith(`${normalizedPrefix}/`)
+}
 
 const translatePathPrefix = (candidate: string, sourcePrefix: string, targetPrefix: string): string | null =>
   pathStartsWith(candidate, sourcePrefix)
-    ? `${targetPrefix}${candidate.slice(sourcePrefix.length)}`
+    ? `${targetPrefix}${candidate.slice(originalPrefixLength(sourcePrefix))}`
     : null
 
 const resolveContainerProjectsRoot = (): string | null => {
@@ -123,8 +138,11 @@ export const remapDockerBindHostPathFromMounts = (
     return hostPath
   }
 
-  return `${match.source}${hostPath.slice(match.destination.length)}`
+  return `${match.source}${hostPath.slice(originalPrefixLength(match.destination))}`
 }
+
+export const buildDockerBindMountArg = (volume: DockerVolume): string =>
+  `type=bind,source=${volume.hostPath},target=${volume.containerPath}`
 
 export const resolveDockerVolumeHostPath = (
   cwd: string,
@@ -196,26 +214,37 @@ const appendEnvArgs = (base: Array<string>, env: string | ReadonlyArray<string>)
   }
 }
 
-const buildDockerArgs = (spec: DockerAuthSpec): ReadonlyArray<string> => {
-  const base: Array<string> = ["run", "--rm"]
-  const dockerNetwork = (spec.network ?? resolveDockerEnvValue("DOCKER_GIT_AUTH_DOCKER_NETWORK") ?? "host").trim()
-  if (dockerNetwork.length > 0) {
-    base.push("--network", dockerNetwork)
+const normalizeDockerArgValue = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim() ?? ""
+  return trimmed.length > 0 ? trimmed : null
+}
+
+const resolveDockerRunNetwork = (network: string | undefined): string | null =>
+  normalizeDockerArgValue(network) ?? resolveDockerEnvValue("DOCKER_GIT_AUTH_DOCKER_NETWORK")
+
+const appendOptionArg = (base: Array<string>, name: string, value: string | null | undefined) => {
+  const normalized = normalizeDockerArgValue(value)
+  if (normalized !== null) {
+    base.push(name, normalized)
   }
-  const dockerUser = (spec.user ?? "").trim() || resolveDefaultDockerUser()
-  if (dockerUser !== null) {
-    base.push("--user", dockerUser)
-  }
+}
+
+const appendDockerRunOptions = (base: Array<string>, spec: DockerAuthSpec) => {
+  appendOptionArg(base, "--network", resolveDockerRunNetwork(spec.network))
+  appendOptionArg(base, "--user", normalizeDockerArgValue(spec.user) ?? resolveDefaultDockerUser())
   if (spec.interactive) {
     base.push("-it")
   }
-  if (spec.entrypoint && spec.entrypoint.length > 0) {
-    base.push("--entrypoint", spec.entrypoint)
-  }
-  base.push("-v", `${spec.volume.hostPath}:${spec.volume.containerPath}`)
+  appendOptionArg(base, "--entrypoint", spec.entrypoint)
+  base.push("--mount", buildDockerBindMountArg(spec.volume))
   if (spec.env !== undefined) {
     appendEnvArgs(base, spec.env)
   }
+}
+
+const buildDockerArgs = (spec: DockerAuthSpec): ReadonlyArray<string> => {
+  const base: Array<string> = ["run", "--rm"]
+  appendDockerRunOptions(base, spec)
   return [...base, spec.image, ...spec.args]
 }
 

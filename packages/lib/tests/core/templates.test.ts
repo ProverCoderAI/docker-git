@@ -545,7 +545,7 @@ describe("renderDockerCompose", () => {
 
     expect(compose).toContain("name: dg-test")
     expect(compose).toContain("container_name: dg-test")
-    expect(compose).toContain("    env_file:\n      - /workspace/.orch/env/global.env\n      - /workspace/.orch/env/project.env\n")
+    expect(compose).toContain("    env_file:\n      - '/workspace/.orch/env/global.env'\n      - '/workspace/.orch/env/project.env'\n")
     expect(compose).toContain('DOCKER_GIT_PROJECT_DOCKER_HOST: "${DOCKER_GIT_PROJECT_DOCKER_HOST:-}"')
     expect(compose).toContain('- "${DOCKER_GIT_PROJECT_SSH_BIND_HOST:-127.0.0.1}:2222:22"')
     expect(compose).toContain('    extra_hosts:\n      - "host.docker.internal:host-gateway"')
@@ -554,6 +554,19 @@ describe("renderDockerCompose", () => {
     expect(compose).not.toContain("dg-test-browser")
     expect(compose).not.toContain("/var/run/docker.sock:/var/run/docker.sock")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
+  })
+
+  it("quotes env_file paths so Windows paths and spaces remain YAML scalars", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        envGlobalPath: "C:\\Users\\Dev\\Docker Git\\global.env",
+        envProjectPath: "/workspace/it'test/project.env"
+      })
+    )
+
+    expect(compose).toContain(
+      "    env_file:\n      - 'C:\\Users\\Dev\\Docker Git\\global.env'\n      - '/workspace/it''test/project.env'\n"
+    )
   })
 
   it("renders GPU access only on the main service when explicitly enabled", () => {
@@ -589,7 +602,8 @@ describe("renderDockerCompose", () => {
       }),
       {
         cpuLimit: 1.5,
-        ramLimit: "2g"
+        ramLimit: "2g",
+        swapLimit: "4g"
       }
     )
     const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
@@ -601,7 +615,7 @@ describe("renderDockerCompose", () => {
     expect(compose).toContain('MCP_PLAYWRIGHT_CDP_ENDPOINT: "http://dg-test-browser:9223"')
     expect(compose).toContain("dg-test-browser:\n    build:")
     expect(compose.slice(browserServiceIndex)).toContain(
-      "    env_file:\n      - /workspace/.orch/env/global.env\n      - /workspace/.orch/env/project.env\n"
+      "    env_file:\n      - '/workspace/.orch/env/global.env'\n      - '/workspace/.orch/env/project.env'\n"
     )
     expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
     expect(browserDnsIndex).toBeGreaterThan(browserServiceIndex)
@@ -615,8 +629,8 @@ describe("renderDockerCompose", () => {
         gpu: "none",
       }),
       {
-        main: { cpuLimit: 2, ramLimit: "4g" },
-        playwright: { cpuLimit: 0.5, ramLimit: "1g" }
+        main: { cpuLimit: 2, ramLimit: "4g", swapLimit: "8g" },
+        playwright: { cpuLimit: 0.5, ramLimit: "1g", swapLimit: "2g" }
       }
     )
     const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
@@ -626,10 +640,10 @@ describe("renderDockerCompose", () => {
     expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
     expect(mainSection).toContain("    cpus: 2\n")
     expect(mainSection).toContain('    mem_limit: "4g"\n')
-    expect(mainSection).toContain('    memswap_limit: "4g"\n')
+    expect(mainSection).toContain('    memswap_limit: "8g"\n')
     expect(browserSection).toContain("    cpus: 0.5\n")
     expect(browserSection).toContain('    mem_limit: "1g"\n')
-    expect(browserSection).toContain('    memswap_limit: "1g"\n')
+    expect(browserSection).toContain('    memswap_limit: "2g"\n')
   })
 
   it("backward-compatibly applies single resource limit shape to both services", () => {
@@ -640,7 +654,8 @@ describe("renderDockerCompose", () => {
       }),
       {
         cpuLimit: 1.5,
-        ramLimit: "2g"
+        ramLimit: "2g",
+        swapLimit: "4g"
       }
     )
     const browserServiceIndex = compose.indexOf("\n  dg-test-browser:\n")
@@ -649,6 +664,7 @@ describe("renderDockerCompose", () => {
     expect(browserServiceIndex).toBeGreaterThanOrEqual(0)
     expect(browserSection).toContain("    cpus: 1.5\n")
     expect(browserSection).toContain('    mem_limit: "2g"\n')
+    expect(browserSection).toContain('    memswap_limit: "4g"\n')
   })
 
   it("renders explicit anonymous GitHub clone override for public repos", () => {

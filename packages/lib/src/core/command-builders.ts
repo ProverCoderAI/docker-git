@@ -8,7 +8,8 @@ import {
   parseDockerNetworkMode,
   parseGpuMode,
   parseSshPort,
-  parseSshUser
+  parseSshUser,
+  trimTrailingPathSeparators
 } from "./command-builders-shared.js"
 import { type RawOptions } from "./command-options.js"
 import {
@@ -21,12 +22,11 @@ import {
   resolveRepoInput
 } from "./domain.js"
 import { resolveResourceLimitsIntent } from "./resource-limits.js"
-import { trimRightChar } from "./strings.js"
 import { normalizeAuthLabel, normalizeGitTokenLabel } from "./token-labels.js"
 
 export { nonEmpty } from "./command-builders-shared.js"
 
-const normalizeSecretsRoot = (value: string): string => trimRightChar(value, "/")
+const normalizeSecretsRoot = trimTrailingPathSeparators
 
 type RepoBasics = {
   readonly repoUrl: string

@@ -8,7 +8,7 @@ import type * as Scope from "effect/Scope"
 import * as Stream from "effect/Stream"
 
 import { stripAnsi, writeChunkToFd } from "../shell/ansi-strip.js"
-import { resolveDefaultDockerUser, resolveDockerVolumeHostPath } from "../shell/docker-auth.js"
+import { buildDockerBindMountArg, resolveDefaultDockerUser, resolveDockerVolumeHostPath } from "../shell/docker-auth.js"
 import { AuthError, CommandFailedError } from "../shell/errors.js"
 
 const oauthTokenEnvKey = "DOCKER_GIT_CLAUDE_OAUTH_TOKEN"
@@ -81,7 +81,14 @@ const buildDockerSetupTokenSpec = (
 })
 
 const buildDockerSetupTokenArgs = (spec: DockerSetupTokenSpec): ReadonlyArray<string> => {
-  const base: Array<string> = ["run", "--rm", "-i", "-t", "-v", `${spec.hostPath}:${spec.containerPath}`]
+  const base: Array<string> = [
+    "run",
+    "--rm",
+    "-i",
+    "-t",
+    "--mount",
+    buildDockerBindMountArg({ hostPath: spec.hostPath, containerPath: spec.containerPath })
+  ]
   const dockerUser = resolveDefaultDockerUser()
   if (dockerUser !== null) {
     base.push("--user", dockerUser)

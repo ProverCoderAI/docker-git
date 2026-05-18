@@ -141,4 +141,17 @@ describe("buildCreateCommand", () => {
       }
     }
   })
+
+  it("normalizes Windows-style trailing separators in secrets root", () => {
+    const result = buildCreateCommand({
+      repoUrl: "https://github.com/org/repo.git",
+      secretsRoot: "C:\\Users\\Dev\\.docker-git\\secrets\\\\"
+    })
+
+    expect(Either.isRight(result)).toBe(true)
+    if (Either.isRight(result)) {
+      expect(result.right.config.envGlobalPath).toBe("C:\\Users\\Dev\\.docker-git\\secrets/global.env")
+      expect(result.right.config.codexAuthPath).toBe("C:\\Users\\Dev\\.docker-git\\secrets/codex")
+    }
+  })
 })

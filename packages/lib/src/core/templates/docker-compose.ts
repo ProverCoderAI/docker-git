@@ -81,8 +81,12 @@ const renderGpu = (gpu: TemplateConfig["gpu"]): string =>
 
 const renderBootstrapMounts = (): string => `      - ${bootstrapVolumeKey}:/opt/docker-git/bootstrap/source:ro`
 
+const renderYamlSingleQuoted = (value: string): string => `'${value.replaceAll("'", "''")}'`
+
 const renderEnvFiles = (config: TemplateConfig): string =>
-  `    env_file:\n      - ${config.envGlobalPath}\n      - ${config.envProjectPath}\n`
+  `    env_file:\n      - ${renderYamlSingleQuoted(config.envGlobalPath)}\n      - ${
+    renderYamlSingleQuoted(config.envProjectPath)
+  }\n`
 
 const buildPlaywrightFragments = (
   config: TemplateConfig,

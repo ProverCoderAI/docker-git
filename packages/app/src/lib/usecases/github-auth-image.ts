@@ -50,7 +50,6 @@ export const ensureGhAuthImage = (
     imageName: ghImageName,
     imageDir: ghImageDir,
     dockerfile: renderGhDockerfile(),
-    buildLabel,
-    buildNetwork: "host"
+    buildLabel
   })
 /* jscpd:ignore-end */

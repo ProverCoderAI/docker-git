@@ -4,7 +4,7 @@ import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 
-import { findAuthorizedKeysSource, findSshPrivateKey } from "../../src/usecases/path-helpers.js"
+import { defaultProjectsRoot, findAuthorizedKeysSource, findSshPrivateKey } from "../../src/usecases/path-helpers.js"
 
 const withTempDir = <A, E, R>(
   use: (tempDir: string) => Effect.Effect<A, E, R>
@@ -52,6 +52,30 @@ const withPatchedEnv = <A, E, R>(
   )
 
 describe("path helpers", () => {
+  it.effect("uses USERPROFILE with Windows separators when HOME is absent", () =>
+    withPatchedEnv(
+      {
+        HOME: undefined,
+        USERPROFILE: "C:\\Users\\Dev\\",
+        DOCKER_GIT_PROJECTS_ROOT: undefined
+      },
+      Effect.sync(() => {
+        expect(defaultProjectsRoot("C:\\workspace")).toBe("C:\\Users\\Dev\\.docker-git")
+      })
+    ))
+
+  it.effect("expands Windows home-relative projects root overrides", () =>
+    withPatchedEnv(
+      {
+        HOME: undefined,
+        USERPROFILE: "C:\\Users\\Dev",
+        DOCKER_GIT_PROJECTS_ROOT: "~\\.dg"
+      },
+      Effect.sync(() => {
+        expect(defaultProjectsRoot("C:\\workspace")).toBe("C:\\Users\\Dev\\.dg")
+      })
+    ))
+
   it.effect("prefers the docker-git projects root public key over generic ~/.ssh keys", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {

@@ -30,6 +30,14 @@ const parsePort = (value: string): Either.Either<number, ParseError> => {
   return Either.right(parsed)
 }
 
+export const trimTrailingPathSeparators = (value: string): string => {
+  let end = value.length
+  while (end > 0 && (value[end - 1] === "/" || value[end - 1] === "\\")) {
+    end -= 1
+  }
+  return value.slice(0, end)
+}
+
 /**
  * Parses a raw SSH port value into the valid Docker host-port range.
  *

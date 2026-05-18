@@ -52,6 +52,5 @@ export const ensureGlabAuthImage = (
     imageName: gitlabImageName,
     imageDir: gitlabImageDir,
     dockerfile: renderGlabDockerfile(),
-    buildLabel,
-    buildNetwork: "host"
+    buildLabel
   })

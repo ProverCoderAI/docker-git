@@ -9,6 +9,7 @@ import {
 
 export const controllerCpuLimitEnvKey = "DOCKER_GIT_CONTROLLER_CPUS"
 export const controllerMemoryLimitEnvKey = "DOCKER_GIT_CONTROLLER_MEMORY"
+export const controllerMemorySwapLimitEnvKey = "DOCKER_GIT_CONTROLLER_MEMORY_SWAP"
 export const controllerPidsLimitEnvKey = "DOCKER_GIT_CONTROLLER_PIDS"
 export const controllerResourceLimitsForceRecreateEnvKey = "DOCKER_GIT_CONTROLLER_RESOURCE_LIMITS_FORCE_RECREATE"
 
@@ -34,6 +35,7 @@ export type ControllerResourceLimitIntent = {
 export type ControllerResourceLimitEnv = {
   readonly cpus: string
   readonly memory: string
+  readonly memorySwap: string
   readonly pids: string
 }
 
@@ -305,6 +307,7 @@ export const resolveControllerResourceLimitEnv = (
     return {
       cpus: String(resolved.cpuLimit),
       memory: resolved.ramLimit,
+      memorySwap: resolved.swapLimit,
       pids: pidsLimit
     }
   })

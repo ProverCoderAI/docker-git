@@ -23,7 +23,10 @@ import { autoPullState } from "../../src/usecases/state-repo.js"
 
 const seedEnv: Record<string, string> = {
   DOCKER_GIT_SKIP_POST_PUSH_ACTION: "1",
-  GIT_CONFIG_NOSYSTEM: "1"
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "core.hooksPath",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_VALUE_0: ".git/hooks"
 }
 
 const collectUint8Array = (chunks: Chunk.Chunk<Uint8Array>): Uint8Array =>
