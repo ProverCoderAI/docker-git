@@ -28,8 +28,8 @@ const AuthProviderSnapshotFields = {
   claudeAuthPath: Schema.String,
   geminiAuthEntries: Schema.Number,
   geminiAuthPath: Schema.String,
-  grokAuthEntries: Schema.Number,
-  grokAuthPath: Schema.String,
+  grokAuthEntries: Schema.optionalWith(Schema.Number, { default: () => 0 }),
+  grokAuthPath: Schema.optionalWith(Schema.String, { default: () => "" }),
   githubTokenEntries: Schema.Number,
   gitTokenEntries: Schema.Number
 }
