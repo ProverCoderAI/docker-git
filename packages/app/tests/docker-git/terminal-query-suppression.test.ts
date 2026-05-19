@@ -127,9 +127,30 @@ const MOUSE_TRACKING_MODES: ReadonlyArray<number> = [1000, 1002, 1003, 1006, 101
 
 const FOCUS_REPORTING_MODE = 1004
 
+const ALTERNATE_SCREEN_MODES: ReadonlyArray<number> = [47, 1047, 1049]
+
 const SUPPRESSED_MODES: ReadonlyArray<number> = [...MOUSE_TRACKING_MODES, FOCUS_REPORTING_MODE]
 
-const PASS_THROUGH_MODES: ReadonlyArray<number> = [25, 1007, 1049, 2004, 2026]
+const PASS_THROUGH_MODES: ReadonlyArray<number> = [25, 1007, ...ALTERNATE_SCREEN_MODES, 2004, 2026]
+
+const privateModeHandlers = (
+  mock: MockTerminal
+): readonly [RegisteredCsiHandler, RegisteredCsiHandler] => [
+  findCsi(mock, { final: "h", prefix: "?" }),
+  findCsi(mock, { final: "l", prefix: "?" })
+]
+
+const expectPrivateModesHandled = (
+  handlers: readonly [RegisteredCsiHandler, RegisteredCsiHandler],
+  modes: ReadonlyArray<number>,
+  handled: boolean
+): void => {
+  const [setHandler, resetHandler] = handlers
+  for (const mode of modes) {
+    expect(setHandler.callback([mode])).toBe(handled)
+    expect(resetHandler.callback([mode])).toBe(handled)
+  }
+}
 
 describe("terminal query suppression", () => {
   it("detects color query payloads with the '?' placeholder", () => {
@@ -225,26 +246,28 @@ describe("terminal query suppression", () => {
   it("allows DEC private mouse tracking when explicitly enabled for tmux project terminals", () => {
     const mock = createMockTerminal()
     installTerminalQuerySuppression(mock.terminal, { allowMouseTracking: true })
-    const setHandler = findCsi(mock, { final: "h", prefix: "?" })
-    const resetHandler = findCsi(mock, { final: "l", prefix: "?" })
+    const handlers = privateModeHandlers(mock)
 
-    for (const mode of MOUSE_TRACKING_MODES) {
-      expect(setHandler.callback([mode])).toBe(false)
-      expect(resetHandler.callback([mode])).toBe(false)
-    }
-    expect(setHandler.callback([FOCUS_REPORTING_MODE])).toBe(true)
-    expect(resetHandler.callback([FOCUS_REPORTING_MODE])).toBe(true)
+    expectPrivateModesHandled(handlers, MOUSE_TRACKING_MODES, false)
+    expectPrivateModesHandled(handlers, [FOCUS_REPORTING_MODE], true)
+  })
+
+  it("blocks alternate screen modes when project terminals preserve xterm scrollback", () => {
+    const mock = createMockTerminal()
+    installTerminalQuerySuppression(mock.terminal, {
+      allowMouseTracking: true,
+      suppressAlternateScreen: true
+    })
+    const handlers = privateModeHandlers(mock)
+
+    expectPrivateModesHandled(handlers, ALTERNATE_SCREEN_MODES, true)
+    expectPrivateModesHandled(handlers, MOUSE_TRACKING_MODES, false)
   })
 
   it("lets benign DEC private modes fall through to the built-in handler", () => {
     const mock = createMockTerminal()
     installTerminalQuerySuppression(mock.terminal)
-    const setHandler = findCsi(mock, { final: "h", prefix: "?" })
-    const resetHandler = findCsi(mock, { final: "l", prefix: "?" })
-    for (const mode of PASS_THROUGH_MODES) {
-      expect(setHandler.callback([mode])).toBe(false)
-      expect(resetHandler.callback([mode])).toBe(false)
-    }
+    expectPrivateModesHandled(privateModeHandlers(mock), PASS_THROUGH_MODES, false)
   })
 
   it("treats sub-parameters (nested arrays) as the parameter head", () => {
@@ -258,6 +281,9 @@ describe("terminal query suppression", () => {
   it("exposes the suppressed private mode set", () => {
     expect(isSuppressedDecPrivateMode(1004)).toBe(true)
     expect(isSuppressedDecPrivateMode(1000)).toBe(true)
+    expect(isSuppressedDecPrivateMode(1000, { allowMouseTracking: true })).toBe(false)
+    expect(isSuppressedDecPrivateMode(1049)).toBe(false)
+    expect(isSuppressedDecPrivateMode(1049, { suppressAlternateScreen: true })).toBe(true)
     expect(isSuppressedDecPrivateMode(25)).toBe(false)
     expect(isSuppressedDecPrivateMode(2026)).toBe(false)
   })

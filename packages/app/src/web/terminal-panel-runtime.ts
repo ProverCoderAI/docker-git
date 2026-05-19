@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 
+import { attachTerminalCopyInteraction } from "./terminal-copy-interaction.js"
 import { attachTerminalImagePaste, createTerminalPasteGuard } from "./terminal-image-paste.js"
 import { attachTerminalImageLinks } from "./terminal-inline-images.js"
 import {
@@ -20,21 +21,34 @@ import type {
   TerminalSocketConnectArgs,
   TerminalSocketRef
 } from "./terminal-panel-runtime-types.js"
+import { attachTerminalWheelScroll } from "./terminal-wheel-scroll.js"
 import { isPendingActiveTerminalSession } from "./terminal.js"
+
+type TerminalDisposable = { readonly dispose: () => void }
 
 type TerminalCleanupFactoryArgs = {
   readonly cleanupArgs: Omit<
     Parameters<typeof cleanupTerminalResources>[0],
     "removeImageLinks" | "removeImagePaste" | "removeInput" | "removeResize"
   >
-  readonly imageLinkDisposable: { readonly dispose: () => void }
-  readonly imagePasteDisposable: { readonly dispose: () => void }
-  readonly inputDisposable: { readonly dispose: () => void }
+  readonly copyInteractionDisposable: TerminalDisposable
+  readonly imageLinkDisposable: TerminalDisposable
+  readonly imagePasteDisposable: TerminalDisposable
+  readonly inputDisposable: TerminalDisposable
+  readonly wheelScrollDisposable: TerminalDisposable
   readonly sendResize: () => void
 }
 
 const createTerminalCleanup = (
-  { cleanupArgs, imageLinkDisposable, imagePasteDisposable, inputDisposable, sendResize }: TerminalCleanupFactoryArgs
+  {
+    cleanupArgs,
+    copyInteractionDisposable,
+    imageLinkDisposable,
+    imagePasteDisposable,
+    inputDisposable,
+    sendResize,
+    wheelScrollDisposable
+  }: TerminalCleanupFactoryArgs
 ): () => void =>
 (): void => {
   cleanupTerminalResources({
@@ -46,7 +60,9 @@ const createTerminalCleanup = (
       imagePasteDisposable.dispose()
     },
     removeInput: () => {
+      copyInteractionDisposable.dispose()
       inputDisposable.dispose()
+      wheelScrollDisposable.dispose()
     },
     removeResize: () => {
       globalThis.removeEventListener("resize", sendResize)
@@ -87,9 +103,11 @@ const createTerminalMessageHandlers = (
 })
 
 type MountedTerminalDisposables = {
-  readonly imageLinkDisposable: { readonly dispose: () => void }
-  readonly imagePasteDisposable: { readonly dispose: () => void }
-  readonly inputDisposable: { readonly dispose: () => void }
+  readonly copyInteractionDisposable: TerminalDisposable
+  readonly imageLinkDisposable: TerminalDisposable
+  readonly imagePasteDisposable: TerminalDisposable
+  readonly inputDisposable: TerminalDisposable
+  readonly wheelScrollDisposable: TerminalDisposable
 }
 
 type MountedTerminalCleanupArgs = {
@@ -109,6 +127,7 @@ const createMountedTerminalDisposables = (
   socketRef: TerminalSocketRef,
   terminal: TerminalMessageHandlers["terminal"]
 ): MountedTerminalDisposables => ({
+  copyInteractionDisposable: attachTerminalCopyInteraction({ host, terminal }),
   imageLinkDisposable: attachTerminalImageLinks(terminal, args.session),
   imagePasteDisposable: attachTerminalImagePaste({
     host,
@@ -117,7 +136,8 @@ const createMountedTerminalDisposables = (
     socketRef,
     terminal
   }),
-  inputDisposable: attachTerminalInput(terminal, socketRef, pasteGuard)
+  inputDisposable: attachTerminalInput(terminal, socketRef, pasteGuard),
+  wheelScrollDisposable: attachTerminalWheelScroll({ host, terminal })
 })
 
 const createMountedTerminalConnector = (
@@ -153,10 +173,12 @@ const createMountedTerminalCleanup = (
       socketRef,
       terminal
     },
+    copyInteractionDisposable: disposables.copyInteractionDisposable,
     imageLinkDisposable: disposables.imageLinkDisposable,
     imagePasteDisposable: disposables.imagePasteDisposable,
     inputDisposable: disposables.inputDisposable,
-    sendResize
+    sendResize,
+    wheelScrollDisposable: disposables.wheelScrollDisposable
   })
 
 const resolveMountHost = (
@@ -171,6 +193,9 @@ const resolveMountHost = (
 const shouldAllowTerminalMouseTracking = (session: TerminalLifecycleArgs["session"]): boolean =>
   session.browserProjectId !== undefined
 
+const shouldSuppressTerminalAlternateScreen = (session: TerminalLifecycleArgs["session"]): boolean =>
+  session.browserProjectId !== undefined
+
 const mountTerminalSession = (args: TerminalLifecycleArgs): (() => void) | undefined => {
   const host = resolveMountHost(args)
   if (host === null) {
@@ -182,7 +207,8 @@ const mountTerminalSession = (args: TerminalLifecycleArgs): (() => void) | undef
   const socketRef: TerminalSocketRef = { current: null }
   const { fitAddon, terminal } = createTerminalRuntime(host, {
     querySuppression: {
-      allowMouseTracking: shouldAllowTerminalMouseTracking(args.session)
+      allowMouseTracking: shouldAllowTerminalMouseTracking(args.session),
+      suppressAlternateScreen: shouldSuppressTerminalAlternateScreen(args.session)
     }
   })
   const terminalInputController = createTerminalInputController(terminal, socketRef)

@@ -2,6 +2,7 @@ export type TerminalQuerySuppression = { readonly dispose: () => void }
 
 export type TerminalQuerySuppressionOptions = {
   readonly allowMouseTracking?: boolean
+  readonly suppressAlternateScreen?: boolean
 }
 
 type Disposable = { readonly dispose: () => void }
@@ -44,19 +45,16 @@ const MOUSE_TRACKING_PRIVATE_MODES: ReadonlySet<number> = new Set([
   1016
 ])
 const FOCUS_REPORTING_PRIVATE_MODE = 1004
+const ALTERNATE_SCREEN_PRIVATE_MODES: ReadonlySet<number> = new Set([47, 1047, 1049])
 
 // Suppressing SET leaves xterm.js in the default state (no event emission);
 // suppressing RESET is harmless and kept for symmetry.
 // Modes intentionally left to fall through to xterm's built-in handlers:
 //   25   — cursor visibility
-//   1049 — alternate screen buffer
 //   2004 — bracketed paste
 //   2026 — synchronized output (Ink uses BSU/ESU around every frame)
 //   1007 — alternate scroll (only changes wheel semantics, no leak)
-const SUPPRESSED_PRIVATE_MODES: ReadonlySet<number> = new Set([
-  ...MOUSE_TRACKING_PRIVATE_MODES,
-  FOCUS_REPORTING_PRIVATE_MODE
-])
+//   47/1047/1049 — alternate screen, unless project terminals opt out to keep xterm scrollback visible
 
 const isColorQuery = (data: string): boolean => {
   for (const segment of data.split(";")) {
@@ -80,7 +78,8 @@ const shouldSuppressPrivateMode = (
   options: TerminalQuerySuppressionOptions
 ): boolean =>
   mode === FOCUS_REPORTING_PRIVATE_MODE ||
-  (options.allowMouseTracking !== true && MOUSE_TRACKING_PRIVATE_MODES.has(mode))
+  (options.allowMouseTracking !== true && MOUSE_TRACKING_PRIVATE_MODES.has(mode)) ||
+  (options.suppressAlternateScreen === true && ALTERNATE_SCREEN_PRIVATE_MODES.has(mode))
 
 const containsSuppressedPrivateMode = (
   params: CsiParams,
@@ -168,4 +167,7 @@ export const installTerminalQuerySuppression = (
 
 export const isTerminalColorQuery = isColorQuery
 
-export const isSuppressedDecPrivateMode = (mode: number): boolean => SUPPRESSED_PRIVATE_MODES.has(mode)
+export const isSuppressedDecPrivateMode = (
+  mode: number,
+  options: TerminalQuerySuppressionOptions = {}
+): boolean => shouldSuppressPrivateMode(mode, options)
