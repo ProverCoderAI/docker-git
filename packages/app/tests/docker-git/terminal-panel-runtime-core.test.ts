@@ -83,15 +83,15 @@ describe("terminal panel runtime core", () => {
     expect(sent).toEqual([JSON.stringify({ data: "a", type: "input" })])
   })
 
-  it("keeps the viewport stable for terminal mouse reports", () => {
+  it("keeps the viewport stable for terminal mouse click reports", () => {
     const input = createTerminalInputHarness()
     const { sent, socketRef } = createOpenSocketRef()
 
     attachTerminalInput(input.terminal, socketRef, passThroughPasteGuard)
-    input.emit("\u001B[<64;10;5M")
+    input.emit("\u001B[<0;10;5M")
 
     expect(input.state.scrolls).toBe(0)
-    expect(sent).toEqual([JSON.stringify({ data: "\u001B[<64;10;5M", type: "input" })])
+    expect(sent).toEqual([JSON.stringify({ data: "\u001B[<0;10;5M", type: "input" })])
   })
 
   it("does not scroll or send input suppressed by the paste guard", () => {

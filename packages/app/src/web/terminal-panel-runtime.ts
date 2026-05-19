@@ -21,6 +21,7 @@ import type {
   TerminalSocketConnectArgs,
   TerminalSocketRef
 } from "./terminal-panel-runtime-types.js"
+import { attachTerminalWheelScroll } from "./terminal-wheel-scroll.js"
 import { isPendingActiveTerminalSession } from "./terminal.js"
 
 type TerminalDisposable = { readonly dispose: () => void }
@@ -34,6 +35,7 @@ type TerminalCleanupFactoryArgs = {
   readonly imageLinkDisposable: TerminalDisposable
   readonly imagePasteDisposable: TerminalDisposable
   readonly inputDisposable: TerminalDisposable
+  readonly wheelScrollDisposable: TerminalDisposable
   readonly sendResize: () => void
 }
 
@@ -44,7 +46,8 @@ const createTerminalCleanup = (
     imageLinkDisposable,
     imagePasteDisposable,
     inputDisposable,
-    sendResize
+    sendResize,
+    wheelScrollDisposable
   }: TerminalCleanupFactoryArgs
 ): () => void =>
 (): void => {
@@ -59,6 +62,7 @@ const createTerminalCleanup = (
     removeInput: () => {
       copyInteractionDisposable.dispose()
       inputDisposable.dispose()
+      wheelScrollDisposable.dispose()
     },
     removeResize: () => {
       globalThis.removeEventListener("resize", sendResize)
@@ -103,6 +107,7 @@ type MountedTerminalDisposables = {
   readonly imageLinkDisposable: TerminalDisposable
   readonly imagePasteDisposable: TerminalDisposable
   readonly inputDisposable: TerminalDisposable
+  readonly wheelScrollDisposable: TerminalDisposable
 }
 
 type MountedTerminalCleanupArgs = {
@@ -131,7 +136,8 @@ const createMountedTerminalDisposables = (
     socketRef,
     terminal
   }),
-  inputDisposable: attachTerminalInput(terminal, socketRef, pasteGuard)
+  inputDisposable: attachTerminalInput(terminal, socketRef, pasteGuard),
+  wheelScrollDisposable: attachTerminalWheelScroll({ host, terminal })
 })
 
 const createMountedTerminalConnector = (
@@ -171,7 +177,8 @@ const createMountedTerminalCleanup = (
     imageLinkDisposable: disposables.imageLinkDisposable,
     imagePasteDisposable: disposables.imagePasteDisposable,
     inputDisposable: disposables.inputDisposable,
-    sendResize
+    sendResize,
+    wheelScrollDisposable: disposables.wheelScrollDisposable
   })
 
 const resolveMountHost = (
