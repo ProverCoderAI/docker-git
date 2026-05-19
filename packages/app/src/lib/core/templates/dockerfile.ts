@@ -239,8 +239,8 @@ RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
 const renderDockerfilePlaywrightRuntime = (config: TemplateConfig): string =>
   config.enableMcpPlaywright
     ? `# docker-git nested Playwright browser runtime context
-COPY Dockerfile.browser mcp-playwright-start-extra.sh docker-git-browser-runtime.sh /opt/docker-git/browser/
-RUN chmod +x /opt/docker-git/browser/mcp-playwright-start-extra.sh /opt/docker-git/browser/docker-git-browser-runtime.sh`
+COPY Dockerfile.browser docker-git-cdp-guard mcp-playwright-start-extra.sh docker-git-browser-runtime.sh /opt/docker-git/browser/
+RUN chmod +x /opt/docker-git/browser/docker-git-cdp-guard /opt/docker-git/browser/mcp-playwright-start-extra.sh /opt/docker-git/browser/docker-git-browser-runtime.sh`
     : ""
 
 /**

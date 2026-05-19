@@ -752,14 +752,42 @@ describe("renderDockerCompose", () => {
   it("plans nested browser runtime artifacts when Playwright is enabled", () => {
     const files = planFiles(makeTemplateConfig({ enableMcpPlaywright: true }))
     const filePaths = files.flatMap((file) => file._tag === "File" ? [file.relativePath] : [])
+    const dockerfile = files.find(
+      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+        file._tag === "File" && file.relativePath === "Dockerfile"
+    )
+    const browserDockerfile = files.find(
+      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+        file._tag === "File" && file.relativePath === "Dockerfile.browser"
+    )
+    const cdpGuard = files.find(
+      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+        file._tag === "File" && file.relativePath === "docker-git-cdp-guard"
+    )
+    const startExtra = files.find(
+      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+        file._tag === "File" && file.relativePath === "mcp-playwright-start-extra.sh"
+    )
     const runtime = files.find(
       (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
         file._tag === "File" && file.relativePath === "docker-git-browser-runtime.sh"
     )
 
     expect(filePaths).toContain("Dockerfile.browser")
+    expect(filePaths).toContain("docker-git-cdp-guard")
     expect(filePaths).toContain("mcp-playwright-start-extra.sh")
     expect(filePaths).toContain("docker-git-browser-runtime.sh")
+    expect(dockerfile?.contents).toContain(
+      "COPY Dockerfile.browser docker-git-cdp-guard mcp-playwright-start-extra.sh docker-git-browser-runtime.sh /opt/docker-git/browser/"
+    )
+    expect(browserDockerfile?.contents).toContain("COPY docker-git-cdp-guard /usr/local/bin/docker-git-cdp-guard")
+    expect(browserDockerfile?.contents).not.toContain("RUN cat <<'EOF' > /usr/local/bin/docker-git-cdp-guard")
+    expect(cdpGuard).toBeDefined()
+    expect(cdpGuard?.mode).toBe(0o755)
+    expect(cdpGuard?.contents).toContain("#!/usr/bin/env node")
+    expect(cdpGuard?.contents).toContain("Browser.close")
+    expect(startExtra?.contents).toContain('guard_pid="$!"')
+    expect(startExtra?.contents).toContain("falling back to socat")
     expect(runtime).toBeDefined()
     expect(runtime?.mode).toBe(0o755)
     expect(runtime?.contents).toContain('if [[ "${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')

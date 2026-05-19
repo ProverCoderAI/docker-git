@@ -5,7 +5,11 @@ import { renderEntrypoint } from "./templates-entrypoint.js"
 import { type ComposeResourceLimits, renderDockerCompose } from "./templates/docker-compose.js"
 import { renderDockerfile } from "./templates/dockerfile.js"
 import { renderPlaywrightBrowserRuntime } from "./templates/playwright-browser-runtime.js"
-import { renderPlaywrightBrowserDockerfile, renderPlaywrightStartExtra } from "./templates/playwright.js"
+import {
+  renderPlaywrightBrowserDockerfile,
+  renderPlaywrightCdpGuard,
+  renderPlaywrightStartExtra
+} from "./templates/playwright.js"
 
 export type FileSpec =
   | { readonly _tag: "File"; readonly relativePath: string; readonly contents: string; readonly mode?: number }
@@ -52,6 +56,12 @@ export const planFiles = (
   const maybePlaywrightFiles = config.enableMcpPlaywright
     ? ([
       { _tag: "File", relativePath: "Dockerfile.browser", contents: renderPlaywrightBrowserDockerfile() },
+      {
+        _tag: "File",
+        relativePath: "docker-git-cdp-guard",
+        contents: renderPlaywrightCdpGuard(),
+        mode: 0o755
+      },
       {
         _tag: "File",
         relativePath: "mcp-playwright-start-extra.sh",
