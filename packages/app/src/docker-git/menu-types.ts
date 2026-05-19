@@ -142,7 +142,14 @@ export interface ProjectAuthSnapshot {
 
 export type ViewState =
   | { readonly _tag: "Menu" }
-  | { readonly _tag: "Create"; readonly step: number; readonly buffer: string; readonly values: Partial<CreateInputs> }
+  | {
+    readonly _tag: "Create"
+    readonly mode: "create"
+    readonly step: number
+    readonly buffer: string
+    readonly inputError: string | null
+    readonly values: Partial<CreateInputs>
+  }
   | { readonly _tag: "AuthMenu"; readonly selected: number; readonly snapshot: AuthSnapshot }
   | {
     readonly _tag: "AuthPrompt"

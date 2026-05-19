@@ -20,11 +20,12 @@ import {
 } from "./api-client.js"
 import { type ControllerRuntime, ensureControllerReady } from "./controller.js"
 import type { Command } from "./frontend-lib/core/domain.js"
-import type { ApiRequestError, CliError, ControllerBootstrapError } from "./host-errors.js"
+import type { ApiRequestError, CliError } from "./host-errors.js"
 import { terminalAuthTitle } from "./menu-auth-shared.js"
-import { attachTerminalSession, type TerminalSessionClientError } from "./terminal-session-client.js"
+import { attachTerminalSession } from "./terminal-session-client.js"
 
 type OperationalCommand = Exclude<Command, { readonly _tag: "Help" }>
+type RoutedAuthEffect = Effect.Effect<void, CliError, ControllerRuntime>
 
 export type RoutedAuthCommand = Extract<
   OperationalCommand,
@@ -46,10 +47,9 @@ export type RoutedAuthCommand = Extract<
   }
 >
 
-const withControllerReady = <E extends CliError, R>(
-  effect: Effect.Effect<void, E, R>
-): Effect.Effect<void, E | ControllerBootstrapError, R | ControllerRuntime> =>
-  pipe(ensureControllerReady(), Effect.zipRight(effect))
+const withControllerReady = <R>(
+  effect: Effect.Effect<void, CliError, R>
+): Effect.Effect<void, CliError, ControllerRuntime | R> => pipe(ensureControllerReady(), Effect.zipRight(effect))
 
 const renderAuthPayload = (payload: JsonValue) => Effect.log(renderJsonPayload(payload))
 
@@ -59,17 +59,6 @@ const missingAuthTerminalSessionError = (provider: "GrokOauth"): ApiRequestError
   path: "/auth/terminal-sessions",
   message: `Controller did not create a terminal session for ${provider}.`
 })
-
-const attachGrokTerminalSession = (
-  session: ApiTerminalSession | null
-): Effect.Effect<void, ApiRequestError | TerminalSessionClientError> =>
-  session === null
-    ? Effect.fail(missingAuthTerminalSessionError("GrokOauth"))
-    : attachTerminalSession({
-      header: terminalAuthTitle("GrokOauth"),
-      session,
-      websocketPath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}/ws`
-    })
 
 const routedAuthTags: Readonly<Record<string, true>> = {
   AuthCodexImport: true,
@@ -120,12 +109,34 @@ const handleCodexLoginCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthCodexLogin" }>
 ) => withControllerReady(codexLogin(command))
 
+/**
+ * Attaches the Grok OAuth terminal session created by the controller.
+ *
+ * @pure false
+ * @effect terminal websocket attachment through `attachTerminalSession`
+ * @invariant null controller sessions fail with a typed ApiRequestError
+ * @precondition controller response has already been decoded as ApiTerminalSession | null
+ * @postcondition non-null sessions are attached through the auth terminal websocket path
+ * @complexity O(1) before terminal IO
+ * @throws Never; errors are represented in the Effect error channel as CliError
+ */
+const attachGrokAuthTerminalSession = (
+  session: ApiTerminalSession | null
+): Effect.Effect<void, CliError> =>
+  session === null
+    ? Effect.fail(missingAuthTerminalSessionError("GrokOauth"))
+    : attachTerminalSession({
+      header: terminalAuthTitle("GrokOauth"),
+      session,
+      websocketPath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}/ws`
+    })
+
 const handleGrokLoginCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthGrokLogin" }>
 ) =>
   withControllerReady(
     createAuthTerminalSession("GrokOauth", command.label).pipe(
-      Effect.flatMap((session) => attachGrokTerminalSession(session))
+      Effect.flatMap((session) => attachGrokAuthTerminalSession(session))
     )
   )
 
@@ -157,7 +168,7 @@ const handleCodexLogoutCommand = (
 
 export const dispatchRoutedAuthCommand = (
   command: RoutedAuthCommand
-): Effect.Effect<void, CliError, ControllerRuntime> =>
+): RoutedAuthEffect =>
   Match.value(command).pipe(
     Match.when({ _tag: "AuthGithubLogin" }, handleGithubLoginCommand),
     Match.when({ _tag: "AuthGithubStatus" }, handleGithubStatusCommand),

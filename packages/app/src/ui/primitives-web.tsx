@@ -1,4 +1,4 @@
-import { createElement, type CSSProperties, type JSX } from "react"
+import { createElement, type CSSProperties, type JSX, type KeyboardEvent } from "react"
 
 import type { UiBoxProps, UiButtonProps, UiTextInputProps, UiTextProps } from "./primitives.js"
 
@@ -113,8 +113,67 @@ export const webPrimitives = {
     props.multiline === true ? <MultilineTextInput {...props} /> : <SingleLineTextInput {...props} />
 } as const
 
+const horizontalArrowAction = (
+  key: string,
+  onArrowLeft: (() => void) | undefined,
+  onArrowRight: (() => void) | undefined
+): (() => void) | null => {
+  if (key === "ArrowLeft") {
+    return onArrowLeft ?? null
+  }
+  if (key === "ArrowRight") {
+    return onArrowRight ?? null
+  }
+  return null
+}
+
+type TextInputKeyboardHandlers = {
+  readonly onArrowLeft: (() => void) | undefined
+  readonly onArrowRight: (() => void) | undefined
+  readonly onEnter: ((shift: boolean) => void) | undefined
+  readonly onEscape: (() => void) | undefined
+}
+
+const stopTextInputKey = (
+  event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
+): void => {
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+const handleMultilineTextInputKeyDown =
+  ({ onArrowLeft, onArrowRight, onEnter, onEscape }: TextInputKeyboardHandlers) =>
+  (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    const onArrow = horizontalArrowAction(event.key, onArrowLeft, onArrowRight)
+    if (onArrow !== null) {
+      stopTextInputKey(event)
+      onArrow()
+      return
+    }
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      stopTextInputKey(event)
+      onEnter?.(event.shiftKey)
+      return
+    }
+    if (event.key === "Escape") {
+      stopTextInputKey(event)
+      onEscape?.()
+    }
+  }
+
 const MultilineTextInput = (
-  { ariaLabel, autoFocus, minRows, onChange, onEnter, onEscape, placeholder, value }: UiTextInputProps
+  {
+    ariaLabel,
+    autoFocus,
+    minRows,
+    onArrowLeft,
+    onArrowRight,
+    onChange,
+    onEnter,
+    onEscape,
+    placeholder,
+    value
+  }: UiTextInputProps
 ): JSX.Element => {
   const rows = minRows ?? 6
   return (
@@ -124,19 +183,7 @@ const MultilineTextInput = (
       onChange={(event) => {
         onChange(event.currentTarget.value)
       }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-          event.preventDefault()
-          event.stopPropagation()
-          onEnter?.(event.shiftKey)
-          return
-        }
-        if (event.key === "Escape") {
-          event.preventDefault()
-          event.stopPropagation()
-          onEscape?.()
-        }
-      }}
+      onKeyDown={handleMultilineTextInputKeyDown({ onArrowLeft, onArrowRight, onEnter, onEscape })}
       placeholder={placeholder}
       rows={rows}
       style={{
@@ -152,7 +199,18 @@ const MultilineTextInput = (
 }
 
 const SingleLineTextInput = (
-  { ariaLabel, autoFocus, onChange, onEnter, onEscape, placeholder, secret, value }: UiTextInputProps
+  {
+    ariaLabel,
+    autoFocus,
+    onArrowLeft,
+    onArrowRight,
+    onChange,
+    onEnter,
+    onEscape,
+    placeholder,
+    secret,
+    value
+  }: UiTextInputProps
 ): JSX.Element => (
   <input
     aria-label={ariaLabel}
@@ -161,6 +219,13 @@ const SingleLineTextInput = (
       onChange(event.currentTarget.value)
     }}
     onKeyDown={(event) => {
+      const onArrow = horizontalArrowAction(event.key, onArrowLeft, onArrowRight)
+      if (onArrow !== null) {
+        event.preventDefault()
+        event.stopPropagation()
+        onArrow()
+        return
+      }
       if (event.key === "Enter") {
         event.preventDefault()
         event.stopPropagation()

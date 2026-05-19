@@ -763,6 +763,7 @@ describe("renderDockerCompose", () => {
     expect(runtime).toBeDefined()
     expect(runtime?.mode).toBe(0o755)
     expect(runtime?.contents).toContain('if [[ "${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
+    expect(runtime?.contents).not.toContain('\\${MCP_PLAYWRIGHT_ENABLE:-0}')
     expect(runtime?.contents).toContain("docker_git_wait_for_playwright_cdp()")
     expect(runtime?.contents).toContain("MCP_PLAYWRIGHT_ENABLE=0")
   })

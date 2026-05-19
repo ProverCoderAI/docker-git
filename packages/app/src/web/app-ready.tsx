@@ -2,6 +2,7 @@ import { type JSX } from "react"
 
 import type { DashboardData } from "./api.js"
 import { useReadyController } from "./app-ready-controller.js"
+import type { CreateSubmitMode } from "./app-ready-create.js"
 import { ReadyLayout } from "./app-ready-layout.js"
 import type { ViewportLayout } from "./viewport-layout.js"
 
@@ -29,7 +30,7 @@ type ReadyLayoutRenderArgs = {
     readonly onBackScreen: () => void
     readonly onCreateBufferChange: (buffer: string) => void
     readonly onCreateCancel: () => void
-    readonly onCreateSubmit: (quickCreate?: boolean) => void
+    readonly onCreateSubmit: (mode: CreateSubmitMode) => void
     readonly onDatabaseConnectionInputChange: (value: string) => void
     readonly onDatabaseLabelInputChange: (value: string) => void
     readonly onCloseDatabaseForward: ReturnType<typeof useReadyController>["onCloseDatabaseForward"]

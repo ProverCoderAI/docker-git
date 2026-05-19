@@ -6,7 +6,7 @@ import { runCommandWithExitCodes } from "../shell/command-runner.js"
 import { resolveDockerVolumeHostPath } from "../shell/docker-auth.js"
 import { AuthError, CommandFailedError } from "../shell/errors.js"
 
-// CHANGE: run the Grok CLI device-auth flow inside the auth container
+// CHANGE: run the official Grok CLI device-auth flow inside the auth container
 // WHY: `docker-git auth grok login` must work from terminal-only containers without callback URL handling
 // REF: issue-304
 // SOURCE: https://x.ai/news/grok-build-cli

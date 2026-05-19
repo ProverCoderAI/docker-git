@@ -56,6 +56,8 @@ export type UiTextInputProps = {
   readonly minRows?: number
   readonly multiline?: boolean
   readonly onChange: (value: string) => void
+  readonly onArrowLeft?: () => void
+  readonly onArrowRight?: () => void
   readonly onEnter?: (shift: boolean) => void
   readonly onEscape?: () => void
   readonly placeholder?: string
