@@ -23,12 +23,25 @@ type TestWheelEventState = {
   readonly propagationStopped: number
 }
 
+type WheelDispatchArgs = {
+  readonly deltaMode: number
+  readonly deltaY: number
+  readonly terminal: TerminalWheelScrollTerminal
+  readonly target?: ReturnType<typeof createWheelHost> | undefined
+}
+
 const noop = (): void => undefined
 
 const expectWheelEventStopped = (state: TestWheelEventState): void => {
   expect(state.prevented).toBe(1)
   expect(state.propagationStopped).toBe(1)
   expect(state.immediatePropagationStopped).toBe(1)
+}
+
+const expectWheelEventPassedThrough = (state: TestWheelEventState): void => {
+  expect(state.prevented).toBe(0)
+  expect(state.propagationStopped).toBe(0)
+  expect(state.immediatePropagationStopped).toBe(0)
 }
 
 const createWheelHost = () => {
@@ -98,12 +111,14 @@ const createWheelEvent = (deltaMode: number, deltaY: number) => {
 
 const createTerminal = (
   mouseTrackingMode: TerminalWheelMouseTrackingMode,
-  rows = 24
+  rows = 24,
+  overrides: Partial<Pick<TerminalWheelScrollTerminal, "buffer" | "element">> = {}
 ): { readonly scrolls: ReadonlyArray<number>; readonly terminal: TerminalWheelScrollTerminal } => {
   const scrolls: Array<number> = []
   return {
     scrolls,
     terminal: {
+      ...overrides,
       modes: { mouseTrackingMode },
       rows,
       scrollLines: (amount) => {
@@ -111,6 +126,26 @@ const createTerminal = (
       }
     }
   }
+}
+
+const terminalBuffer = (
+  type: "alternate" | "normal",
+  baseY: number
+): TerminalWheelScrollTerminal["buffer"] => ({
+  active: {
+    baseY,
+    type,
+    viewportY: baseY
+  }
+})
+
+const dispatchWheel = (
+  { deltaMode, deltaY, target = createWheelHost(), terminal }: WheelDispatchArgs
+): { readonly host: ReturnType<typeof createWheelHost>; readonly state: TestWheelEventState } => {
+  const { event, state } = createWheelEvent(deltaMode, deltaY)
+  attachTerminalWheelScroll({ host: target.host, terminal })
+  target.dispatch(event)
+  return { host: target, state }
 }
 
 describe("terminal wheel scroll", () => {
@@ -192,28 +227,58 @@ describe("terminal wheel scroll", () => {
   })
 
   it("still stops sub-line wheel events while accumulating pixel deltas", () => {
-    const host = createWheelHost()
     const { scrolls, terminal } = createTerminal("any")
-    const { event, state } = createWheelEvent(0, 1)
-
-    attachTerminalWheelScroll({ host: host.host, terminal })
-    host.dispatch(event)
+    const { state } = dispatchWheel({ deltaMode: 0, deltaY: 1, terminal })
 
     expectWheelEventStopped(state)
     expect(scrolls).toEqual([])
   })
 
-  it("lets xterm handle wheel events normally when mouse tracking is inactive", () => {
+  it("registers the wheel handler on xterm's terminal element when available", () => {
     const host = createWheelHost()
-    const { scrolls, terminal } = createTerminal("none")
-    const { event, state } = createWheelEvent(0, 45)
+    const element = createWheelHost()
+    const { scrolls, terminal } = createTerminal("any", 24, { element: element.host })
+    const { event, state } = createWheelEvent(1, 2)
 
-    attachTerminalWheelScroll({ host: host.host, terminal })
-    host.dispatch(event)
+    const disposable = attachTerminalWheelScroll({ host: host.host, terminal })
+    element.dispatch(event)
+    disposable.dispose()
 
-    expect(state.prevented).toBe(0)
-    expect(state.propagationStopped).toBe(0)
-    expect(state.immediatePropagationStopped).toBe(0)
+    expect(host.state.added).toBe(0)
+    expect(host.state.removed).toBe(0)
+    expect(element.state.added).toBe(1)
+    expect(element.state.removed).toBe(1)
+    expectWheelEventStopped(state)
+    expect(scrolls).toEqual([2])
+  })
+
+  it("stops wheel events while the alternate buffer is active", () => {
+    const { scrolls, terminal } = createTerminal("none", 24, {
+      buffer: terminalBuffer("alternate", 0)
+    })
+    const { state } = dispatchWheel({ deltaMode: 1, deltaY: 4, terminal })
+
+    expectWheelEventStopped(state)
+    expect(scrolls).toEqual([4])
+  })
+
+  it("scrolls normal-buffer history even when mouse tracking is inactive", () => {
+    const { scrolls, terminal } = createTerminal("none", 24, {
+      buffer: terminalBuffer("normal", 20)
+    })
+    const { state } = dispatchWheel({ deltaMode: 1, deltaY: -2, terminal })
+
+    expectWheelEventStopped(state)
+    expect(scrolls).toEqual([-2])
+  })
+
+  it("lets xterm handle wheel events normally when mouse tracking is inactive", () => {
+    const { scrolls, terminal } = createTerminal("none", 24, {
+      buffer: terminalBuffer("normal", 0)
+    })
+    const { state } = dispatchWheel({ deltaMode: 0, deltaY: 45, terminal })
+
+    expectWheelEventPassedThrough(state)
     expect(scrolls).toEqual([])
   })
 })

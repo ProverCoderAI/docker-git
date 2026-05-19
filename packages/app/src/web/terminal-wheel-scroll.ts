@@ -1,6 +1,18 @@
 export type TerminalWheelMouseTrackingMode = "any" | "drag" | "none" | "vt200" | "x10"
 
+export type TerminalWheelScrollBufferType = "alternate" | "normal"
+
+export type TerminalWheelScrollBuffer = {
+  readonly active: {
+    readonly baseY: number
+    readonly type: TerminalWheelScrollBufferType
+    readonly viewportY: number
+  }
+}
+
 export type TerminalWheelScrollTerminal = {
+  readonly buffer?: TerminalWheelScrollBuffer | undefined
+  readonly element?: TerminalWheelScrollTarget | null | undefined
   readonly modes: {
     readonly mouseTrackingMode: TerminalWheelMouseTrackingMode
   }
@@ -16,7 +28,7 @@ type TerminalWheelScrollEvent = {
   readonly stopPropagation: () => void
 }
 
-type TerminalWheelScrollHost = {
+type TerminalWheelScrollTarget = {
   readonly addEventListener: (
     type: "wheel",
     listener: (event: TerminalWheelScrollEvent) => void,
@@ -42,7 +54,7 @@ export type ResolvedTerminalWheelScrollDelta = {
 }
 
 type TerminalWheelScrollArgs = {
-  readonly host: TerminalWheelScrollHost
+  readonly host: TerminalWheelScrollTarget
   readonly terminal: TerminalWheelScrollTerminal
 }
 
@@ -53,6 +65,23 @@ const pixelsPerTerminalLine = 15
 
 const hasActiveMouseTracking = (terminal: TerminalWheelScrollTerminal): boolean =>
   terminal.modes.mouseTrackingMode !== "none"
+
+const hasActiveAlternateBuffer = (terminal: TerminalWheelScrollTerminal): boolean =>
+  terminal.buffer?.active.type === "alternate"
+
+const hasScrollableTerminalHistory = (terminal: TerminalWheelScrollTerminal): boolean => {
+  const activeBuffer = terminal.buffer?.active
+  return activeBuffer !== undefined && activeBuffer.type === "normal" && activeBuffer.baseY > 0
+}
+
+export const shouldHandleTerminalWheelScroll = (terminal: TerminalWheelScrollTerminal): boolean =>
+  hasActiveMouseTracking(terminal) ||
+  hasActiveAlternateBuffer(terminal) ||
+  hasScrollableTerminalHistory(terminal)
+
+const resolveTerminalWheelScrollTarget = (
+  { host, terminal }: TerminalWheelScrollArgs
+): TerminalWheelScrollTarget => terminal.element ?? host
 
 const validTerminalRows = (rows: number): number => {
   if (!Number.isFinite(rows) || rows < 1) {
@@ -93,8 +122,9 @@ export const attachTerminalWheelScroll = (
   args: TerminalWheelScrollArgs
 ): { readonly dispose: () => void } => {
   let previousPixelDeltaY = 0
+  const target = resolveTerminalWheelScrollTarget(args)
   const onWheel = (event: TerminalWheelScrollEvent): void => {
-    if (!hasActiveMouseTracking(args.terminal)) {
+    if (!shouldHandleTerminalWheelScroll(args.terminal)) {
       return
     }
     const scrollDelta = resolveTerminalWheelScrollDelta({
@@ -112,11 +142,11 @@ export const attachTerminalWheelScroll = (
     }
   }
 
-  args.host.addEventListener("wheel", onWheel, { capture: true, passive: false })
+  target.addEventListener("wheel", onWheel, { capture: true, passive: false })
 
   return {
     dispose: () => {
-      args.host.removeEventListener("wheel", onWheel, true)
+      target.removeEventListener("wheel", onWheel, true)
     }
   }
 }
