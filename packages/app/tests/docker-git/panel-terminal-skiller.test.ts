@@ -56,6 +56,17 @@ const renderTerminalPanel = (overrides: TerminalPanelRenderOverrides = {}): stri
   }))
 
 describe("TerminalPanel Skiller action", () => {
+  it("keeps desktop terminal metadata and actions in separate rows", () => {
+    const html = renderTerminalPanel()
+
+    expect(html).toContain("align-items:stretch")
+    expect(html).toContain("flex-direction:column")
+    expect(html).toContain("width:100%")
+    expect(html).toContain("text-overflow:ellipsis")
+    expect(html).toContain("white-space:nowrap")
+    expect(html).toContain(session.subtitle)
+  })
+
   it("renders Skiller in the project terminal header action row", () => {
     const html = renderTerminalPanel()
 
@@ -83,6 +94,7 @@ describe("TerminalPanel Skiller action", () => {
   it("uses a compact image preview toggle label in compact terminal headers", () => {
     const html = renderTerminalPanel({ mobileMode: true })
 
+    expect(html).toContain("flex-direction:row")
     expect(html).toContain("Img on")
     expect(html).not.toContain("Images on")
   })
