@@ -236,10 +236,12 @@ describe("renderDockerfile", () => {
     const fetchIndex = dockerfile.indexOf("fetch_cdp_version()")
 
     expectContainsAll(dockerfile, [
+      'CDP_ENDPOINT="http://127.0.0.1:9223"',
       'MCP_PLAYWRIGHT_CDP_TIMEOUT="${MCP_PLAYWRIGHT_CDP_TIMEOUT:-60000}"',
       'exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT"',
       'exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT"'
     ])
+    expect(dockerfile).not.toContain('CDP_ENDPOINT="${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"')
     expect(guardedExecIndex).toBeGreaterThanOrEqual(0)
     expect(fetchIndex).toBeGreaterThan(guardedExecIndex)
   })
@@ -712,7 +714,7 @@ describe("renderDockerCompose", () => {
       }
     )
 
-    expect(compose).toContain('MCP_PLAYWRIGHT_CDP_ENDPOINT: "http://127.0.0.1:9223"')
+    expect(compose).not.toContain("MCP_PLAYWRIGHT_CDP_ENDPOINT")
     expect(compose).toContain('DOCKER_GIT_PROJECT_CONTAINER_NAME: "dg-test"')
     expect(compose).toContain('DOCKER_GIT_BROWSER_CONTAINER_NAME: "dg-test-browser"')
     expect(compose).toContain('DOCKER_GIT_BROWSER_IMAGE_NAME: "dg-test-browser:docker-git-browser"')
@@ -734,6 +736,8 @@ describe("renderDockerCompose", () => {
     expect(runtime).not.toContain('if [[ "\\${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
     expect(runtime).toContain('printf \'%s\\n\' "${DOCKER_GIT_BROWSER_CONTEXT_DIR:-/opt/docker-git/browser}"')
     expect(runtime).not.toContain('printf \'%s\\n\' "\\${DOCKER_GIT_BROWSER_CONTEXT_DIR:-/opt/docker-git/browser}"')
+    expect(runtime).toContain('printf \'%s\\n\' "http://127.0.0.1:9223"')
+    expect(runtime).not.toContain('printf \'%s\\n\' "${MCP_PLAYWRIGHT_CDP_ENDPOINT:-http://127.0.0.1:9223}"')
     expect(runtime).toContain('mktemp "${TMPDIR:-/tmp}/docker-git-browser-build.XXXXXX.log"')
     expect(runtime).not.toContain('mktemp "\\${TMPDIR:-/tmp}/docker-git-browser-build.XXXXXX.log"')
     expect(runtime).toContain('docker "${args[@]}" "$image_name" >/dev/null || {')
@@ -752,14 +756,49 @@ describe("renderDockerCompose", () => {
   it("plans nested browser runtime artifacts when Playwright is enabled", () => {
     const files = planFiles(makeTemplateConfig({ enableMcpPlaywright: true }))
     const filePaths = files.flatMap((file) => file._tag === "File" ? [file.relativePath] : [])
+    const dockerfile = files.find(
+      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+        file._tag === "File" && file.relativePath === "Dockerfile"
+    )
+    const browserDockerfile = files.find(
+      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+        file._tag === "File" && file.relativePath === "Dockerfile.browser"
+    )
+    const cdpGuard = files.find(
+      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+        file._tag === "File" && file.relativePath === "docker-git-cdp-guard"
+    )
+    const startExtra = files.find(
+      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+        file._tag === "File" && file.relativePath === "mcp-playwright-start-extra.sh"
+    )
     const runtime = files.find(
       (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
         file._tag === "File" && file.relativePath === "docker-git-browser-runtime.sh"
     )
 
     expect(filePaths).toContain("Dockerfile.browser")
+    expect(filePaths).toContain("docker-git-cdp-guard")
     expect(filePaths).toContain("mcp-playwright-start-extra.sh")
     expect(filePaths).toContain("docker-git-browser-runtime.sh")
+    expect(dockerfile?.contents).toContain(
+      "COPY Dockerfile.browser docker-git-cdp-guard mcp-playwright-start-extra.sh docker-git-browser-runtime.sh /opt/docker-git/browser/"
+    )
+    expect(browserDockerfile?.contents).toContain("COPY docker-git-cdp-guard /usr/local/bin/docker-git-cdp-guard")
+    expect(browserDockerfile?.contents).not.toContain("RUN cat <<'EOF' > /usr/local/bin/docker-git-cdp-guard")
+    expect(cdpGuard).toBeDefined()
+    expect(cdpGuard?.mode).toBe(0o755)
+    expect(cdpGuard?.contents).toContain("#!/usr/bin/env node")
+    expect(cdpGuard?.contents).toContain('const upstreamHost = "127.0.0.1";')
+    expect(cdpGuard?.contents).toContain("const upstreamPort = 9222;")
+    expect(cdpGuard?.contents).toContain('const listenHost = "0.0.0.0";')
+    expect(cdpGuard?.contents).toContain("const listenPort = 9223;")
+    expect(cdpGuard?.contents).not.toContain("MCP_PLAYWRIGHT_UPSTREAM_CDP_HOST")
+    expect(cdpGuard?.contents).not.toContain("MCP_PLAYWRIGHT_CDP_GUARD_PORT")
+    expect(cdpGuard?.contents).toContain("Browser.close")
+    expect(startExtra?.contents).toContain('guard_pid="$!"')
+    expect(startExtra?.contents).toContain("falling back to socat")
+    expect(startExtra?.contents).toContain("socat TCP-LISTEN:9223,fork,reuseaddr TCP:127.0.0.1:9222")
     expect(runtime).toBeDefined()
     expect(runtime?.mode).toBe(0o755)
     expect(runtime?.contents).toContain('if [[ "${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')

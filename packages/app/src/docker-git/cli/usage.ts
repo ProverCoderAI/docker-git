@@ -102,7 +102,6 @@ Container runtime env (set via .orch/env/project.env):
   MCP_PLAYWRIGHT_ISOLATED=1|0           Isolated browser contexts; default 0 shares the VNC session
   MCP_PLAYWRIGHT_CDP_GUARD=1|0          Guard CDP so MCP cannot close/crash shared Chromium (default: 1)
   MCP_PLAYWRIGHT_BLOCK_BROWSER_CLOSE=1|0  Block destructive Browser.close/crash CDP methods (default: 1)
-  MCP_PLAYWRIGHT_CDP_ENDPOINT=http://...  Override CDP endpoint (default: http://127.0.0.1:9223)
   MCP_PLAYWRIGHT_CDP_TIMEOUT=<ms>        CDP connect timeout passed to Playwright MCP (default: 60000)
   MCP_PLAYWRIGHT_READY_ATTEMPTS=<n>      Startup readiness attempts before disabling broken MCP (default: 60)
   MCP_PLAYWRIGHT_READY_DELAY=<seconds>   Delay between startup readiness attempts (default: 1)

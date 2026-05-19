@@ -6,9 +6,7 @@ export const renderPlaywrightBrowserDockerfile = (): string =>
 RUN apk add --no-cache bash procps socat nodejs npm python3 net-tools
 RUN npm install --omit=dev --prefix /opt/docker-git-cdp-guard ws@8.18.3
 
-RUN cat <<'EOF' > /usr/local/bin/docker-git-cdp-guard
-${cdpGuardScript}
-EOF
+COPY docker-git-cdp-guard /usr/local/bin/docker-git-cdp-guard
 RUN chmod +x /usr/local/bin/docker-git-cdp-guard
 
 COPY mcp-playwright-start-extra.sh /usr/local/bin/mcp-playwright-start-extra.sh
@@ -25,10 +23,10 @@ const http = require("node:http");
 const { URL } = require("node:url");
 const { WebSocket, WebSocketServer } = require("/opt/docker-git-cdp-guard/node_modules/ws");
 
-const upstreamHost = process.env.MCP_PLAYWRIGHT_UPSTREAM_CDP_HOST || "127.0.0.1";
-const upstreamPort = Number.parseInt(process.env.MCP_PLAYWRIGHT_UPSTREAM_CDP_PORT || "9222", 10);
-const listenHost = process.env.MCP_PLAYWRIGHT_CDP_GUARD_HOST || "0.0.0.0";
-const listenPort = Number.parseInt(process.env.MCP_PLAYWRIGHT_CDP_GUARD_PORT || "9223", 10);
+const upstreamHost = "127.0.0.1";
+const upstreamPort = 9222;
+const listenHost = "0.0.0.0";
+const listenPort = 9223;
 const blockedMethods = new Set(["Browser.close", "Browser.crash", "Browser.crashGpuProcess"]);
 
 const log = (message) => process.stderr.write("[docker-git-cdp-guard] " + message + "\n");
@@ -243,6 +241,8 @@ server.listen(listenPort, listenHost, () => {
 });
 `
 
+export const renderPlaywrightCdpGuard = (): string => cdpGuardScript
+
 export const renderPlaywrightStartExtra = (): string =>
   `#!/bin/sh
 set -eu
@@ -253,11 +253,22 @@ rm -f /data/SingletonLock /data/SingletonCookie /data/SingletonSocket || true
 # Wait for chromium/x11vnc/noVNC to come up
 sleep 2
 
+start_cdp_fallback() {
+  socat TCP-LISTEN:9223,fork,reuseaddr TCP:127.0.0.1:9222 >/var/log/socat-9223.log 2>&1 &
+}
+
 # CDP guard: expose 9223 on the docker network and block browser-level destructive CDP methods
 if [ "\${MCP_PLAYWRIGHT_CDP_GUARD:-1}" = "1" ]; then
   docker-git-cdp-guard >/var/log/docker-git-cdp-guard.log 2>&1 &
+  guard_pid="$!"
+  sleep 1
+  if ! kill -0 "$guard_pid" 2>/dev/null; then
+    echo "docker-git-cdp-guard exited during startup; falling back to socat" >&2
+    sed -n '1,120p' /var/log/docker-git-cdp-guard.log 2>/dev/null >&2 || true
+    start_cdp_fallback
+  fi
 else
-  socat TCP-LISTEN:9223,fork,reuseaddr TCP:127.0.0.1:9222 >/var/log/socat-9223.log 2>&1 &
+  start_cdp_fallback
 fi
 
 # Optional VNC password disabling (useful if you publish VNC/noVNC ports)

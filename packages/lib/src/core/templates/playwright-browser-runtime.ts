@@ -33,7 +33,7 @@ docker_git_disable_playwright_mcp() {
 }
 
 docker_git_playwright_cdp_endpoint() {
-  printf '%s\\n' "\${MCP_PLAYWRIGHT_CDP_ENDPOINT:-http://127.0.0.1:9223}"
+  printf '%s\\n' "http://127.0.0.1:9223"
 }
 
 docker_git_fetch_playwright_cdp_version() {

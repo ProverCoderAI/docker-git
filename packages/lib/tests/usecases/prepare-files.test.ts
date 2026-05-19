@@ -287,7 +287,7 @@ describe("prepareProjectFiles", () => {
         expect(composeAfter).toContain("container_name: dg-test")
         expect(composeAfter).toContain('DOCKER_GIT_BROWSER_CONTAINER_NAME: "dg-test-browser"')
         expect(composeAfter).toContain('DOCKER_GIT_BROWSER_VOLUME_NAME: "dg-test-home-browser"')
-        expect(composeAfter).toContain('MCP_PLAYWRIGHT_CDP_ENDPOINT: "http://127.0.0.1:9223"')
+        expect(composeAfter).not.toContain("MCP_PLAYWRIGHT_CDP_ENDPOINT")
         expect(composeAfter).toContain("      - /var/run/docker.sock:/var/run/docker.sock")
         expect(composeAfter).toContain("  dg-test-home-browser:")
         expect(composeAfter).not.toContain("\n  dg-test-browser:\n")
