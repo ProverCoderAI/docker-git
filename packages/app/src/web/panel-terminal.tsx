@@ -51,17 +51,20 @@ const terminalPanelStyle = (mobileMode: boolean, keyboardOpen: boolean): CSSProp
 })
 
 const headerStyle: CSSProperties = {
-  alignItems: "center",
+  alignItems: "stretch",
   background: "#101419",
   borderBottom: "1px solid #3a4652",
   display: "flex",
-  gap: "12px",
+  flexDirection: "column",
+  gap: "8px",
   justifyContent: "flex-start",
   padding: "10px 12px"
 }
 
 const compactHeaderStyle: CSSProperties = {
   ...headerStyle,
+  alignItems: "center",
+  flexDirection: "row",
   flexWrap: "wrap",
   gap: "6px",
   overflow: "visible",
@@ -139,14 +142,17 @@ const headerActionsStyle: CSSProperties = {
   flexShrink: 0,
   flexWrap: "wrap",
   gap: "8px",
-  justifyContent: "flex-end",
-  marginLeft: "auto"
+  justifyContent: "flex-start",
+  width: "100%"
 }
 
 const compactHeaderActionsStyle: CSSProperties = {
   ...headerActionsStyle,
   flexWrap: "wrap",
-  gap: "4px"
+  gap: "4px",
+  justifyContent: "flex-end",
+  marginLeft: "auto",
+  width: "auto"
 }
 
 const mobileControlsCollapsedStyle: CSSProperties = {
@@ -225,6 +231,27 @@ const compactStatusStyle = (status: TerminalStatus): CSSProperties => ({
   whiteSpace: "nowrap"
 })
 
+const headerTitleStyle: CSSProperties = {
+  color: "#f6fbff",
+  fontWeight: 700,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+}
+
+const headerStatusStyle = (status: TerminalStatus): CSSProperties => ({
+  color: statusColor(status),
+  whiteSpace: "nowrap"
+})
+
+const headerSubtitleStyle: CSSProperties = {
+  color: "#8fa6c4",
+  fontSize: "12px",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+}
+
 const resolveInitialTerminalStatus = (session: ActiveTerminalSession): TerminalStatus =>
   isPendingActiveTerminalSession(session) && session.pendingConnection.phase === "error" ? "error" : "connecting"
 
@@ -248,14 +275,14 @@ const TerminalHeaderTitle = (
       </div>
     )
     : (
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
-        <div style={{ color: "#f6fbff", fontWeight: 700 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0, width: "100%" }}>
+        <div style={headerTitleStyle}>
           {session.header}
         </div>
-        <div style={{ color: statusColor(status) }}>
+        <div style={headerStatusStyle(status)}>
           {status}
         </div>
-        <div style={{ color: "#8fa6c4", fontSize: "12px" }}>
+        <div style={headerSubtitleStyle}>
           {session.subtitle}
         </div>
       </div>
