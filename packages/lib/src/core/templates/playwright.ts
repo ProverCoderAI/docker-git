@@ -23,10 +23,10 @@ const http = require("node:http");
 const { URL } = require("node:url");
 const { WebSocket, WebSocketServer } = require("/opt/docker-git-cdp-guard/node_modules/ws");
 
-const upstreamHost = process.env.MCP_PLAYWRIGHT_UPSTREAM_CDP_HOST || "127.0.0.1";
-const upstreamPort = Number.parseInt(process.env.MCP_PLAYWRIGHT_UPSTREAM_CDP_PORT || "9222", 10);
-const listenHost = process.env.MCP_PLAYWRIGHT_CDP_GUARD_HOST || "0.0.0.0";
-const listenPort = Number.parseInt(process.env.MCP_PLAYWRIGHT_CDP_GUARD_PORT || "9223", 10);
+const upstreamHost = "127.0.0.1";
+const upstreamPort = 9222;
+const listenHost = "0.0.0.0";
+const listenPort = 9223;
 const blockedMethods = new Set(["Browser.close", "Browser.crash", "Browser.crashGpuProcess"]);
 
 const log = (message) => process.stderr.write("[docker-git-cdp-guard] " + message + "\n");

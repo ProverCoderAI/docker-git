@@ -97,10 +97,6 @@ EOF
     chown 1000:1000 "$CODEX_CONFIG_FILE" || true
   fi
 
-  if [[ -z "$MCP_PLAYWRIGHT_CDP_ENDPOINT" ]]; then
-    MCP_PLAYWRIGHT_CDP_ENDPOINT="http://127.0.0.1:9223"
-  fi
-
   # Replace the docker-git Playwright block to allow upgrades via --force without manual edits.
   if grep -q "^\[mcp_servers\.playwright" "$CODEX_CONFIG_FILE" 2>/dev/null; then
     awk '

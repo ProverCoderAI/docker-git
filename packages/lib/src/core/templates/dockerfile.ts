@@ -170,17 +170,14 @@ for arg in "$@"; do
   esac
 done
 
-CDP_ENDPOINT="\${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"
-if [[ -z "$CDP_ENDPOINT" ]]; then
-  CDP_ENDPOINT="http://127.0.0.1:9223"
-fi
+CDP_ENDPOINT="http://127.0.0.1:9223"
 
 # CHANGE: keep MCP initialize independent from nested browser readiness
 # WHY: Codex starts MCP servers during boot; blocking here closes stdio before initialize when CDP is slow.
 # QUOTE(issue-319): "handshaking with MCP server failed: connection closed: initialize response"
 # REF: issue-319
 # SOURCE: https://playwright.dev/mcp/configuration/options
-# FORMAT THEOREM: guarded_cdp(endpoint) -> mcp_stdio_ready_before_browser_connection
+# FORMAT THEOREM: guarded_cdp(fixed_nested_browser_endpoint) -> mcp_stdio_ready_before_browser_connection
 # PURITY: SHELL
 # INVARIANT: guarded mode never exits before handing stdio to playwright-mcp
 # COMPLEXITY: O(1)
@@ -194,7 +191,8 @@ if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-0}" == "1" ]]; then
   EXTRA_ARGS+=(--isolated)
 fi
 
-# Guarded endpoints are stable HTTP CDP endpoints. Passing the HTTP URL lets Playwright MCP
+# The guarded endpoint is the nested browser opened by docker-git Open browser.
+# Passing the fixed HTTP URL lets Playwright MCP
 # re-resolve /json/version instead of pinning itself to one stale /devtools/browser/<id>.
 if [[ "$MCP_PLAYWRIGHT_CDP_GUARD" == "1" ]]; then
   exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT" "\${EXTRA_ARGS[@]}" "$@"
