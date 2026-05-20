@@ -91,7 +91,7 @@ describe("authGrokLogin", () => {
     expect(dockerfile).not.toContain("npm install -g grok-dev")
   })
 
-  it("uses the official Grok device-auth login mode", () => {
+  it("uses the official interactive Grok login mode", () => {
     const args = buildDockerGrokAuthArgs({
       cwd: "/workspace",
       image: "docker-git-auth-grok:latest",
@@ -103,7 +103,7 @@ describe("authGrokLogin", () => {
     expect(args).toContain("MCP_PLAYWRIGHT_ISOLATED=1")
     expect(args).not.toContain("NO_BROWSER=true")
     expect(args).not.toContain("GROK_NO_BROWSER=true")
-    expect(args.slice(-4)).toEqual(["docker-git-auth-grok:latest", "grok", "login", "--device-auth"])
+    expect(args.slice(-3)).toEqual(["docker-git-auth-grok:latest", "grok", "login"])
   })
 
   it.effect("stores API key and writes Grok settings with Playwright MCP and no sandbox", () =>

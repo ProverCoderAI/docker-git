@@ -26,6 +26,8 @@ export const GithubStatusResponseSchema = Schema.Struct({
 const AuthProviderSnapshotFields = {
   claudeAuthEntries: Schema.Number,
   claudeAuthPath: Schema.String,
+  codexAuthEntries: Schema.optionalWith(Schema.Number, { default: () => 0 }),
+  codexAuthPath: Schema.optionalWith(Schema.String, { default: () => "" }),
   geminiAuthEntries: Schema.Number,
   geminiAuthPath: Schema.String,
   grokAuthEntries: Schema.optionalWith(Schema.Number, { default: () => 0 }),

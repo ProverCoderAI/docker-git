@@ -1,38 +1,32 @@
+/* jscpd:ignore-start */
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { vi } from "vitest"
 
-import { githubLoginStreamMarkers } from "../../src/shared/auth-stream-markers.js"
-import { runGithubOauthMutation } from "../../src/web/actions-github-oauth.js"
+import { codexLoginStreamMarkers } from "../../src/shared/auth-stream-markers.js"
+import { runCodexOauthMutation } from "../../src/web/actions-codex-oauth.js"
 import type { AuthSnapshot, GithubAuthStatus } from "../../src/web/api.js"
 import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
 
-const loginGithubStreamMock = vi.hoisted(() => vi.fn())
+const loginCodexStreamMock = vi.hoisted(() => vi.fn())
 const loadAuthSnapshotMock = vi.hoisted(() => vi.fn())
 const loadGithubStatusMock = vi.hoisted(() => vi.fn())
 
 vi.mock("../../src/web/api.js", () => ({
   loadAuthSnapshot: loadAuthSnapshotMock,
   loadGithubStatus: loadGithubStatusMock,
-  loginGithubStream: loginGithubStreamMock
+  loginCodexStream: loginCodexStreamMock
 }))
 
 const githubStatus: GithubAuthStatus = {
-  summary: "GitHub tokens (1):",
-  tokens: [
-    {
-      key: "GITHUB_TOKEN",
-      label: "default",
-      login: "octocat",
-      status: "valid"
-    }
-  ]
+  summary: "GitHub tokens (0):",
+  tokens: []
 }
 
 const authSnapshot: AuthSnapshot = {
   claudeAuthEntries: 0,
   claudeAuthPath: "/home/dev/.docker-git/.orch/auth/claude",
-  codexAuthEntries: 0,
+  codexAuthEntries: 1,
   codexAuthPath: "/home/dev/.docker-git/.orch/auth/codex",
   geminiAuthEntries: 0,
   geminiAuthPath: "/home/dev/.docker-git/.orch/auth/gemini",
@@ -40,46 +34,44 @@ const authSnapshot: AuthSnapshot = {
   grokAuthPath: "/home/dev/.docker-git/.orch/auth/grok",
   gitTokenEntries: 0,
   gitUserEntries: 0,
-  githubTokenEntries: 1,
+  githubTokenEntries: 0,
   globalEnvPath: "/home/dev/.docker-git/.orch/env/global.env",
-  totalEntries: 1
+  totalEntries: 0
 }
 
-describe("web GitHub OAuth action", () => {
-  it.effect("refreshes dashboard projects after successful OAuth", () =>
+describe("web Codex OAuth action", () => {
+  it.effect("uses the Codex login stream and refreshes the auth snapshot", () =>
     Effect.gen(function*(_) {
-      loginGithubStreamMock.mockImplementation((_label: string | null, onChunk: (chunk: string) => void) =>
+      loginCodexStreamMock.mockImplementation((_label: string | null, onChunk: (chunk: string) => void) =>
         Effect.sync(() => {
-          onChunk("Copy your one-time code: ABCD-1234\n")
-          onChunk("State dir ready: /home/dev/.docker-git\n")
-          onChunk(`${githubLoginStreamMarkers.success}\n`)
+          onChunk("Open this URL to sign in: https://auth.openai.com/example\n")
+          onChunk(`${codexLoginStreamMarkers.success}\n`)
           return [
-            "Copy your one-time code: ABCD-1234",
-            "State dir ready: /home/dev/.docker-git",
-            githubLoginStreamMarkers.success
+            "Open this URL to sign in: https://auth.openai.com/example",
+            codexLoginStreamMarkers.success
           ].join("\n")
         })
       )
       loadAuthSnapshotMock.mockImplementation(() => Effect.succeed(authSnapshot))
       loadGithubStatusMock.mockImplementation(() => Effect.succeed(githubStatus))
 
-      const { context, output, reloadDashboard, setMessage } = makeBrowserActionContext()
+      const { context, output, setMessage } = makeBrowserActionContext()
 
-      runGithubOauthMutation({ label: "" }, context)
+      runCodexOauthMutation({ label: "" }, context)
 
       expect(setMessage).toHaveBeenNthCalledWith(
         1,
-        "GitHub OAuth started. Follow the instructions in Output."
+        "Codex OAuth started. Follow the instructions in Output."
       )
 
       yield* _(waitForAssertion(() => {
-        expect(reloadDashboard).toHaveBeenCalledTimes(1)
+        expect(context.setAuthSnapshot).toHaveBeenCalledWith(authSnapshot)
       }))
 
-      expect(output()).toBe("Copy your one-time code: ABCD-1234\nState dir ready: /home/dev/.docker-git\n")
+      expect(output()).toBe("Open this URL to sign in: https://auth.openai.com/example\n")
       expect(context.setActionPrompt).toHaveBeenCalledWith(null)
-      expect(context.setAuthSnapshot).toHaveBeenCalledWith(authSnapshot)
       expect(context.setGithubStatus).toHaveBeenCalledWith(githubStatus)
-      expect(setMessage).toHaveBeenLastCalledWith("Saved GitHub token (default).")
+      expect(setMessage).toHaveBeenLastCalledWith("Saved Codex login (default).")
     }))
 })
+/* jscpd:ignore-end */

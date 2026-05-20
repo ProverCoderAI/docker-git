@@ -30,7 +30,7 @@ const failOnCopyFile = (
 })
 
 describe("stageBootstrapSnapshot", () => {
-  it.effect("copies stable Codex auth files and skips transient broken tmp entries", () =>
+  it.effect("copies stable Codex and Grok auth files and skips transient entries", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const fileSystem = yield* _(FileSystem.FileSystem)
@@ -43,6 +43,11 @@ describe("stageBootstrapSnapshot", () => {
         const projectClaudeDir = path.join(projectDir, ".orch", "auth", "claude", "default")
         const sharedCodexDir = path.join(root, ".docker-git", ".orch", "auth", "codex")
         const sharedCodexLabelDir = path.join(sharedCodexDir, "team-a")
+        const sharedGrokDir = path.join(root, ".docker-git", ".orch", "auth", "grok")
+        const sharedGrokDefaultDir = path.join(sharedGrokDir, "default")
+        const sharedGrokCredentialsDir = path.join(sharedGrokDefaultDir, ".grok")
+        const sharedGrokLabelDir = path.join(sharedGrokDir, "team-a")
+        const sharedGrokLabelCredentialsDir = path.join(sharedGrokLabelDir, ".grok")
         const envDir = path.join(projectDir, ".orch", "env")
 
         yield* _(fileSystem.makeDirectory(projectCodexDir, { recursive: true }))
@@ -50,6 +55,8 @@ describe("stageBootstrapSnapshot", () => {
         yield* _(fileSystem.makeDirectory(projectClaudeDir, { recursive: true }))
         yield* _(fileSystem.makeDirectory(sharedCodexDir, { recursive: true }))
         yield* _(fileSystem.makeDirectory(sharedCodexLabelDir, { recursive: true }))
+        yield* _(fileSystem.makeDirectory(sharedGrokCredentialsDir, { recursive: true }))
+        yield* _(fileSystem.makeDirectory(sharedGrokLabelCredentialsDir, { recursive: true }))
         yield* _(fileSystem.makeDirectory(envDir, { recursive: true }))
         yield* _(fileSystem.writeFileString(path.join(projectDir, "authorized_keys"), "ssh-ed25519 test\n"))
         yield* _(fileSystem.writeFileString(path.join(envDir, "global.env"), "GITHUB_TOKEN=test\n"))
@@ -61,6 +68,14 @@ describe("stageBootstrapSnapshot", () => {
         yield* _(fileSystem.writeFileString(path.join(projectClaudeDir, ".oauth-token"), "claude-token\n"))
         yield* _(fileSystem.writeFileString(path.join(sharedCodexDir, "auth.json"), "{\"shared\":true}\n"))
         yield* _(fileSystem.writeFileString(path.join(sharedCodexLabelDir, "auth.json"), "{\"shared\":\"team-a\"}\n"))
+        yield* _(fileSystem.writeFileString(path.join(sharedGrokDefaultDir, ".api-key"), "xai-default\n"))
+        yield* _(fileSystem.writeFileString(path.join(sharedGrokDefaultDir, ".env"), "GROK_DEPLOYMENT_KEY=xai-env\n"))
+        yield* _(fileSystem.writeFileString(path.join(sharedGrokCredentialsDir, "auth.json"), "{\"oauth\":\"default\"}\n"))
+        yield* _(
+          fileSystem.writeFileString(path.join(sharedGrokCredentialsDir, "user-settings.json"), "{\"apiKey\":\"xai-default\"}\n")
+        )
+        yield* _(fileSystem.writeFileString(path.join(sharedGrokLabelDir, ".api-key"), "xai-team-a\n"))
+        yield* _(fileSystem.writeFileString(path.join(sharedGrokLabelCredentialsDir, "auth.json"), "{\"oauth\":\"team-a\"}\n"))
 
         const brokenShimDir = path.join(sharedCodexDir, "tmp", "arg0", "codex-arg0broken")
         yield* _(fileSystem.makeDirectory(brokenShimDir, { recursive: true }))
@@ -75,6 +90,12 @@ describe("stageBootstrapSnapshot", () => {
         yield* _(fileSystem.writeFileString(path.join(sharedCodexDir, "log", "codex-login.log"), "transient log\n"))
         yield* _(fileSystem.makeDirectory(path.join(sharedCodexDir, ".image"), { recursive: true }))
         yield* _(fileSystem.writeFileString(path.join(sharedCodexDir, ".image", "Dockerfile"), "FROM scratch\n"))
+        yield* _(fileSystem.makeDirectory(path.join(sharedGrokDir, "tmp"), { recursive: true }))
+        yield* _(fileSystem.writeFileString(path.join(sharedGrokDir, "tmp", "session.lock"), "lock\n"))
+        yield* _(fileSystem.makeDirectory(path.join(sharedGrokDir, "log"), { recursive: true }))
+        yield* _(fileSystem.writeFileString(path.join(sharedGrokDir, "log", "grok-login.log"), "transient log\n"))
+        yield* _(fileSystem.makeDirectory(path.join(sharedGrokDir, ".image"), { recursive: true }))
+        yield* _(fileSystem.writeFileString(path.join(sharedGrokDir, ".image", "Dockerfile"), "FROM scratch\n"))
 
         yield* _(
           stageBootstrapSnapshot(stagingDir, projectDir, {
@@ -83,7 +104,8 @@ describe("stageBootstrapSnapshot", () => {
             envGlobalPath: path.join(projectDir, ".orch", "env", "global.env"),
             envProjectPath: path.join(projectDir, ".orch", "env", "project.env"),
             codexAuthPath: path.join(projectDir, ".orch", "auth", "codex"),
-            codexSharedAuthPath: sharedCodexDir
+            codexSharedAuthPath: sharedCodexDir,
+            grokAuthPath: "./.docker-git/.orch/auth/grok"
           }).pipe(
             Effect.provideService(FileSystem.FileSystem, failOnCopyFile(fileSystem, "stageBootstrapSnapshot"))
           )
@@ -110,11 +132,33 @@ describe("stageBootstrapSnapshot", () => {
         expect(
           yield* _(fileSystem.readFileString(path.join(stagingDir, "project-auth", "claude", "default", ".oauth-token")))
         ).toBe("claude-token\n")
+        expect(
+          yield* _(fileSystem.readFileString(path.join(stagingDir, "project-auth", "grok", "default", ".api-key")))
+        ).toBe("xai-default\n")
+        expect(
+          yield* _(fileSystem.readFileString(path.join(stagingDir, "project-auth", "grok", "default", ".env")))
+        ).toBe("GROK_DEPLOYMENT_KEY=xai-env\n")
+        expect(
+          yield* _(
+            fileSystem.readFileString(path.join(stagingDir, "project-auth", "grok", "default", ".grok", "auth.json"))
+          )
+        ).toBe("{\"oauth\":\"default\"}\n")
+        expect(
+          yield* _(fileSystem.readFileString(path.join(stagingDir, "project-auth", "grok", "team-a", ".api-key")))
+        ).toBe("xai-team-a\n")
+        expect(
+          yield* _(
+            fileSystem.readFileString(path.join(stagingDir, "project-auth", "grok", "team-a", ".grok", "auth.json"))
+          )
+        ).toBe("{\"oauth\":\"team-a\"}\n")
 
         expect(yield* _(fileSystem.exists(path.join(stagingDir, "shared-auth", "codex", "tmp")))).toBe(false)
         expect(yield* _(fileSystem.exists(path.join(stagingDir, "shared-auth", "codex", "log")))).toBe(false)
         expect(yield* _(fileSystem.exists(path.join(stagingDir, "shared-auth", "codex", ".image")))).toBe(false)
         expect(yield* _(fileSystem.exists(path.join(stagingDir, "project-auth", "codex", "tmp")))).toBe(false)
+        expect(yield* _(fileSystem.exists(path.join(stagingDir, "project-auth", "grok", "tmp")))).toBe(false)
+        expect(yield* _(fileSystem.exists(path.join(stagingDir, "project-auth", "grok", "log")))).toBe(false)
+        expect(yield* _(fileSystem.exists(path.join(stagingDir, "project-auth", "grok", ".image")))).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

@@ -28,11 +28,6 @@ docker-git auth claude login --web
 docker-git auth grok login --web
 ```
 
-Grok support uses the official xAI CLI installer from `https://x.ai/cli/install.sh`
-and the CLI device-code login flow. API-key auth can also be stored under the
-selected Grok account label via `GROK_DEPLOYMENT_KEY`, `GROK_API_KEY`, or
-`XAI_API_KEY`.
-
 ## CLI пример
 
 Можно передавать ссылку на репозиторий, ветку (`/tree/...`), issue или PR.

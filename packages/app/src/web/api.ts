@@ -289,6 +289,17 @@ export const loginGithubStream = (label: string | null, onChunk: (chunk: string)
     path: "/auth/github/login/stream"
   })
 
+export const loginCodexStream = (label: string | null, onChunk: (chunk: string) => void) =>
+  requestTextStream({
+    body: { label },
+    method: "POST",
+    onChunk,
+    path: "/auth/codex/login"
+  })
+
+export const logoutCodex = (label: string | null) =>
+  requestText("POST", "/auth/codex/logout", { label }).pipe(Effect.asVoid)
+
 export const loadProjectEvents = (
   projectId: string,
   cursor?: number

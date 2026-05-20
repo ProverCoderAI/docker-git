@@ -4,6 +4,7 @@ import type { AuthSnapshot, ProjectAuthSnapshot } from "./menu-types.js"
 type RawAuthSnapshot = {
   readonly globalEnvPath: string | null
   readonly claudeAuthPath: string | null
+  readonly codexAuthPath: string | null
   readonly geminiAuthPath: string | null
   readonly grokAuthPath: string | null
   readonly totalEntries: number | null
@@ -11,6 +12,7 @@ type RawAuthSnapshot = {
   readonly gitTokenEntries: number | null
   readonly gitUserEntries: number | null
   readonly claudeAuthEntries: number | null
+  readonly codexAuthEntries: number | null
   readonly geminiAuthEntries: number | null
   readonly grokAuthEntries: number | null
 }
@@ -59,6 +61,7 @@ const readAuthSnapshot = (
   return {
     globalEnvPath: asString(snapshot["globalEnvPath"]),
     claudeAuthPath: asString(snapshot["claudeAuthPath"]),
+    codexAuthPath: asString(snapshot["codexAuthPath"]),
     geminiAuthPath: asString(snapshot["geminiAuthPath"]),
     grokAuthPath: asString(snapshot["grokAuthPath"]),
     totalEntries: readNumber(snapshot["totalEntries"]),
@@ -66,19 +69,36 @@ const readAuthSnapshot = (
     gitTokenEntries: readNumber(snapshot["gitTokenEntries"]),
     gitUserEntries: readNumber(snapshot["gitUserEntries"]),
     claudeAuthEntries: readNumber(snapshot["claudeAuthEntries"]),
+    codexAuthEntries: readNumber(snapshot["codexAuthEntries"]),
     geminiAuthEntries: readNumber(snapshot["geminiAuthEntries"]),
     grokAuthEntries: readNumber(snapshot["grokAuthEntries"])
   }
 }
 
 const decodeRequiredAuthSnapshot = (snapshot: RawAuthSnapshot): AuthSnapshot | null => {
-  if (hasNullValue(Object.values(snapshot))) {
+  const requiredValues = [
+    snapshot.globalEnvPath,
+    snapshot.claudeAuthPath,
+    snapshot.codexAuthPath,
+    snapshot.geminiAuthPath,
+    snapshot.grokAuthPath,
+    snapshot.totalEntries,
+    snapshot.githubTokenEntries,
+    snapshot.gitTokenEntries,
+    snapshot.gitUserEntries,
+    snapshot.claudeAuthEntries,
+    snapshot.codexAuthEntries,
+    snapshot.geminiAuthEntries,
+    snapshot.grokAuthEntries
+  ]
+  if (hasNullValue(requiredValues)) {
     return null
   }
 
   return {
     globalEnvPath: stringOrEmpty(snapshot.globalEnvPath),
     claudeAuthPath: stringOrEmpty(snapshot.claudeAuthPath),
+    codexAuthPath: stringOrEmpty(snapshot.codexAuthPath),
     geminiAuthPath: stringOrEmpty(snapshot.geminiAuthPath),
     grokAuthPath: stringOrEmpty(snapshot.grokAuthPath),
     totalEntries: numberOrZero(snapshot.totalEntries),
@@ -86,6 +106,7 @@ const decodeRequiredAuthSnapshot = (snapshot: RawAuthSnapshot): AuthSnapshot | n
     gitTokenEntries: numberOrZero(snapshot.gitTokenEntries),
     gitUserEntries: numberOrZero(snapshot.gitUserEntries),
     claudeAuthEntries: numberOrZero(snapshot.claudeAuthEntries),
+    codexAuthEntries: numberOrZero(snapshot.codexAuthEntries),
     geminiAuthEntries: numberOrZero(snapshot.geminiAuthEntries),
     grokAuthEntries: numberOrZero(snapshot.grokAuthEntries)
   }

@@ -5,8 +5,7 @@ import {
   authViewSteps,
   authViewTitle,
   successMessage as authSuccessMessage,
-  type TerminalAuthFlow,
-  terminalAuthTitle
+  type TerminalAuthFlow
 } from "../docker-git/menu-auth-shared.js"
 import {
   type ProjectAuthMenuAction,
@@ -19,6 +18,7 @@ import {
   createProjectAuthActionPrompt,
   validateActionPrompt
 } from "./action-prompt.js"
+import { runCodexLogoutMutation, runCodexOauthMutation } from "./actions-codex-oauth.js"
 import { runGithubOauthMutation } from "./actions-github-oauth.js"
 import {
   applyAuthSuccessState,
@@ -29,8 +29,8 @@ import {
   returnToMainMenu,
   withBusy
 } from "./actions-shared.js"
+import { runTerminalOnlyAuthAction } from "./actions-terminal-auth.js"
 import {
-  createAuthTerminalSession,
   loadAuthSnapshot,
   loadGithubStatus,
   loadProjectAuthSnapshot,
@@ -64,6 +64,10 @@ type SupportedProjectMutation = Extract<
   | "ProjectGrokConnect"
   | "ProjectGrokDisconnect"
 >
+
+type BrowserAuthPrompt = Extract<ActionPromptState, { readonly kind: "Auth" }>
+type BrowserProjectAuthPrompt = Extract<ActionPromptState, { readonly kind: "ProjectAuth" }>
+type CodexAuthAction = Extract<BrowserAuthPrompt["action"], "CodexOauth" | "CodexLogout">
 
 export const refreshAuthPanel = (context: BrowserActionContext) => {
   withBusy({
@@ -135,35 +139,6 @@ const runSupportedAuthMutation = (
   })
 }
 
-const runTerminalOnlyAuthAction = (
-  action: TerminalAuthFlow,
-  values: Readonly<Record<string, string>>,
-  context: BrowserActionContext
-) => {
-  const provider = terminalAuthTitle(action)
-  const label = nullableValue(values["label"])
-  const sessionLabel = defaultLabel(values["label"])
-  withBusy({
-    context,
-    effect: createAuthTerminalSession(action, label),
-    label: provider,
-    onSuccess: (session) => {
-      context.setActionPrompt(null)
-      context.addTerminalSession({
-        closePath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}`,
-        exitMessage: `${provider} finished (${sessionLabel}).`,
-        header: provider,
-        pendingDeleteMessage: `${provider} was closed before attach.`,
-        readyMessage: `${provider} started (${sessionLabel}).`,
-        session,
-        subtitle: session.sshCommand,
-        websocketPath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}/ws`
-      })
-      context.setMessage(`${provider} is opening in the embedded terminal.`)
-    }
-  })
-}
-
 const runProjectAuthMutation = (
   action: SupportedProjectMutation,
   values: Readonly<Record<string, string>>,
@@ -210,6 +185,24 @@ const openProjectAuthPrompt = (
 const isMenuNavigationAction = (
   action: AuthMenuAction | ProjectAuthMenuAction
 ): action is "Back" | "Refresh" => action === "Back" || action === "Refresh"
+
+const isCodexAuthAction = (action: BrowserAuthPrompt["action"]): action is CodexAuthAction =>
+  action === "CodexOauth" || action === "CodexLogout"
+
+const isTerminalOnlyAuthAction = (action: BrowserAuthPrompt["action"]): action is TerminalAuthFlow =>
+  action === "ClaudeOauth" || action === "GeminiOauth" || action === "GrokOauth"
+
+const runCodexAuthAction = (
+  action: CodexAuthAction,
+  values: Readonly<Record<string, string>>,
+  context: BrowserActionContext
+) => {
+  if (action === "CodexOauth") {
+    runCodexOauthMutation(values, context)
+    return
+  }
+  runCodexLogoutMutation(values, context)
+}
 
 const handleBrowserMenuAction = (
   action: "Back" | "Refresh",
@@ -269,6 +262,32 @@ export const cancelBrowserActionPrompt = (
   context.setMessage(`${prompt.title} cancelled.`)
 }
 
+const submitAuthPrompt = (
+  prompt: BrowserAuthPrompt,
+  context: BrowserActionContext
+) => {
+  if (isCodexAuthAction(prompt.action)) {
+    runCodexAuthAction(prompt.action, prompt.values, context)
+    return
+  }
+  if (isTerminalOnlyAuthAction(prompt.action)) {
+    runTerminalOnlyAuthAction(prompt.action, prompt.values, context)
+    return
+  }
+  runSupportedAuthMutation(prompt.action, prompt.values, context)
+}
+
+const submitProjectAuthPrompt = (
+  prompt: BrowserProjectAuthPrompt,
+  context: BrowserActionContext
+) => {
+  const projectId = requireSelectedProjectId(context)
+  if (projectId === null) {
+    return
+  }
+  runProjectAuthMutation(prompt.action, prompt.values, projectId, context)
+}
+
 export const submitBrowserActionPrompt = (
   prompt: ActionPromptState,
   context: BrowserActionContext
@@ -279,20 +298,8 @@ export const submitBrowserActionPrompt = (
     return
   }
   if (prompt.kind === "Auth") {
-    if (prompt.action === "GithubOauth") {
-      runSupportedAuthMutation(prompt.action, prompt.values, context)
-      return
-    }
-    if (prompt.action === "ClaudeOauth" || prompt.action === "GeminiOauth" || prompt.action === "GrokOauth") {
-      runTerminalOnlyAuthAction(prompt.action, prompt.values, context)
-      return
-    }
-    runSupportedAuthMutation(prompt.action, prompt.values, context)
+    submitAuthPrompt(prompt, context)
     return
   }
-  const projectId = requireSelectedProjectId(context)
-  if (projectId === null) {
-    return
-  }
-  runProjectAuthMutation(prompt.action, prompt.values, projectId, context)
+  submitProjectAuthPrompt(prompt, context)
 }

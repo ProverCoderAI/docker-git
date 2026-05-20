@@ -127,6 +127,114 @@ const runGrokApiKeyConnectCase = (apiKey: string) =>
   )
 
 describe("project auth service", () => {
+  it.effect("counts only credential-bearing project auth accounts", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const authRoot = path.join(projectsRoot, ".orch", "auth")
+        const envDir = path.join(projectsRoot, ".orch", "env")
+        const projectDir = path.join(projectsRoot, "org", "repo")
+        const envGlobalPath = path.join(envDir, "global.env")
+        const envProjectPath = path.join(projectDir, ".env")
+        const project = buildProjectDetails(projectDir, envProjectPath, envGlobalPath)
+
+        yield* _(fs.makeDirectory(path.join(authRoot, "claude", "empty"), { recursive: true }))
+        yield* _(fs.makeDirectory(path.join(authRoot, "gemini", "empty"), { recursive: true }))
+        yield* _(fs.makeDirectory(path.join(authRoot, "grok", "empty", ".grok"), { recursive: true }))
+        yield* _(fs.writeFileString(path.join(authRoot, "grok", "empty", ".grok", "user-settings.json"), "{\"sandboxMode\":\"off\"}\n"))
+
+        yield* _(fs.makeDirectory(path.join(authRoot, "claude", "live"), { recursive: true }))
+        yield* _(fs.writeFileString(path.join(authRoot, "claude", "live", ".credentials.json"), "{}\n"))
+        yield* _(fs.makeDirectory(path.join(authRoot, "gemini", "live", ".gemini"), { recursive: true }))
+        yield* _(fs.writeFileString(path.join(authRoot, "gemini", "live", ".gemini", "oauth-tokens.json"), "{}\n"))
+        yield* _(fs.makeDirectory(path.join(authRoot, "grok", "live"), { recursive: true }))
+        yield* _(fs.writeFileString(path.join(authRoot, "grok", "live", ".env"), "GROK_DEPLOYMENT_KEY='xai-deploy'\n"))
+        yield* _(fs.makeDirectory(projectDir, { recursive: true }))
+        yield* _(fs.makeDirectory(envDir, { recursive: true }))
+        yield* _(fs.writeFileString(envGlobalPath, "# docker-git env\n"))
+        yield* _(fs.writeFileString(envProjectPath, "# project env\n"))
+
+        const service = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            Effect.gen(function*(_) {
+              yield* _(Effect.sync(() => vi.resetModules()))
+              return yield* _(Effect.promise(() => import("../src/services/project-auth.js")))
+            })
+          )
+        )
+        const snapshot = yield* _(withProjectsRoot(projectsRoot, service.readProjectAuthSnapshot(project)))
+
+        expect(snapshot.claudeAuthEntries).toBe(1)
+        expect(snapshot.geminiAuthEntries).toBe(1)
+        expect(snapshot.grokAuthEntries).toBe(1)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("requires real Gemini credentials before connecting a project", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const envDir = path.join(projectsRoot, ".orch", "env")
+        const geminiDefaultAuth = path.join(projectsRoot, ".orch", "auth", "gemini", "default")
+        const projectDir = path.join(projectsRoot, "org", "repo")
+        const envGlobalPath = path.join(envDir, "global.env")
+        const envProjectPath = path.join(projectDir, ".env")
+        const project = buildProjectDetails(projectDir, envProjectPath, envGlobalPath)
+
+        yield* _(fs.makeDirectory(geminiDefaultAuth, { recursive: true }))
+        yield* _(fs.makeDirectory(projectDir, { recursive: true }))
+        yield* _(fs.makeDirectory(envDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(geminiDefaultAuth, ".api-key"), "  \n"))
+        yield* _(fs.writeFileString(envGlobalPath, "# docker-git env\n"))
+        yield* _(fs.writeFileString(envProjectPath, "# project env\n"))
+
+        const service = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            Effect.gen(function*(_) {
+              yield* _(Effect.sync(() => vi.resetModules()))
+              return yield* _(Effect.promise(() => import("../src/services/project-auth.js")))
+            })
+          )
+        )
+        const emptyApiKeyFailure = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            service.runProjectAuthFlow(project, {
+              flow: "ProjectGeminiConnect",
+              label: "default"
+            }).pipe(Effect.flip)
+          )
+        )
+
+        expect(emptyApiKeyFailure._tag).toBe("ApiBadRequestError")
+        expect(yield* _(fs.readFileString(envProjectPath))).not.toContain("GEMINI_AUTH_LABEL=default")
+
+        yield* _(fs.remove(path.join(geminiDefaultAuth, ".api-key")))
+        yield* _(fs.makeDirectory(path.join(geminiDefaultAuth, ".gemini"), { recursive: true }))
+        yield* _(fs.writeFileString(path.join(geminiDefaultAuth, ".gemini", "oauth_creds.json"), "{\"access_token\":\"test\"}\n"))
+
+        const snapshot = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            service.runProjectAuthFlow(project, {
+              flow: "ProjectGeminiConnect",
+              label: "default"
+            })
+          )
+        )
+
+        expect(snapshot.activeGeminiLabel).toBe("default")
+        expect(snapshot.geminiAuthEntries).toBe(1)
+        expect(yield* _(fs.readFileString(envProjectPath))).toContain("GEMINI_AUTH_LABEL=default")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("preserves Grok project API-key connect invariants", () =>
     Effect.tryPromise({
       catch: (error) => error,

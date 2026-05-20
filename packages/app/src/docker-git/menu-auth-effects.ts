@@ -1,6 +1,6 @@
 import { Effect, Match, pipe } from "effect"
 
-import { createAuthTerminalSession, githubLogin } from "./api-client.js"
+import { codexLogin, codexLogout, createAuthTerminalSession, githubLogin } from "./api-client.js"
 import { readAuthSnapshot, successMessage, writeAuthFlow } from "./menu-auth-data.js"
 import { terminalAuthTitle } from "./menu-auth-shared.js"
 import type { MenuError } from "./menu-errors.js"
@@ -61,6 +61,18 @@ export const resolveAuthPromptEffect = (
         scopes: null,
         envGlobalPath: view.snapshot.globalEnvPath
       }).pipe(Effect.asVoid)),
+    Match.when("CodexOauth", () =>
+      codexLogin({
+        _tag: "AuthCodexLogin",
+        label: labelOption,
+        codexAuthPath: view.snapshot.codexAuthPath
+      })),
+    Match.when("CodexLogout", () =>
+      codexLogout({
+        _tag: "AuthCodexLogout",
+        label: labelOption,
+        codexAuthPath: view.snapshot.codexAuthPath
+      })),
     Match.when("ClaudeOauth", () => resolveTerminalAuthEffect("ClaudeOauth", labelOption)),
     Match.when("ClaudeLogout", (flow) => writeAuthFlow(cwd, flow, values)),
     Match.when("GeminiOauth", () => resolveTerminalAuthEffect("GeminiOauth", labelOption)),

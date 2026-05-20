@@ -23,7 +23,7 @@ const decodeAuthSnapshotResponse = (payload: LegacyAuthSnapshotResponse) =>
   ParseResult.decodeUnknownEither(Schema.parseJson(AuthSnapshotResponseSchema))(JSON.stringify(payload))
 
 describe("web auth api schema", () => {
-  it("accepts auth snapshots from controllers without Grok fields", () => {
+  it("accepts auth snapshots from controllers without Codex and Grok fields", () => {
     const decoded = decodeAuthSnapshotResponse({
       snapshot: {
         claudeAuthEntries: 3,
@@ -40,6 +40,8 @@ describe("web auth api schema", () => {
 
     expect(Either.isRight(decoded)).toBe(true)
     if (Either.isRight(decoded)) {
+      expect(decoded.right.snapshot.codexAuthEntries).toBe(0)
+      expect(decoded.right.snapshot.codexAuthPath).toBe("")
       expect(decoded.right.snapshot.grokAuthEntries).toBe(0)
       expect(decoded.right.snapshot.grokAuthPath).toBe("")
     }

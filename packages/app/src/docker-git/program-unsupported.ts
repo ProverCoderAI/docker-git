@@ -5,15 +5,10 @@ export type UnsupportedOperationalCommandTag =
   | "ScrapImport"
   | "McpPlaywrightUp"
   | "Apply"
-  | "AuthClaudeLogin"
   | "AuthClaudeStatus"
   | "AuthClaudeLogout"
-  | "AuthGeminiLogin"
   | "AuthGeminiStatus"
   | "AuthGeminiLogout"
-  | "AuthGrokLogin"
-  | "AuthGrokStatus"
-  | "AuthGrokLogout"
 
 export const unsupportedOperationalCommands: Record<
   UnsupportedOperationalCommandTag,
@@ -31,40 +26,20 @@ export const unsupportedOperationalCommands: Record<
     command: "Apply",
     message: "Command Apply is not available in API-only host mode."
   },
-  AuthClaudeLogin: {
-    command: "auth claude login",
-    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
-  },
   AuthClaudeStatus: {
     command: "auth claude status",
-    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
+    message: "Claude status is not routed through the controller in host API mode."
   },
   AuthClaudeLogout: {
     command: "auth claude logout",
-    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
-  },
-  AuthGeminiLogin: {
-    command: "auth gemini login",
-    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
+    message: "Claude logout is not routed through the controller in host API mode."
   },
   AuthGeminiStatus: {
     command: "auth gemini status",
-    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
+    message: "Gemini status is not routed through the controller in host API mode."
   },
   AuthGeminiLogout: {
     command: "auth gemini logout",
-    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
-  },
-  AuthGrokLogin: {
-    command: "auth grok login",
-    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
-  },
-  AuthGrokStatus: {
-    command: "auth grok status",
-    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
-  },
-  AuthGrokLogout: {
-    command: "auth grok logout",
-    message: "Only GitHub, GitLab, and Codex auth are routed through the controller in host API mode."
+    message: "Gemini logout is not routed through the controller in host API mode."
   }
 }

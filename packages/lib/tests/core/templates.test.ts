@@ -566,6 +566,19 @@ describe("renderEntrypoint auth bridge", () => {
     expect(linkIndex).toBeGreaterThan(dirGuardIndex)
   })
 
+  it("renders Grok auth bootstrap wiring into the container docker-git home", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      'DOCKER_GIT_GROK_AUTH_DIR="$DOCKER_GIT_HOME/.orch/auth/grok"',
+      'BOOTSTRAP_GROK_AUTH_DIR="$BOOTSTRAP_SOURCE_ROOT/project-auth/grok"',
+      'mkdir -p "$DOCKER_GIT_AUTH_DIR" "$DOCKER_GIT_CLAUDE_AUTH_DIR" "$DOCKER_GIT_GROK_AUTH_DIR"',
+      'sync_dir_entries "$BOOTSTRAP_GROK_AUTH_DIR" "$DOCKER_GIT_GROK_AUTH_DIR"',
+      'export GROK_CONFIG_DIR="$GROK_AUTH_ROOT/$GROK_LABEL_NORM"',
+      'docker_git_link_grok_file "$GROK_CONFIG_DIR/.api-key" "$GROK_HOME_DIR/.api-key"'
+    ])
+  })
+
   it("renders system-prompt override hooks for codex/claude/gemini/grok", () => {
     const entrypoint = renderAuthEntrypoint()
 
