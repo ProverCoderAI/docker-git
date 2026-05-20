@@ -13,6 +13,7 @@ import { dirname, join } from "node:path"
 import type {
   ActivityPubFollowActivity,
   ActivityPubOrderedCollection,
+  ActivityPubOrderedCollectionPage,
   ActivityPubPerson,
   ActivityPubPublicKey,
   AgentProvider,
@@ -637,6 +638,18 @@ export const makeFederationFollowersCollection = (
   type: "OrderedCollection",
   id: context.followers,
   totalItems: 0,
+  first: `${context.followers}?page=1`,
+  orderedItems: []
+})
+
+export const makeFederationFollowersPageCollection = (
+  context: FederationContext
+): ActivityPubOrderedCollectionPage => ({
+  "@context": activityForgeFedJsonLdContext,
+  type: "OrderedCollectionPage",
+  id: `${context.followers}?page=1`,
+  totalItems: 0,
+  partOf: context.followers,
   orderedItems: []
 })
 

@@ -1,5 +1,19 @@
 import * as Schema from "effect/Schema"
 
+export {
+  ActivityForgeFedJsonLdContextSchema,
+  ActivityPubFollowActivitySchema,
+  ActivityPubOrderedCollectionPageSchema,
+  ActivityPubOrderedCollectionSchema,
+  ActivityPubPersonSchema,
+  ActivityPubPublicKeySchema,
+  ActorJsonLdContextSchema,
+  ForgeFedTicketSchema,
+  ForgeFedTicketSourceSchema,
+  JsonLdContextSchema,
+  JsonValueSchema
+} from "./activitypub-schema.js"
+
 const OptionalString = Schema.optional(Schema.String)
 const OptionalBoolean = Schema.optional(Schema.Boolean)
 const OptionalNullableString = Schema.optional(Schema.NullOr(Schema.String))
