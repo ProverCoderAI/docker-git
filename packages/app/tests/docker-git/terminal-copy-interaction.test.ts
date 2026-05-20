@@ -9,6 +9,14 @@ import {
   type TerminalMouseTrackingMode,
   writeTerminalSelectionToClipboardData
 } from "../../src/web/terminal-copy-interaction.js"
+import {
+  expectNoDragListeners,
+  expectSingleMouseEvent,
+  FakeTerminalCopyEventTarget,
+  FakeTerminalCopyHost,
+  mouseEvent,
+  type TerminalCopyTestMouseEvent
+} from "./fixtures/terminal-copy-interaction.js"
 
 const terminalWithSelection = (
   mouseTrackingMode: TerminalMouseTrackingMode,
@@ -18,112 +26,6 @@ const terminalWithSelection = (
   hasSelection: () => selection.length > 0,
   modes: { mouseTrackingMode }
 })
-
-type TerminalCopyTestClipboardData = {
-  readonly setData: (format: string, data: string) => void
-}
-
-type TerminalCopyTestClipboardEvent = {
-  readonly clipboardData: TerminalCopyTestClipboardData | null
-  readonly preventDefault: () => void
-  readonly stopPropagation: () => void
-}
-
-type TerminalCopyTestMouseEvent = {
-  readonly button: number
-  altKey: boolean
-  shiftKey: boolean
-}
-
-type TerminalCopyTestMouseType = "mousedown" | "mousemove" | "mouseup"
-type TerminalCopyTestEventType = "copy" | TerminalCopyTestMouseType
-type TerminalCopyTestCopyListener = (event: TerminalCopyTestClipboardEvent) => void
-type TerminalCopyTestMouseListener = (event: TerminalCopyTestMouseEvent) => void
-type TerminalCopyTestListener =
-  | { readonly listener: TerminalCopyTestCopyListener; readonly type: "copy" }
-  | { readonly listener: TerminalCopyTestMouseListener; readonly type: TerminalCopyTestMouseType }
-type TerminalCopyTestAnyListener = TerminalCopyTestCopyListener | TerminalCopyTestMouseListener
-
-const isCopyTestListener = (
-  type: TerminalCopyTestEventType,
-  _listener: TerminalCopyTestAnyListener
-): _listener is TerminalCopyTestCopyListener => type === "copy"
-
-const isMouseTestListener = (
-  type: TerminalCopyTestEventType,
-  _listener: TerminalCopyTestAnyListener
-): _listener is TerminalCopyTestMouseListener => type !== "copy"
-
-const isMouseTestEventType = (
-  type: TerminalCopyTestEventType
-): type is TerminalCopyTestMouseType => type !== "copy"
-
-const isMouseTestListenerEntry = (
-  entry: TerminalCopyTestListener
-): entry is { readonly listener: TerminalCopyTestMouseListener; readonly type: TerminalCopyTestMouseType } =>
-  entry.type !== "copy"
-
-class FakeTerminalCopyEventTarget {
-  private listeners: Array<TerminalCopyTestListener> = []
-
-  addEventListener(type: "copy", listener: TerminalCopyTestCopyListener, options: true): void
-  addEventListener(type: TerminalCopyTestMouseType, listener: TerminalCopyTestMouseListener, options: true): void
-  addEventListener(
-    type: TerminalCopyTestEventType,
-    listener: TerminalCopyTestAnyListener,
-    _options: true
-  ): void {
-    if (isCopyTestListener(type, listener)) {
-      this.listeners.push({ listener, type: "copy" })
-      return
-    }
-    if (isMouseTestEventType(type) && isMouseTestListener(type, listener)) {
-      this.listeners.push({ listener, type })
-    }
-  }
-
-  removeEventListener(type: "copy", listener: TerminalCopyTestCopyListener, options: true): void
-  removeEventListener(type: TerminalCopyTestMouseType, listener: TerminalCopyTestMouseListener, options: true): void
-  removeEventListener(
-    type: TerminalCopyTestEventType,
-    listener: TerminalCopyTestAnyListener,
-    _options: true
-  ): void {
-    this.listeners = this.listeners.filter((entry) => entry.type !== type || entry.listener !== listener)
-  }
-
-  dispatchMouse(type: TerminalCopyTestMouseType, event: TerminalCopyTestMouseEvent): void {
-    for (const entry of this.listeners) {
-      if (isMouseTestListenerEntry(entry) && entry.type === type) {
-        entry.listener(event)
-      }
-    }
-  }
-
-  listenerCount(type: TerminalCopyTestEventType): number {
-    return this.listeners.filter((entry) => entry.type === type).length
-  }
-}
-
-class FakeTerminalCopyHost extends FakeTerminalCopyEventTarget {
-  readonly ownerDocument: FakeTerminalCopyEventTarget | null
-
-  constructor(ownerDocument: FakeTerminalCopyEventTarget | null) {
-    super()
-    this.ownerDocument = ownerDocument
-  }
-}
-
-const mouseEvent = (button: number): TerminalCopyTestMouseEvent => ({
-  altKey: false,
-  button,
-  shiftKey: false
-})
-
-const expectNoDragListeners = (target: FakeTerminalCopyEventTarget): void => {
-  expect(target.listenerCount("mousemove")).toBe(0)
-  expect(target.listenerCount("mouseup")).toBe(0)
-}
 
 describe("terminal copy interaction", () => {
   it("forces browser selection for primary mouse input while terminal mouse tracking is active", () => {
@@ -203,6 +105,73 @@ describe("terminal copy interaction", () => {
     disposable.dispose()
   })
 
+  it("suppresses real mouseup reports and replays a document mouseup for selection finalization", () => {
+    const documentTarget = new FakeTerminalCopyEventTarget()
+    const host = new FakeTerminalCopyHost(documentTarget)
+    const finalizedSelectionEvents: Array<TerminalCopyTestMouseEvent> = []
+    const mouseReportEvents: Array<TerminalCopyTestMouseEvent> = []
+    documentTarget.addBubbleMouseListener("mouseup", (event) => {
+      finalizedSelectionEvents.push(event)
+    })
+    host.addBubbleMouseListener("mouseup", (event) => {
+      mouseReportEvents.push(event)
+    })
+    const disposable = attachTerminalCopyInteraction({ host, terminal: terminalWithSelection("any", "") })
+    const up = mouseEvent(0, "mouseup", {
+      clientX: 12,
+      clientY: 34,
+      screenX: 56,
+      screenY: 78
+    })
+
+    host.dispatchMouse("mousedown", mouseEvent(0))
+    host.dispatchBubblingMouse("mouseup", up)
+
+    expect(up.shiftKey).toBe(true)
+    expect(up.preventDefaultCalls).toBe(1)
+    expect(up.stopImmediatePropagationCalls).toBe(1)
+    expect(up.stopPropagationCalls).toBeGreaterThanOrEqual(1)
+    expect(mouseReportEvents).toEqual([])
+    expect(documentTarget.dispatchedEvents).toHaveLength(1)
+
+    const replayed = expectSingleMouseEvent(finalizedSelectionEvents)
+    expect(replayed).not.toBe(up)
+    expect(replayed.button).toBe(0)
+    expect(replayed.buttons).toBe(0)
+    expect(replayed.clientX).toBe(12)
+    expect(replayed.clientY).toBe(34)
+    expect(replayed.screenX).toBe(56)
+    expect(replayed.screenY).toBe(78)
+    expect(replayed.shiftKey).toBe(true)
+    expect(replayed.altKey).toBe(false)
+    expectNoDragListeners(documentTarget)
+
+    disposable.dispose()
+  })
+
+  it("does not suppress or replay mouseup when mouse tracking is inactive", () => {
+    const documentTarget = new FakeTerminalCopyEventTarget()
+    const host = new FakeTerminalCopyHost(documentTarget)
+    const mouseReportEvents: Array<TerminalCopyTestMouseEvent> = []
+    host.addBubbleMouseListener("mouseup", (event) => {
+      mouseReportEvents.push(event)
+    })
+    const disposable = attachTerminalCopyInteraction({ host, terminal: terminalWithSelection("none", "") })
+    const up = mouseEvent(0, "mouseup")
+
+    host.dispatchMouse("mousedown", mouseEvent(0))
+    host.dispatchBubblingMouse("mouseup", up)
+
+    expect(up.shiftKey).toBe(false)
+    expect(up.preventDefaultCalls).toBe(0)
+    expect(up.stopImmediatePropagationCalls).toBe(0)
+    expect(up.stopPropagationCalls).toBe(0)
+    expect(documentTarget.dispatchedEvents).toEqual([])
+    expect(mouseReportEvents).toEqual([up])
+
+    disposable.dispose()
+  })
+
   it("does not start a forced selection drag when mouse tracking is inactive", () => {
     const documentTarget = new FakeTerminalCopyEventTarget()
     const host = new FakeTerminalCopyHost(documentTarget)
@@ -229,6 +198,7 @@ describe("terminal copy interaction", () => {
 
     expect(down.shiftKey).toBe(true)
     expect(move.shiftKey).toBe(false)
+    expect(documentTarget.dispatchedEvents).toEqual([])
     expectNoDragListeners(documentTarget)
 
     disposable.dispose()
