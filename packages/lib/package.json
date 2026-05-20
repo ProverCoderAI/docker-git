@@ -65,7 +65,7 @@
     "@typescript-eslint/eslint-plugin": "^8.59.4",
     "@typescript-eslint/parser": "^8.59.4",
     "typescript-eslint": "^8.59.4",
-    "@vitest/coverage-v8": "^4.1.6",
+    "@vitest/coverage-v8": "^4.1.7",
     "eslint": "^10.4.0",
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-codegen": "0.34.1",
@@ -80,7 +80,7 @@
     "jscpd": "^4.2.3",
     "typescript": "^6.0.3",
     "vite": "^8.0.13",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.7"
   },
   "types": "dist/index.d.ts",
   "exports": {
