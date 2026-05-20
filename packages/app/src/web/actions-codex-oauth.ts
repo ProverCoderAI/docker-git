@@ -21,7 +21,7 @@ export const runCodexOauthMutation = (
     failureMessage: codexLoginFailureMessage,
     markers: codexLoginStreamMarkers,
     runStream: loginCodexStream,
-    startMessage: "Codex OAuth запущен. Следуй инструкциям в Output.",
+    startMessage: "Codex OAuth started. Follow the instructions in Output.",
     successMessage: (label) => `Saved Codex login (${label}).`,
     values
   })

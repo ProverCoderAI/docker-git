@@ -64,14 +64,24 @@ describe("auth menu service", () => {
         yield* _(fs.makeDirectory(path.join(authRoot, "codex", ".image"), { recursive: true }))
         yield* _(fs.makeDirectory(path.join(authRoot, "grok", ".image"), { recursive: true }))
 
+        yield* _(fs.writeFileString(path.join(authRoot, "claude", ".oauth-token"), "root-claude-oauth\n"))
         yield* _(fs.makeDirectory(path.join(authRoot, "claude", "live"), { recursive: true }))
         yield* _(fs.writeFileString(path.join(authRoot, "claude", "live", ".oauth-token"), "claude-oauth\n"))
         yield* _(fs.makeDirectory(path.join(authRoot, "codex"), { recursive: true }))
         yield* _(fs.writeFileString(path.join(authRoot, "codex", "auth.json"), "{\"tokens\":{\"account_id\":\"default\"}}\n"))
         yield* _(fs.makeDirectory(path.join(authRoot, "codex", "work"), { recursive: true }))
         yield* _(fs.writeFileString(path.join(authRoot, "codex", "work", "auth.json"), "{\"tokens\":{\"account_id\":\"work\"}}\n"))
+        yield* _(fs.symlink(path.join(authRoot, "missing-gemini-account"), path.join(authRoot, "gemini", "broken")))
+        yield* _(fs.writeFileString(path.join(authRoot, "gemini", ".api-key"), "root-gemini-key\n"))
         yield* _(fs.makeDirectory(path.join(authRoot, "gemini", "live"), { recursive: true }))
         yield* _(fs.writeFileString(path.join(authRoot, "gemini", "live", ".api-key"), "gemini-key\n"))
+        yield* _(fs.makeDirectory(path.join(authRoot, "grok", ".grok"), { recursive: true }))
+        yield* _(
+          fs.writeFileString(
+            path.join(authRoot, "grok", ".grok", "auth.json"),
+            `${JSON.stringify({ [grokOidcAuthScope]: { key: "root-xai-oauth" } })}\n`
+          )
+        )
         yield* _(fs.makeDirectory(path.join(authRoot, "grok", "live", ".grok"), { recursive: true }))
         yield* _(
           fs.writeFileString(
@@ -93,10 +103,10 @@ describe("auth menu service", () => {
         )
         const snapshot = yield* _(withProjectsRoot(projectsRoot, service.readAuthMenuSnapshot()))
 
-        expect(snapshot.claudeAuthEntries).toBe(1)
+        expect(snapshot.claudeAuthEntries).toBe(2)
         expect(snapshot.codexAuthEntries).toBe(2)
-        expect(snapshot.geminiAuthEntries).toBe(1)
-        expect(snapshot.grokAuthEntries).toBe(1)
+        expect(snapshot.geminiAuthEntries).toBe(2)
+        expect(snapshot.grokAuthEntries).toBe(2)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

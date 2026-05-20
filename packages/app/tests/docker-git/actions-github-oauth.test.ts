@@ -67,6 +67,11 @@ describe("web GitHub OAuth action", () => {
 
       runGithubOauthMutation({ label: "" }, context)
 
+      expect(setMessage).toHaveBeenNthCalledWith(
+        1,
+        "GitHub OAuth started. Follow the instructions in Output."
+      )
+
       yield* _(waitForAssertion(() => {
         expect(reloadDashboard).toHaveBeenCalledTimes(1)
       }))

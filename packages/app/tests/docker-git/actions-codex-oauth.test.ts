@@ -59,6 +59,11 @@ describe("web Codex OAuth action", () => {
 
       runCodexOauthMutation({ label: "" }, context)
 
+      expect(setMessage).toHaveBeenNthCalledWith(
+        1,
+        "Codex OAuth started. Follow the instructions in Output."
+      )
+
       yield* _(waitForAssertion(() => {
         expect(context.setAuthSnapshot).toHaveBeenCalledWith(authSnapshot)
       }))

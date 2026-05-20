@@ -79,6 +79,7 @@ const decodeRequiredAuthSnapshot = (snapshot: RawAuthSnapshot): AuthSnapshot | n
   const requiredValues = [
     snapshot.globalEnvPath,
     snapshot.claudeAuthPath,
+    snapshot.codexAuthPath,
     snapshot.geminiAuthPath,
     snapshot.grokAuthPath,
     snapshot.totalEntries,
@@ -86,6 +87,7 @@ const decodeRequiredAuthSnapshot = (snapshot: RawAuthSnapshot): AuthSnapshot | n
     snapshot.gitTokenEntries,
     snapshot.gitUserEntries,
     snapshot.claudeAuthEntries,
+    snapshot.codexAuthEntries,
     snapshot.geminiAuthEntries,
     snapshot.grokAuthEntries
   ]

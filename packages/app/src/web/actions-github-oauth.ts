@@ -16,7 +16,7 @@ export const runGithubOauthMutation = (
       context.reloadDashboard()
     },
     runStream: loginGithubStream,
-    startMessage: "GitHub OAuth запущен. Следуй инструкциям в Output.",
+    startMessage: "GitHub OAuth started. Follow the instructions in Output.",
     successMessage: (label) => `Saved GitHub token (${label}).`,
     values
   })

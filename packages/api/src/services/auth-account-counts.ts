@@ -13,6 +13,8 @@ type HasCredentials = (
 const ignoredAuthAccountEntries: ReadonlySet<string> = new Set([".image"])
 const grokEnvApiKeyNames: ReadonlyArray<string> = ["GROK_DEPLOYMENT_KEY", "GROK_API_KEY", "XAI_API_KEY"]
 
+const credentialCount = (connected: boolean): number => connected ? 1 : 0
+
 const hasFileAtPath = (
   fs: FileSystem.FileSystem,
   filePath: string
@@ -235,7 +237,12 @@ export const countCodexCredentialAccounts = (
       return 0
     }
 
-    let count = yield* _(hasCodexAccountCredentials(fs, root), Effect.map((connected) => connected ? 1 : 0))
+    let count = yield* _(
+      hasCodexAccountCredentials(fs, root).pipe(
+        Effect.orElseSucceed(() => false),
+        Effect.map((connected) => credentialCount(connected))
+      )
+    )
     const entries = yield* _(fs.readDirectory(root))
     for (const entry of entries) {
       if (ignoredAuthAccountEntries.has(entry)) {
@@ -243,8 +250,8 @@ export const countCodexCredentialAccounts = (
       }
 
       const accountPath = path.join(root, entry)
-      const info = yield* _(fs.stat(accountPath))
-      if (info.type !== "Directory") {
+      const info = yield* _(fs.stat(accountPath), Effect.orElseSucceed(() => null))
+      if (info === null || info.type !== "Directory") {
         continue
       }
 
@@ -268,16 +275,21 @@ export const countAuthCredentialAccounts = (
       return 0
     }
 
+    let count = yield* _(
+      hasCredentials(fs, root).pipe(
+        Effect.orElseSucceed(() => false),
+        Effect.map((connected) => credentialCount(connected))
+      )
+    )
     const entries = yield* _(fs.readDirectory(root))
-    let count = 0
     for (const entry of entries) {
       if (ignoredAuthAccountEntries.has(entry)) {
         continue
       }
 
       const accountPath = path.join(root, entry)
-      const info = yield* _(fs.stat(accountPath))
-      if (info.type !== "Directory") {
+      const info = yield* _(fs.stat(accountPath), Effect.orElseSucceed(() => null))
+      if (info === null || info.type !== "Directory") {
         continue
       }
 

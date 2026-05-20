@@ -19,6 +19,8 @@ type CredentialDirectoryCounterInput = {
 
 const ignoredAuthAccountEntries: ReadonlySet<string> = new Set([".image"])
 
+const credentialCount = (connected: boolean): number => connected ? 1 : 0
+
 export const hasCodexAccountCredentials = (
   fs: FileSystem.FileSystem,
   accountPath: string
@@ -38,8 +40,8 @@ const countCredentialDirectories = ({
         continue
       }
       const accountPath = path.join(root, entry)
-      const info = yield* _(fs.stat(accountPath))
-      if (info.type !== "Directory") {
+      const info = yield* _(fs.stat(accountPath), Effect.orElseSucceed(() => null))
+      if (info === null || info.type !== "Directory") {
         continue
       }
       const connected = yield* _(hasCredentials(fs, accountPath), Effect.orElseSucceed(() => false))
@@ -54,11 +56,20 @@ const countExistingCredentialDirectories = (
   input: CredentialDirectoryCounterInput
 ): Effect.Effect<number, PlatformError> =>
   input.fs.exists(input.root).pipe(
-    Effect.flatMap((exists) =>
-      exists
-        ? countCredentialDirectories(input)
-        : Effect.succeed(0)
-    )
+    Effect.flatMap((exists) => {
+      if (!exists) {
+        return Effect.succeed(0)
+      }
+      return Effect.all({
+        directoryCount: countCredentialDirectories(input),
+        rootCount: input.hasCredentials(input.fs, input.root).pipe(
+          Effect.orElseSucceed(() => false),
+          Effect.map((connected) => credentialCount(connected))
+        )
+      }).pipe(
+        Effect.map(({ directoryCount, rootCount }) => rootCount + directoryCount)
+      )
+    })
   )
 
 export const countAuthCredentialAccounts = (
@@ -73,21 +84,4 @@ export const countCodexCredentialAccounts = (
   path: Path.Path,
   root: string
 ): Effect.Effect<number, PlatformError> =>
-  fs.exists(root).pipe(
-    Effect.flatMap((exists) => {
-      if (!exists) {
-        return Effect.succeed(0)
-      }
-      return Effect.all({
-        directoryCount: countCredentialDirectories({
-          fs,
-          hasCredentials: hasCodexAccountCredentials,
-          path,
-          root
-        }),
-        rootConnected: hasCodexAccountCredentials(fs, root).pipe(Effect.orElseSucceed(() => false))
-      }).pipe(
-        Effect.map(({ directoryCount, rootConnected }) => directoryCount + (rootConnected ? 1 : 0))
-      )
-    })
-  )
+  countExistingCredentialDirectories({ fs, hasCredentials: hasCodexAccountCredentials, path, root })

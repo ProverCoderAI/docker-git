@@ -127,7 +127,7 @@ const fixGrokAuthPermissions = (cwd: string, hostPath: string, containerPath: st
  * @param cwd Working directory used for Docker command execution.
  * @param accountPath Selected docker-git Grok account directory.
  * @param options Auth container image and in-container home path.
- * @returns Effect that completes after device authorization writes credentials and permissions are normalized.
+ * @returns Effect that completes after OAuth/browser flow writes credentials and permissions are normalized.
  * @pure false
  * @effect CommandExecutor; invokes Docker and writes credentials under the selected account path.
  * @invariant successful completion leaves credentials scoped to accountPath and not to project source files.
