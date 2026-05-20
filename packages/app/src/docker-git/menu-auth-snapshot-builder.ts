@@ -15,19 +15,38 @@ export type AuthAccountCounts = {
   readonly grokAuthEntries: number
 }
 
+export type AuthAccountCountPaths = {
+  readonly claudeAuthPath: string
+  readonly codexAuthPath: string
+  readonly geminiAuthPath: string
+  readonly grokAuthPath: string
+}
+
 export const countAuthAccountEntries = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
-  claudeAuthPath: string,
-  codexAuthPath: string,
-  geminiAuthPath: string,
-  grokAuthPath: string
+  authPaths: AuthAccountCountPaths
 ): Effect.Effect<AuthAccountCounts, PlatformError> =>
   pipe(
     Effect.all({
-      claudeAuthEntries: countAuthCredentialAccounts(fs, path, claudeAuthPath, hasClaudeAccountCredentials),
-      codexAuthEntries: countCodexCredentialAccounts(fs, path, codexAuthPath),
-      geminiAuthEntries: countAuthCredentialAccounts(fs, path, geminiAuthPath, hasGeminiAccountCredentials),
-      grokAuthEntries: countAuthCredentialAccounts(fs, path, grokAuthPath, hasGrokAccountCredentials)
+      claudeAuthEntries: countAuthCredentialAccounts(
+        fs,
+        path,
+        authPaths.claudeAuthPath,
+        hasClaudeAccountCredentials
+      ),
+      codexAuthEntries: countCodexCredentialAccounts(fs, path, authPaths.codexAuthPath),
+      geminiAuthEntries: countAuthCredentialAccounts(
+        fs,
+        path,
+        authPaths.geminiAuthPath,
+        hasGeminiAccountCredentials
+      ),
+      grokAuthEntries: countAuthCredentialAccounts(
+        fs,
+        path,
+        authPaths.grokAuthPath,
+        hasGrokAccountCredentials
+      )
     })
   )

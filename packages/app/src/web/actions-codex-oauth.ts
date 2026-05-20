@@ -1,53 +1,50 @@
 import { Effect } from "effect"
 
+import { codexLoginFailureMessage, codexLoginStreamMarkers } from "../shared/auth-stream-markers.js"
 import {
-  authStreamMarkerExitCode,
-  authStreamSucceeded,
-  codexLoginFailureMessage,
-  codexLoginStreamMarkers,
-  makeVisibleAuthStreamWriter
-} from "../shared/auth-stream-markers.js"
-import {
-  appendOutputChunk,
   applyAuthSuccessState,
   type BrowserActionContext,
   defaultLabel,
   nullableValue,
   withBusy
 } from "./actions-shared.js"
-import { loadAuthSnapshot, loadGithubStatus, loginCodexStream } from "./api.js"
+import { runVisibleAuthStreamMutation } from "./actions-visible-auth-stream.js"
+import { loadAuthSnapshot, loadGithubStatus, loginCodexStream, logoutCodex } from "./api.js"
 
 export const runCodexOauthMutation = (
   values: Readonly<Record<string, string>>,
   context: BrowserActionContext
 ) => {
-  const label = defaultLabel(values["label"])
-  const writer = makeVisibleAuthStreamWriter(codexLoginStreamMarkers, (chunk) => {
-    appendOutputChunk(context, chunk)
+  runVisibleAuthStreamMutation({
+    busyLabel: "Running Codex OAuth",
+    context,
+    failureMessage: codexLoginFailureMessage,
+    markers: codexLoginStreamMarkers,
+    runStream: loginCodexStream,
+    startMessage: "Codex OAuth запущен. Следуй инструкциям в Output.",
+    successMessage: (label) => `Saved Codex login (${label}).`,
+    values
   })
-  context.setOutput("")
-  context.setMessage("Codex OAuth запущен. Следуй инструкциям в Output.")
+}
+
+export const runCodexLogoutMutation = (
+  values: Readonly<Record<string, string>>,
+  context: BrowserActionContext
+) => {
+  const label = defaultLabel(values["label"])
   withBusy({
     context,
-    effect: loginCodexStream(nullableValue(values["label"]), writer.writeChunk).pipe(
-      Effect.ensuring(Effect.sync(writer.flushVisiblePending)),
-      Effect.flatMap((output) =>
-        authStreamSucceeded(output, codexLoginStreamMarkers)
-          ? Effect.all({
-            githubStatus: loadGithubStatus(),
-            snapshot: loadAuthSnapshot()
-          })
-          : Effect.fail(codexLoginFailureMessage(
-            output,
-            authStreamMarkerExitCode(output, codexLoginStreamMarkers)
-          ))
-      )
+    effect: logoutCodex(nullableValue(values["label"])).pipe(
+      Effect.zipRight(Effect.all({
+        githubStatus: loadGithubStatus(),
+        snapshot: loadAuthSnapshot()
+      }))
     ),
-    label: "Running Codex OAuth",
+    label: "CodexLogout",
     onSuccess: ({ githubStatus, snapshot }) => {
       applyAuthSuccessState(context, {
         githubStatus,
-        message: `Saved Codex login (${label}).`,
+        message: `Logged out Codex CLI (${label}).`,
         snapshot
       })
     }

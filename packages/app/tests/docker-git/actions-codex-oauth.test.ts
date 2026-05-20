@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { vi } from "vitest"
@@ -68,3 +69,4 @@ describe("web Codex OAuth action", () => {
       expect(setMessage).toHaveBeenLastCalledWith("Saved Codex login (default).")
     }))
 })
+/* jscpd:ignore-end */

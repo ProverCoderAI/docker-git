@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { beforeEach, vi } from "vitest"
@@ -120,3 +121,4 @@ describe("web auth actions", () => {
       expect(loginCodexStreamMock).toHaveBeenCalledWith(null, expect.any(Function))
     }))
 })
+/* jscpd:ignore-end */

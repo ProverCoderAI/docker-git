@@ -2,29 +2,15 @@ import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import { Effect } from "effect"
 
+import { hasFileAtPath, hasNonEmptyFile } from "./menu-auth-file-helpers.js"
+
+export { hasFileAtPath, hasNonEmptyFile } from "./menu-auth-file-helpers.js"
+
 type AccountCredentialSpec = {
   readonly apiKeyFileName: string
   readonly envFileName: string
   readonly envKeys: ReadonlyArray<string>
 }
-
-export const hasFileAtPath = (
-  fs: FileSystem.FileSystem,
-  filePath: string
-): Effect.Effect<boolean, PlatformError> =>
-  fs.stat(filePath).pipe(
-    Effect.map((info) => info.type === "File"),
-    Effect.catchAll(() => Effect.succeed(false))
-  )
-
-export const hasNonEmptyFile = (
-  fs: FileSystem.FileSystem,
-  filePath: string
-): Effect.Effect<boolean, PlatformError> =>
-  fs.readFileString(filePath).pipe(
-    Effect.map((content) => content.trim().length > 0),
-    Effect.catchAll(() => Effect.succeed(false))
-  )
 
 export const hasNonEmptyEnvValue = (
   fs: FileSystem.FileSystem,
