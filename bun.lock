@@ -25,7 +25,7 @@
       "devDependencies": {
         "@effect/vitest": "^0.29.0",
         "@eslint/js": "10.0.1",
-        "@types/node": "^25.9.0",
+        "@types/node": "^25.9.1",
         "@types/ws": "^8.18.1",
         "@typescript-eslint/eslint-plugin": "^8.59.4",
         "@typescript-eslint/parser": "^8.59.4",
@@ -38,7 +38,7 @@
     },
     "packages/app": {
       "name": "@prover-coder-ai/docker-git",
-      "version": "1.1.20",
+      "version": "1.1.26",
       "bin": {
         "docker-git": "dist/src/docker-git/main.js",
       },
@@ -78,8 +78,8 @@
         "@eslint/js": "10.0.1",
         "@prover-coder-ai/eslint-plugin-suggest-members": "^0.0.26",
         "@ton-ai-core/vibecode-linter": "^1.0.11",
-        "@types/node": "^25.9.0",
-        "@types/react": "^19.2.14",
+        "@types/node": "^25.9.1",
+        "@types/react": "^19.2.15",
         "@types/react-dom": "^19.2.3",
         "@types/ws": "^8.18.1",
         "@typescript-eslint/eslint-plugin": "^8.59.4",
@@ -108,13 +108,13 @@
     },
     "packages/docker-git-session-sync": {
       "name": "@prover-coder-ai/docker-git-session-sync",
-      "version": "1.0.23",
+      "version": "1.0.29",
       "bin": {
         "docker-git-session-sync": "dist/docker-git-session-sync.js",
       },
       "devDependencies": {
         "@effect/vitest": "^0.29.0",
-        "@types/node": "^25.9.0",
+        "@types/node": "^25.9.1",
         "@vitejs/plugin-react": "^6.0.2",
         "typescript": "^6.0.3",
         "vite": "^8.0.13",
@@ -152,7 +152,7 @@
         "@prover-coder-ai/docker-git-session-sync": "workspace:*",
         "@prover-coder-ai/eslint-plugin-suggest-members": "^0.0.26",
         "@ton-ai-core/vibecode-linter": "^1.0.11",
-        "@types/node": "^25.9.0",
+        "@types/node": "^25.9.1",
         "@typescript-eslint/eslint-plugin": "^8.59.4",
         "@typescript-eslint/parser": "^8.59.4",
         "@vitest/coverage-v8": "^4.1.6",
@@ -598,11 +598,11 @@
 
     "@types/minimatch": ["@types/minimatch@6.0.0", "", { "dependencies": { "minimatch": "10.2.4" } }, "sha512-zmPitbQ8+6zNutpwgcQuLcsEpn/Cj54Kbn7L5pX0Os5kdWplB7xPgEh/g+SWOB/qmows2gpuCaPyduq8ZZRnxA=="],
 
-    "@types/node": ["@types/node@25.9.0", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-AOQwYUNolgy3VosiRqXrACUXTN8nJUtPl7FJXMqZVyxiiCLhQuG3jXKvCS1ALr+Y2OmZhzzLVlYPEqJaiqkaJQ=="],
+    "@types/node": ["@types/node@25.9.1", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg=="],
 
     "@types/normalize-package-data": ["@types/normalize-package-data@2.4.4", "", {}, "sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA=="],
 
-    "@types/react": ["@types/react@19.2.14", "", { "dependencies": { "csstype": "3.2.3" } }, "sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w=="],
+    "@types/react": ["@types/react@19.2.15", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-eRwcGNHve+E8qtEQSSRl6urh+rFop4v8gm6O8rGv25CodbvFdLjA1vVQ1KkiFE0w0UPOnb8tDiFKL5lp0rtY5Q=="],
 
     "@types/react-dom": ["@types/react-dom@19.2.3", "", { "peerDependencies": { "@types/react": "19.2.14" } }, "sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ=="],
 
@@ -1831,6 +1831,8 @@
     "@types/glob/@types/node": ["@types/node@24.12.0", "", { "dependencies": { "undici-types": "7.16.0" } }, "sha512-GYDxsZi3ChgmckRT9HPU0WEhKLP08ev/Yfcq2AstjrDASOYCSXeyjDsHg4v5t4jOj7cyDX3vmprafKlWIG9MXQ=="],
 
     "@types/minimatch/minimatch": ["minimatch@10.2.4", "", { "dependencies": { "brace-expansion": "5.0.4" } }, "sha512-oRjTw/97aTBN0RHbYCdtF1MQfvusSIBQM0IZEgzl6426+8jSC0nF1a/GmnVLpfB9yyr6g6FTqWqiZVbxrtaCIg=="],
+
+    "@types/react-dom/@types/react": ["@types/react@19.2.14", "", { "dependencies": { "csstype": "3.2.3" } }, "sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w=="],
 
     "@types/ws/@types/node": ["@types/node@24.12.0", "", { "dependencies": { "undici-types": "7.16.0" } }, "sha512-GYDxsZi3ChgmckRT9HPU0WEhKLP08ev/Yfcq2AstjrDASOYCSXeyjDsHg4v5t4jOj7cyDX3vmprafKlWIG9MXQ=="],
 
