@@ -28,14 +28,16 @@ docker-git auth claude login --web
 docker-git auth grok login --web
 ```
 
-Grok support uses the official xAI CLI installer from `https://x.ai/cli/install.sh`
-and runs the interactive `grok login` OAuth/browser flow inside the auth
-container. Open the sign-in URL printed by the CLI, complete browser consent,
-and, if the local callback cannot connect, paste the returned callback URL into
-the prompt. On success docker-git writes the normalized Grok credentials under
-the selected Grok account label and fixes account-file permissions. API-key auth
-can also be stored under the selected Grok account label via
-`GROK_DEPLOYMENT_KEY`, `GROK_API_KEY`, or `XAI_API_KEY`.
+Поддержка Grok использует официальный установщик xAI CLI из `https://x.ai/cli/install.sh`
+и запускает интерактивный OAuth/браузерный поток `grok login` внутри auth-контейнера.
+Откройте URL входа, который вывел CLI, завершите подтверждение в браузере и, если
+локальный callback не сможет подключиться, вставьте возвращённый callback URL в prompt.
+При успехе docker-git записывает нормализованные Grok credentials под выбранным
+Grok account label и исправляет права на account-file. API-key авторизацию также
+можно сохранить под выбранным Grok account label через переменные окружения
+`GROK_DEPLOYMENT_KEY`, `GROK_API_KEY` или `XAI_API_KEY`. Если задано несколько
+переменных, используется детерминированный порядок переопределения:
+сначала `GROK_DEPLOYMENT_KEY`, затем `GROK_API_KEY`, затем `XAI_API_KEY`.
 
 ## CLI пример
 
