@@ -18,11 +18,13 @@ const renderCountLine = (title: string, count: number): string => `${title}: ${c
 
 const oauthPromptFlows: ReadonlySet<AuthPromptFlow> = new Set([
   "GithubOauth",
+  "CodexOauth",
   "ClaudeOauth",
   "GeminiOauth",
   "GrokOauth"
 ])
 
+const codexPromptFlows: ReadonlySet<AuthPromptFlow> = new Set(["CodexOauth", "CodexLogout"])
 const claudePromptFlows: ReadonlySet<AuthPromptFlow> = new Set(["ClaudeOauth", "ClaudeLogout"])
 const geminiPromptFlows: ReadonlySet<AuthPromptFlow> = new Set(["GeminiOauth", "GeminiApiKey", "GeminiLogout"])
 const grokPromptFlows: ReadonlySet<AuthPromptFlow> = new Set(["GrokOauth", "GrokApiKey", "GrokLogout"])
@@ -39,6 +41,7 @@ const authPromptHelpLine = (flow: AuthPromptFlow): string => {
 
 const authPromptHeaderPaths = (view: AuthPromptView): ReadonlyArray<string> => [
   `Global env: ${view.snapshot.globalEnvPath}`,
+  ...(codexPromptFlows.has(view.flow) ? [`Codex auth: ${view.snapshot.codexAuthPath}`] : []),
   ...(claudePromptFlows.has(view.flow) ? [`Claude auth: ${view.snapshot.claudeAuthPath}`] : []),
   ...(geminiPromptFlows.has(view.flow) ? [`Gemini auth: ${view.snapshot.geminiAuthPath}`] : []),
   ...(grokPromptFlows.has(view.flow) ? [`Grok auth: ${view.snapshot.grokAuthPath}`] : [])
@@ -55,6 +58,7 @@ export const renderAuthMenu = (
     "docker-git / Auth profiles",
     [
       el(Text, null, `Global env: ${snapshot.globalEnvPath}`),
+      el(Text, null, `Codex auth: ${snapshot.codexAuthPath}`),
       el(Text, null, `Claude auth: ${snapshot.claudeAuthPath}`),
       el(Text, null, `Gemini auth: ${snapshot.geminiAuthPath}`),
       el(Text, null, `Grok auth: ${snapshot.grokAuthPath}`),
@@ -62,6 +66,7 @@ export const renderAuthMenu = (
       el(Text, { fg: "gray" }, renderCountLine("GitHub tokens", snapshot.githubTokenEntries)),
       el(Text, { fg: "gray" }, renderCountLine("Git tokens", snapshot.gitTokenEntries)),
       el(Text, { fg: "gray" }, renderCountLine("Git users", snapshot.gitUserEntries)),
+      el(Text, { fg: "gray" }, renderCountLine("Codex logins", snapshot.codexAuthEntries)),
       el(Text, { fg: "gray" }, renderCountLine("Claude logins", snapshot.claudeAuthEntries)),
       el(Text, { fg: "gray" }, renderCountLine("Gemini logins", snapshot.geminiAuthEntries)),
       el(Text, { fg: "gray" }, renderCountLine("Grok logins", snapshot.grokAuthEntries)),

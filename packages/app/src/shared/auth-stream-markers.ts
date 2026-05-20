@@ -68,6 +68,14 @@ const providerLoginFailureMessage = (
 export const githubLoginFailureMessage = (output: string, exitCode: string | null): string =>
   providerLoginFailureMessage("GitHub", output, exitCode, githubLoginStreamMarkers)
 
+export const codexLoginFailureMessage = (output: string, exitCode: string | null): string => {
+  if (output.includes("429 Too Many Requests")) {
+    return "Codex device auth is rate-limited by OpenAI (429 Too Many Requests). Wait a few minutes and retry."
+  }
+
+  return providerLoginFailureMessage("Codex", output, exitCode, codexLoginStreamMarkers)
+}
+
 export const gitlabLoginFailureMessage = (output: string, exitCode: string | null): string =>
   providerLoginFailureMessage("GitLab", output, exitCode, gitlabLoginStreamMarkers)
 

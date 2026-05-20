@@ -4,6 +4,8 @@ import {
   authStreamMarkerExitCode,
   authStreamSucceeded,
   authStreamVisibleLines,
+  codexLoginFailureMessage,
+  codexLoginStreamMarkers,
   githubLoginFailureMessage,
   githubLoginStreamMarkers,
   gitlabLoginFailureMessage,
@@ -44,6 +46,20 @@ describe("auth stream markers", () => {
     expect(authStreamMarkerExitCode(output, gitlabLoginStreamMarkers)).toBe("post-login")
     expect(gitlabLoginFailureMessage(output, "post-login")).toBe("GitLab login failed")
     expect(authStreamVisibleLines(output, gitlabLoginStreamMarkers)).toEqual(["GitLab login failed"])
+  })
+
+  it("detects Codex stream markers and rate-limit failures", () => {
+    const output = [
+      "Codex login failed: 429 Too Many Requests",
+      `${codexLoginStreamMarkers.errorPrefix}1`
+    ].join("\n")
+
+    expect(authStreamSucceeded(`${codexLoginStreamMarkers.success}\n`, codexLoginStreamMarkers)).toBe(true)
+    expect(authStreamMarkerExitCode(output, codexLoginStreamMarkers)).toBe("1")
+    expect(codexLoginFailureMessage(output, "1")).toContain("rate-limited")
+    expect(authStreamVisibleLines(output, codexLoginStreamMarkers)).toEqual([
+      "Codex login failed: 429 Too Many Requests"
+    ])
   })
 
   it("filters marker lines from chunked visible output", () => {

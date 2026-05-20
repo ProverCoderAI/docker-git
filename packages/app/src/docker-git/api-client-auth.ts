@@ -6,7 +6,7 @@ import {
   authStreamMarkerExitCode,
   type AuthStreamMarkers,
   authStreamSucceeded,
-  authStreamVisibleLines,
+  codexLoginFailureMessage,
   codexLoginStreamMarkers,
   githubLoginFailureMessage,
   githubLoginStreamMarkers,
@@ -33,27 +33,6 @@ import type {
 } from "./frontend-lib/core/domain.js"
 import { resolvePathFromCwd } from "./frontend-lib/usecases/path-helpers.js"
 import type { ApiAuthRequiredError, ApiRequestError } from "./host-errors.js"
-
-const codexLoginFailureMessage = (output: string, exitCode: string | null): string => {
-  if (output.includes("429 Too Many Requests")) {
-    return "Codex device auth is rate-limited by OpenAI (429 Too Many Requests). Wait a few minutes and retry."
-  }
-
-  const detailedLine = authStreamVisibleLines(output, codexLoginStreamMarkers)
-    .findLast((line) => line.toLowerCase().includes("error"))
-  if (detailedLine !== undefined) {
-    return detailedLine
-  }
-
-  const lastLine = authStreamVisibleLines(output, codexLoginStreamMarkers).at(-1)
-  if (lastLine !== undefined) {
-    return lastLine
-  }
-
-  return exitCode === null
-    ? "Codex login stream ended without a completion marker."
-    : `Codex login failed (${exitCode}).`
-}
 
 const streamFailure = (
   method: "POST",

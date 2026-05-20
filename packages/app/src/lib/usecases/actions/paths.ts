@@ -1,11 +1,17 @@
 /* jscpd:ignore-start */
 import type * as Path from "@effect/platform/Path"
 import type { CreateCommand } from "../../core/domain.js"
+import { defaultTemplateConfig } from "../../core/template-defaults.js"
 
 export const resolvePathFromBase = (path: Path.Path, baseDir: string, targetPath: string): string =>
   path.isAbsolute(targetPath) ? targetPath : path.resolve(baseDir, targetPath)
 
 const toPosixPath = (value: string): string => value.replaceAll("\\", "/")
+
+const resolveConfigGrokAuthPath = (config: CreateCommand["config"]): string => {
+  const legacyConfig: { readonly grokAuthPath?: string } = config
+  return legacyConfig.grokAuthPath ?? defaultTemplateConfig.grokAuthPath
+}
 
 export const resolveDockerGitRootRelativePath = (
   path: Path.Path,
@@ -42,6 +48,7 @@ export const buildProjectConfigs = (
   // docker-compose resolves relative host paths from the project directory (where docker-compose.yml lives).
   // To keep generated projects portable across host OSes, we avoid embedding absolute host paths in templates.
   const relativeFromOutDir = (absolutePath: string): string => toPosixPath(path.relative(resolvedOutDir, absolutePath))
+  const grokAuthPath = resolveConfigGrokAuthPath(resolvedConfig)
 
   const globalConfig = {
     ...resolvedConfig,
@@ -50,7 +57,8 @@ export const buildProjectConfigs = (
     envGlobalPath: resolvePathFromBase(path, baseDir, resolvedConfig.envGlobalPath),
     envProjectPath: resolvePathFromBase(path, baseDir, resolvedConfig.envProjectPath),
     codexAuthPath: resolvePathFromBase(path, baseDir, resolvedConfig.codexAuthPath),
-    codexSharedAuthPath: resolvePathFromBase(path, baseDir, resolvedConfig.codexSharedAuthPath)
+    codexSharedAuthPath: resolvePathFromBase(path, baseDir, resolvedConfig.codexSharedAuthPath),
+    grokAuthPath: resolvePathFromBase(path, baseDir, grokAuthPath)
   }
   const projectConfig = {
     ...resolvedConfig,
@@ -63,7 +71,9 @@ export const buildProjectConfigs = (
     // Project-local Codex state (sessions/logs/etc) is kept under .orch.
     codexAuthPath: "./.orch/auth/codex",
     // Keep the global auth source path so runtime can seed the shared Docker volume when containers start.
-    codexSharedAuthPath: relativeFromOutDir(globalConfig.codexSharedAuthPath)
+    codexSharedAuthPath: relativeFromOutDir(globalConfig.codexSharedAuthPath),
+    // Keep the global Grok source path so runtime bootstrap can seed selected Grok labels.
+    grokAuthPath: relativeFromOutDir(globalConfig.grokAuthPath)
   }
   return { globalConfig, projectConfig }
 }

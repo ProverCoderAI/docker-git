@@ -85,6 +85,8 @@ export type AuthFlow =
   | "GithubRemove"
   | "GitSet"
   | "GitRemove"
+  | "CodexOauth"
+  | "CodexLogout"
   | "ClaudeOauth"
   | "ClaudeLogout"
   | "GeminiOauth"
@@ -97,6 +99,7 @@ export type AuthFlow =
 export interface AuthSnapshot {
   readonly globalEnvPath: string
   readonly claudeAuthPath: string
+  readonly codexAuthPath: string
   readonly geminiAuthPath: string
   readonly grokAuthPath: string
   readonly totalEntries: number
@@ -104,6 +107,7 @@ export interface AuthSnapshot {
   readonly gitTokenEntries: number
   readonly gitUserEntries: number
   readonly claudeAuthEntries: number
+  readonly codexAuthEntries: number
   readonly geminiAuthEntries: number
   readonly grokAuthEntries: number
 }

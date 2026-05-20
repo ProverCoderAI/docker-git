@@ -22,39 +22,6 @@ const resolvePathFromBase = (
   targetPath: string
 ): string => (path.isAbsolute(targetPath) ? targetPath : path.resolve(baseDir, targetPath))
 
-const copyDirRecursive = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  sourceDir: string,
-  targetDir: string
-): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
-  Effect.gen(function*(_) {
-    const info = yield* _(statIfPresent(fs, sourceDir))
-    if (info === null || info.type !== "Directory") {
-      return
-    }
-
-    yield* _(fs.makeDirectory(targetDir, { recursive: true }))
-    const entries = yield* _(fs.readDirectory(sourceDir))
-    for (const entry of entries) {
-      const sourceEntry = path.join(sourceDir, entry)
-      const targetEntry = path.join(targetDir, entry)
-      const entryInfo = yield* _(statIfPresent(fs, sourceEntry))
-      if (entryInfo === null) {
-        continue
-      }
-      if (entryInfo.type === "Directory") {
-        yield* _(copyDirRecursive(fs, path, sourceEntry, targetEntry))
-      } else if (entryInfo.type === "File") {
-        const sourceText = yield* _(readFileStringIfPresent(fs, sourceEntry))
-        if (sourceText === null) {
-          continue
-        }
-        yield* _(writeFileStringEnsuringParent(fs, path, targetEntry, sourceText))
-      }
-    }
-  })
-
 const copyFileIfPresent = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
@@ -71,6 +38,45 @@ const copyFileIfPresent = (
       return
     }
     yield* _(writeFileStringEnsuringParent(fs, path, targetPath, sourceText))
+  })
+
+const copyDirRecursive = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sourceDir: string,
+  targetDir: string,
+  shouldCopyEntry: (entry: string) => boolean = () => true
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const info = yield* _(statIfPresent(fs, sourceDir))
+    if (info === null || info.type !== "Directory") {
+      return
+    }
+
+    yield* _(fs.makeDirectory(targetDir, { recursive: true }))
+    const entries = yield* _(fs.readDirectory(sourceDir))
+    const copyEntry = (entry: string): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+      Effect.gen(function*(_) {
+        const sourceEntry = path.join(sourceDir, entry)
+        const targetEntry = path.join(targetDir, entry)
+        const entryInfo = yield* _(statIfPresent(fs, sourceEntry))
+        if (entryInfo === null) {
+          return
+        }
+        if (entryInfo.type === "Directory") {
+          yield* _(copyDirRecursive(fs, path, sourceEntry, targetEntry, shouldCopyEntry))
+          return
+        }
+        if (entryInfo.type === "File") {
+          yield* _(copyFileIfPresent(fs, path, sourceEntry, targetEntry))
+        }
+      })
+    for (const entry of entries) {
+      if (!shouldCopyEntry(entry)) {
+        continue
+      }
+      yield* _(copyEntry(entry))
+    }
   })
 
 const copyCodexAuthFileIfPresent = (
@@ -107,10 +113,16 @@ const copyLabeledCodexFiles = (
     }
   })
 
-type BootstrapSeedConfig = Pick<
-  TemplateConfig,
-  "authorizedKeysPath" | "envGlobalPath" | "envProjectPath" | "codexAuthPath" | "codexSharedAuthPath"
->
+type BootstrapSeedConfig =
+  & Pick<
+    TemplateConfig,
+    | "authorizedKeysPath"
+    | "envGlobalPath"
+    | "envProjectPath"
+    | "codexAuthPath"
+    | "codexSharedAuthPath"
+  >
+  & { readonly grokAuthPath?: TemplateConfig["grokAuthPath"] }
 
 type BootstrapSnapshotSources = {
   readonly authorizedKeysSource: string
@@ -119,6 +131,7 @@ type BootstrapSnapshotSources = {
   readonly codexAuthSource: string
   readonly codexSharedAuthSource: string
   readonly claudeAuthSource: string
+  readonly grokAuthSources: ReadonlyArray<string>
 }
 
 type BootstrapSnapshotTargets = {
@@ -127,7 +140,33 @@ type BootstrapSnapshotTargets = {
   readonly envProjectTarget: string
   readonly projectCodexTarget: string
   readonly projectClaudeTarget: string
+  readonly projectGrokTarget: string
   readonly sharedCodexTarget: string
+}
+
+const normalizeBootstrapPath = (value: string): string =>
+  value
+    .replaceAll("\\", "/")
+    .replace(/^\.\//, "")
+    .trim()
+
+const isLegacyDockerGitGrokAuthPath = (value: string): boolean =>
+  normalizeBootstrapPath(value) === ".docker-git/.orch/auth/grok"
+
+const uniquePaths = (values: ReadonlyArray<string>): ReadonlyArray<string> => [...new Set(values)]
+
+const resolveBootstrapGrokAuthSources = (
+  path: Path.Path,
+  projectDir: string,
+  grokAuthPath: string | undefined,
+  codexSharedAuthSource: string
+): ReadonlyArray<string> => {
+  const effectiveGrokAuthPath = grokAuthPath ?? path.join(path.dirname(codexSharedAuthSource), "grok")
+  const configured = resolvePathFromBase(path, projectDir, effectiveGrokAuthPath)
+  if (!isLegacyDockerGitGrokAuthPath(effectiveGrokAuthPath)) {
+    return [configured]
+  }
+  return uniquePaths([path.join(path.dirname(codexSharedAuthSource), "grok"), configured])
 }
 
 const resolveBootstrapSnapshotSources = (
@@ -136,13 +175,15 @@ const resolveBootstrapSnapshotSources = (
   config: BootstrapSeedConfig
 ): BootstrapSnapshotSources => {
   const codexAuthSource = resolvePathFromBase(path, projectDir, config.codexAuthPath)
+  const codexSharedAuthSource = resolvePathFromBase(path, projectDir, config.codexSharedAuthPath)
   return {
     authorizedKeysSource: resolvePathFromBase(path, projectDir, config.authorizedKeysPath),
     envGlobalSource: resolvePathFromBase(path, projectDir, config.envGlobalPath),
     envProjectSource: resolvePathFromBase(path, projectDir, config.envProjectPath),
     codexAuthSource,
-    codexSharedAuthSource: resolvePathFromBase(path, projectDir, config.codexSharedAuthPath),
-    claudeAuthSource: path.join(path.dirname(codexAuthSource), "claude")
+    codexSharedAuthSource,
+    claudeAuthSource: path.join(path.dirname(codexAuthSource), "claude"),
+    grokAuthSources: resolveBootstrapGrokAuthSources(path, projectDir, config.grokAuthPath, codexSharedAuthSource)
   }
 }
 
@@ -161,6 +202,7 @@ const resolveBootstrapSnapshotTargets = (
     envProjectTarget: path.join(stagingDir, "env-project", envProjectBase),
     projectCodexTarget: path.join(stagingDir, "project-auth", "codex"),
     projectClaudeTarget: path.join(stagingDir, "project-auth", "claude"),
+    projectGrokTarget: path.join(stagingDir, "project-auth", "grok"),
     sharedCodexTarget: path.join(stagingDir, "shared-auth", "codex")
   }
 }
@@ -176,6 +218,7 @@ const ensureBootstrapSnapshotLayout = (
     yield* _(fs.makeDirectory(path.dirname(targets.envProjectTarget), { recursive: true }))
     yield* _(fs.makeDirectory(targets.projectCodexTarget, { recursive: true }))
     yield* _(fs.makeDirectory(targets.projectClaudeTarget, { recursive: true }))
+    yield* _(fs.makeDirectory(targets.projectGrokTarget, { recursive: true }))
     yield* _(fs.makeDirectory(targets.sharedCodexTarget, { recursive: true }))
   })
 
@@ -207,6 +250,17 @@ const copyBootstrapSnapshotAuthDirs = (
       copyCodexAuthFileIfPresent(fs, path, sources.codexSharedAuthSource, targets.sharedCodexTarget, "auth.json")
     )
     yield* _(copyLabeledCodexFiles(fs, path, sources.codexSharedAuthSource, targets.sharedCodexTarget, "auth.json"))
+    for (const grokAuthSource of sources.grokAuthSources) {
+      yield* _(
+        copyDirRecursive(
+          fs,
+          path,
+          grokAuthSource,
+          targets.projectGrokTarget,
+          (entry) => entry !== ".image" && entry !== "tmp" && entry !== "log" && entry !== "logs"
+        )
+      )
+    }
   })
 
 export const stageBootstrapSnapshot = (
@@ -228,10 +282,7 @@ export const stageBootstrapSnapshot = (
 
 export const ensureProjectBootstrapVolumeReady = (
   projectDir: string,
-  config: Pick<
-    TemplateConfig,
-    "volumeName" | "authorizedKeysPath" | "envGlobalPath" | "envProjectPath" | "codexAuthPath" | "codexSharedAuthPath"
-  >
+  config: Pick<TemplateConfig, "volumeName"> & BootstrapSeedConfig
 ): Effect.Effect<void, DockerCommandError | PlatformError, SharedVolumeSeedEnvironment> =>
   Effect.scoped(
     Effect.gen(function*(_) {
@@ -246,10 +297,7 @@ export const ensureProjectBootstrapVolumeReady = (
 
 export const ensureSharedCodexVolumeReady = (
   cwd: string,
-  config: Pick<
-    TemplateConfig,
-    "volumeName" | "authorizedKeysPath" | "envGlobalPath" | "envProjectPath" | "codexAuthPath" | "codexSharedAuthPath"
-  >
+  config: Pick<TemplateConfig, "volumeName"> & BootstrapSeedConfig
 ): Effect.Effect<void, DockerCommandError | PlatformError, SharedVolumeSeedEnvironment> =>
   Effect.gen(function*(_) {
     yield* _(runDockerVolumeCreate(cwd, dockerGitSharedCacheVolumeName))

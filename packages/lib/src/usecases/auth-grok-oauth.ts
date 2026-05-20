@@ -6,11 +6,11 @@ import { runCommandWithExitCodes } from "../shell/command-runner.js"
 import { resolveDockerVolumeHostPath } from "../shell/docker-auth.js"
 import { AuthError, CommandFailedError } from "../shell/errors.js"
 
-// CHANGE: run the official Grok CLI device-auth flow inside the auth container
-// WHY: `docker-git auth grok login` must work from terminal-only containers without callback URL handling
+// CHANGE: run the official Grok CLI OAuth/browser flow inside the auth container
+// WHY: `docker-git auth grok login` must use the same interactive Grok CLI login as the CLI path
 // REF: issue-304
 // SOURCE: https://x.ai/news/grok-build-cli
-// FORMAT THEOREM: forall cmd: runGrokOauthLogin(cmd) -> device_code_authorized -> grok_credentials_stored | error
+// FORMAT THEOREM: forall cmd: runGrokOauthLogin(cmd) -> browser_oauth_authorized -> grok_credentials_stored | error
 // PURITY: SHELL
 // EFFECT: Effect<void, AuthError | CommandFailedError | PlatformError, CommandExecutor>
 // INVARIANT: Grok credentials are stored in ~/.grok within the selected account path
@@ -41,15 +41,15 @@ const buildDockerGrokAuthSpec = (
 })
 
 /**
- * Builds the Docker CLI argument vector for the official Grok device-code login flow.
+ * Builds the Docker CLI argument vector for the official Grok OAuth/browser login flow.
  *
  * @param spec Docker auth container paths, image, working directory, and environment bindings.
- * @returns Immutable Docker argument vector ending with `grok login --device-auth`.
+ * @returns Immutable Docker argument vector ending with `grok login`.
  * @pure true
  * @effect none; CORE argument builder only transforms immutable input data.
  * @invariant every non-empty environment binding is emitted as an adjacent `-e` argument pair.
  * @precondition spec.hostPath and spec.containerPath identify the selected Grok auth account directory.
- * @postcondition returned args execute the official headless Grok login mode documented by xAI.
+ * @postcondition returned args execute the same official interactive Grok login command as the CLI route.
  * @complexity O(n) time / O(n) space, where n is spec.env.length.
  * @throws Never - invalid process execution is represented by callers through typed Effect errors.
  */
@@ -73,16 +73,16 @@ export const buildDockerGrokAuthArgs = (spec: DockerGrokAuthSpec): ReadonlyArray
     }
     base.push("-e", trimmed)
   }
-  return [...base, spec.image, "grok", "login", "--device-auth"]
+  return [...base, spec.image, "grok", "login"]
 }
 
-const printDeviceAuthInstructions = (): Effect.Effect<void> =>
+const printOauthInstructions = (): Effect.Effect<void> =>
   Effect.sync(() => {
     process.stderr.write("\n")
-    process.stderr.write("Grok CLI Device Authentication\n")
-    process.stderr.write("1. Copy the device code printed by the Grok CLI.\n")
-    process.stderr.write("2. Open the verification URL printed by the CLI in a browser.\n")
-    process.stderr.write("3. Complete approval; this terminal continues after the CLI writes credentials.\n")
+    process.stderr.write("Grok CLI OAuth Authentication\n")
+    process.stderr.write("1. Open the Grok sign-in URL printed by the CLI.\n")
+    process.stderr.write("2. Complete browser authentication.\n")
+    process.stderr.write("3. If the callback cannot connect, paste the returned URL into the prompt.\n")
     process.stderr.write("\n")
   })
 
@@ -119,10 +119,10 @@ const fixGrokAuthPermissions = (cwd: string, hostPath: string, containerPath: st
   )
 
 /**
- * Runs the Grok CLI `--device-auth` login inside the docker-git auth container.
+ * Runs the Grok CLI OAuth/browser login inside the docker-git auth container.
  *
- * The CLI prints a device code and verification URL; after the user completes
- * approval externally, the command exits and credentials are normalized.
+ * The CLI prints a sign-in URL and may ask for the callback URL; after OAuth
+ * completes, credentials are normalized.
  *
  * @param cwd Working directory used for Docker command execution.
  * @param accountPath Selected docker-git Grok account directory.
@@ -133,7 +133,7 @@ const fixGrokAuthPermissions = (cwd: string, hostPath: string, containerPath: st
  * @invariant successful completion leaves credentials scoped to accountPath and not to project source files.
  * @precondition Docker is available and options.image contains the official Grok CLI binary.
  * @postcondition accountPath ownership follows the mounted account root or a typed error is returned.
- * @complexity O(n) local argument construction plus unbounded external device authorization time.
+ * @complexity O(n) local argument construction plus unbounded external OAuth interaction time.
  * @throws Never - failures are modeled as AuthError, CommandFailedError, or PlatformError in the Effect type.
  */
 export const runGrokOauthLoginWithPrompt = (
@@ -145,7 +145,7 @@ export const runGrokOauthLoginWithPrompt = (
   }
 ): Effect.Effect<void, AuthError | CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
-    yield* _(printDeviceAuthInstructions())
+    yield* _(printOauthInstructions())
     const hostPath = yield* _(resolveDockerVolumeHostPath(cwd, accountPath))
     const spec = buildDockerGrokAuthSpec(cwd, hostPath, options.image, options.containerPath)
     yield* _(

@@ -10,7 +10,7 @@ const actionHint = (action: string | null): string | undefined => {
   if (action === "ClaudeOauth" || action === "GeminiOauth" || action === "GrokOauth") {
     return "opens embedded terminal"
   }
-  if (action === "GithubOauth") {
+  if (action === "GithubOauth" || action === "CodexOauth") {
     return "controller web login"
   }
   return undefined
@@ -78,6 +78,7 @@ export const AuthPanel = (
           <SnapshotLine label="GitHub tokens" value={snapshot.githubTokenEntries} />
           <SnapshotLine label="Git tokens" value={snapshot.gitTokenEntries} />
           <SnapshotLine label="Git users" value={snapshot.gitUserEntries} />
+          <SnapshotLine label="Codex accounts" value={snapshot.codexAuthEntries} />
           <SnapshotLine label="Claude accounts" value={snapshot.claudeAuthEntries} />
           <SnapshotLine label="Gemini accounts" value={snapshot.geminiAuthEntries} />
           <SnapshotLine label="Grok accounts" value={snapshot.grokAuthEntries} />

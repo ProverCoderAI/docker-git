@@ -13,6 +13,7 @@ import { hasGrokAuthJsonCredentialText, hasGrokUserSettingsCredentialText } from
 
 import type { ProjectAuthFlow, ProjectAuthRequest, ProjectAuthSnapshot, ProjectDetails } from "../api/contracts.js"
 import { ApiBadRequestError } from "../api/errors.js"
+import { countAuthCredentialAccounts } from "./auth-account-counts.js"
 
 type ProjectAuthRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 
@@ -81,34 +82,6 @@ const hasFileAtPath = (
     }
     const info = yield* _(fs.stat(filePath))
     return info.type === "File"
-  })
-
-const countAuthAccountDirectories = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  root: string
-): Effect.Effect<number, PlatformError> =>
-  Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(root))
-    if (!exists) {
-      return 0
-    }
-
-    const entries = yield* _(fs.readDirectory(root))
-    let count = 0
-    for (const entry of entries) {
-      if (entry === ".image") {
-        continue
-      }
-
-      const fullPath = path.join(root, entry)
-      const info = yield* _(fs.stat(fullPath))
-      if (info.type === "Directory") {
-        count += 1
-      }
-    }
-
-    return count
   })
 
 const hasNonEmptyOauthToken = (
@@ -231,7 +204,7 @@ const hasGeminiAccountCredentials = (
   fs: FileSystem.FileSystem,
   accountPath: string
 ): Effect.Effect<boolean, PlatformError> =>
-  hasFileAtPath(fs, `${accountPath}/.api-key`).pipe(
+  hasNonEmptyApiKeyFile(fs, `${accountPath}/.api-key`).pipe(
     Effect.flatMap((hasApiKey) => {
       if (hasApiKey) {
         return Effect.succeed(true)
@@ -243,6 +216,7 @@ const hasGeminiAccountCredentials = (
             return Effect.succeed(true)
           }
           return checkAnyFileExists(fs, `${accountPath}/.gemini`, [
+            "oauth_creds.json",
             "oauth-tokens.json",
             "credentials.json",
             "application_default_credentials.json"
@@ -373,9 +347,9 @@ export const readProjectAuthSnapshot = (
     loadProjectAuthEnvText(project),
     Effect.flatMap(({ fs, path, globalEnvText, projectEnvText }) =>
       Effect.all({
-        claudeAuthEntries: countAuthAccountDirectories(fs, path, claudeAuthRoot),
-        geminiAuthEntries: countAuthAccountDirectories(fs, path, geminiAuthRoot),
-        grokAuthEntries: countAuthAccountDirectories(fs, path, grokAuthRoot)
+        claudeAuthEntries: countAuthCredentialAccounts(fs, path, claudeAuthRoot, hasClaudeAccountCredentials),
+        geminiAuthEntries: countAuthCredentialAccounts(fs, path, geminiAuthRoot, hasGeminiAccountCredentials),
+        grokAuthEntries: countAuthCredentialAccounts(fs, path, grokAuthRoot, hasGrokAccountCredentials)
       }).pipe(
         Effect.map(({ claudeAuthEntries, geminiAuthEntries, grokAuthEntries }) => ({
           projectDir: project.projectDir,

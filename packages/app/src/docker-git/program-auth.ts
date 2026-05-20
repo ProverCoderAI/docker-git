@@ -21,7 +21,7 @@ import {
 import { type ControllerRuntime, ensureControllerReady } from "./controller.js"
 import type { Command } from "./frontend-lib/core/domain.js"
 import type { ApiRequestError, CliError } from "./host-errors.js"
-import { terminalAuthTitle } from "./menu-auth-shared.js"
+import { terminalAuthTitle, type TerminalAuthFlow } from "./menu-auth-shared.js"
 import { attachTerminalSession } from "./terminal-session-client.js"
 
 type OperationalCommand = Exclude<Command, { readonly _tag: "Help" }>
@@ -37,6 +37,8 @@ export type RoutedAuthCommand = Extract<
       | "AuthGitlabLogin"
       | "AuthGitlabStatus"
       | "AuthGitlabLogout"
+      | "AuthClaudeLogin"
+      | "AuthGeminiLogin"
       | "AuthGrokLogin"
       | "AuthGrokStatus"
       | "AuthGrokLogout"
@@ -53,7 +55,7 @@ const withControllerReady = <R>(
 
 const renderAuthPayload = (payload: JsonValue) => Effect.log(renderJsonPayload(payload))
 
-const missingAuthTerminalSessionError = (provider: "GrokOauth"): ApiRequestError => ({
+const missingAuthTerminalSessionError = (provider: TerminalAuthFlow): ApiRequestError => ({
   _tag: "ApiRequestError",
   method: "POST",
   path: "/auth/terminal-sessions",
@@ -68,6 +70,8 @@ const routedAuthTags: Readonly<Record<string, true>> = {
   AuthGithubLogin: true,
   AuthGithubLogout: true,
   AuthGithubStatus: true,
+  AuthClaudeLogin: true,
+  AuthGeminiLogin: true,
   AuthGrokLogin: true,
   AuthGrokLogout: true,
   AuthGitlabLogin: true,
@@ -109,34 +113,42 @@ const handleCodexLoginCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthCodexLogin" }>
 ) => withControllerReady(codexLogin(command))
 
-/**
- * Attaches the Grok OAuth terminal session created by the controller.
- *
- * @pure false
- * @effect terminal websocket attachment through `attachTerminalSession`
- * @invariant null controller sessions fail with a typed ApiRequestError
- * @precondition controller response has already been decoded as ApiTerminalSession | null
- * @postcondition non-null sessions are attached through the auth terminal websocket path
- * @complexity O(1) before terminal IO
- * @throws Never; errors are represented in the Effect error channel as CliError
- */
-const attachGrokAuthTerminalSession = (
+const attachAuthTerminalSession = (
+  flow: TerminalAuthFlow,
   session: ApiTerminalSession | null
 ): Effect.Effect<void, CliError> =>
   session === null
-    ? Effect.fail(missingAuthTerminalSessionError("GrokOauth"))
+    ? Effect.fail(missingAuthTerminalSessionError(flow))
     : attachTerminalSession({
-      header: terminalAuthTitle("GrokOauth"),
+      header: terminalAuthTitle(flow),
       session,
       websocketPath: `/auth/terminal-sessions/${encodeURIComponent(session.id)}/ws`
     })
+
+const handleClaudeLoginCommand = (
+  command: Extract<OperationalCommand, { readonly _tag: "AuthClaudeLogin" }>
+) =>
+  withControllerReady(
+    createAuthTerminalSession("ClaudeOauth", command.label).pipe(
+      Effect.flatMap((session) => attachAuthTerminalSession("ClaudeOauth", session))
+    )
+  )
+
+const handleGeminiLoginCommand = (
+  command: Extract<OperationalCommand, { readonly _tag: "AuthGeminiLogin" }>
+) =>
+  withControllerReady(
+    createAuthTerminalSession("GeminiOauth", command.label).pipe(
+      Effect.flatMap((session) => attachAuthTerminalSession("GeminiOauth", session))
+    )
+  )
 
 const handleGrokLoginCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthGrokLogin" }>
 ) =>
   withControllerReady(
     createAuthTerminalSession("GrokOauth", command.label).pipe(
-      Effect.flatMap((session) => attachGrokAuthTerminalSession(session))
+      Effect.flatMap((session) => attachAuthTerminalSession("GrokOauth", session))
     )
   )
 
@@ -176,6 +188,8 @@ export const dispatchRoutedAuthCommand = (
     Match.when({ _tag: "AuthGitlabLogin" }, handleGitlabLoginCommand),
     Match.when({ _tag: "AuthGitlabStatus" }, handleGitlabStatusCommand),
     Match.when({ _tag: "AuthGitlabLogout" }, handleGitlabLogoutCommand),
+    Match.when({ _tag: "AuthClaudeLogin" }, handleClaudeLoginCommand),
+    Match.when({ _tag: "AuthGeminiLogin" }, handleGeminiLoginCommand),
     Match.when({ _tag: "AuthGrokLogin" }, handleGrokLoginCommand),
     Match.when({ _tag: "AuthGrokStatus" }, handleGrokStatusCommand),
     Match.when({ _tag: "AuthGrokLogout" }, handleGrokLogoutCommand),

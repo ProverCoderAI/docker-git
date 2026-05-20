@@ -4,7 +4,10 @@ import type { AuthFlow } from "./menu-types.js"
 
 export type AuthMenuAction = AuthFlow | "Refresh" | "Back"
 
-export type AuthEnvFlow = Exclude<AuthFlow, "GithubOauth" | "ClaudeOauth" | "GeminiOauth" | "GrokOauth">
+export type AuthEnvFlow = Exclude<
+  AuthFlow,
+  "GithubOauth" | "CodexOauth" | "CodexLogout" | "ClaudeOauth" | "GeminiOauth" | "GrokOauth"
+>
 export type TerminalAuthFlow = Extract<AuthFlow, "ClaudeOauth" | "GeminiOauth" | "GrokOauth">
 
 export type AuthPromptStep = {
@@ -24,6 +27,8 @@ const authMenuItems: ReadonlyArray<AuthMenuItem> = [
   { action: "GithubRemove", label: "GitHub: remove token" },
   { action: "GitSet", label: "Git: add/update credentials" },
   { action: "GitRemove", label: "Git: remove credentials" },
+  { action: "CodexOauth", label: "Codex CLI: login via OAuth (OpenAI account)" },
+  { action: "CodexLogout", label: "Codex CLI: logout (clear credentials)" },
   { action: "ClaudeOauth", label: "Claude Code: login via OAuth (web)" },
   { action: "ClaudeLogout", label: "Claude Code: logout (clear cache)" },
   { action: "GeminiOauth", label: "Gemini CLI: login via OAuth (Google account)" },
@@ -50,6 +55,12 @@ const flowSteps: Readonly<Record<AuthFlow, ReadonlyArray<AuthPromptStep>>> = {
   ],
   GitRemove: [
     { key: "label", label: "Label to remove (empty = default)", required: false, secret: false }
+  ],
+  CodexOauth: [
+    { key: "label", label: "Label (empty = default)", required: false, secret: false }
+  ],
+  CodexLogout: [
+    { key: "label", label: "Label to logout (empty = default)", required: false, secret: false }
   ],
   ClaudeOauth: [
     { key: "label", label: "Label (empty = default)", required: false, secret: false }
@@ -85,6 +96,8 @@ export const successMessage = (flow: AuthFlow, label: string): string =>
     Match.when("GithubRemove", () => `Removed GitHub token (${label}).`),
     Match.when("GitSet", () => `Saved Git credentials (${label}).`),
     Match.when("GitRemove", () => `Removed Git credentials (${label}).`),
+    Match.when("CodexOauth", () => `Saved Codex login (${label}).`),
+    Match.when("CodexLogout", () => `Logged out Codex CLI (${label}).`),
     Match.when("ClaudeOauth", () => `Saved Claude Code login (${label}).`),
     Match.when("ClaudeLogout", () => `Logged out Claude Code (${label}).`),
     Match.when("GeminiOauth", () => `Saved Gemini CLI OAuth login (${label}).`),
@@ -102,6 +115,8 @@ export const authViewTitle = (flow: AuthFlow): string =>
     Match.when("GithubRemove", () => "GitHub remove"),
     Match.when("GitSet", () => "Git credentials"),
     Match.when("GitRemove", () => "Git remove"),
+    Match.when("CodexOauth", () => "Codex CLI OAuth"),
+    Match.when("CodexLogout", () => "Codex CLI logout"),
     Match.when("ClaudeOauth", () => "Claude Code OAuth"),
     Match.when("ClaudeLogout", () => "Claude Code logout"),
     Match.when("GeminiOauth", () => "Gemini CLI OAuth"),

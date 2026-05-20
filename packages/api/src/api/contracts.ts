@@ -208,6 +208,7 @@ export type AuthTerminalFlow = "ClaudeOauth" | "GeminiOauth" | "GrokOauth"
 export type AuthSnapshot = {
   readonly globalEnvPath: string
   readonly claudeAuthPath: string
+  readonly codexAuthPath: string
   readonly geminiAuthPath: string
   readonly grokAuthPath: string
   readonly totalEntries: number
@@ -215,6 +216,7 @@ export type AuthSnapshot = {
   readonly gitTokenEntries: number
   readonly gitUserEntries: number
   readonly claudeAuthEntries: number
+  readonly codexAuthEntries: number
   readonly geminiAuthEntries: number
   readonly grokAuthEntries: number
 }

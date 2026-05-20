@@ -29,7 +29,8 @@ const pathFieldsForNormalization = (template: TemplateConfig): ReadonlyArray<str
   template.envGlobalPath,
   template.envProjectPath,
   template.codexAuthPath,
-  template.codexSharedAuthPath
+  template.codexSharedAuthPath,
+  template.grokAuthPath
 ]
 
 const hasLegacyTemplatePaths = (path: Path.Path, template: TemplateConfig): boolean =>
@@ -55,6 +56,8 @@ const normalizeTemplateConfig = (
   const codexAuthPath = "./.orch/auth/codex"
   const codexSharedAbs = path.join(projectsRoot, ".orch", "auth", "codex")
   const codexSharedRel = toPosixPath(path.relative(projectDir, codexSharedAbs))
+  const grokAuthAbs = path.join(projectsRoot, ".orch", "auth", "grok")
+  const grokAuthRel = toPosixPath(path.relative(projectDir, grokAuthAbs))
 
   return {
     ...template,
@@ -63,7 +66,8 @@ const normalizeTemplateConfig = (
     envGlobalPath,
     envProjectPath,
     codexAuthPath,
-    codexSharedAuthPath: withFallback(codexSharedRel, "./.orch/auth/codex")
+    codexSharedAuthPath: withFallback(codexSharedRel, "./.orch/auth/codex"),
+    grokAuthPath: withFallback(grokAuthRel, "./.orch/auth/grok")
   }
 }
 

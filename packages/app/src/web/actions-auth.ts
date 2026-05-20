@@ -19,6 +19,7 @@ import {
   createProjectAuthActionPrompt,
   validateActionPrompt
 } from "./action-prompt.js"
+import { runCodexOauthMutation } from "./actions-codex-oauth.js"
 import { runGithubOauthMutation } from "./actions-github-oauth.js"
 import {
   applyAuthSuccessState,
@@ -34,6 +35,7 @@ import {
   loadAuthSnapshot,
   loadGithubStatus,
   loadProjectAuthSnapshot,
+  logoutCodex,
   runAuthMenuFlow,
   runProjectAuthFlow
 } from "./api.js"
@@ -129,6 +131,30 @@ const runSupportedAuthMutation = (
       applyAuthSuccessState(context, {
         githubStatus,
         message: authSuccessMessage(action, label),
+        snapshot
+      })
+    }
+  })
+}
+
+const runCodexLogoutMutation = (
+  values: Readonly<Record<string, string>>,
+  context: BrowserActionContext
+) => {
+  const label = defaultLabel(values["label"])
+  withBusy({
+    context,
+    effect: logoutCodex(nullableValue(values["label"])).pipe(
+      Effect.zipRight(Effect.all({
+        githubStatus: loadGithubStatus(),
+        snapshot: loadAuthSnapshot()
+      }))
+    ),
+    label: "CodexLogout",
+    onSuccess: ({ githubStatus, snapshot }) => {
+      applyAuthSuccessState(context, {
+        githubStatus,
+        message: authSuccessMessage("CodexLogout", label),
         snapshot
       })
     }
@@ -281,6 +307,14 @@ export const submitBrowserActionPrompt = (
   if (prompt.kind === "Auth") {
     if (prompt.action === "GithubOauth") {
       runSupportedAuthMutation(prompt.action, prompt.values, context)
+      return
+    }
+    if (prompt.action === "CodexOauth") {
+      runCodexOauthMutation(prompt.values, context)
+      return
+    }
+    if (prompt.action === "CodexLogout") {
+      runCodexLogoutMutation(prompt.values, context)
       return
     }
     if (prompt.action === "ClaudeOauth" || prompt.action === "GeminiOauth" || prompt.action === "GrokOauth") {

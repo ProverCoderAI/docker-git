@@ -392,6 +392,44 @@ describe("syncGithubAuthKeys", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("migrates legacy Grok auth directory into docker-git root", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const legacyGrokDefault = path.join(root, ".orch", "auth", "grok", "default")
+        const legacyGrokHome = path.join(legacyGrokDefault, ".grok")
+
+        yield* _(fs.makeDirectory(legacyGrokHome, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(legacyGrokDefault, ".api-key"), "xai-legacy\n"))
+        yield* _(fs.writeFileString(path.join(legacyGrokHome, "auth.json"), "{\"oauth\":\"legacy\"}\n"))
+
+        yield* _(
+          migrateLegacyOrchLayout(root, {
+            envGlobalPath: ".docker-git/.orch/env/global.env",
+            envProjectPath: ".orch/env/project.env",
+            codexAuthPath: ".docker-git/.orch/auth/codex",
+            ghAuthPath: ".docker-git/.orch/auth/gh",
+            claudeAuthPath: ".docker-git/.orch/auth/claude",
+            grokAuthPath: ".docker-git/.orch/auth/grok"
+          })
+        )
+
+        const migratedGrokDefault = path.join(
+          root,
+          ".docker-git",
+          ".orch",
+          "auth",
+          "grok",
+          "default"
+        )
+        expect(yield* _(fs.readFileString(path.join(migratedGrokDefault, ".api-key")))).toBe("xai-legacy\n")
+        expect(yield* _(fs.readFileString(path.join(migratedGrokDefault, ".grok", "auth.json")))).toBe(
+          "{\"oauth\":\"legacy\"}\n"
+        )
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("seeds Claude auth from host home into docker-git default account", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {

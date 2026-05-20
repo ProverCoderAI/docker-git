@@ -3,8 +3,8 @@ import { expect, vi } from "vitest"
 
 import {
   type CreateFlowView,
-  type DisplayModeFlowView,
   createInitialFlowView,
+  type DisplayModeFlowView,
   resolveCreateDisplaySteps
 } from "../../src/docker-git/menu-create-shared.js"
 import type { CreateInputs, CreateStep } from "../../src/docker-git/menu-types.js"

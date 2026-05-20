@@ -211,6 +211,8 @@ export const migrateLegacyOrchLayout = (
       const legacyCodex = path.join(legacyRoot, "auth", "codex")
       const legacyGh = path.join(legacyRoot, "auth", "gh")
       const legacyClaude = path.join(legacyRoot, "auth", "claude")
+      const legacyGemini = path.join(legacyRoot, "auth", "gemini")
+      const legacyGrok = path.join(legacyRoot, "auth", "grok")
 
       const resolvedEnvGlobal = resolvePathFromBase(path, baseDir, paths.envGlobalPath)
       const resolvedEnvProject = resolvePathFromBase(path, baseDir, paths.envProjectPath)
@@ -223,5 +225,13 @@ export const migrateLegacyOrchLayout = (
       yield* _(copyDirIfEmpty(fs, path, legacyCodex, resolvedCodex, "Codex auth"))
       yield* _(copyDirIfEmpty(fs, path, legacyGh, resolvedGh, "GH auth"))
       yield* _(copyDirIfEmpty(fs, path, legacyClaude, resolvedClaude, "Claude auth"))
+      if (paths.geminiAuthPath !== undefined) {
+        const resolvedGemini = resolvePathFromBase(path, baseDir, paths.geminiAuthPath)
+        yield* _(copyDirIfEmpty(fs, path, legacyGemini, resolvedGemini, "Gemini auth"))
+      }
+      if (paths.grokAuthPath !== undefined) {
+        const resolvedGrok = resolvePathFromBase(path, baseDir, paths.grokAuthPath)
+        yield* _(copyDirIfEmpty(fs, path, legacyGrok, resolvedGrok, "Grok auth"))
+      }
     })
   )

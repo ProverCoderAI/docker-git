@@ -10,6 +10,8 @@ const runBrowserFrontendCommandMock = vi.hoisted(() => vi.fn(() => Effect.void))
 const runMenuCallMock = vi.hoisted(() => vi.fn(() => {}))
 const readCommandMock = vi.hoisted(() => vi.fn<() => Command>())
 const codexLoginMock = vi.hoisted(() => vi.fn(() => Effect.void))
+const createAuthTerminalSessionMock = vi.hoisted(() => vi.fn())
+const attachTerminalSessionMock = vi.hoisted(() => vi.fn(() => Effect.void))
 const gitlabLoginMock = vi.hoisted(() => vi.fn(() => Effect.succeed({ ok: true })))
 const readStatePullMock = vi.hoisted(() => vi.fn(() => Effect.succeed("State pull completed.")))
 
@@ -25,6 +27,17 @@ const gitlabLoginCommand: Extract<Command, { readonly _tag: "AuthGitlabLogin" }>
   label: null,
   token: "glpat-token",
   envGlobalPath: ".docker-git/.orch/env/global.env"
+}
+const claudeLoginCommand: Extract<Command, { readonly _tag: "AuthClaudeLogin" }> = {
+  _tag: "AuthClaudeLogin",
+  label: "work",
+  claudeAuthPath: ".docker-git/.orch/auth/claude"
+}
+const geminiLoginCommand: Extract<Command, { readonly _tag: "AuthGeminiLogin" }> = {
+  _tag: "AuthGeminiLogin",
+  label: null,
+  geminiAuthPath: ".docker-git/.orch/auth/gemini",
+  isWeb: false
 }
 const statePullCommand: Extract<Command, { readonly _tag: "StatePull" }> = { _tag: "StatePull" }
 
@@ -47,6 +60,7 @@ vi.mock("../../src/docker-git/api-client.js", () => ({
   codexImport: vi.fn(() => Effect.succeed({ ok: true })),
   codexLogout: vi.fn(() => Effect.void),
   codexStatus: vi.fn(() => Effect.succeed({ ok: true })),
+  createAuthTerminalSession: createAuthTerminalSessionMock,
   createProject: vi.fn(() => Effect.succeed(null)),
   downAllProjects: vi.fn(() => Effect.void),
   gitlabLogin: gitlabLoginMock,
@@ -68,6 +82,10 @@ vi.mock("../../src/docker-git/api-client.js", () => ({
   renderProjectSummaryLine: vi.fn(() => "project"),
   stopContainerTask: vi.fn(() => Effect.void),
   syncState: vi.fn(() => Effect.succeed("State sync completed."))
+}))
+
+vi.mock("../../src/docker-git/terminal-session-client.js", () => ({
+  attachTerminalSession: attachTerminalSessionMock
 }))
 
 vi.mock("../../src/docker-git/menu.js", () => ({
@@ -93,6 +111,18 @@ describe("program menu dispatch", () => {
     readCommandMock.mockReturnValue(menuCommand)
     codexLoginMock.mockReset()
     codexLoginMock.mockImplementation(() => Effect.void)
+    createAuthTerminalSessionMock.mockReset()
+    createAuthTerminalSessionMock.mockImplementation(() =>
+      Effect.succeed({
+        createdAt: "2026-04-21T10:00:00.000Z",
+        id: "auth-session-1",
+        projectId: "auth",
+        sshCommand: "ssh dev@auth",
+        status: "ready"
+      })
+    )
+    attachTerminalSessionMock.mockReset()
+    attachTerminalSessionMock.mockImplementation(() => Effect.void)
     gitlabLoginMock.mockReset()
     gitlabLoginMock.mockImplementation(() => Effect.succeed({ ok: true }))
     readStatePullMock.mockReset()
@@ -147,6 +177,28 @@ describe("program menu dispatch", () => {
 
       expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
       expect(gitlabLoginMock).toHaveBeenCalledTimes(1)
+      expect(process.exitCode ?? 0).toBe(0)
+    }))
+
+  it.effect("routes claude login through controller auth terminal sessions", () =>
+    Effect.gen(function*(_) {
+      readCommandMock.mockReturnValue(claudeLoginCommand)
+      yield* _(runProgram())
+
+      expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
+      expect(createAuthTerminalSessionMock).toHaveBeenCalledWith("ClaudeOauth", "work")
+      expect(attachTerminalSessionMock).toHaveBeenCalledTimes(1)
+      expect(process.exitCode ?? 0).toBe(0)
+    }))
+
+  it.effect("routes gemini login through controller auth terminal sessions", () =>
+    Effect.gen(function*(_) {
+      readCommandMock.mockReturnValue(geminiLoginCommand)
+      yield* _(runProgram())
+
+      expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
+      expect(createAuthTerminalSessionMock).toHaveBeenCalledWith("GeminiOauth", null)
+      expect(attachTerminalSessionMock).toHaveBeenCalledTimes(1)
       expect(process.exitCode ?? 0).toBe(0)
     }))
 })

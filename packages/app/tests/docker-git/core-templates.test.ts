@@ -42,6 +42,15 @@ const getGeneratedFilePaths = (files: ReadonlyArray<PlannedFile>): ReadonlyArray
   files.flatMap((file) => file._tag === "File" ? [file.relativePath] : [])
 
 describe("app planFiles", () => {
+  it("includes Grok auth bootstrap wiring in the generated entrypoint", () => {
+    const files = planFiles(makeTemplateConfig())
+    const entrypoint = getGeneratedFile(files, "entrypoint.sh")
+
+    expect(entrypoint.contents).toContain("DOCKER_GIT_GROK_AUTH_DIR=\"$DOCKER_GIT_HOME/.orch/auth/grok\"")
+    expect(entrypoint.contents).toContain("BOOTSTRAP_GROK_AUTH_DIR=\"$BOOTSTRAP_SOURCE_ROOT/project-auth/grok\"")
+    expect(entrypoint.contents).toContain("sync_dir_entries \"$BOOTSTRAP_GROK_AUTH_DIR\" \"$DOCKER_GIT_GROK_AUTH_DIR\"")
+  })
+
   it("includes nested browser runtime artifacts when Playwright is enabled", () => {
     const files = planFiles(makeTemplateConfig({ enableMcpPlaywright: true }))
     const filePaths = getGeneratedFilePaths(files)

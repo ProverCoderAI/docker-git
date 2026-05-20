@@ -7,6 +7,7 @@ import { Effect } from "effect"
 
 import type { CreateCommand, ParseError } from "../../core/domain.js"
 import { deriveRepoPathParts } from "../../core/domain.js"
+import { defaultTemplateConfig } from "../../core/template-defaults.js"
 import { ensureDockerDaemonAccess } from "../../shell/docker.js"
 import type {
   AgentFailedError,
@@ -66,6 +67,11 @@ const makeCreateContext = (path: Path.Path, baseDir: string): CreateContext => {
   return { baseDir, resolveRootPath }
 }
 
+const resolveConfigGrokAuthPath = (config: CreateCommand["config"]): string => {
+  const legacyConfig: { readonly grokAuthPath?: string } = config
+  return legacyConfig.grokAuthPath ?? defaultTemplateConfig.grokAuthPath
+}
+
 const resolveRootedConfig = (command: CreateCommand, ctx: CreateContext): CreateCommand["config"] => ({
   ...command.config,
   dockerGitPath: ctx.resolveRootPath(command.config.dockerGitPath),
@@ -73,7 +79,8 @@ const resolveRootedConfig = (command: CreateCommand, ctx: CreateContext): Create
   envGlobalPath: ctx.resolveRootPath(command.config.envGlobalPath),
   envProjectPath: ctx.resolveRootPath(command.config.envProjectPath),
   codexAuthPath: ctx.resolveRootPath(command.config.codexAuthPath),
-  codexSharedAuthPath: ctx.resolveRootPath(command.config.codexSharedAuthPath)
+  codexSharedAuthPath: ctx.resolveRootPath(command.config.codexSharedAuthPath),
+  grokAuthPath: ctx.resolveRootPath(resolveConfigGrokAuthPath(command.config))
 })
 
 const resolveCreateConfig = (
