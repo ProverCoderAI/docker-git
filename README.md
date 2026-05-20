@@ -28,8 +28,6 @@ docker-git auth claude login --web
 docker-git auth grok login --web
 ```
 
-Команды `login` запускают интерактивную OAuth-авторизацию выбранного провайдера.
-
 ## CLI пример
 
 Можно передавать ссылку на репозиторий, ветку (`/tree/...`), issue или PR.
