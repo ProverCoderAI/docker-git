@@ -30,29 +30,38 @@ type TerminalCopyClipboardEvent = {
   readonly stopPropagation: () => void
 }
 
-type TerminalCopyMouseEvent = TerminalMouseButtonEvent & TerminalSelectionModifierEvent
+type TerminalCopyMouseEvent = TerminalMouseButtonEvent & TerminalSelectionModifierEvent & {
+  readonly buttons?: number | undefined
+  readonly clientX?: number | undefined
+  readonly clientY?: number | undefined
+  readonly ctrlKey?: boolean | undefined
+  readonly detail?: number | undefined
+  readonly metaKey?: boolean | undefined
+  readonly preventDefault?: (() => void) | undefined
+  readonly screenX?: number | undefined
+  readonly screenY?: number | undefined
+  readonly stopImmediatePropagation?: (() => void) | undefined
+  readonly stopPropagation?: (() => void) | undefined
+}
 
 type TerminalSelectionDragEventType = "mousemove" | "mouseup"
+type TerminalCopyMouseEventType = "mousedown" | TerminalSelectionDragEventType
 
 type TerminalSelectionDragListenerRegistration = (
   type: TerminalSelectionDragEventType,
-  listener: (event: TerminalSelectionModifierEvent) => void,
+  listener: (event: TerminalCopyMouseEvent) => void,
   options: true
 ) => void
 
 type TerminalSelectionDragTarget = {
   readonly addEventListener: TerminalSelectionDragListenerRegistration
+  readonly dispatchEvent?: ((event: Event) => boolean) | undefined
   readonly removeEventListener: TerminalSelectionDragListenerRegistration
 }
 
 type TerminalCopyListenerRegistration = {
   (type: "copy", listener: (event: TerminalCopyClipboardEvent) => void, options: true): void
-  (type: "mousedown", listener: (event: TerminalCopyMouseEvent) => void, options: true): void
-  (
-    type: TerminalSelectionDragEventType,
-    listener: (event: TerminalSelectionModifierEvent) => void,
-    options: true
-  ): void
+  (type: TerminalCopyMouseEventType, listener: (event: TerminalCopyMouseEvent) => void, options: true): void
 }
 
 type TerminalCopyInteractionHost = {
@@ -131,6 +140,81 @@ const resolveTerminalSelectionDragTarget = (
   host: TerminalCopyInteractionHost
 ): TerminalSelectionDragTarget => host.ownerDocument ?? host
 
+const optionalNumber = (value: number | undefined): number => value ?? 0
+
+const optionalBoolean = (value: boolean | undefined): boolean => value ?? false
+
+const forcedTerminalMouseUpInit = (event: TerminalCopyMouseEvent): MouseEventInit => {
+  const selectionModifier = terminalSelectionModifier(currentNavigatorPlatform())
+  return {
+    altKey: selectionModifier === "altKey" ? true : event.altKey,
+    bubbles: true,
+    button: event.button,
+    buttons: 0,
+    cancelable: true,
+    clientX: optionalNumber(event.clientX),
+    clientY: optionalNumber(event.clientY),
+    ctrlKey: optionalBoolean(event.ctrlKey),
+    detail: optionalNumber(event.detail),
+    metaKey: optionalBoolean(event.metaKey),
+    screenX: optionalNumber(event.screenX),
+    screenY: optionalNumber(event.screenY),
+    shiftKey: selectionModifier === "shiftKey" ? true : event.shiftKey
+  }
+}
+
+const defineMouseEventProperty = (
+  event: Event,
+  property: string,
+  value: boolean | number
+): void => {
+  Reflect.defineProperty(event, property, {
+    configurable: true,
+    value
+  })
+}
+
+const copyMouseEventInitProperties = (
+  event: Event,
+  init: MouseEventInit
+): void => {
+  defineMouseEventProperty(event, "altKey", optionalBoolean(init.altKey))
+  defineMouseEventProperty(event, "button", optionalNumber(init.button))
+  defineMouseEventProperty(event, "buttons", optionalNumber(init.buttons))
+  defineMouseEventProperty(event, "clientX", optionalNumber(init.clientX))
+  defineMouseEventProperty(event, "clientY", optionalNumber(init.clientY))
+  defineMouseEventProperty(event, "ctrlKey", optionalBoolean(init.ctrlKey))
+  defineMouseEventProperty(event, "detail", optionalNumber(init.detail))
+  defineMouseEventProperty(event, "metaKey", optionalBoolean(init.metaKey))
+  defineMouseEventProperty(event, "screenX", optionalNumber(init.screenX))
+  defineMouseEventProperty(event, "screenY", optionalNumber(init.screenY))
+  defineMouseEventProperty(event, "shiftKey", optionalBoolean(init.shiftKey))
+}
+
+const createForcedTerminalMouseUpEvent = (
+  sourceEvent: TerminalCopyMouseEvent
+): Event => {
+  const init = forcedTerminalMouseUpInit(sourceEvent)
+  const event = typeof MouseEvent === "function"
+    ? new MouseEvent("mouseup", init)
+    : new Event("mouseup", { bubbles: true, cancelable: true })
+  copyMouseEventInitProperties(event, init)
+  return event
+}
+
+const suppressOriginalTerminalMouseUp = (event: TerminalCopyMouseEvent): void => {
+  event.preventDefault?.()
+  event.stopPropagation?.()
+  event.stopImmediatePropagation?.()
+}
+
+const replayForcedTerminalMouseUp = (
+  target: TerminalSelectionDragTarget,
+  event: TerminalCopyMouseEvent
+): void => {
+  target.dispatchEvent?.(createForcedTerminalMouseUpEvent(event))
+}
+
 const createTerminalSelectionDragController = (
   host: TerminalCopyInteractionHost
 ): TerminalSelectionDragController => {
@@ -148,16 +232,27 @@ const createTerminalSelectionDragController = (
     forcedSelectionDrag = false
   }
 
-  const onMouseMove = (event: TerminalSelectionModifierEvent): void => {
+  const onMouseMove = (event: TerminalCopyMouseEvent): void => {
     if (!forcedSelectionDrag) {
       return
     }
     forceTerminalSelectionModifier(event)
   }
 
-  const onMouseUp = (event: TerminalSelectionModifierEvent): void => {
-    if (forcedSelectionDrag) {
-      forceTerminalSelectionModifier(event)
+  const onMouseUp = (event: TerminalCopyMouseEvent): void => {
+    if (!forcedSelectionDrag) {
+      return
+    }
+    const target = selectionDragTarget
+    forceTerminalSelectionModifier(event)
+    if (target?.dispatchEvent !== undefined) {
+      // CHANGE: replay a clean document mouseup for xterm selection finalization.
+      // WHY: xterm's mouse-report mouseup treats the original release as pty input,
+      // which triggers onUserInput and clears the just-created selection.
+      suppressOriginalTerminalMouseUp(event)
+      clearSelectionDrag()
+      replayForcedTerminalMouseUp(target, event)
+      return
     }
     clearSelectionDrag()
   }
