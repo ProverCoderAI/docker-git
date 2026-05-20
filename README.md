@@ -29,9 +29,13 @@ docker-git auth grok login --web
 ```
 
 Grok support uses the official xAI CLI installer from `https://x.ai/cli/install.sh`
-and the CLI device-code login flow. API-key auth can also be stored under the
-selected Grok account label via `GROK_DEPLOYMENT_KEY`, `GROK_API_KEY`, or
-`XAI_API_KEY`.
+and runs the interactive `grok login` OAuth/browser flow inside the auth
+container. Open the sign-in URL printed by the CLI, complete browser consent,
+and, if the local callback cannot connect, paste the returned callback URL into
+the prompt. On success docker-git writes the normalized Grok credentials under
+the selected Grok account label and fixes account-file permissions. API-key auth
+can also be stored under the selected Grok account label via
+`GROK_DEPLOYMENT_KEY`, `GROK_API_KEY`, or `XAI_API_KEY`.
 
 ## CLI пример
 
