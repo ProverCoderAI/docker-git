@@ -2,6 +2,7 @@ import * as fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
 import {
+  advanceCreateDisplaySettingsStep,
   applyCreateDisplaySettingsStep,
   completeCreateDisplaySettingsFlow,
   type DisplayModeFlowView,
@@ -80,6 +81,35 @@ describe("menu-create-shared display settings", () => {
     expect(next.buffer).toBe("")
     expect(next.values.enableMcpPlaywright).toBe(true)
     expect(resolveCreateDisplaySteps()[next.step]).toBe("mcpPlaywright")
+  })
+
+  it("applies a browser display setting and advances to the next row", () => {
+    const next = expectDisplayModeView(expectCreateContinueView(advanceCreateDisplaySettingsStep(
+      cwd,
+      { ...createFlowViewAtStep(createFeatureRepoDisplaySettingsView(cwd), "mcpPlaywright"), buffer: "y" }
+    )))
+
+    expect(next.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
+    expect(next.buffer).toBe("")
+    expect(next.values.enableMcpPlaywright).toBe(true)
+  })
+
+  it("preserves an existing setting value on empty Enter and wraps after the last row", () => {
+    const view = createFlowViewAtStep(createFeatureRepoDisplaySettingsView(cwd), "force", "")
+    const next = expectDisplayModeView(expectCreateContinueView(advanceCreateDisplaySettingsStep(
+      cwd,
+      {
+        ...view,
+        values: {
+          ...view.values,
+          force: true
+        }
+      }
+    )))
+
+    expect(next.step).toBe(resolveCreateDisplaySteps().indexOf("cpuLimit"))
+    expect(next.buffer).toBe("")
+    expect(next.values.force).toBe(true)
   })
 
   it("navigates browser display settings without skipping applied rows", () => {

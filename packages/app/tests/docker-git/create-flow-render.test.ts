@@ -7,8 +7,8 @@ import {
   type CreateFlowContext,
   type CreateFlowView,
   createInitialFlowView,
-  createSettingsHint,
   type CreateModeFlowView,
+  createSettingsHint,
   type DisplayModeFlowView,
   renderCreateStepLabel,
   resolveCreateDisplaySteps,
@@ -34,6 +34,7 @@ const createContext: CreateFlowContext = {
 const renderWithUi = (element: ReactElement): string =>
   renderToStaticMarkup(createElement(UiProvider, { primitives: webPrimitives }, element))
 
+const webCreateSettingsNavigationHint = "↑ - up, ↓ - down, Enter - apply + down"
 const webCreateSettingsChoiceHint = "←/→ - choose yes/no or GPU"
 const createSettingsView = (): DisplayModeFlowView => createFeatureRepoDisplaySettingsView(createContext)
 
@@ -54,6 +55,7 @@ const renderCreatePanel = (
 const activeStepMarker = "&gt; "
 
 const countActiveStepMarkers = (html: string): number => html.split(activeStepMarker).length - 1
+const renderedHelpLine = (line: string): string => `>${line}</div>`
 
 const renderStepLabels = (createView: CreateFlowView): ReadonlyArray<string> => {
   const defaults = resolveCreateInputs(createContext, createView.values)
@@ -204,10 +206,18 @@ describe("Create flow rendering", () => {
   })
 
   it("renders the settings navigation hint only after leaving the repo URL step", () => {
-    expect(renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))).not.toContain(createSettingsHint)
-    expect(renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))).not.toContain(webCreateSettingsChoiceHint)
-    expect(renderCreatePanel(createSettingsView())).toContain(createSettingsHint)
-    expect(renderCreatePanel(createSettingsView())).toContain(webCreateSettingsChoiceHint)
+    expect(renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))).not.toContain(
+      renderedHelpLine(createSettingsHint)
+    )
+    expect(renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))).not.toContain(
+      renderedHelpLine(webCreateSettingsNavigationHint)
+    )
+    expect(renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))).not.toContain(
+      renderedHelpLine(webCreateSettingsChoiceHint)
+    )
+    expect(renderCreatePanel(createSettingsView())).not.toContain(renderedHelpLine(createSettingsHint))
+    expect(renderCreatePanel(createSettingsView())).toContain(renderedHelpLine(webCreateSettingsNavigationHint))
+    expect(renderCreatePanel(createSettingsView())).toContain(renderedHelpLine(webCreateSettingsChoiceHint))
   })
 
   it("renders terminal Create hints with the same repo/settings split", () => {
@@ -216,8 +226,9 @@ describe("Create flow rendering", () => {
 
     expect(repoHtml).not.toContain("Enter = next, Esc = cancel.")
     expect(repoHtml).not.toContain("Shift+Enter")
-    expect(settingsHtml).toContain(createSettingsHint)
-    expect(settingsHtml).not.toContain(webCreateSettingsChoiceHint)
+    expect(settingsHtml).toContain(renderedHelpLine(createSettingsHint))
+    expect(settingsHtml).not.toContain(renderedHelpLine(webCreateSettingsNavigationHint))
+    expect(settingsHtml).not.toContain(renderedHelpLine(webCreateSettingsChoiceHint))
   })
 
   it("preserves hint visibility invariants for every Create step", () => {
@@ -231,10 +242,12 @@ describe("Create flow rendering", () => {
         const panelHtml = renderCreatePanel(view)
         const compactPanelHtml = renderCreatePanel(view, { compact: true })
 
-        expect(panelHtml.includes(createSettingsHint)).toBe(isSettings)
-        expect(compactPanelHtml.includes(createSettingsHint)).toBe(isSettings)
-        expect(panelHtml.includes(webCreateSettingsChoiceHint)).toBe(isSettings)
-        expect(compactPanelHtml.includes(webCreateSettingsChoiceHint)).toBe(isSettings)
+        expect(panelHtml).not.toContain(renderedHelpLine(createSettingsHint))
+        expect(compactPanelHtml).not.toContain(renderedHelpLine(createSettingsHint))
+        expect(panelHtml.includes(renderedHelpLine(webCreateSettingsNavigationHint))).toBe(isSettings)
+        expect(compactPanelHtml.includes(renderedHelpLine(webCreateSettingsNavigationHint))).toBe(isSettings)
+        expect(panelHtml.includes(renderedHelpLine(webCreateSettingsChoiceHint))).toBe(isSettings)
+        expect(compactPanelHtml.includes(renderedHelpLine(webCreateSettingsChoiceHint))).toBe(isSettings)
         expect(panelHtml).not.toContain("Enter = next, Esc = cancel.")
         expect(compactPanelHtml).not.toContain("Enter = next, Esc = cancel.")
         expect(panelHtml).not.toContain("Shift+Enter")
@@ -250,8 +263,9 @@ describe("Create flow rendering", () => {
         const view = step === 0 ? createInitialFlowView(featureCreateRepoUrl) : { ...terminalSettingsView, step }
         const terminalHtml = renderTerminalCreate(view)
 
-        expect(terminalHtml.includes(createSettingsHint)).toBe(step > 0)
-        expect(terminalHtml).not.toContain(webCreateSettingsChoiceHint)
+        expect(terminalHtml.includes(renderedHelpLine(createSettingsHint))).toBe(step > 0)
+        expect(terminalHtml).not.toContain(renderedHelpLine(webCreateSettingsNavigationHint))
+        expect(terminalHtml).not.toContain(renderedHelpLine(webCreateSettingsChoiceHint))
         expect(terminalHtml).not.toContain("Enter = next, Esc = cancel.")
         expect(terminalHtml).not.toContain("Shift+Enter")
       })

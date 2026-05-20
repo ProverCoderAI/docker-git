@@ -4,7 +4,6 @@ import {
   type CreateFlowContext,
   type CreateFlowView,
   type CreateSettingsChoiceDirection,
-  createSettingsHint,
   isCreateFlowRepoStep,
   isDisplayModeFlowView,
   renderCreateStepLabel,
@@ -20,6 +19,7 @@ import type { CreateSubmitMode } from "./app-ready-create.js"
 
 const renderStepColor = (active: boolean): string => active ? "#56f39a" : "#8fa6c4"
 
+const webCreateSettingsNavigationHint = "↑ - up, ↓ - down, Enter - apply + down"
 const webCreateSettingsChoiceHint = "←/→ - choose yes/no or GPU"
 
 const createPrompt = (
@@ -225,7 +225,7 @@ const CreateHintBlock = (
   <HelpLines
     lines={[
       ...(isRepoStep ? ["Repo URL or URL + CLI flags."] : []),
-      ...(isRepoStep ? [] : [createSettingsHint]),
+      ...(isRepoStep ? [] : [webCreateSettingsNavigationHint]),
       ...(isRepoStep ? [] : [webCreateSettingsChoiceHint]),
       ...(compact && isRepoStep ? ["↑/↓ = menu, ←/→ = project"] : []),
       `Current cwd: ${controllerCwd}`

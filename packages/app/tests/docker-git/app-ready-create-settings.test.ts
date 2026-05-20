@@ -75,12 +75,12 @@ describe("app-ready-create settings", () => {
     expect(arrowView.values.gpu).toBeUndefined()
     expect(enterResult.handled).toBe(true)
     expect(enteredView.values.gpu).toBe("all")
-    expect(enteredView.step).toBe(resolveCreateDisplaySteps().indexOf("gpu"))
+    expect(enteredView.step).toBe(resolveCreateDisplaySteps().indexOf("runUp"))
     expect(enteredView.buffer).toBe("")
     expect(submitCreateInputsMock).not.toHaveBeenCalled()
   })
 
-  it("keeps an applied settings row selected and visible instead of submitting", () => {
+  it("wraps to the first settings row after applying the last settings row", () => {
     const createView: CreateFlowView = {
       ...createSettingsFlowViewAtStep("force", "y"),
       values: {
@@ -97,21 +97,36 @@ describe("app-ready-create settings", () => {
 
     expect(handled).toBe(true)
     expect(enteredView.values.force).toBe(true)
-    expect(enteredView.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
+    expect(enteredView.step).toBe(resolveCreateDisplaySteps().indexOf("cpuLimit"))
     expect(enteredView.buffer).toBe("")
     expect(submitCreateInputsMock).not.toHaveBeenCalled()
+  })
+
+  it("keeps the previous setting value when Enter applies an empty buffer", () => {
+    const createView: CreateFlowView = {
+      ...createSettingsFlowViewAtStep("runUp", ""),
+      values: {
+        ...createSettingsFlowView().values,
+        runUp: false
+      }
+    }
+    const emptyResult = runCreateKey(handleCreateKey, createView, "Enter")
+    const emptyView = requireCreateViewValue(emptyResult.setCreateViewSpy.mock.calls[0]?.[0])
+
+    expect(emptyResult.handled).toBe(true)
+    expect(emptyView.step).toBe(resolveCreateDisplaySteps().indexOf("mcpPlaywright"))
+    expect(emptyView.values.runUp).toBe(false)
+    expect(emptyView.buffer).toBe("")
   })
 
   it("navigates to the next visible row after applying a settings row", () => {
     const enterResult = runCreateKey(handleCreateKey, createSettingsFlowViewAtStep("mcpPlaywright", "y"), "Enter")
     const enteredView = requireCreateViewValue(enterResult.setCreateViewSpy.mock.calls[0]?.[0])
-    const downResult = runCreateKey(handleCreateKey, enteredView, "ArrowDown")
-    const downView = requireCreateViewValue(downResult.setCreateViewSpy.mock.calls[0]?.[0])
 
-    expect(downResult.handled).toBe(true)
-    expect(downView.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
-    expect(downView.values.enableMcpPlaywright).toBe(true)
-    expect(downView.buffer).toBe("")
+    expect(enterResult.handled).toBe(true)
+    expect(enteredView.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
+    expect(enteredView.values.enableMcpPlaywright).toBe(true)
+    expect(enteredView.buffer).toBe("")
   })
 
   it("clears an unconfirmed preview when navigating away from a settings row", () => {
