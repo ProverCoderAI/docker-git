@@ -3,8 +3,8 @@ import { type Dispatch, type SetStateAction, useEffect } from "react"
 import { formatParseError } from "../docker-git/cli/usage.js"
 import { nextBufferValue } from "../docker-git/menu-buffer-input.js"
 import {
+  advanceCreateDisplaySettingsStep,
   advanceCreateFlow,
-  applyCreateDisplaySettingsStep,
   completeCreateDisplaySettingsFlow,
   createDisplayFlowView,
   type CreateFlowView,
@@ -75,7 +75,7 @@ const resolveCreateSubmitResult = (
 ): ReturnType<typeof advanceCreateFlow> => {
   if (isDisplayModeFlowView(createView)) {
     return mode === "advance"
-      ? applyCreateDisplaySettingsStep(createContext, createView)
+      ? advanceCreateDisplaySettingsStep(createContext, createView)
       : completeCreateDisplaySettingsFlow(createContext, createView)
   }
   const next = advanceCreateFlow(createContext, createView, { quickCreate: mode === "quick-create" })

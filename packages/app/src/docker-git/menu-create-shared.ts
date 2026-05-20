@@ -899,6 +899,29 @@ export const applyCreateDisplaySettingsStep = (
     ))
 
 /**
+ * Applies one browser Create settings display row and advances selection downward.
+ *
+ * @pure true
+ * @effect none
+ * @invariant successful result preserves applied values and moves over the finite display row cycle
+ * @precondition view.step points at a settings display row
+ * @postcondition result._tag = "Continue" -> result.view.buffer = ""
+ * @complexity O(1)
+ */
+export const advanceCreateDisplaySettingsStep = (
+  contextOrCwd: string | CreateFlowContext,
+  view: DisplayModeFlowView
+): AdvanceCreateFlowResult | null => {
+  const applied = applyCreateDisplaySettingsStep(contextOrCwd, view)
+  if (applied === null || applied._tag !== "Continue" || !isDisplayModeFlowView(applied.view)) {
+    return applied
+  }
+
+  const movedView = moveCreateDisplaySettingsStep(applied.view, "down")
+  return movedView === null ? applied : { ...applied, view: movedView }
+}
+
+/**
  * Completes browser Create settings by applying a non-empty active buffer first.
  *
  * @pure true
