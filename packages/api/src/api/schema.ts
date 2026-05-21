@@ -11,7 +11,15 @@ export {
   ForgeFedTicketSchema,
   ForgeFedTicketSourceSchema,
   JsonLdContextSchema,
-  JsonValueSchema
+  JsonValueSchema,
+  LocalActivityPubFollowersCollectionSchema,
+  LocalActivityPubOrderedCollectionPageSchema,
+  LocalActivityPubOrderedCollectionSchema,
+  LocalActivityPubPersonSchema,
+  MastodonFollowersOrderedCollectionPageSchema,
+  MastodonFollowersOrderedCollectionSchema,
+  MastodonIssueActivityPubPersonSchema,
+  exactActivityPubParseOptions
 } from "./activitypub-schema.js"
 
 const OptionalString = Schema.optional(Schema.String)

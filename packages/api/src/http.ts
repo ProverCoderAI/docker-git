@@ -44,7 +44,8 @@ import {
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
-  UpProjectRequestSchema
+  UpProjectRequestSchema,
+  exactActivityPubParseOptions
 } from "./api/schema.js"
 import type { UpProjectRequestInput } from "./api/schema.js"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
@@ -316,7 +317,7 @@ const validatedJsonLdResponse = <A, I>(
   label: string,
   status: number
 ) =>
-  Schema.decodeUnknown(schema)(data).pipe(
+  Schema.decodeUnknown(schema, exactActivityPubParseOptions)(data).pipe(
     Effect.mapError((error) =>
       new ApiInternalError({
         message: `${label} does not satisfy its ActivityPub JSON-LD schema: ${

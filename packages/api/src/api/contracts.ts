@@ -9,7 +9,11 @@ import type {
   ActivityPubPublicKeySchema,
   ActorJsonLdContextSchema,
   ForgeFedTicketSchema,
-  ForgeFedTicketSourceSchema
+  ForgeFedTicketSourceSchema,
+  LocalActivityPubFollowersCollectionSchema,
+  LocalActivityPubOrderedCollectionPageSchema,
+  LocalActivityPubOrderedCollectionSchema,
+  LocalActivityPubPersonSchema
 } from "./activitypub-schema.js"
 
 export type ProjectStatus = "running" | "stopped" | "unknown"
@@ -622,9 +626,18 @@ export type ActivityPubPublicKey = Schema.Schema.Type<typeof ActivityPubPublicKe
 
 export type ActivityPubPerson = Schema.Schema.Type<typeof ActivityPubPersonSchema>
 
+export type LocalActivityPubPerson = Schema.Schema.Type<typeof LocalActivityPubPersonSchema>
+
 export type ActivityPubOrderedCollection = Schema.Schema.Type<typeof ActivityPubOrderedCollectionSchema>
 
+export type LocalActivityPubOrderedCollection =
+  | Schema.Schema.Type<typeof LocalActivityPubOrderedCollectionSchema>
+  | Schema.Schema.Type<typeof LocalActivityPubFollowersCollectionSchema>
+
 export type ActivityPubOrderedCollectionPage = Schema.Schema.Type<typeof ActivityPubOrderedCollectionPageSchema>
+
+export type LocalActivityPubOrderedCollectionPage =
+  Schema.Schema.Type<typeof LocalActivityPubOrderedCollectionPageSchema>
 
 export type FollowSubscription = {
   readonly id: string

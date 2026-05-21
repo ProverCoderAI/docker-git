@@ -13,9 +13,6 @@ import { dirname, join } from "node:path"
 import type { JsonValue } from "../api/activitypub-schema.js"
 import type {
   ActivityPubFollowActivity,
-  ActivityPubOrderedCollection,
-  ActivityPubOrderedCollectionPage,
-  ActivityPubPerson,
   ActivityPubPublicKey,
   AgentProvider,
   AgentSession,
@@ -33,6 +30,9 @@ import type {
   FollowSubscriptionCreated,
   ForgeFedTicket,
   ForgeFedTicketSource,
+  LocalActivityPubOrderedCollection,
+  LocalActivityPubOrderedCollectionPage,
+  LocalActivityPubPerson,
   ProjectDetails
 } from "../api/contracts.js"
 import {
@@ -629,7 +629,7 @@ const followActivityJson = (activity: ActivityPubFollowActivity): JsonValue => (
 
 export const makeFederationActorDocument = (
   context: FederationContext
-): ActivityPubPerson => ({
+): LocalActivityPubPerson => ({
   "@context": actorJsonLdContext,
   type: "Person",
   id: context.actorId,
@@ -649,7 +649,7 @@ export const makeFederationActorDocument = (
 
 export const makeFederationOutboxCollection = (
   context: FederationContext
-): ActivityPubOrderedCollection => {
+): LocalActivityPubOrderedCollection => {
   const orderedItems = listFollowSubscriptions().map((subscription) => followActivityJson(subscription.activity))
   return {
     "@context": activityForgeFedJsonLdContext,
@@ -662,7 +662,7 @@ export const makeFederationOutboxCollection = (
 
 export const makeFederationFollowersCollection = (
   context: FederationContext
-): ActivityPubOrderedCollection => ({
+): LocalActivityPubOrderedCollection => ({
   "@context": activityForgeFedJsonLdContext,
   type: "OrderedCollection",
   id: context.followers,
@@ -673,7 +673,7 @@ export const makeFederationFollowersCollection = (
 
 export const makeFederationFollowersPageCollection = (
   context: FederationContext
-): ActivityPubOrderedCollectionPage => ({
+): LocalActivityPubOrderedCollectionPage => ({
   "@context": activityForgeFedJsonLdContext,
   type: "OrderedCollectionPage",
   id: `${context.followers}?page=1`,
@@ -684,7 +684,7 @@ export const makeFederationFollowersPageCollection = (
 
 export const makeFederationFollowingCollection = (
   context: FederationContext
-): ActivityPubOrderedCollection => {
+): LocalActivityPubOrderedCollection => {
   const orderedItems = listFollowSubscriptions()
     .filter((subscription) => subscription.status === "accepted")
     .map((subscription) => subscription.object)
@@ -700,7 +700,7 @@ export const makeFederationFollowingCollection = (
 
 export const makeFederationLikedCollection = (
   context: FederationContext
-): ActivityPubOrderedCollection => ({
+): LocalActivityPubOrderedCollection => ({
   "@context": activityForgeFedJsonLdContext,
   type: "OrderedCollection",
   id: context.liked,
@@ -1592,11 +1592,11 @@ const outboxItemId = (item: unknown, subscription: FollowSubscription): string =
 
 const fetchOutbox = (
   url: string
-): Effect.Effect<ActivityPubOrderedCollection, ApiBadRequestError> =>
+): Effect.Effect<LocalActivityPubOrderedCollection, ApiBadRequestError> =>
   fetchJson(url, "Exchange outbox").pipe(
     Effect.flatMap((record) =>
       requireFederationJsonLdContext(record, "Exchange outbox").pipe(
-        Effect.map((): ActivityPubOrderedCollection => ({
+        Effect.map((): LocalActivityPubOrderedCollection => ({
           "@context": activityForgeFedJsonLdContext,
           type: "OrderedCollection",
           id: readOptionalString(record, "id") ?? url,

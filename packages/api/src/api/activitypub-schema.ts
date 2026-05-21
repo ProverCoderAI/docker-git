@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema"
+import type * as SchemaAST from "effect/SchemaAST"
 
 import {
   activityStreamsJsonLdContext,
@@ -10,6 +11,10 @@ import {
 export type JsonPrimitive = boolean | number | string | null
 export type JsonValue = JsonPrimitive | JsonObject | ReadonlyArray<JsonValue>
 export type JsonObject = Readonly<{ [key: string]: JsonValue }>
+
+export const exactActivityPubParseOptions: SchemaAST.ParseOptions = {
+  onExcessProperty: "error"
+}
 
 export const JsonValueSchema: Schema.Schema<JsonValue> = Schema.suspend(() =>
   Schema.Union(
@@ -23,13 +28,12 @@ export const JsonValueSchema: Schema.Schema<JsonValue> = Schema.suspend(() =>
 )
 
 const OptionalString = Schema.optional(Schema.String)
-const OptionalBoolean = Schema.optional(Schema.Boolean)
 const JsonObjectSchema = Schema.Record({ key: Schema.String, value: JsonValueSchema })
 const JsonLdContextEntrySchema = Schema.Union(Schema.String, JsonObjectSchema)
 const JsonLdIdMappingSchema = Schema.Struct({
   "@id": Schema.String,
-  "@type": OptionalString
-}, Schema.Record({ key: Schema.String, value: JsonValueSchema }))
+  "@type": Schema.Literal("@id")
+})
 
 export const ActivityForgeFedJsonLdContextSchema = Schema.Tuple(
   Schema.Literal(activityStreamsJsonLdContext),
@@ -43,29 +47,29 @@ export const LocalActorJsonLdContextSchema = Schema.Tuple(
 )
 
 export const MastodonActorContextExtensionsSchema = Schema.Struct({
-  manuallyApprovesFollowers: OptionalString,
-  toot: OptionalString,
-  featured: Schema.optional(JsonLdIdMappingSchema),
-  featuredTags: Schema.optional(JsonLdIdMappingSchema),
-  alsoKnownAs: Schema.optional(JsonLdIdMappingSchema),
-  movedTo: Schema.optional(JsonLdIdMappingSchema),
-  schema: OptionalString,
-  PropertyValue: OptionalString,
-  value: OptionalString,
-  discoverable: OptionalString,
-  suspended: OptionalString,
-  memorial: OptionalString,
-  indexable: OptionalString,
-  attributionDomains: Schema.optional(JsonLdIdMappingSchema),
-  showFeatured: OptionalString,
-  showMedia: OptionalString,
-  showRepliesInMedia: OptionalString,
-  gts: OptionalString,
-  interactionPolicy: Schema.optional(JsonLdIdMappingSchema),
-  canQuote: Schema.optional(JsonLdIdMappingSchema),
-  automaticApproval: Schema.optional(JsonLdIdMappingSchema),
-  manualApproval: Schema.optional(JsonLdIdMappingSchema)
-}, Schema.Record({ key: Schema.String, value: JsonValueSchema }))
+  manuallyApprovesFollowers: Schema.String,
+  toot: Schema.String,
+  featured: JsonLdIdMappingSchema,
+  featuredTags: JsonLdIdMappingSchema,
+  alsoKnownAs: JsonLdIdMappingSchema,
+  movedTo: JsonLdIdMappingSchema,
+  schema: Schema.String,
+  PropertyValue: Schema.String,
+  value: Schema.String,
+  discoverable: Schema.String,
+  suspended: Schema.String,
+  memorial: Schema.String,
+  indexable: Schema.String,
+  attributionDomains: JsonLdIdMappingSchema,
+  showFeatured: Schema.String,
+  showMedia: Schema.String,
+  showRepliesInMedia: Schema.String,
+  gts: Schema.String,
+  interactionPolicy: JsonLdIdMappingSchema,
+  canQuote: JsonLdIdMappingSchema,
+  automaticApproval: JsonLdIdMappingSchema,
+  manualApproval: JsonLdIdMappingSchema
+})
 
 export const MastodonActorJsonLdContextSchema = Schema.Tuple(
   Schema.Literal(activityStreamsJsonLdContext),
@@ -113,7 +117,7 @@ export const ActivityPubPublicKeySchema = Schema.Struct({
 })
 
 const ActivityPubEndpointsSchema = Schema.Struct({
-  sharedInbox: OptionalString
+  sharedInbox: Schema.String
 })
 
 const ActivityPubImageSchema = Schema.Struct({
@@ -166,44 +170,57 @@ const MastodonInteractionPolicySchema = Schema.Struct({
     policy.canQuote !== undefined)
 )
 
-export const ActivityPubPersonSchema = Schema.Struct({
-  "@context": ActorJsonLdContextSchema,
+export const LocalActivityPubPersonSchema = Schema.Struct({
+  "@context": LocalActorJsonLdContextSchema,
   type: Schema.Literal("Person"),
   id: Schema.String,
-  name: OptionalString,
+  name: Schema.String,
   preferredUsername: Schema.String,
   summary: Schema.String,
   inbox: Schema.String,
   outbox: Schema.String,
   followers: Schema.String,
   following: Schema.String,
-  liked: OptionalString,
-  publicKey: Schema.optional(ActivityPubPublicKeySchema),
-  endpoints: Schema.optional(ActivityPubEndpointsSchema),
-  webfinger: OptionalString,
-  featured: OptionalString,
-  featuredTags: OptionalString,
-  url: OptionalString,
-  manuallyApprovesFollowers: OptionalBoolean,
-  discoverable: OptionalBoolean,
-  indexable: OptionalBoolean,
-  published: OptionalString,
-  memorial: OptionalBoolean,
-  alsoKnownAs: Schema.optional(Schema.Array(Schema.String)),
-  movedTo: OptionalString,
-  suspended: OptionalBoolean,
-  attributionDomains: Schema.optional(Schema.Array(Schema.String)),
-  icon: Schema.optional(ActivityPubImageSchema),
-  image: Schema.optional(ActivityPubImageSchema),
-  devices: OptionalString,
-  showFeatured: OptionalBoolean,
-  showMedia: OptionalBoolean,
-  showRepliesInMedia: OptionalBoolean,
-  interactionPolicy: Schema.optional(MastodonInteractionPolicySchema),
-  featuredCollections: OptionalString,
-  tag: Schema.optional(Schema.Array(ActivityPubActorTagSchema)),
-  attachment: Schema.optional(Schema.Array(ActivityPubActorAttachmentSchema))
+  liked: Schema.String,
+  publicKey: ActivityPubPublicKeySchema,
+  endpoints: ActivityPubEndpointsSchema
 })
+
+export const MastodonIssueActivityPubPersonSchema = Schema.Struct({
+  "@context": MastodonActorJsonLdContextSchema,
+  id: Schema.String,
+  webfinger: Schema.String,
+  type: Schema.Literal("Person"),
+  following: Schema.String,
+  followers: Schema.String,
+  inbox: Schema.String,
+  outbox: Schema.String,
+  featured: Schema.String,
+  featuredTags: Schema.String,
+  preferredUsername: Schema.String,
+  name: Schema.String,
+  summary: Schema.String,
+  url: Schema.String,
+  manuallyApprovesFollowers: Schema.Boolean,
+  discoverable: Schema.Boolean,
+  indexable: Schema.Boolean,
+  published: Schema.String,
+  memorial: Schema.Boolean,
+  showFeatured: Schema.Boolean,
+  showMedia: Schema.Boolean,
+  showRepliesInMedia: Schema.Boolean,
+  interactionPolicy: MastodonInteractionPolicySchema,
+  featuredCollections: Schema.String,
+  publicKey: ActivityPubPublicKeySchema,
+  tag: Schema.Array(ActivityPubActorTagSchema),
+  attachment: Schema.Array(ActivityPubActorAttachmentSchema),
+  endpoints: ActivityPubEndpointsSchema
+})
+
+export const ActivityPubPersonSchema = Schema.Union(
+  LocalActivityPubPersonSchema,
+  MastodonIssueActivityPubPersonSchema
+)
 
 export const ActivityPubFollowActivitySchema = Schema.Struct({
   "@context": ActivityForgeFedJsonLdContextSchema,
@@ -215,24 +232,57 @@ export const ActivityPubFollowActivitySchema = Schema.Struct({
   capability: OptionalString
 })
 
-export const ActivityPubOrderedCollectionSchema = Schema.Struct({
-  "@context": JsonLdContextSchema,
+export const LocalActivityPubOrderedCollectionSchema = Schema.Struct({
+  "@context": ActivityForgeFedJsonLdContextSchema,
   type: Schema.Literal("OrderedCollection"),
   id: Schema.String,
   totalItems: Schema.Number,
-  first: OptionalString,
-  last: OptionalString,
-  current: OptionalString,
-  orderedItems: Schema.optionalWith(Schema.Array(JsonValueSchema), { default: () => [] })
+  orderedItems: Schema.Array(JsonValueSchema)
 })
 
-export const ActivityPubOrderedCollectionPageSchema = Schema.Struct({
-  "@context": JsonLdContextSchema,
+export const LocalActivityPubFollowersCollectionSchema = Schema.Struct({
+  "@context": ActivityForgeFedJsonLdContextSchema,
+  type: Schema.Literal("OrderedCollection"),
+  id: Schema.String,
+  totalItems: Schema.Number,
+  first: Schema.String,
+  orderedItems: Schema.Array(JsonValueSchema)
+})
+
+export const MastodonFollowersOrderedCollectionSchema = Schema.Struct({
+  "@context": Schema.Literal(activityStreamsJsonLdContext),
+  id: Schema.String,
+  type: Schema.Literal("OrderedCollection"),
+  totalItems: Schema.Number,
+  first: Schema.String
+})
+
+export const ActivityPubOrderedCollectionSchema = Schema.Union(
+  LocalActivityPubOrderedCollectionSchema,
+  LocalActivityPubFollowersCollectionSchema,
+  MastodonFollowersOrderedCollectionSchema
+)
+
+export const LocalActivityPubOrderedCollectionPageSchema = Schema.Struct({
+  "@context": ActivityForgeFedJsonLdContextSchema,
   type: Schema.Literal("OrderedCollectionPage"),
   id: Schema.String,
   totalItems: Schema.Number,
   partOf: Schema.String,
-  next: OptionalString,
-  prev: OptionalString,
   orderedItems: Schema.Array(JsonValueSchema)
 })
+
+export const MastodonFollowersOrderedCollectionPageSchema = Schema.Struct({
+  "@context": Schema.Literal(activityStreamsJsonLdContext),
+  id: Schema.String,
+  type: Schema.Literal("OrderedCollectionPage"),
+  totalItems: Schema.Number,
+  partOf: Schema.String,
+  next: Schema.String,
+  orderedItems: Schema.Array(Schema.String)
+})
+
+export const ActivityPubOrderedCollectionPageSchema = Schema.Union(
+  LocalActivityPubOrderedCollectionPageSchema,
+  MastodonFollowersOrderedCollectionPageSchema
+)

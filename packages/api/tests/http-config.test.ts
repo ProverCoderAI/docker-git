@@ -12,7 +12,8 @@ import {
 import {
   ActivityPubOrderedCollectionPageSchema,
   ActivityPubOrderedCollectionSchema,
-  ActivityPubPersonSchema
+  ActivityPubPersonSchema,
+  exactActivityPubParseOptions
 } from "../src/api/schema.js"
 import {
   federationActorDocumentResponse,
@@ -138,7 +139,7 @@ const readNestedField = (value: object | null, parent: string, key: string): unk
 }
 
 const decodeOrThrow = <A, I>(schema: Schema.Schema<A, I, never>, value: unknown): A =>
-  Either.match(Schema.decodeUnknownEither(schema)(value), {
+  Either.match(Schema.decodeUnknownEither(schema, exactActivityPubParseOptions)(value), {
     onLeft: (error) => {
       throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
     },
