@@ -1,20 +1,14 @@
 import * as HttpApp from "@effect/platform/HttpApp"
 import * as HttpRouter from "@effect/platform/HttpRouter"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Either, ParseResult, Schema } from "effect"
+import { Effect } from "effect"
 import fc from "fast-check"
 
 import {
-  activityForgeFedJsonLdContext,
+  activityStreamsJsonLdContext,
   actorJsonLdContext,
   federationJsonLdResponseContentType
 } from "../src/api/contracts.js"
-import {
-  ActivityPubOrderedCollectionPageSchema,
-  ActivityPubOrderedCollectionSchema,
-  ActivityPubPersonSchema,
-  exactActivityPubParseOptions
-} from "../src/api/schema.js"
 import {
   federationActorDocumentResponse,
   federationExchangeStatusResponse,
@@ -22,6 +16,7 @@ import {
   federationFollowingDocumentResponse,
   federationLikedDocumentResponse,
   federationOutboxDocumentResponse,
+  federationWebFingerResponse,
   resolveConfiguredFederationPublicOrigin
 } from "../src/http.js"
 import { clearFederationState } from "../src/services/federation.js"
@@ -63,6 +58,7 @@ const federationDocumentHandler = HttpApp.toWebHandler(
   Effect.flatten(
     HttpRouter.toHttpApp(
       HttpRouter.empty.pipe(
+        HttpRouter.get("/.well-known/webfinger", federationWebFingerResponse()),
         HttpRouter.get("/federation/actor", federationActorDocumentResponse()),
         HttpRouter.get("/federation/outbox", federationOutboxDocumentResponse()),
         HttpRouter.get("/federation/followers", federationFollowersDocumentResponse()),
@@ -138,20 +134,24 @@ const readNestedField = (value: object | null, parent: string, key: string): unk
   return typeof nested === "object" && nested !== null ? Reflect.get(nested, key) : undefined
 }
 
-const decodeOrThrow = <A, I>(schema: Schema.Schema<A, I, never>, value: unknown): A =>
-  Either.match(Schema.decodeUnknownEither(schema, exactActivityPubParseOptions)(value), {
-    onLeft: (error) => {
-      throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
-    },
-    onRight: (decoded) => decoded
-  })
+const unsupportedMastodonTerms = [
+  "https://purl.archive.org/socialweb/webfinger",
+  "http://joinmastodon.org/ns#",
+  "toot:",
+  "featuredTags",
+  "alsoKnownAs",
+  "movedTo",
+  "manuallyApprovesFollowers",
+  "discoverable",
+  "suspended",
+  "interactionPolicy"
+] as const
 
-const decodeFederationDocument = (expectedType: string, payload: object | null): void => {
-  if (expectedType === "Person") {
-    decodeOrThrow(ActivityPubPersonSchema, payload)
-    return
+const assertNoMastodonTerms = (payload: object | null): void => {
+  const serialized = JSON.stringify(payload)
+  for (const term of unsupportedMastodonTerms) {
+    expect(serialized.includes(term)).toBe(false)
   }
-  decodeOrThrow(ActivityPubOrderedCollectionSchema, payload)
 }
 
 const federationDocumentCases: ReadonlyArray<{
@@ -168,25 +168,25 @@ const federationDocumentCases: ReadonlyArray<{
   },
   {
     path: "/federation/outbox",
-    expectedContext: activityForgeFedJsonLdContext,
+    expectedContext: activityStreamsJsonLdContext,
     expectedId: "https://public.example.test/federation/outbox",
     expectedType: "OrderedCollection"
   },
   {
     path: "/federation/followers",
-    expectedContext: activityForgeFedJsonLdContext,
+    expectedContext: activityStreamsJsonLdContext,
     expectedId: "https://public.example.test/federation/followers",
     expectedType: "OrderedCollection"
   },
   {
     path: "/federation/following",
-    expectedContext: activityForgeFedJsonLdContext,
+    expectedContext: activityStreamsJsonLdContext,
     expectedId: "https://public.example.test/federation/following",
     expectedType: "OrderedCollection"
   },
   {
     path: "/federation/liked",
-    expectedContext: activityForgeFedJsonLdContext,
+    expectedContext: activityStreamsJsonLdContext,
     expectedId: "https://public.example.test/federation/liked",
     expectedType: "OrderedCollection"
   }
@@ -267,11 +267,11 @@ describe("api http config", () => {
         expect(readField(payload, "@context")).toEqual(documentCase.expectedContext)
         expect(readField(payload, "type")).toBe(documentCase.expectedType)
         expect(readField(payload, "id")).toBe(documentCase.expectedId)
-        decodeFederationDocument(documentCase.expectedType, payload)
+        assertNoMastodonTerms(payload)
       }))
   }
 
-  it.effect("serves followers page as typed ActivityPub JSON-LD", () =>
+  it.effect("serves followers page as Fedify ActivityPub JSON-LD", () =>
     Effect.gen(function*(_) {
       yield* _(Effect.sync(() => clearFederationState()))
 
@@ -280,11 +280,40 @@ describe("api http config", () => {
 
       expect(document.status).toBe(200)
       expect(document.contentType).toBe(federationJsonLdResponseContentType)
-      expect(readField(payload, "@context")).toEqual(activityForgeFedJsonLdContext)
+      expect(readField(payload, "@context")).toBe(activityStreamsJsonLdContext)
       expect(readField(payload, "type")).toBe("OrderedCollectionPage")
       expect(readField(payload, "id")).toBe("https://public.example.test/federation/followers?page=1")
       expect(readField(payload, "partOf")).toBe("https://public.example.test/federation/followers")
-      decodeOrThrow(ActivityPubOrderedCollectionPageSchema, payload)
+      assertNoMastodonTerms(payload)
+    }))
+
+  it.effect("serves WebFinger through Fedify", () =>
+    Effect.gen(function*(_) {
+      yield* _(Effect.sync(() => clearFederationState()))
+
+      const document = yield* _(
+        readFederationDocumentRoute(
+          "/.well-known/webfinger?resource=acct:docker-git@public.example.test"
+        )
+      )
+      const payload = parseJsonObject(document.body)
+      const links = readField(payload, "links")
+
+      expect(document.status).toBe(200)
+      expect(document.contentType).toBe("application/jrd+json")
+      expect(readField(payload, "subject")).toBe("acct:docker-git@public.example.test")
+      expect(readField(payload, "aliases")).toEqual([
+        "https://public.example.test/federation/actor"
+      ])
+      expect(Array.isArray(links)).toBe(true)
+      if (!Array.isArray(links)) {
+        throw new Error("Expected WebFinger links.")
+      }
+      expect(links[0]).toEqual({
+        rel: "self",
+        href: "https://public.example.test/federation/actor",
+        type: "application/activity+json"
+      })
     }))
 
   it.effect("rejects unsupported followers pages", () =>

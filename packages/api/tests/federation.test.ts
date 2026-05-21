@@ -4,9 +4,12 @@ import { vi } from "vitest"
 
 import {
   activityForgeFedJsonLdContext,
-  actorJsonLdContext,
   federationJsonLdContentType
 } from "../src/api/contracts.js"
+import {
+  makeFedifyActorJsonLd,
+  makeFedifyFollowingJsonLd
+} from "../src/services/fedify-federation.js"
 import {
   clearFederationState,
   createFollowSubscription,
@@ -15,12 +18,20 @@ import {
   listFederationIssues,
   listExchangeSubscriptions,
   listFollowSubscriptions,
-  makeFederationActorDocument,
   makeFederationContext,
   makeFederationExchangeStatus,
-  makeFederationFollowingCollection,
   pollExchangeOutboxes
 } from "../src/services/federation.js"
+
+const asRecord = (value: unknown): Record<string, unknown> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("Expected JSON object.")
+  }
+  return value as Record<string, unknown>
+}
+
+const readField = (record: Record<string, unknown>, key: string): unknown =>
+  Reflect.get(record, key)
 
 describe("federation service", () => {
   it.effect("ingests ForgeFed Offer with Ticket payload", () =>
@@ -130,7 +141,7 @@ describe("federation service", () => {
       expect(created.subscription.inbox).toBe("https://social.provercoder.ai/federation/inbox")
     }))
 
-  it.effect("builds person and following collections in activitypub shape", () =>
+  it.effect("builds person and following collections through Fedify", () =>
     Effect.gen(function*(_) {
       clearFederationState()
 
@@ -141,12 +152,11 @@ describe("federation service", () => {
         })
       )
 
-      const person = makeFederationActorDocument(context)
-      expect(person.type).toBe("Person")
-      expect(person["@context"]).toEqual(actorJsonLdContext)
-      expect(person.id).toBe("https://social.provercoder.ai/federation/actor")
-      expect(person.preferredUsername).toBe("tasks")
-      expect(person.followers).toBe("https://social.provercoder.ai/federation/followers")
+      const person = asRecord(yield* _(makeFedifyActorJsonLd(context)))
+      expect(readField(person, "type")).toBe("Person")
+      expect(readField(person, "id")).toBe("https://social.provercoder.ai/federation/actor")
+      expect(readField(person, "preferredUsername")).toBe("tasks")
+      expect(readField(person, "followers")).toBe("https://social.provercoder.ai/federation/followers")
 
       const created = yield* _(
         createFollowSubscription(
@@ -165,10 +175,12 @@ describe("federation service", () => {
         })
       )
 
-      const following = makeFederationFollowingCollection(context)
-      expect(following.type).toBe("OrderedCollection")
-      expect(following.totalItems).toBe(1)
-      expect(following.orderedItems[0]).toBe("https://tracker.provercoder.ai/issues/followers")
+      const following = asRecord(yield* _(makeFedifyFollowingJsonLd(context)))
+      expect(readField(following, "type")).toBe("OrderedCollection")
+      expect(readField(following, "totalItems")).toBe(1)
+      expect(readField(following, "orderedItems")).toEqual([
+        "https://tracker.provercoder.ai/issues/followers"
+      ])
     }))
 
   it.effect("rejects duplicate pending follow subscription", () =>

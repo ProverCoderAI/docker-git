@@ -1,558 +1,224 @@
+import { Follow, OrderedCollection, OrderedCollectionPage, Person } from "@fedify/vocab"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Either, ParseResult, Schema } from "effect"
-import fc from "fast-check"
+import { Effect, Either, Schema } from "effect"
 
 import {
-  ActivityPubOrderedCollectionPageSchema,
-  ActivityPubOrderedCollectionSchema,
-  ActivityPubPersonSchema,
-  exactActivityPubParseOptions
-} from "../src/api/schema.js"
+  activityStreamsJsonLdContext,
+  actorJsonLdContext
+} from "../src/api/contracts.js"
+import { ForgeFedTicketSchema } from "../src/api/schema.js"
+import {
+  clearFederationState,
+  createFollowSubscription,
+  ingestFederationInbox,
+  makeFederationContext
+} from "../src/services/federation.js"
+import {
+  makeFedifyActorJsonLd,
+  makeFedifyFollowersJsonLd,
+  makeFedifyFollowersPageJsonLd,
+  makeFedifyFollowingJsonLd,
+  makeFedifyOutboxJsonLd
+} from "../src/services/fedify-federation.js"
 
-const decodeActivityPubEither = <A, I>(schema: Schema.Schema<A, I, never>, value: unknown) =>
-  Schema.decodeUnknownEither(schema, exactActivityPubParseOptions)(value)
+type JsonRecord = Record<string, unknown>
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-
-const expectDecodedMatchesFixtureKeys = (decoded: object, fixture: object): void => {
-  expect(Object.keys(decoded).sort()).toEqual(Object.keys(fixture).sort())
-}
-
-const activityForgeFedContextArbitrary = fc.constant([
-  "https://www.w3.org/ns/activitystreams",
-  "https://forgefed.org/ns"
-] as const)
-
-const activityPubActorContextArbitrary = fc.constant([
-  "https://www.w3.org/ns/activitystreams",
-  "https://w3id.org/security/v1",
-  "https://forgefed.org/ns"
-] as const)
-
-const schemaStringArbitrary = fc.string()
-
-const nonPersonTypeArbitrary = fc.string().filter((value) => value !== "Person")
-
-const nonOrderedCollectionTypeArbitrary = fc
-  .string()
-  .filter((value) => value !== "OrderedCollection")
-
-const nonOrderedCollectionPageTypeArbitrary = fc
-  .string()
-  .filter((value) => value !== "OrderedCollectionPage")
-
-const activityPubPublicKeyArbitrary = fc.record({
-  id: schemaStringArbitrary,
-  owner: schemaStringArbitrary,
-  publicKeyPem: schemaStringArbitrary
-})
-
-const activityPubEndpointsArbitrary = fc.record({
-  sharedInbox: schemaStringArbitrary
-})
-
-const activityPubPersonRequiredFieldsArbitrary = fc.record({
-  "@context": activityPubActorContextArbitrary,
-  type: fc.constant("Person"),
-  id: schemaStringArbitrary,
-  name: schemaStringArbitrary,
-  preferredUsername: schemaStringArbitrary,
-  summary: schemaStringArbitrary,
-  inbox: schemaStringArbitrary,
-  outbox: schemaStringArbitrary,
-  followers: schemaStringArbitrary,
-  following: schemaStringArbitrary,
-  liked: schemaStringArbitrary,
-  publicKey: activityPubPublicKeyArbitrary,
-  endpoints: activityPubEndpointsArbitrary
-})
-
-const activityPubPersonMissingRequiredFieldsArbitrary = fc.record({
-  "@context": activityPubActorContextArbitrary,
-  type: fc.constant("Person"),
-  id: schemaStringArbitrary
-})
-
-const activityPubOrderedCollectionRequiredFieldsArbitrary = fc.record({
-  "@context": activityForgeFedContextArbitrary,
-  type: fc.constant("OrderedCollection"),
-  id: schemaStringArbitrary,
-  totalItems: fc.integer({ min: 0 }),
-  orderedItems: fc.array(fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null)))
-})
-
-const activityPubOrderedCollectionMissingRequiredFieldsArbitrary = fc.record({
-  "@context": activityForgeFedContextArbitrary,
-  type: fc.constant("OrderedCollection"),
-  id: schemaStringArbitrary,
-  totalItems: fc.integer({ min: 0 })
-})
-
-const activityPubOrderedCollectionPageRequiredFieldsArbitrary = fc.record({
-  "@context": activityForgeFedContextArbitrary,
-  type: fc.constant("OrderedCollectionPage"),
-  id: schemaStringArbitrary,
-  totalItems: fc.integer({ min: 0 }),
-  partOf: schemaStringArbitrary,
-  orderedItems: fc.array(fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null)))
-})
-
-const activityPubOrderedCollectionPageMissingRequiredFieldsArbitrary = fc.record({
-  "@context": activityForgeFedContextArbitrary,
-  type: fc.constant("OrderedCollectionPage"),
-  id: schemaStringArbitrary,
-  totalItems: fc.integer({ min: 0 }),
-  orderedItems: fc.array(fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null)))
-})
-
-const mastodonActorContextExtensionsFixture = {
-  manuallyApprovesFollowers: "as:manuallyApprovesFollowers",
-  toot: "http://joinmastodon.org/ns#",
-  featured: {
-    "@id": "toot:featured",
-    "@type": "@id"
-  },
-  featuredTags: {
-    "@id": "toot:featuredTags",
-    "@type": "@id"
-  },
-  alsoKnownAs: {
-    "@id": "as:alsoKnownAs",
-    "@type": "@id"
-  },
-  movedTo: {
-    "@id": "as:movedTo",
-    "@type": "@id"
-  },
-  schema: "http://schema.org/#",
-  PropertyValue: "schema:PropertyValue",
-  value: "schema:value",
-  discoverable: "toot:discoverable",
-  suspended: "toot:suspended",
-  memorial: "toot:memorial",
-  indexable: "toot:indexable",
-  attributionDomains: {
-    "@id": "toot:attributionDomains",
-    "@type": "@id"
-  },
-  showFeatured: "toot:showFeatured",
-  showMedia: "toot:showMedia",
-  showRepliesInMedia: "toot:showRepliesInMedia",
-  gts: "https://gotosocial.org/ns#",
-  interactionPolicy: {
-    "@id": "gts:interactionPolicy",
-    "@type": "@id"
-  },
-  canQuote: {
-    "@id": "gts:canQuote",
-    "@type": "@id"
-  },
-  automaticApproval: {
-    "@id": "gts:automaticApproval",
-    "@type": "@id"
-  },
-  manualApproval: {
-    "@id": "gts:manualApproval",
-    "@type": "@id"
-  }
-}
-
-const mastodonActorContextFixture = [
-  "https://www.w3.org/ns/activitystreams",
-  "https://w3id.org/security/v1",
+const unsupportedMastodonTerms = [
   "https://purl.archive.org/socialweb/webfinger",
-  mastodonActorContextExtensionsFixture
+  "http://joinmastodon.org/ns#",
+  "toot:",
+  "featuredTags",
+  "alsoKnownAs",
+  "movedTo",
+  "manuallyApprovesFollowers",
+  "discoverable",
+  "suspended",
+  "memorial",
+  "indexable",
+  "interactionPolicy",
+  "canQuote",
+  "automaticApproval",
+  "manualApproval",
+  "showFeatured",
+  "showMedia",
+  "showRepliesInMedia"
 ] as const
 
-const mastodonActorFixture = {
-  "@context": mastodonActorContextFixture,
-  id: "https://mastodon.social/users/GordonFreeman",
-  webfinger: "GordonFreeman@mastodon.social",
-  type: "Person",
-  following: "https://mastodon.social/users/GordonFreeman/following",
-  followers: "https://mastodon.social/users/GordonFreeman/followers",
-  inbox: "https://mastodon.social/users/GordonFreeman/inbox",
-  outbox: "https://mastodon.social/users/GordonFreeman/outbox",
-  featured: "https://mastodon.social/users/GordonFreeman/collections/featured",
-  featuredTags: "https://mastodon.social/users/GordonFreeman/collections/tags",
-  preferredUsername: "GordonFreeman",
-  name: "GordonFreeman",
-  summary: "",
-  url: "https://mastodon.social/@GordonFreeman",
-  manuallyApprovesFollowers: false,
-  discoverable: false,
-  indexable: false,
-  published: "2022-05-11T00:00:00Z",
-  memorial: false,
-  showFeatured: true,
-  showMedia: true,
-  showRepliesInMedia: true,
-  interactionPolicy: {
-    canFeature: {
-      automaticApproval: ["https://mastodon.social/users/GordonFreeman"]
-    }
-  },
-  featuredCollections: "https://mastodon.social/ap/users/108283196203417442/featured_collections",
-  publicKey: {
-    id: "https://mastodon.social/users/GordonFreeman#main-key",
-    owner: "https://mastodon.social/users/GordonFreeman",
-    publicKeyPem:
-      "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtest\n-----END PUBLIC KEY-----\n"
-  },
-  tag: [],
-  attachment: [],
-  endpoints: {
-    sharedInbox: "https://mastodon.social/inbox"
+const asRecord = (value: unknown): JsonRecord => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("Expected JSON object.")
+  }
+  return value as JsonRecord
+}
+
+const readField = (record: JsonRecord, key: string): unknown =>
+  Reflect.get(record, key)
+
+const assertNoMastodonTerms = (value: unknown): void => {
+  const serialized = JSON.stringify(value)
+  for (const term of unsupportedMastodonTerms) {
+    expect(serialized.includes(term)).toBe(false)
   }
 }
 
-const mastodonFollowersCollectionFixture = {
-  "@context": "https://www.w3.org/ns/activitystreams",
-  id: "https://mastodon.social/users/nixCraft/followers",
-  type: "OrderedCollection",
-  totalItems: 114133,
-  first: "https://mastodon.social/users/nixCraft/followers?page=1"
-}
+const parsePerson = (payload: unknown) =>
+  Effect.tryPromise({
+    try: () => Person.fromJsonLd(payload),
+    catch: (cause) => new Error(String(cause))
+  })
 
-const mastodonFollowersPageFixture = {
-  "@context": "https://www.w3.org/ns/activitystreams",
-  id: "https://mastodon.social/users/nixCraft/followers?page=1",
-  type: "OrderedCollectionPage",
-  totalItems: 114133,
-  partOf: "https://mastodon.social/users/nixCraft/followers",
-  next: "https://mastodon.social/users/nixCraft/followers?max_id=123&page=1",
-  orderedItems: [
-    "https://mastodon.social/users/GordonFreeman",
-    "https://mastodon.social/users/example"
-  ]
-}
+const parseOrderedCollection = (payload: unknown) =>
+  Effect.tryPromise({
+    try: () => OrderedCollection.fromJsonLd(payload),
+    catch: (cause) => new Error(String(cause))
+  })
 
-const mastodonActorWithContextExtensions = (
-  extensions: unknown
-): object => ({
-  ...mastodonActorFixture,
-  "@context": [
-    "https://www.w3.org/ns/activitystreams",
-    "https://w3id.org/security/v1",
-    "https://purl.archive.org/socialweb/webfinger",
-    extensions
-  ]
-})
+const parseOrderedCollectionPage = (payload: unknown) =>
+  Effect.tryPromise({
+    try: () => OrderedCollectionPage.fromJsonLd(payload),
+    catch: (cause) => new Error(String(cause))
+  })
 
-describe("ActivityPub and ForgeFed schema parity", () => {
-  it.effect("decodes a Mastodon actor Person fixture", () =>
-    Effect.sync(() => {
-      const result = decodeActivityPubEither(ActivityPubPersonSchema, mastodonActorFixture)
+const parseFollow = (payload: unknown) =>
+  Effect.tryPromise({
+    try: () => Follow.fromJsonLd(payload),
+    catch: (cause) => new Error(String(cause))
+  })
 
-      Either.match(result, {
-        onLeft: (error) => {
-          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
-        },
-        onRight: (decoded) => {
-          expectDecodedMatchesFixtureKeys(decoded, mastodonActorFixture)
-          const decodedContext = Reflect.get(decoded, "@context")
-          expect(Array.isArray(decodedContext)).toBe(true)
-          if (!Array.isArray(decodedContext)) {
-            throw new Error("Decoded Mastodon actor context is not an array.")
-          }
-          const decodedExtensions = decodedContext[3]
-          expect(isRecord(decodedExtensions)).toBe(true)
-          if (!isRecord(decodedExtensions)) {
-            throw new Error("Decoded Mastodon actor context extensions are not an object.")
-          }
-          expect(Object.keys(decodedExtensions).sort()).toEqual(
-            Object.keys(mastodonActorContextExtensionsFixture).sort()
-          )
-        }
-      })
-    }))
-
-  it.effect("decodes a Mastodon followers OrderedCollection fixture", () =>
-    Effect.sync(() => {
-      const result = decodeActivityPubEither(
-        ActivityPubOrderedCollectionSchema,
-        mastodonFollowersCollectionFixture
+describe("ActivityPub and ForgeFed protocol parity", () => {
+  it.effect("serializes the local actor through Fedify without Mastodon extension context", () =>
+    Effect.gen(function*(_) {
+      clearFederationState()
+      const context = yield* _(
+        makeFederationContext({
+          publicOrigin: "https://social.provercoder.ai",
+          actorUsername: "tasks"
+        })
       )
 
-      Either.match(result, {
-        onLeft: (error) => {
-          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
-        },
-        onRight: (decoded) => {
-          expectDecodedMatchesFixtureKeys(decoded, mastodonFollowersCollectionFixture)
-        }
-      })
+      const payload = yield* _(makeFedifyActorJsonLd(context))
+      const actor = asRecord(payload)
+      const publicKey = asRecord(readField(actor, "publicKey"))
+
+      expect(readField(actor, "@context")).toEqual(actorJsonLdContext)
+      expect(readField(actor, "type")).toBe("Person")
+      expect(readField(actor, "id")).toBe("https://social.provercoder.ai/federation/actor")
+      expect(readField(actor, "preferredUsername")).toBe("tasks")
+      expect(readField(actor, "followers")).toBe("https://social.provercoder.ai/federation/followers")
+      expect(readField(publicKey, "owner")).toBe("https://social.provercoder.ai/federation/actor")
+      expect(typeof readField(publicKey, "publicKeyPem")).toBe("string")
+      assertNoMastodonTerms(payload)
+
+      const parsed = yield* _(parsePerson(payload))
+      expect(parsed.id?.href).toBe("https://social.provercoder.ai/federation/actor")
+      expect(parsed.preferredUsername).toBe("tasks")
     }))
 
-  it.effect("decodes a Mastodon followers OrderedCollectionPage fixture", () =>
-    Effect.sync(() => {
-      const result = decodeActivityPubEither(
-        ActivityPubOrderedCollectionPageSchema,
-        mastodonFollowersPageFixture
+  it.effect("serializes followers collection and page through Fedify ActivityStreams objects", () =>
+    Effect.gen(function*(_) {
+      clearFederationState()
+      const context = yield* _(
+        makeFederationContext({
+          publicOrigin: "https://social.provercoder.ai",
+          actorUsername: "tasks"
+        })
       )
 
-      Either.match(result, {
-        onLeft: (error) => {
-          throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
-        },
-        onRight: (decoded) => {
-          expectDecodedMatchesFixtureKeys(decoded, mastodonFollowersPageFixture)
-        }
-      })
+      const collectionPayload = yield* _(makeFedifyFollowersJsonLd(context))
+      const collection = asRecord(collectionPayload)
+      expect(readField(collection, "@context")).toBe(activityStreamsJsonLdContext)
+      expect(readField(collection, "type")).toBe("OrderedCollection")
+      expect(readField(collection, "id")).toBe("https://social.provercoder.ai/federation/followers")
+      expect(readField(collection, "first")).toBe("https://social.provercoder.ai/federation/followers?page=1")
+      assertNoMastodonTerms(collectionPayload)
+      yield* _(parseOrderedCollection(collectionPayload))
+
+      const pagePayload = yield* _(makeFedifyFollowersPageJsonLd(context))
+      const page = asRecord(pagePayload)
+      expect(readField(page, "@context")).toBe(activityStreamsJsonLdContext)
+      expect(readField(page, "type")).toBe("OrderedCollectionPage")
+      expect(readField(page, "id")).toBe("https://social.provercoder.ai/federation/followers?page=1")
+      expect(readField(page, "partOf")).toBe("https://social.provercoder.ai/federation/followers")
+      assertNoMastodonTerms(pagePayload)
+      yield* _(parseOrderedCollectionPage(pagePayload))
     }))
 
-  it.effect("rejects ActivityPub objects with wrong literal types", () =>
-    Effect.sync(() => {
-      const personResult = decodeActivityPubEither(ActivityPubPersonSchema, {
-        ...mastodonActorFixture,
-        type: "Service"
-      })
-      const collectionResult = decodeActivityPubEither(ActivityPubOrderedCollectionSchema, {
-        ...mastodonFollowersCollectionFixture,
-        type: "Collection"
-      })
-      const pageResult = decodeActivityPubEither(ActivityPubOrderedCollectionPageSchema, {
-        ...mastodonFollowersPageFixture,
-        type: "OrderedCollection"
-      })
+  it.effect("serializes follow activities and accepted following state through Fedify", () =>
+    Effect.gen(function*(_) {
+      clearFederationState()
+      const context = yield* _(
+        makeFederationContext({
+          publicOrigin: "https://social.provercoder.ai",
+          actorUsername: "tasks"
+        })
+      )
 
-      expect(Either.isLeft(personResult)).toBe(true)
-      expect(Either.isLeft(collectionResult)).toBe(true)
-      expect(Either.isLeft(pageResult)).toBe(true)
-    }))
-
-  it.effect("rejects ActivityPub objects missing required fields", () =>
-    Effect.sync(() => {
-      const personResult = decodeActivityPubEither(ActivityPubPersonSchema, {
-        type: "Person",
-        id: "https://mastodon.social/users/missing"
-      })
-      const collectionResult = decodeActivityPubEither(ActivityPubOrderedCollectionSchema, {
-        type: "OrderedCollection",
-        id: "https://mastodon.social/users/nixCraft/followers"
-      })
-      const pageResult = decodeActivityPubEither(ActivityPubOrderedCollectionPageSchema, {
-        type: "OrderedCollectionPage",
-        id: "https://mastodon.social/users/nixCraft/followers?page=1",
-        orderedItems: []
-      })
-
-      expect(Either.isLeft(personResult)).toBe(true)
-      expect(Either.isLeft(collectionResult)).toBe(true)
-      expect(Either.isLeft(pageResult)).toBe(true)
-    }))
-
-  it.effect("accepts structured ActivityPub Person actor tag and attachment values", () =>
-    Effect.sync(() => {
-      const result = decodeActivityPubEither(ActivityPubPersonSchema, {
-        ...mastodonActorFixture,
-        tag: [
+      const created = yield* _(
+        createFollowSubscription(
           {
-            type: "Hashtag",
-            name: "#activitypub",
-            href: "https://mastodon.social/tags/activitypub"
+            object: "https://tracker.provercoder.ai/issues/followers"
           },
-          {
-            type: "Emoji",
-            id: "https://mastodon.social/emojis/party",
-            name: ":party:",
-            updated: "2026-05-21T00:00:00Z",
-            icon: {
-              type: "Image",
-              mediaType: "image/png",
-              url: "https://mastodon.social/system/custom_emojis/images/party.png"
-            }
-          }
-        ],
+          context
+        )
+      )
+
+      const outboxPayload = yield* _(makeFedifyOutboxJsonLd(context))
+      const outbox = asRecord(outboxPayload)
+      const orderedItems = readField(outbox, "orderedItems")
+      expect(readField(outbox, "@context")).toBe(activityStreamsJsonLdContext)
+      expect(readField(outbox, "type")).toBe("OrderedCollection")
+      expect(Array.isArray(orderedItems)).toBe(true)
+      if (!Array.isArray(orderedItems)) {
+        throw new Error("Expected outbox orderedItems.")
+      }
+      const follow = asRecord(orderedItems[0])
+      expect(readField(follow, "type")).toBe("Follow")
+      expect(readField(follow, "id")).toBe(created.activity.id)
+      expect(readField(follow, "actor")).toBe("https://social.provercoder.ai/federation/actor")
+      expect(readField(follow, "object")).toBe("https://tracker.provercoder.ai/issues/followers")
+      assertNoMastodonTerms(outboxPayload)
+      yield* _(parseFollow(follow))
+
+      yield* _(
+        ingestFederationInbox({
+          "@context": [
+            "https://www.w3.org/ns/activitystreams",
+            "https://forgefed.org/ns"
+          ],
+          type: "Accept",
+          object: created.activity.id
+        })
+      )
+
+      const followingPayload = yield* _(makeFedifyFollowingJsonLd(context))
+      const following = asRecord(followingPayload)
+      expect(readField(following, "type")).toBe("OrderedCollection")
+      expect(readField(following, "totalItems")).toBe(1)
+      expect(readField(following, "orderedItems")).toEqual([
+        "https://tracker.provercoder.ai/issues/followers"
+      ])
+      assertNoMastodonTerms(followingPayload)
+      yield* _(parseOrderedCollection(followingPayload))
+    }))
+
+  it.effect("keeps ForgeFed Ticket validation at the JSON boundary", () =>
+    Effect.sync(() => {
+      const decoded = Schema.decodeUnknownEither(ForgeFedTicketSchema)({
+        id: "https://tracker.example/issues/42",
+        attributedTo: "https://tracker.example/users/alice",
+        summary: "Implement protocol proof",
+        content: "Use ActivityPub and ForgeFed boundary validation.",
         attachment: [
           {
-            type: "PropertyValue",
-            name: "Website",
-            value: "<a href=\"https://example.com\">https://example.com</a>"
+            type: "Document",
+            url: "https://tracker.example/issues/42/log"
           }
-        ]
-      })
-
-      expect(Either.isRight(result)).toBe(true)
-    }))
-
-  it.effect("rejects structurally invalid ActivityPub Person actor extensions", () =>
-    Effect.sync(() => {
-      const invalidActors = [
-        { ...mastodonActorFixture, icon: {} },
-        { ...mastodonActorFixture, image: { type: "Image" } },
-        { ...mastodonActorFixture, tag: [{}] },
-        {
-          ...mastodonActorFixture,
-          tag: [{ type: "Emoji", id: "https://mastodon.social/emojis/party", name: ":party:" }]
-        },
-        { ...mastodonActorFixture, attachment: [{}] },
-        {
-          ...mastodonActorFixture,
-          attachment: [{ type: "Note", name: "Website", value: "https://example.com" }]
-        },
-        { ...mastodonActorFixture, interactionPolicy: {} },
-        { ...mastodonActorFixture, interactionPolicy: { arbitrary: true } },
-        { ...mastodonActorFixture, interactionPolicy: { canFeature: { arbitrary: true } } }
-      ]
-
-      invalidActors.forEach((actor) => {
-        expect(Either.isLeft(decodeActivityPubEither(ActivityPubPersonSchema, actor))).toBe(true)
-      })
-    }))
-
-  it.effect("rejects non-exact ActivityPub fixture shapes", () =>
-    Effect.sync(() => {
-      const contextWithoutManualApproval = Object.fromEntries(
-        Object.entries(mastodonActorContextExtensionsFixture).filter(
-          ([key]) => key !== "manualApproval"
-        )
-      )
-      const contextWithFeaturedWithoutType = {
-        ...mastodonActorContextExtensionsFixture,
-        featured: {
-          "@id": mastodonActorContextExtensionsFixture.featured["@id"]
+        ],
+        raw: {
+          type: "Ticket"
         }
-      }
-      const contextWithExtraKey = {
-        ...mastodonActorContextExtensionsFixture,
-        extraContextTerm: "toot:extraContextTerm"
-      }
-      const invalidDocuments = [
-        { ...mastodonActorFixture, extraField: "not in the issue fixture" },
-        mastodonActorWithContextExtensions(contextWithoutManualApproval),
-        mastodonActorWithContextExtensions(contextWithFeaturedWithoutType),
-        mastodonActorWithContextExtensions(contextWithExtraKey),
-        { ...mastodonFollowersCollectionFixture, orderedItems: [] },
-        { ...mastodonFollowersPageFixture, prev: "https://mastodon.social/users/nixCraft/followers" },
-        { ...mastodonFollowersPageFixture, orderedItems: ["ok", { id: "not-a-link" }] }
-      ]
-
-      invalidDocuments.slice(0, 4).forEach((document) => {
-        expect(Either.isLeft(decodeActivityPubEither(ActivityPubPersonSchema, document))).toBe(true)
       })
-      expect(
-        Either.isLeft(decodeActivityPubEither(ActivityPubOrderedCollectionSchema, invalidDocuments[4]))
-      ).toBe(true)
-      expect(
-        Either.isLeft(decodeActivityPubEither(ActivityPubOrderedCollectionPageSchema, invalidDocuments[5]))
-      ).toBe(true)
-      expect(
-        Either.isLeft(decodeActivityPubEither(ActivityPubOrderedCollectionPageSchema, invalidDocuments[6]))
-      ).toBe(true)
-    }))
 
-  it.effect("accepts ActivityPub Person objects with required fields and correct type", () =>
-    Effect.sync(() => {
-      fc.assert(
-        fc.property(activityPubPersonRequiredFieldsArbitrary, (person) => {
-          expect(Either.isRight(decodeActivityPubEither(ActivityPubPersonSchema, person))).toBe(true)
-        })
-      )
-    }))
-
-  it.effect("rejects ActivityPub Person objects with wrong type", () =>
-    Effect.sync(() => {
-      fc.assert(
-        fc.property(activityPubPersonRequiredFieldsArbitrary, nonPersonTypeArbitrary, (person, type) => {
-          expect(
-            Either.isLeft(decodeActivityPubEither(ActivityPubPersonSchema, { ...person, type }))
-          ).toBe(true)
-        })
-      )
-    }))
-
-  it.effect("rejects ActivityPub Person objects missing required fields", () =>
-    Effect.sync(() => {
-      fc.assert(
-        fc.property(activityPubPersonMissingRequiredFieldsArbitrary, (person) => {
-          expect(Either.isLeft(decodeActivityPubEither(ActivityPubPersonSchema, person))).toBe(true)
-        })
-      )
-    }))
-
-  it.effect("accepts ActivityPub OrderedCollection objects with required fields and correct type", () =>
-    Effect.sync(() => {
-      fc.assert(
-        fc.property(activityPubOrderedCollectionRequiredFieldsArbitrary, (collection) => {
-          expect(
-            Either.isRight(decodeActivityPubEither(ActivityPubOrderedCollectionSchema, collection))
-          ).toBe(true)
-        })
-      )
-    }))
-
-  it.effect("rejects ActivityPub OrderedCollection objects with wrong type", () =>
-    Effect.sync(() => {
-      fc.assert(
-        fc.property(
-          activityPubOrderedCollectionRequiredFieldsArbitrary,
-          nonOrderedCollectionTypeArbitrary,
-          (collection, type) => {
-            expect(
-              Either.isLeft(
-                decodeActivityPubEither(ActivityPubOrderedCollectionSchema, {
-                  ...collection,
-                  type
-                })
-              )
-            ).toBe(true)
-          }
-        )
-      )
-    }))
-
-  it.effect("rejects ActivityPub OrderedCollection objects missing required fields", () =>
-    Effect.sync(() => {
-      fc.assert(
-        fc.property(activityPubOrderedCollectionMissingRequiredFieldsArbitrary, (collection) => {
-          expect(
-            Either.isLeft(decodeActivityPubEither(ActivityPubOrderedCollectionSchema, collection))
-          ).toBe(true)
-        })
-      )
-    }))
-
-  it.effect("accepts ActivityPub OrderedCollectionPage objects with required fields and correct type", () =>
-    Effect.sync(() => {
-      fc.assert(
-        fc.property(activityPubOrderedCollectionPageRequiredFieldsArbitrary, (page) => {
-          expect(
-            Either.isRight(decodeActivityPubEither(ActivityPubOrderedCollectionPageSchema, page))
-          ).toBe(true)
-        })
-      )
-    }))
-
-  it.effect("rejects ActivityPub OrderedCollectionPage objects with wrong type", () =>
-    Effect.sync(() => {
-      fc.assert(
-        fc.property(
-          activityPubOrderedCollectionPageRequiredFieldsArbitrary,
-          nonOrderedCollectionPageTypeArbitrary,
-          (page, type) => {
-            expect(
-              Either.isLeft(
-                decodeActivityPubEither(ActivityPubOrderedCollectionPageSchema, {
-                  ...page,
-                  type
-                })
-              )
-            ).toBe(true)
-          }
-        )
-      )
-    }))
-
-  it.effect("rejects ActivityPub OrderedCollectionPage objects missing required fields", () =>
-    Effect.sync(() => {
-      fc.assert(
-        fc.property(activityPubOrderedCollectionPageMissingRequiredFieldsArbitrary, (page) => {
-          expect(
-            Either.isLeft(decodeActivityPubEither(ActivityPubOrderedCollectionPageSchema, page))
-          ).toBe(true)
-        })
-      )
+      expect(Either.isRight(decoded)).toBe(true)
     }))
 })

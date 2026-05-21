@@ -13,7 +13,6 @@ import { dirname, join } from "node:path"
 import type { JsonValue } from "../api/activitypub-schema.js"
 import type {
   ActivityPubFollowActivity,
-  ActivityPubPublicKey,
   AgentProvider,
   AgentSession,
   CreateFollowRequest,
@@ -31,14 +30,11 @@ import type {
   ForgeFedTicket,
   ForgeFedTicketSource,
   LocalActivityPubOrderedCollection,
-  LocalActivityPubOrderedCollectionPage,
-  LocalActivityPubPerson,
   ProjectDetails
 } from "../api/contracts.js"
 import {
   activityForgeFedJsonLdContext,
   activityStreamsJsonLdContext,
-  actorJsonLdContext,
   federationJsonLdContentType,
   forgeFedJsonLdContext
 } from "../api/contracts.js"
@@ -48,7 +44,7 @@ import { createProjectFromRequest } from "./projects.js"
 
 type JsonRecord = { readonly [key: string]: unknown }
 
-type LocalActorKeys = {
+export type LocalActorKeys = {
   readonly publicKeyPem: string
   readonly privateKeyPem: string
 }
@@ -581,6 +577,9 @@ export const initializeFederationState = () =>
 const ensureStateLoaded = () =>
   stateLoaded ? Effect.void : initializeFederationState()
 
+export const readLocalActorKeys = (): Effect.Effect<LocalActorKeys, never> =>
+  ensureStateLoaded().pipe(Effect.map(() => ensureLocalActorKeys()))
+
 export const makeFederationContext = (
   input: FederationContextInput
 ): Effect.Effect<FederationContext, ApiBadRequestError> =>
@@ -610,103 +609,6 @@ const defaultFederationContext = () =>
       "http://localhost:3334",
     actorUsername: process.env["DOCKER_GIT_FEDERATION_ACTOR"] ?? defaultActorUsername
   })
-
-const publicKeyForContext = (context: FederationContext): ActivityPubPublicKey => ({
-  id: `${context.actorId}#main-key`,
-  owner: context.actorId,
-  publicKeyPem: ensureLocalActorKeys().publicKeyPem
-})
-
-const followActivityJson = (activity: ActivityPubFollowActivity): JsonValue => ({
-  "@context": [...activity["@context"]],
-  id: activity.id,
-  type: activity.type,
-  actor: activity.actor,
-  object: activity.object,
-  ...(activity.to === undefined ? {} : { to: [...activity.to] }),
-  ...(activity.capability === undefined ? {} : { capability: activity.capability })
-})
-
-export const makeFederationActorDocument = (
-  context: FederationContext
-): LocalActivityPubPerson => ({
-  "@context": actorJsonLdContext,
-  type: "Person",
-  id: context.actorId,
-  name: "docker-git task feed",
-  preferredUsername: context.actorUsername,
-  summary: "docker-git ActivityPub actor for task and issue stream subscriptions.",
-  inbox: context.inbox,
-  outbox: context.outbox,
-  followers: context.followers,
-  following: context.following,
-  liked: context.liked,
-  publicKey: publicKeyForContext(context),
-  endpoints: {
-    sharedInbox: context.inbox
-  }
-})
-
-export const makeFederationOutboxCollection = (
-  context: FederationContext
-): LocalActivityPubOrderedCollection => {
-  const orderedItems = listFollowSubscriptions().map((subscription) => followActivityJson(subscription.activity))
-  return {
-    "@context": activityForgeFedJsonLdContext,
-    type: "OrderedCollection",
-    id: context.outbox,
-    totalItems: orderedItems.length,
-    orderedItems
-  }
-}
-
-export const makeFederationFollowersCollection = (
-  context: FederationContext
-): LocalActivityPubOrderedCollection => ({
-  "@context": activityForgeFedJsonLdContext,
-  type: "OrderedCollection",
-  id: context.followers,
-  totalItems: 0,
-  first: `${context.followers}?page=1`,
-  orderedItems: []
-})
-
-export const makeFederationFollowersPageCollection = (
-  context: FederationContext
-): LocalActivityPubOrderedCollectionPage => ({
-  "@context": activityForgeFedJsonLdContext,
-  type: "OrderedCollectionPage",
-  id: `${context.followers}?page=1`,
-  totalItems: 0,
-  partOf: context.followers,
-  orderedItems: []
-})
-
-export const makeFederationFollowingCollection = (
-  context: FederationContext
-): LocalActivityPubOrderedCollection => {
-  const orderedItems = listFollowSubscriptions()
-    .filter((subscription) => subscription.status === "accepted")
-    .map((subscription) => subscription.object)
-
-  return {
-    "@context": activityForgeFedJsonLdContext,
-    type: "OrderedCollection",
-    id: context.following,
-    totalItems: orderedItems.length,
-    orderedItems
-  }
-}
-
-export const makeFederationLikedCollection = (
-  context: FederationContext
-): LocalActivityPubOrderedCollection => ({
-  "@context": activityForgeFedJsonLdContext,
-  type: "OrderedCollection",
-  id: context.liked,
-  totalItems: 0,
-  orderedItems: []
-})
 
 const readTicketSource = (payload: JsonRecord): string | ForgeFedTicketSource | undefined => {
   const raw = payload["source"]

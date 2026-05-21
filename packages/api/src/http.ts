@@ -13,9 +13,6 @@ import { renderError, type AppError } from "@effect-template/lib/usecases/errors
 import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
 import { federationJsonLdResponseContentType, type ApplyProjectRequest } from "./api/contracts.js"
 import {
-  ActivityPubOrderedCollectionPageSchema,
-  ActivityPubOrderedCollectionSchema,
-  ActivityPubPersonSchema,
   AuthMenuRequestSchema,
   AuthTerminalSessionRequestSchema,
   ActiveProjectTerminalSessionRequestSchema,
@@ -44,8 +41,7 @@ import {
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
-  UpProjectRequestSchema,
-  exactActivityPubParseOptions
+  UpProjectRequestSchema
 } from "./api/schema.js"
 import type { UpProjectRequestInput } from "./api/schema.js"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
@@ -78,16 +74,19 @@ import {
   listExchangeSubscriptions,
   listFederationIssues,
   listFollowSubscriptions,
-  makeFederationActorDocument,
   makeFederationContext,
   makeFederationExchangeStatus,
-  makeFederationFollowersCollection,
-  makeFederationFollowersPageCollection,
-  makeFederationFollowingCollection,
-  makeFederationLikedCollection,
-  makeFederationOutboxCollection,
   pollExchangeOutboxes
 } from "./services/federation.js"
+import {
+  fetchFedifyWebFinger,
+  makeFedifyActorJsonLd,
+  makeFedifyFollowersJsonLd,
+  makeFedifyFollowersPageJsonLd,
+  makeFedifyFollowingJsonLd,
+  makeFedifyLikedJsonLd,
+  makeFedifyOutboxJsonLd
+} from "./services/fedify-federation.js"
 import {
   applyAllProjects,
   applyProjectById,
@@ -310,24 +309,6 @@ const binaryResponse = (data: Uint8Array, contentType: string, status = 200) =>
  */
 const jsonLdResponse = (data: unknown, status: number) =>
   textResponse(JSON.stringify(data), federationJsonLdResponseContentType, status)
-
-const validatedJsonLdResponse = <A, I>(
-  schema: Schema.Schema<A, I, never>,
-  data: unknown,
-  label: string,
-  status: number
-) =>
-  Schema.decodeUnknown(schema, exactActivityPubParseOptions)(data).pipe(
-    Effect.mapError((error) =>
-      new ApiInternalError({
-        message: `${label} does not satisfy its ActivityPub JSON-LD schema: ${
-          ParseResult.TreeFormatter.formatIssueSync(error.issue)
-        }`,
-        cause: error
-      })
-    ),
-    Effect.flatMap((payload) => jsonLdResponse(payload, status))
-  )
 
 const parseQueryInt = (url: string, key: string, fallback: number): number => {
   const parsed = Number(new URL(url, "http://localhost").searchParams.get(key) ?? "")
@@ -655,7 +636,7 @@ export const federationExchangeStatusResponse = () =>
  * @returns Effect that yields the local ActivityPub actor document response.
  *
  * @pure false
- * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationActorDocument, serializes with jsonLdResponse, and maps failures through errorResponse.
+ * @effect Reads HttpServerRequest, resolves federation context, renders a Fedify Person, serializes with jsonLdResponse, and maps failures through errorResponse.
  * @invariant successful responses contain the actor id derived from the resolved federation context.
  * @precondition request headers or configured env provide a non-empty public origin.
  * @postcondition successful responses contain a JSON-LD Person document with HTTP 200.
@@ -666,14 +647,8 @@ export const federationActorDocumentResponse = () =>
   Effect.gen(function*(_) {
     const request = yield* _(HttpServerRequest.HttpServerRequest)
     const context = yield* _(resolveFederationContext(request))
-    return yield* _(
-      validatedJsonLdResponse(
-        ActivityPubPersonSchema,
-        makeFederationActorDocument(context),
-        "Federation actor document",
-        200
-      )
-    )
+    const document = yield* _(makeFedifyActorJsonLd(context))
+    return yield* _(jsonLdResponse(document, 200))
   }).pipe(Effect.catchAll(errorResponse))
 
 /**
@@ -682,7 +657,7 @@ export const federationActorDocumentResponse = () =>
  * @returns Effect that yields the local ActivityPub outbox collection response.
  *
  * @pure false
- * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationOutboxCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
+ * @effect Reads HttpServerRequest, resolves federation context, renders a Fedify OrderedCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
  * @invariant successful responses contain the outbox id derived from the resolved federation context.
  * @precondition request headers or configured env provide a non-empty public origin.
  * @postcondition successful responses contain a JSON-LD OrderedCollection document with HTTP 200.
@@ -693,14 +668,8 @@ export const federationOutboxDocumentResponse = () =>
   Effect.gen(function*(_) {
     const request = yield* _(HttpServerRequest.HttpServerRequest)
     const context = yield* _(resolveFederationContext(request))
-    return yield* _(
-      validatedJsonLdResponse(
-        ActivityPubOrderedCollectionSchema,
-        makeFederationOutboxCollection(context),
-        "Federation outbox collection",
-        200
-      )
-    )
+    const document = yield* _(makeFedifyOutboxJsonLd(context))
+    return yield* _(jsonLdResponse(document, 200))
   }).pipe(Effect.catchAll(errorResponse))
 
 /**
@@ -709,7 +678,7 @@ export const federationOutboxDocumentResponse = () =>
  * @returns Effect that yields the local ActivityPub followers collection response.
  *
  * @pure false
- * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationFollowersCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
+ * @effect Reads HttpServerRequest, resolves federation context, renders a Fedify OrderedCollection/Page, serializes with jsonLdResponse, and maps failures through errorResponse.
  * @invariant successful responses contain the followers id derived from the resolved federation context.
  * @precondition request headers or configured env provide a non-empty public origin.
  * @postcondition successful responses contain a JSON-LD OrderedCollection document with HTTP 200.
@@ -721,21 +690,12 @@ export const federationFollowersDocumentResponse = () =>
     const request = yield* _(HttpServerRequest.HttpServerRequest)
     const context = yield* _(resolveFederationContext(request))
     const mode = yield* _(readFollowersPageMode(request.url))
-    return yield* _(
+    const document = yield* _(
       mode === "page"
-        ? validatedJsonLdResponse(
-          ActivityPubOrderedCollectionPageSchema,
-          makeFederationFollowersPageCollection(context),
-          "Federation followers page",
-          200
-        )
-        : validatedJsonLdResponse(
-          ActivityPubOrderedCollectionSchema,
-          makeFederationFollowersCollection(context),
-          "Federation followers collection",
-          200
-        )
+        ? makeFedifyFollowersPageJsonLd(context)
+        : makeFedifyFollowersJsonLd(context)
     )
+    return yield* _(jsonLdResponse(document, 200))
   }).pipe(Effect.catchAll(errorResponse))
 
 /**
@@ -744,7 +704,7 @@ export const federationFollowersDocumentResponse = () =>
  * @returns Effect that yields the local ActivityPub following collection response.
  *
  * @pure false
- * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationFollowingCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
+ * @effect Reads HttpServerRequest, resolves federation context, renders a Fedify OrderedCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
  * @invariant successful responses contain the following id derived from the resolved federation context.
  * @precondition request headers or configured env provide a non-empty public origin.
  * @postcondition successful responses contain a JSON-LD OrderedCollection document with HTTP 200.
@@ -755,14 +715,8 @@ export const federationFollowingDocumentResponse = () =>
   Effect.gen(function*(_) {
     const request = yield* _(HttpServerRequest.HttpServerRequest)
     const context = yield* _(resolveFederationContext(request))
-    return yield* _(
-      validatedJsonLdResponse(
-        ActivityPubOrderedCollectionSchema,
-        makeFederationFollowingCollection(context),
-        "Federation following collection",
-        200
-      )
-    )
+    const document = yield* _(makeFedifyFollowingJsonLd(context))
+    return yield* _(jsonLdResponse(document, 200))
   }).pipe(Effect.catchAll(errorResponse))
 
 /**
@@ -771,7 +725,7 @@ export const federationFollowingDocumentResponse = () =>
  * @returns Effect that yields the local ActivityPub liked collection response.
  *
  * @pure false
- * @effect Reads HttpServerRequest, resolves federation context, renders makeFederationLikedCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
+ * @effect Reads HttpServerRequest, resolves federation context, renders a Fedify OrderedCollection, serializes with jsonLdResponse, and maps failures through errorResponse.
  * @invariant successful responses contain the liked collection id derived from the resolved federation context.
  * @precondition request headers or configured env provide a non-empty public origin.
  * @postcondition successful responses contain a JSON-LD OrderedCollection document with HTTP 200.
@@ -782,14 +736,17 @@ export const federationLikedDocumentResponse = () =>
   Effect.gen(function*(_) {
     const request = yield* _(HttpServerRequest.HttpServerRequest)
     const context = yield* _(resolveFederationContext(request))
-    return yield* _(
-      validatedJsonLdResponse(
-        ActivityPubOrderedCollectionSchema,
-        makeFederationLikedCollection(context),
-        "Federation liked collection",
-        200
-      )
-    )
+    const document = yield* _(makeFedifyLikedJsonLd(context))
+    return yield* _(jsonLdResponse(document, 200))
+  }).pipe(Effect.catchAll(errorResponse))
+
+export const federationWebFingerResponse = () =>
+  Effect.gen(function*(_) {
+    const request = yield* _(HttpServerRequest.HttpServerRequest)
+    const context = yield* _(resolveFederationContext(request))
+    const webRequest = yield* _(HttpServerRequest.toWeb(request))
+    const response = yield* _(fetchFedifyWebFinger(webRequest, context))
+    return HttpServerResponse.fromWeb(response)
   }).pipe(Effect.catchAll(errorResponse))
 
 const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
@@ -1083,6 +1040,10 @@ export const makeRouter = () => {
         Effect.flatMap((payload) => jsonResponse(payload, 200)),
         Effect.catchAll(errorResponse)
       )
+    ),
+    HttpRouter.get(
+      "/.well-known/webfinger",
+      federationWebFingerResponse()
     ),
     HttpRouter.get(
       "/federation/actor",
