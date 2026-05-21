@@ -116,42 +116,55 @@ const ActivityPubEndpointsSchema = Schema.Struct({
   sharedInbox: OptionalString
 })
 
-const ActivityPubInteractionPolicySchema = Schema.Record({
-  key: Schema.String,
-  value: JsonValueSchema
+const ActivityPubImageSchema = Schema.Struct({
+  type: Schema.Literal("Image"),
+  mediaType: OptionalString,
+  url: Schema.String,
+  name: OptionalString
 })
 
-const ActivityPubImageSchema = Schema.Struct({
-  type: OptionalString,
-  mediaType: OptionalString,
-  url: OptionalString,
-  name: OptionalString
-}, Schema.Record({ key: Schema.String, value: JsonValueSchema }))
-
 const ActivityPubActorAttachmentSchema = Schema.Struct({
-  type: OptionalString,
-  name: OptionalString,
-  value: OptionalString
-}, Schema.Record({ key: Schema.String, value: JsonValueSchema }))
+  type: Schema.Literal("PropertyValue"),
+  name: Schema.String,
+  value: Schema.String
+})
 
-const ActivityPubActorTagSchema = Schema.Struct({
-  type: OptionalString,
-  name: OptionalString,
-  href: OptionalString,
-  id: OptionalString,
-  icon: Schema.optional(ActivityPubImageSchema),
+const ActivityPubHashtagTagSchema = Schema.Struct({
+  type: Schema.Literal("Hashtag"),
+  name: Schema.String,
+  href: Schema.String
+})
+
+const ActivityPubEmojiTagSchema = Schema.Struct({
+  type: Schema.Literal("Emoji"),
+  id: Schema.String,
+  name: Schema.String,
+  icon: ActivityPubImageSchema,
   updated: OptionalString
-}, Schema.Record({ key: Schema.String, value: JsonValueSchema }))
+})
+
+const ActivityPubActorTagSchema = Schema.Union(
+  ActivityPubHashtagTagSchema,
+  ActivityPubEmojiTagSchema
+)
 
 const ActivityPubInteractionApprovalSchema = Schema.Struct({
   automaticApproval: Schema.optional(Schema.Array(Schema.String)),
   manualApproval: Schema.optional(Schema.Array(Schema.String))
-}, Schema.Record({ key: Schema.String, value: JsonValueSchema }))
+}).pipe(
+  Schema.filter((approval) =>
+    approval.automaticApproval !== undefined ||
+    approval.manualApproval !== undefined)
+)
 
 const MastodonInteractionPolicySchema = Schema.Struct({
   canFeature: Schema.optional(ActivityPubInteractionApprovalSchema),
   canQuote: Schema.optional(ActivityPubInteractionApprovalSchema)
-}, Schema.Record({ key: Schema.String, value: JsonValueSchema }))
+}).pipe(
+  Schema.filter((policy) =>
+    policy.canFeature !== undefined ||
+    policy.canQuote !== undefined)
+)
 
 export const ActivityPubPersonSchema = Schema.Struct({
   "@context": ActorJsonLdContextSchema,
@@ -186,7 +199,7 @@ export const ActivityPubPersonSchema = Schema.Struct({
   showFeatured: OptionalBoolean,
   showMedia: OptionalBoolean,
   showRepliesInMedia: OptionalBoolean,
-  interactionPolicy: Schema.optional(Schema.Union(MastodonInteractionPolicySchema, ActivityPubInteractionPolicySchema)),
+  interactionPolicy: Schema.optional(MastodonInteractionPolicySchema),
   featuredCollections: OptionalString,
   tag: Schema.optional(Schema.Array(ActivityPubActorTagSchema)),
   attachment: Schema.optional(Schema.Array(ActivityPubActorAttachmentSchema))

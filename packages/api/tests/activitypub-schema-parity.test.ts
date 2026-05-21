@@ -301,6 +301,75 @@ describe("ActivityPub and ForgeFed schema parity", () => {
       expect(Either.isLeft(pageResult)).toBe(true)
     }))
 
+  it.effect("accepts structured ActivityPub Person actor extensions", () =>
+    Effect.sync(() => {
+      const result = Schema.decodeUnknownEither(ActivityPubPersonSchema)({
+        ...mastodonActorFixture,
+        icon: {
+          type: "Image",
+          mediaType: "image/png",
+          url: "https://mastodon.social/system/accounts/avatars/icon.png"
+        },
+        image: {
+          type: "Image",
+          mediaType: "image/jpeg",
+          url: "https://mastodon.social/system/accounts/headers/header.jpeg"
+        },
+        tag: [
+          {
+            type: "Hashtag",
+            name: "#activitypub",
+            href: "https://mastodon.social/tags/activitypub"
+          },
+          {
+            type: "Emoji",
+            id: "https://mastodon.social/emojis/party",
+            name: ":party:",
+            updated: "2026-05-21T00:00:00Z",
+            icon: {
+              type: "Image",
+              mediaType: "image/png",
+              url: "https://mastodon.social/system/custom_emojis/images/party.png"
+            }
+          }
+        ],
+        attachment: [
+          {
+            type: "PropertyValue",
+            name: "Website",
+            value: "<a href=\"https://example.com\">https://example.com</a>"
+          }
+        ]
+      })
+
+      expect(Either.isRight(result)).toBe(true)
+    }))
+
+  it.effect("rejects structurally invalid ActivityPub Person actor extensions", () =>
+    Effect.sync(() => {
+      const invalidActors = [
+        { ...mastodonActorFixture, icon: {} },
+        { ...mastodonActorFixture, image: { type: "Image" } },
+        { ...mastodonActorFixture, tag: [{}] },
+        {
+          ...mastodonActorFixture,
+          tag: [{ type: "Emoji", id: "https://mastodon.social/emojis/party", name: ":party:" }]
+        },
+        { ...mastodonActorFixture, attachment: [{}] },
+        {
+          ...mastodonActorFixture,
+          attachment: [{ type: "Note", name: "Website", value: "https://example.com" }]
+        },
+        { ...mastodonActorFixture, interactionPolicy: {} },
+        { ...mastodonActorFixture, interactionPolicy: { arbitrary: true } },
+        { ...mastodonActorFixture, interactionPolicy: { canFeature: { arbitrary: true } } }
+      ]
+
+      invalidActors.forEach((actor) => {
+        expect(Either.isLeft(Schema.decodeUnknownEither(ActivityPubPersonSchema)(actor))).toBe(true)
+      })
+    }))
+
   it.effect("accepts ActivityPub Person objects with required fields and correct type", () =>
     Effect.sync(() => {
       fc.assert(
