@@ -299,11 +299,17 @@ describe("renderEntrypoint clone cache", () => {
     const entrypoint = renderEntrypoint(makeTemplateConfig())
 
     expect(entrypoint).toContain("git --git-dir '$CACHE_REPO_DIR' fetch")
+    expect(entrypoint).toContain('CLONE_SOURCE_REPO_URL="$AUTH_REPO_URL"')
+    expect(entrypoint).toContain('CLONE_SOURCE_REPO_URL="$CACHE_REPO_DIR"')
+    expect(entrypoint).toContain('CLONE_CACHE_ARGS="--no-local"')
+    expect(entrypoint).toContain("git clone --progress $CLONE_CACHE_ARGS '$CLONE_SOURCE_REPO_URL' '$TARGET_DIR'")
     expect(entrypoint).toContain("'+refs/heads/*:refs/heads/*'")
     expect(entrypoint).toContain("'+refs/tags/*:refs/tags/*'")
+    expect(entrypoint).toContain("git fetch --progress '$AUTH_REPO_URL' '$REPO_REF':'$REF_BRANCH'")
     expect(entrypoint).not.toContain("'+refs/*:refs/*'")
     expect(entrypoint).not.toContain("'+refs/pull/*:refs/pull/*'")
     expect(entrypoint).not.toContain("'+refs/merge-requests/*:refs/merge-requests/*'")
+    expect(entrypoint).not.toContain("--reference-if-able")
   })
 
   it("preserves branch/tag-only clone-cache refspecs for generated configs", () => {
