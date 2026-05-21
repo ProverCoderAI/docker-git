@@ -147,12 +147,21 @@ const renderCloneCacheInit = (config: TemplateConfig): string =>
     chown 1000:1000 "$CACHE_ROOT" || true
     if [[ -d "$CACHE_REPO_DIR" ]]; then
       if su - ${config.sshUser} -c "git --git-dir '$CACHE_REPO_DIR' rev-parse --is-bare-repository >/dev/null 2>&1"; then
-        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' ${cloneCacheRefreshRefspecs}"; then
+        if su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' ${cloneCacheRefreshRefspecs}"; then
+          CACHE_HEAD_REF="$(git --git-dir "$CACHE_REPO_DIR" symbolic-ref -q HEAD 2>/dev/null || true)"
+          if [[ -z "$CACHE_HEAD_REF" ]] || ! git --git-dir "$CACHE_REPO_DIR" show-ref --verify --quiet "$CACHE_HEAD_REF"; then
+            CACHE_HEAD_REF="$(git --git-dir "$CACHE_REPO_DIR" for-each-ref --format='%(refname)' refs/heads/main refs/heads/master refs/heads | head -n 1 || true)"
+          fi
+          if [[ -n "$CACHE_HEAD_REF" ]] && git --git-dir "$CACHE_REPO_DIR" symbolic-ref HEAD "$CACHE_HEAD_REF"; then
+            CLONE_SOURCE_REPO_URL="$CACHE_REPO_DIR"
+            CLONE_CACHE_ARGS="--no-local"
+            echo "[clone-cache] using mirror: $CACHE_REPO_DIR"
+          else
+            echo "[clone-cache] mirror has no usable HEAD for $REPO_URL"
+          fi
+        else
           echo "[clone-cache] mirror refresh failed for $REPO_URL"
         fi
-        CLONE_SOURCE_REPO_URL="$CACHE_REPO_DIR"
-        CLONE_CACHE_ARGS="--no-local"
-        echo "[clone-cache] using mirror: $CACHE_REPO_DIR"
       else
         echo "[clone-cache] invalid mirror removed: $CACHE_REPO_DIR"
         rm -rf "$CACHE_REPO_DIR"
