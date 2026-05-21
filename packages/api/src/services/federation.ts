@@ -10,10 +10,9 @@ import {
 import { promises as fs } from "node:fs"
 import { dirname, join } from "node:path"
 
+import type { JsonValue } from "../api/activitypub-schema.js"
 import type {
   ActivityPubFollowActivity,
-  ActivityPubOrderedCollection,
-  ActivityPubPerson,
   ActivityPubPublicKey,
   AgentProvider,
   AgentSession,
@@ -31,6 +30,9 @@ import type {
   FollowSubscriptionCreated,
   ForgeFedTicket,
   ForgeFedTicketSource,
+  LocalActivityPubOrderedCollection,
+  LocalActivityPubOrderedCollectionPage,
+  LocalActivityPubPerson,
   ProjectDetails
 } from "../api/contracts.js"
 import {
@@ -124,6 +126,24 @@ const isRecord = (value: unknown): value is JsonRecord =>
 
 const asRecord = (value: unknown): JsonRecord | null =>
   isRecord(value) ? value : null
+
+const isJsonValue = (value: unknown): value is JsonValue => {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return true
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue)
+  }
+  return isRecord(value) && Object.values(value).every(isJsonValue)
+}
+
+const readJsonValue = (value: unknown): JsonValue | undefined =>
+  isJsonValue(value) ? value : undefined
 
 /**
  * Extracts string JSON-LD context entries from a boundary value.
@@ -597,9 +617,19 @@ const publicKeyForContext = (context: FederationContext): ActivityPubPublicKey =
   publicKeyPem: ensureLocalActorKeys().publicKeyPem
 })
 
+const followActivityJson = (activity: ActivityPubFollowActivity): JsonValue => ({
+  "@context": [...activity["@context"]],
+  id: activity.id,
+  type: activity.type,
+  actor: activity.actor,
+  object: activity.object,
+  ...(activity.to === undefined ? {} : { to: [...activity.to] }),
+  ...(activity.capability === undefined ? {} : { capability: activity.capability })
+})
+
 export const makeFederationActorDocument = (
   context: FederationContext
-): ActivityPubPerson => ({
+): LocalActivityPubPerson => ({
   "@context": actorJsonLdContext,
   type: "Person",
   id: context.actorId,
@@ -619,8 +649,8 @@ export const makeFederationActorDocument = (
 
 export const makeFederationOutboxCollection = (
   context: FederationContext
-): ActivityPubOrderedCollection => {
-  const orderedItems = listFollowSubscriptions().map((subscription) => subscription.activity)
+): LocalActivityPubOrderedCollection => {
+  const orderedItems = listFollowSubscriptions().map((subscription) => followActivityJson(subscription.activity))
   return {
     "@context": activityForgeFedJsonLdContext,
     type: "OrderedCollection",
@@ -632,17 +662,29 @@ export const makeFederationOutboxCollection = (
 
 export const makeFederationFollowersCollection = (
   context: FederationContext
-): ActivityPubOrderedCollection => ({
+): LocalActivityPubOrderedCollection => ({
   "@context": activityForgeFedJsonLdContext,
   type: "OrderedCollection",
   id: context.followers,
   totalItems: 0,
+  first: `${context.followers}?page=1`,
+  orderedItems: []
+})
+
+export const makeFederationFollowersPageCollection = (
+  context: FederationContext
+): LocalActivityPubOrderedCollectionPage => ({
+  "@context": activityForgeFedJsonLdContext,
+  type: "OrderedCollectionPage",
+  id: `${context.followers}?page=1`,
+  totalItems: 0,
+  partOf: context.followers,
   orderedItems: []
 })
 
 export const makeFederationFollowingCollection = (
   context: FederationContext
-): ActivityPubOrderedCollection => {
+): LocalActivityPubOrderedCollection => {
   const orderedItems = listFollowSubscriptions()
     .filter((subscription) => subscription.status === "accepted")
     .map((subscription) => subscription.object)
@@ -658,7 +700,7 @@ export const makeFederationFollowingCollection = (
 
 export const makeFederationLikedCollection = (
   context: FederationContext
-): ActivityPubOrderedCollection => ({
+): LocalActivityPubOrderedCollection => ({
   "@context": activityForgeFedJsonLdContext,
   type: "OrderedCollection",
   id: context.liked,
@@ -680,9 +722,9 @@ const readTicketSource = (payload: JsonRecord): string | ForgeFedTicketSource | 
   return content === undefined && mediaType === undefined ? undefined : { content, mediaType }
 }
 
-const readTicketAttachment = (payload: JsonRecord): ReadonlyArray<unknown> | undefined => {
+const readTicketAttachment = (payload: JsonRecord): ReadonlyArray<JsonValue> | undefined => {
   const raw = payload["attachment"]
-  return Array.isArray(raw) ? raw : undefined
+  return Array.isArray(raw) && raw.every(isJsonValue) ? raw : undefined
 }
 
 const parseTicket = (
@@ -705,6 +747,7 @@ const parseTicket = (
     const summary = yield* _(readRequiredString(payload, "summary", "ForgeFed ticket"))
     const content = yield* _(readRequiredString(payload, "content", "ForgeFed ticket"))
     const id = readOptionalString(payload, "id") ?? `urn:docker-git:forgefed:ticket:${randomUUID()}`
+    const raw = readJsonValue(payload)
 
     return {
       id,
@@ -719,7 +762,7 @@ const parseTicket = (
       context: readOptionalString(payload, "context"),
       workType: readOptionalString(payload, "workType"),
       attachment: readTicketAttachment(payload),
-      raw: payload
+      ...(raw === undefined ? {} : { raw })
     }
   })
 
@@ -1549,11 +1592,11 @@ const outboxItemId = (item: unknown, subscription: FollowSubscription): string =
 
 const fetchOutbox = (
   url: string
-): Effect.Effect<ActivityPubOrderedCollection, ApiBadRequestError> =>
+): Effect.Effect<LocalActivityPubOrderedCollection, ApiBadRequestError> =>
   fetchJson(url, "Exchange outbox").pipe(
     Effect.flatMap((record) =>
       requireFederationJsonLdContext(record, "Exchange outbox").pipe(
-        Effect.map((): ActivityPubOrderedCollection => ({
+        Effect.map((): LocalActivityPubOrderedCollection => ({
           "@context": activityForgeFedJsonLdContext,
           type: "OrderedCollection",
           id: readOptionalString(record, "id") ?? url,

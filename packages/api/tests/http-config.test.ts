@@ -1,7 +1,7 @@
 import * as HttpApp from "@effect/platform/HttpApp"
 import * as HttpRouter from "@effect/platform/HttpRouter"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, Either, ParseResult, Schema } from "effect"
 import fc from "fast-check"
 
 import {
@@ -9,6 +9,12 @@ import {
   actorJsonLdContext,
   federationJsonLdResponseContentType
 } from "../src/api/contracts.js"
+import {
+  ActivityPubOrderedCollectionPageSchema,
+  ActivityPubOrderedCollectionSchema,
+  ActivityPubPersonSchema,
+  exactActivityPubParseOptions
+} from "../src/api/schema.js"
 import {
   federationActorDocumentResponse,
   federationExchangeStatusResponse,
@@ -127,6 +133,27 @@ const parseJsonObject = (raw: string): object | null => {
 const readField = (value: object | null, key: string): unknown =>
   value === null ? undefined : Reflect.get(value, key)
 
+const readNestedField = (value: object | null, parent: string, key: string): unknown => {
+  const nested = readField(value, parent)
+  return typeof nested === "object" && nested !== null ? Reflect.get(nested, key) : undefined
+}
+
+const decodeOrThrow = <A, I>(schema: Schema.Schema<A, I, never>, value: unknown): A =>
+  Either.match(Schema.decodeUnknownEither(schema, exactActivityPubParseOptions)(value), {
+    onLeft: (error) => {
+      throw new Error(ParseResult.TreeFormatter.formatIssueSync(error.issue))
+    },
+    onRight: (decoded) => decoded
+  })
+
+const decodeFederationDocument = (expectedType: string, payload: object | null): void => {
+  if (expectedType === "Person") {
+    decodeOrThrow(ActivityPubPersonSchema, payload)
+    return
+  }
+  decodeOrThrow(ActivityPubOrderedCollectionSchema, payload)
+}
+
 const federationDocumentCases: ReadonlyArray<{
   readonly path: string
   readonly expectedContext: unknown
@@ -240,6 +267,35 @@ describe("api http config", () => {
         expect(readField(payload, "@context")).toEqual(documentCase.expectedContext)
         expect(readField(payload, "type")).toBe(documentCase.expectedType)
         expect(readField(payload, "id")).toBe(documentCase.expectedId)
+        decodeFederationDocument(documentCase.expectedType, payload)
       }))
   }
+
+  it.effect("serves followers page as typed ActivityPub JSON-LD", () =>
+    Effect.gen(function*(_) {
+      yield* _(Effect.sync(() => clearFederationState()))
+
+      const document = yield* _(readFederationDocumentRoute("/federation/followers?page=1"))
+      const payload = parseJsonObject(document.body)
+
+      expect(document.status).toBe(200)
+      expect(document.contentType).toBe(federationJsonLdResponseContentType)
+      expect(readField(payload, "@context")).toEqual(activityForgeFedJsonLdContext)
+      expect(readField(payload, "type")).toBe("OrderedCollectionPage")
+      expect(readField(payload, "id")).toBe("https://public.example.test/federation/followers?page=1")
+      expect(readField(payload, "partOf")).toBe("https://public.example.test/federation/followers")
+      decodeOrThrow(ActivityPubOrderedCollectionPageSchema, payload)
+    }))
+
+  it.effect("rejects unsupported followers pages", () =>
+    Effect.gen(function*(_) {
+      yield* _(Effect.sync(() => clearFederationState()))
+
+      const document = yield* _(readFederationDocumentRoute("/federation/followers?page=2"))
+      const payload = parseJsonObject(document.body)
+
+      expect(document.status).toBe(400)
+      expect(readNestedField(payload, "error", "type")).toBe("ApiBadRequestError")
+      expect(readNestedField(payload, "error", "message")).toBe("Unsupported followers page: 2")
+    }))
 })

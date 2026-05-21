@@ -1,3 +1,21 @@
+import type * as Schema from "effect/Schema"
+
+import type {
+  ActivityForgeFedJsonLdContextSchema,
+  ActivityPubFollowActivitySchema,
+  ActivityPubOrderedCollectionPageSchema,
+  ActivityPubOrderedCollectionSchema,
+  ActivityPubPersonSchema,
+  ActivityPubPublicKeySchema,
+  ActorJsonLdContextSchema,
+  ForgeFedTicketSchema,
+  ForgeFedTicketSourceSchema,
+  LocalActivityPubFollowersCollectionSchema,
+  LocalActivityPubOrderedCollectionPageSchema,
+  LocalActivityPubOrderedCollectionSchema,
+  LocalActivityPubPersonSchema
+} from "./activitypub-schema.js"
+
 export type ProjectStatus = "running" | "stopped" | "unknown"
 
 export type AgentProvider = "codex" | "opencode" | "claude" | "grok" | "custom"
@@ -542,6 +560,7 @@ export type ContainerTaskSnapshot = {
 export const activityStreamsJsonLdContext = "https://www.w3.org/ns/activitystreams" as const
 export const forgeFedJsonLdContext = "https://forgefed.org/ns" as const
 export const securityJsonLdContext = "https://w3id.org/security/v1" as const
+export const socialWebWebfingerJsonLdContext = "https://purl.archive.org/socialweb/webfinger" as const
 export const activityForgeFedJsonLdContext = [
   activityStreamsJsonLdContext,
   forgeFedJsonLdContext
@@ -556,29 +575,12 @@ export const federationJsonLdContentType =
 export const federationJsonLdResponseContentType =
   `${federationJsonLdContentType}; charset=utf-8` as const
 
-export type ActivityForgeFedJsonLdContext = typeof activityForgeFedJsonLdContext
-export type ActorJsonLdContext = typeof actorJsonLdContext
+export type ActivityForgeFedJsonLdContext = Schema.Schema.Type<typeof ActivityForgeFedJsonLdContextSchema>
+export type ActorJsonLdContext = Schema.Schema.Type<typeof ActorJsonLdContextSchema>
 
-export type ForgeFedTicket = {
-  readonly id: string
-  readonly attributedTo: string
-  readonly summary: string
-  readonly content: string
-  readonly mediaType?: string | undefined
-  readonly source?: string | ForgeFedTicketSource | undefined
-  readonly published?: string | undefined
-  readonly updated?: string | undefined
-  readonly url?: string | undefined
-  readonly context?: string | undefined
-  readonly workType?: string | undefined
-  readonly attachment?: ReadonlyArray<unknown> | undefined
-  readonly raw?: unknown | undefined
-}
+export type ForgeFedTicket = Schema.Schema.Type<typeof ForgeFedTicketSchema>
 
-export type ForgeFedTicketSource = {
-  readonly content?: string | undefined
-  readonly mediaType?: string | undefined
-}
+export type ForgeFedTicketSource = Schema.Schema.Type<typeof ForgeFedTicketSourceSchema>
 
 export type FederationIssueStatus =
   | "offered"
@@ -618,47 +620,24 @@ export type CreateFollowRequest = {
 
 export type FollowStatus = "pending" | "accepted" | "rejected"
 
-export type ActivityPubFollowActivity = {
-  readonly "@context": ActivityForgeFedJsonLdContext
-  readonly id: string
-  readonly type: "Follow"
-  readonly actor: string
-  readonly object: string
-  readonly to?: ReadonlyArray<string> | undefined
-  readonly capability?: string | undefined
-}
+export type ActivityPubFollowActivity = Schema.Schema.Type<typeof ActivityPubFollowActivitySchema>
 
-export type ActivityPubPublicKey = {
-  readonly id: string
-  readonly owner: string
-  readonly publicKeyPem: string
-}
+export type ActivityPubPublicKey = Schema.Schema.Type<typeof ActivityPubPublicKeySchema>
 
-export type ActivityPubPerson = {
-  readonly "@context": ActorJsonLdContext
-  readonly type: "Person"
-  readonly id: string
-  readonly name: string
-  readonly preferredUsername: string
-  readonly summary: string
-  readonly inbox: string
-  readonly outbox: string
-  readonly followers: string
-  readonly following: string
-  readonly liked: string
-  readonly publicKey?: ActivityPubPublicKey | undefined
-  readonly endpoints?: {
-    readonly sharedInbox?: string | undefined
-  } | undefined
-}
+export type ActivityPubPerson = Schema.Schema.Type<typeof ActivityPubPersonSchema>
 
-export type ActivityPubOrderedCollection = {
-  readonly "@context": ActivityForgeFedJsonLdContext
-  readonly type: "OrderedCollection"
-  readonly id: string
-  readonly totalItems: number
-  readonly orderedItems: ReadonlyArray<unknown>
-}
+export type LocalActivityPubPerson = Schema.Schema.Type<typeof LocalActivityPubPersonSchema>
+
+export type ActivityPubOrderedCollection = Schema.Schema.Type<typeof ActivityPubOrderedCollectionSchema>
+
+export type LocalActivityPubOrderedCollection =
+  | Schema.Schema.Type<typeof LocalActivityPubOrderedCollectionSchema>
+  | Schema.Schema.Type<typeof LocalActivityPubFollowersCollectionSchema>
+
+export type ActivityPubOrderedCollectionPage = Schema.Schema.Type<typeof ActivityPubOrderedCollectionPageSchema>
+
+export type LocalActivityPubOrderedCollectionPage =
+  Schema.Schema.Type<typeof LocalActivityPubOrderedCollectionPageSchema>
 
 export type FollowSubscription = {
   readonly id: string

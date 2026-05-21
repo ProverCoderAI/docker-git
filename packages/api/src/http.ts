@@ -13,6 +13,9 @@ import { renderError, type AppError } from "@effect-template/lib/usecases/errors
 import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
 import { federationJsonLdResponseContentType, type ApplyProjectRequest } from "./api/contracts.js"
 import {
+  ActivityPubOrderedCollectionPageSchema,
+  ActivityPubOrderedCollectionSchema,
+  ActivityPubPersonSchema,
   AuthMenuRequestSchema,
   AuthTerminalSessionRequestSchema,
   ActiveProjectTerminalSessionRequestSchema,
@@ -41,7 +44,8 @@ import {
   StateCommitRequestSchema,
   StateInitRequestSchema,
   StateSyncRequestSchema,
-  UpProjectRequestSchema
+  UpProjectRequestSchema,
+  exactActivityPubParseOptions
 } from "./api/schema.js"
 import type { UpProjectRequestInput } from "./api/schema.js"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
@@ -78,6 +82,7 @@ import {
   makeFederationContext,
   makeFederationExchangeStatus,
   makeFederationFollowersCollection,
+  makeFederationFollowersPageCollection,
   makeFederationFollowingCollection,
   makeFederationLikedCollection,
   makeFederationOutboxCollection,
@@ -306,6 +311,24 @@ const binaryResponse = (data: Uint8Array, contentType: string, status = 200) =>
 const jsonLdResponse = (data: unknown, status: number) =>
   textResponse(JSON.stringify(data), federationJsonLdResponseContentType, status)
 
+const validatedJsonLdResponse = <A, I>(
+  schema: Schema.Schema<A, I, never>,
+  data: unknown,
+  label: string,
+  status: number
+) =>
+  Schema.decodeUnknown(schema, exactActivityPubParseOptions)(data).pipe(
+    Effect.mapError((error) =>
+      new ApiInternalError({
+        message: `${label} does not satisfy its ActivityPub JSON-LD schema: ${
+          ParseResult.TreeFormatter.formatIssueSync(error.issue)
+        }`,
+        cause: error
+      })
+    ),
+    Effect.flatMap((payload) => jsonLdResponse(payload, status))
+  )
+
 const parseQueryInt = (url: string, key: string, fallback: number): number => {
   const parsed = Number(new URL(url, "http://localhost").searchParams.get(key) ?? "")
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -316,6 +339,16 @@ const parseQueryInt = (url: string, key: string, fallback: number): number => {
 
 const hasQueryParam = (url: string, key: string): boolean =>
   new URL(url, "http://localhost").searchParams.has(key)
+
+const readFollowersPageMode = (url: string): Effect.Effect<"collection" | "page", ApiBadRequestError> => {
+  const page = new URL(url, "http://localhost").searchParams.get("page")
+  if (page === null) {
+    return Effect.succeed("collection")
+  }
+  return page === "1"
+    ? Effect.succeed("page")
+    : Effect.fail(new ApiBadRequestError({ message: `Unsupported followers page: ${page}` }))
+}
 
 const parsePortParam = (value: string): Effect.Effect<number, ApiBadRequestError> => {
   const parsed = Number.parseInt(value, 10)
@@ -633,7 +666,14 @@ export const federationActorDocumentResponse = () =>
   Effect.gen(function*(_) {
     const request = yield* _(HttpServerRequest.HttpServerRequest)
     const context = yield* _(resolveFederationContext(request))
-    return yield* _(jsonLdResponse(makeFederationActorDocument(context), 200))
+    return yield* _(
+      validatedJsonLdResponse(
+        ActivityPubPersonSchema,
+        makeFederationActorDocument(context),
+        "Federation actor document",
+        200
+      )
+    )
   }).pipe(Effect.catchAll(errorResponse))
 
 /**
@@ -653,7 +693,14 @@ export const federationOutboxDocumentResponse = () =>
   Effect.gen(function*(_) {
     const request = yield* _(HttpServerRequest.HttpServerRequest)
     const context = yield* _(resolveFederationContext(request))
-    return yield* _(jsonLdResponse(makeFederationOutboxCollection(context), 200))
+    return yield* _(
+      validatedJsonLdResponse(
+        ActivityPubOrderedCollectionSchema,
+        makeFederationOutboxCollection(context),
+        "Federation outbox collection",
+        200
+      )
+    )
   }).pipe(Effect.catchAll(errorResponse))
 
 /**
@@ -673,7 +720,22 @@ export const federationFollowersDocumentResponse = () =>
   Effect.gen(function*(_) {
     const request = yield* _(HttpServerRequest.HttpServerRequest)
     const context = yield* _(resolveFederationContext(request))
-    return yield* _(jsonLdResponse(makeFederationFollowersCollection(context), 200))
+    const mode = yield* _(readFollowersPageMode(request.url))
+    return yield* _(
+      mode === "page"
+        ? validatedJsonLdResponse(
+          ActivityPubOrderedCollectionPageSchema,
+          makeFederationFollowersPageCollection(context),
+          "Federation followers page",
+          200
+        )
+        : validatedJsonLdResponse(
+          ActivityPubOrderedCollectionSchema,
+          makeFederationFollowersCollection(context),
+          "Federation followers collection",
+          200
+        )
+    )
   }).pipe(Effect.catchAll(errorResponse))
 
 /**
@@ -693,7 +755,14 @@ export const federationFollowingDocumentResponse = () =>
   Effect.gen(function*(_) {
     const request = yield* _(HttpServerRequest.HttpServerRequest)
     const context = yield* _(resolveFederationContext(request))
-    return yield* _(jsonLdResponse(makeFederationFollowingCollection(context), 200))
+    return yield* _(
+      validatedJsonLdResponse(
+        ActivityPubOrderedCollectionSchema,
+        makeFederationFollowingCollection(context),
+        "Federation following collection",
+        200
+      )
+    )
   }).pipe(Effect.catchAll(errorResponse))
 
 /**
@@ -713,7 +782,14 @@ export const federationLikedDocumentResponse = () =>
   Effect.gen(function*(_) {
     const request = yield* _(HttpServerRequest.HttpServerRequest)
     const context = yield* _(resolveFederationContext(request))
-    return yield* _(jsonLdResponse(makeFederationLikedCollection(context), 200))
+    return yield* _(
+      validatedJsonLdResponse(
+        ActivityPubOrderedCollectionSchema,
+        makeFederationLikedCollection(context),
+        "Federation liked collection",
+        200
+      )
+    )
   }).pipe(Effect.catchAll(errorResponse))
 
 const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
