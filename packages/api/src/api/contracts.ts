@@ -556,6 +556,7 @@ export type ContainerTaskSnapshot = {
 export const activityStreamsJsonLdContext = "https://www.w3.org/ns/activitystreams" as const
 export const forgeFedJsonLdContext = "https://forgefed.org/ns" as const
 export const securityJsonLdContext = "https://w3id.org/security/v1" as const
+export const socialWebWebfingerJsonLdContext = "https://purl.archive.org/socialweb/webfinger" as const
 export const activityForgeFedJsonLdContext = [
   activityStreamsJsonLdContext,
   forgeFedJsonLdContext

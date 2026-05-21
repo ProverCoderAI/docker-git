@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Either, ParseResult, Schema } from "effect"
+import fc from "fast-check"
 
 import {
   ActivityPubOrderedCollectionPageSchema,
@@ -10,6 +11,75 @@ import {
 const expectDecodedCoversFixtureKeys = (decoded: object, fixture: object): void => {
   expect(Object.keys(decoded)).toEqual(expect.arrayContaining(Object.keys(fixture)))
 }
+
+const activityPubContextArbitrary = fc.constant("https://www.w3.org/ns/activitystreams")
+
+const activityPubActorContextArbitrary = fc.constant([
+  "https://www.w3.org/ns/activitystreams",
+  "https://w3id.org/security/v1",
+  "https://forgefed.org/ns"
+] as const)
+
+const schemaStringArbitrary = fc.string()
+
+const nonPersonTypeArbitrary = fc.string().filter((value) => value !== "Person")
+
+const nonOrderedCollectionTypeArbitrary = fc
+  .string()
+  .filter((value) => value !== "OrderedCollection")
+
+const nonOrderedCollectionPageTypeArbitrary = fc
+  .string()
+  .filter((value) => value !== "OrderedCollectionPage")
+
+const activityPubPersonRequiredFieldsArbitrary = fc.record({
+  "@context": activityPubActorContextArbitrary,
+  type: fc.constant("Person"),
+  id: schemaStringArbitrary,
+  name: schemaStringArbitrary,
+  preferredUsername: schemaStringArbitrary,
+  summary: schemaStringArbitrary,
+  inbox: schemaStringArbitrary,
+  outbox: schemaStringArbitrary,
+  followers: schemaStringArbitrary,
+  following: schemaStringArbitrary
+})
+
+const activityPubPersonMissingRequiredFieldsArbitrary = fc.record({
+  "@context": activityPubActorContextArbitrary,
+  type: fc.constant("Person"),
+  id: schemaStringArbitrary
+})
+
+const activityPubOrderedCollectionRequiredFieldsArbitrary = fc.record({
+  "@context": activityPubContextArbitrary,
+  type: fc.constant("OrderedCollection"),
+  id: schemaStringArbitrary,
+  totalItems: fc.integer({ min: 0 })
+})
+
+const activityPubOrderedCollectionMissingRequiredFieldsArbitrary = fc.record({
+  "@context": activityPubContextArbitrary,
+  type: fc.constant("OrderedCollection"),
+  id: schemaStringArbitrary
+})
+
+const activityPubOrderedCollectionPageRequiredFieldsArbitrary = fc.record({
+  "@context": activityPubContextArbitrary,
+  type: fc.constant("OrderedCollectionPage"),
+  id: schemaStringArbitrary,
+  totalItems: fc.integer({ min: 0 }),
+  partOf: schemaStringArbitrary,
+  orderedItems: fc.array(fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null)))
+})
+
+const activityPubOrderedCollectionPageMissingRequiredFieldsArbitrary = fc.record({
+  "@context": activityPubContextArbitrary,
+  type: fc.constant("OrderedCollectionPage"),
+  id: schemaStringArbitrary,
+  totalItems: fc.integer({ min: 0 }),
+  orderedItems: fc.array(fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null)))
+})
 
 const mastodonActorFixture = {
   "@context": [
@@ -229,5 +299,122 @@ describe("ActivityPub and ForgeFed schema parity", () => {
       expect(Either.isLeft(personResult)).toBe(true)
       expect(Either.isLeft(collectionResult)).toBe(true)
       expect(Either.isLeft(pageResult)).toBe(true)
+    }))
+
+  it.effect("accepts ActivityPub Person objects with required fields and correct type", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(activityPubPersonRequiredFieldsArbitrary, (person) => {
+          expect(Either.isRight(Schema.decodeUnknownEither(ActivityPubPersonSchema)(person))).toBe(
+            true
+          )
+        })
+      )
+    }))
+
+  it.effect("rejects ActivityPub Person objects with wrong type", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(activityPubPersonRequiredFieldsArbitrary, nonPersonTypeArbitrary, (person, type) => {
+          expect(
+            Either.isLeft(Schema.decodeUnknownEither(ActivityPubPersonSchema)({ ...person, type }))
+          ).toBe(true)
+        })
+      )
+    }))
+
+  it.effect("rejects ActivityPub Person objects missing required fields", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(activityPubPersonMissingRequiredFieldsArbitrary, (person) => {
+          expect(Either.isLeft(Schema.decodeUnknownEither(ActivityPubPersonSchema)(person))).toBe(
+            true
+          )
+        })
+      )
+    }))
+
+  it.effect("accepts ActivityPub OrderedCollection objects with required fields and correct type", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(activityPubOrderedCollectionRequiredFieldsArbitrary, (collection) => {
+          expect(
+            Either.isRight(Schema.decodeUnknownEither(ActivityPubOrderedCollectionSchema)(collection))
+          ).toBe(true)
+        })
+      )
+    }))
+
+  it.effect("rejects ActivityPub OrderedCollection objects with wrong type", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(
+          activityPubOrderedCollectionRequiredFieldsArbitrary,
+          nonOrderedCollectionTypeArbitrary,
+          (collection, type) => {
+            expect(
+              Either.isLeft(
+                Schema.decodeUnknownEither(ActivityPubOrderedCollectionSchema)({
+                  ...collection,
+                  type
+                })
+              )
+            ).toBe(true)
+          }
+        )
+      )
+    }))
+
+  it.effect("rejects ActivityPub OrderedCollection objects missing required fields", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(activityPubOrderedCollectionMissingRequiredFieldsArbitrary, (collection) => {
+          expect(
+            Either.isLeft(Schema.decodeUnknownEither(ActivityPubOrderedCollectionSchema)(collection))
+          ).toBe(true)
+        })
+      )
+    }))
+
+  it.effect("accepts ActivityPub OrderedCollectionPage objects with required fields and correct type", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(activityPubOrderedCollectionPageRequiredFieldsArbitrary, (page) => {
+          expect(
+            Either.isRight(Schema.decodeUnknownEither(ActivityPubOrderedCollectionPageSchema)(page))
+          ).toBe(true)
+        })
+      )
+    }))
+
+  it.effect("rejects ActivityPub OrderedCollectionPage objects with wrong type", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(
+          activityPubOrderedCollectionPageRequiredFieldsArbitrary,
+          nonOrderedCollectionPageTypeArbitrary,
+          (page, type) => {
+            expect(
+              Either.isLeft(
+                Schema.decodeUnknownEither(ActivityPubOrderedCollectionPageSchema)({
+                  ...page,
+                  type
+                })
+              )
+            ).toBe(true)
+          }
+        )
+      )
+    }))
+
+  it.effect("rejects ActivityPub OrderedCollectionPage objects missing required fields", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(activityPubOrderedCollectionPageMissingRequiredFieldsArbitrary, (page) => {
+          expect(
+            Either.isLeft(Schema.decodeUnknownEither(ActivityPubOrderedCollectionPageSchema)(page))
+          ).toBe(true)
+        })
+      )
     }))
 })

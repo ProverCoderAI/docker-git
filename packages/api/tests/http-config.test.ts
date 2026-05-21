@@ -132,6 +132,11 @@ const parseJsonObject = (raw: string): object | null => {
 const readField = (value: object | null, key: string): unknown =>
   value === null ? undefined : Reflect.get(value, key)
 
+const readNestedField = (value: object | null, parent: string, key: string): unknown => {
+  const nested = readField(value, parent)
+  return typeof nested === "object" && nested !== null ? Reflect.get(nested, key) : undefined
+}
+
 const decodeOrThrow = <A, I>(schema: Schema.Schema<A, I, never>, value: unknown): A =>
   Either.match(Schema.decodeUnknownEither(schema)(value), {
     onLeft: (error) => {
@@ -279,5 +284,17 @@ describe("api http config", () => {
       expect(readField(payload, "id")).toBe("https://public.example.test/federation/followers?page=1")
       expect(readField(payload, "partOf")).toBe("https://public.example.test/federation/followers")
       decodeOrThrow(ActivityPubOrderedCollectionPageSchema, payload)
+    }))
+
+  it.effect("rejects unsupported followers pages", () =>
+    Effect.gen(function*(_) {
+      yield* _(Effect.sync(() => clearFederationState()))
+
+      const document = yield* _(readFederationDocumentRoute("/federation/followers?page=2"))
+      const payload = parseJsonObject(document.body)
+
+      expect(document.status).toBe(400)
+      expect(readNestedField(payload, "error", "type")).toBe("ApiBadRequestError")
+      expect(readNestedField(payload, "error", "message")).toBe("Unsupported followers page: 2")
     }))
 })
