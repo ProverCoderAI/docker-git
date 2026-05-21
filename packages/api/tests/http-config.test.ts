@@ -1,5 +1,6 @@
 import * as HttpApp from "@effect/platform/HttpApp"
 import * as HttpRouter from "@effect/platform/HttpRouter"
+import { OrderedCollectionPage } from "@fedify/vocab"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import fc from "fast-check"
@@ -134,25 +135,81 @@ const readNestedField = (value: object | null, parent: string, key: string): unk
   return typeof nested === "object" && nested !== null ? Reflect.get(nested, key) : undefined
 }
 
-const unsupportedMastodonTerms = [
+type JsonRecord = Record<string, unknown>
+
+const isJsonRecord = (value: unknown): value is JsonRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+const unsupportedMastodonContextTerms = [
   "https://purl.archive.org/socialweb/webfinger",
   "http://joinmastodon.org/ns#",
-  "toot:",
+  "toot:"
+] as const
+
+const unsupportedMastodonKeys = [
+  "toot",
+  "featured",
   "featuredTags",
   "alsoKnownAs",
   "movedTo",
   "manuallyApprovesFollowers",
   "discoverable",
   "suspended",
-  "interactionPolicy"
+  "interactionPolicy",
+  "canQuote",
+  "automaticApproval",
+  "manualApproval"
 ] as const
 
-const assertNoMastodonTerms = (payload: object | null): void => {
-  const serialized = JSON.stringify(payload)
-  for (const term of unsupportedMastodonTerms) {
-    expect(serialized.includes(term)).toBe(false)
+const assertNoMastodonContextTerms = (value: unknown): void => {
+  if (typeof value === "string") {
+    for (const term of unsupportedMastodonContextTerms) {
+      expect(value.includes(term)).toBe(false)
+    }
+    return
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      assertNoMastodonContextTerms(item)
+    }
+    return
+  }
+  if (isJsonRecord(value)) {
+    for (const [key, item] of Object.entries(value)) {
+      expect(unsupportedMastodonKeys.some((unsupportedKey) => unsupportedKey === key)).toBe(false)
+      assertNoMastodonContextTerms(item)
+    }
   }
 }
+
+const assertNoMastodonKeys = (value: unknown): void => {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      assertNoMastodonKeys(item)
+    }
+    return
+  }
+  if (isJsonRecord(value)) {
+    for (const [key, item] of Object.entries(value)) {
+      expect(unsupportedMastodonKeys.some((unsupportedKey) => unsupportedKey === key)).toBe(false)
+      assertNoMastodonKeys(item)
+    }
+  }
+}
+
+const assertNoMastodonTerms = (payload: object | null): void => {
+  if (payload === null) {
+    return
+  }
+  assertNoMastodonContextTerms(Reflect.get(payload, "@context"))
+  assertNoMastodonKeys(payload)
+}
+
+const parseOrderedCollectionPage = (payload: unknown) =>
+  Effect.tryPromise({
+    try: () => OrderedCollectionPage.fromJsonLd(payload),
+    catch: (cause) => new Error(String(cause))
+  })
 
 const federationDocumentCases: ReadonlyArray<{
   readonly path: string
@@ -191,6 +248,11 @@ const federationDocumentCases: ReadonlyArray<{
     expectedType: "OrderedCollection"
   }
 ]
+
+const webFingerResourceArbitrary = fc.constantFrom(
+  "acct:docker-git@public.example.test",
+  "https://public.example.test/federation/actor"
+)
 
 describe("api http config", () => {
   it.effect("ignores empty federation public origin values", () =>
@@ -280,10 +342,10 @@ describe("api http config", () => {
 
       expect(document.status).toBe(200)
       expect(document.contentType).toBe(federationJsonLdResponseContentType)
-      expect(readField(payload, "@context")).toBe(activityStreamsJsonLdContext)
-      expect(readField(payload, "type")).toBe("OrderedCollectionPage")
-      expect(readField(payload, "id")).toBe("https://public.example.test/federation/followers?page=1")
-      expect(readField(payload, "partOf")).toBe("https://public.example.test/federation/followers")
+      const page = yield* _(parseOrderedCollectionPage(payload))
+      expect(page.id?.href).toBe("https://public.example.test/federation/followers?page=1")
+      expect(page.partOfId?.href).toBe("https://public.example.test/federation/followers")
+      expect(page.totalItems).toBe(0)
       assertNoMastodonTerms(payload)
     }))
 
@@ -314,6 +376,60 @@ describe("api http config", () => {
         href: "https://public.example.test/federation/actor",
         type: "application/activity+json"
       })
+    }))
+
+  it.effect("satisfies WebFinger invariants for supported actor resources", () =>
+    Effect.tryPromise({
+      try: () =>
+        fc.assert(
+          fc.asyncProperty(webFingerResourceArbitrary, async (resource) => {
+            clearFederationState()
+            const document = await Effect.runPromise(
+              readFederationDocumentRoute(
+                `/.well-known/webfinger?resource=${encodeURIComponent(resource)}`
+              )
+            )
+            const payload = parseJsonObject(document.body)
+            if (payload === null) {
+              throw new Error("Expected WebFinger JSON object.")
+            }
+            const aliases = readField(payload, "aliases")
+            const links = readField(payload, "links")
+
+            expect(document.status).toBe(200)
+            expect(readField(payload, "subject")).toBe(resource)
+            expect(Array.isArray(aliases)).toBe(true)
+            if (!Array.isArray(aliases)) {
+              throw new Error("Expected WebFinger aliases.")
+            }
+            for (const alias of aliases) {
+              expect(new URL(String(alias)).href).toBe(String(alias))
+            }
+
+            expect(Array.isArray(links)).toBe(true)
+            if (!Array.isArray(links)) {
+              throw new Error("Expected WebFinger links.")
+            }
+            const selfLink = links
+              .filter(isJsonRecord)
+              .find((link) =>
+                readField(link, "rel") === "self" &&
+                readField(link, "type") === "application/activity+json")
+            if (selfLink === undefined) {
+              throw new Error("Expected WebFinger self link.")
+            }
+            const actorHref = readField(selfLink, "href")
+            expect(actorHref).toBe("https://public.example.test/federation/actor")
+
+            const actor = await Effect.runPromise(readFederationDocumentRoute("/federation/actor"))
+            const actorPayload = parseJsonObject(actor.body)
+            expect(actor.status).toBe(200)
+            expect(readField(actorPayload, "id")).toBe(actorHref)
+            expect(readField(actorPayload, "type")).toBe("Person")
+          }),
+          { numRuns: 4 }
+        ),
+      catch: (cause) => cause instanceof Error ? cause : new Error(String(cause))
     }))
 
   it.effect("rejects unsupported followers pages", () =>

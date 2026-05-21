@@ -23,6 +23,9 @@ import {
 
 type JsonRecord = Record<string, unknown>
 
+const isJsonRecord = (value: unknown): value is JsonRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
 const unsupportedMastodonTerms = [
   "https://purl.archive.org/socialweb/webfinger",
   "http://joinmastodon.org/ns#",
@@ -45,10 +48,10 @@ const unsupportedMastodonTerms = [
 ] as const
 
 const asRecord = (value: unknown): JsonRecord => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isJsonRecord(value)) {
     throw new Error("Expected JSON object.")
   }
-  return value as JsonRecord
+  return value
 }
 
 const readField = (record: JsonRecord, key: string): unknown =>
