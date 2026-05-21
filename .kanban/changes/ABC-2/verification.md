@@ -15,38 +15,27 @@ bun run check
 
 ## Docker Runtime Verification
 
-The stock e2e script was attempted:
+The stock clone-cache e2e script was run against the reachable docker-git
+controller in this remote-Docker environment:
 
 ```bash
-bun run e2e:clone-cache
+DOCKER_GIT_API_URL=http://172.18.0.3:3336 \
+DOCKER_GIT_API_CONTAINER_NAME=docker-git-api-cloudflared \
+DOCKER_GIT_E2E_CLONE_CACHE_TIMEOUT=900s \
+  bash scripts/e2e/clone-cache.sh
 ```
 
-Environment finding:
+Result:
 
-- With `DOCKER_HOST=tcp://host.docker.internal:2375`, host CLI requires `DOCKER_GIT_API_URL`.
-- With `DOCKER_HOST` unset, Docker is not accessible in this container.
-- With `DOCKER_GIT_API_URL=http://host.docker.internal:3334`, the stock harness reaches clone setup but its helper expects local project directories while the API controller stores projects in controller state.
-
-Manual warm-cache verification was then run against the reachable controller:
-
-```bash
-DOCKER_GIT_API_URL=http://host.docker.internal:3334 \
-  bun packages/app/dist/src/docker-git/main.js clone \
-  https://github.com/octocat/Hello-World/issues/1 \
-  --force --gh-skip --no-ssh \
-  --container-name <temporary-name> \
-  --service-name <temporary-name> \
-  --volume-name <temporary-name>-home
+```text
+e2e/clone-cache: cache reuse verified for https://github.com/octocat/Hello-World/issues/1
 ```
 
-Assertions passed:
+Environment notes:
 
-- container log contained `[clone-cache] using mirror:`;
-- checkout branch was `issue-1`;
-- `git rev-parse HEAD` returned a commit;
-- container log did not contain `remote HEAD refers to nonexistent ref`.
-
-Temporary verification containers were removed after the check.
+- `DOCKER_HOST=tcp://host.docker.internal:2375` requires an explicit `DOCKER_GIT_API_URL`.
+- The controller container is named `docker-git-api-cloudflared`; setting `DOCKER_GIT_API_CONTAINER_NAME` lets the e2e helper inspect the nested project Docker daemon.
+- A shorter `300s` first attempt expired while cold-pulling/building the base runtime image, before clone-cache assertions could run.
 
 ## Current Workspace State
 
@@ -55,4 +44,3 @@ At archive time:
 - working tree was clean before creating this audit trail;
 - final code commits were present on branch `vk/2562-github-138`;
 - archive artifacts are stored under `.kanban/changes/ABC-2`.
-
