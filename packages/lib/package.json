@@ -79,7 +79,7 @@
     "globals": "^17.6.0",
     "jscpd": "^4.2.3",
     "typescript": "^6.0.3",
-    "vite": "^8.0.13",
+    "vite": "^8.0.14",
     "vitest": "^4.1.7"
   },
   "types": "dist/index.d.ts",
