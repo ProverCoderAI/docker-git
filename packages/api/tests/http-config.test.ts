@@ -382,51 +382,62 @@ describe("api http config", () => {
     Effect.tryPromise({
       try: () =>
         fc.assert(
-          fc.asyncProperty(webFingerResourceArbitrary, async (resource) => {
-            clearFederationState()
-            const document = await Effect.runPromise(
-              readFederationDocumentRoute(
-                `/.well-known/webfinger?resource=${encodeURIComponent(resource)}`
-              )
+          fc.asyncProperty(webFingerResourceArbitrary, (resource) =>
+            Effect.runPromise(
+              Effect.gen(function*(_) {
+                yield* _(Effect.sync(() => clearFederationState()))
+                const document = yield* _(
+                  readFederationDocumentRoute(
+                    `/.well-known/webfinger?resource=${encodeURIComponent(resource)}`
+                  )
+                )
+                const payload = parseJsonObject(document.body)
+                if (payload === null) {
+                  throw new Error("Expected WebFinger JSON object.")
+                }
+                const aliases = readField(payload, "aliases")
+                const links = readField(payload, "links")
+
+                expect(document.status).toBe(200)
+                expect(readField(payload, "subject")).toBe(resource)
+                expect(Array.isArray(aliases)).toBe(true)
+                if (!Array.isArray(aliases)) {
+                  throw new Error("Expected WebFinger aliases.")
+                }
+                yield* _(
+                  Effect.forEach(
+                    aliases,
+                    (alias) =>
+                      Effect.sync(() => {
+                        expect(new URL(String(alias)).href).toBe(String(alias))
+                      }),
+                    { discard: true }
+                  )
+                )
+
+                expect(Array.isArray(links)).toBe(true)
+                if (!Array.isArray(links)) {
+                  throw new Error("Expected WebFinger links.")
+                }
+                const selfLink = links
+                  .filter(isJsonRecord)
+                  .find((link) =>
+                    readField(link, "rel") === "self" &&
+                    readField(link, "type") === "application/activity+json")
+                if (selfLink === undefined) {
+                  throw new Error("Expected WebFinger self link.")
+                }
+                const actorHref = readField(selfLink, "href")
+                expect(actorHref).toBe("https://public.example.test/federation/actor")
+
+                const actor = yield* _(readFederationDocumentRoute("/federation/actor"))
+                const actorPayload = parseJsonObject(actor.body)
+                expect(actor.status).toBe(200)
+                expect(readField(actorPayload, "id")).toBe(actorHref)
+                expect(readField(actorPayload, "type")).toBe("Person")
+              })
             )
-            const payload = parseJsonObject(document.body)
-            if (payload === null) {
-              throw new Error("Expected WebFinger JSON object.")
-            }
-            const aliases = readField(payload, "aliases")
-            const links = readField(payload, "links")
-
-            expect(document.status).toBe(200)
-            expect(readField(payload, "subject")).toBe(resource)
-            expect(Array.isArray(aliases)).toBe(true)
-            if (!Array.isArray(aliases)) {
-              throw new Error("Expected WebFinger aliases.")
-            }
-            for (const alias of aliases) {
-              expect(new URL(String(alias)).href).toBe(String(alias))
-            }
-
-            expect(Array.isArray(links)).toBe(true)
-            if (!Array.isArray(links)) {
-              throw new Error("Expected WebFinger links.")
-            }
-            const selfLink = links
-              .filter(isJsonRecord)
-              .find((link) =>
-                readField(link, "rel") === "self" &&
-                readField(link, "type") === "application/activity+json")
-            if (selfLink === undefined) {
-              throw new Error("Expected WebFinger self link.")
-            }
-            const actorHref = readField(selfLink, "href")
-            expect(actorHref).toBe("https://public.example.test/federation/actor")
-
-            const actor = await Effect.runPromise(readFederationDocumentRoute("/federation/actor"))
-            const actorPayload = parseJsonObject(actor.body)
-            expect(actor.status).toBe(200)
-            expect(readField(actorPayload, "id")).toBe(actorHref)
-            expect(readField(actorPayload, "type")).toBe("Person")
-          }),
+          ),
           { numRuns: 4 }
         ),
       catch: (cause) => cause instanceof Error ? cause : new Error(String(cause))
