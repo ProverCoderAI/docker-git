@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url"
 
 import { WebSocket, WebSocketServer } from "ws"
 
+import { shouldProxyHttpPath } from "./serve-dist-web-routing.mjs"
+
 const appRoot = normalize(join(fileURLToPath(new URL(".", import.meta.url)), ".."))
 const staticRoot = join(appRoot, "dist-web")
 const trimTrailingSlashes = (value) => value.replace(/\/+$/u, "")
@@ -63,35 +65,6 @@ const reachableUrls = (host, port) =>
     ? [`http://127.0.0.1:${port}`, ...hostNetworkUrls(port)]
     : [`http://${host}:${port}`]
 
-const dbGateOwnedPathPrefixes = [
-  "/admin",
-  "/admin-license",
-  "/build/",
-  "/bulma.css",
-  "/connections",
-  "/database-connections",
-  "/dimensions.css",
-  "/favicon.ico",
-  "/forgot-password",
-  "/global.css",
-  "/icon-colors.css",
-  "/license",
-  "/login",
-  "/manifest.json",
-  "/oauth",
-  "/plugins",
-  "/redirect",
-  "/reset-password",
-  "/runners",
-  "/scheduler",
-  "/set-admin-password",
-  "/storage",
-  "/tokens.css"
-]
-
-const isDbGateOwnedPath = (pathname) =>
-  dbGateOwnedPathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(prefix))
-
 const resolveStaticPath = (pathname) => {
   const normalized = normalize(pathname)
   return normalized.startsWith(staticRoot)
@@ -122,9 +95,6 @@ const resolveUpstreamPath = (url) => {
   const pathname = parsed.pathname.replace(/^\/api/u, "") || "/"
   return `${pathname}${parsed.search}`
 }
-
-const isFederationPath = (pathname) =>
-  pathname === "/federation" || pathname.startsWith("/federation/")
 
 const firstHeader = (value) => Array.isArray(value) ? value[0] : value
 
@@ -273,15 +243,7 @@ const bridgeWebSockets = (clientSocket, upstream) => {
 
 const server = createServer((request, response) => {
   const parsed = new URL(request.url ?? "/", "http://localhost")
-  if (
-    parsed.pathname === "/api" ||
-    parsed.pathname.startsWith("/api/") ||
-    isFederationPath(parsed.pathname) ||
-    parsed.pathname.startsWith("/p/") ||
-    parsed.pathname.startsWith("/b/") ||
-    parsed.pathname.startsWith("/d/") ||
-    isDbGateOwnedPath(parsed.pathname)
-  ) {
+  if (shouldProxyHttpPath(parsed.pathname)) {
     proxyHttp(request, response)
     return
   }
