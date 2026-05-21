@@ -82,6 +82,7 @@ Optional env:
 
 - `GET /health`
 - `POST /federation/inbox` (ForgeFed `Ticket` / `Offer(Ticket)`, ActivityPub `Accept` / `Reject`)
+- `GET /.well-known/webfinger` (Fedify WebFinger document for the local federation actor)
 - `GET /federation/issues`
 - `GET /federation/actor` (ActivityPub `Person`)
 - `GET /federation/outbox`
@@ -115,6 +116,14 @@ Optional env:
 ## Subscription workflow (ActivityPub Follow + ForgeFed issues)
 
 Exchange targets must be explicit. Use `https://exchange.lefine.pro`, an actor URL, or a handle like `code@exchange.lefine.pro`; the API resolves the code actor document, stores its `inbox/outbox/followers/publicKey`, sends `Follow`, and polls the stored `outbox`.
+
+Local ActivityPub documents are serialized with Fedify and use only the supported ActivityStreams and security JSON-LD contexts. Mastodon-specific extension contexts and keys such as `https://purl.archive.org/socialweb/webfinger`, `toot`, `featured`, `featuredTags`, `alsoKnownAs`, `movedTo`, and `interactionPolicy` are not emitted by docker-git.
+
+The local actor is discoverable through WebFinger:
+
+```bash
+./ctl request GET '/.well-known/webfinger?resource=acct:docker-git@social.provercoder.ai'
+```
 
 ```bash
 ./ctl request POST /federation/exchange/subscriptions '{
