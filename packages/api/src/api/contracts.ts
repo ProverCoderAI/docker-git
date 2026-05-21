@@ -3,17 +3,9 @@ import type * as Schema from "effect/Schema"
 import type {
   ActivityForgeFedJsonLdContextSchema,
   ActivityPubFollowActivitySchema,
-  ActivityPubOrderedCollectionPageSchema,
-  ActivityPubOrderedCollectionSchema,
-  ActivityPubPersonSchema,
-  ActivityPubPublicKeySchema,
-  ActorJsonLdContextSchema,
   ForgeFedTicketSchema,
   ForgeFedTicketSourceSchema,
-  LocalActivityPubFollowersCollectionSchema,
-  LocalActivityPubOrderedCollectionPageSchema,
-  LocalActivityPubOrderedCollectionSchema,
-  LocalActivityPubPersonSchema
+  LocalActivityPubOrderedCollectionSchema
 } from "./activitypub-schema.js"
 
 export type ProjectStatus = "running" | "stopped" | "unknown"
@@ -560,15 +552,13 @@ export type ContainerTaskSnapshot = {
 export const activityStreamsJsonLdContext = "https://www.w3.org/ns/activitystreams" as const
 export const forgeFedJsonLdContext = "https://forgefed.org/ns" as const
 export const securityJsonLdContext = "https://w3id.org/security/v1" as const
-export const socialWebWebfingerJsonLdContext = "https://purl.archive.org/socialweb/webfinger" as const
 export const activityForgeFedJsonLdContext = [
   activityStreamsJsonLdContext,
   forgeFedJsonLdContext
 ] as const
 export const actorJsonLdContext = [
   activityStreamsJsonLdContext,
-  securityJsonLdContext,
-  forgeFedJsonLdContext
+  securityJsonLdContext
 ] as const
 export const federationJsonLdContentType =
   `application/ld+json; profile="${activityStreamsJsonLdContext}"` as const
@@ -576,7 +566,6 @@ export const federationJsonLdResponseContentType =
   `${federationJsonLdContentType}; charset=utf-8` as const
 
 export type ActivityForgeFedJsonLdContext = Schema.Schema.Type<typeof ActivityForgeFedJsonLdContextSchema>
-export type ActorJsonLdContext = Schema.Schema.Type<typeof ActorJsonLdContextSchema>
 
 export type ForgeFedTicket = Schema.Schema.Type<typeof ForgeFedTicketSchema>
 
@@ -622,22 +611,7 @@ export type FollowStatus = "pending" | "accepted" | "rejected"
 
 export type ActivityPubFollowActivity = Schema.Schema.Type<typeof ActivityPubFollowActivitySchema>
 
-export type ActivityPubPublicKey = Schema.Schema.Type<typeof ActivityPubPublicKeySchema>
-
-export type ActivityPubPerson = Schema.Schema.Type<typeof ActivityPubPersonSchema>
-
-export type LocalActivityPubPerson = Schema.Schema.Type<typeof LocalActivityPubPersonSchema>
-
-export type ActivityPubOrderedCollection = Schema.Schema.Type<typeof ActivityPubOrderedCollectionSchema>
-
-export type LocalActivityPubOrderedCollection =
-  | Schema.Schema.Type<typeof LocalActivityPubOrderedCollectionSchema>
-  | Schema.Schema.Type<typeof LocalActivityPubFollowersCollectionSchema>
-
-export type ActivityPubOrderedCollectionPage = Schema.Schema.Type<typeof ActivityPubOrderedCollectionPageSchema>
-
-export type LocalActivityPubOrderedCollectionPage =
-  Schema.Schema.Type<typeof LocalActivityPubOrderedCollectionPageSchema>
+export type LocalActivityPubOrderedCollection = Schema.Schema.Type<typeof LocalActivityPubOrderedCollectionSchema>
 
 export type FollowSubscription = {
   readonly id: string

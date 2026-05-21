@@ -3,23 +3,10 @@ import * as Schema from "effect/Schema"
 export {
   ActivityForgeFedJsonLdContextSchema,
   ActivityPubFollowActivitySchema,
-  ActivityPubOrderedCollectionPageSchema,
-  ActivityPubOrderedCollectionSchema,
-  ActivityPubPersonSchema,
-  ActivityPubPublicKeySchema,
-  ActorJsonLdContextSchema,
   ForgeFedTicketSchema,
   ForgeFedTicketSourceSchema,
-  JsonLdContextSchema,
   JsonValueSchema,
-  LocalActivityPubFollowersCollectionSchema,
-  LocalActivityPubOrderedCollectionPageSchema,
-  LocalActivityPubOrderedCollectionSchema,
-  LocalActivityPubPersonSchema,
-  MastodonFollowersOrderedCollectionPageSchema,
-  MastodonFollowersOrderedCollectionSchema,
-  MastodonIssueActivityPubPersonSchema,
-  exactActivityPubParseOptions
+  LocalActivityPubOrderedCollectionSchema
 } from "./activitypub-schema.js"
 
 const OptionalString = Schema.optional(Schema.String)

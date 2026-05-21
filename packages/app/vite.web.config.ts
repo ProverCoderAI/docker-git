@@ -18,6 +18,12 @@ const noStoreHeaders = {
 const webSocketHeartbeatIntervalMs = 25_000
 
 const createProxy = (apiTarget: string) => ({
+  "/.well-known/webfinger": {
+    target: apiTarget,
+    changeOrigin: false,
+    xfwd: true,
+    ws: false
+  },
   "/b": {
     target: apiTarget,
     changeOrigin: false,

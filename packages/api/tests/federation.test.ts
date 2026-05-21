@@ -1,12 +1,17 @@
+import { Person } from "@fedify/vocab"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import fc from "fast-check"
 import { vi } from "vitest"
 
 import {
   activityForgeFedJsonLdContext,
-  actorJsonLdContext,
   federationJsonLdContentType
 } from "../src/api/contracts.js"
+import {
+  makeFedifyActorJsonLd,
+  makeFedifyFollowingJsonLd
+} from "../src/services/fedify-federation.js"
 import {
   clearFederationState,
   createFollowSubscription,
@@ -15,12 +20,48 @@ import {
   listFederationIssues,
   listExchangeSubscriptions,
   listFollowSubscriptions,
-  makeFederationActorDocument,
   makeFederationContext,
   makeFederationExchangeStatus,
-  makeFederationFollowingCollection,
   pollExchangeOutboxes
 } from "../src/services/federation.js"
+
+type JsonRecord = Record<string, unknown>
+
+const isJsonRecord = (value: unknown): value is JsonRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+const asRecord = (value: unknown): JsonRecord => {
+  if (!isJsonRecord(value)) {
+    throw new Error("Expected JSON object.")
+  }
+  return value
+}
+
+const readField = (record: JsonRecord, key: string): unknown =>
+  Reflect.get(record, key)
+
+const countKey = (value: unknown, key: string): number => {
+  if (Array.isArray(value)) {
+    return value.reduce((count, item) => count + countKey(item, key), 0)
+  }
+  if (!isJsonRecord(value)) {
+    return 0
+  }
+  const current = Reflect.has(value, key) ? 1 : 0
+  return Object.values(value).reduce<number>((count, item) => count + countKey(item, key), current)
+}
+
+const actorUsernameArbitrary = fc
+  .string({ minLength: 1, maxLength: 20 })
+  .filter((value) => /^[a-z0-9_-]+$/i.test(value))
+
+const publicOriginArbitrary = fc.webUrl().map((value) => new URL(value).origin)
+
+const parsePersonJsonLd = (payload: unknown) =>
+  Effect.tryPromise({
+    try: () => Person.fromJsonLd(payload),
+    catch: (cause) => cause instanceof Error ? cause : new Error(String(cause))
+  })
 
 describe("federation service", () => {
   it.effect("ingests ForgeFed Offer with Ticket payload", () =>
@@ -130,7 +171,7 @@ describe("federation service", () => {
       expect(created.subscription.inbox).toBe("https://social.provercoder.ai/federation/inbox")
     }))
 
-  it.effect("builds person and following collections in activitypub shape", () =>
+  it.effect("builds person and following collections through Fedify", () =>
     Effect.gen(function*(_) {
       clearFederationState()
 
@@ -141,12 +182,11 @@ describe("federation service", () => {
         })
       )
 
-      const person = makeFederationActorDocument(context)
-      expect(person.type).toBe("Person")
-      expect(person["@context"]).toEqual(actorJsonLdContext)
-      expect(person.id).toBe("https://social.provercoder.ai/federation/actor")
-      expect(person.preferredUsername).toBe("tasks")
-      expect(person.followers).toBe("https://social.provercoder.ai/federation/followers")
+      const person = asRecord(yield* _(makeFedifyActorJsonLd(context)))
+      expect(readField(person, "type")).toBe("Person")
+      expect(readField(person, "id")).toBe("https://social.provercoder.ai/federation/actor")
+      expect(readField(person, "preferredUsername")).toBe("tasks")
+      expect(readField(person, "followers")).toBe("https://social.provercoder.ai/federation/followers")
 
       const created = yield* _(
         createFollowSubscription(
@@ -165,10 +205,109 @@ describe("federation service", () => {
         })
       )
 
-      const following = makeFederationFollowingCollection(context)
-      expect(following.type).toBe("OrderedCollection")
-      expect(following.totalItems).toBe(1)
-      expect(following.orderedItems[0]).toBe("https://tracker.provercoder.ai/issues/followers")
+      const following = asRecord(yield* _(makeFedifyFollowingJsonLd(context)))
+      expect(readField(following, "type")).toBe("OrderedCollection")
+      expect(readField(following, "totalItems")).toBe(1)
+      expect(readField(following, "orderedItems")).toEqual([
+        "https://tracker.provercoder.ai/issues/followers"
+      ])
+    }))
+
+  it.effect("satisfies Fedify actor JSON-LD property invariants", () =>
+    Effect.tryPromise({
+      try: () =>
+        fc.assert(
+          fc.asyncProperty(
+            fc.record({
+              publicOrigin: publicOriginArbitrary,
+              actorUsername: actorUsernameArbitrary
+            }),
+            ({ publicOrigin, actorUsername }) =>
+              Effect.runPromise(
+                Effect.gen(function*(_) {
+                  yield* _(Effect.sync(() => clearFederationState()))
+                  const context = yield* _(
+                    makeFederationContext({ publicOrigin, actorUsername })
+                  )
+                  const payload = yield* _(makeFedifyActorJsonLd(context))
+                  const actor = asRecord(payload)
+                  const parsed = yield* _(parsePersonJsonLd(payload))
+
+                  expect(parsed.id?.href).toBe(`${context.publicOrigin}/federation/actor`)
+                  expect(parsed.preferredUsername).toBe(context.actorUsername)
+                  expect(countKey(actor, "@context")).toBe(1)
+                  expect(readField(actor, "id")).toBe(`${context.publicOrigin}/federation/actor`)
+                  expect(readField(actor, "inbox")).toBe(`${context.publicOrigin}/federation/inbox`)
+                  expect(readField(actor, "outbox")).toBe(`${context.publicOrigin}/federation/outbox`)
+                  expect(readField(actor, "followers")).toBe(`${context.publicOrigin}/federation/followers`)
+                  expect(readField(actor, "following")).toBe(`${context.publicOrigin}/federation/following`)
+                  expect(readField(actor, "liked")).toBe(`${context.publicOrigin}/federation/liked`)
+                })
+              )
+          ),
+          { numRuns: 10 }
+        ),
+      catch: (cause) => cause instanceof Error ? cause : new Error(String(cause))
+    }))
+
+  it.effect("satisfies Fedify following collection property invariants", () =>
+    Effect.tryPromise({
+      try: () =>
+        fc.assert(
+          fc.asyncProperty(
+            fc.record({
+              targetIds: fc.uniqueArray(fc.integer({ min: 1, max: 10_000 }), { maxLength: 5 })
+            }),
+            ({ targetIds }) =>
+              Effect.runPromise(
+                Effect.gen(function*(_) {
+                  yield* _(Effect.sync(() => clearFederationState()))
+                  const context = yield* _(
+                    makeFederationContext({
+                      publicOrigin: "https://social.provercoder.ai",
+                      actorUsername: "tasks"
+                    })
+                  )
+
+                  yield* _(
+                    Effect.forEach(
+                      targetIds,
+                      (targetId) =>
+                        Effect.gen(function*(_) {
+                          const created = yield* _(
+                            createFollowSubscription(
+                              {
+                                object: `https://tracker${targetId}.example.test/issues/followers`
+                              },
+                              context
+                            )
+                          )
+                          yield* _(
+                            ingestFederationInbox({
+                              "@context": activityForgeFedJsonLdContext,
+                              type: "Accept",
+                              object: created.activity.id
+                            })
+                          )
+                        }),
+                      { discard: true }
+                    )
+                  )
+
+                  const payload = yield* _(makeFedifyFollowingJsonLd(context))
+                  const following = asRecord(payload)
+                  const orderedItems = readField(following, "orderedItems")
+                  const items = Array.isArray(orderedItems) ? orderedItems : []
+
+                  expect(readField(following, "id")).toBe(`${context.publicOrigin}/federation/following`)
+                  expect(readField(following, "totalItems")).toBe(items.length)
+                  expect(countKey(following, "@context")).toBe(1)
+                })
+              )
+          ),
+          { numRuns: 10 }
+        ),
+      catch: (cause) => cause instanceof Error ? cause : new Error(String(cause))
     }))
 
   it.effect("rejects duplicate pending follow subscription", () =>
