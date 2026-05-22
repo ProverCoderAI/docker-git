@@ -1,3 +1,4 @@
+import { SystemError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { describe, expect, it } from "@effect/vitest"
@@ -55,6 +56,63 @@ const memoryFileInfo = (entry: MemoryFileEntry): FileSystem.File.Info => ({
   uid: Option.none()
 })
 
+/**
+ * Builds a typed FileSystem error for the in-memory test filesystem.
+ *
+ * @param method - FileSystem method name that observed the invalid path.
+ * @param requestedPath - Normalized memory path associated with the failure.
+ * @param reason - Platform filesystem reason reported by the mock.
+ * @param description - Human-readable failure description.
+ * @returns Platform SystemError compatible with FileSystem effects.
+ * @pure true
+ * @effect none
+ * @invariant The produced error is always scoped to the FileSystem module.
+ * @precondition `method`, `requestedPath`, and `description` are finite strings.
+ * @postcondition The returned error preserves the failing path in `pathOrDescriptor`.
+ * @complexity O(1) time and space.
+ * @throws Never
+ */
+const memoryFileSystemError = (
+  method: string,
+  requestedPath: string,
+  reason: "BadResource" | "NotFound",
+  description: string
+): SystemError =>
+  new SystemError({
+    description,
+    method,
+    module: "FileSystem",
+    pathOrDescriptor: requestedPath,
+    reason
+  })
+
+/**
+ * Looks up an in-memory file entry with real FileSystem missing-path semantics.
+ *
+ * @param entries - Current memory filesystem entries.
+ * @param requestedPath - Path requested by the FileSystem operation.
+ * @param method - FileSystem method name for typed error reporting.
+ * @returns Effect that succeeds with the entry or fails when the path is absent.
+ * @pure true
+ * @effect Effect.fail or Effect.succeed
+ * @invariant Missing paths are represented as typed NotFound failures.
+ * @precondition `requestedPath` is a finite path string.
+ * @postcondition Success implies the normalized path exists in `entries`.
+ * @complexity O(p) time and O(p) space where p = |requestedPath|.
+ * @throws Never
+ */
+const requireMemoryEntry = (
+  entries: ReadonlyMap<string, MemoryFileEntry>,
+  requestedPath: string,
+  method: string
+): Effect.Effect<MemoryFileEntry, SystemError> => {
+  const normalized = normalizeMemoryPath(requestedPath)
+  const entry = entries.get(normalized)
+  return entry === undefined
+    ? Effect.fail(memoryFileSystemError(method, normalized, "NotFound", "Missing memory filesystem entry."))
+    : Effect.succeed(entry)
+}
+
 const createMemoryFileSystemLayer = () => {
   let entries = new Map<string, MemoryFileEntry>([
     ["/memory", { _tag: "Directory" }]
@@ -67,8 +125,16 @@ const createMemoryFileSystemLayer = () => {
         entries = new Map(entries).set(normalizeMemoryPath(path), { _tag: "Directory" })
       }),
     readDirectory: (path) =>
-      Effect.sync(() => {
+      Effect.gen(function*(_) {
         const directory = normalizeMemoryPath(path)
+        const entry = yield* _(requireMemoryEntry(entries, directory, "readDirectory"))
+        if (entry._tag !== "Directory") {
+          return yield* _(
+            Effect.fail(
+              memoryFileSystemError("readDirectory", directory, "BadResource", "Memory entry is not a directory.")
+            )
+          )
+        }
         const prefix = directory === "/" ? "/" : `${directory}/`
         const names = new Set<string>()
         for (const candidate of entries.keys()) {
@@ -83,11 +149,18 @@ const createMemoryFileSystemLayer = () => {
         return [...names]
       }),
     readFileString: (path) =>
-      Effect.sync(() => {
-        const entry = entries.get(normalizeMemoryPath(path))
-        return entry?._tag === "File" ? entry.contents : ""
+      Effect.gen(function*(_) {
+        const normalized = normalizeMemoryPath(path)
+        const entry = yield* _(requireMemoryEntry(entries, normalized, "readFileString"))
+        return entry._tag === "File"
+          ? entry.contents
+          : yield* _(
+            Effect.fail(
+              memoryFileSystemError("readFileString", normalized, "BadResource", "Memory entry is not a file.")
+            )
+          )
       }),
-    stat: (path) => Effect.sync(() => memoryFileInfo(entries.get(normalizeMemoryPath(path)) ?? { _tag: "Directory" })),
+    stat: (path) => requireMemoryEntry(entries, path, "stat").pipe(Effect.map((entry) => memoryFileInfo(entry))),
     writeFileString: (path, contents) =>
       Effect.sync(() => {
         entries = new Map(entries).set(normalizeMemoryPath(path), { _tag: "File", contents })
