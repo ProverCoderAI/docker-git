@@ -765,25 +765,40 @@ const writePtyInput = (pty: PtyBridge | null, data: string): void => {
 
 const shellQuote = (value: string): string => `'${value.replace(/'/gu, "'\\''")}'`
 
-const tmuxRightClickPaneBindings: ReadonlyArray<string> = ["MouseDown3Pane", "M-MouseDown3Pane"]
-const tmuxRightClickStatusBindings: ReadonlyArray<string> = [
+const tmuxRightClickForwardPredicate =
+  "#{||:#{mouse_any_flag},#{&&:#{pane_in_mode},#{?#{m/r:(copy|view)-mode,#{pane_mode}},0,1}}}"
+const tmuxRightClickPaneBindings: ReadonlyArray<string> = [
+  "MouseDown3Pane",
+  "MouseDrag3Pane",
+  "MouseDragEnd3Pane",
+  "MouseUp3Pane",
+  "M-MouseDown3Pane",
+  "M-MouseDrag3Pane",
+  "M-MouseDragEnd3Pane",
+  "M-MouseUp3Pane"
+]
+const tmuxRightClickSuppressBindings: ReadonlyArray<string> = [
   "MouseDown3Status",
   "MouseDown3StatusLeft",
+  "MouseDown3StatusRight",
+  "MouseDown3Border",
   "M-MouseDown3Status",
-  "M-MouseDown3StatusLeft"
+  "M-MouseDown3StatusLeft",
+  "M-MouseDown3StatusRight",
+  "M-MouseDown3Border"
 ]
 
 const renderTmuxPaneRightClickBinding = (binding: string): string =>
-  `tmux bind-key -T root ${binding} if-shell -F -t = ${shellQuote("#{mouse_any_flag}")} ${
-    shellQuote("send-keys -M")
+  `tmux bind-key -T root ${binding} if-shell -F -t = ${shellQuote(tmuxRightClickForwardPredicate)} ${
+    shellQuote("select-pane -t = ; send-keys -M")
   } >/dev/null 2>&1 || true`
 
-const renderTmuxStatusRightClickUnbind = (binding: string): string =>
+const renderTmuxRightClickSuppressBinding = (binding: string): string =>
   `tmux unbind-key -T root ${binding} >/dev/null 2>&1 || true`
 
 const renderTmuxRightClickBindingCommands = (): ReadonlyArray<string> => [
   ...tmuxRightClickPaneBindings.map(renderTmuxPaneRightClickBinding),
-  ...tmuxRightClickStatusBindings.map(renderTmuxStatusRightClickUnbind)
+  ...tmuxRightClickSuppressBindings.map(renderTmuxRightClickSuppressBinding)
 ]
 
 const writeBufferToProjectContainer = (
