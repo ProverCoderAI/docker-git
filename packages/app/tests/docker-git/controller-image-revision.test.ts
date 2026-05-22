@@ -7,6 +7,7 @@ import { Effect, Layer } from "effect"
 import * as Inspectable from "effect/Inspectable"
 import * as Sink from "effect/Sink"
 import * as Stream from "effect/Stream"
+import * as fc from "fast-check"
 
 import { inspectControllerImageRevision } from "../../src/docker-git/controller-image-revision.js"
 
@@ -21,6 +22,15 @@ const emptyCommandResult: TestCommandResult = {
   stderr: "",
   stdout: ""
 }
+const composeImageLineArbitrary = fc
+  .string({ minLength: 1 })
+  .filter((value) => value.trim().length > 0 && !value.includes("\n") && !value.includes("\r"))
+const nonReusableComposeImagesOutputArbitrary = fc.oneof(
+  fc.constantFrom("", "\n", " \n\t\n"),
+  fc.array(composeImageLineArbitrary, { maxLength: 8, minLength: 2 }).map((lines) =>
+    lines.map((line) => ` ${line} `).join("\n")
+  )
+)
 
 const encodeText = (value: string): Uint8Array => new TextEncoder().encode(value)
 
@@ -97,23 +107,56 @@ const commandExecutorLayer = (handler: TestCommandHandler) =>
     })
   )
 
-describe("controller image revision", () => {
-  it.effect("falls back to null when compose image resolution is ambiguous", () =>
-    Effect.gen(function*(_) {
-      const revision = yield* _(
-        inspectControllerImageRevision().pipe(
-          Effect.provide(
-            commandExecutorLayer((command) =>
-              command.command === "docker" && command.args.includes("--images")
-                ? { exitCode: 0, stderr: "", stdout: "app-api:latest\nanother-image:latest\n" }
-                : emptyCommandResult
-            )
-          ),
-          Effect.provide(FileSystem.layerNoop({})),
-          Effect.provide(Path.layer)
-        )
+/**
+ * Runs image revision inspection with controlled `docker compose config --images` output.
+ *
+ * @param composeImagesOutput - Stdout emitted by the fake `--images` command.
+ * @returns Effect producing the inspected image revision.
+ * @pure false
+ * @effect CommandExecutor, FileSystem, Path
+ * @invariant Docker commands are served by the in-memory command executor.
+ * @precondition `composeImagesOutput` is finite text.
+ * @postcondition The real Docker daemon is never invoked.
+ * @complexity O(n) time and space where n = |composeImagesOutput|.
+ * @throws Never - all command failures are represented in the Effect error channel.
+ */
+// CHANGE: centralize the mocked compose image inspection path for property tests
+// WHY: the fallback invariant depends only on normalized compose stdout cardinality
+// QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
+// REF: CodeRabbit PR #344 review 4349246446
+// SOURCE: n/a
+// FORMAT THEOREM: output -> inspectControllerImageRevision(output)
+// PURITY: SHELL
+// EFFECT: Effect<string | null, ControllerBootstrapError, ControllerRuntime>
+// INVARIANT: Docker command output is supplied by the test harness
+// COMPLEXITY: O(n)
+const inspectRevisionWithComposeImagesOutput = (composeImagesOutput: string) =>
+  inspectControllerImageRevision().pipe(
+    Effect.provide(
+      commandExecutorLayer((command) =>
+        command.command === "docker" && command.args.includes("--images")
+          ? { exitCode: 0, stderr: "", stdout: composeImagesOutput }
+          : emptyCommandResult
       )
+    ),
+    Effect.provide(FileSystem.layerNoop({})),
+    Effect.provide(Path.layer)
+  )
 
-      expect(revision).toBeNull()
+describe("controller image revision", () => {
+  it.effect("falls back to null for non-reusable compose image output cardinalities", () =>
+    Effect.tryPromise({
+      catch: (cause) => cause,
+      try: () =>
+        fc.assert(
+          fc.asyncProperty(nonReusableComposeImagesOutputArbitrary, (composeImagesOutput) =>
+            Effect.runPromise(
+              Effect.gen(function*(_) {
+                const revision = yield* _(inspectRevisionWithComposeImagesOutput(composeImagesOutput))
+                expect(revision).toBeNull()
+              })
+            )),
+          { numRuns: 50 }
+        )
     }))
 })
