@@ -208,6 +208,11 @@ const suppressOriginalTerminalMouseUp = (event: TerminalCopyMouseEvent): void =>
   event.stopImmediatePropagation?.()
 }
 
+const suppressTerminalMouseReport = (event: TerminalCopyMouseEvent): void => {
+  event.stopPropagation?.()
+  event.stopImmediatePropagation?.()
+}
+
 const replayForcedTerminalMouseUp = (
   target: TerminalSelectionDragTarget,
   event: TerminalCopyMouseEvent
@@ -283,6 +288,10 @@ export const attachTerminalCopyInteraction = (
       return
     }
     forceTerminalSelectionModifier(event)
+    if (forceSelectionContext) {
+      suppressTerminalMouseReport(event)
+      return
+    }
     if (forceBrowserSelection) {
       selectionDrag.start()
     }

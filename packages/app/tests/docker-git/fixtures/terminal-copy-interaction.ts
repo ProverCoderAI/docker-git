@@ -135,6 +135,24 @@ export class FakeTerminalCopyMouseEvent extends Event {
   }
 }
 
+export class FakeTerminalCopyClipboardEvent {
+  readonly clipboardData: TerminalCopyTestClipboardData | null
+  preventDefaultCalls = 0
+  stopPropagationCalls = 0
+
+  constructor(clipboardData: TerminalCopyTestClipboardData | null) {
+    this.clipboardData = clipboardData
+  }
+
+  preventDefault(): void {
+    this.preventDefaultCalls += 1
+  }
+
+  stopPropagation(): void {
+    this.stopPropagationCalls += 1
+  }
+}
+
 const isPropagationStopped = (event: TerminalCopyTestMouseEvent): boolean =>
   event instanceof FakeTerminalCopyMouseEvent &&
   (event.stopPropagationCalls > 0 || event.stopImmediatePropagationCalls > 0)
@@ -199,6 +217,14 @@ export class FakeTerminalCopyEventTarget {
     this.dispatchMousePhase(type, event, "bubble")
   }
 
+  dispatchCopy(event: TerminalCopyTestClipboardEvent): void {
+    for (const entry of this.listeners) {
+      if (entry.type === "copy") {
+        entry.listener(event)
+      }
+    }
+  }
+
   dispatchEvent(event: Event): boolean {
     this.dispatchedEvents.push(event)
     if (isMouseTestEventType(event.type) && isTerminalCopyTestMouseEvent(event)) {
@@ -246,6 +272,10 @@ export const mouseEvent = (
     Pick<TerminalCopyTestMouseEvent, "altKey" | "buttons" | "clientX" | "clientY" | "screenX" | "screenY" | "shiftKey">
   >
 ): FakeTerminalCopyMouseEvent => new FakeTerminalCopyMouseEvent(type, button, options)
+
+export const copyEvent = (
+  clipboardData: TerminalCopyTestClipboardData | null
+): FakeTerminalCopyClipboardEvent => new FakeTerminalCopyClipboardEvent(clipboardData)
 
 export const expectNoDragListeners = (target: FakeTerminalCopyEventTarget): void => {
   expect(target.captureListenerCount("mousemove")).toBe(0)
