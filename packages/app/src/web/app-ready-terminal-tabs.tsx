@@ -72,7 +72,7 @@ const NewTerminalButton = (
   props: Pick<TerminalTabsProps, "activeSessionId" | "compactMobile" | "onOpenProjectTerminalById" | "terminalSessions">
 ): JSX.Element | null => {
   const activeProject = activeTerminalProject(props.terminalSessions, props.activeSessionId)
-  if (props.terminalSessions.length === 0) {
+  if (activeProject === null) {
     return null
   }
   return (
@@ -80,9 +80,7 @@ const NewTerminalButton = (
       border={true}
       borderColor="#3a4652"
       onClick={() => {
-        if (activeProject !== null) {
-          props.onOpenProjectTerminalById(activeProject.projectId, activeProject.projectKey)
-        }
+        props.onOpenProjectTerminalById(activeProject.projectId, activeProject.projectKey)
       }}
       padding="6px"
       width="auto"

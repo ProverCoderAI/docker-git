@@ -9,6 +9,23 @@ import type {
 import { firstCreateSettingsStepIndex } from "./menu-create-flow-types.js"
 import { resolveCreateDisplaySteps, resolveCreateFlowSteps } from "./menu-create-steps.js"
 
+/**
+ * Clamps a create settings index into the editable settings range.
+ *
+ * @pure true
+ * @invariant result is between first settings step and lastStep when range is valid
+ * @complexity O(1)
+ */
+// CHANGE: centralize create settings index clamping
+// WHY: advancement and navigation must share the same range invariant
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall i: clamp(i) in [first,last] for first <= last
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: repo URL step is excluded from the settings range
+// COMPLEXITY: O(1)
 export const clampCreateSettingsStep = (
   step: number,
   lastStep: number
@@ -62,6 +79,23 @@ const gpuChoiceBuffer = (direction: CreateSettingsChoiceDirection): string =>
     Match.exhaustive
   )
 
+/**
+ * Resolves horizontal browser setting controls into preview buffer tokens.
+ *
+ * @pure true
+ * @invariant free-text rows return null
+ * @complexity O(1)
+ */
+// CHANGE: map display-mode left/right choices to create setting buffer values
+// WHY: browser controls should preview discrete settings without committing values
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall d: choice(d) in BufferToken or null
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: committed view.values are not changed
+// COMPLEXITY: O(1)
 export const resolveCreateSettingsChoiceBuffer = (
   view: DisplayModeFlowView,
   direction: CreateSettingsChoiceDirection
@@ -85,12 +119,46 @@ export const resolveCreateSettingsChoiceBuffer = (
   )
 }
 
+/**
+ * Moves the create-mode settings selection with wraparound.
+ *
+ * @pure true
+ * @invariant returned view has an empty buffer
+ * @complexity O(s) where s = number of remaining create steps
+ */
+// CHANGE: expose pure create-mode settings navigation
+// WHY: arrow-key handling must not mutate the current view
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: valid(v) -> step(move(v,d)) = wrapped(step(v),d)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: repo URL step navigation returns null
+// COMPLEXITY: O(s) where s = number of remaining create steps
 export const moveCreateSettingsStep = (
   view: CreateModeFlowView,
   direction: CreateSettingsNavigationDirection
 ): CreateModeFlowView | null =>
   moveCreateSettingsWithin(view, resolveCreateFlowSteps(view.values).length - 1, direction)
 
+/**
+ * Moves the browser display-settings selection with wraparound.
+ *
+ * @pure true
+ * @invariant returned view has an empty buffer
+ * @complexity O(s) where s = number of display steps
+ */
+// CHANGE: expose pure display-mode settings navigation
+// WHY: browser settings keep all rows navigable regardless of committed values
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: valid(v) -> step(moveDisplay(v,d)) = wrapped(step(v),d)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: display settings never skip applied rows
+// COMPLEXITY: O(s) where s = number of display steps
 export const moveCreateDisplaySettingsStep = (
   view: DisplayModeFlowView,
   direction: CreateSettingsNavigationDirection

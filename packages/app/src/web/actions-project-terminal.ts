@@ -38,9 +38,10 @@ const resolveProjectTerminalKey = (
 }
 
 const randomHex = (bytes: number): string => {
-  if (typeof globalThis.crypto.getRandomValues === "function") {
+  const webCrypto = "crypto" in globalThis ? globalThis.crypto : null
+  if (webCrypto !== null && typeof webCrypto.getRandomValues === "function") {
     const values = new Uint8Array(bytes)
-    globalThis.crypto.getRandomValues(values)
+    webCrypto.getRandomValues(values)
     return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("")
   }
 
@@ -63,8 +64,9 @@ const formatUuidV4 = (hex: string): string => {
 }
 
 const createPendingTerminalSessionId = (): string => {
-  if (typeof globalThis.crypto.randomUUID === "function") {
-    return globalThis.crypto.randomUUID()
+  const webCrypto = "crypto" in globalThis ? globalThis.crypto : null
+  if (webCrypto !== null && typeof webCrypto.randomUUID === "function") {
+    return webCrypto.randomUUID()
   }
 
   return formatUuidV4(randomHex(16))

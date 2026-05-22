@@ -23,6 +23,23 @@ const isCreateStepSatisfied = (
     Match.exhaustive
   )
 
+/**
+ * Resolves create-mode prompts that remain after committed values.
+ *
+ * @pure true
+ * @invariant repoUrl is always the first step
+ * @complexity O(s) where s = number of create steps
+ */
+// CHANGE: derive the active create-mode step list from satisfied inputs
+// WHY: inline CLI flags and applied settings should remove already-satisfied prompts
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall v: steps(v)[0] = repoUrl
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: only unsatisfied settings remain after repoUrl
+// COMPLEXITY: O(s) where s = number of create steps
 export const resolveCreateFlowSteps = (
   values: Partial<CreateInputs>
 ): ReadonlyArray<CreateStep> => [
@@ -32,6 +49,23 @@ export const resolveCreateFlowSteps = (
     .filter((step) => !isCreateStepSatisfied(step, values))
 ]
 
+/**
+ * Resolves browser display-settings rows.
+ *
+ * @pure true
+ * @invariant all create steps remain visible
+ * @complexity O(1)
+ */
+// CHANGE: keep browser display settings independent from committed values
+// WHY: browser settings must allow revisiting already-applied rows
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall v: displaySteps(v) = createSteps
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: display mode never filters satisfied settings
+// COMPLEXITY: O(1)
 export const resolveCreateDisplaySteps = (
   _values: Partial<CreateInputs> = {}
 ): ReadonlyArray<CreateStep> => createSteps

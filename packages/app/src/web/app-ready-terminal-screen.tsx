@@ -19,7 +19,8 @@ const resolveActiveTerminalSessionId = (
   ) {
     return activeTerminalSessionId
   }
-  return null
+  const fallback = sessions[0]
+  return fallback === undefined ? null : terminalSessionId(fallback)
 }
 
 const TerminalScreenTabs = (

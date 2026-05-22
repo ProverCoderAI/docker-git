@@ -1,5 +1,6 @@
-import { FetchHttpClient, HttpClient } from "@effect/platform"
-import { Effect } from "effect"
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "@effect/platform"
+import { Duration, Effect } from "effect"
+import * as Stream from "effect/Stream"
 
 import { resolveTerminalImageFetchUrl } from "./terminal-image-url.js"
 import {
@@ -22,6 +23,19 @@ type TerminalInlineImageFetchError = {
   readonly message: string
 }
 
+type TerminalInlineImageBufferState = {
+  readonly chunks: ReadonlyArray<Uint8Array>
+  readonly size: number
+}
+
+const terminalInlineImageFetchTimeout = Duration.seconds(10)
+const terminalInlineImageMaxBytes = 10 * 1024 * 1024
+
+const emptyTerminalInlineImageBufferState: TerminalInlineImageBufferState = {
+  chunks: [],
+  size: 0
+}
+
 const terminalImageEntry = (
   handlers: TerminalMessageHandlers,
   path: string
@@ -41,10 +55,61 @@ const terminalInlineImageFetchHeaders: Readonly<Record<string, string>> = {
   pragma: "no-cache"
 }
 
-const imageBlobFromArrayBuffer = (
-  buffer: ArrayBuffer,
+const readContentLength = (headers: Readonly<Record<string, string | undefined>>): number | null => {
+  const value = headers["content-length"]
+  if (value === undefined) {
+    return null
+  }
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+}
+
+const validateTerminalInlineImageSize = (size: number): Effect.Effect<void, TerminalInlineImageFetchError> =>
+  size > terminalInlineImageMaxBytes
+    ? Effect.fail(terminalInlineImageFetchError("Terminal image is too large."))
+    : Effect.void
+
+const appendTerminalInlineImageChunk = (
+  state: TerminalInlineImageBufferState,
+  chunk: Uint8Array
+): Effect.Effect<TerminalInlineImageBufferState, TerminalInlineImageFetchError> => {
+  const nextSize = state.size + chunk.byteLength
+  return validateTerminalInlineImageSize(nextSize).pipe(
+    Effect.as({
+      chunks: [...state.chunks, chunk],
+      size: nextSize
+    })
+  )
+}
+
+const copyChunkToArrayBuffer = (chunk: Uint8Array): ArrayBuffer => {
+  const copy = new Uint8Array(chunk.byteLength)
+  copy.set(chunk)
+  return copy.buffer
+}
+
+const imageBlobFromChunks = (
+  chunks: ReadonlyArray<Uint8Array>,
   mediaType: string | undefined
-): Blob => new Blob([buffer], mediaType === undefined ? {} : { type: mediaType })
+): Blob =>
+  new Blob(
+    chunks.map((chunk) => copyChunkToArrayBuffer(chunk)),
+    mediaType === undefined ? {} : { type: mediaType }
+  )
+
+const readTerminalInlineImageBlob = (
+  response: HttpClientResponse.HttpClientResponse
+): Effect.Effect<Blob, TerminalInlineImageFetchError> => {
+  const contentLength = readContentLength(response.headers)
+  if (contentLength !== null && contentLength > terminalInlineImageMaxBytes) {
+    return Effect.fail(terminalInlineImageFetchError("Terminal image is too large."))
+  }
+  return HttpClientResponse.stream(Effect.succeed(response)).pipe(
+    Stream.runFoldEffect(emptyTerminalInlineImageBufferState, appendTerminalInlineImageChunk),
+    Effect.map((state) => imageBlobFromChunks(state.chunks, response.headers["content-type"])),
+    Effect.mapError(() => terminalInlineImageFetchError("Could not read terminal image response."))
+  )
+}
 
 const fetchTerminalInlineImageBlob = (
   fetchUrl: string
@@ -59,13 +124,14 @@ const fetchTerminalInlineImageBlob = (
     if (response.status >= 400) {
       return yield* _(Effect.fail(terminalInlineImageFetchError(`Terminal image returned HTTP ${response.status}.`)))
     }
-    const buffer = yield* _(
-      response.arrayBuffer.pipe(
-        Effect.mapError(() => terminalInlineImageFetchError("Could not read terminal image response."))
-      )
-    )
-    return imageBlobFromArrayBuffer(buffer, response.headers["content-type"])
-  }).pipe(Effect.provide(FetchHttpClient.layer))
+    return yield* _(readTerminalInlineImageBlob(response))
+  }).pipe(
+    Effect.timeoutFail({
+      duration: terminalInlineImageFetchTimeout,
+      onTimeout: () => terminalInlineImageFetchError("Terminal image fetch timed out.")
+    }),
+    Effect.provide(FetchHttpClient.layer)
+  )
 
 const loadTerminalImageEntry = (
   handlers: TerminalMessageHandlers,

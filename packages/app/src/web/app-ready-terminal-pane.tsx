@@ -39,8 +39,16 @@ const pendingTerminalBodyStyle: CSSProperties = {
   whiteSpace: "pre-wrap"
 }
 
-const requestTerminalSessionClose = (closePath: string): void => {
-  void Effect.runPromise(deleteTerminalSessionByPath(closePath).pipe(Effect.either, Effect.asVoid))
+const requestTerminalSessionClose = (
+  closePath: string,
+  onFailure: (error: string) => void,
+  onSuccess: () => void
+): void => {
+  void Effect.runPromise(
+    deleteTerminalSessionByPath(closePath).pipe(
+      Effect.match({ onFailure, onSuccess })
+    )
+  )
 }
 
 const terminalReturnScreen = (session: ActiveTerminalSession): BrowserScreen =>
@@ -127,13 +135,18 @@ const handleTerminalExit = (
 }
 
 const handleTerminalKill = (props: TerminalPaneProps, runtime: TerminalPaneRuntime): void => {
-  if (!runtime.pendingSession) {
-    requestTerminalSessionClose(props.terminalSession.closePath)
-    props.terminalSession.onExit?.()
-  }
-  detachTerminalSession(props, runtime)
-  props.onTerminalMessage(
-    `${runtime.pendingSession ? "Closed pending" : "Killed"} SSH terminal: ${props.terminalSession.session.id}.`
+  requestTerminalSessionClose(
+    props.terminalSession.closePath,
+    (error) => {
+      props.onTerminalMessage(`Could not close SSH terminal ${props.terminalSession.session.id}: ${error}`)
+    },
+    () => {
+      props.terminalSession.onExit?.()
+      detachTerminalSession(props, runtime)
+      props.onTerminalMessage(
+        `${runtime.pendingSession ? "Closed pending" : "Killed"} SSH terminal: ${props.terminalSession.session.id}.`
+      )
+    }
   )
 }
 

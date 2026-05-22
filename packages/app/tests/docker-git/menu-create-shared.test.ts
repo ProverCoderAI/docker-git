@@ -169,6 +169,20 @@ describe("menu-create-shared", () => {
     )
   })
 
+  it("advances by one settings index after applying the current setting", () => {
+    const next = expectCreateContinueView(advanceCreateFlow(
+      cwd,
+      {
+        ...createFeatureRepoSettingsView(cwd),
+        buffer: "45%"
+      }
+    ))
+
+    expect(next.values.cpuLimit).toBe("45%")
+    expect(next.step).toBe(2)
+    expect(resolveCreateFlowSteps(next.values)[next.step]).toBe("gpu")
+  })
+
   it("maps create-mode steps to the matching display row when opening browser Settings", () => {
     const createView = {
       ...createFeatureRepoSettingsView(cwd),

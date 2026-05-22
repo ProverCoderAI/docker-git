@@ -60,6 +60,11 @@ describe("app-ready ssh link hook", () => {
     })
   })
 
+  it("ignores malformed percent-encoded SSH paths", () => {
+    expect(readSshLinkRequestFromHref("https://docker-git.local/ssh/%E0%A4%A")).toBeNull()
+    expect(readSshLinkRequestFromHref("https://docker-git.local/ssh/session/%E0%A4%A")).toBeNull()
+  })
+
   it("selects the requested workspace terminal before the active one", () => {
     expect(selectWorkspaceTerminalSession(makeSessionPair(), "session-1", "session-2")?.id).toBe("session-2")
   })

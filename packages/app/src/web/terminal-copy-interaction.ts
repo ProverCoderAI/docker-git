@@ -68,7 +68,7 @@ export const shouldForceBrowserTerminalSelection = (
 export const shouldForceTerminalSelectionContext = (
   event: TerminalMouseButtonEvent,
   terminal: TerminalCopyInteractionTerminal
-): boolean => isSecondaryMouseButton(event) && terminal.hasSelection()
+): boolean => isSecondaryMouseButton(event) && hasActiveMouseTracking(terminal) && terminal.hasSelection()
 
 export const writeTerminalSelectionToClipboardData = (
   terminal: TerminalSelectionTarget,
@@ -142,7 +142,9 @@ class TerminalCopyInteractionController {
   }
 
   private readonly shouldProtectSelectionContext = (event: TerminalCopyMouseEvent): boolean =>
-    isSecondaryMouseButton(event) && (this.selectionContext.has() || this.args.terminal.hasSelection())
+    isSecondaryMouseButton(event) &&
+    hasActiveMouseTracking(this.args.terminal) &&
+    (this.selectionContext.has() || this.args.terminal.hasSelection())
 
   private readonly onSelectionContextMouseEvent = (event: TerminalCopyMouseEvent): boolean => {
     if (!this.shouldProtectSelectionContext(event)) {

@@ -31,6 +31,23 @@ const joinPath = (...parts: ReadonlyArray<string>): string => {
   return cleaned.join("/")
 }
 
+/**
+ * Normalizes legacy cwd input into the create-flow context record.
+ *
+ * @pure true
+ * @invariant string input maps to { cwd: input }
+ * @complexity O(1)
+ */
+// CHANGE: normalize create-flow context boundaries into one record shape
+// WHY: pure helpers can share cwd and optional projectsRoot resolution
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall c: normalize(c).cwd is defined
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: object context is preserved by reference
+// COMPLEXITY: O(1)
 export const normalizeCreateFlowContext = (
   context: string | CreateFlowContext
 ): CreateFlowContext =>
@@ -43,6 +60,23 @@ const resolveProjectsRoot = (context: CreateFlowContext): string =>
     ? context.projectsRoot
     : defaultProjectsRoot(context.cwd)
 
+/**
+ * Resolves the default output directory for a repo input.
+ *
+ * @pure true
+ * @invariant output is rooted under the resolved projects root
+ * @complexity O(n) where n = |repoUrl|
+ */
+// CHANGE: derive create-flow output directory from repo identity and context root
+// WHY: repo URL, branch suffix, and browser-provided projectsRoot must resolve consistently
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall r: outDir(r) = projectsRoot / repoPathParts(r)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: no duplicate path separator is introduced by joinPath
+// COMPLEXITY: O(n) where n = |repoUrl|
 export const resolveDefaultOutDir = (context: CreateFlowContext, repoUrl: string): string => {
   const resolvedRepo = resolveRepoInput(repoUrl)
   const baseParts = deriveRepoPathParts(resolvedRepo.repoUrl).pathParts
@@ -50,6 +84,23 @@ export const resolveDefaultOutDir = (context: CreateFlowContext, repoUrl: string
   return joinPath(resolveProjectsRoot(context), ...projectParts)
 }
 
+/**
+ * Resolves partial create-flow values into total create command inputs.
+ *
+ * @pure true
+ * @invariant every CreateInputs field is defined in the result
+ * @complexity O(n) where n = |repoUrl|
+ */
+// CHANGE: totalize create-flow partial values with deterministic defaults
+// WHY: completion must hand the shell a complete create command input record
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall p: resolve(p) in CreateInputs
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: explicit false boolean values are preserved
+// COMPLEXITY: O(n) where n = |repoUrl|
 export const resolveCreateInputs = (
   contextOrCwd: string | CreateFlowContext,
   values: Partial<CreateInputs>

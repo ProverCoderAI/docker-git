@@ -47,8 +47,59 @@ export type CreateSettingsChoiceDirection = "left" | "right"
 export const createSettingsHint = "↑ - up, ↓ - down, Enter - apply"
 export const firstCreateSettingsStepIndex = 1
 
+/**
+ * Narrows a create-flow view to interactive create mode.
+ *
+ * @pure true
+ * @invariant true iff mode = create
+ * @complexity O(1)
+ */
+// CHANGE: expose a pure predicate for create-mode flow views
+// WHY: callers need type-safe mode refinement before create-only transitions
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall v: isCreate(v) <-> v.mode = create
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: predicate does not inspect mutable state
+// COMPLEXITY: O(1)
 export const isCreateModeFlowView = (view: CreateFlowView): view is CreateModeFlowView => view.mode === "create"
 
+/**
+ * Narrows a create-flow view to browser display-settings mode.
+ *
+ * @pure true
+ * @invariant true iff mode = display
+ * @complexity O(1)
+ */
+// CHANGE: expose a pure predicate for display-mode flow views
+// WHY: callers need type-safe mode refinement before display-only transitions
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall v: isDisplay(v) <-> v.mode = display
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: predicate does not inspect mutable state
+// COMPLEXITY: O(1)
 export const isDisplayModeFlowView = (view: CreateFlowView): view is DisplayModeFlowView => view.mode === "display"
 
+/**
+ * Detects the repo-url prompt in create mode.
+ *
+ * @pure true
+ * @invariant true implies create mode and step = 0
+ * @complexity O(1)
+ */
+// CHANGE: expose the repo-step predicate for shared create-flow input handling
+// WHY: navigation and input logic treat repo URL entry differently from settings rows
+// QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall v: repoStep(v) -> v.mode = create and v.step = 0
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: display-mode views are never repo-step views
+// COMPLEXITY: O(1)
 export const isCreateFlowRepoStep = (view: CreateFlowView): boolean => isCreateModeFlowView(view) && view.step === 0

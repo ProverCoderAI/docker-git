@@ -10,56 +10,88 @@ import { resolveDefaultOutDir } from "./menu-create-inputs.js"
 import type { CreateInputs } from "./menu-types.js"
 
 type CreateTokenizeState = {
-  current: string
-  escaping: boolean
-  quote: "'" | "\"" | null
-  readonly tokens: Array<string>
+  readonly current: string
+  readonly escaping: boolean
+  readonly quote: "'" | "\"" | null
+  readonly tokens: ReadonlyArray<string>
 }
 
-const pushCreateToken = (state: CreateTokenizeState): void => {
-  if (state.current.length > 0) {
-    state.tokens.push(state.current)
-    state.current = ""
-  }
-}
+const pushCreateToken = (state: CreateTokenizeState): CreateTokenizeState =>
+  state.current.length > 0
+    ? {
+      ...state,
+      current: "",
+      tokens: [...state.tokens, state.current]
+    }
+    : state
 
-const consumeCreateTokenChar = (state: CreateTokenizeState, char: string): void => {
+const consumeCreateTokenChar = (state: CreateTokenizeState, char: string): CreateTokenizeState => {
   if (state.escaping) {
-    state.current += char
-    state.escaping = false
-    return
+    return {
+      ...state,
+      current: `${state.current}${char}`,
+      escaping: false
+    }
   }
   if (char === "\\") {
-    state.escaping = true
-    return
+    return {
+      ...state,
+      escaping: true
+    }
   }
   if (state.quote !== null) {
     if (char === state.quote) {
-      state.quote = null
-      return
+      return {
+        ...state,
+        quote: null
+      }
     }
-    state.current += char
-    return
+    return {
+      ...state,
+      current: `${state.current}${char}`
+    }
   }
   if (char === "'" || char === "\"") {
-    state.quote = char
-    return
+    return {
+      ...state,
+      quote: char
+    }
   }
   if (/\s/u.test(char)) {
-    pushCreateToken(state)
-    return
+    return pushCreateToken(state)
   }
-  state.current += char
+  return {
+    ...state,
+    current: `${state.current}${char}`
+  }
+}
+
+const consumeCreateTokenInput = (
+  input: string,
+  index: number,
+  state: CreateTokenizeState
+): CreateTokenizeState => {
+  if (index >= input.length) {
+    return state
+  }
+
+  const codePoint = input.codePointAt(index)
+  if (codePoint === undefined) {
+    return state
+  }
+
+  const char = String.fromCodePoint(codePoint)
+  return consumeCreateTokenInput(input, index + char.length, consumeCreateTokenChar(state, char))
 }
 
 const tokenizeCreateCommandLine = (
   input: string
 ): Either.Either<ReadonlyArray<string>, ParseError> => {
-  const state: CreateTokenizeState = { current: "", escaping: false, quote: null, tokens: [] }
-
-  for (const char of input.trim()) {
-    consumeCreateTokenChar(state, char)
-  }
+  const state = consumeCreateTokenInput(
+    input.trim(),
+    0,
+    { current: "", escaping: false, quote: null, tokens: [] }
+  )
 
   if (state.escaping) {
     return Either.left(createParseError("unterminated escape sequence"))
@@ -68,8 +100,7 @@ const tokenizeCreateCommandLine = (
     return Either.left(createParseError("unterminated quoted value"))
   }
 
-  pushCreateToken(state)
-  return Either.right(state.tokens)
+  return Either.right(pushCreateToken(state).tokens)
 }
 
 const unsupportedCreatePrefixes = new Set([
@@ -157,6 +188,23 @@ const createInputsFromCommand = (
   ...forceEnvCreateInput(raw, command)
 })
 
+/**
+ * Parses the repo step buffer as either a raw URL or create/init CLI fragment.
+ *
+ * @pure true
+ * @invariant valid(buffer) -> decoded create defaults are deterministic
+ * @complexity O(n) where n = |buffer|
+ */
+// CHANGE: decode the first create-flow prompt through pure CLI-compatible parsing
+// WHY: repo URL input may include inline create flags that satisfy later prompts
+// QUOTE(ТЗ): "fix CodeRabbit review comments"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall b in Buffer: parse(b) = Left(error) or Right(partialInputs)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: parser state is immutable across token transitions
+// COMPLEXITY: O(n) where n = |buffer|
 export const parseRepoStepInput = (
   context: CreateFlowContext,
   buffer: string

@@ -24,6 +24,17 @@ type MobileTerminalControlsProps = {
   readonly onToggleCtrl: () => void
 }
 
+type MobileTerminalArrowKey = Extract<MobileTerminalKey, "down" | "left" | "right" | "up">
+
+const mobileTerminalArrowKeys: ReadonlyArray<MobileTerminalArrowKey> = ["left", "up", "down", "right"]
+
+const mobileTerminalArrowLabels: Readonly<Record<MobileTerminalArrowKey, string>> = {
+  down: "↓",
+  left: "←",
+  right: "→",
+  up: "↑"
+}
+
 export const retainTerminalFocus = (controller: TerminalInputController | null): void => {
   controller?.focus()
 }
@@ -112,10 +123,10 @@ const MobileArrowControlsRow = (
   { onKeyPress }: Pick<MobileTerminalControlsProps, "onKeyPress">
 ): JSX.Element => (
   <div style={mobileArrowRowStyle}>
-    {(["left", "up", "down", "right"] as const).map((key) => (
+    {mobileTerminalArrowKeys.map((key) => (
       <MobileTerminalControlButton
         key={key}
-        label={{ down: "↓", left: "←", right: "→", up: "↑" }[key]}
+        label={mobileTerminalArrowLabels[key]}
         onClick={() => {
           onKeyPress(key)
         }}

@@ -96,14 +96,34 @@ const renderProjectDetailsContent = (
   />
 )
 
+const renderProjectPickerHandledContent = (currentMenu: BrowserMenuTag): JSX.Element => (
+  <StaticActionPanel
+    description="This panel is rendered by the project picker screen."
+    title={currentMenu}
+  />
+)
+
 export const renderContentBody = (props: ContentPanelProps): JSX.Element =>
   Match.value(props.currentMenu).pipe(
+    Match.when("Auth", () => renderAuthContent(props)),
+    Match.when("ProjectAuth", () => renderProjectAuthContent(props)),
     Match.when("Create", () => renderCreateContent(props)),
     Match.when("Select", () => renderSelectContent(props)),
     Match.when("Delete", () => renderProjectDetailsContent("Delete", props)),
     Match.when("Down", () => renderProjectDetailsContent("Down", props)),
     Match.when("Info", () => renderProjectDetailsContent("Info", props)),
-    Match.orElse((menu) => renderStaticMenuPanel(menu as StaticMenuTag))
+    Match.when("DownAll", () => renderStaticMenuPanel("DownAll")),
+    Match.when("Logs", () => renderStaticMenuPanel("Logs")),
+    Match.when("Quit", () => renderStaticMenuPanel("Quit")),
+    Match.when("Status", () => renderStaticMenuPanel("Status")),
+    Match.when("Browser", () => renderProjectPickerHandledContent("Browser")),
+    Match.when("Databases", () => renderProjectPickerHandledContent("Databases")),
+    Match.when("Ports", () => renderProjectPickerHandledContent("Ports")),
+    Match.when("Prompts", () => renderProjectPickerHandledContent("Prompts")),
+    Match.when("Share", () => renderProjectPickerHandledContent("Share")),
+    Match.when("Skills", () => renderProjectPickerHandledContent("Skills")),
+    Match.when("Tasks", () => renderProjectPickerHandledContent("Tasks")),
+    Match.exhaustive
   )
 
 export const renderAuthContent = (props: ContentPanelProps): JSX.Element => (

@@ -1,3 +1,4 @@
+import { Either } from "effect"
 import { Terminal } from "xterm"
 import { FitAddon } from "xterm-addon-fit"
 
@@ -95,11 +96,10 @@ export const sendTerminalResize = (
   socketRef: TerminalSocketRef,
   terminal: Terminal
 ): void => {
-  if (
-    !runOptionalTerminalOperation(() => {
-      fitAddon.fit()
-    })
-  ) {
+  const fitResult = runOptionalTerminalOperation(() => {
+    fitAddon.fit()
+  })
+  if (Either.isLeft(fitResult)) {
     return
   }
   sendTerminalClientMessage(socketRef, {

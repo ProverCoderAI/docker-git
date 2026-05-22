@@ -38,6 +38,7 @@ describe("terminal copy interaction", () => {
   it("forces context-menu clicks into selection mode only when selected terminal text exists", () => {
     expect(shouldForceTerminalSelectionContext({ button: 2 }, terminalWithSelection("any", "selected"))).toBe(true)
     expect(shouldForceTerminalSelectionContext({ button: 2 }, terminalWithSelection("any", ""))).toBe(false)
+    expect(shouldForceTerminalSelectionContext({ button: 2 }, terminalWithSelection("none", "selected"))).toBe(false)
     expect(shouldForceTerminalSelectionContext({ button: 0 }, terminalWithSelection("any", "selected"))).toBe(false)
   })
 
