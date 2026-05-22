@@ -166,7 +166,7 @@ const inspectControllerComposeImageName = (): Effect.Effect<
  *
  * @pure false
  * @effect Docker CLI through ControllerRuntime.
- * @invariant Missing image or missing label resolves to null rather than throwing.
+ * @invariant Missing or ambiguous compose image output resolves to null rather than throwing.
  * @precondition Docker is reachable through the configured runtime.
  * @postcondition Returned revision is normalized by label parsing.
  * @complexity O(1) Docker inspections.
@@ -180,7 +180,7 @@ const inspectControllerComposeImageName = (): Effect.Effect<
 // FORMAT THEOREM: image_label(image) = local_revision -> no rebuild is required
 // PURITY: SHELL
 // EFFECT: Effect<string | null, ControllerBootstrapError, ControllerRuntime>
-// INVARIANT: missing image or missing label resolves to null rather than throwing
+// INVARIANT: missing or unresolvable image metadata resolves to null rather than throwing
 // COMPLEXITY: O(1) Docker inspections
 export const inspectControllerImageRevision = (): Effect.Effect<
   string | null,
@@ -188,6 +188,7 @@ export const inspectControllerImageRevision = (): Effect.Effect<
   ControllerRuntime
 > =>
   inspectControllerComposeImageName().pipe(
+    Effect.orElseSucceed((): string | null => null),
     Effect.flatMap((imageName) =>
       imageName === null
         ? Effect.succeed<string | null>(null)
