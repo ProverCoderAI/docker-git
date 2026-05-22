@@ -174,15 +174,16 @@ const showPendingTerminalError = (
   context: BrowserActionContext,
   runtime: ConnectProjectRuntime,
   error: string
-): void => {
+): boolean => {
   const wasFinalized = runtime.pendingSessionFinalized
   if (wasFinalized) {
-    return
+    return false
   }
   runtime.pendingSessionFinalized = true
   runtime.lifecycle.onFailure?.(error)
   appendOutputLine(context, `[error] ${error}`)
   context.addTerminalSession(renderPendingTerminalSession(context, runtime, error, "error"))
+  return true
 }
 
 const attachCreatedSession = (
@@ -225,8 +226,9 @@ const handleProjectEvent = (
 ): void => {
   const failure = readTerminalStartupFailure(event, requestId)
   if (failure !== null) {
-    showPendingTerminalError(context, runtime, failure)
-    context.setMessage(failure)
+    if (showPendingTerminalError(context, runtime, failure)) {
+      context.setMessage(failure)
+    }
     closeStream(runtime)
     return
   }

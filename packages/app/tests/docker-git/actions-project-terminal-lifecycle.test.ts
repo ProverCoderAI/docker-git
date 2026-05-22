@@ -228,13 +228,17 @@ describe("project terminal connect lifecycle", () => {
       const pendingSessionId = "00000000-0000-4000-8000-000000000006"
       loadProjectTerminalSessionMock.mockImplementation(() => Effect.succeed({ ...session, id: pendingSessionId }))
       const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
-      const { context, lifecycle } = prepareAcceptedConnect(pendingSessionId, { addTerminalSession })
+      const { context, lifecycle, setMessage } = prepareAcceptedConnect(pendingSessionId, { addTerminalSession })
 
       yield* _(connectAndAttachSession(context, lifecycle, pendingSessionId))
       emitStartupFailure(pendingSessionId, "Late backend failure.")
 
       expect(lifecycle.onFailure).not.toHaveBeenCalled()
       expect(addTerminalSession).toHaveBeenCalledTimes(2)
+      expect(setMessage).not.toHaveBeenCalledWith("Late backend failure.")
+      expect(setMessage).toHaveBeenLastCalledWith(
+        "Project is ready. SSH terminal is connecting for octocat/hello-world."
+      )
     }))
 
   it.effect("reports failure when startup fails", () =>
