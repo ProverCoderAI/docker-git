@@ -17,6 +17,7 @@ runs:
 
         threshold_gib="${DOCKER_GIT_FREE_DOCKER_DISK_MIN_AVAILABLE_GIB:-40}"
         force_cleanup="${DOCKER_GIT_FORCE_FREE_DOCKER_DISK:-0}"
+        force_cleanup_normalized="${force_cleanup,,}"
         force_cleanup_enabled=0
 
         if [[ ! "$threshold_gib" =~ ^[0-9]+$ ]]; then
@@ -24,8 +25,8 @@ runs:
           exit 1
         fi
 
-        case "$force_cleanup" in
-          1|true|TRUE|yes|YES|on|ON)
+        case "$force_cleanup_normalized" in
+          1|true|yes|on)
             force_cleanup_enabled=1
             ;;
           *)

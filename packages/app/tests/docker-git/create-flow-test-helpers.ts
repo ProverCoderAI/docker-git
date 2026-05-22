@@ -39,8 +39,34 @@ export const repositoryCreateInputArbitrary = fc.record({
     : `https://github.com/${owner}/${repo}/tree/${branch}`
 }))
 
-export const expectedOutDirForRepoUrl = (repoUrl: string, projectsRoot: string): string =>
-  `${projectsRoot}/${deriveRepoPathParts(resolveRepoInput(repoUrl).repoUrl).pathParts.join("/")}`
+/**
+ * Resolves the expected create-flow output directory for a generated repo URL.
+ *
+ * @param repoUrl - Generated GitHub repository URL accepted by create-flow parsing.
+ * @param projectsRoot - Browser projects root used as the output directory base.
+ * @returns Expected POSIX output directory for the repository.
+ * @pure true
+ * @effect n/a
+ * @invariant Root projectsRoot "/" is preserved as an absolute path prefix.
+ * @precondition `repoUrl` and `projectsRoot` are finite strings.
+ * @postcondition The result contains the derived repo path parts in order.
+ * @complexity O(n) time and O(n) space where n = |repoUrl|.
+ * @throws Never
+ */
+// CHANGE: preserve absolute root projectsRoot in generated create-flow expectations
+// WHY: property tests must assert "/" maps to /owner/repo, not //owner/repo
+// QUOTE(ТЗ): "Потеря абсолютного корня в joinPath при \"/\""
+// REF: CodeRabbit PR #344 review
+// SOURCE: n/a
+// FORMAT THEOREM: projectsRoot = "/" -> result startsWith "/"
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: root projectsRoot remains absolute
+// COMPLEXITY: O(n) where n = |repoUrl|
+export const expectedOutDirForRepoUrl = (repoUrl: string, projectsRoot: string): string => {
+  const repoPath = deriveRepoPathParts(resolveRepoInput(repoUrl).repoUrl).pathParts.join("/")
+  return projectsRoot === "/" ? `/${repoPath}` : `${projectsRoot}/${repoPath}`
+}
 
 export const expectCreateContinueView = (
   next: ReturnType<typeof advanceCreateFlow>

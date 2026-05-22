@@ -17,6 +17,16 @@ import type { CreateInputs } from "./menu-types.js"
  * @complexity O(n) time and O(n) space where n = |value|.
  * @throws Never
  */
+// CHANGE: normalize leading separators on path fragments before joining
+// WHY: repository path parts must not reset the selected projects root
+// QUOTE(ТЗ): n/a
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall s: trimLeftSlash(s) has no leading slash unless empty
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: result length never exceeds input length
+// COMPLEXITY: O(n) where n = |value|
 const trimLeftSlash = (value: string): string => {
   let start = 0
   while (start < value.length && value[start] === "/") {
@@ -39,6 +49,16 @@ const trimLeftSlash = (value: string): string => {
  * @complexity O(n) time and O(n) space where n = |value|.
  * @throws Never
  */
+// CHANGE: normalize trailing separators on path fragments before joining
+// WHY: joined create-flow paths should not contain duplicate separators at boundaries
+// QUOTE(ТЗ): n/a
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: forall s: trimRightSlash(s) has no trailing slash unless empty
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: result length never exceeds input length
+// COMPLEXITY: O(n) where n = |value|
 const trimRightSlash = (value: string): string => {
   let end = value.length
   while (end > 0 && value[end - 1] === "/") {
@@ -61,6 +81,16 @@ const trimRightSlash = (value: string): string => {
  * @complexity O(p + n) time and O(p + n) space where p = |parts| and n = total input length.
  * @throws Never
  */
+// CHANGE: join create-flow path fragments while preserving absolute roots
+// WHY: browser-provided projectsRoot="/" must produce /owner/repo rather than a relative path
+// QUOTE(ТЗ): "Потеря абсолютного корня в joinPath при \"/\""
+// REF: CodeRabbit PR #344 review
+// SOURCE: n/a
+// FORMAT THEOREM: parts[0] = "/" -> joinPath(parts) startsWith "/"
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: non-root fragments cannot introduce duplicate boundary separators
+// COMPLEXITY: O(p + n) where p = |parts| and n = total input length
 const joinPath = (...parts: ReadonlyArray<string>): string => {
   const cleaned = parts
     .filter((part) => part.length > 0)
@@ -127,6 +157,16 @@ export const normalizeCreateFlowContext = (
  * @complexity O(n) time and O(n) space where n = |context.projectsRoot ?? context.cwd|.
  * @throws Never
  */
+// CHANGE: select explicit browser projectsRoot before cwd-derived defaults
+// WHY: browser create-flow must honor server-provided workspace root
+// QUOTE(ТЗ): n/a
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: trim(projectsRoot) != "" -> result = projectsRoot
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: non-blank projectsRoot has precedence over cwd defaults
+// COMPLEXITY: O(n) where n = |context.projectsRoot ?? context.cwd|
 const resolveProjectsRoot = (context: CreateFlowContext): string =>
   context.projectsRoot?.trim().length
     ? context.projectsRoot

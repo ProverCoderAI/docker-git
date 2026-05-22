@@ -9,47 +9,119 @@ const inspectControllerRevisionLabelTemplate = String
   .raw`{{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}`
 
 /**
- * Returns the first non-empty line from Docker CLI output.
+ * Builds a typed controller bootstrap error.
  *
- * @param output - Raw command output.
- * @returns The first trimmed non-empty line, or null when none exists.
+ * @param message - Human-readable bootstrap failure message.
+ * @returns Controller bootstrap error value.
  *
  * @pure true
  * @effect n/a
- * @invariant Result is either null or a string with length > 0.
+ * @invariant Returned error tag is always `ControllerBootstrapError`.
+ * @precondition `message` is a finite string.
+ * @postcondition The returned error preserves the provided message.
+ * @complexity O(1) time and O(1) space.
+ * @throws Never
+ */
+// CHANGE: represent deterministic image-resolution failures as typed bootstrap errors
+// WHY: ambiguous compose image output must fail through the Effect error channel
+// QUOTE(ТЗ): "хочу сузить время билда докер контейнера"
+// REF: user-request-2026-05-22-controller-build-speed
+// SOURCE: n/a
+// FORMAT THEOREM: error(message).message = message
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: error tag is stable
+// COMPLEXITY: O(1)
+const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
+  _tag: "ControllerBootstrapError",
+  message
+})
+
+/**
+ * Returns all non-empty lines from Docker CLI output.
+ *
+ * @param output - Raw command output.
+ * @returns Trimmed non-empty output lines.
+ *
+ * @pure true
+ * @effect n/a
+ * @invariant Every returned line has length > 0.
  * @precondition `output` is a finite string.
  * @postcondition Whitespace-only lines are ignored.
  * @complexity O(n) time and O(n) space where n = |output|.
  * @throws Never
  */
 // CHANGE: normalize compose image output before image inspection
-// WHY: docker compose config --images emits line-oriented output and bootstrap needs one image name proof
+// WHY: docker compose config --images emits line-oriented output and bootstrap needs a deterministic image proof
 // QUOTE(ТЗ): "контейнер собирается минут 5-6"
 // REF: user-request-2026-05-22-controller-build-speed
 // SOURCE: n/a
-// FORMAT THEOREM: exists first non-empty line -> result = trim(first)
+// FORMAT THEOREM: result = map(trim, lines(output)) filtered by non-empty
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: result is null or non-empty
+// INVARIANT: every result entry is non-empty
 // COMPLEXITY: O(n)
-const firstNonEmptyLine = (output: string): string | null => {
-  for (const line of output.split(/\r?\n/u)) {
-    const trimmed = line.trim()
-    if (trimmed.length > 0) {
-      return trimmed
-    }
+const nonEmptyLines = (output: string): ReadonlyArray<string> => {
+  const lines = output.split(/\r?\n/u)
+  return lines
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+}
+
+/**
+ * Resolves compose image output into exactly one controller image name.
+ *
+ * @param output - Raw `docker compose config --images` output.
+ * @returns Effect with the single image, null for empty output, or a typed bootstrap error for ambiguity.
+ *
+ * @pure true
+ * @effect Effect.succeed | Effect.fail
+ * @invariant More than one non-empty line is rejected as ambiguous.
+ * @precondition `output` is finite Docker CLI output.
+ * @postcondition Success with a string implies exactly one non-empty image line existed.
+ * @complexity O(n) time and O(n) space where n = |output|.
+ * @throws Never - ambiguity is represented in the Effect error channel.
+ */
+// CHANGE: require deterministic controller image resolution from compose output
+// WHY: revision reuse is sound only when the inspected image is uniquely the controller image
+// QUOTE(ТЗ): "хочу сузить время билда докер контейнера"
+// REF: user-request-2026-05-22-controller-build-speed
+// SOURCE: n/a
+// FORMAT THEOREM: |images| = 0 -> null, |images| = 1 -> images[0], |images| > 1 -> error
+// PURITY: CORE
+// EFFECT: Effect<string | null, ControllerBootstrapError>
+// INVARIANT: multiple compose images never collapse to the first image
+// COMPLEXITY: O(n) where n = |output|
+const resolveSingleControllerImageName = (
+  output: string
+): Effect.Effect<string | null, ControllerBootstrapError> => {
+  const imageNames = nonEmptyLines(output)
+  if (imageNames.length === 0) {
+    return Effect.succeed(null)
   }
-  return null
+  const imageName = imageNames[0]
+  if (imageNames.length === 1 && imageName !== undefined) {
+    return Effect.succeed(imageName)
+  }
+  return Effect.fail(
+    controllerBootstrapError(
+      [
+        "Expected exactly one docker-git controller image from docker compose config --images.",
+        "Resolved images:",
+        ...imageNames.map((name) => `- ${name}`)
+      ].join("\n")
+    )
+  )
 }
 
 /**
  * Resolves the Docker image name configured for the active controller compose files.
  *
- * @returns The first compose image name, or null when compose emits no images.
+ * @returns The single compose image name, or null when compose emits no images.
  *
  * @pure false
  * @effect Docker CLI through ControllerRuntime.
- * @invariant Empty compose output is represented as null.
+ * @invariant Multiple compose images fail rather than selecting the first line.
  * @precondition Compose files resolve for the current GPU mode.
  * @postcondition Returned image name is trimmed and non-empty.
  * @complexity O(1) compose invocations.
@@ -60,10 +132,10 @@ const firstNonEmptyLine = (output: string): string | null => {
 // QUOTE(ТЗ): "хочу сузить время билда докер контейнера"
 // REF: user-request-2026-05-22-controller-build-speed
 // SOURCE: n/a
-// FORMAT THEOREM: compose_image = null -> image_revision = null
+// FORMAT THEOREM: |compose_images| <= 1 or bootstrap fails
 // PURITY: SHELL
 // EFFECT: Effect<string | null, ControllerBootstrapError, ControllerRuntime>
-// INVARIANT: no image name is treated as missing revision proof
+// INVARIANT: ambiguous image lists are typed bootstrap errors
 // COMPLEXITY: O(1) Docker compose invocations
 const inspectControllerComposeImageName = (): Effect.Effect<
   string | null,
@@ -84,7 +156,7 @@ const inspectControllerComposeImageName = (): Effect.Effect<
       )
     )
 
-    return firstNonEmptyLine(output)
+    return yield* _(resolveSingleControllerImageName(output))
   })
 
 /**
