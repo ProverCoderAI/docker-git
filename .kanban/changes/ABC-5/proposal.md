@@ -1,0 +1,44 @@
+# ABC-5 Proposal: Repository Download Cache
+
+## Summary
+
+Implement repository download caching for `docker-git clone` so repeated clones of the same repository reuse shared cached git data and refresh that cache before preparing the requested workspace branch.
+
+## Requirement
+
+GitHub issue #138:
+
+> Что бы один и тот же репозиторий лежал бы в кеше и мы бы грузили данные из кеша + git pull под нужную нам ветку
+
+## Current State
+
+- The clone flow is generated as shell from `packages/lib/src/core/templates-entrypoint/tasks.ts` and mirrored in `packages/app/src/lib/core/templates-entrypoint/tasks.ts`.
+- A shared Docker volume already mounts `/home/dev/.docker-git/.cache` into project containers.
+- Existing cache behavior stores a per-`REPO_URL` bare mirror under `/home/dev/.docker-git/.cache/git-mirrors`.
+- Existing clone behavior uses `--reference-if-able` and `--dissociate`, then performs branch or PR/MR checkout logic in the target workspace.
+- Existing behavior refreshes the bare mirror with `git fetch --prune`, but it does not provide a cached working repository that is updated via branch-aware pull before workspace preparation.
+
+## Scope
+
+- Add or refine clone-cache behavior inside the generated entrypoint clone task.
+- Keep cache state inside the shared cache volume.
+- Preserve existing parsing of `REPO_URL`, `REPO_REF`, issue URLs, PR refs, GitLab merge request refs, auth labels, and fork remotes.
+- Keep state repository sync behavior separate from repository download caching.
+- Extend tests around template rendering and clone-cache e2e behavior.
+
+## Non-Goals
+
+- Do not change CLI argument semantics.
+- Do not merge work into `main`.
+- Do not cache secrets or auth material in repository cache paths.
+- Do not commit cache artifacts into the `.docker-git` state repository.
+- Do not broaden mirror refresh to hosted forge PR/MR refs.
+
+## Acceptance Criteria
+
+- Repeated clones of the same `REPO_URL` use the same cache key/path.
+- The cache is refreshed before it is used for a workspace.
+- The resulting workspace is checked out to the requested `REPO_REF` or deterministic local issue/PR/MR branch.
+- Cache paths remain ignored and untracked by state repository sync.
+- Existing clone flows continue to work for normal branches, issue URLs, GitHub PR refs, GitLab MR refs, and no-ref clones.
+- Tests document the cache reuse and branch-refresh contract.
