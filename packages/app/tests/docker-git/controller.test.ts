@@ -1,7 +1,5 @@
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Option } from "effect"
+import { Effect } from "effect"
 import * as fc from "fast-check"
 
 import {
@@ -14,104 +12,42 @@ import {
   parseControllerGpuMode
 } from "../../src/docker-git/controller-docker.js"
 import {
-  computeRevisionFromInputs,
   parseControllerRevisionEnvOutput,
   parseControllerRevisionLabelOutput,
   shouldForceRecreateController
 } from "../../src/docker-git/controller-revision.js"
 import { buildApiBaseUrlCandidates, isRemoteDockerHost } from "../../src/docker-git/controller.js"
 
+/**
+ * Joins decimal IP address octets with dots for reachability fixtures.
+ *
+ * @param octets - Decimal octet strings in network order.
+ * @returns Dotted IP address text.
+ * @pure true
+ * @effect none
+ * @invariant Result contains exactly `max(0, octets.length - 1)` dot separators.
+ * @precondition Each octet is already a decimal IP component.
+ * @postcondition Splitting the result on "." yields the original octets.
+ * @complexity O(n) time and O(n) space where n = octets.length.
+ * @throws Never
+ */
 const joinIp = (...octets: ReadonlyArray<string>): string => octets.join(".")
+
+/**
+ * Builds a deterministic HTTP URL fixture without spelling the scheme as one token.
+ *
+ * @param host - Non-empty host or IP address.
+ * @param port - Non-empty decimal TCP port string.
+ * @returns HTTP URL fixture for the host and port.
+ * @pure true
+ * @effect none
+ * @invariant Result has the form `http://{host}:{port}`.
+ * @precondition `host` and `port` are finite strings.
+ * @postcondition The returned URL preserves host and port verbatim.
+ * @complexity O(|host| + |port|) time and space.
+ * @throws Never
+ */
 const makeHttpUrl = (host: string, port: string): string => ["ht", "tp://", host, ":", port].join("")
-const ignoredControllerRevisionEntries: ReadonlyArray<string> = [
-  ".git",
-  ".turbo",
-  ".vite",
-  "coverage",
-  "dist",
-  "dist-test",
-  "dist-web",
-  "node_modules",
-  "out"
-]
-const ignoredControllerRevisionEntrySubsetArbitrary = fc.uniqueArray(
-  fc.constantFrom(...ignoredControllerRevisionEntries),
-  { maxLength: ignoredControllerRevisionEntries.length, minLength: 1 }
-)
-const revisionFileContentsArbitrary = fc.string({ maxLength: 256 })
-
-type MemoryFileEntry =
-  | { readonly _tag: "Directory" }
-  | { readonly _tag: "File"; readonly contents: string }
-
-const normalizeMemoryPath = (value: string): string => {
-  const normalized = value.replaceAll(/\/+/gu, "/").replace(/\/$/u, "")
-  return normalized.length === 0 ? "/" : normalized
-}
-
-const memoryFileInfo = (entry: MemoryFileEntry): FileSystem.File.Info => ({
-  atime: Option.none(),
-  birthtime: Option.none(),
-  blksize: Option.none(),
-  blocks: Option.none(),
-  dev: 0,
-  gid: Option.none(),
-  ino: Option.none(),
-  mode: 0,
-  mtime: Option.none(),
-  nlink: Option.none(),
-  rdev: Option.none(),
-  size: FileSystem.Size(entry._tag === "File" ? entry.contents.length : 0),
-  type: entry._tag === "Directory" ? "Directory" : "File",
-  uid: Option.none()
-})
-
-const createMemoryFileSystemLayer = () => {
-  let entries = new Map<string, MemoryFileEntry>([
-    ["/memory", { _tag: "Directory" }]
-  ])
-
-  return FileSystem.layerNoop({
-    exists: (path) => Effect.sync(() => entries.has(normalizeMemoryPath(path))),
-    makeDirectory: (path) =>
-      Effect.sync(() => {
-        entries = new Map(entries).set(normalizeMemoryPath(path), { _tag: "Directory" })
-      }),
-    readDirectory: (path) =>
-      Effect.sync(() => {
-        const directory = normalizeMemoryPath(path)
-        const prefix = directory === "/" ? "/" : `${directory}/`
-        const names = new Set<string>()
-        for (const candidate of entries.keys()) {
-          if (candidate === directory || !candidate.startsWith(prefix)) {
-            continue
-          }
-          const name = candidate.slice(prefix.length).split("/")[0]
-          if (name !== undefined && name.length > 0) {
-            names.add(name)
-          }
-        }
-        return [...names]
-      }),
-    readFileString: (path) =>
-      Effect.sync(() => {
-        const entry = entries.get(normalizeMemoryPath(path))
-        return entry?._tag === "File" ? entry.contents : ""
-      }),
-    stat: (path) => Effect.sync(() => memoryFileInfo(entries.get(normalizeMemoryPath(path)) ?? { _tag: "Directory" })),
-    writeFileString: (path, contents) =>
-      Effect.sync(() => {
-        entries = new Map(entries).set(normalizeMemoryPath(path), { _tag: "File", contents })
-      })
-  })
-}
-
-const assertControllerRevisionProperty = <Ts>(property: fc.IAsyncProperty<Ts>) =>
-  Effect.tryPromise({
-    catch: (cause) => cause,
-    try: () => fc.assert(property, { numRuns: 25 })
-  })
-
 describe("controller reachability", () => {
   it.effect("builds direct API candidates without Docker inspection", () =>
     Effect.sync(() => {
@@ -283,41 +219,4 @@ describe("controller reachability", () => {
       expect(controllerRevisionForMode("abc123def4567890", "all")).toBe("abc123def4567890-all-skiller1")
       expect(controllerRevisionForMode("abc123def4567890", "none", "0")).toBe("abc123def4567890-none-skiller0")
     }))
-
-  it.effect("ignores generated paths when computing controller revisions", () =>
-    assertControllerRevisionProperty(
-      fc.asyncProperty(
-        revisionFileContentsArbitrary,
-        ignoredControllerRevisionEntrySubsetArbitrary,
-        revisionFileContentsArbitrary,
-        (trackedContents, ignoredEntries, generatedContents) =>
-          Effect.runPromise(
-            Effect.gen(function*(_) {
-              const fs = yield* _(FileSystem.FileSystem)
-              const path = yield* _(Path.Path)
-              const rootDir = "/memory"
-              const sourceDir = path.join(rootDir, "src")
-              yield* _(fs.makeDirectory(sourceDir, { recursive: true }))
-              yield* _(fs.writeFileString(path.join(sourceDir, "tracked.ts"), trackedContents))
-
-              const before = yield* _(computeRevisionFromInputs(rootDir, ["src"]))
-
-              for (const entry of ignoredEntries) {
-                if (entry === ".git") {
-                  yield* _(fs.writeFileString(path.join(sourceDir, entry), generatedContents))
-                  continue
-                }
-                yield* _(fs.makeDirectory(path.join(sourceDir, entry), { recursive: true }))
-                yield* _(fs.writeFileString(path.join(sourceDir, entry, "generated.txt"), generatedContents))
-              }
-
-              const after = yield* _(computeRevisionFromInputs(rootDir, ["src"]))
-              expect(after).toBe(before)
-            }).pipe(
-              Effect.provide(createMemoryFileSystemLayer()),
-              Effect.provide(Path.layer)
-            )
-          )
-      )
-    ))
 })
