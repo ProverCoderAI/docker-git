@@ -34,6 +34,11 @@ const ignoredControllerRevisionEntries: ReadonlyArray<string> = [
   "node_modules",
   "out"
 ]
+const ignoredControllerRevisionEntrySubsetArbitrary = fc.uniqueArray(
+  fc.constantFrom(...ignoredControllerRevisionEntries),
+  { maxLength: ignoredControllerRevisionEntries.length, minLength: 1 }
+)
+const revisionFileContentsArbitrary = fc.string({ maxLength: 256 })
 
 type MemoryFileEntry =
   | { readonly _tag: "Directory" }
@@ -100,6 +105,12 @@ const createMemoryFileSystemLayer = () => {
       })
   })
 }
+
+const assertControllerRevisionProperty = <Ts>(property: fc.IAsyncProperty<Ts>) =>
+  Effect.tryPromise({
+    catch: (cause) => cause,
+    try: () => fc.assert(property, { numRuns: 25 })
+  })
 
 describe("controller reachability", () => {
   it.effect("builds direct API candidates without Docker inspection", () =>
@@ -274,29 +285,39 @@ describe("controller reachability", () => {
     }))
 
   it.effect("ignores generated paths when computing controller revisions", () =>
-    Effect.gen(function*(_) {
-      const fs = yield* _(FileSystem.FileSystem)
-      const path = yield* _(Path.Path)
-      const rootDir = "/memory"
-      const sourceDir = path.join(rootDir, "src")
-      yield* _(fs.makeDirectory(sourceDir, { recursive: true }))
-      yield* _(fs.writeFileString(path.join(sourceDir, "tracked.ts"), "export const value = 1\n"))
+    assertControllerRevisionProperty(
+      fc.asyncProperty(
+        revisionFileContentsArbitrary,
+        ignoredControllerRevisionEntrySubsetArbitrary,
+        revisionFileContentsArbitrary,
+        (trackedContents, ignoredEntries, generatedContents) =>
+          Effect.runPromise(
+            Effect.gen(function*(_) {
+              const fs = yield* _(FileSystem.FileSystem)
+              const path = yield* _(Path.Path)
+              const rootDir = "/memory"
+              const sourceDir = path.join(rootDir, "src")
+              yield* _(fs.makeDirectory(sourceDir, { recursive: true }))
+              yield* _(fs.writeFileString(path.join(sourceDir, "tracked.ts"), trackedContents))
 
-      const before = yield* _(computeRevisionFromInputs(rootDir, ["src"]))
+              const before = yield* _(computeRevisionFromInputs(rootDir, ["src"]))
 
-      for (const entry of ignoredControllerRevisionEntries) {
-        if (entry === ".git") {
-          yield* _(fs.writeFileString(path.join(sourceDir, entry), "gitdir: ignored\n"))
-          continue
-        }
-        yield* _(fs.makeDirectory(path.join(sourceDir, entry), { recursive: true }))
-        yield* _(fs.writeFileString(path.join(sourceDir, entry, "generated.txt"), "ignored\n"))
-      }
+              for (const entry of ignoredEntries) {
+                if (entry === ".git") {
+                  yield* _(fs.writeFileString(path.join(sourceDir, entry), generatedContents))
+                  continue
+                }
+                yield* _(fs.makeDirectory(path.join(sourceDir, entry), { recursive: true }))
+                yield* _(fs.writeFileString(path.join(sourceDir, entry, "generated.txt"), generatedContents))
+              }
 
-      const after = yield* _(computeRevisionFromInputs(rootDir, ["src"]))
-      expect(after).toBe(before)
-    }).pipe(
-      Effect.provide(createMemoryFileSystemLayer()),
-      Effect.provide(Path.layer)
+              const after = yield* _(computeRevisionFromInputs(rootDir, ["src"]))
+              expect(after).toBe(before)
+            }).pipe(
+              Effect.provide(createMemoryFileSystemLayer()),
+              Effect.provide(Path.layer)
+            )
+          )
+      )
     ))
 })
