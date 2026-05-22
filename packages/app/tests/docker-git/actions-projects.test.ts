@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { beforeEach, vi } from "vitest"
+import { afterEach, beforeEach, vi } from "vitest"
 
 import { applyProjectById, runApplyAllProjects } from "../../src/web/actions-projects.js"
 import type { applyAllProjects, applyProject } from "../../src/web/api.js"
@@ -50,6 +50,9 @@ describe("web project actions", () => {
     vi.restoreAllMocks()
     applyAllProjectsMock.mockReset()
     applyProjectMock.mockReset()
+  })
+
+  afterEach(() => {
     vi.unstubAllGlobals()
   })
 

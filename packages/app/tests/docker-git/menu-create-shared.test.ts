@@ -89,14 +89,19 @@ describe("menu-create-shared", () => {
     ])
   })
 
-  it("tokenizes long create command buffers without recursion depth failures", () => {
-    const longOutDir = `/tmp/${"nested-".repeat(2500)}repo`
-    const view = expectCreateContinueView(advanceCreateFlow(
-      cwd,
-      createInitialFlowView(`${featureCreateRepoUrl} --out-dir "${longOutDir}"`)
-    ))
+  it("preserves generated long out-dir buffers without recursion depth failures", () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 2500 }), (repeatCount) => {
+        const longOutDir = `/tmp/${"nested-".repeat(repeatCount)}repo`
+        const view = expectCreateContinueView(advanceCreateFlow(
+          cwd,
+          createInitialFlowView(`${featureCreateRepoUrl} --out-dir "${longOutDir}"`)
+        ))
 
-    expect(view.values.outDir).toBe(longOutDir)
+        expect(view.values.outDir).toBe(longOutDir)
+      }),
+      { numRuns: 25 }
+    )
   })
 
   it("completes immediately when every remaining prompt was passed inline", () => {
@@ -250,7 +255,7 @@ describe("menu-create-shared", () => {
     expect(resolveCreateSettingsChoiceBuffer(unknownStepView, "left")).toBeNull()
   })
 
-  it("continues after applying a navigated setting while earlier settings remain unresolved", () => {
+  it("completes after applying a navigated final setting with defaults", () => {
     const view = createFeatureRepoSettingsView(cwd)
     const forceView = moveCreateSettingsStep(view, "up")
 
@@ -258,7 +263,7 @@ describe("menu-create-shared", () => {
       throw new TypeError("expected settings navigation result")
     }
 
-    const next = expectCreateContinueView(advanceCreateFlow(
+    const inputs = expectCreateCompleteInputs(advanceCreateFlow(
       cwd,
       {
         ...forceView,
@@ -266,42 +271,46 @@ describe("menu-create-shared", () => {
       }
     ))
 
-    expect(next.values.force).toBe(true)
-    expect(next.step).toBe(resolveCreateFlowSteps(next.values).length - 1)
-    expect(resolveCreateFlowSteps(next.values)).toEqual([
-      "repoUrl",
-      "cpuLimit",
-      "ramLimit",
-      "gpu",
-      "runUp",
-      "mcpPlaywright"
-    ])
+    expect(inputs.force).toBe(true)
+    expect(inputs.cpuLimit).toBe("")
+    expect(inputs.ramLimit).toBe("")
   })
 
-  it("completes after applying the only remaining create setting", () => {
-    const values = {
-      outDir: defaultRoot,
-      repoRef: "feature-x",
-      repoUrl: featureCreateRepoUrl,
-      cpuLimit: "50%",
-      ramLimit: "4g",
-      gpu: "none",
-      runUp: true,
-      enableMcpPlaywright: false
-    } satisfies Partial<CreateInputs>
-    expect(resolveCreateFlowSteps(values)).toEqual(["repoUrl", "force"])
+  it("completes after applying generated only remaining create settings", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          cpuLimit: fc.constantFrom("", "25%", "50%"),
+          enableMcpPlaywright: fc.boolean(),
+          force: fc.boolean(),
+          gpu: fc.constantFrom<CreateInputs["gpu"]>("none", "all"),
+          ramLimit: fc.constantFrom("", "2g", "4g"),
+          runUp: fc.boolean()
+        }),
+        ({ force, ...generatedValues }) => {
+          const values = {
+            outDir: defaultRoot,
+            repoRef: "feature-x",
+            repoUrl: featureCreateRepoUrl,
+            ...generatedValues
+          } satisfies Partial<CreateInputs>
+          expect(resolveCreateFlowSteps(values)).toEqual(["repoUrl", "force"])
 
-    const inputs = expectCreateCompleteInputs(advanceCreateFlow(
-      cwd,
-      {
-        buffer: "y",
-        inputError: null,
-        mode: "create",
-        step: 1,
-        values
-      }
-    ))
+          const inputs = expectCreateCompleteInputs(advanceCreateFlow(
+            cwd,
+            {
+              buffer: force ? "y" : "n",
+              inputError: null,
+              mode: "create",
+              step: 1,
+              values
+            }
+          ))
 
-    expect(inputs.force).toBe(true)
+          expect(inputs.force).toBe(force)
+        }
+      ),
+      { numRuns: 50 }
+    )
   })
 })

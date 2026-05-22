@@ -266,8 +266,9 @@ const resolveNextCreateFlowStep = (
     : currentStepIndex + 1
 
 const shouldCompleteCreateFlow = (
-  nextSteps: ReadonlyArray<CreateStep>
-): boolean => nextSteps.length <= firstCreateSettingsStepIndex
+  nextSteps: ReadonlyArray<CreateStep>,
+  nextStep: number
+): boolean => nextSteps.length <= firstCreateSettingsStepIndex || nextStep >= nextSteps.length
 
 /**
  * Advances create mode by applying the active prompt buffer.
@@ -281,10 +282,10 @@ const shouldCompleteCreateFlow = (
 // QUOTE(ТЗ): "after applying a non-repoUrl step it advances to currentStepIndex + 1"
 // REF: issue-339
 // SOURCE: n/a
-// FORMAT THEOREM: remaining = empty -> Complete, otherwise Continue(next valid setting)
+// FORMAT THEOREM: remaining = empty or nextStep past end -> Complete, otherwise Continue(next valid setting)
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: completion requires no unsatisfied settings after repoUrl
+// INVARIANT: applying the final settings index completes instead of clamping back to it
 // COMPLEXITY: O(k + s) where s = number of remaining create steps
 export const advanceCreateFlow = (
   contextOrCwd: string | CreateFlowContext,
@@ -307,12 +308,10 @@ export const advanceCreateFlow = (
 
       const nextSteps = resolveCreateFlowSteps(nextValues)
       const nextStep = resolveNextCreateFlowStep(step, view.step)
-      if (shouldCompleteCreateFlow(nextSteps)) {
+      if (shouldCompleteCreateFlow(nextSteps, nextStep)) {
         return completeCreateFlow(context, nextValues)
       }
-      return nextStep < nextSteps.length
-        ? continueCreateFlow(clampCreateSettingsStep(nextStep, nextSteps.length - 1), nextValues)
-        : continueCreateFlow(nextSteps.length - 1, nextValues)
+      return continueCreateFlow(clampCreateSettingsStep(nextStep, nextSteps.length - 1), nextValues)
     }
   )
 }

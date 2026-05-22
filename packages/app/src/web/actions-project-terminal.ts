@@ -176,10 +176,11 @@ const showPendingTerminalError = (
   error: string
 ): void => {
   const wasFinalized = runtime.pendingSessionFinalized
-  runtime.pendingSessionFinalized = true
-  if (!wasFinalized) {
-    runtime.lifecycle.onFailure?.(error)
+  if (wasFinalized) {
+    return
   }
+  runtime.pendingSessionFinalized = true
+  runtime.lifecycle.onFailure?.(error)
   appendOutputLine(context, `[error] ${error}`)
   context.addTerminalSession(renderPendingTerminalSession(context, runtime, error, "error"))
 }

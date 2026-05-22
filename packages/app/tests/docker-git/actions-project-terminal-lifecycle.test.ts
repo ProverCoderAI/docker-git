@@ -45,6 +45,20 @@ const emitCreatedSession = (requestId: string): void => {
   })
 }
 
+const emitStartupFailure = (requestId: string, message: string): void => {
+  readFirstProjectEventHandler()({
+    at: "2026-04-21T10:00:01.000Z",
+    payload: {
+      message,
+      phase: "ssh.failed",
+      requestId
+    },
+    projectId: "project-1",
+    seq: 8,
+    type: "project.deployment.status"
+  })
+}
+
 type ProjectConnectContext = Parameters<typeof connectProjectById>[1]
 type ProjectConnectLifecycle = NonNullable<Parameters<typeof connectProjectById>[3]>
 
@@ -69,13 +83,31 @@ const connectProjectAndWaitForStream = (
     }))
   })
 
-const prepareAcceptedConnect = (pendingSessionId: string) => {
+const connectAndAttachSession = (
+  context: ProjectConnectContext,
+  lifecycle: Required<ProjectConnectLifecycle>,
+  pendingSessionId: string
+) =>
+  Effect.gen(function*(_) {
+    yield* _(connectProjectAndWaitForStream(context, lifecycle))
+    expect(lifecycle.onFailure).not.toHaveBeenCalled()
+    expect(lifecycle.onSuccess).not.toHaveBeenCalled()
+    emitCreatedSession(pendingSessionId)
+    yield* _(waitForAssertion(() => {
+      expect(lifecycle.onSuccess).toHaveBeenCalledWith(pendingSessionId)
+    }))
+  })
+
+const prepareAcceptedConnect = (
+  pendingSessionId: string,
+  overrides: Parameters<typeof makeSelectedProjectContext>[0] = {}
+) => {
   vi.stubGlobal("crypto", { randomUUID: () => pendingSessionId })
   startProjectTerminalSessionMock.mockImplementation(() => Effect.succeed(startTerminalAccepted(pendingSessionId)))
   mockProjectStream()
   return {
     lifecycle: createLifecycleSpies(),
-    ...makeSelectedProjectContext({})
+    ...makeSelectedProjectContext(overrides)
   }
 }
 
@@ -187,16 +219,22 @@ describe("project terminal connect lifecycle", () => {
       loadProjectTerminalSessionMock.mockImplementation(() => Effect.succeed({ ...session, id: pendingSessionId }))
       const { context, lifecycle } = prepareAcceptedConnect(pendingSessionId)
 
-      yield* _(connectProjectAndWaitForStream(context, lifecycle))
+      yield* _(connectAndAttachSession(context, lifecycle, pendingSessionId))
       expect(lifecycle.onFailure).not.toHaveBeenCalled()
-      expect(lifecycle.onSuccess).not.toHaveBeenCalled()
+    }))
 
-      emitCreatedSession(pendingSessionId)
+  it.effect("ignores late failure events after the session already attached", () =>
+    Effect.gen(function*(_) {
+      const pendingSessionId = "00000000-0000-4000-8000-000000000006"
+      loadProjectTerminalSessionMock.mockImplementation(() => Effect.succeed({ ...session, id: pendingSessionId }))
+      const addTerminalSession = vi.fn<(session: ActiveTerminalSession) => void>()
+      const { context, lifecycle } = prepareAcceptedConnect(pendingSessionId, { addTerminalSession })
 
-      yield* _(waitForAssertion(() => {
-        expect(lifecycle.onSuccess).toHaveBeenCalledWith(pendingSessionId)
-      }))
+      yield* _(connectAndAttachSession(context, lifecycle, pendingSessionId))
+      emitStartupFailure(pendingSessionId, "Late backend failure.")
+
       expect(lifecycle.onFailure).not.toHaveBeenCalled()
+      expect(addTerminalSession).toHaveBeenCalledTimes(2)
     }))
 
   it.effect("reports failure when startup fails", () =>
@@ -235,17 +273,7 @@ describe("project terminal connect lifecycle", () => {
       const { context, lifecycle } = prepareAcceptedConnect(pendingSessionId)
 
       yield* _(connectProjectAndWaitForStream(context, lifecycle))
-      readFirstProjectEventHandler()({
-        at: "2026-04-21T10:00:01.000Z",
-        payload: {
-          message: "Backend SSH startup failed.",
-          phase: "ssh.failed",
-          requestId: pendingSessionId
-        },
-        projectId: "project-1",
-        seq: 8,
-        type: "project.deployment.status"
-      })
+      emitStartupFailure(pendingSessionId, "Backend SSH startup failed.")
 
       expect(lifecycle.onFailure).toHaveBeenCalledWith("Backend SSH startup failed.")
       expect(lifecycle.onSuccess).not.toHaveBeenCalled()
