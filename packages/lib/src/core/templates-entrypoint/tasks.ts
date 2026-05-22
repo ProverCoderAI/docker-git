@@ -130,6 +130,8 @@ const cloneCacheRefreshRefspecs = "'+refs/heads/*:refs/heads/*' '+refs/tags/*:re
 
 const renderCloneCacheInit = (config: TemplateConfig): string =>
   `  CLONE_CACHE_ARGS=""
+  CLONE_SOURCE_REPO="$AUTH_REPO_URL"
+  CLONE_USED_CACHE=0
   CACHE_REPO_DIR=""
   CACHE_ROOT="/home/${config.sshUser}/.docker-git/.cache/git-mirrors"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -150,6 +152,8 @@ const renderCloneCacheInit = (config: TemplateConfig): string =>
           echo "[clone-cache] mirror refresh failed for $REPO_URL"
         fi
         CLONE_CACHE_ARGS="--reference-if-able '$CACHE_REPO_DIR' --dissociate"
+        CLONE_SOURCE_REPO="$CACHE_REPO_DIR"
+        CLONE_USED_CACHE=1
         echo "[clone-cache] using mirror: $CACHE_REPO_DIR"
       else
         echo "[clone-cache] invalid mirror removed: $CACHE_REPO_DIR"
@@ -170,19 +174,19 @@ const renderCloneBodyRef = (config: TemplateConfig): string =>
   String.raw`  if [[ -n "$REPO_REF" ]]; then
     if [[ "$REPO_REF" == refs/pull/* || "$REPO_REF" == refs/merge-requests/* ]]; then
       REF_BRANCH="$(printf "%s" "$REPO_REF" | sed -E 's#^refs/pull/([^/]+)/head$#pr-\1#; s#^refs/merge-requests/([^/]+)/head$#mr-\1#')"
-      if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$AUTH_REPO_URL' '$TARGET_DIR'"; then
+      if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$CLONE_SOURCE_REPO' '$TARGET_DIR'"; then
         echo "[clone] git clone failed for $REPO_URL"
         CLONE_OK=0
       else
-        if ! su - ${config.sshUser} -c "cd '$TARGET_DIR' && GIT_TERMINAL_PROMPT=0 git fetch --progress origin '$REPO_REF':'$REF_BRANCH' && git checkout '$REF_BRANCH'"; then
+        if ! su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote set-url origin '$AUTH_REPO_URL' && GIT_TERMINAL_PROMPT=0 git fetch --progress origin '$REPO_REF':'$REF_BRANCH' && git checkout '$REF_BRANCH'"; then
           echo "[clone] git fetch failed for $REPO_REF"
           CLONE_OK=0
         fi
       fi
     else
-      if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS --branch '$REPO_REF' '$AUTH_REPO_URL' '$TARGET_DIR'"; then
+      if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS --branch '$REPO_REF' '$CLONE_SOURCE_REPO' '$TARGET_DIR'"; then
         echo "[clone] branch '$REPO_REF' missing; retrying without --branch"
-        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$AUTH_REPO_URL' '$TARGET_DIR'"; then
+        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$CLONE_SOURCE_REPO' '$TARGET_DIR'"; then
           echo "[clone] git clone failed for $REPO_URL"
           CLONE_OK=0
         elif [[ "$REPO_REF" == issue-* ]]; then
@@ -191,12 +195,26 @@ const renderCloneBodyRef = (config: TemplateConfig): string =>
             CLONE_OK=0
           fi
         fi
+      elif [[ "$CLONE_USED_CACHE" == "1" ]]; then
+        if ! su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote set-url origin '$AUTH_REPO_URL' && GIT_TERMINAL_PROMPT=0 git pull --ff-only origin '$REPO_REF'"; then
+          echo "[clone-cache] git pull failed for $REPO_REF"
+          CLONE_OK=0
+        else
+          echo "[clone-cache] pulled branch: $REPO_REF"
+        fi
       fi
     fi
   else
-    if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$AUTH_REPO_URL' '$TARGET_DIR'"; then
+    if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$CLONE_SOURCE_REPO' '$TARGET_DIR'"; then
       echo "[clone] git clone failed for $REPO_URL"
       CLONE_OK=0
+    elif [[ "$CLONE_USED_CACHE" == "1" ]]; then
+      if ! su - ${config.sshUser} -c "cd '$TARGET_DIR' && git remote set-url origin '$AUTH_REPO_URL' && GIT_TERMINAL_PROMPT=0 git pull --ff-only"; then
+        echo "[clone-cache] git pull failed for default branch"
+        CLONE_OK=0
+      else
+        echo "[clone-cache] pulled default branch"
+      fi
     fi
   fi`
 

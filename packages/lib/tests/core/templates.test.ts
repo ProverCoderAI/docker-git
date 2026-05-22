@@ -306,6 +306,50 @@ describe("renderEntrypoint clone cache", () => {
     expect(entrypoint).not.toContain("'+refs/merge-requests/*:refs/merge-requests/*'")
   })
 
+  it("uses refreshed mirrors as clone source and pulls cached branch clones", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expectContainsAll(entrypoint, [
+      'CLONE_SOURCE_REPO="$AUTH_REPO_URL"',
+      "CLONE_SOURCE_REPO=\"$CACHE_REPO_DIR\"",
+      "CLONE_USED_CACHE=1",
+      "git clone --progress $CLONE_CACHE_ARGS --branch '$REPO_REF' '$CLONE_SOURCE_REPO' '$TARGET_DIR'",
+      "git remote set-url origin '$AUTH_REPO_URL' && GIT_TERMINAL_PROMPT=0 git pull --ff-only origin '$REPO_REF'",
+      'echo "[clone-cache] pulled branch: $REPO_REF"'
+    ])
+  })
+
+  it("keeps issue refs as local branches after fallback clone", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expectContainsAll(entrypoint, [
+      'elif [[ "$REPO_REF" == issue-* ]]; then',
+      "cd '$TARGET_DIR' && git checkout -B '$REPO_REF'",
+      'echo "[clone] failed to create local branch \'$REPO_REF\'"'
+    ])
+  })
+
+  it("keeps PR and merge request refs as explicit fetches after cached clone", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expect(entrypoint).toContain(
+      "git clone --progress $CLONE_CACHE_ARGS '$CLONE_SOURCE_REPO' '$TARGET_DIR'"
+    )
+    expect(entrypoint).toContain(
+      "git remote set-url origin '$AUTH_REPO_URL' && GIT_TERMINAL_PROMPT=0 git fetch --progress origin '$REPO_REF':'$REF_BRANCH' && git checkout '$REF_BRANCH'"
+    )
+  })
+
+  it("pulls the remote default branch when cloning from a warm cache without repoRef", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expectContainsAll(entrypoint, [
+      "git clone --progress $CLONE_CACHE_ARGS '$CLONE_SOURCE_REPO' '$TARGET_DIR'",
+      "git remote set-url origin '$AUTH_REPO_URL' && GIT_TERMINAL_PROMPT=0 git pull --ff-only",
+      'echo "[clone-cache] pulled default branch"'
+    ])
+  })
+
   it("preserves branch/tag-only clone-cache refspecs for generated configs", () => {
     fc.assert(
       fc.property(generatedTemplateConfigArbitrary, (config) => {
