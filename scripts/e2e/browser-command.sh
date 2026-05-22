@@ -116,7 +116,8 @@ wait_for_http_contains() {
   local body=""
 
   for _ in $(seq 1 "$attempts"); do
-    if body="$(curl -fsS "$url" 2>/dev/null)" && grep -Fq -- "$needle" <<<"$body"; then
+    if body="$(curl -fsS --connect-timeout 2 --max-time 5 "$url" 2>/dev/null)" \
+      && grep -Fq -- "$needle" <<<"$body"; then
       return 0
     fi
     if ! browser_alive; then

@@ -3,18 +3,36 @@ import { useEffect, useRef } from "react"
 
 import { connectProjectById } from "./actions-projects.js"
 import type { BrowserActionContext } from "./actions-shared.js"
-import type { TerminalSession } from "./api-types.js"
 import { loadProjectTerminalWorkspace, loadTerminalSessionById } from "./api.js"
 import type { DashboardData } from "./api.js"
+import {
+  type DashboardProject,
+  findLocalTerminalSession,
+  findProjectBySshToken,
+  type ProjectLookupResult,
+  readSshLinkRequestFromHref,
+  resolveMissingSshSessionFallbackPath,
+  selectLocalProjectTerminal,
+  selectWorkspaceTerminalSession,
+  type SshLinkRequest,
+  sshLinkRequestKey
+} from "./app-ready-ssh-link-core.js"
+import {
+  attachLoadedSshSessionLink,
+  attachProjectWorkspaceSessions,
+  type LoadedSshSessionLink,
+  showProjectTerminalScreen
+} from "./app-ready-ssh-link-terminal.js"
 import { browserMenuIndex } from "./menu.js"
 import { projectPickerScreen } from "./screen.js"
-import { terminalSessionId, terminalSessionsForProject } from "./terminal-state.js"
-import {
-  type ActiveTerminalSession,
-  buildProjectActiveTerminalSession,
-  projectSshRoutePath,
-  terminalSessionRoutePath
-} from "./terminal.js"
+import { terminalSessionId } from "./terminal-state.js"
+import type { ActiveTerminalSession } from "./terminal.js"
+
+export {
+  readSshLinkRequestFromHref,
+  resolveMissingSshSessionFallbackPath,
+  selectWorkspaceTerminalSession
+} from "./app-ready-ssh-link-core.js"
 
 type SshLinkArgs = {
   readonly actionContext: BrowserActionContext
@@ -27,18 +45,12 @@ type SshLinkArgs = {
   readonly terminalSessions: ReadonlyArray<ActiveTerminalSession>
 }
 
-const sshPathPrefix = "/ssh/"
 type ConnectTimerRef = { current: ReturnType<typeof globalThis.setTimeout> | null }
 type SshTokenRef = { current: string | null }
-type DashboardProject = DashboardData["projects"][number]
-type SessionLookupResult = { readonly sessionId: string }
-type ProjectLookupResult = { readonly terminalId?: string | undefined; readonly token: string }
-export type SshLinkRequest =
-  | ({ readonly kind: "project" } & ProjectLookupResult)
-  | ({ readonly kind: "session" } & SessionLookupResult)
 type SshLinkEffectArgs = Omit<SshLinkArgs, "dashboard"> & {
   readonly connectTimerRef: ConnectTimerRef
   readonly handledTokenRef: SshTokenRef
+  readonly pendingTokenRef: SshTokenRef
   readonly projects: DashboardData["projects"]
 }
 
@@ -49,170 +61,66 @@ const clearConnectTimer = (connectTimerRef: ConnectTimerRef): void => {
   }
 }
 
-const decodePathTail = (value: string): string =>
-  value
-    .split("/")
-    .filter((segment) => segment.length > 0)
-    .map((segment) => decodeURIComponent(segment))
-    .join("/")
-    .trim()
-
-const readSessionPathRequest = (tail: string): SshLinkRequest | null => {
-  const sessionId = decodeURIComponent(tail.slice("session/".length).split("/")[0] ?? "").trim()
-  return sessionId.length === 0 ? null : { kind: "session", sessionId }
-}
-
-const readSshPathRequest = (url: URL): SshLinkRequest | null => {
-  if (!url.pathname.startsWith(sshPathPrefix)) {
-    return null
-  }
-  const tail = url.pathname.slice(sshPathPrefix.length)
-  if (tail.startsWith("session/")) {
-    return readSessionPathRequest(tail)
-  }
-  const decoded = decodePathTail(tail)
-  const terminalId = url.searchParams.get("terminal")?.trim() || url.searchParams.get("t")?.trim() || undefined
-  return decoded.length === 0 ? null : { kind: "project", terminalId, token: decoded }
-}
-
-const readSshQueryRequest = (url: URL): SshLinkRequest | null => {
-  const queryToken = url.searchParams.get("ssh")?.trim() ?? ""
-  const terminalId = url.searchParams.get("terminal")?.trim() || url.searchParams.get("t")?.trim() || undefined
-  return queryToken.length === 0 ? null : { kind: "project", terminalId, token: queryToken }
-}
-
-export const readSshLinkRequestFromHref = (href: string): SshLinkRequest | null => {
-  const url = new URL(href, "http://localhost")
-  return readSshPathRequest(url) ?? readSshQueryRequest(url)
-}
-
 const readSshLinkRequest = (): SshLinkRequest | null => readSshLinkRequestFromHref(globalThis.location.href)
 
-const findProjectBySshToken = (
-  projects: DashboardData["projects"],
-  token: string
-): DashboardProject | undefined =>
-  projects.find((candidate) => candidate.projectKey === token || candidate.id === token)
-
-const showProjectTerminalScreen = (actionContext: BrowserActionContext, projectId: string): void => {
-  actionContext.setSelectedMenuIndex(browserMenuIndex("Select"))
-  actionContext.setActiveScreen(projectPickerScreen())
-  actionContext.setSelectedProjectId(projectId)
+const clearPendingSshLink = (args: SshLinkEffectArgs, requestKey: string): void => {
+  if (args.pendingTokenRef.current === requestKey) {
+    args.pendingTokenRef.current = null
+  }
 }
 
-const findLocalTerminalSession = (
-  sessions: ReadonlyArray<ActiveTerminalSession>,
-  sessionId: string
-): ActiveTerminalSession | undefined => sessions.find((session) => terminalSessionId(session) === sessionId)
+const isPendingSshLink = (args: SshLinkEffectArgs, requestKey: string): boolean =>
+  args.pendingTokenRef.current === requestKey
 
-const newestTerminalSession = <A extends { readonly createdAt: string; readonly status?: string }>(
-  sessions: ReadonlyArray<A>
-): A | null => {
-  const reusableSessions = sessions.filter((session) => session.status !== "failed")
-  const candidates = reusableSessions.length === 0 ? sessions : reusableSessions
-  return candidates.toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null
+const markSshLinkHandled = (args: SshLinkEffectArgs, requestKey: string): void => {
+  if (!isPendingSshLink(args, requestKey)) {
+    return
+  }
+  args.pendingTokenRef.current = null
+  args.handledTokenRef.current = requestKey
 }
 
-const selectByExactIdOrUniquePrefix = <A extends { readonly id: string }>(
-  sessions: ReadonlyArray<A>,
-  selector: string
-): A | null => {
-  const exact = sessions.find((session) => session.id === selector)
-  if (exact !== undefined) {
-    return exact
-  }
-  const matches = sessions.filter((session) => session.id.startsWith(selector))
-  return matches.length === 1 ? matches[0] ?? null : null
-}
-
-const selectLocalProjectTerminal = (
-  sessions: ReadonlyArray<ActiveTerminalSession>,
-  activeTerminalSessionId: string | null,
-  projectId: string,
-  terminalId: string | undefined
-): ActiveTerminalSession | null => {
-  const projectSessions = terminalSessionsForProject(sessions, projectId)
-  if (terminalId !== undefined) {
-    return selectByExactIdOrUniquePrefix(
-      projectSessions.map((session) => ({ ...session, id: terminalSessionId(session) })),
-      terminalId
-    )
-  }
-  const active = projectSessions.find((session) => terminalSessionId(session) === activeTerminalSessionId)
-  if (active !== undefined) {
-    return active
-  }
-  const newest = newestTerminalSession(projectSessions.map((session) => session.session))
-  return newest === null
-    ? null
-    : projectSessions.find((session) => terminalSessionId(session) === newest.id) ?? null
-}
-
-export const selectWorkspaceTerminalSession = (
-  sessions: ReadonlyArray<TerminalSession>,
-  activeSessionId: string | null,
-  terminalId?: string
-): TerminalSession | null => {
-  if (terminalId !== undefined) {
-    return selectByExactIdOrUniquePrefix(sessions, terminalId)
-  }
-  if (activeSessionId !== null) {
-    const active = sessions.find((session) => session.id === activeSessionId)
-    if (active !== undefined) {
-      return active
-    }
-  }
-  return newestTerminalSession(sessions)
-}
-
-const buildProjectTerminalSession = (
+const handleTerminalSessionAttachFailure = (
   args: SshLinkEffectArgs,
-  project: DashboardProject,
-  session: TerminalSession
-): ActiveTerminalSession =>
-  buildProjectActiveTerminalSession({
-    onExit: args.actionContext.reloadDashboard,
-    onReady: args.actionContext.reloadDashboard,
-    projectDisplayName: project.displayName,
-    projectId: project.id,
-    projectKey: project.projectKey,
-    session
-  })
-
-const attachProjectWorkspaceSessions = (
-  args: SshLinkEffectArgs,
-  project: DashboardProject,
-  sessions: ReadonlyArray<TerminalSession>,
-  selectedSession: TerminalSession
-): void => {
-  const orderedSessions = sessions.toSorted((left, right) => left.createdAt.localeCompare(right.createdAt))
-  for (const session of orderedSessions) {
-    if (session.id !== selectedSession.id) {
-      args.addTerminalSession(buildProjectTerminalSession(args, project, session))
-    }
-  }
-  args.addTerminalSession(buildProjectTerminalSession(args, project, selectedSession))
-  args.selectTerminalSession(selectedSession.id)
-}
-
-const sshLinkRequestKey = (request: SshLinkRequest): string =>
-  request.kind === "session"
-    ? `session:${request.sessionId}`
-    : `project:${request.token}:${request.terminalId ?? ""}`
-
-export const resolveMissingSshSessionFallbackPath = (
-  href: string,
+  requestKey: string,
   sessionId: string,
   error: string
-): string | null => {
-  if (!error.includes("HTTP 404")) {
-    return null
+): void => {
+  if (!isPendingSshLink(args, requestKey)) {
+    return
   }
-  const url = new URL(href, "http://localhost")
-  return url.pathname === terminalSessionRoutePath(sessionId) ? "/menu/select" : null
+  const fallbackPath = resolveMissingSshSessionFallbackPath(globalThis.location.href, sessionId, error)
+  if (fallbackPath !== null) {
+    clearPendingSshLink(args, requestKey)
+    args.handledTokenRef.current = null
+    args.deactivateTerminalWorkspace()
+    args.actionContext.setSelectedMenuIndex(browserMenuIndex("Select"))
+    args.actionContext.setActiveScreen(projectPickerScreen())
+    globalThis.history.replaceState(globalThis.history.state, "", fallbackPath)
+    args.actionContext.setMessage(`SSH terminal is no longer available: ${sessionId}.`)
+    return
+  }
+  clearPendingSshLink(args, requestKey)
+  args.actionContext.setMessage(error)
 }
 
-const scheduleTerminalSessionAttach = (args: SshLinkEffectArgs, sessionId: string): void => {
+const handleTerminalSessionAttachSuccess = (
+  args: SshLinkEffectArgs,
+  requestKey: string,
+  { projectDisplayName, projectKey, session }: LoadedSshSessionLink
+): void => {
+  if (!isPendingSshLink(args, requestKey)) {
+    return
+  }
+  markSshLinkHandled(args, requestKey)
+  attachLoadedSshSessionLink(args, { projectDisplayName, projectKey, session })
+}
+
+const scheduleTerminalSessionAttach = (
+  args: SshLinkEffectArgs,
+  requestKey: string,
+  sessionId: string
+): void => {
   clearConnectTimer(args.connectTimerRef)
   args.connectTimerRef.current = globalThis.setTimeout(() => {
     args.connectTimerRef.current = null
@@ -220,34 +128,10 @@ const scheduleTerminalSessionAttach = (args: SshLinkEffectArgs, sessionId: strin
       loadTerminalSessionById(sessionId).pipe(
         Effect.match({
           onFailure: (error) => {
-            const fallbackPath = resolveMissingSshSessionFallbackPath(globalThis.location.href, sessionId, error)
-            if (fallbackPath !== null) {
-              args.handledTokenRef.current = null
-              args.deactivateTerminalWorkspace()
-              args.actionContext.setSelectedMenuIndex(browserMenuIndex("Select"))
-              args.actionContext.setActiveScreen(projectPickerScreen())
-              globalThis.history.replaceState(globalThis.history.state, "", fallbackPath)
-              args.actionContext.setMessage(`SSH terminal is no longer available: ${sessionId}.`)
-              return
-            }
-            args.actionContext.setMessage(error)
+            handleTerminalSessionAttachFailure(args, requestKey, sessionId, error)
           },
-          onSuccess: ({ projectDisplayName, projectKey, session }) => {
-            globalThis.history.replaceState(
-              globalThis.history.state,
-              "",
-              projectSshRoutePath(projectKey, session.id)
-            )
-            showProjectTerminalScreen(args.actionContext, session.projectId)
-            args.addTerminalSession(buildProjectActiveTerminalSession({
-              onExit: args.actionContext.reloadDashboard,
-              onReady: args.actionContext.reloadDashboard,
-              projectDisplayName,
-              projectId: session.projectId,
-              projectKey,
-              session
-            }))
-            args.actionContext.setMessage(`Attached SSH terminal for ${projectDisplayName}.`)
+          onSuccess: (link) => {
+            handleTerminalSessionAttachSuccess(args, requestKey, link)
           }
         })
       )
@@ -279,6 +163,7 @@ const attachExistingProjectLink = (
 const scheduleProjectTerminalAttach = (
   args: SshLinkEffectArgs,
   project: DashboardProject,
+  requestKey: string,
   request: { readonly terminalId?: string | undefined }
 ): void => {
   clearConnectTimer(args.connectTimerRef)
@@ -289,19 +174,35 @@ const scheduleProjectTerminalAttach = (
       loadProjectTerminalWorkspace(project.projectKey).pipe(
         Effect.match({
           onFailure: (error) => {
+            if (!isPendingSshLink(args, requestKey)) {
+              return
+            }
+            clearPendingSshLink(args, requestKey)
             args.actionContext.setMessage(error)
           },
           onSuccess: ({ activeSessionId, sessions }) => {
+            if (!isPendingSshLink(args, requestKey)) {
+              return
+            }
             const selectedSession = selectWorkspaceTerminalSession(sessions, activeSessionId, request.terminalId)
             if (selectedSession === null) {
               if (request.terminalId !== undefined) {
+                clearPendingSshLink(args, requestKey)
                 args.actionContext.setMessage(`SSH terminal link was not found: ${request.terminalId}.`)
                 return
               }
-              connectProjectById(project.id, args.actionContext, project.projectKey)
+              connectProjectById(project.id, args.actionContext, project.projectKey, {
+                onFailure: () => {
+                  clearPendingSshLink(args, requestKey)
+                },
+                onSuccess: () => {
+                  markSshLinkHandled(args, requestKey)
+                }
+              })
               return
             }
             attachProjectWorkspaceSessions(args, project, sessions, selectedSession)
+            markSshLinkHandled(args, requestKey)
             args.actionContext.setMessage(`Attached SSH terminal for ${project.displayName}.`)
           }
         })
@@ -310,22 +211,28 @@ const scheduleProjectTerminalAttach = (
   }, 0)
 }
 
-const handleProjectSshLink = (args: SshLinkEffectArgs, request: ProjectLookupResult): void => {
+const handleProjectSshLink = (args: SshLinkEffectArgs, requestKey: string, request: ProjectLookupResult): void => {
   const project = findProjectBySshToken(args.projects, request.token)
   if (project === undefined) {
+    clearPendingSshLink(args, requestKey)
     args.actionContext.setMessage(`Project link was not found: ${request.token}.`)
     return
   }
   if (attachExistingProjectLink(args, project, request)) {
+    markSshLinkHandled(args, requestKey)
     return
   }
-  scheduleProjectTerminalAttach(args, project, request)
+  scheduleProjectTerminalAttach(args, project, requestKey, request)
 }
 
-const handleSessionSshLink = (args: SshLinkEffectArgs, request: { readonly sessionId: string }): void => {
+const handleSessionSshLink = (
+  args: SshLinkEffectArgs,
+  requestKey: string,
+  request: { readonly sessionId: string }
+): void => {
   const localSession = findLocalTerminalSession(args.terminalSessions, request.sessionId)
   if (localSession === undefined) {
-    scheduleTerminalSessionAttach(args, request.sessionId)
+    scheduleTerminalSessionAttach(args, requestKey, request.sessionId)
     return
   }
   clearConnectTimer(args.connectTimerRef)
@@ -334,6 +241,7 @@ const handleSessionSshLink = (args: SshLinkEffectArgs, request: { readonly sessi
   }
   args.selectTerminalSession(request.sessionId)
   args.actionContext.setMessage(`Opened existing SSH terminal: ${request.sessionId}.`)
+  markSshLinkHandled(args, requestKey)
 }
 
 const handleSshLinkEffect = (args: SshLinkEffectArgs): void => {
@@ -341,21 +249,47 @@ const handleSshLinkEffect = (args: SshLinkEffectArgs): void => {
   if (request === null) {
     clearConnectTimer(args.connectTimerRef)
     args.handledTokenRef.current = null
+    args.pendingTokenRef.current = null
     return
   }
   const requestKey = sshLinkRequestKey(request)
-  if (args.busyLabel !== null || args.handledTokenRef.current === requestKey) {
+  if (
+    args.busyLabel !== null ||
+    args.handledTokenRef.current === requestKey ||
+    args.pendingTokenRef.current === requestKey
+  ) {
     return
   }
 
-  args.handledTokenRef.current = requestKey
+  args.pendingTokenRef.current = requestKey
   if (request.kind === "project") {
-    handleProjectSshLink(args, request)
+    handleProjectSshLink(args, requestKey, request)
     return
   }
-  handleSessionSshLink(args, request)
+  handleSessionSshLink(args, requestKey, request)
 }
 
+// CHANGE: React hook for idempotent SSH link dispatch.
+// WHY: Links should be marked handled only after the attach/open action succeeds.
+// QUOTE(TZ): CodeRabbit #342: "transient failures should not create a dead-end".
+// REF: PR #342 SSH terminal link handling.
+// SOURCE: n/a
+// FORMAT THEOREM: pending(k) and failure(k) => handled != k.
+// PURITY: SHELL
+// EFFECT: React effects, browser location/history, backend API Effects.
+// INVARIANT: handledTokenRef records only successful request keys.
+// COMPLEXITY: O(n) per effect where n = local/project session counts.
+/**
+ * Handles browser SSH deep links by attaching or selecting a terminal session.
+ *
+ * @pure false
+ * @effect React useEffect, globalThis.location/history, backend API effects.
+ * @invariant A request key moves pending -> handled only on successful local or backend attach.
+ * @precondition Must run in a browser-like environment.
+ * @postcondition Failed requests clear pending state and remain retryable.
+ * @complexity O(n) per effect pass where n is project/session count.
+ * @throws Never
+ */
 export const useSshLink = ({
   actionContext,
   activeTerminalSessionId,
@@ -368,6 +302,7 @@ export const useSshLink = ({
 }: SshLinkArgs) => {
   const connectTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
   const handledTokenRef = useRef<string | null>(null)
+  const pendingTokenRef = useRef<string | null>(null)
   const locationSignature = `${globalThis.location.pathname}${globalThis.location.search}`
 
   useEffect(() => () => {
@@ -383,6 +318,7 @@ export const useSshLink = ({
       connectTimerRef,
       deactivateTerminalWorkspace,
       handledTokenRef,
+      pendingTokenRef,
       projects: dashboard.projects,
       selectTerminalSession,
       terminalSessions

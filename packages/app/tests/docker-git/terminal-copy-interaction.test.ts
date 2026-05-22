@@ -38,6 +38,7 @@ describe("terminal copy interaction", () => {
   it("forces context-menu clicks into selection mode only when selected terminal text exists", () => {
     expect(shouldForceTerminalSelectionContext({ button: 2 }, terminalWithSelection("any", "selected"))).toBe(true)
     expect(shouldForceTerminalSelectionContext({ button: 2 }, terminalWithSelection("any", ""))).toBe(false)
+    expect(shouldForceTerminalSelectionContext({ button: 2 }, terminalWithSelection("none", "selected"))).toBe(false)
     expect(shouldForceTerminalSelectionContext({ button: 0 }, terminalWithSelection("any", "selected"))).toBe(false)
   })
 
@@ -186,24 +187,6 @@ describe("terminal copy interaction", () => {
     disposable.dispose()
   })
 
-  it("keeps right-click selection handling one-shot", () => {
-    const documentTarget = new FakeTerminalCopyEventTarget()
-    const host = new FakeTerminalCopyHost(documentTarget)
-    const disposable = attachTerminalCopyInteraction({ host, terminal: terminalWithSelection("any", "selected") })
-    const down = mouseEvent(2)
-    const move = mouseEvent(0)
-
-    host.dispatchMouse("mousedown", down)
-    documentTarget.dispatchMouse("mousemove", move)
-
-    expect(down.shiftKey).toBe(true)
-    expect(move.shiftKey).toBe(false)
-    expect(documentTarget.dispatchedEvents).toEqual([])
-    expectNoDragListeners(documentTarget)
-
-    disposable.dispose()
-  })
-
   it("falls back to host drag listeners when ownerDocument is unavailable", () => {
     const host = new FakeTerminalCopyHost(null)
     const disposable = attachTerminalCopyInteraction({ host, terminal: terminalWithSelection("drag", "") })
@@ -231,6 +214,8 @@ describe("terminal copy interaction", () => {
 
     expect(move.shiftKey).toBe(false)
     expect(host.listenerCount("mousedown")).toBe(0)
+    expect(host.listenerCount("mouseup")).toBe(0)
+    expect(host.listenerCount("contextmenu")).toBe(0)
     expect(host.listenerCount("copy")).toBe(0)
     expectNoDragListeners(documentTarget)
   })

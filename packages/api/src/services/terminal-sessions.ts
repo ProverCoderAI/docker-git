@@ -765,6 +765,174 @@ const writePtyInput = (pty: PtyBridge | null, data: string): void => {
 
 const shellQuote = (value: string): string => `'${value.replace(/'/gu, "'\\''")}'`
 
+// CHANGE: Predicate for when tmux should forward right-click pane events.
+// WHY: Mouse-aware apps and copy/view mode still need pane mouse events, while tmux menus must stay disabled.
+// QUOTE(TZ): issue #340 right-click must not open the default tmux menu in browser terminals.
+// REF: PR #342 tmux right-click handling.
+// SOURCE: n/a
+// FORMAT THEOREM: mouse-aware-or-copy-mode => predicate evaluates truthy in tmux.
+// PURITY: CORE
+// EFFECT: none
+// INVARIANT: The predicate contains only tmux format language and no shell interpolation.
+// COMPLEXITY: O(1) time/O(1) space.
+/**
+ * Tmux format predicate used by right-click pane bindings.
+ *
+ * @returns A tmux format expression, not a shell command.
+ * @pure true
+ * @effect none
+ * @invariant Expression is constant and contains no user-controlled input.
+ * @precondition tmux understands mouse_any_flag and pane mode format variables.
+ * @postcondition The value is safe to embed after shellQuote.
+ * @complexity O(1) time/O(1) space.
+ * @throws Never
+ */
+const tmuxRightClickForwardPredicate =
+  "#{||:#{mouse_any_flag},#{&&:#{pane_in_mode},#{?#{m/r:(copy|view)-mode,#{pane_mode}},0,1}}}"
+// CHANGE: Pane right-click bindings that are overridden at tmux startup.
+// WHY: These cover down/drag/up/end and Meta-modified events that previously reached display-menu.
+// QUOTE(TZ): issue #340 right-click must not open the default tmux menu in browser terminals.
+// REF: PR #342 tmux right-click handling.
+// SOURCE: n/a
+// FORMAT THEOREM: every binding in the array is mapped to renderTmuxPaneRightClickBinding.
+// PURITY: CORE
+// EFFECT: none
+// INVARIANT: Each entry is a static tmux root-table mouse binding name.
+// COMPLEXITY: O(1) time/O(1) space.
+/**
+ * Tmux pane right-click binding names that should conditionally forward mouse events.
+ *
+ * @pure true
+ * @effect none
+ * @invariant The array contains only static tmux binding identifiers.
+ * @precondition tmux root key table supports these binding names.
+ * @postcondition Consumers can map each entry to a shell-safe bind-key command.
+ * @complexity O(1) time/O(1) space.
+ * @throws Never
+ */
+const tmuxRightClickPaneBindings: ReadonlyArray<string> = [
+  "MouseDown3Pane",
+  "MouseDrag3Pane",
+  "MouseDragEnd3Pane",
+  "MouseUp3Pane",
+  "M-MouseDown3Pane",
+  "M-MouseDrag3Pane",
+  "M-MouseDragEnd3Pane",
+  "M-MouseUp3Pane"
+]
+// CHANGE: Non-pane right-click bindings that are suppressed at tmux startup.
+// WHY: Status and border right-clicks are the tmux menu entry points that cannot be forwarded to pane apps.
+// QUOTE(TZ): issue #340 right-click must not open the default tmux menu in browser terminals.
+// REF: PR #342 tmux right-click handling.
+// SOURCE: n/a
+// FORMAT THEOREM: every binding in the array is mapped to renderTmuxRightClickSuppressBinding.
+// PURITY: CORE
+// EFFECT: none
+// INVARIANT: Each entry is a static tmux root-table mouse binding name.
+// COMPLEXITY: O(1) time/O(1) space.
+/**
+ * Tmux status/border right-click binding names that should be unbound.
+ *
+ * @pure true
+ * @effect none
+ * @invariant The array contains only static tmux binding identifiers.
+ * @precondition tmux root key table supports these binding names.
+ * @postcondition Consumers can map each entry to a shell-safe unbind-key command.
+ * @complexity O(1) time/O(1) space.
+ * @throws Never
+ */
+const tmuxRightClickSuppressBindings: ReadonlyArray<string> = [
+  "MouseDown3Status",
+  "MouseDown3StatusLeft",
+  "MouseDown3StatusRight",
+  "MouseDown3Border",
+  "M-MouseDown3Status",
+  "M-MouseDown3StatusLeft",
+  "M-MouseDown3StatusRight",
+  "M-MouseDown3Border"
+]
+
+// CHANGE: Render one tmux bind-key command for a right-click pane event.
+// WHY: Pane events must reach mouse-aware programs without allowing tmux display-menu.
+// QUOTE(TZ): issue #340 right-click must not open the default tmux menu in browser terminals.
+// REF: PR #342 tmux right-click handling.
+// SOURCE: n/a
+// FORMAT THEOREM: static binding => shellQuote(protected fragments) in result.
+// PURITY: CORE
+// EFFECT: none
+// INVARIANT: Dynamic shell fragments are emitted through shellQuote.
+// COMPLEXITY: O(1) time/O(1) space.
+/**
+ * Builds a tmux root-table command for a pane right-click binding.
+ *
+ * @param binding - Static tmux mouse binding name.
+ * @returns Shell command that binds the event to conditional pane forwarding.
+ * @pure true
+ * @effect none
+ * @invariant Shell-interpreted tmux format/action fragments are quoted.
+ * @precondition binding is one of tmuxRightClickPaneBindings.
+ * @postcondition The command exits successfully even when tmux rejects a binding.
+ * @complexity O(1) time/O(1) space.
+ * @throws Never
+ */
+const renderTmuxPaneRightClickBinding = (binding: string): string =>
+  `tmux bind-key -T root ${binding} if-shell -F -t = ${shellQuote(tmuxRightClickForwardPredicate)} ${
+    shellQuote("select-pane -t = ; send-keys -M")
+  } >/dev/null 2>&1 || true`
+
+// CHANGE: Render one tmux unbind-key command for a suppressed right-click event.
+// WHY: Non-pane right-click targets are tmux UI affordances and should not open display-menu.
+// QUOTE(TZ): issue #340 right-click must not open the default tmux menu in browser terminals.
+// REF: PR #342 tmux right-click handling.
+// SOURCE: n/a
+// FORMAT THEOREM: static binding => deterministic unbind command.
+// PURITY: CORE
+// EFFECT: none
+// INVARIANT: Result contains no user-controlled input.
+// COMPLEXITY: O(1) time/O(1) space.
+/**
+ * Builds a tmux root-table command that suppresses a non-pane right-click binding.
+ *
+ * @param binding - Static tmux mouse binding name.
+ * @returns Shell command that unbinds the event and tolerates unsupported bindings.
+ * @pure true
+ * @effect none
+ * @invariant The returned command contains only static text plus binding.
+ * @precondition binding is one of tmuxRightClickSuppressBindings.
+ * @postcondition The command exits successfully even when the binding is absent.
+ * @complexity O(1) time/O(1) space.
+ * @throws Never
+ */
+const renderTmuxRightClickSuppressBinding = (binding: string): string =>
+  `tmux unbind-key -T root ${binding} >/dev/null 2>&1 || true`
+
+// CHANGE: Aggregate all tmux right-click startup commands.
+// WHY: Terminal session startup needs one ordered command list for pane forwarding and UI suppression.
+// QUOTE(TZ): PR #342 preserves right-click copy while tmux mouse tracking is active.
+// REF: PR #342 tmux right-click handling.
+// SOURCE: n/a
+// FORMAT THEOREM: result length = paneBindings length + suppressBindings length.
+// PURITY: CORE
+// EFFECT: none
+// INVARIANT: Pane commands precede suppress commands.
+// COMPLEXITY: O(n) time/O(n) space where n is the total binding count.
+/**
+ * Renders the complete tmux right-click binding setup command list.
+ *
+ * @returns Readonly array of shell commands for tmux startup.
+ * @pure true
+ * @effect none
+ * @invariant Pane forwarding commands are emitted before suppressing status/border commands.
+ * @precondition Binding arrays contain static tmux binding identifiers.
+ * @postcondition The result contains one command per configured binding.
+ * @complexity O(n) time/O(n) space where n is total binding count.
+ * @throws Never
+ */
+const renderTmuxRightClickBindingCommands = (): ReadonlyArray<string> => [
+  ...tmuxRightClickPaneBindings.map(renderTmuxPaneRightClickBinding),
+  ...tmuxRightClickSuppressBindings.map(renderTmuxRightClickSuppressBinding)
+]
+
 const writeBufferToProjectContainer = (
   containerName: string,
   containerPath: string,
@@ -982,6 +1150,7 @@ export const renderTmuxAttachCommand = (
     `tmux set-option -t ${shellQuote(args.tmuxName)} status off >/dev/null 2>&1 || true`,
     `tmux set-option -t ${shellQuote(args.tmuxName)} history-limit 50000 >/dev/null 2>&1 || true`,
     `tmux set-option -t ${shellQuote(args.tmuxName)} mouse on >/dev/null 2>&1 || true`,
+    ...renderTmuxRightClickBindingCommands(),
     `exec tmux attach-session -t ${shellQuote(args.tmuxName)}`
   ].join("; ")
   return `bash --noprofile --norc -lc ${shellQuote(script)}`
