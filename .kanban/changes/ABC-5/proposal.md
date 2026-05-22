@@ -46,7 +46,12 @@ GitHub issue #138:
 ## Archive Status
 
 - Status: implemented
-- Spec commit: `f961baa docs(spec): add ABC-5 clone cache plan`
-- Implementation commit: `a47e794 feat(clone): reuse repository cache for branch pulls`
+- Branch: `vk/d6b8-abc-5-github-138`
+- Pull request: https://github.com/ProverCoderAI/docker-git/pull/343
+- Implementation archive head before final audit refresh: `67ed16ec6b543492c80e1e5041bdbf55a934c81c`
+- Spec commit after rebase: `7ed9450 docs(spec): add ABC-5 clone cache plan`
+- Implementation commit after rebase: `55ffaa3 feat(clone): reuse repository cache for branch pulls`
+- Archive baseline commit after rebase: `67ed16e docs(spec): archive ABC-5 clone cache work`
 - Final behavior: warm-cache clones use the refreshed bare mirror as the local clone source, then restore the authenticated origin and run branch-aware `git pull --ff-only` for normal branch/default branch flows.
 - E2E note: `bun run e2e:clone-cache` is updated but could not run in the local review environment because the host CLI cannot auto-discover the controller when `DOCKER_HOST=tcp://host.docker.internal:2375` and `DOCKER_GIT_API_URL` is unset.
+- Remote CI note: GitHub `E2E (Clone cache)` was still pending at archive time; other remote build/type/test/e2e checks had passed except the repository-wide `Lint` job, which failed on unrelated pre-existing `max-lines` violations outside ABC-5 files.

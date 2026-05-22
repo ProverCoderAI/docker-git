@@ -85,3 +85,11 @@ No new cache directory was added, so the existing `.cache/git-mirrors/` ignore a
 - Tokenized auth URLs are used for network operations only; final remote normalization still runs through the existing fork/upstream remote block.
 - Clone completion/failure markers remain `/run/docker-git/clone.done` and `/run/docker-git/clone.failed`.
 - CLI/API contracts are unchanged.
+
+## Archive Verification Notes
+
+- The final implementation was rebased onto `origin/main`; implementation/archive baseline was pushed at `67ed16ec6b543492c80e1e5041bdbf55a934c81c`.
+- Task-scope lint passed for both changed template files.
+- Unit, package test, typecheck, and build verification passed locally.
+- Full repository lint is not treated as an ABC-5 regression because the failing files are outside the ABC-5 diff: `packages/app/src/web/*` and `packages/app/src/docker-git/menu-create-shared.ts`.
+- Local clone-cache e2e is environment-blocked by remote `DOCKER_HOST` controller discovery; the GitHub `E2E (Clone cache)` job is the authoritative remote e2e signal for this scenario.

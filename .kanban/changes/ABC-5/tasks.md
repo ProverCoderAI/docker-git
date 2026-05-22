@@ -40,18 +40,24 @@
 
 ## Archive Verification
 
-- [x] `bun run --filter @effect-template/lib test -- tests/core/templates.test.ts` (48 tests passed)
-- [x] `bun run --filter @effect-template/lib test` (51 files, 268 tests passed)
-- [x] `bun run --filter @prover-coder-ai/docker-git test` (73 files, 463 tests passed)
+- [x] `bun run --filter @effect-template/lib test -- tests/core/templates.test.ts` (49 tests passed)
+- [x] `bun run --filter @effect-template/lib test` (52 files, 271 tests passed)
+- [x] `bun run --filter @prover-coder-ai/docker-git test` (77 files, 476 tests passed)
 - [x] `bun run typecheck`
-- [x] `bun run lint`
+- [x] Scoped lint for `packages/app/src/lib/core/templates-entrypoint/tasks.ts` (0 errors)
+- [x] Scoped lint for `packages/lib/src/core/templates-entrypoint/tasks.ts` (0 errors)
+- [ ] `bun run lint` failed on unrelated existing `max-lines` and `max-lines-per-function` violations outside ABC-5 changed files.
 - [x] `bun run build`
 - [x] Local git repro for warm-cache branch path: bare mirror refresh, clone from mirror, restore origin, `git pull --ff-only origin <branch>`.
 - [ ] `bun run e2e:clone-cache` blocked by local Docker/controller discovery: `DOCKER_HOST=tcp://host.docker.internal:2375` with no reachable `DOCKER_GIT_API_URL`.
+- [ ] GitHub `E2E (Clone cache)` pending at archive time.
 
 ## Archive Result
 
 - Completed branch: `vk/d6b8-abc-5-github-138`
-- Spec commit: `f961baa docs(spec): add ABC-5 clone cache plan`
-- Implementation commit: `a47e794 feat(clone): reuse repository cache for branch pulls`
+- Pull request: https://github.com/ProverCoderAI/docker-git/pull/343
+- Implementation/archive baseline head: `67ed16ec6b543492c80e1e5041bdbf55a934c81c`
+- Spec commit: `7ed9450 docs(spec): add ABC-5 clone cache plan`
+- Implementation commit: `55ffaa3 feat(clone): reuse repository cache for branch pulls`
+- Archive baseline commit: `67ed16e docs(spec): archive ABC-5 clone cache work`
 - Merge status: not merged to `main`.
