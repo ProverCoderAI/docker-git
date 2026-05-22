@@ -10,6 +10,7 @@ import {
   resolveCreateFlowSteps,
   resolveCreateSettingsChoiceBuffer
 } from "../../src/docker-git/menu-create-shared.js"
+import type { CreateInputs } from "../../src/docker-git/menu-types.js"
 import {
   createFeatureRepoDisplaySettingsView,
   createFeatureRepoSettingsView,
@@ -86,6 +87,16 @@ describe("menu-create-shared", () => {
       "ramLimit",
       "gpu"
     ])
+  })
+
+  it("tokenizes long create command buffers without recursion depth failures", () => {
+    const longOutDir = `/tmp/${"nested-".repeat(2500)}repo`
+    const view = expectCreateContinueView(advanceCreateFlow(
+      cwd,
+      createInitialFlowView(`${featureCreateRepoUrl} --out-dir "${longOutDir}"`)
+    ))
+
+    expect(view.values.outDir).toBe(longOutDir)
   })
 
   it("completes immediately when every remaining prompt was passed inline", () => {
@@ -265,5 +276,32 @@ describe("menu-create-shared", () => {
       "runUp",
       "mcpPlaywright"
     ])
+  })
+
+  it("completes after applying the only remaining create setting", () => {
+    const values = {
+      outDir: defaultRoot,
+      repoRef: "feature-x",
+      repoUrl: featureCreateRepoUrl,
+      cpuLimit: "50%",
+      ramLimit: "4g",
+      gpu: "none",
+      runUp: true,
+      enableMcpPlaywright: false
+    } satisfies Partial<CreateInputs>
+    expect(resolveCreateFlowSteps(values)).toEqual(["repoUrl", "force"])
+
+    const inputs = expectCreateCompleteInputs(advanceCreateFlow(
+      cwd,
+      {
+        buffer: "y",
+        inputError: null,
+        mode: "create",
+        step: 1,
+        values
+      }
+    ))
+
+    expect(inputs.force).toBe(true)
   })
 })

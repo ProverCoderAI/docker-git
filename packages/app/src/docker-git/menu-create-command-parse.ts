@@ -68,20 +68,20 @@ const consumeCreateTokenChar = (state: CreateTokenizeState, char: string): Creat
 
 const consumeCreateTokenInput = (
   input: string,
-  index: number,
   state: CreateTokenizeState
 ): CreateTokenizeState => {
-  if (index >= input.length) {
-    return state
+  let index = 0
+  let next = state
+  while (index < input.length) {
+    const codePoint = input.codePointAt(index)
+    if (codePoint === undefined) {
+      return next
+    }
+    const char = String.fromCodePoint(codePoint)
+    next = consumeCreateTokenChar(next, char)
+    index += char.length
   }
-
-  const codePoint = input.codePointAt(index)
-  if (codePoint === undefined) {
-    return state
-  }
-
-  const char = String.fromCodePoint(codePoint)
-  return consumeCreateTokenInput(input, index + char.length, consumeCreateTokenChar(state, char))
+  return next
 }
 
 const tokenizeCreateCommandLine = (
@@ -89,7 +89,6 @@ const tokenizeCreateCommandLine = (
 ): Either.Either<ReadonlyArray<string>, ParseError> => {
   const state = consumeCreateTokenInput(
     input.trim(),
-    0,
     { current: "", escaping: false, quote: null, tokens: [] }
   )
 

@@ -65,6 +65,30 @@ export const shouldForceBrowserTerminalSelection = (
   terminal: TerminalCopyInteractionTerminal
 ): boolean => isPrimaryMouseButton(event) && hasActiveMouseTracking(terminal)
 
+/**
+ * Decides whether a secondary-button event must preserve the terminal selection context.
+ *
+ * @param event - Mouse button event captured before xterm/tmux handlers can clear the selection.
+ * @param terminal - Terminal selection and mouse-tracking facade.
+ * @returns True iff the event is a secondary click, mouse tracking is active, and a selection exists.
+ * @pure true
+ * @effect isSecondaryMouseButton(event), hasActiveMouseTracking(terminal), terminal.hasSelection().
+ * @invariant result <=> secondary(event) and tracking(terminal) and selected(terminal).
+ * @precondition `event` and `terminal` are non-null; mouse tracking may be `none`, which disables forcing.
+ * @postcondition True means the caller may snapshot selection text before suppressing terminal mouse reporting.
+ * @complexity O(1)
+ * @throws Never
+ */
+// CHANGE: document the guarded right-click selection preservation predicate
+// WHY: selection protection is valid only while terminal mouse tracking can consume right-click events
+// QUOTE(ТЗ): "right-click with selection should remain copyable in the terminal"
+// REF: issue-340
+// SOURCE: n/a
+// FORMAT THEOREM: forall e,t: force(e,t) <-> secondary(e) and tracking(t) and hasSelection(t)
+// PURITY: CORE
+// EFFECT: reads terminal.hasSelection through the injected terminal facade
+// INVARIANT: mouseTrackingMode = none always yields false
+// COMPLEXITY: O(1)
 export const shouldForceTerminalSelectionContext = (
   event: TerminalMouseButtonEvent,
   terminal: TerminalCopyInteractionTerminal

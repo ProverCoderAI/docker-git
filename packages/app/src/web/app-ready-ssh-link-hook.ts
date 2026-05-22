@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react"
 
 import { connectProjectById } from "./actions-projects.js"
 import type { BrowserActionContext } from "./actions-shared.js"
-import type { TerminalSession } from "./api-types.js"
 import { loadProjectTerminalWorkspace, loadTerminalSessionById } from "./api.js"
 import type { DashboardData } from "./api.js"
 import {
@@ -18,6 +17,7 @@ import {
   type SshLinkRequest,
   sshLinkRequestKey
 } from "./app-ready-ssh-link-core.js"
+import { attachProjectWorkspaceSessions, showProjectTerminalScreen } from "./app-ready-ssh-link-terminal.js"
 import { browserMenuIndex } from "./menu.js"
 import { projectPickerScreen } from "./screen.js"
 import { terminalSessionId } from "./terminal-state.js"
@@ -65,44 +65,11 @@ const clearPendingSshLink = (args: SshLinkEffectArgs, requestKey: string): void 
 }
 
 const markSshLinkHandled = (args: SshLinkEffectArgs, requestKey: string): void => {
+  if (args.pendingTokenRef.current !== requestKey) {
+    return
+  }
   args.pendingTokenRef.current = null
   args.handledTokenRef.current = requestKey
-}
-
-const showProjectTerminalScreen = (actionContext: BrowserActionContext, projectId: string): void => {
-  actionContext.setSelectedMenuIndex(browserMenuIndex("Select"))
-  actionContext.setActiveScreen(projectPickerScreen())
-  actionContext.setSelectedProjectId(projectId)
-}
-
-const buildProjectTerminalSession = (
-  args: SshLinkEffectArgs,
-  project: DashboardProject,
-  session: TerminalSession
-): ActiveTerminalSession =>
-  buildProjectActiveTerminalSession({
-    onExit: args.actionContext.reloadDashboard,
-    onReady: args.actionContext.reloadDashboard,
-    projectDisplayName: project.displayName,
-    projectId: project.id,
-    projectKey: project.projectKey,
-    session
-  })
-
-const attachProjectWorkspaceSessions = (
-  args: SshLinkEffectArgs,
-  project: DashboardProject,
-  sessions: ReadonlyArray<TerminalSession>,
-  selectedSession: TerminalSession
-): void => {
-  const orderedSessions = sessions.toSorted((left, right) => left.createdAt.localeCompare(right.createdAt))
-  for (const session of orderedSessions) {
-    if (session.id !== selectedSession.id) {
-      args.addTerminalSession(buildProjectTerminalSession(args, project, session))
-    }
-  }
-  args.addTerminalSession(buildProjectTerminalSession(args, project, selectedSession))
-  args.selectTerminalSession(selectedSession.id)
 }
 
 const scheduleTerminalSessionAttach = (
@@ -201,12 +168,18 @@ const scheduleProjectTerminalAttach = (
                 args.actionContext.setMessage(`SSH terminal link was not found: ${request.terminalId}.`)
                 return
               }
-              connectProjectById(project.id, args.actionContext, project.projectKey)
-              markSshLinkHandled(args, requestKey)
+              connectProjectById(project.id, args.actionContext, project.projectKey, {
+                onFailure: () => {
+                  clearPendingSshLink(args, requestKey)
+                },
+                onSuccess: () => {
+                  markSshLinkHandled(args, requestKey)
+                }
+              })
               return
             }
-            markSshLinkHandled(args, requestKey)
             attachProjectWorkspaceSessions(args, project, sessions, selectedSession)
+            markSshLinkHandled(args, requestKey)
             args.actionContext.setMessage(`Attached SSH terminal for ${project.displayName}.`)
           }
         })
@@ -286,14 +259,6 @@ const handleSshLinkEffect = (args: SshLinkEffectArgs): void => {
 /**
  * Handles browser SSH deep links by attaching or selecting a terminal session.
  *
- * @param actionContext - Browser action callbacks and message sink.
- * @param activeTerminalSessionId - Currently active terminal id.
- * @param addTerminalSession - Sink for adding opened terminal sessions.
- * @param busyLabel - Non-null while another command is in progress.
- * @param dashboard - Dashboard snapshot containing projects.
- * @param deactivateTerminalWorkspace - Callback for leaving stale terminal workspace routes.
- * @param selectTerminalSession - Callback for selecting an opened terminal tab.
- * @param terminalSessions - Browser-local terminal sessions.
  * @pure false
  * @effect React useEffect, globalThis.location/history, backend API effects.
  * @invariant A request key moves pending -> handled only on successful local or backend attach.

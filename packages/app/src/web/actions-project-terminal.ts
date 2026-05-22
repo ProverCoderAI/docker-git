@@ -11,6 +11,11 @@ type ProjectActiveTerminalSessionArgs = Omit<
   "onExit" | "onReady"
 >
 
+export type ConnectProjectLifecycle = {
+  readonly onFailure?: (error: string) => void
+  readonly onSuccess?: (sessionId: string) => void
+}
+
 type ConnectProjectRuntime = {
   attachedSessionId: string | null
   pendingSessionFinalized: boolean
@@ -19,8 +24,11 @@ type ConnectProjectRuntime = {
   readonly projectDisplayName: string
   readonly projectId: string
   readonly projectKey: string
+  readonly lifecycle: ConnectProjectLifecycle
   stream: ReturnType<typeof openProjectEventStream> | null
 }
+
+const missingProjectKeyMessage = (projectId: string): string => `Project key is missing for ${projectId}.`
 
 const resolveProjectTerminalKey = (
   projectId: string,
@@ -33,7 +41,7 @@ const resolveProjectTerminalKey = (
   if (context.selectedProjectId === projectId && context.selectedProjectKey !== null) {
     return context.selectedProjectKey
   }
-  context.setMessage(`Project key is missing for ${projectId}.`)
+  context.setMessage(missingProjectKeyMessage(projectId))
   return null
 }
 
@@ -118,7 +126,8 @@ const readTerminalStartupFailure = (
 const createConnectProjectRuntime = (
   projectId: string,
   context: BrowserActionContext,
-  projectKey?: string
+  projectKey: string | undefined,
+  lifecycle: ConnectProjectLifecycle
 ): ConnectProjectRuntime | null => {
   const resolvedProjectKey = resolveProjectTerminalKey(projectId, context, projectKey)
   if (resolvedProjectKey === null) {
@@ -126,6 +135,7 @@ const createConnectProjectRuntime = (
   }
   return {
     attachedSessionId: null,
+    lifecycle,
     pendingSessionCreatedAt: new Date().toISOString(),
     pendingSessionFinalized: false,
     pendingSessionId: createPendingTerminalSessionId(),
@@ -165,7 +175,11 @@ const showPendingTerminalError = (
   runtime: ConnectProjectRuntime,
   error: string
 ): void => {
+  const wasFinalized = runtime.pendingSessionFinalized
   runtime.pendingSessionFinalized = true
+  if (!wasFinalized) {
+    runtime.lifecycle.onFailure?.(error)
+  }
   appendOutputLine(context, `[error] ${error}`)
   context.addTerminalSession(renderPendingTerminalSession(context, runtime, error, "error"))
 }
@@ -188,11 +202,15 @@ const attachCreatedSession = (
       closeStream(runtime)
     },
     onSuccess: (session) => {
+      const wasFinalized = runtime.pendingSessionFinalized
       runtime.pendingSessionFinalized = true
       context.reloadDashboard()
       context.closeTerminalSession(runtime.pendingSessionId)
       addProjectTerminalSession(context, { ...runtime, session })
       context.setMessage(`Project is ready. SSH terminal is connecting for ${runtime.projectDisplayName}.`)
+      if (!wasFinalized) {
+        runtime.lifecycle.onSuccess?.(session.id)
+      }
       closeStream(runtime)
     }
   })
@@ -257,13 +275,41 @@ const startTerminalSession = (context: BrowserActionContext, runtime: ConnectPro
   })
 }
 
+/**
+ * Starts a project SSH terminal session and attaches it after the backend emits the created event.
+ *
+ * @param projectId - Project identifier to connect.
+ * @param context - Browser action context used for state updates and terminal tabs.
+ * @param projectKey - Optional project key override used by deep links and menu actions.
+ * @param lifecycle - Optional callbacks fired after terminal attach success or terminal startup failure.
+ * @returns Nothing; state changes are emitted through `context` and lifecycle callbacks.
+ * @pure false
+ * @effect BrowserActionContext, backend start/load terminal Effects, project event stream.
+ * @invariant Lifecycle success fires only after `loadProjectTerminalSession` succeeds.
+ * @precondition `projectId` identifies a known project and `context` is a live browser action context.
+ * @postcondition Failure before attach invokes `lifecycle.onFailure`; successful attach invokes `lifecycle.onSuccess`.
+ * @complexity O(1) setup plus O(e) event handling where e is project stream events.
+ * @throws Never
+ */
+// CHANGE: report project SSH connect outcomes separately from request startup
+// WHY: browser deep-links must remain retryable until a real terminal attach succeeds
+// QUOTE(ТЗ): "deep-link handled only after the connectProjectById pipeline signals a real success"
+// REF: PR #342 CodeRabbit review
+// SOURCE: n/a
+// FORMAT THEOREM: attachSuccess(session) -> handled; startFailure(error) -> retryable
+// PURITY: SHELL
+// EFFECT: Effect<StartProjectTerminalSessionAccepted|TerminalSession, string> plus project event stream callbacks
+// INVARIANT: each ConnectProjectRuntime finalizes its lifecycle outcome at most once
+// COMPLEXITY: O(1) setup plus O(e) event handling where e is project stream events
 export const connectProjectById = (
   projectId: string,
   context: BrowserActionContext,
-  projectKey?: string
+  projectKey?: string,
+  lifecycle: ConnectProjectLifecycle = {}
 ) => {
-  const runtime = createConnectProjectRuntime(projectId, context, projectKey)
+  const runtime = createConnectProjectRuntime(projectId, context, projectKey, lifecycle)
   if (runtime === null) {
+    lifecycle.onFailure?.(missingProjectKeyMessage(projectId))
     return
   }
   context.setSelectedProjectId(projectId)

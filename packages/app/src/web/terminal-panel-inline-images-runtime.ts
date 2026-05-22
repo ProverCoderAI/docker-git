@@ -264,6 +264,30 @@ const flushTerminalOutputQueue = (handlers: TerminalMessageHandlers): void => {
   })
 }
 
+/**
+ * Enqueues terminal output segments and starts the sequential terminal flush loop.
+ *
+ * @param handlers - Runtime terminal handlers with mutable lifecycle queues and flags.
+ * @param data - Raw terminal output chunk to split into text and inline-image preview segments.
+ * @returns Nothing; lifecycle state is updated through `handlers`.
+ * @pure false
+ * @effect TerminalMessageHandlers.lifecycle outputQueue/outputWriting/disposed and terminal writes.
+ * @invariant `outputWriting` acts as a semaphore: at most one flush writes to the terminal at a time.
+ * @precondition `handlers.lifecycle.outputQueue` is an array, `outputWriting` is boolean, and handlers are live.
+ * @postcondition All split segments are appended before `flushTerminalOutputQueue(handlers)` is invoked.
+ * @complexity O(n) where n is the number of output segments parsed from `data`.
+ * @throws Never
+ */
+// CHANGE: document terminal output queueing as the shell boundary for inline image writes
+// WHY: queue order and the outputWriting semaphore protect terminal write ordering across async previews
+// QUOTE(ТЗ): "Limit inline-preview loading by timeout and size without freezing terminal output"
+// REF: issue-339
+// SOURCE: n/a
+// FORMAT THEOREM: enqueue(q, segments) -> flush observes q followed by segments in input order
+// PURITY: SHELL
+// EFFECT: TerminalMessageHandlers -> mutates lifecycle.outputQueue/outputWriting and writes to terminal
+// INVARIANT: disposed handlers never start a new flush, and flush is called only after queue append
+// COMPLEXITY: O(n) where n is the number of output segments parsed from `data`
 export const enqueueTerminalOutput = (
   handlers: TerminalMessageHandlers,
   data: string

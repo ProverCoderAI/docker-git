@@ -259,12 +259,15 @@ export const completeCreateDisplaySettingsFlow = (
 
 const resolveNextCreateFlowStep = (
   currentStep: CreateStep,
-  currentStepIndex: number,
-  nextSteps: ReadonlyArray<CreateStep>
+  currentStepIndex: number
 ): number =>
   currentStep === "repoUrl"
     ? firstCreateSettingsStepIndex
-    : clampCreateSettingsStep(currentStepIndex + 1, nextSteps.length - 1)
+    : currentStepIndex + 1
+
+const shouldCompleteCreateFlow = (
+  nextSteps: ReadonlyArray<CreateStep>
+): boolean => nextSteps.length <= firstCreateSettingsStepIndex
 
 /**
  * Advances create mode by applying the active prompt buffer.
@@ -278,10 +281,10 @@ const resolveNextCreateFlowStep = (
 // QUOTE(ТЗ): "after applying a non-repoUrl step it advances to currentStepIndex + 1"
 // REF: issue-339
 // SOURCE: n/a
-// FORMAT THEOREM: step != repoUrl -> nextStep = clamp(stepIndex + 1)
+// FORMAT THEOREM: remaining = empty -> Complete, otherwise Continue(next valid setting)
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: next step is always within the current settings range when continuing
+// INVARIANT: completion requires no unsatisfied settings after repoUrl
 // COMPLEXITY: O(k + s) where s = number of remaining create steps
 export const advanceCreateFlow = (
   contextOrCwd: string | CreateFlowContext,
@@ -303,10 +306,13 @@ export const advanceCreateFlow = (
       }
 
       const nextSteps = resolveCreateFlowSteps(nextValues)
-      const nextStep = resolveNextCreateFlowStep(step, view.step, nextSteps)
-      return nextSteps.length > firstCreateSettingsStepIndex && nextStep < nextSteps.length
-        ? continueCreateFlow(nextStep, nextValues)
-        : completeCreateFlow(context, nextValues)
+      const nextStep = resolveNextCreateFlowStep(step, view.step)
+      if (shouldCompleteCreateFlow(nextSteps)) {
+        return completeCreateFlow(context, nextValues)
+      }
+      return nextStep < nextSteps.length
+        ? continueCreateFlow(clampCreateSettingsStep(nextStep, nextSteps.length - 1), nextValues)
+        : continueCreateFlow(nextSteps.length - 1, nextValues)
     }
   )
 }

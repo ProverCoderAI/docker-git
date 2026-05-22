@@ -50,9 +50,15 @@ export const firstCreateSettingsStepIndex = 1
 /**
  * Narrows a create-flow view to interactive create mode.
  *
+ * @param view - Create-flow view to refine.
+ * @returns True when `view` is a create-mode view.
  * @pure true
- * @invariant true iff mode = create
+ * @effect n/a
+ * @invariant result <=> view.mode = "create"
+ * @precondition `view` is a non-null CreateFlowView value.
+ * @postcondition True narrows `view` to CreateModeFlowView; false leaves it as the remaining union member.
  * @complexity O(1)
+ * @throws Never
  */
 // CHANGE: expose a pure predicate for create-mode flow views
 // WHY: callers need type-safe mode refinement before create-only transitions
@@ -69,9 +75,15 @@ export const isCreateModeFlowView = (view: CreateFlowView): view is CreateModeFl
 /**
  * Narrows a create-flow view to browser display-settings mode.
  *
+ * @param view - Create-flow view to refine.
+ * @returns True when `view` is a display-mode view.
  * @pure true
- * @invariant true iff mode = display
+ * @effect n/a
+ * @invariant result <=> view.mode = "display"
+ * @precondition `view` is a non-null CreateFlowView value.
+ * @postcondition True narrows `view` to DisplayModeFlowView; false leaves it as the remaining union member.
  * @complexity O(1)
+ * @throws Never
  */
 // CHANGE: expose a pure predicate for display-mode flow views
 // WHY: callers need type-safe mode refinement before display-only transitions
@@ -88,9 +100,15 @@ export const isDisplayModeFlowView = (view: CreateFlowView): view is DisplayMode
 /**
  * Detects the repo-url prompt in create mode.
  *
+ * @param view - Create-flow view to inspect.
+ * @returns True when `view` is create mode at step zero.
  * @pure true
- * @invariant true implies create mode and step = 0
+ * @effect n/a
+ * @invariant result <=> view.mode = "create" and view.step = 0
+ * @precondition `view` is a non-null CreateFlowView value.
+ * @postcondition True implies callers may treat the active row as the repo-url prompt.
  * @complexity O(1)
+ * @throws Never
  */
 // CHANGE: expose the repo-step predicate for shared create-flow input handling
 // WHY: navigation and input logic treat repo URL entry differently from settings rows
