@@ -322,6 +322,33 @@ export const connectProjectById = (
   startTerminalSession(context, runtime)
 }
 
+/**
+ * Attaches an existing project SSH terminal session to the browser terminal list.
+ *
+ * @param projectId - Project identifier whose session should become selected.
+ * @param projectKey - Project key used to resolve the terminal session API route.
+ * @param projectDisplayName - Human-readable project name used in the attached-session message.
+ * @param sessionId - Existing backend terminal session identifier to load and attach.
+ * @param context - Browser action context used for selection, busy state, and terminal tab updates.
+ * @returns Nothing; state changes are emitted through `context`.
+ * @pure false
+ * @effect BrowserActionContext and `loadProjectTerminalSession` Effect.
+ * @invariant A terminal tab is added only after `loadProjectTerminalSession` succeeds.
+ * @precondition `sessionId` names an existing terminal session for the resolved project key.
+ * @postcondition On success, the project is selected and the loaded session is added to terminal tabs.
+ * @complexity O(1) setup plus O(1) backend session load.
+ * @throws Never
+ */
+// CHANGE: document the existing-session attach shell contract
+// WHY: CodeRabbit review requires explicit side-effect and invariant metadata for exported TS functions
+// QUOTE(ТЗ): "Add a TSDoc comment block above the exported function attachProjectTerminalById"
+// REF: PR #342 CodeRabbit review
+// SOURCE: n/a
+// FORMAT THEOREM: resolvedProjectKey != null && load(sessionId) succeeds -> terminalTab(sessionId) is added
+// PURITY: SHELL
+// EFFECT: Effect<TerminalSession, string> via loadProjectTerminalSession plus BrowserActionContext mutations
+// INVARIANT: no terminal tab is added when project key resolution fails or session load fails
+// COMPLEXITY: O(1) setup plus O(1) backend session load
 export const attachProjectTerminalById = (
   projectId: string,
   projectKey: string,
