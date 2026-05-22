@@ -1,8 +1,8 @@
 import { openSelectedProjectBrowser } from "./actions-browser.js"
 import { openSelectedProjectDatabaseEditor } from "./actions-databases.js"
-import { readEventPayloadString } from "./actions-event-payload.js"
-import { appendOutputLine, appendOutputLineHandler, notifyProjectEventRateLimit } from "./actions-output.js"
 import { openSelectedProjectPort } from "./actions-port-forwards.js"
+import { runProjectMenuCommand } from "./actions-project-menu-commands.js"
+import { connectProjectById } from "./actions-project-terminal.js"
 import { loadSelectedProjectPrompts } from "./actions-prompts.js"
 import {
   type BrowserActionContext,
@@ -15,25 +15,16 @@ import {
 } from "./actions-shared.js"
 import { loadSelectedProjectSkills } from "./actions-skills.js"
 import { loadSelectedProjectTasks } from "./actions-tasks.js"
-import {
-  type ApiEvent,
-  applyAllProjects,
-  applyProject,
-  deleteProject,
-  downAllProjects,
-  downProject,
-  loadProjectDetails,
-  loadProjectLogs,
-  loadProjectPs,
-  loadProjectTerminalSession,
-  startProjectTerminalSession
-} from "./api.js"
+import { applyProject, loadProjectDetails } from "./api.js"
 import type { BrowserMenuTag } from "./menu.js"
-import { openProjectEventStream } from "./project-events.js"
-import { outputScreen } from "./screen.js"
-import { buildPendingProjectActiveTerminalSession, buildProjectActiveTerminalSession } from "./terminal.js"
 
 export { submitCreateInputs } from "./actions-project-create.js"
+export { runApplyAllProjects } from "./actions-project-menu-commands.js"
+export { attachProjectTerminalById, connectProjectById } from "./actions-project-terminal.js"
+
+type ProjectMenuActionTag = Exclude<BrowserMenuTag, "Auth" | "ProjectAuth">
+type ProjectMenuCommandTag = Parameters<typeof runProjectMenuCommand>[0]
+type ProjectMenuAction = (context: BrowserActionContext) => void
 
 export const loadSelectedProjectInfo = (
   context: BrowserActionContext,
@@ -64,224 +55,6 @@ export const connectSelectedProject = (context: BrowserActionContext) => {
     return
   }
   connectProjectById(projectId, context, projectKey)
-}
-
-const resolveProjectTerminalKey = (
-  projectId: string,
-  context: BrowserActionContext,
-  projectKey?: string
-): string | null => {
-  if (projectKey !== undefined && projectKey.trim().length > 0) {
-    return projectKey
-  }
-  if (context.selectedProjectId === projectId && context.selectedProjectKey !== null) {
-    return context.selectedProjectKey
-  }
-  context.setMessage(`Project key is missing for ${projectId}.`)
-  return null
-}
-
-const randomHex = (bytes: number): string => {
-  if (typeof globalThis.crypto.getRandomValues === "function") {
-    const values = new Uint8Array(bytes)
-    globalThis.crypto.getRandomValues(values)
-    return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("")
-  }
-
-  return Date.now().toString(16).padStart(bytes * 2, "0").slice(0, bytes * 2)
-}
-
-/**
- * Converts a hex buffer into an RFC 4122-shaped UUID v4 string.
- *
- * @pure true
- * @precondition hex contains hexadecimal characters and may be shorter or longer than 32 chars.
- * @postcondition result length is 36, result[14] is "4", and result[19] has RFC variant bits 10xx.
- * @invariant output preserves the padded/truncated 128-bit payload except version and variant bits.
- * @complexity O(n) time for input normalization, O(1) output space.
- */
-const formatUuidV4 = (hex: string): string => {
-  const value = hex.padEnd(32, "0").slice(0, 32)
-  const variant = ((Number.parseInt(value.slice(16, 18), 16) & 0x3F) | 0x80)
-    .toString(16)
-    .padStart(2, "0")
-  const segments = [
-    value.slice(0, 8),
-    value.slice(8, 12),
-    `4${value.slice(13, 16)}`,
-    `${variant}${value.slice(18, 20)}`,
-    value.slice(20, 32)
-  ]
-  return segments.join("-")
-}
-
-const createPendingTerminalSessionId = (): string => {
-  if (typeof globalThis.crypto.randomUUID === "function") {
-    return globalThis.crypto.randomUUID()
-  }
-
-  return formatUuidV4(randomHex(16))
-}
-
-type ProjectActiveTerminalSessionArgs = Omit<
-  Parameters<typeof buildProjectActiveTerminalSession>[0],
-  "onExit" | "onReady"
->
-
-const addProjectTerminalSession = (
-  context: BrowserActionContext,
-  args: ProjectActiveTerminalSessionArgs
-) => {
-  context.addTerminalSession(buildProjectActiveTerminalSession({
-    ...args,
-    onExit: context.reloadDashboard,
-    onReady: context.reloadDashboard
-  }))
-}
-
-const readTerminalSessionCreatedId = (
-  event: ApiEvent,
-  requestId: string
-): string | null => {
-  if (event.type !== "project.ssh.session") {
-    return null
-  }
-  if (readEventPayloadString(event, "phase") !== "created") {
-    return null
-  }
-  if (readEventPayloadString(event, "requestId") !== requestId) {
-    return null
-  }
-  return readEventPayloadString(event, "sessionId")
-}
-
-const readTerminalStartupFailure = (
-  event: ApiEvent,
-  requestId: string
-): string | null => {
-  if (event.type !== "project.deployment.status") {
-    return null
-  }
-  if (readEventPayloadString(event, "phase") !== "ssh.failed") {
-    return null
-  }
-  if (readEventPayloadString(event, "requestId") !== requestId) {
-    return null
-  }
-  return readEventPayloadString(event, "message") ?? "SSH session startup failed."
-}
-
-export const connectProjectById = (
-  projectId: string,
-  context: BrowserActionContext,
-  projectKey?: string
-) => {
-  const resolvedProjectKey = resolveProjectTerminalKey(projectId, context, projectKey)
-  if (resolvedProjectKey === null) {
-    return
-  }
-  const pendingSessionId = createPendingTerminalSessionId()
-  const pendingSessionCreatedAt = new Date().toISOString()
-  const projectDisplayName = context.selectedProjectId === projectId && context.selectedProjectName !== null
-    ? context.selectedProjectName
-    : resolvedProjectKey
-  let pendingSessionFinalized = false
-  let attachedSessionId: string | null = null
-  const handleOutputLine = appendOutputLineHandler(context)
-  const renderPendingTerminalSession = (
-    message?: string,
-    phase: "connecting" | "error" = "connecting"
-  ) =>
-    buildPendingProjectActiveTerminalSession({
-      createdAt: pendingSessionCreatedAt,
-      onExit: context.reloadDashboard,
-      pendingSessionId,
-      phase,
-      projectDisplayName,
-      projectId,
-      projectKey: resolvedProjectKey,
-      ...(message === undefined ? {} : { message })
-    })
-  context.setSelectedProjectId(projectId)
-  context.setOutput("")
-  appendOutputLine(context, "[ssh.prepare] Preparing SSH session")
-  context.addTerminalSession(renderPendingTerminalSession())
-  let stream: ReturnType<typeof openProjectEventStream> | null = null
-  const closeStream = () => {
-    stream?.close()
-    stream = null
-  }
-  const showPendingTerminalError = (error: string) => {
-    pendingSessionFinalized = true
-    appendOutputLine(context, `[error] ${error}`)
-    context.addTerminalSession(renderPendingTerminalSession(error, "error"))
-  }
-  const attachCreatedSession = (sessionId: string) => {
-    if (attachedSessionId !== null) {
-      return
-    }
-    attachedSessionId = sessionId
-    withBusy({
-      context,
-      effect: loadProjectTerminalSession(resolvedProjectKey, sessionId),
-      label: "Attaching SSH terminal",
-      onFailure: (error) => {
-        showPendingTerminalError(error)
-        closeStream()
-      },
-      onSuccess: (session) => {
-        pendingSessionFinalized = true
-        context.reloadDashboard()
-        context.closeTerminalSession(pendingSessionId)
-        addProjectTerminalSession(context, {
-          projectDisplayName,
-          projectId,
-          projectKey: resolvedProjectKey,
-          session
-        })
-        context.setMessage(`Project is ready. SSH terminal is connecting for ${projectDisplayName}.`)
-        closeStream()
-      }
-    })
-  }
-  withBusy({
-    context,
-    effect: startProjectTerminalSession(resolvedProjectKey, pendingSessionId),
-    label: "Opening SSH terminal",
-    onFailure: (error) => {
-      showPendingTerminalError(error)
-    },
-    onSuccess: (accepted) => {
-      appendOutputLine(context, `[ssh.prepare] SSH terminal request accepted (${accepted.requestId})`)
-      context.setMessage(`SSH terminal startup is running for ${projectDisplayName}. Live logs are open.`)
-      stream = openProjectEventStream(projectId, {
-        initialCursor: accepted.cursor,
-        onEvent: (event) => {
-          const failure = readTerminalStartupFailure(event, accepted.requestId)
-          if (failure !== null) {
-            showPendingTerminalError(failure)
-            context.setMessage(failure)
-            closeStream()
-            return
-          }
-
-          const sessionId = readTerminalSessionCreatedId(event, accepted.requestId)
-          if (sessionId !== null) {
-            attachCreatedSession(sessionId)
-          }
-        },
-        onLine: (line) => {
-          handleOutputLine(line)
-          if (!pendingSessionFinalized) {
-            context.addTerminalSession(renderPendingTerminalSession(line))
-          }
-        },
-        onRateLimit: () => {
-          notifyProjectEventRateLimit(context)
-        }
-      })
-    }
-  })
 }
 
 const applyProjectConfirmMessage = (
@@ -327,207 +100,40 @@ export const applySelectedProject = (
   applyProjectById(projectId, context, gpu)
 }
 
-export const attachProjectTerminalById = (
-  projectId: string,
-  projectKey: string,
-  projectDisplayName: string,
-  sessionId: string,
-  context: BrowserActionContext
-) => {
-  const resolvedProjectKey = resolveProjectTerminalKey(projectId, context, projectKey)
-  if (resolvedProjectKey === null) {
-    return
-  }
-  context.setSelectedProjectId(projectId)
-  withBusy({
-    context,
-    effect: loadProjectTerminalSession(resolvedProjectKey, sessionId),
-    label: "Attaching SSH terminal",
-    onSuccess: (session) => {
-      addProjectTerminalSession(context, {
-        projectDisplayName,
-        projectId,
-        projectKey: resolvedProjectKey,
-        session
-      })
-      context.setMessage(`Attached SSH terminal for ${projectDisplayName}.`)
-    }
-  })
+const setCreateModeMessage = (context: BrowserActionContext): void => {
+  context.setMessage("Create mode is active. Paste URL or URL + flags, then choose Quick Create or Settings.")
 }
 
-const runProjectOutputAction = (
-  context: BrowserActionContext,
-  effect: (projectId: string) => ReturnType<typeof loadProjectPs>,
-  label: string,
-  successMessage: string
-) => {
-  const projectId = requireSelectedProjectId(context)
-  if (projectId === null) {
-    return
-  }
-  withBusy({
-    context,
-    effect: effect(projectId),
-    label,
-    onSuccess: (output) => {
-      context.setOutput(output)
-      context.setActiveScreen(outputScreen())
-      context.setMessage(successMessage)
-    }
-  })
+const setShareModeMessage = (context: BrowserActionContext): void => {
+  context.setMessage("Share screen is active.")
 }
 
-const runDownProject = (context: BrowserActionContext) => {
-  const projectId = requireSelectedProjectId(context)
-  if (projectId === null || !confirmAction(`Stop ${projectActionLabel(context)}?`)) {
-    return
-  }
-  withBusy({
-    context,
-    effect: downProject(projectId),
-    label: "Stopping project",
-    onSuccess: () => {
-      context.reloadDashboard()
-      context.setMessage("Project stopped.")
-    }
-  })
+const runProjectMenuCommandAction = (currentMenu: ProjectMenuCommandTag): ProjectMenuAction => (context) => {
+  runProjectMenuCommand(currentMenu, context)
 }
 
-const runDeleteProject = (context: BrowserActionContext) => {
-  const projectId = requireSelectedProjectId(context)
-  if (projectId === null || !confirmAction(`Delete ${projectActionLabel(context)}?`)) {
-    return
-  }
-  withBusy({
-    context,
-    effect: deleteProject(projectId),
-    label: "Deleting project",
-    onSuccess: () => {
-      context.reloadDashboard()
-      context.setOutput("")
-      context.setProjectAuthSnapshot(null)
-      context.setSelectedProject(null)
-      context.setSelectedProjectId(null)
-      context.setMessage("Project deleted.")
-    }
-  })
-}
-
-const runDownAllProjects = (context: BrowserActionContext) => {
-  if (!confirmAction("Stop all docker-git projects?")) {
-    return
-  }
-  withBusy({
-    context,
-    effect: downAllProjects(),
-    label: "Stopping all projects",
-    onSuccess: () => {
-      context.reloadDashboard()
-      context.setMessage("All projects were asked to stop.")
-    }
-  })
-}
-
-export const runApplyAllProjects = (context: BrowserActionContext) => {
-  if (!confirmAction("Apply docker-git config to all projects?")) {
-    return
-  }
-  withBusy({
-    context,
-    effect: applyAllProjects(false),
-    label: "Applying all projects",
-    onSuccess: () => {
-      context.reloadDashboard()
-      context.setMessage("Applied docker-git config to all projects.")
-    }
-  })
+const projectMenuActions: Record<ProjectMenuActionTag, ProjectMenuAction> = {
+  Browser: openSelectedProjectBrowser,
+  Create: setCreateModeMessage,
+  Databases: openSelectedProjectDatabaseEditor,
+  Delete: runProjectMenuCommandAction("Delete"),
+  Down: runProjectMenuCommandAction("Down"),
+  DownAll: runProjectMenuCommandAction("DownAll"),
+  Info: loadSelectedProjectInfo,
+  Logs: runProjectMenuCommandAction("Logs"),
+  Ports: openSelectedProjectPort,
+  Prompts: loadSelectedProjectPrompts,
+  Quit: runProjectMenuCommandAction("Quit"),
+  Select: connectSelectedProject,
+  Share: setShareModeMessage,
+  Skills: loadSelectedProjectSkills,
+  Status: runProjectMenuCommandAction("Status"),
+  Tasks: loadSelectedProjectTasks
 }
 
 export const runProjectMenuAction = (
   currentMenu: Exclude<BrowserMenuTag, "Auth" | "ProjectAuth">,
   context: BrowserActionContext
 ) => {
-  if (currentMenu === "Create") {
-    context.setMessage("Create mode is active. Paste URL or URL + flags, then choose Quick Create or Settings.")
-    return
-  }
-  if (currentMenu === "Select") {
-    connectSelectedProject(context)
-    return
-  }
-  if (currentMenu === "Info") {
-    loadSelectedProjectInfo(context)
-    return
-  }
-  if (currentMenu === "Ports") {
-    openSelectedProjectPort(context)
-    return
-  }
-  if (currentMenu === "Databases") {
-    openSelectedProjectDatabaseEditor(context)
-    return
-  }
-  if (currentMenu === "Browser") {
-    openSelectedProjectBrowser(context)
-    return
-  }
-  if (currentMenu === "Tasks") {
-    loadSelectedProjectTasks(context)
-    return
-  }
-  if (currentMenu === "Prompts") {
-    loadSelectedProjectPrompts(context)
-    return
-  }
-  if (currentMenu === "Skills") {
-    loadSelectedProjectSkills(context)
-    return
-  }
-  if (currentMenu === "Share") {
-    context.setMessage("Share screen is active.")
-    return
-  }
-  runProjectMenuCommand(currentMenu, context)
-}
-
-const runProjectMenuCommand = (
-  currentMenu: Exclude<
-    BrowserMenuTag,
-    | "Auth"
-    | "ProjectAuth"
-    | "Browser"
-    | "Create"
-    | "Databases"
-    | "Select"
-    | "Info"
-    | "Ports"
-    | "Prompts"
-    | "Share"
-    | "Skills"
-    | "Tasks"
-  >,
-  context: BrowserActionContext
-) => {
-  if (currentMenu === "Status") {
-    runProjectOutputAction(context, loadProjectPs, "Loading docker compose ps", "docker compose ps loaded.")
-    return
-  }
-  if (currentMenu === "Logs") {
-    runProjectOutputAction(context, loadProjectLogs, "Loading logs", "Logs loaded.")
-    return
-  }
-  if (currentMenu === "Down") {
-    runDownProject(context)
-    return
-  }
-  if (currentMenu === "DownAll") {
-    runDownAllProjects(context)
-    return
-  }
-  if (currentMenu === "Delete") {
-    runDeleteProject(context)
-    return
-  }
-  globalThis.close()
-  context.setMessage("Quit requested. If the browser blocked window.close(), close the tab manually.")
+  projectMenuActions[currentMenu](context)
 }

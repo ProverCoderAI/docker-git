@@ -17,6 +17,25 @@ import { Box, Button, Text, TextInput } from "../ui/primitives.js"
 import { HelpLines } from "../ui/shared.js"
 import type { CreateSubmitMode } from "./app-ready-create.js"
 
+type CreatePanelProps = {
+  readonly compact: boolean
+  readonly controllerCwd: string
+  readonly createView: CreateFlowView
+  readonly projectsRoot: string
+  readonly onBufferChange: (buffer: string) => void
+  readonly onCancel: () => void
+  readonly onSubmit: (mode: CreateSubmitMode) => void
+}
+
+type CreatePanelModel = {
+  readonly activeStep: CreateStep
+  readonly isRepoStep: boolean
+  readonly leftChoiceBuffer: string | null
+  readonly prompt: ReturnType<typeof createPrompt>
+  readonly rightChoiceBuffer: string | null
+  readonly visibleSteps: ReadonlyArray<CreateStep>
+}
+
 const renderStepColor = (active: boolean): string => active ? "#56f39a" : "#8fa6c4"
 
 const webCreateSettingsNavigationHint = "↑ - up, ↓ - down, Enter - apply + down"
@@ -78,107 +97,120 @@ const CreatePromptInput = (
   </>
 )
 
-export const CreatePanel = (
-  {
-    compact,
-    controllerCwd,
-    createView,
-    onBufferChange,
-    onCancel,
-    onSubmit,
-    projectsRoot
-  }: {
-    readonly compact: boolean
-    readonly controllerCwd: string
-    readonly createView: CreateFlowView
-    readonly projectsRoot: string
-    readonly onBufferChange: (buffer: string) => void
-    readonly onCancel: () => void
-    readonly onSubmit: (mode: CreateSubmitMode) => void
-  }
-): JSX.Element => {
+const resolveCreatePanelModel = (
+  { compact, controllerCwd, createView, projectsRoot }: Pick<
+    CreatePanelProps,
+    "compact" | "controllerCwd" | "createView" | "projectsRoot"
+  >
+): CreatePanelModel => {
   const prompt = createPrompt({ cwd: controllerCwd, projectsRoot }, createView)
   const steps = resolveCreateDisplaySteps()
   const activeStep = isDisplayModeFlowView(createView) ? steps[createView.step] ?? "repoUrl" : "repoUrl"
   const isRepoStep = isCreateFlowRepoStep(createView)
-  const visibleSteps = compact && isRepoStep ? [activeStep] : steps
-  const leftChoiceBuffer = isDisplayModeFlowView(createView)
-    ? resolveCreateSettingsChoiceBuffer(createView, "left")
-    : null
-  const rightChoiceBuffer = isDisplayModeFlowView(createView)
-    ? resolveCreateSettingsChoiceBuffer(createView, "right")
-    : null
-  const chooseSettingsBuffer = (direction: CreateSettingsChoiceDirection): void => {
-    if (isDisplayModeFlowView(createView)) {
-      const nextBuffer = resolveCreateSettingsChoiceBuffer(createView, direction)
-      if (nextBuffer !== null) {
-        onBufferChange(nextBuffer)
-      }
-    }
+
+  return {
+    activeStep,
+    isRepoStep,
+    leftChoiceBuffer: isDisplayModeFlowView(createView)
+      ? resolveCreateSettingsChoiceBuffer(createView, "left")
+      : null,
+    prompt,
+    rightChoiceBuffer: isDisplayModeFlowView(createView)
+      ? resolveCreateSettingsChoiceBuffer(createView, "right")
+      : null,
+    visibleSteps: compact && isRepoStep ? [activeStep] : steps
   }
+}
+
+const createChoiceHandler = (
+  createView: CreateFlowView,
+  direction: CreateSettingsChoiceDirection,
+  onBufferChange: (buffer: string) => void
+): () => void =>
+() => {
+  if (!isDisplayModeFlowView(createView)) {
+    return
+  }
+  const nextBuffer = resolveCreateSettingsChoiceBuffer(createView, direction)
+  if (nextBuffer !== null) {
+    onBufferChange(nextBuffer)
+  }
+}
+
+const CreateSubmitButtons = (
+  {
+    isRepoStep,
+    onSubmit
+  }: {
+    readonly isRepoStep: boolean
+    readonly onSubmit: (mode: CreateSubmitMode) => void
+  }
+): JSX.Element => (
+  isRepoStep
+    ? (
+      <Box gap={1} marginTop={1}>
+        <Button
+          label="Quick Create"
+          onPress={() => {
+            onSubmit("quick-create")
+          }}
+        />
+        <Button
+          label="Settings"
+          onPress={() => {
+            onSubmit("advance")
+          }}
+        />
+      </Box>
+    )
+    : (
+      <Box gap={1} marginTop={1}>
+        <Button
+          label="Done"
+          onPress={() => {
+            onSubmit("complete-settings")
+          }}
+        />
+      </Box>
+    )
+)
+
+export const CreatePanel = (
+  props: CreatePanelProps
+): JSX.Element => {
+  const { compact, controllerCwd, createView, onBufferChange, onCancel, onSubmit } = props
+  const model = resolveCreatePanelModel(props)
+  const leftChoiceAction = model.leftChoiceBuffer === null
+    ? undefined
+    : createChoiceHandler(createView, "left", onBufferChange)
+  const rightChoiceAction = model.rightChoiceBuffer === null
+    ? undefined
+    : createChoiceHandler(createView, "right", onBufferChange)
 
   return (
     <Box flexDirection="column">
       <Text bold={true} fg="#8be9fd">docker-git / Create</Text>
       <CreateStepsList
-        activeStep={activeStep}
+        activeStep={model.activeStep}
         activeBuffer={createView.buffer}
-        defaults={prompt.defaults}
-        visibleSteps={visibleSteps}
+        defaults={model.prompt.defaults}
+        visibleSteps={model.visibleSteps}
       />
       <Box flexDirection="column" marginTop={1}>
-        <Text fg="#d6e5f7">{prompt.label}:</Text>
+        <Text fg="#d6e5f7">{model.prompt.label}:</Text>
         <CreatePromptInput
           createView={createView}
-          isRepoStep={isRepoStep}
-          {...(leftChoiceBuffer === null
-            ? {}
-            : {
-              onArrowLeft: () => {
-                chooseSettingsBuffer("left")
-              }
-            })}
-          {...(rightChoiceBuffer === null
-            ? {}
-            : {
-              onArrowRight: () => {
-                chooseSettingsBuffer("right")
-              }
-            })}
+          isRepoStep={model.isRepoStep}
+          {...(leftChoiceAction === undefined ? {} : { onArrowLeft: leftChoiceAction })}
+          {...(rightChoiceAction === undefined ? {} : { onArrowRight: rightChoiceAction })}
           onBufferChange={onBufferChange}
           onCancel={onCancel}
           onSubmit={onSubmit}
-          promptLabel={prompt.label}
+          promptLabel={model.prompt.label}
         />
       </Box>
-      {isRepoStep
-        ? (
-          <Box gap={1} marginTop={1}>
-            <Button
-              label="Quick Create"
-              onPress={() => {
-                onSubmit("quick-create")
-              }}
-            />
-            <Button
-              label="Settings"
-              onPress={() => {
-                onSubmit("advance")
-              }}
-            />
-          </Box>
-        )
-        : (
-          <Box gap={1} marginTop={1}>
-            <Button
-              label="Done"
-              onPress={() => {
-                onSubmit("complete-settings")
-              }}
-            />
-          </Box>
-        )}
-      <CreateHintBlock compact={compact} controllerCwd={controllerCwd} isRepoStep={isRepoStep} />
+      <CreateSubmitButtons isRepoStep={model.isRepoStep} onSubmit={onSubmit} />
+      <CreateHintBlock compact={compact} controllerCwd={controllerCwd} isRepoStep={model.isRepoStep} />
     </Box>
   )
 }
