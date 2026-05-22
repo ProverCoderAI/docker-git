@@ -1,3 +1,15 @@
+import {
+  createTerminalSelectionDragController,
+  forceTerminalSelectionModifier,
+  suppressTerminalMouseReport,
+  type TerminalCopyMouseEvent,
+  type TerminalCopyMouseEventType,
+  type TerminalMouseButtonEvent,
+  type TerminalSelectionDragTarget
+} from "./terminal-copy-selection-drag.js"
+
+export { forceTerminalSelectionModifier } from "./terminal-copy-selection-drag.js"
+
 export type TerminalMouseTrackingMode = "any" | "drag" | "none" | "vt200" | "x10"
 
 type TerminalSelectionTarget = {
@@ -11,15 +23,6 @@ export type TerminalCopyInteractionTerminal = TerminalSelectionTarget & {
   }
 }
 
-type TerminalMouseButtonEvent = {
-  readonly button: number
-}
-
-type TerminalSelectionModifierEvent = {
-  readonly altKey: boolean
-  readonly shiftKey: boolean
-}
-
 type TerminalCopyClipboardData = {
   readonly setData: (format: string, data: string) => void
 }
@@ -28,35 +31,6 @@ type TerminalCopyClipboardEvent = {
   readonly clipboardData: TerminalCopyClipboardData | null
   readonly preventDefault: () => void
   readonly stopPropagation: () => void
-}
-
-type TerminalCopyMouseEvent = TerminalMouseButtonEvent & TerminalSelectionModifierEvent & {
-  readonly buttons?: number | undefined
-  readonly clientX?: number | undefined
-  readonly clientY?: number | undefined
-  readonly ctrlKey?: boolean | undefined
-  readonly detail?: number | undefined
-  readonly metaKey?: boolean | undefined
-  readonly preventDefault?: (() => void) | undefined
-  readonly screenX?: number | undefined
-  readonly screenY?: number | undefined
-  readonly stopImmediatePropagation?: (() => void) | undefined
-  readonly stopPropagation?: (() => void) | undefined
-}
-
-type TerminalSelectionDragEventType = "mousemove" | "mouseup"
-type TerminalCopyMouseEventType = "mousedown" | TerminalSelectionDragEventType
-
-type TerminalSelectionDragListenerRegistration = (
-  type: TerminalSelectionDragEventType,
-  listener: (event: TerminalCopyMouseEvent) => void,
-  options: true
-) => void
-
-type TerminalSelectionDragTarget = {
-  readonly addEventListener: TerminalSelectionDragListenerRegistration
-  readonly dispatchEvent?: ((event: Event) => boolean) | undefined
-  readonly removeEventListener: TerminalSelectionDragListenerRegistration
 }
 
 type TerminalCopyListenerRegistration = {
@@ -75,22 +49,9 @@ type TerminalCopyInteractionArgs = {
   readonly terminal: TerminalCopyInteractionTerminal
 }
 
-type TerminalSelectionDragController = {
-  readonly dispose: () => void
-  readonly start: () => void
-}
-
 const primaryMouseButton = 0
 const secondaryMouseButton = 2
-
-const macPlatformNames = new Set(["Mac68K", "MacIntel", "Macintosh", "MacPPC"])
-
-const currentNavigatorPlatform = (): string => {
-  if (typeof navigator === "undefined") {
-    return ""
-  }
-  return navigator.platform
-}
+const terminalSelectionContextSnapshotTtlMs = 10_000
 
 const isPrimaryMouseButton = (event: TerminalMouseButtonEvent): boolean => event.button === primaryMouseButton
 
@@ -109,18 +70,6 @@ export const shouldForceTerminalSelectionContext = (
   terminal: TerminalCopyInteractionTerminal
 ): boolean => isSecondaryMouseButton(event) && terminal.hasSelection()
 
-const terminalSelectionModifier = (platform: string): keyof TerminalSelectionModifierEvent =>
-  macPlatformNames.has(platform) ? "altKey" : "shiftKey"
-
-export const forceTerminalSelectionModifier = (
-  event: TerminalSelectionModifierEvent,
-  platform: string = currentNavigatorPlatform()
-): boolean =>
-  Reflect.defineProperty(event, terminalSelectionModifier(platform), {
-    configurable: true,
-    value: true
-  })
-
 export const writeTerminalSelectionToClipboardData = (
   terminal: TerminalSelectionTarget,
   clipboardData: TerminalCopyClipboardData | null
@@ -136,182 +85,131 @@ export const writeTerminalSelectionToClipboardData = (
   return true
 }
 
-const resolveTerminalSelectionDragTarget = (
-  host: TerminalCopyInteractionHost
-): TerminalSelectionDragTarget => host.ownerDocument ?? host
+class TerminalSelectionContextSnapshot {
+  private selection = ""
+  private timer: ReturnType<typeof setTimeout> | null = null
 
-const optionalNumber = (value: number | undefined): number => value ?? 0
+  constructor(private readonly terminal: TerminalSelectionTarget) {}
 
-const optionalBoolean = (value: boolean | undefined): boolean => value ?? false
-
-const forcedTerminalMouseUpInit = (event: TerminalCopyMouseEvent): MouseEventInit => {
-  const selectionModifier = terminalSelectionModifier(currentNavigatorPlatform())
-  return {
-    altKey: selectionModifier === "altKey" ? true : event.altKey,
-    bubbles: true,
-    button: event.button,
-    buttons: 0,
-    cancelable: true,
-    clientX: optionalNumber(event.clientX),
-    clientY: optionalNumber(event.clientY),
-    ctrlKey: optionalBoolean(event.ctrlKey),
-    detail: optionalNumber(event.detail),
-    metaKey: optionalBoolean(event.metaKey),
-    screenX: optionalNumber(event.screenX),
-    screenY: optionalNumber(event.screenY),
-    shiftKey: selectionModifier === "shiftKey" ? true : event.shiftKey
-  }
-}
-
-const defineMouseEventProperty = (
-  event: Event,
-  property: string,
-  value: boolean | number
-): void => {
-  Reflect.defineProperty(event, property, {
-    configurable: true,
-    value
-  })
-}
-
-const copyMouseEventInitProperties = (
-  event: Event,
-  init: MouseEventInit
-): void => {
-  defineMouseEventProperty(event, "altKey", optionalBoolean(init.altKey))
-  defineMouseEventProperty(event, "button", optionalNumber(init.button))
-  defineMouseEventProperty(event, "buttons", optionalNumber(init.buttons))
-  defineMouseEventProperty(event, "clientX", optionalNumber(init.clientX))
-  defineMouseEventProperty(event, "clientY", optionalNumber(init.clientY))
-  defineMouseEventProperty(event, "ctrlKey", optionalBoolean(init.ctrlKey))
-  defineMouseEventProperty(event, "detail", optionalNumber(init.detail))
-  defineMouseEventProperty(event, "metaKey", optionalBoolean(init.metaKey))
-  defineMouseEventProperty(event, "screenX", optionalNumber(init.screenX))
-  defineMouseEventProperty(event, "screenY", optionalNumber(init.screenY))
-  defineMouseEventProperty(event, "shiftKey", optionalBoolean(init.shiftKey))
-}
-
-const createForcedTerminalMouseUpEvent = (
-  sourceEvent: TerminalCopyMouseEvent
-): Event => {
-  const init = forcedTerminalMouseUpInit(sourceEvent)
-  const event = typeof MouseEvent === "function"
-    ? new MouseEvent("mouseup", init)
-    : new Event("mouseup", { bubbles: true, cancelable: true })
-  copyMouseEventInitProperties(event, init)
-  return event
-}
-
-const suppressOriginalTerminalMouseUp = (event: TerminalCopyMouseEvent): void => {
-  event.preventDefault?.()
-  event.stopPropagation?.()
-  event.stopImmediatePropagation?.()
-}
-
-const suppressTerminalMouseReport = (event: TerminalCopyMouseEvent): void => {
-  event.stopPropagation?.()
-  event.stopImmediatePropagation?.()
-}
-
-const replayForcedTerminalMouseUp = (
-  target: TerminalSelectionDragTarget,
-  event: TerminalCopyMouseEvent
-): void => {
-  target.dispatchEvent?.(createForcedTerminalMouseUpEvent(event))
-}
-
-const createTerminalSelectionDragController = (
-  host: TerminalCopyInteractionHost
-): TerminalSelectionDragController => {
-  let forcedSelectionDrag = false
-  let selectionDragTarget: TerminalSelectionDragTarget | null = null
-
-  const clearSelectionDrag = (): void => {
-    if (selectionDragTarget === null) {
-      forcedSelectionDrag = false
-      return
+  readonly clear = (): void => {
+    this.selection = ""
+    if (this.timer !== null) {
+      clearTimeout(this.timer)
+      this.timer = null
     }
-    selectionDragTarget.removeEventListener("mousemove", onMouseMove, true)
-    selectionDragTarget.removeEventListener("mouseup", onMouseUp, true)
-    selectionDragTarget = null
-    forcedSelectionDrag = false
   }
 
-  const onMouseMove = (event: TerminalCopyMouseEvent): void => {
-    if (!forcedSelectionDrag) {
+  readonly has = (): boolean => this.selection.length > 0
+
+  readonly refresh = (): boolean => {
+    const selection = this.terminal.getSelection()
+    if (selection.length === 0) {
+      this.clear()
+      return false
+    }
+    this.selection = selection
+    if (this.timer !== null) {
+      clearTimeout(this.timer)
+    }
+    this.timer = setTimeout(this.clear, terminalSelectionContextSnapshotTtlMs)
+    return true
+  }
+
+  readonly writeToClipboardData = (clipboardData: TerminalCopyClipboardData | null): boolean => {
+    if (clipboardData === null || this.selection.length === 0) {
+      return false
+    }
+    clipboardData.setData("text/plain", this.selection)
+    return true
+  }
+}
+
+class TerminalCopyInteractionController {
+  private readonly selectionContext: TerminalSelectionContextSnapshot
+  private readonly selectionDrag: ReturnType<typeof createTerminalSelectionDragController>
+
+  constructor(private readonly args: TerminalCopyInteractionArgs) {
+    this.selectionContext = new TerminalSelectionContextSnapshot(args.terminal)
+    this.selectionDrag = createTerminalSelectionDragController(args.host)
+  }
+
+  readonly attach = (): { readonly dispose: () => void } => {
+    this.args.host.addEventListener("mousedown", this.onMouseDown, true)
+    this.args.host.addEventListener("mouseup", this.onMouseUp, true)
+    this.args.host.addEventListener("contextmenu", this.onContextMenu, true)
+    this.args.host.addEventListener("copy", this.onCopy, true)
+    return { dispose: this.dispose }
+  }
+
+  private readonly shouldProtectSelectionContext = (event: TerminalCopyMouseEvent): boolean =>
+    isSecondaryMouseButton(event) && (this.selectionContext.has() || this.args.terminal.hasSelection())
+
+  private readonly onSelectionContextMouseEvent = (event: TerminalCopyMouseEvent): boolean => {
+    if (!this.shouldProtectSelectionContext(event)) {
+      return false
+    }
+    forceTerminalSelectionModifier(event)
+    if (this.args.terminal.hasSelection()) {
+      this.selectionContext.refresh()
+    }
+    return true
+  }
+
+  private readonly onMouseDown = (event: TerminalCopyMouseEvent): void => {
+    if (isPrimaryMouseButton(event)) {
+      this.selectionContext.clear()
+    }
+    const forceBrowserSelection = shouldForceBrowserTerminalSelection(event, this.args.terminal)
+    const forceSelectionContext = shouldForceTerminalSelectionContext(event, this.args.terminal)
+    if (!forceBrowserSelection && !forceSelectionContext) {
+      if (isSecondaryMouseButton(event)) {
+        this.selectionContext.clear()
+      }
       return
     }
     forceTerminalSelectionModifier(event)
-  }
-
-  const onMouseUp = (event: TerminalCopyMouseEvent): void => {
-    if (!forcedSelectionDrag) {
+    if (forceSelectionContext) {
+      this.selectionContext.refresh()
+      suppressTerminalMouseReport(event)
       return
     }
-    const target = selectionDragTarget
-    forceTerminalSelectionModifier(event)
-    if (target?.dispatchEvent !== undefined) {
-      // CHANGE: replay a clean document mouseup for xterm selection finalization.
-      // WHY: xterm's mouse-report mouseup treats the original release as pty input,
-      // which triggers onUserInput and clears the just-created selection.
-      suppressOriginalTerminalMouseUp(event)
-      clearSelectionDrag()
-      replayForcedTerminalMouseUp(target, event)
+    if (forceBrowserSelection) {
+      this.selectionDrag.start()
+    }
+  }
+
+  private readonly onMouseUp = (event: TerminalCopyMouseEvent): void => {
+    if (!this.onSelectionContextMouseEvent(event)) {
       return
     }
-    clearSelectionDrag()
+    suppressTerminalMouseReport(event)
   }
 
-  const startSelectionDrag = (): void => {
-    clearSelectionDrag()
-    forcedSelectionDrag = true
-    selectionDragTarget = resolveTerminalSelectionDragTarget(host)
-    selectionDragTarget.addEventListener("mousemove", onMouseMove, true)
-    selectionDragTarget.addEventListener("mouseup", onMouseUp, true)
+  private readonly onContextMenu = (event: TerminalCopyMouseEvent): void => {
+    this.onSelectionContextMouseEvent(event)
   }
 
-  return {
-    dispose: clearSelectionDrag,
-    start: startSelectionDrag
+  private readonly onCopy = (event: TerminalCopyClipboardEvent): void => {
+    const wroteSelection = writeTerminalSelectionToClipboardData(this.args.terminal, event.clipboardData)
+    const wroteSnapshot = wroteSelection ? false : this.selectionContext.writeToClipboardData(event.clipboardData)
+    if (!wroteSelection && !wroteSnapshot) {
+      return
+    }
+    this.selectionContext.clear()
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  private readonly dispose = (): void => {
+    this.selectionDrag.dispose()
+    this.selectionContext.clear()
+    this.args.host.removeEventListener("mousedown", this.onMouseDown, true)
+    this.args.host.removeEventListener("mouseup", this.onMouseUp, true)
+    this.args.host.removeEventListener("contextmenu", this.onContextMenu, true)
+    this.args.host.removeEventListener("copy", this.onCopy, true)
   }
 }
 
 export const attachTerminalCopyInteraction = (
   args: TerminalCopyInteractionArgs
-): { readonly dispose: () => void } => {
-  const selectionDrag = createTerminalSelectionDragController(args.host)
-
-  const onMouseDown = (event: TerminalCopyMouseEvent): void => {
-    const forceBrowserSelection = shouldForceBrowserTerminalSelection(event, args.terminal)
-    const forceSelectionContext = shouldForceTerminalSelectionContext(event, args.terminal)
-    if (!forceBrowserSelection && !forceSelectionContext) {
-      return
-    }
-    forceTerminalSelectionModifier(event)
-    if (forceSelectionContext) {
-      suppressTerminalMouseReport(event)
-      return
-    }
-    if (forceBrowserSelection) {
-      selectionDrag.start()
-    }
-  }
-  const onCopy = (event: TerminalCopyClipboardEvent): void => {
-    if (!writeTerminalSelectionToClipboardData(args.terminal, event.clipboardData)) {
-      return
-    }
-    event.preventDefault()
-    event.stopPropagation()
-  }
-
-  args.host.addEventListener("mousedown", onMouseDown, true)
-  args.host.addEventListener("copy", onCopy, true)
-
-  return {
-    dispose: () => {
-      selectionDrag.dispose()
-      args.host.removeEventListener("mousedown", onMouseDown, true)
-      args.host.removeEventListener("copy", onCopy, true)
-    }
-  }
-}
+): { readonly dispose: () => void } => new TerminalCopyInteractionController(args).attach()

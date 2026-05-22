@@ -21,7 +21,7 @@ export type TerminalCopyTestMouseEvent = Event & {
   readonly shiftKey: boolean
 }
 
-type TerminalCopyTestMouseType = "mousedown" | "mousemove" | "mouseup"
+type TerminalCopyTestMouseType = "contextmenu" | "mousedown" | "mousemove" | "mouseup"
 type TerminalCopyTestEventType = "copy" | TerminalCopyTestMouseType
 type TerminalCopyTestCopyListener = (event: TerminalCopyTestClipboardEvent) => void
 type TerminalCopyTestMouseListener = (event: TerminalCopyTestMouseEvent) => void
@@ -37,6 +37,7 @@ type TerminalCopyTestMouseOptions = Pick<
   TerminalCopyTestMouseEvent,
   "altKey" | "buttons" | "clientX" | "clientY" | "screenX" | "screenY" | "shiftKey"
 >
+const mouseTestEventTypes = new Set<string>(["contextmenu", "mousedown", "mousemove", "mouseup"])
 
 const isCopyTestListener = (
   type: TerminalCopyTestEventType,
@@ -50,7 +51,7 @@ const isMouseTestListener = (
 
 const isMouseTestEventType = (
   type: string
-): type is TerminalCopyTestMouseType => type === "mousedown" || type === "mousemove" || type === "mouseup"
+): type is TerminalCopyTestMouseType => mouseTestEventTypes.has(type)
 
 const isMouseTestListenerEntry = (
   entry: TerminalCopyTestListener
@@ -74,14 +75,22 @@ const optionalBoolean = (value: boolean | undefined): boolean => value ?? false
 
 const optionalNumber = (value: number | undefined): number => value ?? 0
 
-const defaultButtons = (type: TerminalCopyTestMouseType): number => type === "mouseup" ? 0 : 1
+const pressedButtonsByMouseButton: ReadonlyArray<number> = [1, 4, 2]
+
+const defaultButtons = (type: TerminalCopyTestMouseType, button: number): number => {
+  if (type === "contextmenu" || type === "mouseup") {
+    return 0
+  }
+  return pressedButtonsByMouseButton[button] ?? 0
+}
 
 const resolveMouseOptions = (
   type: TerminalCopyTestMouseType,
+  button: number,
   options: Partial<TerminalCopyTestMouseOptions>
 ): TerminalCopyTestMouseOptions => ({
   altKey: optionalBoolean(options.altKey),
-  buttons: options.buttons ?? defaultButtons(type),
+  buttons: options.buttons ?? defaultButtons(type, button),
   clientX: optionalNumber(options.clientX),
   clientY: optionalNumber(options.clientY),
   screenX: optionalNumber(options.screenX),
@@ -108,7 +117,7 @@ export class FakeTerminalCopyMouseEvent extends Event {
     options: Partial<TerminalCopyTestMouseOptions> = {}
   ) {
     super(type, { bubbles: true, cancelable: true })
-    const resolved = resolveMouseOptions(type, options)
+    const resolved = resolveMouseOptions(type, button, options)
     this.altKey = resolved.altKey
     this.button = button
     this.buttons = resolved.buttons
@@ -273,9 +282,8 @@ export const mouseEvent = (
   >
 ): FakeTerminalCopyMouseEvent => new FakeTerminalCopyMouseEvent(type, button, options)
 
-export const copyEvent = (
-  clipboardData: TerminalCopyTestClipboardData | null
-): FakeTerminalCopyClipboardEvent => new FakeTerminalCopyClipboardEvent(clipboardData)
+export const copyEvent = (clipboardData: TerminalCopyTestClipboardData | null): FakeTerminalCopyClipboardEvent =>
+  new FakeTerminalCopyClipboardEvent(clipboardData)
 
 export const expectNoDragListeners = (target: FakeTerminalCopyEventTarget): void => {
   expect(target.captureListenerCount("mousemove")).toBe(0)
@@ -286,9 +294,5 @@ export const expectSingleMouseEvent = (
   events: ReadonlyArray<TerminalCopyTestMouseEvent>
 ): TerminalCopyTestMouseEvent => {
   expect(events).toHaveLength(1)
-  const event = events[0]
-  if (event === undefined) {
-    throw new Error("Expected one mouse event.")
-  }
-  return event
+  return events[0] ?? expect.fail("Expected one mouse event.")
 }

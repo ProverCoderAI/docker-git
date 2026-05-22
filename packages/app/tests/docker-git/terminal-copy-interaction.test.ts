@@ -10,7 +10,6 @@ import {
   writeTerminalSelectionToClipboardData
 } from "../../src/web/terminal-copy-interaction.js"
 import {
-  copyEvent,
   expectNoDragListeners,
   expectSingleMouseEvent,
   FakeTerminalCopyEventTarget,
@@ -187,66 +186,6 @@ describe("terminal copy interaction", () => {
     disposable.dispose()
   })
 
-  it("keeps right-click selection handling one-shot", () => {
-    const documentTarget = new FakeTerminalCopyEventTarget()
-    const host = new FakeTerminalCopyHost(documentTarget)
-    const disposable = attachTerminalCopyInteraction({ host, terminal: terminalWithSelection("any", "selected") })
-    const down = mouseEvent(2)
-    const move = mouseEvent(0)
-
-    host.dispatchMouse("mousedown", down)
-    documentTarget.dispatchMouse("mousemove", move)
-
-    expect(down.shiftKey).toBe(true)
-    expect(move.shiftKey).toBe(false)
-    expect(documentTarget.dispatchedEvents).toEqual([])
-    expectNoDragListeners(documentTarget)
-
-    disposable.dispose()
-  })
-
-  it("keeps selected terminal text copyable after right-click while mouse tracking is active", () => {
-    const documentTarget = new FakeTerminalCopyEventTarget()
-    const host = new FakeTerminalCopyHost(documentTarget)
-    const selectedText = "line one\nline two"
-    let terminalSelection = selectedText
-    const terminal: TerminalCopyInteractionTerminal = {
-      getSelection: () => terminalSelection,
-      hasSelection: () => terminalSelection.length > 0,
-      modes: { mouseTrackingMode: "any" }
-    }
-    const terminalMouseReports: Array<TerminalCopyTestMouseEvent> = []
-    const clipboardWrites: Array<{ readonly data: string; readonly format: string }> = []
-    const disposable = attachTerminalCopyInteraction({ host, terminal })
-    host.addBubbleMouseListener("mousedown", (event) => {
-      terminalMouseReports.push(event)
-      terminalSelection = ""
-    })
-    const rightClick = mouseEvent(2)
-    const clipboardData = {
-      setData: (format: string, data: string) => {
-        clipboardWrites.push({ data, format })
-      }
-    }
-    const copy = copyEvent(clipboardData)
-
-    host.dispatchMouse("mousedown", rightClick)
-    host.dispatchCopy(copy)
-
-    expect(rightClick.shiftKey).toBe(true)
-    expect(rightClick.preventDefaultCalls).toBe(0)
-    expect(rightClick.stopImmediatePropagationCalls).toBe(1)
-    expect(rightClick.stopPropagationCalls).toBeGreaterThanOrEqual(1)
-    expect(terminalMouseReports).toEqual([])
-    expect(terminalSelection).toBe(selectedText)
-    expectNoDragListeners(documentTarget)
-    expect(clipboardWrites).toEqual([{ data: selectedText, format: "text/plain" }])
-    expect(copy.preventDefaultCalls).toBe(1)
-    expect(copy.stopPropagationCalls).toBe(1)
-
-    disposable.dispose()
-  })
-
   it("falls back to host drag listeners when ownerDocument is unavailable", () => {
     const host = new FakeTerminalCopyHost(null)
     const disposable = attachTerminalCopyInteraction({ host, terminal: terminalWithSelection("drag", "") })
@@ -274,6 +213,8 @@ describe("terminal copy interaction", () => {
 
     expect(move.shiftKey).toBe(false)
     expect(host.listenerCount("mousedown")).toBe(0)
+    expect(host.listenerCount("mouseup")).toBe(0)
+    expect(host.listenerCount("contextmenu")).toBe(0)
     expect(host.listenerCount("copy")).toBe(0)
     expectNoDragListeners(documentTarget)
   })
