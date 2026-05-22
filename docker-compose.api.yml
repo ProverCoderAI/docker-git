@@ -4,10 +4,13 @@ services:
       context: .
       dockerfile: packages/api/Dockerfile
       args:
+        DOCKER_GIT_CONTROLLER_REV: ${DOCKER_GIT_CONTROLLER_REV:-unknown}
+        DOCKER_GIT_CONTROLLER_BUILD_SKILLER: ${DOCKER_GIT_CONTROLLER_BUILD_SKILLER:-1}
         UBUNTU_APT_MIRROR: ${UBUNTU_APT_MIRROR:-}
     container_name: ${DOCKER_GIT_API_CONTAINER_NAME:-docker-git-api}
     environment:
       DOCKER_GIT_API_PORT: ${DOCKER_GIT_API_PORT:-3334}
+      DOCKER_GIT_CONTROLLER_REV: ${DOCKER_GIT_CONTROLLER_REV:-unknown}
       DOCKER_GIT_DOCKER_RUNTIME: ${DOCKER_GIT_DOCKER_RUNTIME:-isolated}
       DOCKER_HOST: ${DOCKER_GIT_CONTROLLER_DOCKER_HOST:-unix:///var/run/docker.sock}
       DOCKER_GIT_DOCKERD_TCP_HOST: ${DOCKER_GIT_DOCKERD_TCP_HOST:-tcp://0.0.0.0:2375}

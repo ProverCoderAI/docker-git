@@ -21,7 +21,13 @@ import {
 import { parseControllerRevisionEnvOutput } from "./controller-revision.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
-export { controllerGpuModeEnvKey, controllerRevisionForMode, parseControllerGpuMode } from "./controller-compose.js"
+export {
+  controllerBuildSkillerEnvKey,
+  controllerGpuModeEnvKey,
+  controllerRevisionForMode,
+  parseControllerBuildSkillerMode,
+  parseControllerGpuMode
+} from "./controller-compose.js"
 
 export type ControllerRuntime =
   | CommandExecutor.CommandExecutor

@@ -7,6 +7,7 @@ export const controllerRevisionEnvKey = "DOCKER_GIT_CONTROLLER_REV"
 
 const controllerRevisionInputs: ReadonlyArray<string> = [
   "docker-compose.yml",
+  "docker-compose.api.yml",
   "docker-compose.gpu.yml",
   "package.json",
   "bun.lock",
@@ -16,11 +17,23 @@ const controllerRevisionInputs: ReadonlyArray<string> = [
   "patches",
   "scripts",
   "packages/api",
-  "packages/lib"
+  "packages/docker-git-session-sync",
+  "packages/lib",
+  "third_party/skiller-desktop-skills-manager"
 ]
 
-const skippedDirectoryNames = new Set([".git", "node_modules", "dist", "dist-test", ".turbo"])
-const skippedFileNames = new Set([".DS_Store"])
+const skippedDirectoryNames = new Set([
+  ".git",
+  ".turbo",
+  ".vite",
+  "coverage",
+  "dist",
+  "dist-test",
+  "dist-web",
+  "node_modules",
+  "out"
+])
+const skippedFileNames = new Set([".DS_Store", ".git"])
 
 const appendChunk = (chunks: Array<string>, value: string): void => {
   chunks.push(value)
@@ -100,6 +113,35 @@ export const parseControllerRevisionEnvOutput = (output: string): string | null 
     return revision.length > 0 ? revision : null
   }
   return null
+}
+
+// CHANGE: parse the controller image revision label from Docker inspect output
+// WHY: bootstrap can skip rebuilding when an existing image already proves the required revision
+// QUOTE(ТЗ): "хочу сузить время билда докер контейнера"
+// REF: user-request-2026-05-22-controller-build-speed
+// SOURCE: n/a
+// FORMAT THEOREM: forall output: blank(output) or missing_label(output) -> null
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: non-empty label text is preserved after trimming
+// COMPLEXITY: O(n) where n = |output|
+/**
+ * Parses the docker-git controller revision label emitted by `docker image inspect`.
+ *
+ * @param output - Raw Go-template output from Docker.
+ * @returns Trimmed revision string, or null when the label is absent.
+ *
+ * @pure true
+ * @effect n/a
+ * @invariant Blank and Docker `<no value>` outputs are treated as missing labels.
+ * @precondition `output` is a finite string.
+ * @postcondition Non-empty revision text is returned without surrounding whitespace.
+ * @complexity O(n) time and O(n) space where n = |output|.
+ * @throws Never
+ */
+export const parseControllerRevisionLabelOutput = (output: string): string | null => {
+  const revision = output.trim()
+  return revision.length === 0 || revision === "<no value>" ? null : revision
 }
 
 export const shouldForceRecreateController = (

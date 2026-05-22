@@ -1,5 +1,6 @@
 import { Duration, Effect, pipe, Schedule } from "effect"
 
+import { resolveControllerComposeUpArgs, shouldBuildControllerImage } from "./controller-bootstrap-plan.js"
 import {
   controllerContainerName,
   controllerExists,
@@ -13,6 +14,7 @@ import {
   runCompose
 } from "./controller-docker.js"
 import { findReachableApiBaseUrl, findReachableDirectHealthProbe } from "./controller-health.js"
+import { inspectControllerImageRevision } from "./controller-image-revision.js"
 import {
   buildApiBaseUrlCandidates,
   type DockerNetworkIps,
@@ -142,6 +144,8 @@ type ControllerBootstrapContext = {
   readonly explicitApiBaseUrl: string | undefined
   readonly localControllerRevision: string
   readonly currentControllerRevision: string | null
+  readonly currentImageRevision: string | null
+  readonly buildController: boolean
   readonly forceRecreateController: boolean
   readonly currentContainerNetworks: DockerNetworkIps
   readonly initialControllerNetworks: DockerNetworkIps
@@ -158,16 +162,25 @@ const loadControllerBootstrapContext = (): Effect.Effect<
     const localControllerRevision = yield* _(prepareLocalControllerRevision())
     const currentControllerExists = yield* _(controllerExists())
     const currentControllerRevision = yield* _(inspectControllerRevision())
+    const currentImageRevision = yield* _(inspectControllerImageRevision())
     const currentContainerNetworks = yield* _(resolveCurrentContainerNetworks())
     const initialControllerNetworks = yield* _(inspectContainerNetworks(controllerContainerName))
     const forceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
+    const forceRecreateController = forceRecreateForResourceLimits ||
+      shouldForceRecreateController(currentControllerExists, localControllerRevision, currentControllerRevision)
 
     return {
       explicitApiBaseUrl,
       localControllerRevision,
       currentControllerRevision,
-      forceRecreateController: forceRecreateForResourceLimits ||
-        shouldForceRecreateController(currentControllerExists, localControllerRevision, currentControllerRevision),
+      currentImageRevision,
+      buildController: shouldBuildControllerImage({
+        currentControllerRevision,
+        currentImageRevision,
+        forceRecreateController,
+        localControllerRevision
+      }),
+      forceRecreateController,
       currentContainerNetworks,
       initialControllerNetworks
     }
@@ -206,29 +219,27 @@ const reuseReachableControllerIfPossible = (
     })
   )
 
-const logControllerRecreate = (
-  localControllerRevision: string,
-  currentControllerRevision: string | null
+const logControllerStart = (
+  context: ControllerBootstrapContext
 ): Effect.Effect<void> =>
   Effect.log(
-    `Rebuilding docker-git controller: local revision ${localControllerRevision}, container revision ${
-      currentControllerRevision ?? "unknown"
-    }`
+    [
+      context.buildController ? "Rebuilding docker-git controller" : "Recreating docker-git controller",
+      `local revision ${context.localControllerRevision}`,
+      `container revision ${context.currentControllerRevision ?? "unknown"}`,
+      `image revision ${context.currentImageRevision ?? "unknown"}`
+    ].join(": ")
   )
 
 const startAndRememberController = (
   context: ControllerBootstrapContext
 ): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
-    if (context.forceRecreateController) {
-      yield* _(logControllerRecreate(context.localControllerRevision, context.currentControllerRevision))
+    if (context.forceRecreateController || context.buildController) {
+      yield* _(logControllerStart(context))
     }
 
-    yield* _(
-      runCompose(
-        context.forceRecreateController ? ["up", "-d", "--build", "--force-recreate"] : ["up", "-d", "--build"]
-      )
-    )
+    yield* _(runCompose(resolveControllerComposeUpArgs(context)))
     yield* _(ensureControllerReachabilityNetworks(context.currentContainerNetworks))
 
     const controllerNetworks = yield* _(inspectContainerNetworks(controllerContainerName))

@@ -8,8 +8,10 @@ import { findExistingUpwards } from "./frontend-lib/usecases/path-helpers.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
 export const controllerGpuModeEnvKey = "DOCKER_GIT_CONTROLLER_GPU"
+export const controllerBuildSkillerEnvKey = "DOCKER_GIT_CONTROLLER_BUILD_SKILLER"
 
 export type ControllerGpuMode = "none" | "all"
+export type ControllerBuildSkillerMode = "0" | "1"
 
 export type ControllerComposeFiles = {
   readonly composePath: string
@@ -29,10 +31,19 @@ export const parseControllerGpuMode = (raw?: string): ControllerGpuMode | null =
   return trimmed === "all" ? "all" : null
 }
 
+export const parseControllerBuildSkillerMode = (raw?: string): ControllerBuildSkillerMode | null => {
+  const trimmed = raw?.trim() ?? ""
+  if (trimmed.length === 0 || trimmed === "1" || trimmed === "true") {
+    return "1"
+  }
+  return trimmed === "0" || trimmed === "false" ? "0" : null
+}
+
 export const controllerRevisionForMode = (
   sourceRevision: string,
-  gpuMode: ControllerGpuMode
-): string => `${sourceRevision}-${gpuMode}`
+  gpuMode: ControllerGpuMode,
+  buildSkillerMode: ControllerBuildSkillerMode = "1"
+): string => `${sourceRevision}-${gpuMode}-skiller${buildSkillerMode}`
 
 const loadControllerGpuMode = (): Effect.Effect<ControllerGpuMode, ControllerBootstrapError> => {
   const raw = process.env[controllerGpuModeEnvKey]
@@ -43,6 +54,19 @@ const loadControllerGpuMode = (): Effect.Effect<ControllerGpuMode, ControllerBoo
   return Effect.fail(
     controllerBootstrapError(
       `${controllerGpuModeEnvKey} must be unset or one of: none, all. Received: ${raw ?? ""}`
+    )
+  )
+}
+
+const loadControllerBuildSkillerMode = (): Effect.Effect<ControllerBuildSkillerMode, ControllerBootstrapError> => {
+  const raw = process.env[controllerBuildSkillerEnvKey]
+  const parsed = parseControllerBuildSkillerMode(raw)
+  if (parsed !== null) {
+    return Effect.succeed(parsed)
+  }
+  return Effect.fail(
+    controllerBootstrapError(
+      `${controllerBuildSkillerEnvKey} must be unset or one of: 0, 1, false, true. Received: ${raw ?? ""}`
     )
   )
 }
@@ -99,6 +123,7 @@ const composeFilesForGpuMode = (
 type ComposePathAndGpuMode = {
   readonly composePath: string
   readonly gpuMode: ControllerGpuMode
+  readonly buildSkillerMode: ControllerBuildSkillerMode
 }
 
 const withComposePathAndGpuMode = <A>(
@@ -112,7 +137,11 @@ const withComposePathAndGpuMode = <A>(
     Effect.mapError(mapComposePathError),
     Effect.flatMap((composePath) =>
       loadControllerGpuMode().pipe(
-        Effect.flatMap((gpuMode) => effect({ composePath, gpuMode }))
+        Effect.flatMap((gpuMode) =>
+          loadControllerBuildSkillerMode().pipe(
+            Effect.flatMap((buildSkillerMode) => effect({ buildSkillerMode, composePath, gpuMode }))
+          )
+        )
       )
     )
   )
@@ -125,11 +154,12 @@ export const resolveControllerComposeFiles = (): Effect.Effect<
 
 const computeControllerRevision = (
   composePath: string,
-  gpuMode: ControllerGpuMode
+  gpuMode: ControllerGpuMode,
+  buildSkillerMode: ControllerBuildSkillerMode
 ): Effect.Effect<string, ControllerBootstrapError, FileSystem.FileSystem | Path.Path> =>
   computeLocalControllerRevision(composePath).pipe(
     Effect.mapError(mapControllerRevisionError),
-    Effect.map((revision) => controllerRevisionForMode(revision, gpuMode))
+    Effect.map((revision) => controllerRevisionForMode(revision, gpuMode, buildSkillerMode))
   )
 
 const persistControllerRevision = (revision: string): Effect.Effect<void> =>
@@ -142,6 +172,6 @@ export const prepareControllerRevision = (): Effect.Effect<
   ControllerBootstrapError,
   FileSystem.FileSystem | Path.Path
 > =>
-  withComposePathAndGpuMode(({ composePath, gpuMode }) => computeControllerRevision(composePath, gpuMode)).pipe(
-    Effect.tap((revision) => persistControllerRevision(revision))
-  )
+  withComposePathAndGpuMode(({ buildSkillerMode, composePath, gpuMode }) =>
+    computeControllerRevision(composePath, gpuMode, buildSkillerMode)
+  ).pipe(Effect.tap((revision) => persistControllerRevision(revision)))

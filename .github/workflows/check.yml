@@ -153,6 +153,8 @@ jobs:
     name: E2E (Browser command)
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -170,6 +172,8 @@ jobs:
     name: E2E (OpenCode)
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -187,6 +191,8 @@ jobs:
     name: E2E (Clone cache)
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -204,6 +210,8 @@ jobs:
     name: E2E (Login context)
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -221,6 +229,8 @@ jobs:
     name: E2E (Runtime volumes + SSH)
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -238,6 +248,8 @@ jobs:
     name: E2E (Clone auto-open SSH)
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
     steps:
       - uses: actions/checkout@v6
         with:
