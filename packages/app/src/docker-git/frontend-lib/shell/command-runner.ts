@@ -132,6 +132,59 @@ export const runCommandCapture = <E>(
     })
   )
 
+// CHANGE: expose combined command output to typed failure constructors
+// WHY: Docker inspection fallback must distinguish missing images from daemon/socket failures without losing diagnostics
+// QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
+// REF: CodeRabbit PR #344 review 4349265315
+// SOURCE: n/a
+// FORMAT THEOREM: exit ∉ okExitCodes -> failure(exit, trim(stdout stderr))
+// PURITY: SHELL
+// EFFECT: Effect<string, E | PlatformError, CommandExecutor>
+// INVARIANT: success returns stdout exactly as emitted, failure carries combined non-empty output
+// COMPLEXITY: O(n) where n = |stdout| + |stderr|
+/**
+ * Runs a command, returning stdout on success and combined output to the failure mapper otherwise.
+ *
+ * @param spec - Command invocation specification.
+ * @param okExitCodes - Exit codes considered successful.
+ * @param onFailure - Total mapper from failing exit code and combined output to typed error.
+ * @returns Effect containing stdout or the typed failure produced by `onFailure`.
+ *
+ * @pure false
+ * @effect CommandExecutor
+ * @invariant Success preserves stdout; failure exposes trimmed stdout/stderr diagnostics.
+ * @precondition `okExitCodes` is finite and `onFailure` is total.
+ * @postcondition No command failure is converted to success by this helper.
+ * @complexity O(n) time and O(n) space where n = |stdout| + |stderr|.
+ * @throws Never - all failures are represented in the Effect error channel.
+ */
+export const runCommandCaptureWithFailureOutput = <E>(
+  spec: RunCommandSpec,
+  okExitCodes: ReadonlyArray<number>,
+  onFailure: (exitCode: number, output: string) => E
+): Effect.Effect<string, E | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const executor = yield* _(CommandExecutor.CommandExecutor)
+      const process = yield* _(executor.start(buildCommand(spec, "pipe", "pipe", "pipe")))
+      const [stdout, stderr] = yield* _(
+        Effect.all(
+          [
+            collectStreamText(process.stdout),
+            collectStreamText(process.stderr)
+          ],
+          { concurrency: "unbounded" }
+        )
+      )
+      const exitCode = yield* _(process.exitCode)
+      yield* _(
+        ensureExitCode(exitCode, okExitCodes, (numericExitCode) =>
+          onFailure(numericExitCode, combineCommandOutput(stdout, stderr)))
+      )
+      return stdout
+    })
+  )
+
 export const runCommandExitCodeStreaming = (
   spec: RunCommandSpec
 ): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>

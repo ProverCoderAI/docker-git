@@ -1,11 +1,12 @@
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
+import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
 import { composeFilesForMode, prepareControllerRevision, resolveControllerComposeFiles } from "./controller-compose.js"
 import {
-  runCommandCapture,
+  runCommandCaptureWithFailureOutput,
   runCommandExitCode,
   runCommandExitCodeStreaming,
   runCommandWithCapturedOutput
@@ -146,42 +147,234 @@ const formatDockerInvocationFailure = (
     `Exit code: ${exitCode}`
   ].join("\n")
 
+// CHANGE: include captured Docker output in command failure diagnostics
+// WHY: callers need typed errors that can distinguish missing images from Docker access failures
+// QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
+// REF: CodeRabbit PR #344 review 4349265315
+// SOURCE: n/a
+// FORMAT THEOREM: output = "" -> base_message; output != "" -> base_message + output
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: the original headline, invocation and exit code are always preserved
+// COMPLEXITY: O(n) where n = |output|
+/**
+ * Formats Docker command failure diagnostics with optional captured output.
+ *
+ * @param headline - Human-readable failure headline.
+ * @param invocation - Resolved Docker command invocation.
+ * @param exitCode - Process exit code.
+ * @param output - Combined stdout/stderr captured from the process.
+ * @returns Stable multi-line diagnostic message.
+ *
+ * @pure true
+ * @effect n/a
+ * @invariant Empty output does not add an output section.
+ * @precondition `headline` is non-empty and `exitCode` is the process exit code.
+ * @postcondition The returned message preserves the command and exit code.
+ * @complexity O(n) time and O(n) space where n = |output|.
+ * @throws Never
+ */
+const formatDockerInvocationFailureWithOutput = (
+  headline: string,
+  invocation: DockerInvocation,
+  exitCode: number,
+  output: string
+): string =>
+  [
+    formatDockerInvocationFailure(headline, invocation, exitCode),
+    output.trim().length > 0 ? `Output:\n${output.trim()}` : ""
+  ].filter((part) => part.length > 0).join("\n")
+
+// CHANGE: share Docker command resolution between exit-code and capture paths
+// WHY: all controller Docker operations must use the same direct/sudo resolution and argument composition
+// QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
+// REF: CodeRabbit PR #344 review 4349265315
+// SOURCE: n/a
+// FORMAT THEOREM: resolve(args) = build(resolveDockerCommand(), args)
+// PURITY: SHELL
+// EFFECT: Effect<DockerInvocation, ControllerBootstrapError, ControllerRuntime>
+// INVARIANT: returned invocation always has a concrete command and immutable args
+// COMPLEXITY: O(|args|)
+/**
+ * Resolves the Docker executable and composes it with operation arguments.
+ *
+ * @param args - Docker CLI arguments after the executable.
+ * @returns Effect containing the concrete command invocation.
+ *
+ * @pure false
+ * @effect CommandExecutor through Docker probing.
+ * @invariant Invocation command defaults to `docker` only when the resolved command list is empty.
+ * @precondition `args` is a finite argument vector.
+ * @postcondition Sudo/direct Docker probing errors remain typed `ControllerBootstrapError` failures.
+ * @complexity O(n) time and O(n) space where n = |args|.
+ * @throws Never - all failures are represented in the Effect error channel.
+ */
+const resolveDockerInvocation = (
+  args: ReadonlyArray<string>
+): Effect.Effect<DockerInvocation, ControllerBootstrapError, ControllerRuntime> =>
+  resolveDockerCommand().pipe(
+    Effect.map((dockerCommand) => buildDockerInvocation(dockerCommand, args))
+  )
+
 const runDockerExitCodeCommand = (
   args: ReadonlyArray<string>
 ): Effect.Effect<number, ControllerBootstrapError, ControllerRuntime> =>
-  Effect.gen(function*(_) {
-    const dockerCommand = yield* _(resolveDockerCommand())
-    const invocation = buildDockerInvocation(dockerCommand, args)
-    return yield* _(runExitCode(invocation.command, invocation.args))
-  })
+  resolveDockerInvocation(args).pipe(
+    Effect.flatMap((invocation) => runExitCode(invocation.command, invocation.args))
+  )
 
-export const runDockerCapture = (
+// CHANGE: preserve typed Docker capture errors while normalizing platform failures
+// WHY: callers must see daemon/socket diagnostics instead of nullable fallback for infrastructure failures
+// QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
+// REF: CodeRabbit PR #344 review 4349265315
+// SOURCE: n/a
+// FORMAT THEOREM: ControllerBootstrapError -> same; PlatformError -> ControllerBootstrapError(label, details)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: existing ControllerBootstrapError messages are preserved exactly
+// COMPLEXITY: O(|error|)
+/**
+ * Builds a mapper from command runner errors into controller bootstrap errors.
+ *
+ * @param label - Operation label used for platform error diagnostics.
+ * @returns A total error mapper for Docker capture effects.
+ *
+ * @pure true
+ * @effect n/a
+ * @invariant Existing `ControllerBootstrapError` values are returned unchanged.
+ * @precondition `label` is finite human-readable text.
+ * @postcondition Non-controller platform errors include the operation label and original details.
+ * @complexity O(n) where n = |error string|.
+ * @throws Never
+ */
+const mapDockerCaptureError =
+  (label: string) => (error: ControllerBootstrapError | PlatformError): ControllerBootstrapError =>
+    error._tag === "ControllerBootstrapError"
+      ? error
+      : controllerBootstrapError(`${label} failed.\nDetails: ${String(error)}`)
+
+// CHANGE: choose whether a Docker capture failure includes process output
+// WHY: regular callers keep stable messages, while image inspection needs output for missing-image classification
+// QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
+// REF: CodeRabbit PR #344 review 4349265315
+// SOURCE: n/a
+// FORMAT THEOREM: includeOutput -> failure_with_output; !includeOutput -> base_failure
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: both modes preserve headline, command and exit code
+// COMPLEXITY: O(|output|)
+/**
+ * Formats a Docker capture failure according to the selected diagnostic mode.
+ *
+ * @param label - Operation label.
+ * @param invocation - Resolved Docker invocation.
+ * @param exitCode - Process exit code.
+ * @param output - Combined stdout/stderr from the process.
+ * @param includeOutput - Whether the message should include captured process output.
+ * @returns Stable Docker failure message.
+ *
+ * @pure true
+ * @effect n/a
+ * @invariant Base diagnostics always include command and exit code.
+ * @precondition `exitCode` is the observed process exit code.
+ * @postcondition Captured output appears only when `includeOutput` is true and output is non-empty.
+ * @complexity O(n) where n = |output|.
+ * @throws Never
+ */
+const formatDockerCaptureFailure = (
+  label: string,
+  invocation: DockerInvocation,
+  exitCode: number,
+  output: string,
+  includeOutput: boolean
+): string =>
+  includeOutput
+    ? formatDockerInvocationFailureWithOutput(`${label} failed.`, invocation, exitCode, output)
+    : formatDockerInvocationFailure(`${label} failed.`, invocation, exitCode)
+
+// CHANGE: centralize Docker capture execution for regular and diagnostic modes
+// WHY: selective recovery must not duplicate Docker probing, invocation building, or platform error mapping
+// QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
+// REF: CodeRabbit PR #344 review 4349265315
+// SOURCE: n/a
+// FORMAT THEOREM: docker_exit=0 -> stdout; docker_exit!=0 -> ControllerBootstrapError(mode)
+// PURITY: SHELL
+// EFFECT: Effect<string, ControllerBootstrapError, ControllerRuntime>
+// INVARIANT: no Docker capture failure is converted to success
+// COMPLEXITY: O(command_output)
+/**
+ * Runs a Docker command and maps non-zero exits through the selected output mode.
+ *
+ * @param args - Docker CLI arguments after the executable.
+ * @param label - Operation label used in diagnostics.
+ * @param includeOutput - Whether non-zero exit diagnostics include captured stdout/stderr.
+ * @returns Effect containing stdout on success.
+ *
+ * @pure false
+ * @effect CommandExecutor, FileSystem, Path through ControllerRuntime.
+ * @invariant Docker probing and command execution failures stay in the typed error channel.
+ * @precondition `args` is finite and `label` is non-empty.
+ * @postcondition Success implies Docker exited with code 0.
+ * @complexity O(n) time and O(n) space where n is captured output size.
+ * @throws Never - all failures are represented in the Effect error channel.
+ */
+const runDockerCaptureWithOutputMode = (
   args: ReadonlyArray<string>,
-  label: string
+  label: string,
+  includeOutput: boolean
 ): Effect.Effect<string, ControllerBootstrapError, ControllerRuntime> =>
-  Effect.gen(function*(_) {
-    const dockerCommand = yield* _(resolveDockerCommand())
-    const invocation = buildDockerInvocation(dockerCommand, args)
-    const output = yield* _(
-      runCommandCapture(
+  resolveDockerInvocation(args).pipe(
+    Effect.flatMap((invocation) =>
+      runCommandCaptureWithFailureOutput(
         {
           cwd: process.cwd(),
           command: invocation.command,
           args: invocation.args
         },
         [0],
-        (exitCode) => controllerBootstrapError(formatDockerInvocationFailure(`${label} failed.`, invocation, exitCode))
+        (exitCode, output) =>
+          controllerBootstrapError(formatDockerCaptureFailure(label, invocation, exitCode, output, includeOutput))
       )
-    )
-
-    return output
-  }).pipe(
-    Effect.mapError((error): ControllerBootstrapError =>
-      error._tag === "ControllerBootstrapError"
-        ? error
-        : controllerBootstrapError(`${label} failed.\nDetails: ${String(error)}`)
-    )
+    ),
+    Effect.mapError(mapDockerCaptureError(label))
   )
+
+export const runDockerCapture = (
+  args: ReadonlyArray<string>,
+  label: string
+): Effect.Effect<string, ControllerBootstrapError, ControllerRuntime> =>
+  runDockerCaptureWithOutputMode(args, label, false)
+
+// CHANGE: preserve Docker stderr/stdout diagnostics for selective error recovery
+// WHY: image revision inspection must fallback only for absent images while surfacing daemon/socket failures
+// QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
+// REF: CodeRabbit PR #344 review 4349265315
+// SOURCE: n/a
+// FORMAT THEOREM: docker_exit ∉ ok -> ControllerBootstrapError(message includes output)
+// PURITY: SHELL
+// EFFECT: Effect<string, ControllerBootstrapError, ControllerRuntime>
+// INVARIANT: Docker access resolution errors remain ControllerBootstrapError failures
+// COMPLEXITY: O(command_output)
+/**
+ * Runs a Docker command and includes captured stdout/stderr in the typed failure message.
+ *
+ * @param args - Docker CLI arguments after the resolved docker executable.
+ * @param label - Human-readable operation label used in failure diagnostics.
+ * @returns Effect containing stdout when Docker exits successfully.
+ *
+ * @pure false
+ * @effect CommandExecutor, FileSystem, Path through ControllerRuntime.
+ * @invariant Non-zero Docker exits are failures and preserve the combined command output.
+ * @precondition `args` is a finite Docker argument vector and `label` is non-empty.
+ * @postcondition Docker daemon/socket discovery errors are not converted to success.
+ * @complexity O(n) time and O(n) space where n is captured command output.
+ * @throws Never - all failures are represented in the Effect error channel.
+ */
+export const runDockerCaptureWithFailureOutput = (
+  args: ReadonlyArray<string>,
+  label: string
+): Effect.Effect<string, ControllerBootstrapError, ControllerRuntime> =>
+  runDockerCaptureWithOutputMode(args, label, true)
 
 export const runCompose = (
   args: ReadonlyArray<string>

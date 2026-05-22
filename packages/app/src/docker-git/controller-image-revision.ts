@@ -1,12 +1,40 @@
 import { Effect } from "effect"
 
 import { composeFilesForMode, resolveControllerComposeFiles } from "./controller-compose.js"
-import { type ControllerRuntime, runDockerCapture } from "./controller-docker.js"
+import { type ControllerRuntime, runDockerCapture, runDockerCaptureWithFailureOutput } from "./controller-docker.js"
 import { parseControllerRevisionLabelOutput } from "./controller-revision.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
 const inspectControllerRevisionLabelTemplate = String
   .raw`{{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}`
+const missingImageInspectionPatterns: ReadonlyArray<RegExp> = [/No such image/iu, /No such object/iu]
+
+/**
+ * Detects the Docker inspect failure that means the reusable controller image is absent.
+ *
+ * @param error - Typed Docker bootstrap error from image inspection.
+ * @returns True only for Docker's missing-image diagnostics.
+ *
+ * @pure true
+ * @effect n/a
+ * @invariant Daemon/socket/permission failures are not classified as missing images.
+ * @precondition `error.message` is the captured Docker inspect diagnostic.
+ * @postcondition True implies the caller may safely fallback to rebuilding the image.
+ * @complexity O(n * m) where n = pattern count and m = |message|.
+ * @throws Never
+ */
+// CHANGE: classify image-not-found separately from Docker infrastructure failures
+// WHY: controller bootstrap can rebuild absent images, but daemon/socket failures must stay visible
+// QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
+// REF: CodeRabbit PR #344 review 4349265315
+// SOURCE: n/a
+// FORMAT THEOREM: missing_image(error) -> fallback_null; infrastructure_error(error) -> typed_failure
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: permission and daemon diagnostics do not satisfy the predicate
+// COMPLEXITY: O(n * m)
+const isMissingControllerImageInspectionError = (error: ControllerBootstrapError): boolean =>
+  missingImageInspectionPatterns.some((pattern) => pattern.test(error.message))
 
 /**
  * Returns all non-empty lines from Docker CLI output.
@@ -121,11 +149,11 @@ const inspectControllerComposeImageName = (): Effect.Effect<
  *
  * @pure false
  * @effect Docker CLI through ControllerRuntime.
- * @invariant Missing image or missing label resolves to null rather than throwing.
+ * @invariant Missing image/label resolves to null; Docker infrastructure failures remain typed failures.
  * @precondition Docker is reachable through the configured runtime.
  * @postcondition Returned revision is normalized by label parsing.
  * @complexity O(1) Docker inspections.
- * @throws Never - failures are represented in the Effect error channel or recovered to null.
+ * @throws Never - failures are represented in the Effect error channel or selectively recovered to null.
  */
 // CHANGE: inspect the compose-built controller image revision label
 // WHY: host bootstrap can start an already-current image without forcing Docker to rebuild heavy layers
@@ -135,7 +163,7 @@ const inspectControllerComposeImageName = (): Effect.Effect<
 // FORMAT THEOREM: image_label(image) = local_revision -> no rebuild is required
 // PURITY: SHELL
 // EFFECT: Effect<string | null, ControllerBootstrapError, ControllerRuntime>
-// INVARIANT: missing image or missing label resolves to null rather than throwing
+// INVARIANT: missing image or missing label resolves to null, daemon/socket errors stay in the error channel
 // COMPLEXITY: O(1) Docker inspections
 export const inspectControllerImageRevision = (): Effect.Effect<
   string | null,
@@ -146,12 +174,16 @@ export const inspectControllerImageRevision = (): Effect.Effect<
     Effect.flatMap((imageName) =>
       imageName === null
         ? Effect.succeed<string | null>(null)
-        : runDockerCapture(
+        : runDockerCaptureWithFailureOutput(
           ["image", "inspect", "-f", inspectControllerRevisionLabelTemplate, imageName],
           `Failed to inspect image revision for ${imageName}`
         ).pipe(
           Effect.map((output) => parseControllerRevisionLabelOutput(output)),
-          Effect.orElseSucceed((): string | null => null)
+          Effect.catchTag("ControllerBootstrapError", (error) =>
+            isMissingControllerImageInspectionError(error)
+              ? Effect.succeed<string | null>(null)
+              : Effect.fail(error)
+          )
         )
     )
   )
