@@ -64,3 +64,24 @@ The bare mirror path remains:
 ## Recommended Implementation Constraint
 
 Prefer minimal changes to the existing bare mirror flow first. Treat "git pull под нужную нам ветку" as the externally visible invariant: cache is refreshed, then workspace is checked out to the requested branch. Add a working-copy cache only if e2e verification shows the bare mirror flow cannot satisfy the requirement.
+
+## Final Design Decision
+
+The implementation kept the existing bare mirror cache and did not introduce a separate working-copy cache. This preserved the established cache root and state-repo ignore contract while satisfying the branch-refresh invariant:
+
+1. Refresh `/home/<sshUser>/.docker-git/.cache/git-mirrors/<repo-cache-key>.git` with branch/tag-only refspecs.
+2. Clone warm-cache workspaces from that local mirror.
+3. Restore `origin` to the authenticated repository URL before network fetch/pull.
+4. Run `git pull --ff-only origin <repoRef>` for normal branch refs, or `git pull --ff-only` for no-ref default-branch clones.
+5. Keep PR/MR refs on explicit fetch into deterministic local branches.
+6. Keep issue refs as deterministic local branches after fallback clone.
+
+No new cache directory was added, so the existing `.cache/git-mirrors/` ignore and untrack behavior remains sufficient.
+
+## Archive Invariants
+
+- Cache key remains derived from canonical `REPO_URL`, not `AUTH_REPO_URL`.
+- Broad cache refresh remains limited to `refs/heads/*` and `refs/tags/*`.
+- Tokenized auth URLs are used for network operations only; final remote normalization still runs through the existing fork/upstream remote block.
+- Clone completion/failure markers remain `/run/docker-git/clone.done` and `/run/docker-git/clone.failed`.
+- CLI/API contracts are unchanged.

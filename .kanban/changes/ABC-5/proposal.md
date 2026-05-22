@@ -42,3 +42,11 @@ GitHub issue #138:
 - Cache paths remain ignored and untracked by state repository sync.
 - Existing clone flows continue to work for normal branches, issue URLs, GitHub PR refs, GitLab MR refs, and no-ref clones.
 - Tests document the cache reuse and branch-refresh contract.
+
+## Archive Status
+
+- Status: implemented
+- Spec commit: `f961baa docs(spec): add ABC-5 clone cache plan`
+- Implementation commit: `a47e794 feat(clone): reuse repository cache for branch pulls`
+- Final behavior: warm-cache clones use the refreshed bare mirror as the local clone source, then restore the authenticated origin and run branch-aware `git pull --ff-only` for normal branch/default branch flows.
+- E2E note: `bun run e2e:clone-cache` is updated but could not run in the local review environment because the host CLI cannot auto-discover the controller when `DOCKER_HOST=tcp://host.docker.internal:2375` and `DOCKER_GIT_API_URL` is unset.

@@ -34,6 +34,24 @@
 
 ## Open Questions
 
-- Should the final implementation use only the existing bare mirror cache, or introduce a separate working-copy cache to match the literal "git pull" wording?
-- Should concurrent clone cache refreshes use a lock file in the shared cache volume?
-- Should failed cache refresh be a warning with fallback or a hard clone failure?
+- Resolved: use the existing bare mirror cache; no separate working-copy cache was added.
+- Deferred: concurrent clone cache refreshes still do not use a lock file.
+- Preserved: failed cache refresh remains a warning/fallback behavior rather than a hard clone failure.
+
+## Archive Verification
+
+- [x] `bun run --filter @effect-template/lib test -- tests/core/templates.test.ts` (48 tests passed)
+- [x] `bun run --filter @effect-template/lib test` (51 files, 268 tests passed)
+- [x] `bun run --filter @prover-coder-ai/docker-git test` (73 files, 463 tests passed)
+- [x] `bun run typecheck`
+- [x] `bun run lint`
+- [x] `bun run build`
+- [x] Local git repro for warm-cache branch path: bare mirror refresh, clone from mirror, restore origin, `git pull --ff-only origin <branch>`.
+- [ ] `bun run e2e:clone-cache` blocked by local Docker/controller discovery: `DOCKER_HOST=tcp://host.docker.internal:2375` with no reachable `DOCKER_GIT_API_URL`.
+
+## Archive Result
+
+- Completed branch: `vk/d6b8-abc-5-github-138`
+- Spec commit: `f961baa docs(spec): add ABC-5 clone cache plan`
+- Implementation commit: `a47e794 feat(clone): reuse repository cache for branch pulls`
+- Merge status: not merged to `main`.
