@@ -765,6 +765,27 @@ const writePtyInput = (pty: PtyBridge | null, data: string): void => {
 
 const shellQuote = (value: string): string => `'${value.replace(/'/gu, "'\\''")}'`
 
+const tmuxRightClickPaneBindings: ReadonlyArray<string> = ["MouseDown3Pane", "M-MouseDown3Pane"]
+const tmuxRightClickStatusBindings: ReadonlyArray<string> = [
+  "MouseDown3Status",
+  "MouseDown3StatusLeft",
+  "M-MouseDown3Status",
+  "M-MouseDown3StatusLeft"
+]
+
+const renderTmuxPaneRightClickBinding = (binding: string): string =>
+  `tmux bind-key -T root ${binding} if-shell -F -t = ${shellQuote("#{mouse_any_flag}")} ${
+    shellQuote("send-keys -M")
+  } >/dev/null 2>&1 || true`
+
+const renderTmuxStatusRightClickUnbind = (binding: string): string =>
+  `tmux unbind-key -T root ${binding} >/dev/null 2>&1 || true`
+
+const renderTmuxRightClickBindingCommands = (): ReadonlyArray<string> => [
+  ...tmuxRightClickPaneBindings.map(renderTmuxPaneRightClickBinding),
+  ...tmuxRightClickStatusBindings.map(renderTmuxStatusRightClickUnbind)
+]
+
 const writeBufferToProjectContainer = (
   containerName: string,
   containerPath: string,
@@ -982,6 +1003,7 @@ export const renderTmuxAttachCommand = (
     `tmux set-option -t ${shellQuote(args.tmuxName)} status off >/dev/null 2>&1 || true`,
     `tmux set-option -t ${shellQuote(args.tmuxName)} history-limit 50000 >/dev/null 2>&1 || true`,
     `tmux set-option -t ${shellQuote(args.tmuxName)} mouse on >/dev/null 2>&1 || true`,
+    ...renderTmuxRightClickBindingCommands(),
     `exec tmux attach-session -t ${shellQuote(args.tmuxName)}`
   ].join("; ")
   return `bash --noprofile --norc -lc ${shellQuote(script)}`
