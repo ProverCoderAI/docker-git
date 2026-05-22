@@ -155,6 +155,7 @@ jobs:
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
+      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -174,6 +175,7 @@ jobs:
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
+      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -193,6 +195,7 @@ jobs:
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
+      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -212,6 +215,7 @@ jobs:
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
+      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -231,6 +235,7 @@ jobs:
     timeout-minutes: 60
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
+      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -250,6 +255,7 @@ jobs:
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
+      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
       - uses: actions/checkout@v6
         with:

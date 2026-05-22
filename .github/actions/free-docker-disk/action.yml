@@ -7,10 +7,38 @@ runs:
     - name: Free disk for Docker builds
       shell: bash
       run: |
-        set -euxo pipefail
+        set -euo pipefail
 
         df -h
-        docker system df || true
+
+        threshold_gib="${DOCKER_GIT_FREE_DOCKER_DISK_MIN_AVAILABLE_GIB:-40}"
+        force_cleanup="${DOCKER_GIT_FORCE_FREE_DOCKER_DISK:-0}"
+        force_cleanup_enabled=0
+
+        if [[ ! "$threshold_gib" =~ ^[0-9]+$ ]]; then
+          echo "Invalid DOCKER_GIT_FREE_DOCKER_DISK_MIN_AVAILABLE_GIB: $threshold_gib" >&2
+          exit 1
+        fi
+
+        case "$force_cleanup" in
+          1|true|TRUE|yes|YES|on|ON)
+            force_cleanup_enabled=1
+            ;;
+          *)
+            force_cleanup_enabled=0
+            ;;
+        esac
+
+        available_kib="$(df -Pk / | awk 'NR == 2 { print $4 }')"
+        threshold_kib="$((threshold_gib * 1024 * 1024))"
+
+        if [[ "$force_cleanup_enabled" != "1" && "$available_kib" -ge "$threshold_kib" ]]; then
+          echo "Skipping Docker disk cleanup: / has at least ${threshold_gib}GiB available."
+          exit 0
+        fi
+
+        echo "Running Docker disk cleanup: available=${available_kib}KiB threshold=${threshold_kib}KiB force=${force_cleanup}."
+        timeout 20s docker system df || true
 
         sudo rm -rf \
           /opt/ghc \
@@ -22,4 +50,4 @@ runs:
         docker system prune -af --volumes || true
 
         df -h
-        docker system df || true
+        timeout 20s docker system df || true

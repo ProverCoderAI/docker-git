@@ -140,7 +140,11 @@ dg_ensure_docker "$E2E_BIN"
 dg_prepare_docker_git_cli "$REPO_ROOT" "$E2E_BIN"
 
 cd "$REPO_ROOT"
-setsid bash -lc 'bun run docker-git -- browser' >"$BROWSER_LOG" 2>&1 &
+if dg_is_truthy "${DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL:-0}"; then
+  setsid bash -lc 'bun packages/app/dist/src/docker-git/main.js browser' >"$BROWSER_LOG" 2>&1 &
+else
+  setsid bash -lc 'bun run docker-git -- browser' >"$BROWSER_LOG" 2>&1 &
+fi
 BROWSER_PID="$!"
 
 wait_for_log_line "Ensuring docker-git API controller is current."

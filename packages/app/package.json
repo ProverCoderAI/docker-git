@@ -27,6 +27,8 @@
     "lint:effect": "NODE_OPTIONS=--max-old-space-size=4096 PATH=../../scripts:$PATH eslint --config eslint.effect-ts-check.config.mjs .",
     "prebuild:docker-git": "bun install --cwd ../.. && bun run --cwd ../docker-git-session-sync build && bun run --cwd ../lib build",
     "build:docker-git": "vite build --config vite.docker-git.config.ts",
+    "prebuild:docker-git:reuse-install": "bun run --cwd ../docker-git-session-sync build && bun run --cwd ../lib build",
+    "build:docker-git:reuse-install": "vite build --config vite.docker-git.config.ts",
     "check": "bun run typecheck",
     "clone": "bun run build:docker-git && bun dist/src/docker-git/main.js clone",
     "open": "bun run build:docker-git && bun dist/src/docker-git/main.js open",
