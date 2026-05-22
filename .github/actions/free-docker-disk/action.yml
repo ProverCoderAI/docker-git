@@ -9,7 +9,11 @@ runs:
       run: |
         set -euo pipefail
 
-        df -h
+        if command -v df >/dev/null 2>&1; then
+          df -h || true
+        else
+          echo "df is not available; Docker disk cleanup will run without a free-space precheck." >&2
+        fi
 
         threshold_gib="${DOCKER_GIT_FREE_DOCKER_DISK_MIN_AVAILABLE_GIB:-40}"
         force_cleanup="${DOCKER_GIT_FORCE_FREE_DOCKER_DISK:-0}"
@@ -29,7 +33,15 @@ runs:
             ;;
         esac
 
-        available_kib="$(df -Pk / | awk 'NR == 2 { print $4 }')"
+        if command -v df >/dev/null 2>&1; then
+          available_kib="$(df -Pk / 2>/dev/null | awk 'NR == 2 { print $4 }' || true)"
+        else
+          available_kib=""
+        fi
+        if [[ ! "$available_kib" =~ ^[0-9]+$ ]]; then
+          echo "Could not parse available disk space from df output; Docker disk cleanup will run." >&2
+          available_kib=0
+        fi
         threshold_kib="$((threshold_gib * 1024 * 1024))"
 
         if [[ "$force_cleanup_enabled" != "1" && "$available_kib" -ge "$threshold_kib" ]]; then
@@ -49,5 +61,7 @@ runs:
 
         docker system prune -af --volumes || true
 
-        df -h
+        if command -v df >/dev/null 2>&1; then
+          df -h || true
+        fi
         timeout 20s docker system df || true

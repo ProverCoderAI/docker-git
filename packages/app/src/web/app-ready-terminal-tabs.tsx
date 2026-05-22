@@ -37,7 +37,7 @@ const activeTerminalProject = (
   sessions: ReadonlyArray<ActiveTerminalSession>,
   activeSessionId: string | null
 ): { readonly projectId: string; readonly projectKey?: string | undefined } | null => {
-  const active = sessions.find((session) => terminalSessionId(session) === activeSessionId) ?? sessions.at(-1)
+  const active = sessions.find((session) => terminalSessionId(session) === activeSessionId) ?? sessions[0]
   return active?.browserProjectId === undefined
     ? null
     : { projectId: active.browserProjectId, projectKey: active.browserProjectKey }

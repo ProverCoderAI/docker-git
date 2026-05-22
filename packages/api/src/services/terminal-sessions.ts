@@ -766,11 +766,11 @@ const writePtyInput = (pty: PtyBridge | null, data: string): void => {
 const shellQuote = (value: string): string => `'${value.replace(/'/gu, "'\\''")}'`
 
 // CHANGE: Predicate for when tmux should forward right-click pane events.
-// WHY: Mouse-aware apps and copy/view mode still need pane mouse events, while tmux menus must stay disabled.
+// WHY: Mouse-aware apps receive pane events; copy/view mode keeps tmux handling unless mouse tracking is active.
 // QUOTE(TZ): issue #340 right-click must not open the default tmux menu in browser terminals.
 // REF: PR #342 tmux right-click handling.
 // SOURCE: n/a
-// FORMAT THEOREM: mouse-aware-or-copy-mode => predicate evaluates truthy in tmux.
+// FORMAT THEOREM: mouse_any_flag or non-copy/view pane mode => predicate evaluates truthy in tmux.
 // PURITY: CORE
 // EFFECT: none
 // INVARIANT: The predicate contains only tmux format language and no shell interpolation.

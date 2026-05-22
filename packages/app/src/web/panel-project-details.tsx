@@ -124,6 +124,11 @@ const renderDetailsPanel = (
   )
 }
 
+const selectedProjectKeyForLiveSessions = (
+  project: SelectPanelProps["project"],
+  selectedProjectSummary: SelectPanelProps["selectedProjectSummary"]
+): string | null => selectedProjectSummary?.projectKey ?? project?.projectKey ?? null
+
 export const SelectPanel = (
   {
     currentMenu,
@@ -136,7 +141,7 @@ export const SelectPanel = (
     selectedProjectSummary
   }: SelectPanelProps
 ): JSX.Element | null => {
-  const selectedProjectKey = selectedProjectSummary?.projectKey ?? null
+  const selectedProjectKey = selectedProjectKeyForLiveSessions(project, selectedProjectSummary)
 
   if (currentMenu !== "Select") {
     return null

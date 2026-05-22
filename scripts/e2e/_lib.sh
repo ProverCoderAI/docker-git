@@ -155,13 +155,33 @@ dg_log_duration() {
   echo "e2e: ${label} completed in $((finished_at - started_at))s" >&2
 }
 
+# The reuse fast path assumes Bun installed the current workspace layout:
+# root node_modules plus Vite/TypeScript bins for packages/app, packages/lib,
+# and packages/docker-git-session-sync. If package names, locations, or the
+# package manager change, this check should fail closed and print the missing
+# path so CI falls back to a fresh install instead of silently using stale deps.
 dg_workspace_install_ready() {
   local repo_root="$1"
+  local required_bins=(
+    "$repo_root/packages/app/node_modules/.bin/vite"
+    "$repo_root/packages/lib/node_modules/.bin/tsc"
+    "$repo_root/packages/docker-git-session-sync/node_modules/.bin/vite"
+  )
+  local bin
 
-  [[ -d "$repo_root/node_modules" ]] \
-    && [[ -x "$repo_root/packages/app/node_modules/.bin/vite" ]] \
-    && [[ -x "$repo_root/packages/lib/node_modules/.bin/tsc" ]] \
-    && [[ -x "$repo_root/packages/docker-git-session-sync/node_modules/.bin/vite" ]]
+  if [[ ! -d "$repo_root/node_modules" ]]; then
+    echo "e2e: workspace install check failed: missing directory $repo_root/node_modules" >&2
+    return 1
+  fi
+
+  for bin in "${required_bins[@]}"; do
+    if [[ ! -x "$bin" ]]; then
+      echo "e2e: workspace install check failed: missing executable $bin" >&2
+      return 1
+    fi
+  done
+
+  return 0
 }
 
 dg_pick_free_port() {

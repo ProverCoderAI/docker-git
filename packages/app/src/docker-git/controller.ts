@@ -317,5 +317,12 @@ export const restartController = (): Effect.Effect<void, ControllerBootstrapErro
     }
 
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
-    yield* _(startAndRememberController({ ...bootstrapContext, forceRecreateController: true }))
+    const forceRecreateController = true
+    const buildController = shouldBuildControllerImage({
+      currentControllerRevision: bootstrapContext.currentControllerRevision,
+      currentImageRevision: bootstrapContext.currentImageRevision,
+      forceRecreateController,
+      localControllerRevision: bootstrapContext.localControllerRevision
+    })
+    yield* _(startAndRememberController({ ...bootstrapContext, buildController, forceRecreateController }))
   })

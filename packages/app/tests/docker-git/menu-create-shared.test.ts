@@ -150,6 +150,18 @@ describe("menu-create-shared", () => {
     expect(view.values.outDir).toBe("/home/dev/.docker-git/org/repo")
   })
 
+  it("preserves an absolute root projectsRoot in browser mode", () => {
+    const view = expectCreateContinueView(advanceCreateFlow(
+      {
+        cwd: "/repo/packages/api",
+        projectsRoot: "/"
+      },
+      createInitialFlowView(featureCreateRepoUrl)
+    ))
+
+    expect(view.values.outDir).toBe("/org/repo")
+  })
+
   it("moves between remaining settings rows and clears the input buffer", () => {
     const view = createFeatureRepoSettingsView(cwd)
     const editingView = { ...view, buffer: "stale" }
@@ -185,7 +197,7 @@ describe("menu-create-shared", () => {
     )
   })
 
-  it("advances by one settings index after applying the current setting", () => {
+  it("advances to the next remaining settings row after applying the current setting", () => {
     const next = expectCreateContinueView(advanceCreateFlow(
       cwd,
       {
@@ -195,8 +207,8 @@ describe("menu-create-shared", () => {
     ))
 
     expect(next.values.cpuLimit).toBe("45%")
-    expect(next.step).toBe(2)
-    expect(resolveCreateFlowSteps(next.values)[next.step]).toBe("gpu")
+    expect(next.step).toBe(1)
+    expect(resolveCreateFlowSteps(next.values)[next.step]).toBe("ramLimit")
   })
 
   it("maps create-mode steps to the matching display row when opening browser Settings", () => {
