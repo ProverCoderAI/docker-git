@@ -1,0 +1,51 @@
+[package]
+name = "docker-git-browser-connection"
+version = "0.1.0"
+edition = "2021"
+description = "Rust module for noVNC + browser connection (single browser for docker-git, MCP and Hermes tools) - per issue #347"
+license = "MIT"
+keywords = ["docker-git", "browser", "novnc", "cdp", "rust"]
+repository = "https://github.com/ProverCoderAI/rust-browser-connection"
+rust-version = "1.70"
+
+[lib]
+name = "docker_git_browser_connection"
+path = "src/lib.rs"
+
+[[bin]]
+name = "docker-git-browser-connection"
+path = "src/main.rs"
+
+[dependencies]
+bollard = "0.16"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+clap = { version = "4.4", features = ["derive"] }
+anyhow = "1.0"
+futures = "0.3"
+log = "0.4"
+env_logger = "0.11"
+
+[dev-dependencies]
+tempfile = "3.0"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+[[test]]
+name = "unit"
+path = "tests/unit/mod.rs"
+
+[[test]]
+name = "integration"
+path = "tests/integration/mod.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
