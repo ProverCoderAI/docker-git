@@ -1,0 +1,879 @@
+diff --git a/docs/case-studies/issue-113/README.md b/docs/case-studies/issue-113/README.md
+new file mode 100644
+index 0000000..bd453f9
+--- /dev/null
++++ b/docs/case-studies/issue-113/README.md
+@@ -0,0 +1,111 @@
++# Case Study: Issue #113 - JavaScript Publish Does Not Work
++
++## Summary
++
++The JavaScript CI/CD pipeline was failing during the release step due to a subtle bug related to how the `command-stream` library handles the `cd` command.
++
++## Timeline of Events
++
++1. **CI Run Triggered**: Push to main branch triggered the JS CI/CD Pipeline (run #20885464993)
++2. **Tests Passed**: Lint, format check, and unit tests all passed successfully
++3. **Release Job Started**: The release job started and began processing changesets
++4. **Version Bump Executed**: The `version-and-commit.mjs` script ran `cd js && npm run changeset:version`
++5. **Failure**: After the version bump completed, the script failed with:
++   ```
++   Error: ENOENT: no such file or directory, open './js/package.json'
++   ```
++
++## Root Cause Analysis
++
++### The Bug
++
++The root cause was a subtle interaction between the `command-stream` library and Node.js's process working directory:
++
++1. **command-stream's Virtual `cd` Command**: The `command-stream` library implements `cd` as a **virtual command** that calls `process.chdir()` on the Node.js process itself, rather than just affecting the subprocess.
++
++2. **Working Directory Persistence**: When the script executed:
++   ```javascript
++   await $`cd js && npm run changeset:version`;
++   ```
++   The `cd js` command permanently changed the Node.js process's working directory from the repository root to the `js/` subdirectory.
++
++3. **Subsequent File Access Failure**: After the command returned, when the script tried to read `./js/package.json`, it was looking for the file relative to the **new** working directory (`js/`), which would resolve to `js/js/package.json` - a path that doesn't exist.
++
++### Code Flow
++
++```
++Repository Root (/)
++├── js/
++│   └── package.json    <- This is what we want to read
++└── scripts/
++    └── version-and-commit.mjs
++
++1. Script starts with cwd = /
++2. Script runs: await $`cd js && npm run changeset:version`
++3. command-stream's cd command calls: process.chdir('js')
++4. cwd is now /js/
++5. Script tries to read: readFileSync('./js/package.json')
++6. This resolves to: /js/js/package.json <- DOES NOT EXIST!
++7. Error: ENOENT
++```
++
++### Why This Was Hard to Detect
++
++- The `cd` command in most shell scripts only affects the subprocess, not the parent process
++- Developers familiar with Unix shells would not expect `cd` to affect the Node.js process
++- The error message didn't clearly indicate that the working directory had changed
++- The `command-stream` library documentation doesn't prominently warn about this behavior
++
++## Solution
++
++The fix involves saving the original working directory and restoring it after any command that uses `cd`:
++
++```javascript
++// Store the original working directory
++const originalCwd = process.cwd();
++
++try {
++  // ... code that uses cd ...
++  await $`cd js && npm run changeset:version`;
++
++  // Restore the original working directory
++  process.chdir(originalCwd);
++
++  // Now file operations work correctly
++  const packageJson = JSON.parse(readFileSync('./js/package.json', 'utf8'));
++} catch (error) {
++  // Handle error
++}
++```
++
++### Files Modified
++
++1. **scripts/version-and-commit.mjs**: Added cwd preservation and restoration after `cd js && npm run changeset:version`
++
++2. **scripts/instant-version-bump.mjs**: Added cwd preservation and restoration after:
++   - `cd js && npm version ${bumpType} --no-git-tag-version`
++   - `cd js && npm install --package-lock-only --legacy-peer-deps`
++
++3. **scripts/publish-to-npm.mjs**: Added cwd preservation and restoration after `cd js && npm run changeset:publish`, including proper handling in the retry loop error path
++
++## Lessons Learned
++
++1. **Understand Library Internals**: Third-party libraries may have non-obvious behaviors. The `command-stream` library's virtual `cd` command is a powerful feature for maintaining working directory state, but it can cause issues if not handled properly.
++
++2. **Test Edge Cases**: The CI environment differs from local development. File path handling can behave differently depending on the working directory context.
++
++3. **Add Defensive Code**: When using commands that modify process state, always save and restore the original state.
++
++4. **Document Non-Obvious Behaviors**: The fix includes detailed comments explaining why the `process.chdir()` restoration is necessary.
++
++## CI Logs
++
++The full CI logs are preserved in:
++- `ci-logs/full-run-20885464993.log` - Complete run log
++- `ci-logs/release-job-60008012717.log` - Detailed release job log
++
++## References
++
++- [GitHub Issue #113](https://github.com/link-assistant/agent/issues/113)
++- [CI Run #20885464993](https://github.com/link-assistant/agent/actions/runs/20885464993)
++- [command-stream npm package](https://www.npmjs.com/package/command-stream)
+diff --git a/scripts/instant-version-bump.mjs b/scripts/instant-version-bump.mjs
+index c1a34dd..7673338 100644
+--- a/scripts/instant-version-bump.mjs
++++ b/scripts/instant-version-bump.mjs
+@@ -14,6 +14,13 @@
+ 
+ import { readFileSync, writeFileSync } from 'fs';
+ 
++import {
++  getJsRoot,
++  getPackageJsonPath,
++  needsCd,
++  parseJsRootConfig,
++} from './js-paths.mjs';
++
+ // Load use-m dynamically
+ const { use } = eval(
+   await (await fetch('https://unpkg.com/use-m/use.js')).text()
+@@ -37,11 +44,24 @@ const config = makeConfig({
+         type: 'string',
+         default: getenv('DESCRIPTION', ''),
+         describe: 'Description for the version bump',
++      })
++      .option('js-root', {
++        type: 'string',
++        default: getenv('JS_ROOT', ''),
++        describe: 'JavaScript package root directory (auto-detected if not specified)',
+       }),
+ });
+ 
++// Store the original working directory to restore after cd commands
++// IMPORTANT: command-stream's cd is a virtual command that calls process.chdir()
++const originalCwd = process.cwd();
++
+ try {
+-  const { bumpType, description } = config;
++  const { bumpType, description, jsRoot: jsRootArg } = config;
++
++  // Get JavaScript package root (auto-detect or use explicit config)
++  const jsRootConfig = jsRootArg || parseJsRootConfig();
++  const jsRoot = getJsRoot({ jsRoot: jsRootConfig, verbose: true });
+   const finalDescription = description || `Manual ${bumpType} release`;
+ 
+   if (!bumpType || !['major', 'minor', 'patch'].includes(bumpType)) {
+@@ -54,15 +74,22 @@ try {
+   console.log(`\nBumping version (${bumpType})...`);
+ 
+   // Get current version
+-  const packageJson = JSON.parse(readFileSync('js/package.json', 'utf-8'));
++  const packageJsonPath = getPackageJsonPath({ jsRoot });
++  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+   const oldVersion = packageJson.version;
+   console.log(`Current version: ${oldVersion}`);
+ 
+   // Bump version using npm version (doesn't create git tag)
+-  await $`cd js && npm version ${bumpType} --no-git-tag-version`;
++  // IMPORTANT: cd is a virtual command that calls process.chdir(), so we restore after
++  if (needsCd({ jsRoot })) {
++    await $`cd ${jsRoot} && npm version ${bumpType} --no-git-tag-version`;
++    process.chdir(originalCwd);
++  } else {
++    await $`npm version ${bumpType} --no-git-tag-version`;
++  }
+ 
+   // Get new version
+-  const updatedPackageJson = JSON.parse(readFileSync('js/package.json', 'utf-8'));
++  const updatedPackageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+   const newVersion = updatedPackageJson.version;
+   console.log(`New version: ${newVersion}`);
+ 
+@@ -108,7 +135,13 @@ try {
+ 
+   // Synchronize package-lock.json
+   console.log('\nSynchronizing package-lock.json...');
+-  await $`cd js && npm install --package-lock-only --legacy-peer-deps`;
++  // IMPORTANT: cd is a virtual command that calls process.chdir(), so we restore after
++  if (needsCd({ jsRoot })) {
++    await $`cd ${jsRoot} && npm install --package-lock-only --legacy-peer-deps`;
++    process.chdir(originalCwd);
++  } else {
++    await $`npm install --package-lock-only --legacy-peer-deps`;
++  }
+ 
+   console.log('\n✅ Instant version bump complete');
+   console.log(`Version: ${oldVersion} → ${newVersion}`);
+diff --git a/scripts/js-paths.mjs b/scripts/js-paths.mjs
+new file mode 100644
+index 0000000..810d56b
+--- /dev/null
++++ b/scripts/js-paths.mjs
+@@ -0,0 +1,159 @@
++#!/usr/bin/env node
++
++/**
++ * JavaScript package path detection utility
++ *
++ * Automatically detects the JavaScript package root for both:
++ * - Single-language repositories (package.json in root)
++ * - Multi-language repositories (package.json in js/ subfolder)
++ *
++ * Usage:
++ *   import { getJsRoot, getPackageJsonPath, getChangesetDir } from './js-paths.mjs';
++ *
++ *   const jsRoot = getJsRoot();          // Returns 'js' or '.'
++ *   const pkgPath = getPackageJsonPath(); // Returns 'js/package.json' or './package.json'
++ */
++
++import { existsSync } from 'fs';
++import { join } from 'path';
++
++// Cache for detected paths (computed once per process)
++let cachedJsRoot = null;
++
++/**
++ * Detect JavaScript package root directory
++ * Checks in order:
++ * 1. ./package.json (single-language repo)
++ * 2. ./js/package.json (multi-language repo)
++ *
++ * @param {Object} options - Configuration options
++ * @param {string} [options.jsRoot] - Explicitly set JavaScript root (overrides auto-detection)
++ * @param {boolean} [options.verbose=false] - Log detection details
++ * @returns {string} The JavaScript root directory ('.' or 'js')
++ * @throws {Error} If no package.json is found in expected locations
++ */
++export function getJsRoot(options = {}) {
++  const { jsRoot: explicitRoot, verbose = false } = options;
++
++  // If explicitly configured, use that
++  if (explicitRoot !== undefined) {
++    if (verbose) {
++      console.log(`Using explicitly configured JavaScript root: ${explicitRoot}`);
++    }
++    return explicitRoot;
++  }
++
++  // Return cached value if already computed
++  if (cachedJsRoot !== null) {
++    return cachedJsRoot;
++  }
++
++  // Check for single-language repo (package.json in root)
++  if (existsSync('./package.json')) {
++    if (verbose) {
++      console.log('Detected single-language repository (package.json in root)');
++    }
++    cachedJsRoot = '.';
++    return cachedJsRoot;
++  }
++
++  // Check for multi-language repo (package.json in js/ subfolder)
++  if (existsSync('./js/package.json')) {
++    if (verbose) {
++      console.log('Detected multi-language repository (package.json in js/)');
++    }
++    cachedJsRoot = 'js';
++    return cachedJsRoot;
++  }
++
++  // No package.json found
++  throw new Error(
++    'Could not find package.json in expected locations.\n' +
++    'Searched in:\n' +
++    '  - ./package.json (single-language repository)\n' +
++    '  - ./js/package.json (multi-language repository)\n\n' +
++    'To fix this, either:\n' +
++    '  1. Run the script from the repository root\n' +
++    '  2. Explicitly configure the JavaScript root using --js-root option\n' +
++    '  3. Set the JS_ROOT environment variable'
++  );
++}
++
++/**
++ * Get the path to package.json
++ * @param {Object} options - Configuration options (passed to getJsRoot)
++ * @returns {string} Path to package.json
++ */
++export function getPackageJsonPath(options = {}) {
++  const jsRoot = getJsRoot(options);
++  return jsRoot === '.' ? './package.json' : join(jsRoot, 'package.json');
++}
++
++/**
++ * Get the path to package-lock.json
++ * @param {Object} options - Configuration options (passed to getJsRoot)
++ * @returns {string} Path to package-lock.json
++ */
++export function getPackageLockPath(options = {}) {
++  const jsRoot = getJsRoot(options);
++  return jsRoot === '.' ? './package-lock.json' : join(jsRoot, 'package-lock.json');
++}
++
++/**
++ * Get the path to .changeset directory
++ * @param {Object} options - Configuration options (passed to getJsRoot)
++ * @returns {string} Path to .changeset directory
++ */
++export function getChangesetDir(options = {}) {
++  const jsRoot = getJsRoot(options);
++  return jsRoot === '.' ? './.changeset' : join(jsRoot, '.changeset');
++}
++
++/**
++ * Get the cd command prefix for running npm commands
++ * Returns empty string for single-language repos, 'cd js && ' for multi-language repos
++ * @param {Object} options - Configuration options (passed to getJsRoot)
++ * @returns {string} CD prefix for shell commands
++ */
++export function getCdPrefix(options = {}) {
++  const jsRoot = getJsRoot(options);
++  return jsRoot === '.' ? '' : `cd ${jsRoot} && `;
++}
++
++/**
++ * Check if we need to change directory before running npm commands
++ * @param {Object} options - Configuration options (passed to getJsRoot)
++ * @returns {boolean} True if cd is needed
++ */
++export function needsCd(options = {}) {
++  const jsRoot = getJsRoot(options);
++  return jsRoot !== '.';
++}
++
++/**
++ * Reset the cached JavaScript root (useful for testing)
++ */
++export function resetCache() {
++  cachedJsRoot = null;
++}
++
++/**
++ * Parse JavaScript root from CLI arguments or environment
++ * Supports --js-root argument and JS_ROOT environment variable
++ * @returns {string|undefined} Configured JavaScript root or undefined for auto-detection
++ */
++export function parseJsRootConfig() {
++  // Check CLI arguments
++  const args = process.argv.slice(2);
++  const jsRootIndex = args.indexOf('--js-root');
++  if (jsRootIndex >= 0 && args[jsRootIndex + 1]) {
++    return args[jsRootIndex + 1];
++  }
++
++  // Check environment variable
++  if (process.env.JS_ROOT) {
++    return process.env.JS_ROOT;
++  }
++
++  return undefined;
++}
+diff --git a/scripts/publish-to-npm.mjs b/scripts/publish-to-npm.mjs
+index 450af67..9b41bc4 100644
+--- a/scripts/publish-to-npm.mjs
++++ b/scripts/publish-to-npm.mjs
+@@ -15,6 +15,13 @@
+ 
+ import { readFileSync, appendFileSync } from 'fs';
+ 
++import {
++  getJsRoot,
++  getPackageJsonPath,
++  needsCd,
++  parseJsRootConfig,
++} from './js-paths.mjs';
++
+ // Package name from package.json
+ const PACKAGE_NAME = '@link-assistant/agent';
+ 
+@@ -30,14 +37,24 @@ const { makeConfig } = await use('lino-arguments');
+ // Parse CLI arguments using lino-arguments
+ const config = makeConfig({
+   yargs: ({ yargs, getenv }) =>
+-    yargs.option('should-pull', {
+-      type: 'boolean',
+-      default: getenv('SHOULD_PULL', false),
+-      describe: 'Pull latest changes before publishing',
+-    }),
++    yargs
++      .option('should-pull', {
++        type: 'boolean',
++        default: getenv('SHOULD_PULL', false),
++        describe: 'Pull latest changes before publishing',
++      })
++      .option('js-root', {
++        type: 'string',
++        default: getenv('JS_ROOT', ''),
++        describe: 'JavaScript package root directory (auto-detected if not specified)',
++      }),
+ });
+ 
+-const { shouldPull } = config;
++const { shouldPull, jsRoot: jsRootArg } = config;
++
++// Get JavaScript package root (auto-detect or use explicit config)
++const jsRootConfig = jsRootArg || parseJsRootConfig();
++const jsRoot = getJsRoot({ jsRoot: jsRootConfig, verbose: true });
+ const MAX_RETRIES = 3;
+ const RETRY_DELAY = 10000; // 10 seconds
+ 
+@@ -62,6 +79,10 @@ function setOutput(key, value) {
+ }
+ 
+ async function main() {
++  // Store the original working directory to restore after cd commands
++  // IMPORTANT: command-stream's cd is a virtual command that calls process.chdir()
++  const originalCwd = process.cwd();
++
+   try {
+     if (shouldPull) {
+       // Pull the latest changes we just pushed
+@@ -69,7 +90,8 @@ async function main() {
+     }
+ 
+     // Get current version
+-    const packageJson = JSON.parse(readFileSync('./js/package.json', 'utf8'));
++    const packageJsonPath = getPackageJsonPath({ jsRoot });
++    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+     const currentVersion = packageJson.version;
+     console.log(`Current version to publish: ${currentVersion}`);
+ 
+@@ -101,7 +123,14 @@ async function main() {
+     for (let i = 1; i <= MAX_RETRIES; i++) {
+       console.log(`Publish attempt ${i} of ${MAX_RETRIES}...`);
+       try {
+-        await $`npm run changeset:publish`;
++        // Run changeset:publish from the js directory where package.json with this script exists
++        // IMPORTANT: cd is a virtual command that calls process.chdir(), so we restore after
++        if (needsCd({ jsRoot })) {
++          await $`cd ${jsRoot} && npm run changeset:publish`;
++          process.chdir(originalCwd);
++        } else {
++          await $`npm run changeset:publish`;
++        }
+         setOutput('published', 'true');
+         setOutput('published_version', currentVersion);
+         console.log(
+@@ -109,6 +138,10 @@ async function main() {
+         );
+         return;
+       } catch (_error) {
++        // Restore cwd on error before retry
++        if (needsCd({ jsRoot })) {
++          process.chdir(originalCwd);
++        }
+         if (i < MAX_RETRIES) {
+           console.log(
+             `Publish failed, waiting ${RETRY_DELAY / 1000}s before retry...`
+diff --git a/scripts/rust-collect-changelog.mjs b/scripts/rust-collect-changelog.mjs
+index dc4f385..dd6712c 100644
+--- a/scripts/rust-collect-changelog.mjs
++++ b/scripts/rust-collect-changelog.mjs
+@@ -15,8 +15,29 @@ import {
+ } from 'fs';
+ import { join } from 'path';
+ 
+-const CHANGELOG_DIR = 'rust/changelog.d';
+-const CHANGELOG_FILE = 'rust/CHANGELOG.md';
++import {
++  getRustRoot,
++  getCargoTomlPath,
++  getChangelogDir,
++  getChangelogPath,
++  parseRustRootConfig,
++} from './rust-paths.mjs';
++
++// Simple CLI argument parsing
++const args = process.argv.slice(2);
++const getArg = (name, defaultValue) => {
++  const index = args.indexOf(`--${name}`);
++  return index >= 0 && args[index + 1] ? args[index + 1] : defaultValue;
++};
++
++// Get Rust package root (auto-detect or use explicit config)
++const rustRootConfig = getArg('rust-root', '') || parseRustRootConfig();
++const rustRoot = getRustRoot({ rustRoot: rustRootConfig || undefined, verbose: true });
++
++// Get paths based on detected/configured rust root
++const CARGO_TOML = getCargoTomlPath({ rustRoot });
++const CHANGELOG_DIR = getChangelogDir({ rustRoot });
++const CHANGELOG_FILE = getChangelogPath({ rustRoot });
+ const INSERT_MARKER = '<!-- changelog-insert-here -->';
+ 
+ /**
+@@ -24,11 +45,11 @@ const INSERT_MARKER = '<!-- changelog-insert-here -->';
+  * @returns {string}
+  */
+ function getVersionFromCargo() {
+-  const cargoToml = readFileSync('rust/Cargo.toml', 'utf-8');
++  const cargoToml = readFileSync(CARGO_TOML, 'utf-8');
+   const match = cargoToml.match(/^version\s*=\s*"([^"]+)"/m);
+ 
+   if (!match) {
+-    console.error('Error: Could not find version in rust/Cargo.toml');
++    console.error(`Error: Could not find version in ${CARGO_TOML}`);
+     process.exit(1);
+   }
+ 
+diff --git a/scripts/rust-get-bump-type.mjs b/scripts/rust-get-bump-type.mjs
+index 31b492e..0a608a9 100644
+--- a/scripts/rust-get-bump-type.mjs
++++ b/scripts/rust-get-bump-type.mjs
+@@ -20,6 +20,12 @@
+ import { readFileSync, readdirSync, existsSync, appendFileSync } from 'fs';
+ import { join } from 'path';
+ 
++import {
++  getRustRoot,
++  getChangelogDir,
++  parseRustRootConfig,
++} from './rust-paths.mjs';
++
+ // Simple CLI argument parsing
+ const args = process.argv.slice(2);
+ const getArg = (name, defaultValue) => {
+@@ -29,7 +35,12 @@ const getArg = (name, defaultValue) => {
+ 
+ const defaultBump = getArg('default', process.env.DEFAULT_BUMP || 'patch');
+ 
+-const CHANGELOG_DIR = 'rust/changelog.d';
++// Get Rust package root (auto-detect or use explicit config)
++const rustRootConfig = getArg('rust-root', '') || parseRustRootConfig();
++const rustRoot = getRustRoot({ rustRoot: rustRootConfig || undefined, verbose: true });
++
++// Get paths based on detected/configured rust root
++const CHANGELOG_DIR = getChangelogDir({ rustRoot });
+ 
+ // Bump type priority (higher = more significant)
+ const BUMP_PRIORITY = {
+diff --git a/scripts/rust-paths.mjs b/scripts/rust-paths.mjs
+new file mode 100644
+index 0000000..4f4636a
+--- /dev/null
++++ b/scripts/rust-paths.mjs
+@@ -0,0 +1,169 @@
++#!/usr/bin/env node
++
++/**
++ * Rust package path detection utility
++ *
++ * Automatically detects the Rust package root for both:
++ * - Single-language repositories (Cargo.toml in root)
++ * - Multi-language repositories (Cargo.toml in rust/ subfolder)
++ *
++ * Usage:
++ *   import { getRustRoot, getCargoTomlPath, getChangelogDir } from './rust-paths.mjs';
++ *
++ *   const rustRoot = getRustRoot();          // Returns 'rust' or '.'
++ *   const cargoPath = getCargoTomlPath();    // Returns 'rust/Cargo.toml' or './Cargo.toml'
++ */
++
++import { existsSync } from 'fs';
++import { join } from 'path';
++
++// Cache for detected paths (computed once per process)
++let cachedRustRoot = null;
++
++/**
++ * Detect Rust package root directory
++ * Checks in order:
++ * 1. ./Cargo.toml (single-language repo)
++ * 2. ./rust/Cargo.toml (multi-language repo)
++ *
++ * @param {Object} options - Configuration options
++ * @param {string} [options.rustRoot] - Explicitly set Rust root (overrides auto-detection)
++ * @param {boolean} [options.verbose=false] - Log detection details
++ * @returns {string} The Rust root directory ('.' or 'rust')
++ * @throws {Error} If no Cargo.toml is found in expected locations
++ */
++export function getRustRoot(options = {}) {
++  const { rustRoot: explicitRoot, verbose = false } = options;
++
++  // If explicitly configured, use that
++  if (explicitRoot !== undefined) {
++    if (verbose) {
++      console.log(`Using explicitly configured Rust root: ${explicitRoot}`);
++    }
++    return explicitRoot;
++  }
++
++  // Return cached value if already computed
++  if (cachedRustRoot !== null) {
++    return cachedRustRoot;
++  }
++
++  // Check for single-language repo (Cargo.toml in root)
++  if (existsSync('./Cargo.toml')) {
++    if (verbose) {
++      console.log('Detected single-language repository (Cargo.toml in root)');
++    }
++    cachedRustRoot = '.';
++    return cachedRustRoot;
++  }
++
++  // Check for multi-language repo (Cargo.toml in rust/ subfolder)
++  if (existsSync('./rust/Cargo.toml')) {
++    if (verbose) {
++      console.log('Detected multi-language repository (Cargo.toml in rust/)');
++    }
++    cachedRustRoot = 'rust';
++    return cachedRustRoot;
++  }
++
++  // No Cargo.toml found
++  throw new Error(
++    'Could not find Cargo.toml in expected locations.\n' +
++    'Searched in:\n' +
++    '  - ./Cargo.toml (single-language repository)\n' +
++    '  - ./rust/Cargo.toml (multi-language repository)\n\n' +
++    'To fix this, either:\n' +
++    '  1. Run the script from the repository root\n' +
++    '  2. Explicitly configure the Rust root using --rust-root option\n' +
++    '  3. Set the RUST_ROOT environment variable'
++  );
++}
++
++/**
++ * Get the path to Cargo.toml
++ * @param {Object} options - Configuration options (passed to getRustRoot)
++ * @returns {string} Path to Cargo.toml
++ */
++export function getCargoTomlPath(options = {}) {
++  const rustRoot = getRustRoot(options);
++  return rustRoot === '.' ? './Cargo.toml' : join(rustRoot, 'Cargo.toml');
++}
++
++/**
++ * Get the path to Cargo.lock
++ * @param {Object} options - Configuration options (passed to getRustRoot)
++ * @returns {string} Path to Cargo.lock
++ */
++export function getCargoLockPath(options = {}) {
++  const rustRoot = getRustRoot(options);
++  return rustRoot === '.' ? './Cargo.lock' : join(rustRoot, 'Cargo.lock');
++}
++
++/**
++ * Get the path to changelog.d directory
++ * @param {Object} options - Configuration options (passed to getRustRoot)
++ * @returns {string} Path to changelog.d directory
++ */
++export function getChangelogDir(options = {}) {
++  const rustRoot = getRustRoot(options);
++  return rustRoot === '.' ? './changelog.d' : join(rustRoot, 'changelog.d');
++}
++
++/**
++ * Get the path to CHANGELOG.md
++ * @param {Object} options - Configuration options (passed to getRustRoot)
++ * @returns {string} Path to CHANGELOG.md
++ */
++export function getChangelogPath(options = {}) {
++  const rustRoot = getRustRoot(options);
++  return rustRoot === '.' ? './CHANGELOG.md' : join(rustRoot, 'CHANGELOG.md');
++}
++
++/**
++ * Get the cd command prefix for running cargo commands
++ * Returns empty string for single-language repos, 'cd rust && ' for multi-language repos
++ * @param {Object} options - Configuration options (passed to getRustRoot)
++ * @returns {string} CD prefix for shell commands
++ */
++export function getCdPrefix(options = {}) {
++  const rustRoot = getRustRoot(options);
++  return rustRoot === '.' ? '' : `cd ${rustRoot} && `;
++}
++
++/**
++ * Check if we need to change directory before running cargo commands
++ * @param {Object} options - Configuration options (passed to getRustRoot)
++ * @returns {boolean} True if cd is needed
++ */
++export function needsCd(options = {}) {
++  const rustRoot = getRustRoot(options);
++  return rustRoot !== '.';
++}
++
++/**
++ * Reset the cached Rust root (useful for testing)
++ */
++export function resetCache() {
++  cachedRustRoot = null;
++}
++
++/**
++ * Parse Rust root from CLI arguments or environment
++ * Supports --rust-root argument and RUST_ROOT environment variable
++ * @returns {string|undefined} Configured Rust root or undefined for auto-detection
++ */
++export function parseRustRootConfig() {
++  // Check CLI arguments
++  const args = process.argv.slice(2);
++  const rustRootIndex = args.indexOf('--rust-root');
++  if (rustRootIndex >= 0 && args[rustRootIndex + 1]) {
++    return args[rustRootIndex + 1];
++  }
++
++  // Check environment variable
++  if (process.env.RUST_ROOT) {
++    return process.env.RUST_ROOT;
++  }
++
++  return undefined;
++}
+diff --git a/scripts/rust-version-and-commit.mjs b/scripts/rust-version-and-commit.mjs
+index f90bbd7..7b9117c 100644
+--- a/scripts/rust-version-and-commit.mjs
++++ b/scripts/rust-version-and-commit.mjs
+@@ -18,6 +18,14 @@ import {
+ import { join } from 'path';
+ import { execSync } from 'child_process';
+ 
++import {
++  getRustRoot,
++  getCargoTomlPath,
++  getChangelogDir,
++  getChangelogPath,
++  parseRustRootConfig,
++} from './rust-paths.mjs';
++
+ // Simple CLI argument parsing
+ const args = process.argv.slice(2);
+ const getArg = (name, defaultValue) => {
+@@ -28,16 +36,21 @@ const getArg = (name, defaultValue) => {
+ const bumpType = getArg('bump-type', process.env.BUMP_TYPE || '');
+ const description = getArg('description', process.env.DESCRIPTION || '');
+ 
++// Get Rust package root (auto-detect or use explicit config)
++const rustRootConfig = getArg('rust-root', '') || parseRustRootConfig();
++const rustRoot = getRustRoot({ rustRoot: rustRootConfig || undefined, verbose: true });
++
+ if (!bumpType || !['major', 'minor', 'patch'].includes(bumpType)) {
+   console.error(
+-    'Usage: node scripts/rust-version-and-commit.mjs --bump-type <major|minor|patch> [--description <desc>]'
++    'Usage: node scripts/rust-version-and-commit.mjs --bump-type <major|minor|patch> [--description <desc>] [--rust-root <path>]'
+   );
+   process.exit(1);
+ }
+ 
+-const CARGO_TOML = 'rust/Cargo.toml';
+-const CHANGELOG_DIR = 'rust/changelog.d';
+-const CHANGELOG_FILE = 'rust/CHANGELOG.md';
++// Get paths based on detected/configured rust root
++const CARGO_TOML = getCargoTomlPath({ rustRoot });
++const CHANGELOG_DIR = getChangelogDir({ rustRoot });
++const CHANGELOG_FILE = getChangelogPath({ rustRoot });
+ 
+ /**
+  * Append to GitHub Actions output file
+diff --git a/scripts/version-and-commit.mjs b/scripts/version-and-commit.mjs
+index 7235407..28d21dc 100644
+--- a/scripts/version-and-commit.mjs
++++ b/scripts/version-and-commit.mjs
+@@ -14,6 +14,14 @@
+ 
+ import { readFileSync, appendFileSync, readdirSync } from 'fs';
+ 
++import {
++  getJsRoot,
++  getPackageJsonPath,
++  getChangesetDir,
++  needsCd,
++  parseJsRootConfig,
++} from './js-paths.mjs';
++
+ // Load use-m dynamically
+ const { use } = eval(
+   await (await fetch('https://unpkg.com/use-m/use.js')).text()
+@@ -42,16 +50,26 @@ const config = makeConfig({
+         type: 'string',
+         default: getenv('DESCRIPTION', ''),
+         describe: 'Description for instant version bump',
++      })
++      .option('js-root', {
++        type: 'string',
++        default: getenv('JS_ROOT', ''),
++        describe: 'JavaScript package root directory (auto-detected if not specified)',
+       }),
+ });
+ 
+-const { mode, bumpType, description } = config;
++const { mode, bumpType, description, jsRoot: jsRootArg } = config;
++
++// Get JavaScript package root (auto-detect or use explicit config)
++const jsRootConfig = jsRootArg || parseJsRootConfig();
++const jsRoot = getJsRoot({ jsRoot: jsRootConfig, verbose: true });
+ 
+ // Debug: Log parsed configuration
+ console.log('Parsed configuration:', {
+   mode,
+   bumpType,
+   description: description || '(none)',
++  jsRoot,
+ });
+ 
+ // Detect if positional arguments were used (common mistake)
+@@ -112,7 +130,7 @@ function setOutput(key, value) {
+  */
+ function countChangesets() {
+   try {
+-    const changesetDir = 'js/.changeset';
++    const changesetDir = getChangesetDir({ jsRoot });
+     const files = readdirSync(changesetDir);
+     return files.filter((f) => f.endsWith('.md') && f !== 'README.md').length;
+   } catch {
+@@ -125,16 +143,24 @@ function countChangesets() {
+  * @param {string} source - 'local' or 'remote'
+  */
+ async function getVersion(source = 'local') {
++  const packageJsonPath = getPackageJsonPath({ jsRoot });
+   if (source === 'remote') {
+-    const result = await $`git show origin/main:js/package.json`.run({
++    // For remote, we need the path relative to repo root (without ./ prefix)
++    const remotePath = packageJsonPath.replace(/^\.\//, '');
++    const result = await $`git show origin/main:${remotePath}`.run({
+       capture: true,
+     });
+     return JSON.parse(result.stdout).version;
+   }
+-  return JSON.parse(readFileSync('./js/package.json', 'utf8')).version;
++  return JSON.parse(readFileSync(packageJsonPath, 'utf8')).version;
+ }
+ 
+ async function main() {
++  // Store the original working directory to restore after cd commands
++  // IMPORTANT: command-stream's cd is a virtual command that calls process.chdir()
++  // This means `cd js` actually changes the Node.js process's working directory
++  const originalCwd = process.cwd();
++
+   try {
+     // Configure git
+     await $`git config user.name "github-actions[bot]"`;
+@@ -186,17 +212,26 @@ async function main() {
+ 
+     if (mode === 'instant') {
+       console.log('Running instant version bump...');
+-      // Run instant version bump script
++      // Run instant version bump script, passing js-root for consistent path handling
+       // Rely on command-stream's auto-quoting for proper argument handling
+       if (description) {
+-        await $`node scripts/instant-version-bump.mjs --bump-type ${bumpType} --description ${description}`;
++        await $`node scripts/instant-version-bump.mjs --bump-type ${bumpType} --description ${description} --js-root ${jsRoot}`;
+       } else {
+-        await $`node scripts/instant-version-bump.mjs --bump-type ${bumpType}`;
++        await $`node scripts/instant-version-bump.mjs --bump-type ${bumpType} --js-root ${jsRoot}`;
+       }
+     } else {
+       console.log('Running changeset version...');
+       // Run changeset version to bump versions and update CHANGELOG
+-      await $`cd js && npm run changeset:version`;
++      // IMPORTANT: cd is a virtual command in command-stream that calls process.chdir()
++      // We need to restore the original directory after this command
++      if (needsCd({ jsRoot })) {
++        await $`cd ${jsRoot} && npm run changeset:version`;
++        // Restore the original working directory
++        process.chdir(originalCwd);
++      } else {
++        // Single-language repo - run in current directory
++        await $`npm run changeset:version`;
++      }
+     }
+ 
+     // Get new version after bump
