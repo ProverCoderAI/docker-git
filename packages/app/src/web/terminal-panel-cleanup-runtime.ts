@@ -24,7 +24,9 @@ export const cleanupTerminalResources = (
   args.lifecycle.disposed = true
   clearReconnectTimer(args)
   for (const disposable of args.lifecycle.inlineImageDisposables) {
-    disposable.dispose()
+    runOptionalTerminalOperation(() => {
+      disposable.dispose()
+    })
   }
   args.lifecycle.inlineImageDisposables = []
   revokeTerminalInlineImageObjectUrlCache(args.lifecycle.inlineImageObjectUrls)

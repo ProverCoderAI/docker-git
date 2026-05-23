@@ -6,6 +6,8 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { afterEach, beforeEach, vi } from "vitest"
 
+import type { ControllerBootstrapError } from "../../src/docker-git/host-errors.js"
+
 type CommandSpec = {
   readonly args: ReadonlyArray<string>
   readonly command: string
@@ -14,13 +16,28 @@ type CommandSpec = {
 }
 
 const ensureControllerReadyMock = vi.hoisted(() => vi.fn<() => Effect.Effect<void>>())
+const resolveApiBaseUrlMock = vi.hoisted(() => vi.fn<() => string>())
+const findReachableApiBaseUrlMock = vi.hoisted(
+  () => vi.fn<(candidateUrls: ReadonlyArray<string>) => Effect.Effect<string, ControllerBootstrapError>>()
+)
+const resolveConfiguredApiBaseUrlMock = vi.hoisted(() => vi.fn<() => string>())
+const resolveExplicitApiBaseUrlMock = vi.hoisted(() => vi.fn<() => string | undefined>())
 const runCommandCaptureMock = vi.hoisted(() => vi.fn<(spec: CommandSpec) => Effect.Effect<string>>())
 const runCommandExitCodeMock = vi.hoisted(() => vi.fn<(spec: CommandSpec) => Effect.Effect<number>>())
 const runCommandExitCodeStreamingMock = vi.hoisted(() => vi.fn<(spec: CommandSpec) => Effect.Effect<number>>())
 
 vi.mock("../../src/docker-git/controller.js", () => ({
   ensureControllerReady: ensureControllerReadyMock,
-  resolveApiBaseUrl: () => "http://127.0.0.1:3334"
+  resolveApiBaseUrl: resolveApiBaseUrlMock
+}))
+
+vi.mock("../../src/docker-git/controller-health.js", () => ({
+  findReachableApiBaseUrl: findReachableApiBaseUrlMock
+}))
+
+vi.mock("../../src/docker-git/controller-reachability.js", () => ({
+  resolveConfiguredApiBaseUrl: resolveConfiguredApiBaseUrlMock,
+  resolveExplicitApiBaseUrl: resolveExplicitApiBaseUrlMock
 }))
 
 vi.mock("../../src/docker-git/frontend-lib/shell/command-runner.js", () => ({
@@ -63,6 +80,10 @@ const requireEnvValue = (
   return value
 }
 
+const makeHttpUrl = (host: string, port: string): string => `http://${host}:${port}`
+
+const dockerBridgeHost = ["172", "17", "0", "2"].join(".")
+
 const writeWebStateFile = (
   statePath: string,
   state: Readonly<Record<string, string | number>>
@@ -100,6 +121,14 @@ describe("browser frontend command", () => {
             makeNonInteractive()
             ensureControllerReadyMock.mockReset()
             ensureControllerReadyMock.mockImplementation(() => Effect.void)
+            resolveApiBaseUrlMock.mockReset()
+            resolveApiBaseUrlMock.mockReturnValue("http://127.0.0.1:3334")
+            findReachableApiBaseUrlMock.mockReset()
+            findReachableApiBaseUrlMock.mockImplementation((candidateUrls) => Effect.succeed(candidateUrls[0] ?? ""))
+            resolveConfiguredApiBaseUrlMock.mockReset()
+            resolveConfiguredApiBaseUrlMock.mockReturnValue("http://127.0.0.1:3334")
+            resolveExplicitApiBaseUrlMock.mockReset()
+            resolveExplicitApiBaseUrlMock.mockImplementation(() => {})
             runCommandCaptureMock.mockReset()
             runCommandCaptureMock.mockImplementation(() => Effect.succeed(""))
             runCommandExitCodeMock.mockReset()
@@ -140,6 +169,50 @@ describe("browser frontend command", () => {
       expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
       expect(runCommandExitCodeMock).not.toHaveBeenCalled()
       expect(runCommandExitCodeStreamingMock).toHaveBeenCalledTimes(2)
+    }))
+
+  it.effect("prefers the reachable host API URL over a selected Docker bridge URL for the web proxy", () =>
+    Effect.gen(function*(_) {
+      resolveApiBaseUrlMock.mockReturnValue(makeHttpUrl(dockerBridgeHost, "3334"))
+      resolveConfiguredApiBaseUrlMock.mockReturnValue("http://127.0.0.1:3334")
+      findReachableApiBaseUrlMock.mockImplementation((candidateUrls) => Effect.succeed(candidateUrls[0] ?? ""))
+
+      yield* _(runBrowserCommandUnderTest)
+
+      expect(findReachableApiBaseUrlMock).toHaveBeenCalledWith(["http://127.0.0.1:3334"])
+      expect(streamingEnvs()).toEqual([
+        expect.objectContaining({ DOCKER_GIT_API_URL: "http://127.0.0.1:3334" }),
+        expect.objectContaining({ DOCKER_GIT_API_URL: "http://127.0.0.1:3334" })
+      ])
+    }))
+
+  it.effect("falls back to the selected controller URL when the host API URL is unreachable", () =>
+    Effect.gen(function*(_) {
+      const dockerBridgeApiBaseUrl = makeHttpUrl(dockerBridgeHost, "3334")
+      resolveApiBaseUrlMock.mockReturnValue(dockerBridgeApiBaseUrl)
+      resolveConfiguredApiBaseUrlMock.mockReturnValue("http://127.0.0.1:3334")
+      findReachableApiBaseUrlMock.mockReturnValue(Effect.fail({ _tag: "ControllerBootstrapError", message: "no" }))
+
+      yield* _(runBrowserCommandUnderTest)
+
+      expect(streamingEnvs()).toEqual([
+        expect.objectContaining({ DOCKER_GIT_API_URL: dockerBridgeApiBaseUrl }),
+        expect.objectContaining({ DOCKER_GIT_API_URL: dockerBridgeApiBaseUrl })
+      ])
+    }))
+
+  it.effect("does not override an explicit API URL", () =>
+    Effect.gen(function*(_) {
+      resolveApiBaseUrlMock.mockReturnValue("https://api.example.test")
+      resolveExplicitApiBaseUrlMock.mockReturnValue("https://api.example.test")
+
+      yield* _(runBrowserCommandUnderTest)
+
+      expect(findReachableApiBaseUrlMock).not.toHaveBeenCalled()
+      expect(streamingEnvs()).toEqual([
+        expect.objectContaining({ DOCKER_GIT_API_URL: "https://api.example.test" }),
+        expect.objectContaining({ DOCKER_GIT_API_URL: "https://api.example.test" })
+      ])
     }))
 
   it.effect("binds browser web to all host interfaces by default", () =>

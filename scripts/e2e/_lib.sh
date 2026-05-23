@@ -24,6 +24,7 @@ exec sudo -n env \
   "DOCKER_GIT_API_CONTAINER_NAME=${DOCKER_GIT_API_CONTAINER_NAME:-}" \
   "DOCKER_GIT_API_PORT=${DOCKER_GIT_API_PORT:-}" \
   "DOCKER_GIT_CONTROLLER_DOCKER_HOST=${DOCKER_GIT_CONTROLLER_DOCKER_HOST:-}" \
+  "DOCKER_GIT_CONTROLLER_BUILD_SKILLER=${DOCKER_GIT_CONTROLLER_BUILD_SKILLER:-}" \
   "DOCKER_GIT_CONTROLLER_REV=${DOCKER_GIT_CONTROLLER_REV:-}" \
   "DOCKER_GIT_DOCKERD_DEFAULT_CGROUPNS_MODE=${DOCKER_GIT_DOCKERD_DEFAULT_CGROUPNS_MODE:-}" \
   "DOCKER_GIT_DOCKERD_TCP_HOST=${DOCKER_GIT_DOCKERD_TCP_HOST:-}" \
@@ -132,6 +133,55 @@ dg_ensure_node_gyp() {
   fi
 
   export PATH="$node_gyp_bin:$PATH"
+}
+
+dg_is_truthy() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+dg_log_duration() {
+  local label="$1"
+  local started_at="$2"
+  local finished_at
+  finished_at="$(date +%s)"
+
+  echo "e2e: ${label} completed in $((finished_at - started_at))s" >&2
+}
+
+# The reuse fast path assumes Bun installed the current workspace layout:
+# root node_modules plus Vite/TypeScript bins for packages/app, packages/lib,
+# and packages/docker-git-session-sync. If package names, locations, or the
+# package manager change, this check should fail closed and print the missing
+# path so CI falls back to a fresh install instead of silently using stale deps.
+dg_workspace_install_ready() {
+  local repo_root="$1"
+  local required_bins=(
+    "$repo_root/packages/app/node_modules/.bin/vite"
+    "$repo_root/packages/lib/node_modules/.bin/tsc"
+    "$repo_root/packages/docker-git-session-sync/node_modules/.bin/vite"
+  )
+  local bin
+
+  if [[ ! -d "$repo_root/node_modules" ]]; then
+    echo "e2e: workspace install check failed: missing directory $repo_root/node_modules" >&2
+    return 1
+  fi
+
+  for bin in "${required_bins[@]}"; do
+    if [[ ! -x "$bin" ]]; then
+      echo "e2e: workspace install check failed: missing executable $bin" >&2
+      return 1
+    fi
+  done
+
+  return 0
 }
 
 dg_pick_free_port() {
@@ -430,31 +480,56 @@ dg_project_ssh_to_container() {
 dg_prepare_bun_workspace() {
   local repo_root="$1"
   local bin_dir="$2"
+  local started_at
 
   dg_ensure_bun
   dg_ensure_node_gyp "$bin_dir"
 
+  if dg_is_truthy "${DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL:-0}" && dg_workspace_install_ready "$repo_root"; then
+    echo "e2e: reusing existing Bun workspace install" >&2
+    return 0
+  fi
+
+  started_at="$(date +%s)"
   (
     cd "$repo_root"
     bun install --no-save --silent
   )
+  dg_log_duration "Bun workspace install" "$started_at"
 }
 
 dg_build_docker_git_cli() {
   local repo_root="$1"
+  local started_at
+
+  started_at="$(date +%s)"
+
+  if dg_is_truthy "${DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL:-0}" && dg_workspace_install_ready "$repo_root"; then
+    (
+      cd "$repo_root"
+      bun run --cwd packages/app build:docker-git:reuse-install
+    )
+    dg_log_duration "docker-git CLI build" "$started_at"
+    return 0
+  fi
 
   (
     cd "$repo_root"
     bun run --cwd packages/app build:docker-git
   )
+  dg_log_duration "docker-git CLI build" "$started_at"
 }
 
 dg_prepare_docker_git_cli() {
   local repo_root="$1"
   local bin_dir="$2"
+  local started_at
+
+  started_at="$(date +%s)"
 
   dg_prepare_bun_workspace "$repo_root" "$bin_dir"
   dg_build_docker_git_cli "$repo_root"
+  dg_log_duration "prepare docker-git CLI" "$started_at"
 }
 
 dg_run_docker_git() {

@@ -263,7 +263,7 @@ const resolveNextCreateFlowStep = (
 ): number =>
   currentStep === "repoUrl"
     ? firstCreateSettingsStepIndex
-    : currentStepIndex + 1
+    : currentStepIndex
 
 const shouldCompleteCreateFlow = (
   nextSteps: ReadonlyArray<CreateStep>,
@@ -278,14 +278,14 @@ const shouldCompleteCreateFlow = (
  * @complexity O(k + s) where s = number of remaining create steps
  */
 // CHANGE: advance normal create-flow settings after committing the active prompt
-// WHY: applying a non-repo step must move forward instead of reselecting the same index
-// QUOTE(ТЗ): "after applying a non-repoUrl step it advances to currentStepIndex + 1"
+// WHY: applying a non-repo step removes it from nextSteps, so the same index selects the next remaining row
+// QUOTE(ТЗ): "после cpuLimit нельзя пропустить ramLimit"
 // REF: issue-339
 // SOURCE: n/a
 // FORMAT THEOREM: remaining = empty or nextStep past end -> Complete, otherwise Continue(next valid setting)
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: applying the final settings index completes instead of clamping back to it
+// INVARIANT: the next view never skips the remaining setting at the applied index
 // COMPLEXITY: O(k + s) where s = number of remaining create steps
 export const advanceCreateFlow = (
   contextOrCwd: string | CreateFlowContext,
