@@ -182,8 +182,7 @@ export const inspectControllerImageRevision = (): Effect.Effect<
           Effect.catchTag("ControllerBootstrapError", (error) =>
             isMissingControllerImageInspectionError(error)
               ? Effect.succeed<string | null>(null)
-              : Effect.fail(error)
-          )
+              : Effect.fail(error))
         )
     )
   )

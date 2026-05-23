@@ -18,8 +18,10 @@ import {
   expectCreateCompleteInputs,
   expectCreateContinueView,
   expectCreateNavigationResult,
+  expectedOutDirForRepoUrl,
   expectedWrappedCreateNavigationStep,
-  featureCreateRepoUrl
+  featureCreateRepoUrl,
+  repositoryCreateInputArbitrary
 } from "./create-flow-test-helpers.js"
 
 const expectFeatureRepoDefaults = (
@@ -151,15 +153,21 @@ describe("menu-create-shared", () => {
   })
 
   it("preserves an absolute root projectsRoot in browser mode", () => {
-    const view = expectCreateContinueView(advanceCreateFlow(
-      {
-        cwd: "/repo/packages/api",
-        projectsRoot: "/"
-      },
-      createInitialFlowView(featureCreateRepoUrl)
-    ))
+    fc.assert(
+      fc.property(repositoryCreateInputArbitrary, ({ repoUrl }) => {
+        const view = expectCreateContinueView(advanceCreateFlow(
+          {
+            cwd: "/repo/packages/api",
+            projectsRoot: "/"
+          },
+          createInitialFlowView(repoUrl)
+        ))
 
-    expect(view.values.outDir).toBe("/org/repo")
+        expect(view.values.outDir).toBe(expectedOutDirForRepoUrl(repoUrl, "/"))
+        expect(view.values.outDir?.startsWith("/")).toBe(true)
+      }),
+      { numRuns: 50 }
+    )
   })
 
   it("moves between remaining settings rows and clears the input buffer", () => {
@@ -198,17 +206,21 @@ describe("menu-create-shared", () => {
   })
 
   it("advances to the next remaining settings row after applying the current setting", () => {
-    const next = expectCreateContinueView(advanceCreateFlow(
-      cwd,
-      {
-        ...createFeatureRepoSettingsView(cwd),
-        buffer: "45%"
-      }
-    ))
+    fc.assert(
+      fc.property(fc.constantFrom("", "25%", "45%", "100m"), (cpuLimit) => {
+        const next = expectCreateContinueView(advanceCreateFlow(
+          cwd,
+          {
+            ...createFeatureRepoSettingsView(cwd),
+            buffer: cpuLimit
+          }
+        ))
 
-    expect(next.values.cpuLimit).toBe("45%")
-    expect(next.step).toBe(1)
-    expect(resolveCreateFlowSteps(next.values)[next.step]).toBe("ramLimit")
+        expect(next.values.cpuLimit).toBe(cpuLimit)
+        expect(next.step).toBe(1)
+        expect(resolveCreateFlowSteps(next.values)[next.step]).toBe("ramLimit")
+      })
+    )
   })
 
   it("maps create-mode steps to the matching display row when opening browser Settings", () => {

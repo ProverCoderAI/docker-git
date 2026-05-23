@@ -2,18 +2,9 @@ import { Match } from "effect"
 import * as fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
-import {
-  advanceCreateFlow,
-  createInitialFlowView,
-  resolveCreateFlowSteps
-} from "../../src/docker-git/menu-create-shared.js"
+import { advanceCreateFlow, resolveCreateFlowSteps } from "../../src/docker-git/menu-create-shared.js"
 import type { CreateInputs, CreateStep } from "../../src/docker-git/menu-types.js"
-import {
-  expectCreateContinueView,
-  expectedOutDirForRepoUrl,
-  featureCreateRepoUrl,
-  repositoryCreateInputArbitrary
-} from "./create-flow-test-helpers.js"
+import { featureCreateRepoUrl } from "./create-flow-test-helpers.js"
 
 type CreateSettingStep = Exclude<CreateStep, "outDir" | "repoRef" | "repoUrl">
 
@@ -118,24 +109,6 @@ const createValuesWithSatisfiedSettings = (
 describe("menu-create-shared property invariants", () => {
   const cwd = process.cwd()
   const defaultRoot = `${process.env["HOME"] ?? cwd}/.docker-git/org/repo`
-
-  it("preserves absolute root projectsRoot for generated repo URLs", () => {
-    fc.assert(
-      fc.property(repositoryCreateInputArbitrary, ({ repoUrl }) => {
-        const view = expectCreateContinueView(advanceCreateFlow(
-          {
-            cwd: "/repo/packages/api",
-            projectsRoot: "/"
-          },
-          createInitialFlowView(repoUrl)
-        ))
-
-        expect(view.values.outDir).toBe(expectedOutDirForRepoUrl(repoUrl, "/"))
-        expect(view.values.outDir?.startsWith("/")).toBe(true)
-      }),
-      { numRuns: 50 }
-    )
-  })
 
   it("preserves the next remaining settings index after applying generated current settings", () => {
     fc.assert(
