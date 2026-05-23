@@ -175,7 +175,7 @@ const resolveBrowserFrontendApiBaseUrl = (): Effect.Effect<string, never, Contro
   const selectedApiBaseUrl = resolveApiBaseUrl()
   const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
   if (explicitApiBaseUrl !== undefined) {
-    return Effect.succeed(selectedApiBaseUrl)
+    return Effect.succeed(explicitApiBaseUrl)
   }
 
   const configuredApiBaseUrl = resolveConfiguredApiBaseUrl()
