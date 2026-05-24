@@ -68,7 +68,32 @@ RUN set -eu; \
     openssh-server git gh ca-certificates curl unzip bsdutils sudo tmux \
     make docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
     ncurses-term jq \
- && rm -rf /var/lib/apt/lists/*
+    rustc cargo \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.cargo/bin:/usr/local/cargo/bin:\${PATH}"
+
+# CHANGE: install the unified Rust browser connection with a current Rust toolchain.
+# WHY: rust-browser-connection uses a Cargo.lock format newer than Ubuntu apt cargo; silently ignoring install failures leaves MCP Playwright without the noVNC/CDP browser module.
+# QUOTE(ТЗ): "добиться что бы всё работало и этому были доказательства"
+# REF: issue-347
+# SOURCE: n/a
+# FORMAT THEOREM: image_build_success -> executable(docker-git-browser-connection) on PATH
+# PURITY: SHELL
+# EFFECT: Docker build downloads rustup and installs the GitHub Rust crate.
+# INVARIANT: generated project images fail fast instead of booting with MCP_PLAYWRIGHT_ENABLE=1 and no browser binary.
+# COMPLEXITY: O(network + cargo_build)
+RUN set -eu; \
+  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh; \
+  sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain stable; \
+  rm -f /tmp/rustup-init.sh; \
+  rustc --version; \
+  cargo --version
+
+# Install unified Rust browser connection (noVNC + CDP + single dg-*-browser guarantee)
+# Replaces all previous TS/MCP browser-connection duplication (per issue #347)
+RUN cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --branch main docker-git-browser-connection --locked \
+  && docker-git-browser-connection --version
 
 # Passwordless sudo for all users (container is disposable)
 RUN printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
@@ -198,8 +223,9 @@ if [[ "$MCP_PLAYWRIGHT_CDP_GUARD" == "1" ]]; then
   exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT" "\${EXTRA_ARGS[@]}" "$@"
 fi
 
-# kechangdev/browser-vnc binds Chromium CDP on 127.0.0.1:9222; it also host-checks HTTP requests.
-# When the guard is disabled, preserve the old behavior by converting the HTTP endpoint to WS.
+# Unified Rust browser (docker-git-browser-connection) now provides the single
+# dg-$PROJECT-browser container with CDP on :9223 (reachable by name when --network is passed).
+# MCP Playwright connects directly to ws://dg-...-browser:9223 — no more separate browser-vnc or cdp-guard duplication (per #347).
 fetch_cdp_version() {
   curl -sSf --connect-timeout 3 --max-time 10 -H 'Host: 127.0.0.1:9222' "\${CDP_ENDPOINT%/}/json/version" 2>/dev/null
 }
@@ -236,9 +262,9 @@ RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
 
 const renderDockerfilePlaywrightRuntime = (config: TemplateConfig): string =>
   config.enableMcpPlaywright
-    ? `# docker-git nested Playwright browser runtime context
-COPY Dockerfile.browser docker-git-cdp-guard mcp-playwright-start-extra.sh docker-git-browser-runtime.sh /opt/docker-git/browser/
-RUN chmod +x /opt/docker-git/browser/docker-git-cdp-guard /opt/docker-git/browser/mcp-playwright-start-extra.sh /opt/docker-git/browser/docker-git-browser-runtime.sh`
+    ? `# Unified Rust browser (dg-*-browser) is started by docker-git-browser-connection binary
+# No more COPY of separate browser files — single session guaranteed by Rust module (see entrypoint and rust-browser-connection repo)
+# Old browser-vnc + cdp-guard duplication removed per #347`
     : ""
 
 /**

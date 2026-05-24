@@ -2,18 +2,33 @@
 import type { TemplateConfig } from "./domain.js"
 import type { ResolvedComposeResourceLimits } from "./resource-limits.js"
 import { renderEntrypoint } from "./templates-entrypoint.js"
-import { type ComposeResourceLimits, renderDockerCompose } from "./templates/docker-compose.js"
-import { renderDockerfile } from "./templates/dockerfile.js"
-import { renderPlaywrightBrowserRuntime } from "./templates/playwright-browser-runtime.js"
 import {
-  renderPlaywrightBrowserDockerfile,
-  renderPlaywrightCdpGuard,
-  renderPlaywrightStartExtra
-} from "./templates/playwright.js"
+  type ComposeResourceLimits,
+  type DockerComposeRenderOptions,
+  renderDockerCompose
+} from "./templates/docker-compose.js"
+import { renderDockerfile } from "./templates/dockerfile.js"
+
+// NOTE (Rust migration #347):
+// The unified single-browser (noVNC + CDP) is now managed by the Rust binary
+// `docker-git-browser-connection` (separate repo ProverCoderAI/rust-browser-connection).
+// It guarantees exactly one `dg-{project}-browser` container per project.
+// Old separate Dockerfile.browser / docker-git-browser-runtime.sh / cdp-guard
+// have been replaced to avoid duplication with TS code.
+// The Rust CLI is started in background from entrypoint (see renderEntrypointRustBrowserConnection).
+// MCP Playwright connects to the CDP exposed by the shared browser container.
 
 export type FileSpec =
   | { readonly _tag: "File"; readonly relativePath: string; readonly contents: string; readonly mode?: number }
   | { readonly _tag: "Dir"; readonly relativePath: string }
+
+export type TemplateRenderOptions = {
+  readonly compose: DockerComposeRenderOptions
+}
+
+const defaultTemplateRenderOptions: TemplateRenderOptions = {
+  compose: { enableLocalDockerSocket: false }
+}
 
 const renderGitignore = (): string =>
   `# docker-git project files
@@ -51,31 +66,13 @@ const renderConfigJson = (config: TemplateConfig): string =>
 
 export const planFiles = (
   config: TemplateConfig,
-  composeResourceLimits?: ResolvedComposeResourceLimits | ComposeResourceLimits
+  composeResourceLimits?: ResolvedComposeResourceLimits | ComposeResourceLimits,
+  options: TemplateRenderOptions = defaultTemplateRenderOptions
 ): ReadonlyArray<FileSpec> => {
-  const maybePlaywrightFiles = config.enableMcpPlaywright
-    ? ([
-      { _tag: "File", relativePath: "Dockerfile.browser", contents: renderPlaywrightBrowserDockerfile() },
-      {
-        _tag: "File",
-        relativePath: "docker-git-cdp-guard",
-        contents: renderPlaywrightCdpGuard(),
-        mode: 0o755
-      },
-      {
-        _tag: "File",
-        relativePath: "mcp-playwright-start-extra.sh",
-        contents: renderPlaywrightStartExtra(),
-        mode: 0o755
-      },
-      {
-        _tag: "File",
-        relativePath: "docker-git-browser-runtime.sh",
-        contents: renderPlaywrightBrowserRuntime(),
-        mode: 0o755
-      }
-    ] satisfies ReadonlyArray<FileSpec>)
-    : ([] satisfies ReadonlyArray<FileSpec>)
+  // Old separate browser files removed — unified browser is provided by Rust module
+  // (started via background task in entrypoint.sh).
+  // No more duplication with packages/browser-connection or playwright-browser TS.
+  const maybePlaywrightFiles: ReadonlyArray<FileSpec> = []
 
   return [
     { _tag: "File", relativePath: "Dockerfile", contents: renderDockerfile(config) },
@@ -83,7 +80,7 @@ export const planFiles = (
     {
       _tag: "File",
       relativePath: "docker-compose.yml",
-      contents: renderDockerCompose(config, composeResourceLimits)
+      contents: renderDockerCompose(config, composeResourceLimits, options.compose)
     },
     { _tag: "File", relativePath: ".dockerignore", contents: renderDockerignore() },
     { _tag: "File", relativePath: "docker-git.json", contents: renderConfigJson(config) },

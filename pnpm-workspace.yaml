@@ -1,6 +1,5 @@
 packages:
   - packages/api
   - packages/app
-  - packages/browser-connection
   - packages/docker-git-session-sync
   - packages/lib
