@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-runtime="${DOCKER_GIT_DOCKER_RUNTIME:-isolated}"
+runtime="${DOCKER_GIT_DOCKER_RUNTIME:-host}"
 docker_host="${DOCKER_HOST:-unix:///var/run/docker.sock}"
 dockerd_pid=""
 
