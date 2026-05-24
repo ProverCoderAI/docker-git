@@ -37,7 +37,7 @@ services:
       - docker_git_projects:${DOCKER_GIT_PROJECTS_ROOT:-/home/dev/.docker-git}
       - docker_git_docker_data:/var/lib/docker
       - /var/run/docker.sock:/var/run/docker.sock
-    privileged: true
+    privileged: ${DOCKER_GIT_CONTROLLER_PRIVILEGED:-false}
     cgroup: host
     init: true
     restart: unless-stopped

@@ -48,6 +48,12 @@ const joinIp = (...octets: ReadonlyArray<string>): string => octets.join(".")
  * @throws Never
  */
 const makeHttpUrl = (host: string, port: string): string => ["ht", "tp://", host, ":", port].join("")
+const controllerSourceRevisionArbitrary = fc
+  .string({ maxLength: 64, minLength: 1 })
+  .filter((value) => !value.includes("\n") && !value.includes("\r"))
+const controllerGpuModeArbitrary = fc.constantFrom<"none" | "all">("none", "all")
+const controllerBuildSkillerModeArbitrary = fc.constantFrom<"0" | "1">("0", "1")
+
 describe("controller reachability", () => {
   it.effect("builds direct API candidates without Docker inspection", () =>
     Effect.sync(() => {
@@ -218,5 +224,18 @@ describe("controller reachability", () => {
       expect(controllerRevisionForMode("abc123def4567890", "none")).toBe("abc123def4567890-none-skiller1")
       expect(controllerRevisionForMode("abc123def4567890", "all")).toBe("abc123def4567890-all-skiller1")
       expect(controllerRevisionForMode("abc123def4567890", "none", "0")).toBe("abc123def4567890-none-skiller0")
+
+      fc.assert(
+        fc.property(
+          controllerSourceRevisionArbitrary,
+          controllerGpuModeArbitrary,
+          controllerBuildSkillerModeArbitrary,
+          (sourceRevision, gpuMode, buildSkillerMode) => {
+            expect(controllerRevisionForMode(sourceRevision, gpuMode, buildSkillerMode)).toBe(
+              `${sourceRevision}-${gpuMode}-skiller${buildSkillerMode}`
+            )
+          }
+        )
+      )
     }))
 })

@@ -2,7 +2,7 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
-import { Effect } from "effect"
+import { Duration, Effect } from "effect"
 
 import { computeLocalControllerRevision, controllerRevisionEnvKey } from "./controller-revision.js"
 import { runCommandWithCapturedOutput } from "./frontend-lib/shell/command-runner.js"
@@ -87,6 +87,9 @@ const composeFilePath = (): Effect.Effect<string, PlatformError, FileSystem.File
 const mapComposePathError = (error: PlatformError): ControllerBootstrapError =>
   controllerBootstrapError(`Failed to resolve docker-compose.yml path.\nDetails: ${String(error)}`)
 
+const mapSkillerPathError = (error: PlatformError): ControllerBootstrapError =>
+  controllerBootstrapError(`Failed to check Skiller submodule path.\nDetails: ${String(error)}`)
+
 const mapControllerRevisionError = (error: PlatformError): ControllerBootstrapError =>
   controllerBootstrapError(`Failed to compute docker-git controller revision.\nDetails: ${String(error)}`)
 
@@ -97,6 +100,7 @@ const skillerSubmoduleCommand = [
   "--checkout",
   skillerSubmodulePath
 ]
+const skillerSubmoduleInitTimeout = Duration.seconds(60)
 
 const formatSkillerSubmoduleFailure = (rootDir: string, exitCode: number, output: string): ControllerBootstrapError =>
   controllerBootstrapError(
@@ -121,6 +125,18 @@ const runSkillerSubmoduleInit = (
     [0],
     (exitCode, output) => formatSkillerSubmoduleFailure(rootDir, exitCode, output)
   ).pipe(
+    Effect.timeoutFail({
+      duration: skillerSubmoduleInitTimeout,
+      onTimeout: () =>
+        controllerBootstrapError(
+          [
+            "Timed out while initializing Skiller submodule before building docker-git controller.",
+            `Command: git ${skillerSubmoduleCommand.join(" ")}`,
+            `Working directory: ${rootDir}`,
+            `Timeout: ${Duration.toSeconds(skillerSubmoduleInitTimeout)} seconds`
+          ].join("\n")
+        )
+    }),
     Effect.mapError((error): ControllerBootstrapError =>
       error._tag === "ControllerBootstrapError"
         ? error
@@ -147,7 +163,7 @@ export const ensureSkillerSubmoduleInitialized = (
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const packagePath = path.join(rootDir, skillerPackagePath)
-    const existsBeforeInit = yield* _(fs.exists(packagePath).pipe(Effect.mapError(mapComposePathError)))
+    const existsBeforeInit = yield* _(fs.exists(packagePath).pipe(Effect.mapError(mapSkillerPathError)))
     if (existsBeforeInit) {
       return
     }
@@ -155,7 +171,7 @@ export const ensureSkillerSubmoduleInitialized = (
     yield* _(Effect.log("Initializing Skiller submodule for docker-git controller build."))
     yield* _(runSkillerSubmoduleInit(rootDir))
 
-    const existsAfterInit = yield* _(fs.exists(packagePath).pipe(Effect.mapError(mapComposePathError)))
+    const existsAfterInit = yield* _(fs.exists(packagePath).pipe(Effect.mapError(mapSkillerPathError)))
     if (existsAfterInit) {
       return
     }

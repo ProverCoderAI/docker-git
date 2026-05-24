@@ -11,11 +11,18 @@ This is now the intended controller plane:
 
 ## Runtime contract: host-Docker-backed
 
-`docker-git` is host-Docker-backed, not isolated. The controller container
-created from this package binds the host socket
+`docker-git` is host-Docker-backed by default. The primary controller
+container created from this package binds the host socket
 (`/var/run/docker.sock:/var/run/docker.sock`, see `docker-compose.yml`) and
-uses it to spawn per-project containers. There is no Docker-in-Docker
-runtime; the daemon is always the host's daemon.
+uses it to spawn per-project containers. `DOCKER_GIT_DOCKER_RUNTIME=isolated`
+is an opt-in fallback for environments that explicitly require an embedded
+controller daemon.
+
+Security note: binding `/var/run/docker.sock` gives the controller container
+root-equivalent control over the host Docker daemon, including the ability to
+create containers and mount host paths. This is an intended trade-off for the
+host-backed architecture; run the controller only in trusted environments and
+review the threat model before exposing the API.
 
 The host CLI (`packages/app`) also talks to that same daemon directly when
 it bootstraps the controller. Three failure modes look identical at first
@@ -61,8 +68,9 @@ Optional env:
 
 - `DOCKER_GIT_API_BIND_HOST` (default: `127.0.0.1`)
 - `DOCKER_GIT_API_PORT` (default: `3334`)
-- `DOCKER_GIT_DOCKER_RUNTIME` (default: `host`; set to `isolated` to use an embedded controller daemon)
+- `DOCKER_GIT_DOCKER_RUNTIME` (default: `host`; set to `isolated` as an optional fallback to use an embedded controller daemon)
 - `DOCKER_GIT_CONTROLLER_DOCKER_HOST` (default: `unix:///var/run/docker.sock`; socket path inside the controller)
+- `DOCKER_GIT_CONTROLLER_PRIVILEGED` (default: `false`; set to `true` only when using `DOCKER_GIT_DOCKER_RUNTIME=isolated`)
 - `DOCKER_GIT_DOCKERD_TCP_HOST` (default: `tcp://0.0.0.0:2375`; reachable only inside Docker networks unless explicitly published)
 - `DOCKER_GIT_DOCKERD_DEFAULT_CGROUPNS_MODE` (default: `host`; keeps nested project containers compatible with cgroup v2 DinD)
 - `DOCKER_GIT_PROJECT_DOCKER_HOST` (default: empty; unset uses host socket in project containers when mounted)
