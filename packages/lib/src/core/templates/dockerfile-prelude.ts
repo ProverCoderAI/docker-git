@@ -9,13 +9,13 @@
 // COMPLEXITY: O(1)/O(1)
 const dockerGitBaseImage = "konard/box-js:2.1.1"
 
-// CHANGE: include tmux in generated project images for durable terminal multiplexing.
-// WHY: stable project SSH links attach to persisted tmux sessions instead of one-off shell processes.
+// CHANGE: include tmux and build-essential in generated project images for durable sessions and Rust crate installation.
+// WHY: stable project SSH links need persisted tmux sessions, and cargo install of proc-macro/build-script dependencies requires a C linker.
 // QUOTE(ТЗ): n/a
 // REF: PR-309
 // SOURCE: n/a
 // PURITY: CORE
-// INVARIANT: generated base image contains the terminal multiplexer required by project SSH sessions.
+// INVARIANT: generated base image contains both the terminal multiplexer and cc toolchain required before Rust browser CLI installation.
 // COMPLEXITY: O(1)/O(1)
 const renderDockerfileBase = (): string =>
   `ARG DOCKER_GIT_BASE_IMAGE=${dockerGitBaseImage}
@@ -48,7 +48,7 @@ RUN set -eu; \
   done; \
   apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
     openssh-server git gh ca-certificates curl unzip bsdutils sudo tmux \
-    make docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
+    make build-essential docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
     ncurses-term jq \
   && rm -rf /var/lib/apt/lists/*`
 

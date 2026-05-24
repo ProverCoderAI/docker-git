@@ -89,6 +89,7 @@ describe("renderDockerfile", () => {
 
     expect(dockerfile).toContain("ARG DOCKER_GIT_BASE_IMAGE=konard/box-js:2.1.1")
     expect(dockerfile).toContain("FROM ${DOCKER_GIT_BASE_IMAGE}")
+    expect(dockerfile).toContain("make build-essential docker.io")
     expect(dockerfile).toContain(
       "#checkov:skip=CKV_DOCKER_8: docker-git entrypoint must start as root to prepare SSH/auth/bootstrap and run sshd"
     )
