@@ -1,103 +1,10 @@
 import type { TemplateConfig } from "../domain.js"
 import { shellSingleQuote } from "../shell-literals.js"
 import { renderDockerfilePrompt } from "../templates-prompt.js"
+import { renderDockerfilePlaywrightMcp } from "./dockerfile-playwright-mcp.js"
+import { renderDockerfilePrelude } from "./dockerfile-prelude.js"
 import { renderDockerfileGlab } from "./glab.js"
 import { renderDockerfileGitleaks, renderDockerfileOpenCode } from "./tools.js"
-
-// CHANGE: use the shared link-foundation JS box as the generated project base image
-// WHY: issue #267 asks docker-git to reuse unified box containers instead of maintaining a raw Ubuntu workspace base; the Docker Hub JS image is public and version-pinned to avoid latest drift
-// QUOTE(ТЗ): "Что бы не зависить только от своих обновлений, а иметь единую инфраструктру есть смысл юзать готовый репозиторий"
-// REF: issue-267
-// SOURCE: https://github.com/link-foundation/box#docker-hub---combo-boxes
-// FORMAT THEOREM: renderDockerfile(config) -> base_image_default(rendered) = konard/box-js:2.1.1
-// PURITY: CORE
-// INVARIANT: the rendered Dockerfile inherits JS/runtime tooling from link-foundation/box while preserving docker-git bootstrap layers
-// COMPLEXITY: O(1)/O(1)
-const dockerGitBaseImage = "konard/box-js:2.1.1"
-
-// CHANGE: include tmux in generated project images for durable terminal multiplexing.
-// WHY: stable project SSH links attach to persisted tmux sessions instead of one-off shell processes.
-// QUOTE(ТЗ): n/a
-// REF: PR-309
-// SOURCE: n/a
-// PURITY: CORE
-// INVARIANT: generated base image contains the terminal multiplexer required by project SSH sessions.
-// COMPLEXITY: O(1)/O(1)
-
-/**
- * Renders the base image, root user, apt mirror, core packages, and sudo prelude.
- *
- * @returns Dockerfile fragment that establishes the shared project container base.
- * @pure true
- * @effect none; CORE template renderer only constructs a string.
- * @invariant the returned fragment starts from the configured shared JS box image.
- * @precondition docker-git generated entrypoint remains the container entrypoint.
- * @postcondition the fragment keeps root available for setup and runtime bootstrap.
- * @complexity O(1) time / O(1) space.
- */
-const renderDockerfilePrelude = (): string =>
-  `ARG DOCKER_GIT_BASE_IMAGE=${dockerGitBaseImage}
-FROM \${DOCKER_GIT_BASE_IMAGE}
-
-#checkov:skip=CKV_DOCKER_8: docker-git entrypoint must start as root to prepare SSH/auth/bootstrap and run sshd
-USER root
-ARG UBUNTU_APT_MIRROR=
-ENV DEBIAN_FRONTEND=noninteractive
-ENV NVM_DIR=/usr/local/nvm
-
-RUN set -eu; \
-  if [ -n "\${UBUNTU_APT_MIRROR:-}" ]; then \
-    sed -i \
-      -e "s|http://archive.ubuntu.com/ubuntu|\${UBUNTU_APT_MIRROR}|g" \
-      -e "s|http://security.ubuntu.com/ubuntu|\${UBUNTU_APT_MIRROR}|g" \
-      /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true; \
-  fi; \
-  for attempt in 1 2 3 4 5; do \
-    rm -rf /var/lib/apt/lists/*; \
-    if apt-get -o Acquire::Retries=3 -o Acquire::By-Hash=force update; then \
-      break; \
-    fi; \
-    if [ "$attempt" = "5" ]; then \
-      echo "apt-get update failed after retries" >&2; \
-      exit 1; \
-    fi; \
-    echo "apt-get update attempt \${attempt} failed; retrying..." >&2; \
-    sleep $((attempt * 2)); \
-  done; \
-  apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-    openssh-server git gh ca-certificates curl unzip bsdutils sudo tmux \
-    make docker.io docker-compose-v2 bash-completion zsh zsh-autosuggestions xauth \
-    ncurses-term jq \
-    rustc cargo \
-  && rm -rf /var/lib/apt/lists/*
-
-ENV PATH="/root/.cargo/bin:/usr/local/cargo/bin:\${PATH}"
-
-# CHANGE: install the unified Rust browser connection with a current Rust toolchain.
-# WHY: rust-browser-connection uses a Cargo.lock format newer than Ubuntu apt cargo; silently ignoring install failures leaves MCP Playwright without the noVNC/CDP browser module.
-# QUOTE(ТЗ): "добиться что бы всё работало и этому были доказательства"
-# REF: issue-347
-# SOURCE: n/a
-# FORMAT THEOREM: image_build_success -> executable(docker-git-browser-connection) on PATH
-# PURITY: SHELL
-# EFFECT: Docker build downloads rustup and installs the GitHub Rust crate.
-# INVARIANT: generated project images fail fast instead of booting with MCP_PLAYWRIGHT_ENABLE=1 and no browser binary.
-# COMPLEXITY: O(network + cargo_build)
-RUN set -eu; \
-  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh; \
-  sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain stable; \
-  rm -f /tmp/rustup-init.sh; \
-  rustc --version; \
-  cargo --version
-
-# Install unified Rust browser connection (noVNC + CDP + single dg-*-browser guarantee)
-# Replaces all previous TS/MCP browser-connection duplication (per issue #347)
-RUN cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --branch main docker-git-browser-connection --locked \
-  && docker-git-browser-connection --version
-
-# Passwordless sudo for all users (container is disposable)
-RUN printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
-  && chmod 0440 /etc/sudoers.d/zz-all`
 
 const renderDockerfileNode = (): string =>
   `# Tooling: Node 24 (NodeSource) + nvm
@@ -178,88 +85,6 @@ RUN set -eu; \
 
 const dockerGitSessionSyncPackage = "@prover-coder-ai/docker-git-session-sync@latest"
 
-const dockerfilePlaywrightMcpBlock = String.raw`ARG PLAYWRIGHT_MCP_VERSION=0.0.75
-RUN npm install -g "@playwright/mcp@${"$"}{PLAYWRIGHT_MCP_VERSION}"
-
-# docker-git: wrapper that launches the MCP stdio server without blocking initialize on CDP readiness.
-RUN cat <<'EOF' > /usr/local/bin/docker-git-playwright-mcp
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Fast-path for help/version (avoid waiting for the nested browser runtime).
-for arg in "$@"; do
-  case "$arg" in
-    -h|--help|-V|--version)
-      exec playwright-mcp "$@"
-      ;;
-  esac
-done
-
-CDP_ENDPOINT="http://127.0.0.1:9223"
-
-# CHANGE: keep MCP initialize independent from nested browser readiness
-# WHY: Codex starts MCP servers during boot; blocking here closes stdio before initialize when CDP is slow.
-# QUOTE(issue-319): "handshaking with MCP server failed: connection closed: initialize response"
-# REF: issue-319
-# SOURCE: https://playwright.dev/mcp/configuration/options
-# FORMAT THEOREM: guarded_cdp(fixed_nested_browser_endpoint) -> mcp_stdio_ready_before_browser_connection
-# PURITY: SHELL
-# INVARIANT: guarded mode never exits before handing stdio to playwright-mcp
-# COMPLEXITY: O(1)
-MCP_PLAYWRIGHT_RETRY_ATTEMPTS="\${MCP_PLAYWRIGHT_RETRY_ATTEMPTS:-10}"
-MCP_PLAYWRIGHT_RETRY_DELAY="\${MCP_PLAYWRIGHT_RETRY_DELAY:-2}"
-MCP_PLAYWRIGHT_CDP_GUARD="\${MCP_PLAYWRIGHT_CDP_GUARD:-1}"
-MCP_PLAYWRIGHT_CDP_TIMEOUT="\${MCP_PLAYWRIGHT_CDP_TIMEOUT:-60000}"
-
-EXTRA_ARGS=()
-if [[ "\${MCP_PLAYWRIGHT_ISOLATED:-0}" == "1" ]]; then
-  EXTRA_ARGS+=(--isolated)
-fi
-
-# The guarded endpoint is the nested browser opened by docker-git Open browser.
-# Passing the fixed HTTP URL lets Playwright MCP
-# re-resolve /json/version instead of pinning itself to one stale /devtools/browser/<id>.
-if [[ "$MCP_PLAYWRIGHT_CDP_GUARD" == "1" ]]; then
-  exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT" "\${EXTRA_ARGS[@]}" "$@"
-fi
-
-# Unified Rust browser (docker-git-browser-connection) now provides the single
-# dg-$PROJECT-browser container with CDP on :9223 (reachable by name when --network is passed).
-# MCP Playwright connects directly to ws://dg-...-browser:9223 — no more separate browser-vnc or cdp-guard duplication (per #347).
-fetch_cdp_version() {
-  curl -sSf --connect-timeout 3 --max-time 10 -H 'Host: 127.0.0.1:9222' "\${CDP_ENDPOINT%/}/json/version" 2>/dev/null
-}
-
-JSON=""
-for attempt in $(seq 1 "$MCP_PLAYWRIGHT_RETRY_ATTEMPTS"); do
-  if JSON="$(fetch_cdp_version)"; then
-    break
-  fi
-  if [[ "$attempt" -lt "$MCP_PLAYWRIGHT_RETRY_ATTEMPTS" ]]; then
-    echo "docker-git-playwright-mcp: waiting for nested browser runtime (attempt $attempt/$MCP_PLAYWRIGHT_RETRY_ATTEMPTS)..." >&2
-    sleep "$MCP_PLAYWRIGHT_RETRY_DELAY"
-  fi
-done
-
-if [[ -z "$JSON" ]]; then
-  echo "docker-git-playwright-mcp: failed to connect to CDP endpoint $CDP_ENDPOINT after $MCP_PLAYWRIGHT_RETRY_ATTEMPTS attempts" >&2
-  exit 1
-fi
-
-WS_URL="$(printf "%s" "$JSON" | node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(j.webSocketDebuggerUrl || "")')"
-if [[ -z "$WS_URL" ]]; then
-  echo "docker-git-playwright-mcp: webSocketDebuggerUrl missing" >&2
-  exit 1
-fi
-
-# Rewrite ws origin to match the CDP endpoint origin (docker DNS).
-BASE_WS="$(CDP_ENDPOINT="$CDP_ENDPOINT" node -e 'const { URL } = require("url"); const u=new URL(process.env.CDP_ENDPOINT); const proto=u.protocol==="https:"?"wss:":"ws:"; process.stdout.write(proto + "//" + u.host)')"
-WS_REWRITTEN="$(BASE_WS="$BASE_WS" WS_URL="$WS_URL" node -e 'const { URL } = require("url"); const base=new URL(process.env.BASE_WS); const ws=new URL(process.env.WS_URL); ws.protocol=base.protocol; ws.host=base.host; process.stdout.write(ws.toString())')"
-
-exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT" "\${EXTRA_ARGS[@]}" "$@"
-EOF
-RUN chmod +x /usr/local/bin/docker-git-playwright-mcp`
-
 const renderDockerfilePlaywrightRuntime = (config: TemplateConfig): string =>
   config.enableMcpPlaywright
     ? `# Unified Rust browser (dg-*-browser) is started by docker-git-browser-connection binary
@@ -285,11 +110,7 @@ const renderDockerfileBunProfile = (): string =>
 const renderDockerfileBun = (config: TemplateConfig): string =>
   [
     renderDockerfileBunPrelude(config),
-    config.enableMcpPlaywright
-      ? dockerfilePlaywrightMcpBlock
-        .replaceAll("\\${", "${")
-        .replaceAll("__SERVICE_NAME__", config.serviceName)
-      : "",
+    config.enableMcpPlaywright ? renderDockerfilePlaywrightMcp() : "",
     renderDockerfileBunProfile()
   ]
     .filter((chunk) => chunk.trim().length > 0)
