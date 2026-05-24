@@ -23,9 +23,19 @@ bun run docker-git --help
 
 ```bash
 bun run docker-git auth github login --web
-bun run  docker-git auth codex login --web
-bun run  docker-git auth claude login --web
-bun run  docker-git auth grok login --web
+bun run docker-git auth codex login --web
+bun run docker-git auth claude login --web
+bun run docker-git auth grok login --web
+```
+
+Для запуска WEB версии:
+```bash
+bun run docker-git -- browser
+```
+
+По умолчанию web-версия слушает все интерфейсы хоста (`0.0.0.0`), поэтому её можно открыть с другого устройства в LAN, например `http://192.168.0.206:4174/`. Чтобы ограничить доступ только этой машиной:
+```bash
+DOCKER_GIT_WEB_HOST=127.0.0.1 bun run docker-git -- browser
 ```
 
 ## CLI пример
@@ -60,16 +70,6 @@ bun run docker-git apply-all --active
 
 - `apply` применяет конфиг к одному проекту. `--no-up` только обновляет файлы без `docker compose up`.
 - `apply-all` применяет конфиг ко всем проектам. `--active` только к запущенным контейнерам.
-
-Для запуска WEB версии:
-```bash
-bun run docker-git -- browser
-```
-
-По умолчанию web-версия слушает все интерфейсы хоста (`0.0.0.0`), поэтому её можно открыть с другого устройства в LAN, например `http://192.168.0.206:4174/`. Чтобы ограничить доступ только этой машиной:
-```bash
-DOCKER_GIT_WEB_HOST=127.0.0.1 bun run docker-git -- browser
-```
 
 ## Подробности
 
