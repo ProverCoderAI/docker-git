@@ -57,10 +57,10 @@ RUN set -eu; \
 // QUOTE(ТЗ): "Rust-only отдельный модуль для noVNC/browser, без TS-дублирования"
 // REF: issue-347
 // SOURCE: n/a
-// FORMAT THEOREM: image_build_success -> executable(/usr/local/bin/docker-git-browser-connection)
+// FORMAT THEOREM: image_build_success -> executables(/usr/local/bin/docker-git-browser-connection, /usr/local/bin/browser-connection)
 // PURITY: SHELL
-// EFFECT: Docker build downloads rustup and installs the GitHub Rust crate.
-// INVARIANT: generated images use rustup stable for cargo install and expose the browser binary on runtime PATH.
+// EFFECT: Docker build downloads rustup and installs a pinned Git revision of the Rust crate.
+// INVARIANT: generated images use rustup stable and expose both Rust lifecycle and MCP stdio binaries from an immutable upstream revision on runtime PATH.
 // COMPLEXITY: O(network + cargo_build)
 const renderDockerfileRustBrowserConnection = (): string =>
   `ENV CARGO_HOME=/usr/local/cargo
@@ -75,8 +75,9 @@ RUN set -eu; \
 
 # Install unified Rust browser connection (noVNC + CDP + single dg-*-browser guarantee)
 # Replaces all previous TS/MCP browser-connection duplication (per issue #347)
-RUN cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --branch main --locked --root /usr/local docker-git-browser-connection \
-  && /usr/local/bin/docker-git-browser-connection --version
+RUN cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev c36f263ebc5d0acdf155113914f08cafefa69c56 --locked --bins --root /usr/local \
+  && /usr/local/bin/docker-git-browser-connection --version \
+  && /usr/local/bin/browser-connection --version
 
 # Passwordless sudo for all users (container is disposable)
 RUN printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
@@ -88,9 +89,9 @@ RUN printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
  * @returns Dockerfile fragment that establishes the shared project container base.
  * @pure true
  * @effect none; CORE template renderer only constructs a string.
- * @invariant the returned fragment starts from the configured shared JS box image and installs the Rust browser CLI.
+ * @invariant the returned fragment starts from the configured shared JS box image and installs the Rust browser lifecycle + MCP CLIs.
  * @precondition docker-git generated entrypoint remains the container entrypoint.
- * @postcondition the fragment keeps root available for setup and publishes docker-git-browser-connection on PATH.
+ * @postcondition the fragment keeps root available for setup and publishes both Rust browser binaries on PATH.
  * @complexity O(1) time / O(1) space.
  */
 export const renderDockerfilePrelude = (): string =>

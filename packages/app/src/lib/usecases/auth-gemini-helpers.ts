@@ -299,7 +299,7 @@ export const defaultGeminiSettings = {
   },
   mcpServers: {
     playwright: {
-      command: "docker-git-playwright-mcp",
+      command: "browser-connection",
       args: [],
       trust: true
     }

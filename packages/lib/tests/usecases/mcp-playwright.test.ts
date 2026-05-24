@@ -125,26 +125,20 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(composeAfter).toContain("      - /var/run/docker.sock:/var/run/docker.sock")
 
         const dockerfileAfter = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
-        expect(dockerfileAfter).toContain("ARG PLAYWRIGHT_MCP_VERSION=0.0.75")
-        expect(dockerfileAfter).toContain('RUN npm install -g "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"')
-
-        // CHANGE: verify lazy Playwright MCP startup and legacy guarded fallback wiring
-        // WHY: issue-319 requires MCP stdio initialize to answer even when CDP is still starting
-        // QUOTE(issue-319): "MCP startup failed: handshaking with MCP server failed"
-        // REF: issue-319
-        expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_RETRY_ATTEMPTS")
-        expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_RETRY_DELAY")
-        expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_CDP_GUARD")
-        expect(dockerfileAfter).toContain("MCP_PLAYWRIGHT_CDP_TIMEOUT")
-        expect(dockerfileAfter).toContain('if [[ "${MCP_PLAYWRIGHT_ISOLATED:-0}" == "1" ]]; then')
-        expect(dockerfileAfter).toContain("fetch_cdp_version()")
-        expect(dockerfileAfter).toContain("waiting for nested browser runtime")
-        expect(dockerfileAfter).toContain(
-          'exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT"'
-        )
         expect(dockerfileAfter).toContain("cargo install --git https://github.com/ProverCoderAI/rust-browser-connection")
-        expect(dockerfileAfter).toContain("docker-git-browser-connection")
+        expect(dockerfileAfter).toContain("--locked --bins --root /usr/local")
+        expect(dockerfileAfter).toContain("/usr/local/bin/docker-git-browser-connection --version")
+        expect(dockerfileAfter).toContain("/usr/local/bin/browser-connection --version")
+        expect(dockerfileAfter).not.toContain("docker-git-playwright-mcp")
+        expect(dockerfileAfter).not.toContain("@playwright/mcp")
+        expect(dockerfileAfter).not.toContain("playwright-mcp --cdp-endpoint")
         expect(dockerfileAfter).not.toContain("COPY Dockerfile.browser")
+
+        const entrypointAfter = yield* _(fs.readFileString(path.join(outDir, "entrypoint.sh")))
+        expect(entrypointAfter).toContain("docker_git_start_rust_browser_connection")
+        expect(entrypointAfter).toContain("docker-git-browser-connection")
+        expect(entrypointAfter).toContain('command = "browser-connection"')
+        expect(entrypointAfter).toContain('args = ["--project", "$DOCKER_GIT_BROWSER_PROJECT", "--network", "$DOCKER_GIT_BROWSER_NETWORK"]')
 
         const browserDockerfileExists = yield* _(fs.exists(path.join(outDir, "Dockerfile.browser")))
         const cdpGuardExists = yield* _(fs.exists(path.join(outDir, "docker-git-cdp-guard")))

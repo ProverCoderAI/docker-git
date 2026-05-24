@@ -289,7 +289,7 @@ export const renderEntrypointRustBrowserConnection = (): string =>
     "",
     "  local browser_bin=\"\"",
     "  local candidate",
-    "  for candidate in /root/.cargo/bin/docker-git-browser-connection /usr/local/cargo/bin/docker-git-browser-connection $(command -v docker-git-browser-connection 2>/dev/null || true); do",
+    "  for candidate in /usr/local/bin/docker-git-browser-connection /root/.cargo/bin/docker-git-browser-connection /usr/local/cargo/bin/docker-git-browser-connection $(command -v docker-git-browser-connection 2>/dev/null || true); do",
     "    if [[ -x \"$candidate\" ]]; then",
     "      browser_bin=\"$candidate\"",
     "      break",

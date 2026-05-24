@@ -64,7 +64,8 @@ describe("app planFiles", () => {
       "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection"
     )
     expect(dockerfile.contents).toContain("make build-essential docker.io")
-    expect(dockerfile.contents).toContain("docker-git-playwright-mcp")
+    expect(dockerfile.contents).toContain("/usr/local/bin/browser-connection --version")
+    expect(dockerfile.contents).not.toContain("docker-git-playwright-mcp")
     expect(entrypoint.contents).toContain("docker_git_start_rust_browser_connection")
     expect(entrypoint.contents).toContain("docker-git-browser-connection")
     expect(entrypoint.contents).toContain("local network_mode=\"container:${project_container}\"")

@@ -230,20 +230,19 @@ describe("renderDockerfile", () => {
     expect(dockerfile).not.toContain("grok --version >/dev/null || true")
   })
 
-  it("renders Playwright MCP without blocking stdio initialization on CDP readiness", () => {
+  it("renders Rust browser binaries without the legacy Playwright MCP wrapper", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig({ enableMcpPlaywright: true }))
-    const guardedExecIndex = dockerfile.indexOf('if [[ "$MCP_PLAYWRIGHT_CDP_GUARD" == "1" ]]; then')
-    const fetchIndex = dockerfile.indexOf("fetch_cdp_version()")
 
     expectContainsAll(dockerfile, [
-      'CDP_ENDPOINT="http://127.0.0.1:9223"',
-      'MCP_PLAYWRIGHT_CDP_TIMEOUT="${MCP_PLAYWRIGHT_CDP_TIMEOUT:-60000}"',
-      'exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT"',
-      'exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT"'
+      "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev c36f263ebc5d0acdf155113914f08cafefa69c56 --locked --bins --root /usr/local",
+      "/usr/local/bin/docker-git-browser-connection --version",
+      "/usr/local/bin/browser-connection --version",
+      "# Unified Rust browser (dg-*-browser) is started by docker-git-browser-connection binary"
     ])
-    expect(dockerfile).not.toContain('CDP_ENDPOINT="${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"')
-    expect(guardedExecIndex).toBeGreaterThanOrEqual(0)
-    expect(fetchIndex).toBeGreaterThan(guardedExecIndex)
+    expect(dockerfile).not.toContain("docker-git-playwright-mcp")
+    expect(dockerfile).not.toContain("@playwright/mcp")
+    expect(dockerfile).not.toContain("playwright-mcp --cdp-endpoint")
+    expect(dockerfile).not.toContain("MCP_PLAYWRIGHT_CDP_TIMEOUT")
   })
 })
 
@@ -444,7 +443,7 @@ describe("renderEntrypoint auth bridge", () => {
 
     expectContainsAll(entrypoint, [
       "nextServers.playwright = {",
-      "command: \"docker-git-playwright-mcp\"",
+      "command: \"browser-connection\"",
       "docker_git_sync_project_codex_skills()",
       "project_skills_root=\"$codex_home/skills/.docker-git-project\"",
       "docker_git_prepare_active_agent_project_rules()",
@@ -453,7 +452,9 @@ describe("renderEntrypoint auth bridge", () => {
       "docker_git_detect_grok_project_rules()",
       "docker_git_sync_gemini_playwright_mcp()",
       "docker_git_sync_grok_playwright_mcp()",
-      'MCP_PLAYWRIGHT_ENABLE="${MCP_PLAYWRIGHT_ENABLE:-0}" node',
+      'local browser_project="${DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"',
+      'DOCKER_GIT_BROWSER_PROJECT="${DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"',
+      'MCP_PLAYWRIGHT_ENABLE="${MCP_PLAYWRIGHT_ENABLE:-0}" DOCKER_GIT_BROWSER_PROJECT="$browser_project" DOCKER_GIT_BROWSER_NETWORK="$browser_network" node',
       "DOCKER_GIT_RTK_ENABLE=\"${DOCKER_GIT_RTK_ENABLE:-1}\"",
       "DOCKER_GIT_RTK_ENABLE=1",
       "docker_git_rtk_init_as_user()",
@@ -759,7 +760,8 @@ describe("renderDockerCompose", () => {
     expect(filePaths).not.toContain("docker-git-browser-runtime.sh")
     expect(filePaths).not.toContain("mcp-playwright-start-extra.sh")
     expect(dockerfile?.contents).toContain("cargo install --git https://github.com/ProverCoderAI/rust-browser-connection")
-    expect(dockerfile?.contents).toContain("docker-git-playwright-mcp")
+    expect(dockerfile?.contents).toContain("/usr/local/bin/browser-connection --version")
+    expect(dockerfile?.contents).not.toContain("docker-git-playwright-mcp")
     expect(dockerfile?.contents).not.toContain("COPY Dockerfile.browser")
     expect(entrypoint?.contents).toContain("docker_git_start_rust_browser_connection")
     expect(entrypoint?.contents).toContain("docker-git-browser-connection")
@@ -772,6 +774,14 @@ describe("renderDockerCompose", () => {
 
     expect(browserRuntimeIndex).toBeGreaterThanOrEqual(0)
     expect(mcpConfigIndex).toBeGreaterThan(browserRuntimeIndex)
+  })
+
+  it("renders Browser MCP project fallback without set -u unbound variables", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig({ enableMcpPlaywright: false }))
+
+    expect(entrypoint).toContain('DOCKER_GIT_BROWSER_PROJECT="${DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"')
+    expect(entrypoint).toContain('local browser_project="${DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"')
+    expect(entrypoint).not.toContain('"$DOCKER_GIT_PROJECT_CONTAINER_NAME"')
   })
 
   it("renders local Docker socket mount only when explicitly enabled", () => {

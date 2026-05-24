@@ -200,7 +200,9 @@ fi`
 const renderGeminiMcpPlaywrightConfig = (): string =>
   String.raw`# Gemini CLI: keep Playwright MCP config in sync with container settings
 docker_git_sync_gemini_playwright_mcp() {
-  GEMINI_CONFIG_SETTINGS_FILE="$GEMINI_CONFIG_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="${"$"}{MCP_PLAYWRIGHT_ENABLE:-0}" node - <<'NODE'
+  local browser_project="${"$"}{DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"; [[ -n "$browser_project" ]] || browser_project="$(hostname)"
+  local browser_network="container:$browser_project"
+  GEMINI_CONFIG_SETTINGS_FILE="$GEMINI_CONFIG_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="${"$"}{MCP_PLAYWRIGHT_ENABLE:-0}" DOCKER_GIT_BROWSER_PROJECT="$browser_project" DOCKER_GIT_BROWSER_NETWORK="$browser_network" node - <<'NODE'
 const fs = require("node:fs")
 const path = require("node:path")
 const settingsPath = process.env.GEMINI_CONFIG_SETTINGS_FILE
@@ -213,9 +215,11 @@ try {
   if (isRecord(parsed)) settings = parsed
 } catch {}
 
+const browserProject = process.env.DOCKER_GIT_BROWSER_PROJECT || ""
+const browserArgs = browserProject.length > 0 ? ["--project", browserProject, "--network", process.env.DOCKER_GIT_BROWSER_NETWORK || "container:" + browserProject] : []
 const nextServers = { ...(isRecord(settings.mcpServers) ? settings.mcpServers : {}) }
 if (process.env.MCP_PLAYWRIGHT_ENABLE === "1") {
-  nextServers.playwright = { command: "docker-git-playwright-mcp", args: [], trust: true }
+  nextServers.playwright = { command: "browser-connection", args: browserArgs, trust: true }
 } else {
   delete nextServers.playwright
 }

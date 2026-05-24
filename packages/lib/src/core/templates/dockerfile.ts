@@ -1,7 +1,6 @@
 import type { TemplateConfig } from "../domain.js"
 import { shellSingleQuote } from "../shell-literals.js"
 import { renderDockerfilePrompt } from "../templates-prompt.js"
-import { renderDockerfilePlaywrightMcp } from "./dockerfile-playwright-mcp.js"
 import { renderDockerfilePrelude } from "./dockerfile-prelude.js"
 import { renderDockerfileGlab } from "./glab.js"
 import { renderDockerfileGitleaks, renderDockerfileOpenCode } from "./tools.js"
@@ -110,7 +109,6 @@ const renderDockerfileBunProfile = (): string =>
 const renderDockerfileBun = (config: TemplateConfig): string =>
   [
     renderDockerfileBunPrelude(config),
-    config.enableMcpPlaywright ? renderDockerfilePlaywrightMcp() : "",
     renderDockerfileBunProfile()
   ]
     .filter((chunk) => chunk.trim().length > 0)

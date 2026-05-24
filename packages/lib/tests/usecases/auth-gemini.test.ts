@@ -89,7 +89,7 @@ describe("authGeminiLogin", () => {
           expect(settings.model.name).toBe("gemini-3.1-pro-preview")
           expect(settings.modelConfigs.customAliases["yolo-ultra"]).toBeDefined()
           expect(settings.general.defaultApprovalMode).toBe("auto_edit")
-          expect(settings.mcpServers.playwright.command).toBe("docker-git-playwright-mcp")
+          expect(settings.mcpServers.playwright.command).toBe("browser-connection")
           expect(settings.security.folderTrust.enabled).toBe(false)
           expect(settings.tools.allowed).toContain("googleSearch")
         })

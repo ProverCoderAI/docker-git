@@ -13,10 +13,9 @@ import { renderDockerfile } from "./templates/dockerfile.js"
 // The unified single-browser (noVNC + CDP) is now managed by the Rust binary
 // `docker-git-browser-connection` (separate repo ProverCoderAI/rust-browser-connection).
 // It guarantees exactly one `dg-{project}-browser` container per project.
-// Old separate Dockerfile.browser / docker-git-browser-runtime.sh / cdp-guard
-// have been replaced to avoid duplication with TS code.
-// The Rust CLI is started in background from entrypoint (see renderEntrypointRustBrowserConnection).
-// MCP Playwright connects to the CDP exposed by the shared browser container.
+// Legacy TS/shell browser runtime files have been replaced to avoid duplication.
+// The Rust lifecycle CLI is started in background from entrypoint (see renderEntrypointRustBrowserConnection).
+// MCP clients use the Rust `browser-connection` stdio server for the same shared browser container.
 
 export type FileSpec =
   | { readonly _tag: "File"; readonly relativePath: string; readonly contents: string; readonly mode?: number }
