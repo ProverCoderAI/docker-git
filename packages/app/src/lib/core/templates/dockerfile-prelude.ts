@@ -75,7 +75,7 @@ RUN set -eu; \
 
 # Install unified Rust browser connection (noVNC + CDP + single dg-*-browser guarantee)
 # Replaces all previous TS/MCP browser-connection duplication (per issue #347)
-RUN cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev b69fa095da54a97c440738abd56e3abf3344ab70 --locked --bins --root /usr/local \
+RUN cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev acd76d19a96763c8b5616076443d15be59fc7f78 --locked --bins --root /usr/local \
   && /usr/local/bin/docker-git-browser-connection --version \
   && /usr/local/bin/browser-connection --version
 
