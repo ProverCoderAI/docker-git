@@ -234,7 +234,7 @@ describe("renderDockerfile", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig({ enableMcpPlaywright: true }))
 
     expectContainsAll(dockerfile, [
-      "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev c36f263ebc5d0acdf155113914f08cafefa69c56 --locked --bins --root /usr/local",
+      "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev b69fa095da54a97c440738abd56e3abf3344ab70 --locked --bins --root /usr/local",
       "/usr/local/bin/docker-git-browser-connection --version",
       "/usr/local/bin/browser-connection --version",
       "# Unified Rust browser (dg-*-browser) is started by docker-git-browser-connection binary"
@@ -764,8 +764,10 @@ describe("renderDockerCompose", () => {
     expect(dockerfile?.contents).not.toContain("docker-git-playwright-mcp")
     expect(dockerfile?.contents).not.toContain("COPY Dockerfile.browser")
     expect(entrypoint?.contents).toContain("docker_git_start_rust_browser_connection")
+    expect(entrypoint?.contents).toContain("docker_git_stop_playwright_browser()")
     expect(entrypoint?.contents).toContain("docker-git-browser-connection")
     expect(entrypoint?.contents).toContain('local network_mode="container:${project_container}"')
+    expect(entrypoint?.contents).toContain('stop --project "$project_container"')
   })
   it("renders Rust browser startup before MCP client config", () => {
     const entrypoint = renderEntrypoint(makeTemplateConfig({ enableMcpPlaywright: true }))

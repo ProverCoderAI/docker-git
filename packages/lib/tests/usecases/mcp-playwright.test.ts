@@ -136,7 +136,9 @@ describe("enableMcpPlaywrightProjectFiles", () => {
 
         const entrypointAfter = yield* _(fs.readFileString(path.join(outDir, "entrypoint.sh")))
         expect(entrypointAfter).toContain("docker_git_start_rust_browser_connection")
+        expect(entrypointAfter).toContain("docker_git_stop_playwright_browser()")
         expect(entrypointAfter).toContain("docker-git-browser-connection")
+        expect(entrypointAfter).toContain('stop --project "$project_container"')
         expect(entrypointAfter).toContain('command = "browser-connection"')
         expect(entrypointAfter).toContain('args = ["--project", "$DOCKER_GIT_BROWSER_PROJECT", "--network", "$DOCKER_GIT_BROWSER_NETWORK"]')
 
