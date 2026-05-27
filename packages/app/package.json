@@ -87,7 +87,7 @@
     "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.15",
+    "@biomejs/biome": "^2.4.16",
     "@effect-template/lib": "workspace:*",
     "@effect/eslint-plugin": "^0.3.2",
     "@effect/language-service": "latest",
@@ -107,7 +107,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.7",
     "@vitest/eslint-plugin": "^1.6.18",
-    "biome": "npm:@biomejs/biome@^2.4.15",
+    "biome": "npm:@biomejs/biome@^2.4.16",
     "eslint": "^10.4.0",
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-codegen": "0.34.1",
