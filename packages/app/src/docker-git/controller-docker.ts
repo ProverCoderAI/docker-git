@@ -5,6 +5,7 @@ import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
 import { composeFilesForMode, prepareControllerRevision, resolveControllerComposeFiles } from "./controller-compose.js"
+import { readCurrentContainerName } from "./controller-hostname.js"
 import {
   runCommandCaptureWithFailureOutput,
   runCommandExitCode,
@@ -461,7 +462,9 @@ export const inspectControllerPublishedPorts = (): Effect.Effect<string, never, 
   )
 
 export const resolveCurrentContainerNetworks = (): Effect.Effect<DockerNetworkIps, never, ControllerRuntime> =>
-  inspectContainerNetworks(process.env["HOSTNAME"]?.trim() ?? "")
+  readCurrentContainerName().pipe(
+    Effect.flatMap((containerName) => inspectContainerNetworks(containerName))
+  )
 
 const connectControllerToNetworkBestEffort = (
   networkName: string

@@ -102,6 +102,25 @@ export const isRemoteDockerHost = (dockerHost = process.env["DOCKER_HOST"]): boo
   return trimmed.startsWith("tcp://") || trimmed.startsWith("ssh://")
 }
 
+// CHANGE: allow remote Docker bootstrap when the current runtime is inspectable on that daemon
+// WHY: containerized hosts often reach Docker through tcp://host.docker.internal while sharing daemon networks
+// QUOTE(ТЗ): "Надо проверить запускается ли сервер теперь"
+// REF: user-request-2026-05-27-pr-351-browser-e2e
+// SOURCE: n/a
+// FORMAT THEOREM: remote(dockerHost) ∧ noExplicitApi ∧ empty(networks) -> require_explicit_api
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: remote Docker is allowed only when network-derived controller candidates can be constructed
+// COMPLEXITY: O(k) where k = |currentContainerNetworks|
+export const shouldRequireExplicitApiUrlForRemoteDocker = (
+  dockerHost: string | undefined,
+  explicitApiBaseUrl: string | undefined,
+  currentContainerNetworks: DockerNetworkIps
+): boolean =>
+  isRemoteDockerHost(dockerHost) &&
+  explicitApiBaseUrl === undefined &&
+  Object.keys(currentContainerNetworks).length === 0
+
 export const buildApiBaseUrlCandidates = ({
   cachedApiBaseUrl,
   controllerNetworks,

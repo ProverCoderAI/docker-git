@@ -11,6 +11,8 @@ import {
   parseControllerBuildSkillerMode,
   parseControllerGpuMode
 } from "../../src/docker-git/controller-docker.js"
+import { resolveCurrentContainerName } from "../../src/docker-git/controller-hostname.js"
+import { shouldRequireExplicitApiUrlForRemoteDocker } from "../../src/docker-git/controller-reachability.js"
 import {
   parseControllerRevisionEnvOutput,
   parseControllerRevisionLabelOutput,
@@ -119,6 +121,37 @@ describe("controller reachability", () => {
       expect(isRemoteDockerHost("unix:///var/run/docker.sock")).toBe(false)
       expect(isRemoteDockerHost("tcp://docker.example.test:2376")).toBe(true)
       expect(isRemoteDockerHost("ssh://docker@example.test")).toBe(true)
+    }))
+
+  it.effect("requires an explicit API URL only for non-inspectable remote Docker hosts", () =>
+    Effect.sync(() => {
+      expect(
+        shouldRequireExplicitApiUrlForRemoteDocker("tcp://docker.example.test:2376", undefined, {})
+      ).toBe(true)
+      expect(
+        shouldRequireExplicitApiUrlForRemoteDocker(
+          "tcp://docker.example.test:2376",
+          makeHttpUrl("api.example.test", "3334"),
+          {}
+        )
+      ).toBe(false)
+      expect(
+        shouldRequireExplicitApiUrlForRemoteDocker(
+          "tcp://host.docker.internal:2375",
+          undefined,
+          { bridge: joinIp("172", "17", "0", "2") }
+        )
+      ).toBe(false)
+      expect(
+        shouldRequireExplicitApiUrlForRemoteDocker("unix:///var/run/docker.sock", undefined, {})
+      ).toBe(false)
+    }))
+
+  it.effect("resolves the current container name from HOSTNAME or OS hostname", () =>
+    Effect.sync(() => {
+      expect(resolveCurrentContainerName(" env-container ", "os-container")).toBe("env-container")
+      expect(resolveCurrentContainerName("", " os-container ")).toBe("os-container")
+      expect(resolveCurrentContainerName(undefined, " os-container ")).toBe("os-container")
     }))
 
   it.effect("parses controller revision from container env output", () =>

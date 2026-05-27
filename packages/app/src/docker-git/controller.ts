@@ -19,10 +19,10 @@ import {
   buildApiBaseUrlCandidates,
   type DockerNetworkIps,
   formatNetworkIps,
-  isRemoteDockerHost,
   resolveApiPort,
   resolveConfiguredApiBaseUrl,
   resolveExplicitApiBaseUrl,
+  shouldRequireExplicitApiUrlForRemoteDocker,
   trimTrailingSlashes
 } from "./controller-reachability.js"
 import {
@@ -98,9 +98,17 @@ const waitForReachableApiBaseUrl = (
     })
   )
 
-const failIfRemoteDockerWithoutApiUrl = (): Effect.Effect<void, ControllerBootstrapError> => {
+const failIfRemoteDockerWithoutApiUrl = (
+  currentContainerNetworks: DockerNetworkIps
+): Effect.Effect<void, ControllerBootstrapError> => {
   const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
-  if (!isRemoteDockerHost() || explicitApiBaseUrl !== undefined) {
+  if (
+    !shouldRequireExplicitApiUrlForRemoteDocker(
+      process.env["DOCKER_HOST"],
+      explicitApiBaseUrl,
+      currentContainerNetworks
+    )
+  ) {
     return Effect.void
   }
 
@@ -266,7 +274,6 @@ const startAndRememberController = (
 // COMPLEXITY: O(1) compose + O(k) health checks
 export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
-    yield* _(failIfRemoteDockerWithoutApiUrl())
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
     const localControllerRevision = yield* _(prepareLocalControllerRevision())
     const forceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
@@ -300,6 +307,7 @@ export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrap
     }
 
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
+    yield* _(failIfRemoteDockerWithoutApiUrl(bootstrapContext.currentContainerNetworks))
     const reusedExistingController = yield* _(reuseReachableControllerIfPossible(bootstrapContext))
     if (reusedExistingController) {
       return
@@ -309,7 +317,6 @@ export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrap
 
 export const restartController = (): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
-    yield* _(failIfRemoteDockerWithoutApiUrl())
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
     if (explicitApiBaseUrl !== undefined) {
       yield* _(ensureControllerReady())
@@ -317,6 +324,7 @@ export const restartController = (): Effect.Effect<void, ControllerBootstrapErro
     }
 
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
+    yield* _(failIfRemoteDockerWithoutApiUrl(bootstrapContext.currentContainerNetworks))
     const forceRecreateController = true
     const buildController = shouldBuildControllerImage({
       currentControllerRevision: bootstrapContext.currentControllerRevision,
