@@ -26,10 +26,19 @@ export const loadControllerDockerRuntime = (): Effect.Effect<ControllerDockerRun
   )
 }
 
-const isolatedOverlayFileName = (composeFileName: string): string =>
-  composeFileName.endsWith(".yaml")
-    ? `${composeFileName.slice(0, -".yaml".length)}.isolated.yaml`
-    : `${composeFileName.slice(0, -".yml".length)}.isolated.yml`
+const isolatedOverlayFileName = (composeFileName: string): Effect.Effect<string, ControllerBootstrapError> => {
+  if (composeFileName.endsWith(".yaml")) {
+    return Effect.succeed(`${composeFileName.slice(0, -".yaml".length)}.isolated.yaml`)
+  }
+  if (composeFileName.endsWith(".yml")) {
+    return Effect.succeed(`${composeFileName.slice(0, -".yml".length)}.isolated.yml`)
+  }
+  return Effect.fail(
+    controllerBootstrapError(
+      `${controllerDockerRuntimeEnvKey}=isolated requires a .yml or .yaml compose file. Received: ${composeFileName}`
+    )
+  )
+}
 
 export const resolveControllerRuntimeOverlayPath = (
   composePath: string,
@@ -40,9 +49,10 @@ export const resolveControllerRuntimeOverlayPath = (
     : Effect.gen(function*(_) {
       const fs = yield* _(FileSystem.FileSystem)
       const path = yield* _(Path.Path)
+      const overlayFileName = yield* _(isolatedOverlayFileName(path.basename(composePath)))
       const runtimeOverlayPath = path.join(
         path.dirname(composePath),
-        isolatedOverlayFileName(path.basename(composePath))
+        overlayFileName
       )
       const exists = yield* _(fs.exists(runtimeOverlayPath).pipe(Effect.mapError(mapComposePathError)))
       return exists

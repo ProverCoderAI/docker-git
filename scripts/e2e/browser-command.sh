@@ -160,7 +160,7 @@ wait_for_controller_health() {
 
   for _ in $(seq 1 "$attempts"); do
     logged_url="$(read_logged_api_base_url || true)"
-    for candidate in "$local_url" "$logged_url"; do
+    for candidate in "$logged_url" "$local_url"; do
       if [[ -z "$candidate" ]]; then
         continue
       fi

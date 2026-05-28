@@ -58,6 +58,26 @@ const controllerSourceRevisionArbitrary = fc
 const controllerGpuModeArbitrary = fc.constantFrom<"none" | "all">("none", "all")
 const controllerBuildSkillerModeArbitrary = fc.constantFrom<"0" | "1">("0", "1")
 const controllerDockerRuntimeArbitrary = fc.constantFrom<"host" | "isolated">("host", "isolated")
+const dockerHostArbitrary = fc.constantFrom<string | undefined>(
+  undefined,
+  "",
+  " unix:///var/run/docker.sock ",
+  "tcp://docker.example.test:2376",
+  " ssh://docker@example.test "
+)
+const explicitApiBaseUrlArbitrary = fc.option(fc.webUrl(), { nil: undefined })
+const dockerNetworkNameArbitrary = fc
+  .string({ maxLength: 16, minLength: 1 })
+  .filter((value) => value.trim().length > 0)
+const dockerNetworkIpArbitrary = fc
+  .tuple(
+    fc.integer({ max: 255, min: 1 }),
+    fc.integer({ max: 255, min: 0 }),
+    fc.integer({ max: 255, min: 0 }),
+    fc.integer({ max: 254, min: 1 })
+  )
+  .map((octets) => joinIp(...octets.map(String)))
+const dockerNetworkIpsArbitrary = fc.dictionary(dockerNetworkNameArbitrary, dockerNetworkIpArbitrary)
 
 describe("controller reachability", () => {
   it.effect("builds direct API candidates without Docker inspection", () =>
@@ -128,33 +148,37 @@ describe("controller reachability", () => {
 
   it.effect("requires an explicit API URL only for non-inspectable remote Docker hosts", () =>
     Effect.sync(() => {
-      expect(
-        shouldRequireExplicitApiUrlForRemoteDocker("tcp://docker.example.test:2376", undefined, {})
-      ).toBe(true)
-      expect(
-        shouldRequireExplicitApiUrlForRemoteDocker(
-          "tcp://docker.example.test:2376",
-          makeHttpUrl("api.example.test", "3334"),
-          {}
+      fc.assert(
+        fc.property(
+          dockerHostArbitrary,
+          explicitApiBaseUrlArbitrary,
+          dockerNetworkIpsArbitrary,
+          (dockerHost, explicitApiBaseUrl, currentContainerNetworks) => {
+            const expected = isRemoteDockerHost(dockerHost) &&
+              explicitApiBaseUrl === undefined &&
+              Object.keys(currentContainerNetworks).length === 0
+
+            expect(
+              shouldRequireExplicitApiUrlForRemoteDocker(dockerHost, explicitApiBaseUrl, currentContainerNetworks)
+            ).toBe(expected)
+          }
         )
-      ).toBe(false)
-      expect(
-        shouldRequireExplicitApiUrlForRemoteDocker(
-          "tcp://host.docker.internal:2375",
-          undefined,
-          { bridge: joinIp("172", "17", "0", "2") }
-        )
-      ).toBe(false)
-      expect(
-        shouldRequireExplicitApiUrlForRemoteDocker("unix:///var/run/docker.sock", undefined, {})
-      ).toBe(false)
+      )
     }))
 
   it.effect("resolves the current container name from HOSTNAME or OS hostname", () =>
     Effect.sync(() => {
-      expect(resolveCurrentContainerName(" env-container ", "os-container")).toBe("env-container")
-      expect(resolveCurrentContainerName("", " os-container ")).toBe("os-container")
-      expect(resolveCurrentContainerName(undefined, " os-container ")).toBe("os-container")
+      fc.assert(
+        fc.property(
+          fc.option(fc.string(), { nil: undefined }),
+          fc.string(),
+          (envHostname, systemHostname) => {
+            expect(resolveCurrentContainerName(envHostname, systemHostname)).toBe(
+              envHostname?.trim() || systemHostname.trim()
+            )
+          }
+        )
+      )
     }))
 
   it.effect("parses controller revision from container env output", () =>

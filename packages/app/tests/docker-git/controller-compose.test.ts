@@ -5,6 +5,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as fc from "fast-check"
 
+import { resolveControllerRuntimeOverlayPath } from "../../src/docker-git/controller-compose-runtime.js"
 import {
   controllerBuildSkillerEnvKey,
   controllerGpuModeEnvKey,
@@ -107,6 +108,7 @@ type PreparedRevision = {
 }
 
 type ControllerBuildSkillerFixtureMode = "0" | "1" | undefined
+type ControllerDockerRuntimeEnvFixtureMode = "host" | "isolated" | undefined
 
 type PrepareRevisionFixture = {
   readonly buildSkillerMode: ControllerBuildSkillerFixtureMode
@@ -118,6 +120,11 @@ const controllerBuildSkillerFixtureModeArbitrary = fc.constantFrom<ControllerBui
   "0",
   "1"
 )
+const controllerDockerRuntimeEnvFixtureModeArbitrary = fc.constantFrom<ControllerDockerRuntimeEnvFixtureMode>(
+  undefined,
+  "host",
+  "isolated"
+)
 const prepareRevisionFixtureArbitrary: fc.Arbitrary<PrepareRevisionFixture> = fc
   .record({
     buildSkillerMode: controllerBuildSkillerFixtureModeArbitrary,
@@ -126,18 +133,27 @@ const prepareRevisionFixtureArbitrary: fc.Arbitrary<PrepareRevisionFixture> = fc
   .filter(({ buildSkillerMode, includeSkillerPackage }) => buildSkillerMode === "0" || includeSkillerPackage)
 const controllerRevisionPattern = /^[a-f0-9]{16}-host-none-skiller[01]$/u
 
-const prepareRevisionInTemporaryRoot = ({
-  buildSkillerMode,
-  includeSkillerPackage
-}: PrepareRevisionFixture) =>
+const withMinimalControllerRoot = <A, E, R>(
+  effect: (rootDir: string) => Effect.Effect<A, E, R>
+) =>
   Effect.scoped(
     Effect.gen(function*(_) {
       const rootDir = yield* _(temporaryControllerRoot)
       yield* _(writeMinimalCompose(rootDir))
+      yield* _(withWorkingDirectory(rootDir))
+      return yield* _(effect(rootDir))
+    })
+  )
+
+const prepareRevisionInTemporaryRoot = ({
+  buildSkillerMode,
+  includeSkillerPackage
+}: PrepareRevisionFixture) =>
+  withMinimalControllerRoot((rootDir) =>
+    Effect.gen(function*(_) {
       if (includeSkillerPackage) {
         yield* _(writeSkillerPackage(rootDir))
       }
-      yield* _(withWorkingDirectory(rootDir))
       yield* _(
         withControllerEnv([
           [controllerBuildSkillerEnvKey, buildSkillerMode],
@@ -164,6 +180,23 @@ const expectPreparedRevisionInvariants = (fixture: PrepareRevisionFixture, prepa
   expectPreparedRevision(prepared, controllerRevisionPattern)
   expect(prepared.revision.endsWith(expectedSkillerSuffixForMode(fixture.buildSkillerMode))).toBe(true)
 }
+
+const resolveComposeFilesInTemporaryRoot = (
+  dockerRuntimeMode: ControllerDockerRuntimeEnvFixtureMode
+) =>
+  withMinimalControllerRoot((rootDir) =>
+    Effect.gen(function*(_) {
+      yield* _(writeMinimalIsolatedCompose(rootDir))
+      yield* _(
+        withControllerEnv([
+          [controllerBuildSkillerEnvKey, "0"],
+          [controllerDockerRuntimeEnvKey, dockerRuntimeMode],
+          [controllerGpuModeEnvKey, undefined]
+        ])
+      )
+      return yield* _(resolveControllerComposeFiles())
+    })
+  ).pipe(Effect.provide(NodeContext.layer))
 
 const assertControllerComposeProperty = <PropertyArgs>(property: fc.IAsyncProperty<PropertyArgs>) =>
   Effect.tryPromise({
@@ -217,32 +250,38 @@ describe("controller compose preparation", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  /* jscpd:ignore-start */
   it.effect("adds the isolated runtime overlay only for isolated controller mode", () =>
+    assertControllerComposeProperty(
+      fc.asyncProperty(controllerDockerRuntimeEnvFixtureModeArbitrary, (dockerRuntimeMode) =>
+        Effect.runPromise(
+          resolveComposeFilesInTemporaryRoot(dockerRuntimeMode).pipe(
+            Effect.tap((files) =>
+              Effect.sync(() => {
+                if (dockerRuntimeMode === "isolated") {
+                  expect(files.runtimeOverlayPath).toBeDefined()
+                  expect(files.runtimeOverlayPath?.endsWith("docker-compose.isolated.yml")).toBe(true)
+                  return
+                }
+                expect(files.runtimeOverlayPath).toBeNull()
+              })
+            ),
+            Effect.asVoid
+          )
+        ))
+    ))
+
+  it.effect("rejects unsupported compose filename extensions for isolated controller mode", () =>
     Effect.scoped(
       Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
         const rootDir = yield* _(temporaryControllerRoot)
-        yield* _(writeMinimalCompose(rootDir))
-        yield* _(writeMinimalIsolatedCompose(rootDir))
-        yield* _(withWorkingDirectory(rootDir))
-
-        yield* _(
-          withControllerEnv([
-            [controllerBuildSkillerEnvKey, "0"],
-            [controllerDockerRuntimeEnvKey, "host"],
-            [controllerGpuModeEnvKey, undefined]
-          ])
+        const error = yield* _(
+          resolveControllerRuntimeOverlayPath(path.join(rootDir, "docker-compose.json"), "isolated").pipe(Effect.flip)
         )
-        const hostFiles = yield* _(resolveControllerComposeFiles())
-        expect(hostFiles.runtimeOverlayPath).toBeNull()
-
-        yield* _(withControllerEnv([[controllerDockerRuntimeEnvKey, "isolated"]]))
-        const isolatedFiles = yield* _(resolveControllerComposeFiles())
-        expect(isolatedFiles.runtimeOverlayPath).toBeDefined()
-        expect(isolatedFiles.runtimeOverlayPath?.endsWith("docker-compose.isolated.yml")).toBe(true)
+        expect(error._tag).toBe("ControllerBootstrapError")
+        expect(error.message).toContain(".yml or .yaml")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
-  /* jscpd:ignore-end */
 
   it.effect("prepares and persists host controller revisions for Skiller build modes", () =>
     assertControllerComposeProperty(
