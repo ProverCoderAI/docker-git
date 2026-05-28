@@ -69,6 +69,12 @@ describe("controller compose resource limits", () => {
             "DOCKER_GIT_PROJECT_DOCKER_HOST: ${DOCKER_GIT_PROJECT_DOCKER_HOST:-tcp://host.docker.internal:2375}"
           )
         }))
+
+      it.effect("enables privileged controller mode for the embedded Docker daemon", () =>
+        Effect.gen(function*(_) {
+          const contents = yield* _(readComposeFile(composeFile))
+          expect(contents).toContain("privileged: ${DOCKER_GIT_CONTROLLER_PRIVILEGED:-true}")
+        }))
     })
   }
 })

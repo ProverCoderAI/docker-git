@@ -1,5 +1,6 @@
 services:
   api:
+    privileged: ${DOCKER_GIT_CONTROLLER_PRIVILEGED:-true}
     environment:
       DOCKER_GIT_PROJECT_DOCKER_HOST: ${DOCKER_GIT_PROJECT_DOCKER_HOST:-tcp://host.docker.internal:2375}
     volumes: !override

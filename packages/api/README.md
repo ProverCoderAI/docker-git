@@ -81,7 +81,7 @@ Optional env:
 - `DOCKER_GIT_API_PORT` (default: `3334`)
 - `DOCKER_GIT_DOCKER_RUNTIME` (default: `host`; set to `isolated` as an optional fallback to use an embedded controller daemon)
 - `DOCKER_GIT_CONTROLLER_DOCKER_HOST` (default: `unix:///var/run/docker.sock`; socket path inside the controller)
-- `DOCKER_GIT_CONTROLLER_PRIVILEGED` (default: `false`; set to `true` only when using `DOCKER_GIT_DOCKER_RUNTIME=isolated`)
+- `DOCKER_GIT_CONTROLLER_PRIVILEGED` (default: `false` in host mode; isolated overlays default it to `true` for the embedded Docker daemon)
 - `DOCKER_GIT_DOCKERD_TCP_HOST` (default: `tcp://0.0.0.0:2375`; reachable only inside Docker networks unless explicitly published)
 - `DOCKER_GIT_DOCKERD_DEFAULT_CGROUPNS_MODE` (default: `host`; keeps nested project containers compatible with cgroup v2 DinD)
 - `DOCKER_GIT_PROJECT_DOCKER_HOST` (default: empty in host mode; isolated mode defaults to `tcp://host.docker.internal:2375`)
