@@ -30,6 +30,7 @@ import {
   shouldForceRecreateForControllerResourceLimits
 } from "./controller-resource-limits-shell.js"
 import { shouldForceRecreateController } from "./controller-revision.js"
+import { prepareControllerRuntimeEnv } from "./controller-runtime-shell.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
 export type { ControllerRuntime } from "./controller-docker.js"
@@ -165,6 +166,7 @@ const loadControllerBootstrapContext = (): Effect.Effect<
   ControllerRuntime
 > =>
   Effect.gen(function*(_) {
+    yield* _(prepareControllerRuntimeEnv())
     yield* _(prepareControllerResourceLimitEnv())
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
     const localControllerRevision = yield* _(prepareLocalControllerRevision())
@@ -275,35 +277,32 @@ const startAndRememberController = (
 export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
-    const localControllerRevision = yield* _(prepareLocalControllerRevision())
-    const forceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
-    if (explicitApiBaseUrl === undefined) {
+    if (explicitApiBaseUrl !== undefined) {
       const reachableBeforeDocker = yield* _(
-        findReachableDirectHealthProbe({
-          explicitApiBaseUrl,
-          cachedApiBaseUrl: selectedApiBaseUrl
-        })
-      )
-      if (
-        reachableBeforeDocker !== null &&
-        reachableBeforeDocker.revision === localControllerRevision &&
-        !forceRecreateForResourceLimits
-      ) {
-        rememberSelectedApiBaseUrl(reachableBeforeDocker.apiBaseUrl)
-        return
-      }
-    } else {
-      const reachableBeforeDocker = yield* _(
-        findReachableDirectHealthProbe({
-          explicitApiBaseUrl,
-          cachedApiBaseUrl: selectedApiBaseUrl
-        })
+        findReachableDirectHealthProbe({ explicitApiBaseUrl, cachedApiBaseUrl: selectedApiBaseUrl })
       )
       if (reachableBeforeDocker !== null) {
         rememberSelectedApiBaseUrl(reachableBeforeDocker.apiBaseUrl)
         return
       }
       yield* _(failIfExplicitApiUrlIsUnreachable(explicitApiBaseUrl))
+    }
+
+    const localControllerRevision = yield* _(prepareLocalControllerRevision())
+    const forceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
+    const reachableBeforeDocker = yield* _(
+      findReachableDirectHealthProbe({
+        explicitApiBaseUrl,
+        cachedApiBaseUrl: selectedApiBaseUrl
+      })
+    )
+    if (
+      reachableBeforeDocker !== null &&
+      reachableBeforeDocker.revision === localControllerRevision &&
+      !forceRecreateForResourceLimits
+    ) {
+      rememberSelectedApiBaseUrl(reachableBeforeDocker.apiBaseUrl)
+      return
     }
 
     const bootstrapContext = yield* _(loadControllerBootstrapContext())

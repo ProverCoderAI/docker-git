@@ -9,9 +9,11 @@ import {
   controllerBuildSkillerEnvKey,
   controllerGpuModeEnvKey,
   ensureSkillerSubmoduleInitialized,
-  prepareControllerRevision
+  prepareControllerRevision,
+  resolveControllerComposeFiles
 } from "../../src/docker-git/controller-compose.js"
 import { controllerRevisionEnvKey } from "../../src/docker-git/controller-revision.js"
+import { controllerDockerRuntimeEnvKey } from "../../src/docker-git/controller-runtime.js"
 import type { TestCommandResult } from "./fixtures/command-executor.js"
 import { commandExecutorLayer, emptyCommandResult } from "./fixtures/command-executor.js"
 
@@ -52,6 +54,9 @@ const writeRootFile = (
 
 const writeMinimalCompose = (rootDir: string) =>
   writeRootFile(rootDir, "docker-compose.yml", "services:\n  api:\n    image: docker-git-api\n")
+
+const writeMinimalIsolatedCompose = (rootDir: string) =>
+  writeRootFile(rootDir, "docker-compose.isolated.yml", "services:\n  api:\n    volumes: !override []\n")
 
 const writeSkillerPackage = (rootDir: string) =>
   writeRootFile(rootDir, skillerPackageRelativePath, "{\"name\":\"skiller-desktop-skills-manager\"}\n")
@@ -119,7 +124,7 @@ const prepareRevisionFixtureArbitrary: fc.Arbitrary<PrepareRevisionFixture> = fc
     includeSkillerPackage: fc.boolean()
   })
   .filter(({ buildSkillerMode, includeSkillerPackage }) => buildSkillerMode === "0" || includeSkillerPackage)
-const controllerRevisionPattern = /^[a-f0-9]{16}-none-skiller[01]$/u
+const controllerRevisionPattern = /^[a-f0-9]{16}-host-none-skiller[01]$/u
 
 const prepareRevisionInTemporaryRoot = ({
   buildSkillerMode,
@@ -136,6 +141,7 @@ const prepareRevisionInTemporaryRoot = ({
       yield* _(
         withControllerEnv([
           [controllerBuildSkillerEnvKey, buildSkillerMode],
+          [controllerDockerRuntimeEnvKey, undefined],
           [controllerGpuModeEnvKey, undefined],
           [controllerRevisionEnvKey, undefined]
         ])
@@ -210,6 +216,33 @@ describe("controller compose preparation", () => {
         expect(startedCommands).toEqual([expectedSkillerSubmoduleCommand])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
+
+  /* jscpd:ignore-start */
+  it.effect("adds the isolated runtime overlay only for isolated controller mode", () =>
+    Effect.scoped(
+      Effect.gen(function*(_) {
+        const rootDir = yield* _(temporaryControllerRoot)
+        yield* _(writeMinimalCompose(rootDir))
+        yield* _(writeMinimalIsolatedCompose(rootDir))
+        yield* _(withWorkingDirectory(rootDir))
+
+        yield* _(
+          withControllerEnv([
+            [controllerBuildSkillerEnvKey, "0"],
+            [controllerDockerRuntimeEnvKey, "host"],
+            [controllerGpuModeEnvKey, undefined]
+          ])
+        )
+        const hostFiles = yield* _(resolveControllerComposeFiles())
+        expect(hostFiles.runtimeOverlayPath).toBeNull()
+
+        yield* _(withControllerEnv([[controllerDockerRuntimeEnvKey, "isolated"]]))
+        const isolatedFiles = yield* _(resolveControllerComposeFiles())
+        expect(isolatedFiles.runtimeOverlayPath).toBeDefined()
+        expect(isolatedFiles.runtimeOverlayPath?.endsWith("docker-compose.isolated.yml")).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+  /* jscpd:ignore-end */
 
   it.effect("prepares and persists host controller revisions for Skiller build modes", () =>
     assertControllerComposeProperty(

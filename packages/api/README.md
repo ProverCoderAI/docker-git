@@ -16,7 +16,10 @@ container created from this package binds the host socket
 (`/var/run/docker.sock:/var/run/docker.sock`, see `docker-compose.yml`) and
 uses it to spawn per-project containers. `DOCKER_GIT_DOCKER_RUNTIME=isolated`
 is an opt-in fallback for environments that explicitly require an embedded
-controller daemon.
+controller daemon. In isolated mode, start the controller through the host CLI
+or include `docker-compose.isolated.yml`; that overlay removes the host socket
+bind and defaults project containers to the embedded daemon endpoint
+`tcp://host.docker.internal:2375`.
 
 Security note: binding `/var/run/docker.sock` gives the controller container
 root-equivalent control over the host Docker daemon, including the ability to
@@ -59,6 +62,14 @@ docker compose up -d --build
 ./ctl health
 ```
 
+Isolated fallback:
+
+```bash
+DOCKER_GIT_DOCKER_RUNTIME=isolated \
+  docker compose -f docker-compose.yml -f docker-compose.isolated.yml up -d --build
+./ctl health
+```
+
 Default port mapping:
 
 - host: `127.0.0.1:3334`
@@ -73,7 +84,7 @@ Optional env:
 - `DOCKER_GIT_CONTROLLER_PRIVILEGED` (default: `false`; set to `true` only when using `DOCKER_GIT_DOCKER_RUNTIME=isolated`)
 - `DOCKER_GIT_DOCKERD_TCP_HOST` (default: `tcp://0.0.0.0:2375`; reachable only inside Docker networks unless explicitly published)
 - `DOCKER_GIT_DOCKERD_DEFAULT_CGROUPNS_MODE` (default: `host`; keeps nested project containers compatible with cgroup v2 DinD)
-- `DOCKER_GIT_PROJECT_DOCKER_HOST` (default: empty; unset uses host socket in project containers when mounted)
+- `DOCKER_GIT_PROJECT_DOCKER_HOST` (default: empty in host mode; isolated mode defaults to `tcp://host.docker.internal:2375`)
 - `DOCKER_GIT_PROJECT_SSH_BIND_HOST` (default: `0.0.0.0`)
 - `DOCKER_GIT_PROJECTS_ROOT` (container path, default: `/home/dev/.docker-git`)
 - `DOCKER_GIT_PROJECTS_ROOT_VOLUME` (Docker volume name for controller state, default: `docker-git-projects`)

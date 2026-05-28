@@ -9,6 +9,8 @@ const controllerRevisionInputs: ReadonlyArray<string> = [
   "docker-compose.yml",
   "docker-compose.api.yml",
   "docker-compose.gpu.yml",
+  "docker-compose.isolated.yml",
+  "docker-compose.api.isolated.yml",
   ".gitmodules",
   "package.json",
   "bun.lock",

@@ -15,6 +15,10 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [[ "$runtime" == "isolated" ]]; then
+  if [[ -z "${DOCKER_GIT_PROJECT_DOCKER_HOST:-}" ]]; then
+    export DOCKER_GIT_PROJECT_DOCKER_HOST="tcp://host.docker.internal:2375"
+  fi
+
   if [[ "$docker_host" != unix://* ]]; then
     echo "DOCKER_GIT_DOCKER_RUNTIME=isolated requires a unix:// DOCKER_HOST for the managed controller daemon." >&2
     exit 1

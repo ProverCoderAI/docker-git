@@ -4,7 +4,9 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Duration, Effect } from "effect"
 
+import { loadControllerDockerRuntime, resolveControllerRuntimeOverlayPath } from "./controller-compose-runtime.js"
 import { computeLocalControllerRevision, controllerRevisionEnvKey } from "./controller-revision.js"
+import type { ControllerDockerRuntime } from "./controller-runtime.js"
 import { runCommandWithCapturedOutput } from "./frontend-lib/shell/command-runner.js"
 import { findExistingUpwards } from "./frontend-lib/usecases/path-helpers.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
@@ -18,6 +20,7 @@ export type ControllerBuildSkillerMode = "0" | "1"
 export type ControllerComposeFiles = {
   readonly composePath: string
   readonly gpuOverlayPath: string | null
+  readonly runtimeOverlayPath: string | null
 }
 
 const skillerSubmodulePath = "third_party/skiller-desktop-skills-manager"
@@ -47,8 +50,9 @@ export const parseControllerBuildSkillerMode = (raw?: string): ControllerBuildSk
 export const controllerRevisionForMode = (
   sourceRevision: string,
   gpuMode: ControllerGpuMode,
-  buildSkillerMode: ControllerBuildSkillerMode = "1"
-): string => `${sourceRevision}-${gpuMode}-skiller${buildSkillerMode}`
+  buildSkillerMode: ControllerBuildSkillerMode = "1",
+  dockerRuntime: ControllerDockerRuntime = "host"
+): string => `${sourceRevision}-${dockerRuntime}-${gpuMode}-skiller${buildSkillerMode}`
 
 const loadControllerGpuMode = (): Effect.Effect<ControllerGpuMode, ControllerBootstrapError> => {
   const raw = process.env[controllerGpuModeEnvKey]
@@ -187,11 +191,21 @@ export const ensureSkillerSubmoduleInitialized = (
 
 export const composeFilesForMode = (
   composePath: string,
-  gpuOverlayPath: string | null
-): ReadonlyArray<string> =>
-  gpuOverlayPath === null
-    ? ["-f", composePath]
-    : ["-f", composePath, "-f", gpuOverlayPath]
+  gpuOverlayPath: string | null,
+  runtimeOverlayPath: string | null = null
+): ReadonlyArray<string> => [
+  "-f",
+  composePath,
+  ...(runtimeOverlayPath === null ? [] : ["-f", runtimeOverlayPath]),
+  ...(gpuOverlayPath === null ? [] : ["-f", gpuOverlayPath])
+]
+
+export const composeFilesToArgs = (composeFiles: ControllerComposeFiles): ReadonlyArray<string> =>
+  composeFilesForMode(
+    composeFiles.composePath,
+    composeFiles.gpuOverlayPath,
+    composeFiles.runtimeOverlayPath
+  )
 
 const requireGpuOverlayPath = (
   composePath: string
@@ -215,13 +229,14 @@ const composeFilesForGpuMode = (
   gpuMode: ControllerGpuMode
 ): Effect.Effect<ControllerComposeFiles, ControllerBootstrapError, FileSystem.FileSystem | Path.Path> =>
   gpuMode === "none"
-    ? Effect.succeed({ composePath, gpuOverlayPath: null })
+    ? Effect.succeed({ composePath, gpuOverlayPath: null, runtimeOverlayPath: null })
     : requireGpuOverlayPath(composePath).pipe(
-      Effect.map((gpuOverlayPath) => ({ composePath, gpuOverlayPath }))
+      Effect.map((gpuOverlayPath) => ({ composePath, gpuOverlayPath, runtimeOverlayPath: null }))
     )
 
 type ComposePathAndGpuMode = {
   readonly composePath: string
+  readonly dockerRuntime: ControllerDockerRuntime
   readonly gpuMode: ControllerGpuMode
   readonly buildSkillerMode: ControllerBuildSkillerMode
 }
@@ -236,12 +251,12 @@ const withComposePathAndGpuMode = <A, R>(
   composeFilePath().pipe(
     Effect.mapError(mapComposePathError),
     Effect.flatMap((composePath) =>
-      loadControllerGpuMode().pipe(
-        Effect.flatMap((gpuMode) =>
-          loadControllerBuildSkillerMode().pipe(
-            Effect.flatMap((buildSkillerMode) => effect({ buildSkillerMode, composePath, gpuMode }))
-          )
-        )
+      Effect.all({
+        buildSkillerMode: loadControllerBuildSkillerMode(),
+        dockerRuntime: loadControllerDockerRuntime(),
+        gpuMode: loadControllerGpuMode()
+      }).pipe(
+        Effect.flatMap((modes) => effect({ composePath, ...modes }))
       )
     )
   )
@@ -250,16 +265,24 @@ export const resolveControllerComposeFiles = (): Effect.Effect<
   ControllerComposeFiles,
   ControllerBootstrapError,
   FileSystem.FileSystem | Path.Path
-> => withComposePathAndGpuMode(({ composePath, gpuMode }) => composeFilesForGpuMode(composePath, gpuMode))
+> =>
+  withComposePathAndGpuMode(({ composePath, dockerRuntime, gpuMode }) =>
+    Effect.gen(function*(_) {
+      const composeFiles = yield* _(composeFilesForGpuMode(composePath, gpuMode))
+      const runtimeOverlayPath = yield* _(resolveControllerRuntimeOverlayPath(composePath, dockerRuntime))
+      return { ...composeFiles, runtimeOverlayPath }
+    })
+  )
 
 const computeControllerRevision = (
   composePath: string,
   gpuMode: ControllerGpuMode,
-  buildSkillerMode: ControllerBuildSkillerMode
+  buildSkillerMode: ControllerBuildSkillerMode,
+  dockerRuntime: ControllerDockerRuntime
 ): Effect.Effect<string, ControllerBootstrapError, FileSystem.FileSystem | Path.Path> =>
   computeLocalControllerRevision(composePath).pipe(
     Effect.mapError(mapControllerRevisionError),
-    Effect.map((revision) => controllerRevisionForMode(revision, gpuMode, buildSkillerMode))
+    Effect.map((revision) => controllerRevisionForMode(revision, gpuMode, buildSkillerMode, dockerRuntime))
   )
 
 const persistControllerRevision = (revision: string): Effect.Effect<void> =>
@@ -272,13 +295,13 @@ export const prepareControllerRevision = (): Effect.Effect<
   ControllerBootstrapError,
   FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 > =>
-  withComposePathAndGpuMode(({ buildSkillerMode, composePath, gpuMode }) =>
+  withComposePathAndGpuMode(({ buildSkillerMode, composePath, dockerRuntime, gpuMode }) =>
     Effect.gen(function*(_) {
       const path = yield* _(Path.Path)
       if (buildSkillerMode === "1") {
         yield* _(ensureSkillerSubmoduleInitialized(path.dirname(composePath)))
       }
-      return yield* _(computeControllerRevision(composePath, gpuMode, buildSkillerMode))
+      return yield* _(computeControllerRevision(composePath, gpuMode, buildSkillerMode, dockerRuntime))
     })
   ).pipe(
     Effect.tap((revision) => persistControllerRevision(revision))

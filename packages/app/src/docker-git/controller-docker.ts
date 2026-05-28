@@ -4,7 +4,7 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import { composeFilesForMode, prepareControllerRevision, resolveControllerComposeFiles } from "./controller-compose.js"
+import { composeFilesToArgs, prepareControllerRevision, resolveControllerComposeFiles } from "./controller-compose.js"
 import { readCurrentContainerName } from "./controller-hostname.js"
 import {
   runCommandCaptureWithFailureOutput,
@@ -30,6 +30,7 @@ export {
   parseControllerBuildSkillerMode,
   parseControllerGpuMode
 } from "./controller-compose.js"
+export { parseControllerDockerRuntime } from "./controller-runtime.js"
 
 export type ControllerRuntime =
   | CommandExecutor.CommandExecutor
@@ -385,7 +386,7 @@ export const runCompose = (
     const composeFiles = yield* _(resolveControllerComposeFiles())
     const invocation = buildDockerInvocation(dockerCommand, [
       "compose",
-      ...composeFilesForMode(composeFiles.composePath, composeFiles.gpuOverlayPath),
+      ...composeFilesToArgs(composeFiles),
       ...args
     ])
     const exitCode = yield* _(

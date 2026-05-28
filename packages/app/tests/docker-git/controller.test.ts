@@ -9,6 +9,7 @@ import {
 import {
   controllerRevisionForMode,
   parseControllerBuildSkillerMode,
+  parseControllerDockerRuntime,
   parseControllerGpuMode
 } from "../../src/docker-git/controller-docker.js"
 import { resolveCurrentContainerName } from "../../src/docker-git/controller-hostname.js"
@@ -18,6 +19,7 @@ import {
   parseControllerRevisionLabelOutput,
   shouldForceRecreateController
 } from "../../src/docker-git/controller-revision.js"
+import { resolveProjectDockerHostForRuntime } from "../../src/docker-git/controller-runtime.js"
 import { buildApiBaseUrlCandidates, isRemoteDockerHost } from "../../src/docker-git/controller.js"
 
 /**
@@ -55,6 +57,7 @@ const controllerSourceRevisionArbitrary = fc
   .filter((value) => !value.includes("\n") && !value.includes("\r"))
 const controllerGpuModeArbitrary = fc.constantFrom<"none" | "all">("none", "all")
 const controllerBuildSkillerModeArbitrary = fc.constantFrom<"0" | "1">("0", "1")
+const controllerDockerRuntimeArbitrary = fc.constantFrom<"host" | "isolated">("host", "isolated")
 
 describe("controller reachability", () => {
   it.effect("builds direct API candidates without Docker inspection", () =>
@@ -252,20 +255,40 @@ describe("controller reachability", () => {
       expect(parseControllerBuildSkillerMode("skip")).toBeNull()
     }))
 
-  it.effect("includes controller GPU and Skiller build modes in the revision", () =>
+  it.effect("parses controller Docker runtime from environment values", () =>
     Effect.sync(() => {
-      expect(controllerRevisionForMode("abc123def4567890", "none")).toBe("abc123def4567890-none-skiller1")
-      expect(controllerRevisionForMode("abc123def4567890", "all")).toBe("abc123def4567890-all-skiller1")
-      expect(controllerRevisionForMode("abc123def4567890", "none", "0")).toBe("abc123def4567890-none-skiller0")
+      expect(parseControllerDockerRuntime()).toBe("host")
+      expect(parseControllerDockerRuntime("")).toBe("host")
+      expect(parseControllerDockerRuntime("host")).toBe("host")
+      expect(parseControllerDockerRuntime("isolated")).toBe("isolated")
+      expect(parseControllerDockerRuntime("remote")).toBeNull()
+    }))
+
+  it.effect("defaults isolated project containers to the embedded controller daemon", () =>
+    Effect.sync(() => {
+      expect(resolveProjectDockerHostForRuntime("host")).toBe("")
+      expect(resolveProjectDockerHostForRuntime("host", " tcp://custom:2375 ")).toBe("tcp://custom:2375")
+      expect(resolveProjectDockerHostForRuntime("isolated")).toBe("tcp://host.docker.internal:2375")
+      expect(resolveProjectDockerHostForRuntime("isolated", " tcp://custom:2375 ")).toBe("tcp://custom:2375")
+    }))
+
+  it.effect("includes controller runtime, GPU and Skiller build modes in the revision", () =>
+    Effect.sync(() => {
+      expect(controllerRevisionForMode("abc123def4567890", "none")).toBe("abc123def4567890-host-none-skiller1")
+      expect(controllerRevisionForMode("abc123def4567890", "all")).toBe("abc123def4567890-host-all-skiller1")
+      expect(controllerRevisionForMode("abc123def4567890", "none", "0", "isolated")).toBe(
+        "abc123def4567890-isolated-none-skiller0"
+      )
 
       fc.assert(
         fc.property(
           controllerSourceRevisionArbitrary,
           controllerGpuModeArbitrary,
           controllerBuildSkillerModeArbitrary,
-          (sourceRevision, gpuMode, buildSkillerMode) => {
-            expect(controllerRevisionForMode(sourceRevision, gpuMode, buildSkillerMode)).toBe(
-              `${sourceRevision}-${gpuMode}-skiller${buildSkillerMode}`
+          controllerDockerRuntimeArbitrary,
+          (sourceRevision, gpuMode, buildSkillerMode, dockerRuntime) => {
+            expect(controllerRevisionForMode(sourceRevision, gpuMode, buildSkillerMode, dockerRuntime)).toBe(
+              `${sourceRevision}-${dockerRuntime}-${gpuMode}-skiller${buildSkillerMode}`
             )
           }
         )
