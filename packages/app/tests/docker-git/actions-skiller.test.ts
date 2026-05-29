@@ -87,7 +87,7 @@ describe("web Skiller actions", () => {
 
       openSkillerApp(context)
 
-      expect(browserOpenMock).toHaveBeenCalledWith("about:blank", "_blank", "noopener")
+      expect(browserOpenMock).toHaveBeenCalledWith("about:blank", "_blank")
       expect(setMessage).toHaveBeenCalledWith("Opening Skiller...")
       yield* _(waitForAssertion(() => {
         expect(openSkillerMock).toHaveBeenCalledWith(undefined, undefined)

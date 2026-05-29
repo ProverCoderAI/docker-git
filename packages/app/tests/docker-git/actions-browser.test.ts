@@ -67,7 +67,7 @@ describe("web browser actions", () => {
         expect(setProjectBrowser).toHaveBeenCalledWith(runningBrowser)
       }))
 
-      expect(openMock).toHaveBeenCalledWith("about:blank", "_blank", "noopener")
+      expect(openMock).toHaveBeenCalledWith("about:blank", "_blank")
       expect(openedWindow.location.href).toBe("/api/projects/project-1/browser/novnc")
       expect(setMessage).toHaveBeenLastCalledWith("Browser opened. CDP endpoint: /api/projects/project-1/browser/cdp.")
     }))
@@ -89,7 +89,7 @@ describe("web browser actions", () => {
       }))
 
       expect(startProjectBrowserMock).toHaveBeenCalledWith("project-1")
-      expect(openMock).toHaveBeenCalledWith("about:blank", "_blank", "noopener")
+      expect(openMock).toHaveBeenCalledWith("about:blank", "_blank")
       expect(openedWindow.close).toHaveBeenCalledOnce()
       expect(setMessage).toHaveBeenLastCalledWith(
         "Browser runtime is missing. Enable Playwright MCP and start the project first."
