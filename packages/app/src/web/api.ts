@@ -139,9 +139,12 @@ export const loadProjectPortForwards = (projectId: string) =>
   )
 
 export const loadProjectBrowser = (projectId: string) =>
-  requestJson("GET", `/projects/${encodeURIComponent(projectId)}/browser`, ProjectBrowserResponseSchema).pipe(
-    Effect.map((response) => response.browser)
-  )
+  requestJson("GET", `/projects/${encodeURIComponent(projectId)}/browser`, ProjectBrowserResponseSchema)
+    .pipe(Effect.map((response) => response.browser))
+
+export const startProjectBrowser = (projectId: string) =>
+  requestJson("POST", `/projects/${encodeURIComponent(projectId)}/browser/start`, ProjectBrowserResponseSchema)
+    .pipe(Effect.map((response) => response.browser))
 
 export const createProjectPortForward = (
   projectId: string,

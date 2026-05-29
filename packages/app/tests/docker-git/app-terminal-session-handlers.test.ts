@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { afterEach, beforeEach, vi } from "vitest"
 
+import type { ProjectBrowserSession } from "../../src/web/api.js"
 import {
   newProjectTerminalUrl,
   type ProjectHandlers,
@@ -11,7 +12,10 @@ import { waitForAssertion } from "./browser-action-context-fixture.js"
 import { type BrowserOpenMockWindow, makeBrowserOpenMockWindow, stubBrowserOpen } from "./browser-open-fixture.js"
 
 const terminalApiMocks = vi.hoisted(() => ({
-  openSkiller: vi.fn()
+  openSkiller: vi.fn(),
+  projectBrowserCdpUrl: vi.fn(),
+  projectBrowserNoVncUrl: vi.fn(),
+  startProjectBrowser: vi.fn()
 }))
 
 vi.mock("../../src/web/api.js", () => ({
@@ -21,8 +25,9 @@ vi.mock("../../src/web/api.js", () => ({
   loadProjectTaskLogs: vi.fn(),
   loadProjectTasks: vi.fn(),
   openSkiller: terminalApiMocks.openSkiller,
-  projectBrowserCdpUrl: vi.fn(),
-  projectBrowserNoVncUrl: vi.fn(),
+  projectBrowserCdpUrl: terminalApiMocks.projectBrowserCdpUrl,
+  projectBrowserNoVncUrl: terminalApiMocks.projectBrowserNoVncUrl,
+  startProjectBrowser: terminalApiMocks.startProjectBrowser,
   stopProjectTask: vi.fn()
 }))
 
@@ -57,6 +62,17 @@ const skillerLaunch = () => ({
   trpcPort: 17_888
 })
 
+const runningBrowser: ProjectBrowserSession = {
+  cdpPath: "/b/repo-issue-7/cdp/json/version",
+  cdpUrl: "ws://browser",
+  containerName: "dg-repo-issue-7-browser",
+  noVncPath: "/b/repo-issue-7/vnc.html",
+  noVncUrl: "https://browser/vnc.html",
+  projectId: "project-1",
+  projectKey: "repo-issue-7",
+  status: "running"
+}
+
 type ExpectedProjectHandlers = {
   readonly apply: boolean
   readonly browser: boolean
@@ -88,6 +104,8 @@ describe("useProjectActionHandlers", () => {
     vi.clearAllMocks()
     openedWindow = makeBrowserOpenMockWindow()
     stubBrowserOpen(openedWindow)
+    terminalApiMocks.projectBrowserCdpUrl.mockImplementation((browser: ProjectBrowserSession) => browser.cdpPath)
+    terminalApiMocks.projectBrowserNoVncUrl.mockImplementation((browser: ProjectBrowserSession) => browser.noVncPath)
   })
 
   afterEach(() => {
@@ -167,6 +185,25 @@ describe("useProjectActionHandlers", () => {
         expect(openedWindow.location.href).toBe("/api/ssh/session/session-1/skiller/app/")
         expect(setMessage).toHaveBeenCalledWith(
           "Skiller launch started (pid 1234). Log: /home/dev/.docker-git/logs/skiller.log. Container FS: dg-project:/home/dev/app. Opened /api/ssh/session/session-1/skiller/app/."
+        )
+      }))
+    }))
+
+  it.effect("starts and opens the browser from a terminal action", () =>
+    Effect.gen(function*(_) {
+      const setMessage = vi.fn()
+      terminalApiMocks.startProjectBrowser.mockImplementation(() => Effect.succeed(runningBrowser))
+      const handlers = buildHandlers({ setMessage })
+
+      expect(typeof handlers.onOpenBrowser).toBe("function")
+      handlers.onOpenBrowser?.()
+
+      expect(openedWindow.opener).toBeNull()
+      yield* _(waitForAssertion(() => {
+        expect(terminalApiMocks.startProjectBrowser).toHaveBeenCalledWith("project-1")
+        expect(openedWindow.location.href).toBe("/b/repo-issue-7/vnc.html")
+        expect(setMessage).toHaveBeenCalledWith(
+          "Browser opened. CDP endpoint: /b/repo-issue-7/cdp/json/version."
         )
       }))
     }))

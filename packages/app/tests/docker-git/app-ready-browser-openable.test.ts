@@ -19,17 +19,19 @@ const browser: ProjectBrowserSession = {
 }
 
 describe("browser open availability", () => {
-  it("enables browser actions only for the running sidecar on the same project", () => {
+  it("enables browser actions when a project context exists", () => {
     expect(canOpenProjectBrowser(browser, "project-1")).toBe(true)
-    expect(canOpenProjectBrowser({ ...browser, status: "missing" }, "project-1")).toBe(false)
-    expect(canOpenProjectBrowser(browser, "project-2")).toBe(false)
-    expect(canOpenProjectBrowser(null, "project-1")).toBe(false)
+    expect(canOpenProjectBrowser({ ...browser, status: "missing" }, "project-1")).toBe(true)
+    expect(canOpenProjectBrowser(browser, "project-2")).toBe(true)
+    expect(canOpenProjectBrowser(null, "project-1")).toBe(true)
+    expect(canOpenProjectBrowser(browser, null)).toBe(false)
   })
 
-  it("gates only the browser menu action by sidecar availability", () => {
+  it("gates only the browser menu action by project availability", () => {
     expect(canRunProjectBrowserAction("Browser", browser, "project-1")).toBe(true)
-    expect(canRunProjectBrowserAction("Browser", null, "project-1")).toBe(false)
+    expect(canRunProjectBrowserAction("Browser", null, "project-1")).toBe(true)
+    expect(canRunProjectBrowserAction("Browser", null, null)).toBe(false)
     expect(canRunProjectBrowserAction("Info", null, "project-1")).toBe(true)
-    expect(browserSidecarUnavailableMessage).toContain("Enable Playwright MCP")
+    expect(browserSidecarUnavailableMessage).toContain("Select a project")
   })
 })

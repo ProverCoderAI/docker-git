@@ -221,6 +221,33 @@ const inspectBrowserContainerState = (
     Effect.catchAll(() => Effect.succeed(missingBrowserContainerState))
   )
 
+const startBrowserContainer = (
+  cwd: string,
+  projectContainerName: string
+) =>
+  dockerCapture(
+    cwd,
+    [
+      "exec",
+      projectContainerName,
+      "docker-git-browser-connection",
+      "start",
+      "--project",
+      projectContainerName,
+      "--network",
+      `container:${projectContainerName}`
+    ],
+    "docker exec docker-git-browser-connection start"
+  ).pipe(
+    Effect.asVoid,
+    Effect.mapError(() =>
+      new ApiConflictError({
+        message:
+          `Failed to start browser runtime for ${projectContainerName}. Make sure the project is running and Playwright MCP is enabled.`
+      })
+    )
+  )
+
 const parseContainerNetworkEntries = (output: string): ReadonlyArray<ContainerNetworkEntry> =>
   output
     .trim()
@@ -400,6 +427,18 @@ export const readProjectBrowserSession = (
   Effect.gen(function*(_) {
     const project = yield* _(getProjectItemById(projectId))
     const containerName = browserContainerName(project.containerName)
+    const state = yield* _(inspectBrowserContainerState(project.projectDir, containerName))
+    return browserSessionFromState(projectId, containerName, state, externalOrigin)
+  })
+
+export const startProjectBrowserSession = (
+  projectId: string,
+  externalOrigin: string
+): Effect.Effect<ProjectBrowserSession, BrowserApiError | PlatformError, ListProjectsContext> =>
+  Effect.gen(function*(_) {
+    const project = yield* _(getProjectItemById(projectId))
+    const containerName = browserContainerName(project.containerName)
+    yield* _(startBrowserContainer(project.projectDir, project.containerName))
     const state = yield* _(inspectBrowserContainerState(project.projectDir, containerName))
     return browserSessionFromState(projectId, containerName, state, externalOrigin)
   })
