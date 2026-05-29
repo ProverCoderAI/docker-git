@@ -19,10 +19,10 @@ import {
   buildApiBaseUrlCandidates,
   type DockerNetworkIps,
   formatNetworkIps,
-  isRemoteDockerHost,
   resolveApiPort,
   resolveConfiguredApiBaseUrl,
   resolveExplicitApiBaseUrl,
+  shouldRequireExplicitApiUrlForRemoteDocker,
   trimTrailingSlashes
 } from "./controller-reachability.js"
 import {
@@ -30,6 +30,7 @@ import {
   shouldForceRecreateForControllerResourceLimits
 } from "./controller-resource-limits-shell.js"
 import { shouldForceRecreateController } from "./controller-revision.js"
+import { prepareControllerRuntimeEnv } from "./controller-runtime-shell.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
 export type { ControllerRuntime } from "./controller-docker.js"
@@ -98,9 +99,17 @@ const waitForReachableApiBaseUrl = (
     })
   )
 
-const failIfRemoteDockerWithoutApiUrl = (): Effect.Effect<void, ControllerBootstrapError> => {
+const failIfRemoteDockerWithoutApiUrl = (
+  currentContainerNetworks: DockerNetworkIps
+): Effect.Effect<void, ControllerBootstrapError> => {
   const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
-  if (!isRemoteDockerHost() || explicitApiBaseUrl !== undefined) {
+  if (
+    !shouldRequireExplicitApiUrlForRemoteDocker(
+      process.env["DOCKER_HOST"],
+      explicitApiBaseUrl,
+      currentContainerNetworks
+    )
+  ) {
     return Effect.void
   }
 
@@ -157,6 +166,7 @@ const loadControllerBootstrapContext = (): Effect.Effect<
   ControllerRuntime
 > =>
   Effect.gen(function*(_) {
+    yield* _(prepareControllerRuntimeEnv())
     yield* _(prepareControllerResourceLimitEnv())
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
     const localControllerRevision = yield* _(prepareLocalControllerRevision())
@@ -266,31 +276,10 @@ const startAndRememberController = (
 // COMPLEXITY: O(1) compose + O(k) health checks
 export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
-    yield* _(failIfRemoteDockerWithoutApiUrl())
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
-    const localControllerRevision = yield* _(prepareLocalControllerRevision())
-    const forceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
-    if (explicitApiBaseUrl === undefined) {
+    if (explicitApiBaseUrl !== undefined) {
       const reachableBeforeDocker = yield* _(
-        findReachableDirectHealthProbe({
-          explicitApiBaseUrl,
-          cachedApiBaseUrl: selectedApiBaseUrl
-        })
-      )
-      if (
-        reachableBeforeDocker !== null &&
-        reachableBeforeDocker.revision === localControllerRevision &&
-        !forceRecreateForResourceLimits
-      ) {
-        rememberSelectedApiBaseUrl(reachableBeforeDocker.apiBaseUrl)
-        return
-      }
-    } else {
-      const reachableBeforeDocker = yield* _(
-        findReachableDirectHealthProbe({
-          explicitApiBaseUrl,
-          cachedApiBaseUrl: selectedApiBaseUrl
-        })
+        findReachableDirectHealthProbe({ explicitApiBaseUrl, cachedApiBaseUrl: selectedApiBaseUrl })
       )
       if (reachableBeforeDocker !== null) {
         rememberSelectedApiBaseUrl(reachableBeforeDocker.apiBaseUrl)
@@ -299,7 +288,25 @@ export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrap
       yield* _(failIfExplicitApiUrlIsUnreachable(explicitApiBaseUrl))
     }
 
+    const localControllerRevision = yield* _(prepareLocalControllerRevision())
+    const forceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
+    const reachableBeforeDocker = yield* _(
+      findReachableDirectHealthProbe({
+        explicitApiBaseUrl,
+        cachedApiBaseUrl: selectedApiBaseUrl
+      })
+    )
+    if (
+      reachableBeforeDocker !== null &&
+      reachableBeforeDocker.revision === localControllerRevision &&
+      !forceRecreateForResourceLimits
+    ) {
+      rememberSelectedApiBaseUrl(reachableBeforeDocker.apiBaseUrl)
+      return
+    }
+
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
+    yield* _(failIfRemoteDockerWithoutApiUrl(bootstrapContext.currentContainerNetworks))
     const reusedExistingController = yield* _(reuseReachableControllerIfPossible(bootstrapContext))
     if (reusedExistingController) {
       return
@@ -309,7 +316,6 @@ export const ensureControllerReady = (): Effect.Effect<void, ControllerBootstrap
 
 export const restartController = (): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
-    yield* _(failIfRemoteDockerWithoutApiUrl())
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
     if (explicitApiBaseUrl !== undefined) {
       yield* _(ensureControllerReady())
@@ -317,6 +323,7 @@ export const restartController = (): Effect.Effect<void, ControllerBootstrapErro
     }
 
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
+    yield* _(failIfRemoteDockerWithoutApiUrl(bootstrapContext.currentContainerNetworks))
     const forceRecreateController = true
     const buildController = shouldBuildControllerImage({
       currentControllerRevision: bootstrapContext.currentControllerRevision,

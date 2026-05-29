@@ -13,6 +13,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$ROOT/docker-compose.yml"
+COMPOSE_ISOLATED_FILE="$ROOT/docker-compose.isolated.yml"
 CONTAINER_NAME="docker-git-api"
 API_PORT="${DOCKER_GIT_API_PORT:-3334}"
 API_HOST="${DOCKER_GIT_API_BIND_HOST:-127.0.0.1}"
@@ -54,7 +55,11 @@ USAGE
 }
 
 compose() {
-  "${DOCKER_CMD[@]}" compose -f "$COMPOSE_FILE" "$@"
+  local compose_args=(-f "$COMPOSE_FILE")
+  if [[ "${DOCKER_GIT_DOCKER_RUNTIME:-host}" == "isolated" ]]; then
+    compose_args+=(-f "$COMPOSE_ISOLATED_FILE")
+  fi
+  "${DOCKER_CMD[@]}" compose "${compose_args[@]}" "$@"
 }
 
 compute_controller_revision() {

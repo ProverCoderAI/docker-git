@@ -17,6 +17,7 @@ import {
 } from "../../src/docker-git/controller-resource-limits.js"
 
 const composeFiles: ReadonlyArray<string> = ["docker-compose.yml", "docker-compose.api.yml"]
+const isolatedComposeFiles: ReadonlyArray<string> = ["docker-compose.isolated.yml", "docker-compose.api.isolated.yml"]
 
 const readComposeFile = (relativePath: string): Effect.Effect<string> =>
   Effect.gen(function*(_) {
@@ -48,6 +49,31 @@ describe("controller compose resource limits", () => {
         Effect.gen(function*(_) {
           const contents = yield* _(readComposeFile(composeFile))
           expect(contents).toMatch(/pids_limit: \$\{DOCKER_GIT_CONTROLLER_PIDS:-\d+\}/u)
+        }))
+    })
+  }
+
+  for (const composeFile of isolatedComposeFiles) {
+    describe(composeFile, () => {
+      it.effect("removes the host Docker socket bind in isolated runtime overlays", () =>
+        Effect.gen(function*(_) {
+          const contents = yield* _(readComposeFile(composeFile))
+          expect(contents).toContain("volumes: !override")
+          expect(contents).not.toContain("/var/run/docker.sock:/var/run/docker.sock")
+        }))
+
+      it.effect("defaults project containers to the embedded controller daemon", () =>
+        Effect.gen(function*(_) {
+          const contents = yield* _(readComposeFile(composeFile))
+          expect(contents).toContain(
+            "DOCKER_GIT_PROJECT_DOCKER_HOST: ${DOCKER_GIT_PROJECT_DOCKER_HOST:-tcp://host.docker.internal:2375}"
+          )
+        }))
+
+      it.effect("enables privileged controller mode for the embedded Docker daemon", () =>
+        Effect.gen(function*(_) {
+          const contents = yield* _(readComposeFile(composeFile))
+          expect(contents).toContain("privileged: ${DOCKER_GIT_CONTROLLER_PRIVILEGED:-true}")
         }))
     })
   }

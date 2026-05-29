@@ -1,9 +1,13 @@
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
-import { Effect } from "effect"
+import { Duration, Effect } from "effect"
 
+import { loadControllerDockerRuntime, resolveControllerRuntimeOverlayPath } from "./controller-compose-runtime.js"
 import { computeLocalControllerRevision, controllerRevisionEnvKey } from "./controller-revision.js"
+import type { ControllerDockerRuntime } from "./controller-runtime.js"
+import { runCommandWithCapturedOutput } from "./frontend-lib/shell/command-runner.js"
 import { findExistingUpwards } from "./frontend-lib/usecases/path-helpers.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
@@ -16,7 +20,11 @@ export type ControllerBuildSkillerMode = "0" | "1"
 export type ControllerComposeFiles = {
   readonly composePath: string
   readonly gpuOverlayPath: string | null
+  readonly runtimeOverlayPath: string | null
 }
+
+const skillerSubmodulePath = "third_party/skiller-desktop-skills-manager"
+const skillerPackagePath = `${skillerSubmodulePath}/package.json`
 
 const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
   _tag: "ControllerBootstrapError",
@@ -42,8 +50,9 @@ export const parseControllerBuildSkillerMode = (raw?: string): ControllerBuildSk
 export const controllerRevisionForMode = (
   sourceRevision: string,
   gpuMode: ControllerGpuMode,
-  buildSkillerMode: ControllerBuildSkillerMode = "1"
-): string => `${sourceRevision}-${gpuMode}-skiller${buildSkillerMode}`
+  buildSkillerMode: ControllerBuildSkillerMode = "1",
+  dockerRuntime: ControllerDockerRuntime = "host"
+): string => `${sourceRevision}-${dockerRuntime}-${gpuMode}-skiller${buildSkillerMode}`
 
 const loadControllerGpuMode = (): Effect.Effect<ControllerGpuMode, ControllerBootstrapError> => {
   const raw = process.env[controllerGpuModeEnvKey]
@@ -82,16 +91,121 @@ const composeFilePath = (): Effect.Effect<string, PlatformError, FileSystem.File
 const mapComposePathError = (error: PlatformError): ControllerBootstrapError =>
   controllerBootstrapError(`Failed to resolve docker-compose.yml path.\nDetails: ${String(error)}`)
 
+const mapSkillerPathError = (error: PlatformError): ControllerBootstrapError =>
+  controllerBootstrapError(`Failed to check Skiller submodule path.\nDetails: ${String(error)}`)
+
 const mapControllerRevisionError = (error: PlatformError): ControllerBootstrapError =>
   controllerBootstrapError(`Failed to compute docker-git controller revision.\nDetails: ${String(error)}`)
 
+const skillerSubmoduleCommand = [
+  "submodule",
+  "update",
+  "--init",
+  "--checkout",
+  skillerSubmodulePath
+]
+const skillerSubmoduleInitTimeout = Duration.seconds(60)
+
+const formatSkillerSubmoduleFailure = (rootDir: string, exitCode: number, output: string): ControllerBootstrapError =>
+  controllerBootstrapError(
+    [
+      "Failed to initialize Skiller submodule before building docker-git controller.",
+      `Command: git ${skillerSubmoduleCommand.join(" ")}`,
+      `Working directory: ${rootDir}`,
+      `Exit code: ${exitCode}`,
+      output.trim().length > 0 ? `Output:\n${output.trim()}` : "Output: n/a"
+    ].join("\n")
+  )
+
+const runSkillerSubmoduleInit = (
+  rootDir: string
+): Effect.Effect<void, ControllerBootstrapError, CommandExecutor.CommandExecutor> =>
+  runCommandWithCapturedOutput(
+    {
+      cwd: rootDir,
+      command: "git",
+      args: skillerSubmoduleCommand
+    },
+    [0],
+    (exitCode, output) => formatSkillerSubmoduleFailure(rootDir, exitCode, output)
+  ).pipe(
+    Effect.timeoutFail({
+      duration: skillerSubmoduleInitTimeout,
+      onTimeout: () =>
+        controllerBootstrapError(
+          [
+            "Timed out while initializing Skiller submodule before building docker-git controller.",
+            `Command: git ${skillerSubmoduleCommand.join(" ")}`,
+            `Working directory: ${rootDir}`,
+            `Timeout: ${Duration.toSeconds(skillerSubmoduleInitTimeout)} seconds`
+          ].join("\n")
+        )
+    }),
+    Effect.mapError((error): ControllerBootstrapError =>
+      error._tag === "ControllerBootstrapError"
+        ? error
+        : controllerBootstrapError(
+          `Failed to initialize Skiller submodule before building docker-git controller.\nDetails: ${String(error)}`
+        )
+    )
+  )
+
+// CHANGE: initialize the pinned Skiller submodule before controller Docker builds
+// WHY: the API image copies `third_party`, so an empty submodule makes the patch/build step fail
+// QUOTE(ТЗ): "исправь проблему"
+// REF: user-message-2026-05-24-controller-skiller-submodule
+// SOURCE: n/a
+// FORMAT THEOREM: forall root: missing(root/skillerPackagePath) -> init(root) -> exists(root/skillerPackagePath) or typed error
+// PURITY: SHELL
+// EFFECT: Effect<void, ControllerBootstrapError, FileSystem | Path | CommandExecutor>
+// INVARIANT: controller revision and Docker build context are computed only after Skiller source exists
+// COMPLEXITY: O(1) filesystem probes plus O(git submodule update)
+export const ensureSkillerSubmoduleInitialized = (
+  rootDir: string
+): Effect.Effect<void, ControllerBootstrapError, FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const packagePath = path.join(rootDir, skillerPackagePath)
+    const existsBeforeInit = yield* _(fs.exists(packagePath).pipe(Effect.mapError(mapSkillerPathError)))
+    if (existsBeforeInit) {
+      return
+    }
+
+    yield* _(Effect.log("Initializing Skiller submodule for docker-git controller build."))
+    yield* _(runSkillerSubmoduleInit(rootDir))
+
+    const existsAfterInit = yield* _(fs.exists(packagePath).pipe(Effect.mapError(mapSkillerPathError)))
+    if (existsAfterInit) {
+      return
+    }
+
+    return yield* _(
+      Effect.fail(
+        controllerBootstrapError(
+          `Skiller submodule initialization completed but ${packagePath} was not found.`
+        )
+      )
+    )
+  })
+
 export const composeFilesForMode = (
   composePath: string,
-  gpuOverlayPath: string | null
-): ReadonlyArray<string> =>
-  gpuOverlayPath === null
-    ? ["-f", composePath]
-    : ["-f", composePath, "-f", gpuOverlayPath]
+  gpuOverlayPath: string | null,
+  runtimeOverlayPath: string | null = null
+): ReadonlyArray<string> => [
+  "-f",
+  composePath,
+  ...(runtimeOverlayPath === null ? [] : ["-f", runtimeOverlayPath]),
+  ...(gpuOverlayPath === null ? [] : ["-f", gpuOverlayPath])
+]
+
+export const composeFilesToArgs = (composeFiles: ControllerComposeFiles): ReadonlyArray<string> =>
+  composeFilesForMode(
+    composeFiles.composePath,
+    composeFiles.gpuOverlayPath,
+    composeFiles.runtimeOverlayPath
+  )
 
 const requireGpuOverlayPath = (
   composePath: string
@@ -115,33 +229,34 @@ const composeFilesForGpuMode = (
   gpuMode: ControllerGpuMode
 ): Effect.Effect<ControllerComposeFiles, ControllerBootstrapError, FileSystem.FileSystem | Path.Path> =>
   gpuMode === "none"
-    ? Effect.succeed({ composePath, gpuOverlayPath: null })
+    ? Effect.succeed({ composePath, gpuOverlayPath: null, runtimeOverlayPath: null })
     : requireGpuOverlayPath(composePath).pipe(
-      Effect.map((gpuOverlayPath) => ({ composePath, gpuOverlayPath }))
+      Effect.map((gpuOverlayPath) => ({ composePath, gpuOverlayPath, runtimeOverlayPath: null }))
     )
 
 type ComposePathAndGpuMode = {
   readonly composePath: string
+  readonly dockerRuntime: ControllerDockerRuntime
   readonly gpuMode: ControllerGpuMode
   readonly buildSkillerMode: ControllerBuildSkillerMode
 }
 
-const withComposePathAndGpuMode = <A>(
+const withComposePathAndGpuMode = <A, R>(
   effect: (input: ComposePathAndGpuMode) => Effect.Effect<
     A,
     ControllerBootstrapError,
-    FileSystem.FileSystem | Path.Path
+    R
   >
-): Effect.Effect<A, ControllerBootstrapError, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<A, ControllerBootstrapError, FileSystem.FileSystem | Path.Path | R> =>
   composeFilePath().pipe(
     Effect.mapError(mapComposePathError),
     Effect.flatMap((composePath) =>
-      loadControllerGpuMode().pipe(
-        Effect.flatMap((gpuMode) =>
-          loadControllerBuildSkillerMode().pipe(
-            Effect.flatMap((buildSkillerMode) => effect({ buildSkillerMode, composePath, gpuMode }))
-          )
-        )
+      Effect.all({
+        buildSkillerMode: loadControllerBuildSkillerMode(),
+        dockerRuntime: loadControllerDockerRuntime(),
+        gpuMode: loadControllerGpuMode()
+      }).pipe(
+        Effect.flatMap((modes) => effect({ composePath, ...modes }))
       )
     )
   )
@@ -150,16 +265,24 @@ export const resolveControllerComposeFiles = (): Effect.Effect<
   ControllerComposeFiles,
   ControllerBootstrapError,
   FileSystem.FileSystem | Path.Path
-> => withComposePathAndGpuMode(({ composePath, gpuMode }) => composeFilesForGpuMode(composePath, gpuMode))
+> =>
+  withComposePathAndGpuMode(({ composePath, dockerRuntime, gpuMode }) =>
+    Effect.gen(function*(_) {
+      const composeFiles = yield* _(composeFilesForGpuMode(composePath, gpuMode))
+      const runtimeOverlayPath = yield* _(resolveControllerRuntimeOverlayPath(composePath, dockerRuntime))
+      return { ...composeFiles, runtimeOverlayPath }
+    })
+  )
 
 const computeControllerRevision = (
   composePath: string,
   gpuMode: ControllerGpuMode,
-  buildSkillerMode: ControllerBuildSkillerMode
+  buildSkillerMode: ControllerBuildSkillerMode,
+  dockerRuntime: ControllerDockerRuntime
 ): Effect.Effect<string, ControllerBootstrapError, FileSystem.FileSystem | Path.Path> =>
   computeLocalControllerRevision(composePath).pipe(
     Effect.mapError(mapControllerRevisionError),
-    Effect.map((revision) => controllerRevisionForMode(revision, gpuMode, buildSkillerMode))
+    Effect.map((revision) => controllerRevisionForMode(revision, gpuMode, buildSkillerMode, dockerRuntime))
   )
 
 const persistControllerRevision = (revision: string): Effect.Effect<void> =>
@@ -170,8 +293,16 @@ const persistControllerRevision = (revision: string): Effect.Effect<void> =>
 export const prepareControllerRevision = (): Effect.Effect<
   string,
   ControllerBootstrapError,
-  FileSystem.FileSystem | Path.Path
+  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 > =>
-  withComposePathAndGpuMode(({ buildSkillerMode, composePath, gpuMode }) =>
-    computeControllerRevision(composePath, gpuMode, buildSkillerMode)
-  ).pipe(Effect.tap((revision) => persistControllerRevision(revision)))
+  withComposePathAndGpuMode(({ buildSkillerMode, composePath, dockerRuntime, gpuMode }) =>
+    Effect.gen(function*(_) {
+      const path = yield* _(Path.Path)
+      if (buildSkillerMode === "1") {
+        yield* _(ensureSkillerSubmoduleInitialized(path.dirname(composePath)))
+      }
+      return yield* _(computeControllerRevision(composePath, gpuMode, buildSkillerMode, dockerRuntime))
+    })
+  ).pipe(
+    Effect.tap((revision) => persistControllerRevision(revision))
+  )
