@@ -26,10 +26,9 @@ import { renderEntrypointGitConfig, renderEntrypointGitHooks } from "./templates
 import { renderEntrypointGrokConfig } from "./templates-entrypoint/grok.js"
 import { renderEntrypointDockerGitBootstrap } from "./templates-entrypoint/nested-docker-git.js"
 import { renderEntrypointOpenCodeConfig } from "./templates-entrypoint/opencode.js"
-import { renderEntrypointPlaywrightBrowserRuntime } from "./templates-entrypoint/playwright-browser.js"
 import { renderEntrypointProjectAgentRules } from "./templates-entrypoint/project-rules.js"
 import { renderEntrypointRtkConfig } from "./templates-entrypoint/rtk.js"
-import { renderEntrypointBackgroundTasks } from "./templates-entrypoint/tasks.js"
+import { renderEntrypointBackgroundTasks, renderEntrypointRustBrowserConnection } from "./templates-entrypoint/tasks.js"
 import {
   renderEntrypointBashCompletion,
   renderEntrypointBashHistory,
@@ -59,7 +58,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointProjectAgentRules(),
     renderEntrypointAgentsNotice(config),
     renderEntrypointDockerSocket(config),
-    renderEntrypointPlaywrightBrowserRuntime(config),
+    renderEntrypointRustBrowserConnection(),
     renderEntrypointMcpPlaywright(config),
     renderEntrypointGitConfig(config),
     renderEntrypointClaudeConfig(config),

@@ -151,7 +151,7 @@ describe("authGrokLogin", () => {
           expect(Number(credentialsInfo.mode ?? 0) & 0o777).toBe(0o700)
           expect(userSettings.apiKey).toBe("xai-test-api-key")
           expect(userSettings.sandboxMode).toBe("off")
-          expect(projectSettings.mcpServers.playwright.command).toBe("docker-git-playwright-mcp")
+          expect(projectSettings.mcpServers.playwright.command).toBe("browser-connection")
           expect(projectSettings.mcpServers.playwright.trust).toBe(true)
         })
       )

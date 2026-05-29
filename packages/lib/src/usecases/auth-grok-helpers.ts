@@ -238,7 +238,7 @@ export const defaultGrokProjectSettings = {
   sandboxMode: "off",
   mcpServers: {
     playwright: {
-      command: "docker-git-playwright-mcp",
+      command: "browser-connection",
       args: [],
       trust: true
     }

@@ -8,7 +8,6 @@ import { defaultTemplateConfig, type TemplateConfig } from "../../src/core/domai
 import { planFiles } from "../../src/core/templates.js"
 import { renderDockerCompose } from "../../src/core/templates/docker-compose.js"
 import { renderDockerfile } from "../../src/core/templates/dockerfile.js"
-import { renderPlaywrightBrowserRuntime } from "../../src/core/templates/playwright-browser-runtime.js"
 import { renderEntrypoint } from "../../src/core/templates-entrypoint.js"
 import { renderEntrypointDnsRepair } from "../../src/core/templates-entrypoint/dns-repair.js"
 import { renderEntrypointGitHooks } from "../../src/core/templates-entrypoint/git.js"
@@ -90,6 +89,7 @@ describe("renderDockerfile", () => {
 
     expect(dockerfile).toContain("ARG DOCKER_GIT_BASE_IMAGE=konard/box-js:2.1.1")
     expect(dockerfile).toContain("FROM ${DOCKER_GIT_BASE_IMAGE}")
+    expect(dockerfile).toContain("make build-essential docker.io")
     expect(dockerfile).toContain(
       "#checkov:skip=CKV_DOCKER_8: docker-git entrypoint must start as root to prepare SSH/auth/bootstrap and run sshd"
     )
@@ -230,20 +230,19 @@ describe("renderDockerfile", () => {
     expect(dockerfile).not.toContain("grok --version >/dev/null || true")
   })
 
-  it("renders Playwright MCP without blocking stdio initialization on CDP readiness", () => {
+  it("renders Rust browser binaries without the legacy Playwright MCP wrapper", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig({ enableMcpPlaywright: true }))
-    const guardedExecIndex = dockerfile.indexOf('if [[ "$MCP_PLAYWRIGHT_CDP_GUARD" == "1" ]]; then')
-    const fetchIndex = dockerfile.indexOf("fetch_cdp_version()")
 
     expectContainsAll(dockerfile, [
-      'CDP_ENDPOINT="http://127.0.0.1:9223"',
-      'MCP_PLAYWRIGHT_CDP_TIMEOUT="${MCP_PLAYWRIGHT_CDP_TIMEOUT:-60000}"',
-      'exec playwright-mcp --cdp-endpoint "$CDP_ENDPOINT" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT"',
-      'exec playwright-mcp --cdp-endpoint "$WS_REWRITTEN" --cdp-timeout "$MCP_PLAYWRIGHT_CDP_TIMEOUT"'
+      "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev acd76d19a96763c8b5616076443d15be59fc7f78 --locked --bins --root /usr/local",
+      "/usr/local/bin/docker-git-browser-connection --version",
+      "/usr/local/bin/browser-connection --version",
+      "# Unified Rust browser (dg-*-browser) start/reuse is owned by browser-connection"
     ])
-    expect(dockerfile).not.toContain('CDP_ENDPOINT="${MCP_PLAYWRIGHT_CDP_ENDPOINT:-}"')
-    expect(guardedExecIndex).toBeGreaterThanOrEqual(0)
-    expect(fetchIndex).toBeGreaterThan(guardedExecIndex)
+    expect(dockerfile).not.toContain("docker-git-playwright-mcp")
+    expect(dockerfile).not.toContain("@playwright/mcp")
+    expect(dockerfile).not.toContain("playwright-mcp --cdp-endpoint")
+    expect(dockerfile).not.toContain("MCP_PLAYWRIGHT_CDP_TIMEOUT")
   })
 })
 
@@ -444,7 +443,7 @@ describe("renderEntrypoint auth bridge", () => {
 
     expectContainsAll(entrypoint, [
       "nextServers.playwright = {",
-      "command: \"docker-git-playwright-mcp\"",
+      "command: \"browser-connection\"",
       "docker_git_sync_project_codex_skills()",
       "project_skills_root=\"$codex_home/skills/.docker-git-project\"",
       "docker_git_prepare_active_agent_project_rules()",
@@ -453,7 +452,9 @@ describe("renderEntrypoint auth bridge", () => {
       "docker_git_detect_grok_project_rules()",
       "docker_git_sync_gemini_playwright_mcp()",
       "docker_git_sync_grok_playwright_mcp()",
-      'MCP_PLAYWRIGHT_ENABLE="${MCP_PLAYWRIGHT_ENABLE:-0}" node',
+      'local browser_project="${DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"',
+      'DOCKER_GIT_BROWSER_PROJECT="${DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"',
+      'MCP_PLAYWRIGHT_ENABLE="${MCP_PLAYWRIGHT_ENABLE:-0}" DOCKER_GIT_BROWSER_PROJECT="$browser_project" DOCKER_GIT_BROWSER_NETWORK="$browser_network" node',
       "DOCKER_GIT_RTK_ENABLE=\"${DOCKER_GIT_RTK_ENABLE:-1}\"",
       "DOCKER_GIT_RTK_ENABLE=1",
       "docker_git_rtk_init_as_user()",
@@ -742,91 +743,53 @@ describe("renderDockerCompose", () => {
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
   })
 
-  it("renders live shell expansion in the nested browser runtime script", () => {
-    const runtime = renderPlaywrightBrowserRuntime()
-
-    expect(runtime).toContain('if [[ "${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
-    expect(runtime).not.toContain('if [[ "\\${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
-    expect(runtime).toContain('printf \'%s\\n\' "${DOCKER_GIT_BROWSER_CONTEXT_DIR:-/opt/docker-git/browser}"')
-    expect(runtime).not.toContain('printf \'%s\\n\' "\\${DOCKER_GIT_BROWSER_CONTEXT_DIR:-/opt/docker-git/browser}"')
-    expect(runtime).toContain('printf \'%s\\n\' "http://127.0.0.1:9223"')
-    expect(runtime).not.toContain('printf \'%s\\n\' "${MCP_PLAYWRIGHT_CDP_ENDPOINT:-http://127.0.0.1:9223}"')
-    expect(runtime).toContain('mktemp "${TMPDIR:-/tmp}/docker-git-browser-build.XXXXXX.log"')
-    expect(runtime).not.toContain('mktemp "\\${TMPDIR:-/tmp}/docker-git-browser-build.XXXXXX.log"')
-    expect(runtime).toContain('docker "${args[@]}" "$image_name" >/dev/null || {')
-    expect(runtime).not.toContain('docker "\\${args[@]}" "$image_name" >/dev/null || {')
-    expect(runtime).toContain("docker_git_wait_for_playwright_cdp()")
-    expect(runtime).toContain('local attempts="${MCP_PLAYWRIGHT_READY_ATTEMPTS:-60}"')
-    expect(runtime).toContain('local delay="${MCP_PLAYWRIGHT_READY_DELAY:-1}"')
-    expect(runtime).toContain("invalid MCP_PLAYWRIGHT_READY_ATTEMPTS")
-    expect(runtime).toContain("invalid MCP_PLAYWRIGHT_READY_DELAY")
-    expect(runtime).toContain("while (( attempt <= attempts )); do")
-    expect(runtime).not.toContain('for attempt in $(seq 1 "$attempts")')
-    expect(runtime).toContain("MCP_PLAYWRIGHT_ENABLE=0")
-    expect(runtime).toContain('docker_git_disable_playwright_mcp "nested browser started but CDP is unavailable"')
-  })
-
-  it("plans nested browser runtime artifacts when Playwright is enabled", () => {
+  it("plans Rust browser connection artifacts when Playwright is enabled", () => {
     const files = planFiles(makeTemplateConfig({ enableMcpPlaywright: true }))
     const filePaths = files.flatMap((file) => file._tag === "File" ? [file.relativePath] : [])
     const dockerfile = files.find(
       (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
         file._tag === "File" && file.relativePath === "Dockerfile"
     )
-    const browserDockerfile = files.find(
+    const entrypoint = files.find(
       (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
-        file._tag === "File" && file.relativePath === "Dockerfile.browser"
-    )
-    const cdpGuard = files.find(
-      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
-        file._tag === "File" && file.relativePath === "docker-git-cdp-guard"
-    )
-    const startExtra = files.find(
-      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
-        file._tag === "File" && file.relativePath === "mcp-playwright-start-extra.sh"
-    )
-    const runtime = files.find(
-      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
-        file._tag === "File" && file.relativePath === "docker-git-browser-runtime.sh"
+        file._tag === "File" && file.relativePath === "entrypoint.sh"
     )
 
-    expect(filePaths).toContain("Dockerfile.browser")
-    expect(filePaths).toContain("docker-git-cdp-guard")
-    expect(filePaths).toContain("mcp-playwright-start-extra.sh")
-    expect(filePaths).toContain("docker-git-browser-runtime.sh")
-    expect(dockerfile?.contents).toContain(
-      "COPY Dockerfile.browser docker-git-cdp-guard mcp-playwright-start-extra.sh docker-git-browser-runtime.sh /opt/docker-git/browser/"
-    )
-    expect(browserDockerfile?.contents).toContain("COPY docker-git-cdp-guard /usr/local/bin/docker-git-cdp-guard")
-    expect(browserDockerfile?.contents).not.toContain("RUN cat <<'EOF' > /usr/local/bin/docker-git-cdp-guard")
-    expect(cdpGuard).toBeDefined()
-    expect(cdpGuard?.mode).toBe(0o755)
-    expect(cdpGuard?.contents).toContain("#!/usr/bin/env node")
-    expect(cdpGuard?.contents).toContain('const upstreamHost = "127.0.0.1";')
-    expect(cdpGuard?.contents).toContain("const upstreamPort = 9222;")
-    expect(cdpGuard?.contents).toContain('const listenHost = "0.0.0.0";')
-    expect(cdpGuard?.contents).toContain("const listenPort = 9223;")
-    expect(cdpGuard?.contents).not.toContain("MCP_PLAYWRIGHT_UPSTREAM_CDP_HOST")
-    expect(cdpGuard?.contents).not.toContain("MCP_PLAYWRIGHT_CDP_GUARD_PORT")
-    expect(cdpGuard?.contents).toContain("Browser.close")
-    expect(startExtra?.contents).toContain('guard_pid="$!"')
-    expect(startExtra?.contents).toContain("falling back to socat")
-    expect(startExtra?.contents).toContain("socat TCP-LISTEN:9223,fork,reuseaddr TCP:127.0.0.1:9222")
-    expect(runtime).toBeDefined()
-    expect(runtime?.mode).toBe(0o755)
-    expect(runtime?.contents).toContain('if [[ "${MCP_PLAYWRIGHT_ENABLE:-0}" != "1" ]]; then')
-    expect(runtime?.contents).not.toContain('\\${MCP_PLAYWRIGHT_ENABLE:-0}')
-    expect(runtime?.contents).toContain("docker_git_wait_for_playwright_cdp()")
-    expect(runtime?.contents).toContain("MCP_PLAYWRIGHT_ENABLE=0")
+    expect(filePaths).not.toContain("Dockerfile.browser")
+    expect(filePaths).not.toContain("docker-git-cdp-guard")
+    expect(filePaths).not.toContain("docker-git-browser-runtime.sh")
+    expect(filePaths).not.toContain("mcp-playwright-start-extra.sh")
+    expect(dockerfile?.contents).toContain("cargo install --git https://github.com/ProverCoderAI/rust-browser-connection")
+    expect(dockerfile?.contents).toContain("/usr/local/bin/browser-connection --version")
+    expect(dockerfile?.contents).not.toContain("docker-git-playwright-mcp")
+    expect(dockerfile?.contents).not.toContain("COPY Dockerfile.browser")
+    expect(entrypoint?.contents).not.toContain("docker_git_start_rust_browser_connection")
+    expect(entrypoint?.contents).not.toContain("start --project")
+    expect(entrypoint?.contents).not.toContain("--no-start-browser")
+    expect(entrypoint?.contents).toContain("docker_git_stop_playwright_browser()")
+    expect(entrypoint?.contents).toContain("docker-git-browser-connection")
+    expect(entrypoint?.contents).toContain('stop --project "$project_container"')
+    expect(entrypoint?.contents).toContain('command = "browser-connection"')
+    expect(entrypoint?.contents).toContain('args = ["--project", "$DOCKER_GIT_BROWSER_PROJECT", "--network", "$DOCKER_GIT_BROWSER_NETWORK"]')
   })
-
-  it("renders Playwright browser startup before MCP client config", () => {
+  it("renders Rust browser cleanup before MCP client config without eager startup", () => {
     const entrypoint = renderEntrypoint(makeTemplateConfig({ enableMcpPlaywright: true }))
-    const browserRuntimeIndex = entrypoint.indexOf("docker_git_start_playwright_browser")
+    const cleanupIndex = entrypoint.indexOf("docker_git_stop_playwright_browser()")
     const mcpConfigIndex = entrypoint.indexOf("[mcp_servers.playwright]")
 
-    expect(browserRuntimeIndex).toBeGreaterThanOrEqual(0)
-    expect(mcpConfigIndex).toBeGreaterThan(browserRuntimeIndex)
+    expect(cleanupIndex).toBeGreaterThanOrEqual(0)
+    expect(mcpConfigIndex).toBeGreaterThan(cleanupIndex)
+    expect(entrypoint).not.toContain("docker_git_start_rust_browser_connection")
+    expect(entrypoint).not.toContain("start --project")
+    expect(entrypoint).not.toContain("--no-start-browser")
+  })
+
+  it("renders Browser MCP project fallback without set -u unbound variables", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig({ enableMcpPlaywright: false }))
+
+    expect(entrypoint).toContain('DOCKER_GIT_BROWSER_PROJECT="${DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"')
+    expect(entrypoint).toContain('local browser_project="${DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"')
+    expect(entrypoint).not.toContain('"$DOCKER_GIT_PROJECT_CONTAINER_NAME"')
   })
 
   it("renders local Docker socket mount only when explicitly enabled", () => {

@@ -192,16 +192,18 @@ const renderClaudeMcpPlaywrightConfig = (): string =>
   String.raw`# Claude Code: keep Playwright MCP config in sync with container settings
 CLAUDE_SETTINGS_FILE="${"$"}{CLAUDE_HOME_JSON:-$CLAUDE_CONFIG_DIR/.claude.json}"
 docker_git_sync_claude_playwright_mcp() {
-  CLAUDE_SETTINGS_FILE="$CLAUDE_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="${"$"}{MCP_PLAYWRIGHT_ENABLE:-0}" node - <<'NODE'
+  local browser_project="${"$"}{DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"; [[ -n "$browser_project" ]] || browser_project="$(hostname)"
+  local browser_network="container:$browser_project"
+  CLAUDE_SETTINGS_FILE="$CLAUDE_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="${"$"}{MCP_PLAYWRIGHT_ENABLE:-0}" DOCKER_GIT_BROWSER_PROJECT="$browser_project" DOCKER_GIT_BROWSER_NETWORK="$browser_network" node - <<'NODE'
 const fs = require("node:fs")
 const path = require("node:path")
 
 const settingsPath = process.env.CLAUDE_SETTINGS_FILE
-if (typeof settingsPath !== "string" || settingsPath.length === 0) {
-  process.exit(0)
-}
+if (typeof settingsPath !== "string" || settingsPath.length === 0) process.exit(0)
 
 const enablePlaywright = process.env.MCP_PLAYWRIGHT_ENABLE === "1"
+const browserProject = process.env.DOCKER_GIT_BROWSER_PROJECT || ""
+const browserArgs = browserProject.length > 0 ? ["--project", browserProject, "--network", process.env.DOCKER_GIT_BROWSER_NETWORK || "container:" + browserProject] : []
 const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value)
 
 let settings = {}
@@ -209,17 +211,15 @@ try {
   const raw = fs.readFileSync(settingsPath, "utf8")
   const parsed = JSON.parse(raw)
   settings = isRecord(parsed) ? parsed : {}
-} catch {
-  settings = {}
-}
+} catch { settings = {} }
 
 const currentServers = isRecord(settings.mcpServers) ? settings.mcpServers : {}
 const nextServers = { ...currentServers }
 if (enablePlaywright) {
   nextServers.playwright = {
     type: "stdio",
-    command: "docker-git-playwright-mcp",
-    args: [],
+    command: "browser-connection",
+    args: browserArgs,
     env: {}
   }
 } else {

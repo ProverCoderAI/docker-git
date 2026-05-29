@@ -184,7 +184,12 @@ chmod 0600 "$GROK_CONFIG_SETTINGS_FILE" "$GROK_USER_SETTINGS_FILE" 2>/dev/null |
 const renderGrokMcpPlaywrightConfig = (): string =>
   String.raw`# Grok CLI: keep Playwright MCP config in sync with container settings
 docker_git_sync_grok_playwright_mcp() {
-  GROK_CONFIG_SETTINGS_FILE="$GROK_CONFIG_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="${"$"}{MCP_PLAYWRIGHT_ENABLE:-0}" node - <<'NODE'
+  local browser_project="${"$"}{DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"
+  if [[ -z "$browser_project" ]]; then
+    browser_project="$(hostname)"
+  fi
+  local browser_network="container:$browser_project"
+  GROK_CONFIG_SETTINGS_FILE="$GROK_CONFIG_SETTINGS_FILE" MCP_PLAYWRIGHT_ENABLE="${"$"}{MCP_PLAYWRIGHT_ENABLE:-0}" DOCKER_GIT_BROWSER_PROJECT="$browser_project" DOCKER_GIT_BROWSER_NETWORK="$browser_network" node - <<'NODE'
 const fs = require("node:fs")
 const path = require("node:path")
 const settingsPath = process.env.GROK_CONFIG_SETTINGS_FILE
@@ -197,9 +202,12 @@ try {
   if (isRecord(parsed)) settings = parsed
 } catch {}
 
+const browserProject = process.env.DOCKER_GIT_BROWSER_PROJECT || ""
+const browserNetwork = process.env.DOCKER_GIT_BROWSER_NETWORK || (browserProject.length > 0 ? "container:" + browserProject : "")
+const browserArgs = browserProject.length > 0 ? ["--project", browserProject, "--network", browserNetwork] : []
 const nextServers = { ...(isRecord(settings.mcpServers) ? settings.mcpServers : {}) }
 if (process.env.MCP_PLAYWRIGHT_ENABLE === "1") {
-  nextServers.playwright = { command: "docker-git-playwright-mcp", args: [], trust: true }
+  nextServers.playwright = { command: "browser-connection", args: browserArgs, trust: true }
 } else {
   delete nextServers.playwright
 }

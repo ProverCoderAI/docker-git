@@ -77,7 +77,7 @@ Options:
   --include-default         Show default/system processes in sessions list
   --up | --no-up            Run docker compose up after init (default: --up)
   --ssh | --no-ssh          Auto-open SSH after create/clone (default: clone=--ssh, create=--no-ssh)
-  --mcp-playwright | --no-mcp-playwright  Enable Playwright MCP + nested Chromium browser (default: --no-mcp-playwright)
+  --mcp-playwright | --no-mcp-playwright  Enable Rust browser MCP + noVNC/CDP session (default: --no-mcp-playwright)
   --auto[=claude|codex|gemini|grok]  Auto-execute an agent; without value picks by auth, random if multiple are available
   --active                  apply-all: apply only to currently running containers (skip stopped ones)
   --force                   Overwrite existing files, replace conflicting docker-git projects/containers, and wipe compose volumes
@@ -99,14 +99,7 @@ Container runtime env (set via .orch/env/project.env):
   DOCKER_GIT_ZSH_AUTOSUGGEST=1|0        Enable zsh-autosuggestions (default: 0)
   DOCKER_GIT_ZSH_AUTOSUGGEST_STYLE=...  zsh-autosuggestions highlight style (default: fg=8,italic)
   DOCKER_GIT_ZSH_AUTOSUGGEST_STRATEGY=...  Suggestion sources (default: history completion)
-  MCP_PLAYWRIGHT_ISOLATED=1|0           Isolated browser contexts; default 0 shares the VNC session
-  MCP_PLAYWRIGHT_CDP_GUARD=1|0          Guard CDP so MCP cannot close/crash shared Chromium (default: 1)
-  MCP_PLAYWRIGHT_BLOCK_BROWSER_CLOSE=1|0  Block destructive Browser.close/crash CDP methods (default: 1)
-  MCP_PLAYWRIGHT_CDP_TIMEOUT=<ms>        CDP connect timeout passed to Playwright MCP (default: 60000)
-  MCP_PLAYWRIGHT_READY_ATTEMPTS=<n>      Startup readiness attempts before disabling broken MCP (default: 60)
-  MCP_PLAYWRIGHT_READY_DELAY=<seconds>   Delay between startup readiness attempts (default: 1)
-  MCP_PLAYWRIGHT_RETRY_ATTEMPTS=<n>     Legacy CDP preflight attempts when CDP guard is disabled (default: 10)
-  MCP_PLAYWRIGHT_RETRY_DELAY=<seconds>  Delay between legacy preflight attempts (default: 2)
+  MCP_PLAYWRIGHT_ISOLATED=1|0           Legacy-compatible hint; default 0 shares the Rust-managed noVNC session
 
 Auth providers:
   github, gh         GitHub CLI auth (tokens saved to env file)

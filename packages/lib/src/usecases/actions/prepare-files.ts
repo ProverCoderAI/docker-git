@@ -230,8 +230,6 @@ const defaultProjectEnvContents = [
   "DOCKER_GIT_ZSH_AUTOSUGGEST_STYLE=fg=8,italic",
   "DOCKER_GIT_ZSH_AUTOSUGGEST_STRATEGY=history completion",
   "MCP_PLAYWRIGHT_ISOLATED=0",
-  "MCP_PLAYWRIGHT_CDP_GUARD=1",
-  "MCP_PLAYWRIGHT_BLOCK_BROWSER_CLOSE=1",
   ""
 ].join("\n")
 

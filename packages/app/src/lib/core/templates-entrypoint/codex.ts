@@ -51,16 +51,22 @@ if [[ "$CODEX_SHARE_AUTH" == "1" ]]; then
   docker_git_upsert_ssh_env "CODEX_AUTH_LABEL" "$CODEX_AUTH_LABEL"
 fi`
 
-const entrypointMcpPlaywrightTemplate = String.raw`# Optional: configure Playwright MCP for Codex (browser automation)
+const entrypointMcpPlaywrightTemplate = String.raw`# Optional: configure Browser MCP for Codex (Rust browser-connection)
 CODEX_CONFIG_FILE="__CODEX_HOME__/config.toml"
+DOCKER_GIT_BROWSER_PROJECT="${"$"}{DOCKER_GIT_PROJECT_CONTAINER_NAME:-}"
+if [[ -z "$DOCKER_GIT_BROWSER_PROJECT" ]]; then
+  DOCKER_GIT_BROWSER_PROJECT="$(hostname)"
+fi
+DOCKER_GIT_BROWSER_NETWORK="container:$DOCKER_GIT_BROWSER_PROJECT"
 
 # Keep config.toml consistent with the container build.
-# If Playwright MCP is disabled for this container, remove the block so Codex
-# doesn't try (and fail) to spawn docker-git-playwright-mcp.
+# If browser MCP is disabled for this container, remove the block so Codex
+# doesn't try (and fail) to spawn browser-connection.
 if [[ "$MCP_PLAYWRIGHT_ENABLE" != "1" ]]; then
   if [[ -f "$CODEX_CONFIG_FILE" ]] && grep -q "^\[mcp_servers\.playwright" "$CODEX_CONFIG_FILE" 2>/dev/null; then
     awk '
       BEGIN { skip=0 }
+      /^# docker-git: Browser MCP/ { next }
       /^# docker-git: Playwright MCP/ { next }
       /^\[mcp_servers[.]playwright([.]|\])/ { skip=1; next }
       skip==1 && /^\[/ { skip=0 }
@@ -98,10 +104,11 @@ EOF
     chown 1000:1000 "$CODEX_CONFIG_FILE" || true
   fi
 
-  # Replace the docker-git Playwright block to allow upgrades via --force without manual edits.
+  # Replace the docker-git Browser MCP block to allow upgrades via --force without manual edits.
   if grep -q "^\[mcp_servers\.playwright" "$CODEX_CONFIG_FILE" 2>/dev/null; then
     awk '
       BEGIN { skip=0 }
+      /^# docker-git: Browser MCP/ { next }
       /^# docker-git: Playwright MCP/ { next }
       /^\[mcp_servers[.]playwright([.]|\])/ { skip=1; next }
       skip==1 && /^\[/ { skip=0 }
@@ -112,10 +119,10 @@ EOF
 
   cat <<EOF >> "$CODEX_CONFIG_FILE"
 
-# docker-git: Playwright MCP (connects to Chromium via CDP)
+# docker-git: Browser MCP (rust-browser-connection)
 [mcp_servers.playwright]
-command = "docker-git-playwright-mcp"
-args = []
+command = "browser-connection"
+args = ["--project", "$DOCKER_GIT_BROWSER_PROJECT", "--network", "$DOCKER_GIT_BROWSER_NETWORK"]
 EOF
 fi`
 
