@@ -51,7 +51,7 @@
   },
   "devDependencies": {
     "@prover-coder-ai/docker-git-session-sync": "workspace:*",
-    "@biomejs/biome": "^2.4.15",
+    "@biomejs/biome": "^2.4.16",
     "@effect/eslint-plugin": "^0.3.2",
     "@effect/language-service": "latest",
     "@effect/vitest": "^0.29.0",
