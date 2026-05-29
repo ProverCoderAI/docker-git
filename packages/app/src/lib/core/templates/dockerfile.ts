@@ -86,8 +86,8 @@ const dockerGitSessionSyncPackage = "@prover-coder-ai/docker-git-session-sync@la
 
 const renderDockerfilePlaywrightRuntime = (config: TemplateConfig): string =>
   config.enableMcpPlaywright
-    ? `# Unified Rust browser (dg-*-browser) is started by docker-git-browser-connection binary
-# No more COPY of separate browser files — single session guaranteed by Rust module (see entrypoint and rust-browser-connection repo)
+    ? `# Unified Rust browser (dg-*-browser) start/reuse is owned by browser-connection
+# No more COPY of separate browser files — single session guaranteed by Rust module (see rust-browser-connection repo)
 # Old browser-vnc + cdp-guard duplication removed per #347`
     : ""
 

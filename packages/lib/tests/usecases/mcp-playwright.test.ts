@@ -135,7 +135,9 @@ describe("enableMcpPlaywrightProjectFiles", () => {
         expect(dockerfileAfter).not.toContain("COPY Dockerfile.browser")
 
         const entrypointAfter = yield* _(fs.readFileString(path.join(outDir, "entrypoint.sh")))
-        expect(entrypointAfter).toContain("docker_git_start_rust_browser_connection")
+        expect(entrypointAfter).not.toContain("docker_git_start_rust_browser_connection")
+        expect(entrypointAfter).not.toContain("start --project")
+        expect(entrypointAfter).not.toContain("--no-start-browser")
         expect(entrypointAfter).toContain("docker_git_stop_playwright_browser()")
         expect(entrypointAfter).toContain("docker-git-browser-connection")
         expect(entrypointAfter).toContain('stop --project "$project_container"')

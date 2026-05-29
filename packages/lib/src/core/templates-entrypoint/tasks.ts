@@ -268,54 +268,19 @@ fi
 
 ${renderAgentLaunch(config)}
 ) &`
-// CHANGE: start the external Rust browser module from the project entrypoint.
-// WHY: issue #347 moves browser ownership to ProverCoderAI/rust-browser-connection while keeping docker-git as caller.
+// CHANGE: leave browser start/reuse ownership with the external Rust MCP module.
+// WHY: issue #347 moves browser lifecycle to ProverCoderAI/rust-browser-connection; docker-git only wires MCP config and cleanup.
 // QUOTE(ТЗ): "Вынести noVNC + MCP Playright в единый модуль."
 // REF: issue-347
 // SOURCE: n/a
-// FORMAT THEOREM: MCP_PLAYWRIGHT_ENABLE=1 -> eventually running(DOCKER_GIT_BROWSER_CONTAINER_NAME)
+// FORMAT THEOREM: MCP_PLAYWRIGHT_ENABLE=1 -> browser-connection owns start/reuse(DOCKER_GIT_BROWSER_CONTAINER_NAME)
 // PURITY: SHELL
-// EFFECT: generated bash calls docker-git-browser-connection, which calls Docker.
-// INVARIANT: browser shares the project container network namespace, so CDP is http://127.0.0.1:9223 from agents.
-// COMPLEXITY: O(1) entrypoint orchestration; Docker build/run is delegated to Rust.
-const renderEntrypointRustBrowserConnectionStart = (): ReadonlyArray<string> => [
-  "# Unified Rust browser connection (noVNC + CDP) for MCP Playwright + Hermes — per #347.",
-  "# Defaults are safe no-ops unless MCP Playwright is enabled.",
-  "docker_git_start_rust_browser_connection() {",
-  "  if [[ \"${MCP_PLAYWRIGHT_ENABLE:-0}\" != \"1\" ]]; then",
-  "    return 0",
-  "  fi",
-  "",
-  "  local browser_bin=\"\"",
-  "  local candidate",
-  "  for candidate in /usr/local/bin/docker-git-browser-connection /root/.cargo/bin/docker-git-browser-connection /usr/local/cargo/bin/docker-git-browser-connection $(command -v docker-git-browser-connection 2>/dev/null || true); do",
-  "    if [[ -x \"$candidate\" ]]; then",
-  "      browser_bin=\"$candidate\"",
-  "      break",
-  "    fi",
-  "  done",
-  "",
-  "  if [[ -z \"$browser_bin\" ]]; then",
-  "    echo \"[browser] WARNING: docker-git-browser-connection not found; Playwright MCP browser is unavailable\" >&2",
-  "    MCP_PLAYWRIGHT_ENABLE=0",
-  "    export MCP_PLAYWRIGHT_ENABLE",
-  "    return 0",
-  "  fi",
-  "",
-  "  local project_container=\"${DOCKER_GIT_PROJECT_CONTAINER_NAME:-$(hostname)}\"",
-  "  local network_mode=\"container:${project_container}\"",
-  "  mkdir -p /var/log",
-  "  \"$browser_bin\" start --project \"$project_container\" --network \"$network_mode\" >> /var/log/docker-git-browser.log 2>&1 || {",
-  "    echo \"[browser] WARNING: Rust browser connection failed; see /var/log/docker-git-browser.log\" >&2",
-  "    MCP_PLAYWRIGHT_ENABLE=0",
-  "    export MCP_PLAYWRIGHT_ENABLE",
-  "    return 0",
-  "  }",
-  "  echo \"[browser] Rust browser connection is ready via $browser_bin on $network_mode\"",
-  "}"
-]
-
+// EFFECT: generated bash calls docker-git-browser-connection stop during teardown.
+// INVARIANT: docker-git entrypoint never eagerly starts the browser; browser-connection starts/reuses it on demand.
+// COMPLEXITY: O(1) cleanup orchestration; Docker lifecycle is delegated to Rust.
 const renderEntrypointRustBrowserConnectionStop = (): ReadonlyArray<string> => [
+  "# Rust browser connection cleanup only; browser-connection owns start/reuse on demand.",
+  "# Do not call docker-git-browser-connection start here, or lifecycle ownership is duplicated.",
   "docker_git_stop_playwright_browser() {",
   "  if [[ \"${MCP_PLAYWRIGHT_ENABLE:-0}\" != \"1\" ]]; then",
   "    return 0",
@@ -341,9 +306,5 @@ const renderEntrypointRustBrowserConnectionStop = (): ReadonlyArray<string> => [
 
 export const renderEntrypointRustBrowserConnection = (): string =>
   [
-    ...renderEntrypointRustBrowserConnectionStart(),
-    "",
-    ...renderEntrypointRustBrowserConnectionStop(),
-    "",
-    "docker_git_start_rust_browser_connection"
+    ...renderEntrypointRustBrowserConnectionStop()
   ].join("\n")

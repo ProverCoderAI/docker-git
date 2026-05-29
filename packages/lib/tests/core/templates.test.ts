@@ -237,7 +237,7 @@ describe("renderDockerfile", () => {
       "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev acd76d19a96763c8b5616076443d15be59fc7f78 --locked --bins --root /usr/local",
       "/usr/local/bin/docker-git-browser-connection --version",
       "/usr/local/bin/browser-connection --version",
-      "# Unified Rust browser (dg-*-browser) is started by docker-git-browser-connection binary"
+      "# Unified Rust browser (dg-*-browser) start/reuse is owned by browser-connection"
     ])
     expect(dockerfile).not.toContain("docker-git-playwright-mcp")
     expect(dockerfile).not.toContain("@playwright/mcp")
@@ -763,19 +763,25 @@ describe("renderDockerCompose", () => {
     expect(dockerfile?.contents).toContain("/usr/local/bin/browser-connection --version")
     expect(dockerfile?.contents).not.toContain("docker-git-playwright-mcp")
     expect(dockerfile?.contents).not.toContain("COPY Dockerfile.browser")
-    expect(entrypoint?.contents).toContain("docker_git_start_rust_browser_connection")
+    expect(entrypoint?.contents).not.toContain("docker_git_start_rust_browser_connection")
+    expect(entrypoint?.contents).not.toContain("start --project")
+    expect(entrypoint?.contents).not.toContain("--no-start-browser")
     expect(entrypoint?.contents).toContain("docker_git_stop_playwright_browser()")
     expect(entrypoint?.contents).toContain("docker-git-browser-connection")
-    expect(entrypoint?.contents).toContain('local network_mode="container:${project_container}"')
     expect(entrypoint?.contents).toContain('stop --project "$project_container"')
+    expect(entrypoint?.contents).toContain('command = "browser-connection"')
+    expect(entrypoint?.contents).toContain('args = ["--project", "$DOCKER_GIT_BROWSER_PROJECT", "--network", "$DOCKER_GIT_BROWSER_NETWORK"]')
   })
-  it("renders Rust browser startup before MCP client config", () => {
+  it("renders Rust browser cleanup before MCP client config without eager startup", () => {
     const entrypoint = renderEntrypoint(makeTemplateConfig({ enableMcpPlaywright: true }))
-    const browserRuntimeIndex = entrypoint.indexOf("docker_git_start_rust_browser_connection")
+    const cleanupIndex = entrypoint.indexOf("docker_git_stop_playwright_browser()")
     const mcpConfigIndex = entrypoint.indexOf("[mcp_servers.playwright]")
 
-    expect(browserRuntimeIndex).toBeGreaterThanOrEqual(0)
-    expect(mcpConfigIndex).toBeGreaterThan(browserRuntimeIndex)
+    expect(cleanupIndex).toBeGreaterThanOrEqual(0)
+    expect(mcpConfigIndex).toBeGreaterThan(cleanupIndex)
+    expect(entrypoint).not.toContain("docker_git_start_rust_browser_connection")
+    expect(entrypoint).not.toContain("start --project")
+    expect(entrypoint).not.toContain("--no-start-browser")
   })
 
   it("renders Browser MCP project fallback without set -u unbound variables", () => {
