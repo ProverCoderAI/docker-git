@@ -17,6 +17,7 @@
     "build": "bun run build:app && bun run build:docker-git",
     "build:app": "vite build --ssr src/app/main.ts",
     "build:web": "vite build --config vite.web.config.ts",
+    "build:web:strict": "bun ../../scripts/ci/check-web-build-output.mjs",
     "prepack": "bun run build:docker-git",
     "dev": "vite build --watch --ssr src/app/main.ts",
     "dev:web": "vite --config vite.web.config.ts",
