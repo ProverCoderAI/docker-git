@@ -11,6 +11,11 @@ export type ControllerBootstrapError = {
   readonly message: string
 }
 
+export const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
+  _tag: "ControllerBootstrapError",
+  message
+})
+
 export type ApiRequestError = {
   readonly _tag: "ApiRequestError"
   readonly method: string

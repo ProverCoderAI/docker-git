@@ -32,7 +32,7 @@ jobs:
         run: bun ./packages/docker-git-session-sync/dist/docker-git-session-sync.js --help
       - name: Verify browser UI and menu clone smoke checks
         run: |
-          bun run --cwd packages/app build:web
+          bun run --cwd packages/app build:web:strict
           bun scripts/final-build/browser-web-smoke.mjs
           bun run --cwd packages/app vitest run tests/docker-git/browser-frontend.test.ts tests/docker-git/app-ready-create.test.ts tests/docker-git/actions-project-create.test.ts
       - name: Prepare package artifacts directory

@@ -13,7 +13,12 @@ import {
   shouldReuseBrowserFrontend
 } from "./browser-frontend-state.js"
 import { findReachableApiBaseUrl } from "./controller-health.js"
-import { resolveConfiguredApiBaseUrl, resolveExplicitApiBaseUrl } from "./controller-reachability.js"
+import {
+  resolveConfiguredApiBaseUrl,
+  resolveDefaultLocalApiBaseUrl,
+  resolveExplicitApiBaseUrl,
+  uniqueStrings
+} from "./controller-reachability.js"
 import { type ControllerRuntime, ensureControllerReady, resolveApiBaseUrl } from "./controller.js"
 import {
   runCommandCapture,
@@ -153,19 +158,19 @@ const readBrowserFrontendRuntimeState = (
 // QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
 // REF: PR #344 E2E (Browser command) regression.
 // SOURCE: n/a
-// FORMAT THEOREM: explicit_api -> explicit_api; reachable(configured_api) -> configured_api; otherwise -> selected_api
+// FORMAT THEOREM: strict_explicit_api -> strict_explicit_api; reachable(local_api) -> local_api; otherwise -> selected_api
 // PURITY: SHELL
 // EFFECT: Effect<string, never, ControllerRuntime>
-// INVARIANT: explicit DOCKER_GIT_API_URL is never overridden by auto-discovery.
+// INVARIANT: strict explicit DOCKER_GIT_API_URL is never overridden by auto-discovery.
 // COMPLEXITY: O(1) probes/O(1) space.
 /**
  * Resolves the API URL used by the browser frontend proxy.
  *
- * @returns Effect with the explicit API URL, the reachable configured host URL, or the selected controller URL.
+ * @returns Effect with the strict explicit API URL, a reachable local host URL, or the selected controller URL.
  *
  * @pure false
  * @effect FetchHttpClient through controller health probing.
- * @invariant Explicit `DOCKER_GIT_API_URL` has precedence over all inferred endpoints.
+ * @invariant Strict explicit `DOCKER_GIT_API_URL` has precedence over all inferred endpoints.
  * @precondition `ensureControllerReady` has already completed for inferred endpoints.
  * @postcondition A configured host URL is used only after a successful health probe.
  * @complexity O(1) time and O(1) space for the bounded candidate set.
@@ -179,11 +184,15 @@ const resolveBrowserFrontendApiBaseUrl = (): Effect.Effect<string, never, Contro
   }
 
   const configuredApiBaseUrl = resolveConfiguredApiBaseUrl()
-  if (configuredApiBaseUrl === selectedApiBaseUrl) {
+  const candidateApiBaseUrls = uniqueStrings([
+    resolveDefaultLocalApiBaseUrl() ?? "",
+    configuredApiBaseUrl
+  ].filter((value) => value.length > 0))
+  if (candidateApiBaseUrls.includes(selectedApiBaseUrl)) {
     return Effect.succeed(selectedApiBaseUrl)
   }
 
-  return findReachableApiBaseUrl([configuredApiBaseUrl]).pipe(
+  return findReachableApiBaseUrl(candidateApiBaseUrls).pipe(
     Effect.match({
       onFailure: () => selectedApiBaseUrl,
       onSuccess: (apiBaseUrl) => apiBaseUrl

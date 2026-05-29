@@ -17,12 +17,14 @@ STATE_PATH="$ROOT/.orch/state/browser-frontend.json"
 FAILURE_DUMPED=0
 BROWSER_PID=""
 BROWSER_STARTUP_ATTEMPTS="${DOCKER_GIT_E2E_BROWSER_STARTUP_ATTEMPTS:-240}"
+RESOLVED_API_BASE_URL=""
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_PROJECTS_ROOT_VOLUME="docker-git-e2e-browser-$RUN_ID-projects"
 export DOCKER_GIT_API_CONTAINER_NAME="docker-git-e2e-browser-$RUN_ID-api"
 DOCKER_GIT_API_PORT="$(dg_require_free_port 34000 34999 "browser API")"
 export DOCKER_GIT_API_PORT
+export DOCKER_GIT_API_URL="http://127.0.0.1:${DOCKER_GIT_API_PORT}"
 DOCKER_GIT_WEB_PORT="$(dg_require_free_port 41000 41999 "browser web")"
 export DOCKER_GIT_WEB_PORT
 export COMPOSE_PROJECT_NAME="docker-git-e2e-browser-$RUN_ID"
@@ -129,6 +131,55 @@ wait_for_http_contains() {
   fail "timed out waiting for endpoint: $url"
 }
 
+read_logged_api_base_url() {
+  if [[ ! -f "$BROWSER_LOG" ]]; then
+    return 1
+  fi
+
+  local line=""
+  local url=""
+  line="$(grep -F " for API http" "$BROWSER_LOG" | tail -n 1 || true)"
+  if [[ -z "$line" ]]; then
+    return 1
+  fi
+
+  url="${line##* for API }"
+  url="${url%% *}"
+  url="${url%.}"
+  if [[ -z "$url" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "$url"
+}
+
+wait_for_controller_health() {
+  local attempts="${1:-90}"
+  local local_url="http://127.0.0.1:${DOCKER_GIT_API_PORT}"
+  local logged_url=""
+  local body=""
+
+  for _ in $(seq 1 "$attempts"); do
+    logged_url="$(read_logged_api_base_url || true)"
+    for candidate in "$logged_url" "$local_url"; do
+      if [[ -z "$candidate" ]]; then
+        continue
+      fi
+      if body="$(curl -fsS --connect-timeout 2 --max-time 5 "${candidate}/health" 2>/dev/null)" \
+        && grep -Fq -- '"ok":true' <<<"$body"; then
+        RESOLVED_API_BASE_URL="$candidate"
+        return 0
+      fi
+    done
+    if ! browser_alive; then
+      fail "browser command exited before controller became ready: ${logged_url:-$local_url}"
+    fi
+    sleep 2
+  done
+
+  fail "timed out waiting for controller endpoint: ${logged_url:-$local_url}"
+}
+
 trap 'on_error $LINENO' ERR
 trap cleanup EXIT
 
@@ -148,7 +199,7 @@ fi
 BROWSER_PID="$!"
 
 wait_for_log_line "Ensuring docker-git API controller is current."
-wait_for_http_contains "http://127.0.0.1:${DOCKER_GIT_API_PORT}/health" '"ok":true' "$BROWSER_STARTUP_ATTEMPTS"
+wait_for_controller_health "$BROWSER_STARTUP_ATTEMPTS"
 wait_for_http_contains "http://127.0.0.1:${DOCKER_GIT_WEB_PORT}/" "<title>docker-git browser</title>" "$BROWSER_STARTUP_ATTEMPTS"
 wait_for_http_contains "http://127.0.0.1:${DOCKER_GIT_WEB_PORT}/api/health" '"ok":true' "$BROWSER_STARTUP_ATTEMPTS"
 wait_for_log_line "docker-git web runtime listening on http://"
@@ -160,7 +211,7 @@ docker ps --format '{{.Names}}' | grep -qx "$DOCKER_GIT_API_CONTAINER_NAME" \
 
 grep -Fq -- "\"port\": \"$DOCKER_GIT_WEB_PORT\"" "$STATE_PATH" \
   || fail "expected runtime state to record web port $DOCKER_GIT_WEB_PORT"
-grep -Fq -- "\"apiBaseUrl\": \"http://127.0.0.1:$DOCKER_GIT_API_PORT\"" "$STATE_PATH" \
-  || fail "expected runtime state to record API base URL http://127.0.0.1:$DOCKER_GIT_API_PORT"
+grep -Fq -- "\"apiBaseUrl\": \"$RESOLVED_API_BASE_URL\"" "$STATE_PATH" \
+  || fail "expected runtime state to record API base URL $RESOLVED_API_BASE_URL"
 
 echo "e2e/browser-command: bun run docker-git -- browser startup verified" >&2

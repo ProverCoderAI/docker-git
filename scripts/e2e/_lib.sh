@@ -417,7 +417,31 @@ dg_project_ssh_to_container() {
   shift 2
 
   if ! dg_has_project_docker_access; then
-    "$local_ssh_command" "$@"
+    local local_ssh_exit=0
+    if "$local_ssh_command" "$@"; then
+      return 0
+    else
+      local_ssh_exit=$?
+    fi
+
+    if [[ "$local_ssh_exit" != "255" ]]; then
+      return "$local_ssh_exit"
+    fi
+
+    local local_container_ip
+    local_container_ip="$(dg_project_container_ip "$container")"
+    if [[ -z "$local_container_ip" ]]; then
+      return "$local_ssh_exit"
+    fi
+
+    local local_identity_arg=""
+    local_identity_arg="$(dg_find_ssh_identity_arg "$@" || true)"
+    local local_rewritten=()
+    while IFS= read -r -d '' arg; do
+      local_rewritten+=("$arg")
+    done < <(dg_rewrite_ssh_args_for_project_container "$local_container_ip" "$local_identity_arg" "$@")
+
+    "$local_ssh_command" "${local_rewritten[@]}"
     return
   fi
 

@@ -9,13 +9,20 @@ import {
 import {
   controllerRevisionForMode,
   parseControllerBuildSkillerMode,
+  parseControllerDockerRuntime,
   parseControllerGpuMode
 } from "../../src/docker-git/controller-docker.js"
+import { resolveCurrentContainerName } from "../../src/docker-git/controller-hostname.js"
+import {
+  isDefaultLocalApiBaseUrl,
+  shouldRequireExplicitApiUrlForRemoteDocker
+} from "../../src/docker-git/controller-reachability.js"
 import {
   parseControllerRevisionEnvOutput,
   parseControllerRevisionLabelOutput,
   shouldForceRecreateController
 } from "../../src/docker-git/controller-revision.js"
+import { resolveProjectDockerHostForRuntime } from "../../src/docker-git/controller-runtime.js"
 import { buildApiBaseUrlCandidates, isRemoteDockerHost } from "../../src/docker-git/controller.js"
 
 /**
@@ -48,6 +55,35 @@ const joinIp = (...octets: ReadonlyArray<string>): string => octets.join(".")
  * @throws Never
  */
 const makeHttpUrl = (host: string, port: string): string => ["ht", "tp://", host, ":", port].join("")
+const controllerSourceRevisionArbitrary = fc
+  .string({ maxLength: 64, minLength: 1 })
+  .filter((value) => !value.includes("\n") && !value.includes("\r"))
+const controllerGpuModeArbitrary = fc.constantFrom<"none" | "all">("none", "all")
+const controllerBuildSkillerModeArbitrary = fc.constantFrom<"0" | "1">("0", "1")
+const controllerDockerRuntimeArbitrary = fc.constantFrom<"host" | "isolated">("host", "isolated")
+const defaultLocalApiHostArbitrary = fc.constantFrom("127.0.0.1", "localhost", "[::1]")
+const apiBaseUrlTrailingSlashesArbitrary = fc.constantFrom("", "/", "///")
+const dockerHostArbitrary = fc.constantFrom<string | undefined>(
+  undefined,
+  "",
+  " unix:///var/run/docker.sock ",
+  "tcp://docker.example.test:2376",
+  " ssh://docker@example.test "
+)
+const explicitApiBaseUrlArbitrary = fc.option(fc.webUrl(), { nil: undefined })
+const dockerNetworkNameArbitrary = fc
+  .string({ maxLength: 16, minLength: 1 })
+  .filter((value) => value.trim().length > 0)
+const dockerNetworkIpArbitrary = fc
+  .tuple(
+    fc.integer({ max: 255, min: 1 }),
+    fc.integer({ max: 255, min: 0 }),
+    fc.integer({ max: 255, min: 0 }),
+    fc.integer({ max: 254, min: 1 })
+  )
+  .map((octets) => joinIp(...octets.map(String)))
+const dockerNetworkIpsArbitrary = fc.dictionary(dockerNetworkNameArbitrary, dockerNetworkIpArbitrary)
+
 describe("controller reachability", () => {
   it.effect("builds direct API candidates without Docker inspection", () =>
     Effect.sync(() => {
@@ -113,6 +149,55 @@ describe("controller reachability", () => {
       expect(isRemoteDockerHost("unix:///var/run/docker.sock")).toBe(false)
       expect(isRemoteDockerHost("tcp://docker.example.test:2376")).toBe(true)
       expect(isRemoteDockerHost("ssh://docker@example.test")).toBe(true)
+    }))
+
+  it.effect("classifies only default localhost API URLs as non-strict overrides", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(defaultLocalApiHostArbitrary, apiBaseUrlTrailingSlashesArbitrary, (host, trailingSlashes) => {
+          expect(isDefaultLocalApiBaseUrl(`http://${host}:3334${trailingSlashes}`, "3334")).toBe(true)
+        })
+      )
+
+      expect(isDefaultLocalApiBaseUrl(makeHttpUrl("127.0.0.1", "4444"), "3334")).toBe(false)
+      expect(isDefaultLocalApiBaseUrl(makeHttpUrl("0.0.0.0", "3334"), "3334")).toBe(false)
+      expect(isDefaultLocalApiBaseUrl("https://localhost:3334", "3334")).toBe(false)
+      expect(isDefaultLocalApiBaseUrl(`${makeHttpUrl("localhost", "3334")}/api`, "3334")).toBe(false)
+    }))
+
+  it.effect("requires an explicit API URL only for non-inspectable remote Docker hosts", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(
+          dockerHostArbitrary,
+          explicitApiBaseUrlArbitrary,
+          dockerNetworkIpsArbitrary,
+          (dockerHost, explicitApiBaseUrl, currentContainerNetworks) => {
+            const expected = isRemoteDockerHost(dockerHost) &&
+              explicitApiBaseUrl === undefined &&
+              Object.keys(currentContainerNetworks).length === 0
+
+            expect(
+              shouldRequireExplicitApiUrlForRemoteDocker(dockerHost, explicitApiBaseUrl, currentContainerNetworks)
+            ).toBe(expected)
+          }
+        )
+      )
+    }))
+
+  it.effect("resolves the current container name from HOSTNAME or OS hostname", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(
+          fc.option(fc.string(), { nil: undefined }),
+          fc.string(),
+          (envHostname, systemHostname) => {
+            expect(resolveCurrentContainerName(envHostname, systemHostname)).toBe(
+              envHostname?.trim() || systemHostname.trim()
+            )
+          }
+        )
+      )
     }))
 
   it.effect("parses controller revision from container env output", () =>
@@ -213,10 +298,43 @@ describe("controller reachability", () => {
       expect(parseControllerBuildSkillerMode("skip")).toBeNull()
     }))
 
-  it.effect("includes controller GPU and Skiller build modes in the revision", () =>
+  it.effect("parses controller Docker runtime from environment values", () =>
     Effect.sync(() => {
-      expect(controllerRevisionForMode("abc123def4567890", "none")).toBe("abc123def4567890-none-skiller1")
-      expect(controllerRevisionForMode("abc123def4567890", "all")).toBe("abc123def4567890-all-skiller1")
-      expect(controllerRevisionForMode("abc123def4567890", "none", "0")).toBe("abc123def4567890-none-skiller0")
+      expect(parseControllerDockerRuntime()).toBe("host")
+      expect(parseControllerDockerRuntime("")).toBe("host")
+      expect(parseControllerDockerRuntime("host")).toBe("host")
+      expect(parseControllerDockerRuntime("isolated")).toBe("isolated")
+      expect(parseControllerDockerRuntime("remote")).toBeNull()
+    }))
+
+  it.effect("defaults isolated project containers to the embedded controller daemon", () =>
+    Effect.sync(() => {
+      expect(resolveProjectDockerHostForRuntime("host")).toBe("")
+      expect(resolveProjectDockerHostForRuntime("host", " tcp://custom:2375 ")).toBe("tcp://custom:2375")
+      expect(resolveProjectDockerHostForRuntime("isolated")).toBe("tcp://host.docker.internal:2375")
+      expect(resolveProjectDockerHostForRuntime("isolated", " tcp://custom:2375 ")).toBe("tcp://custom:2375")
+    }))
+
+  it.effect("includes controller runtime, GPU and Skiller build modes in the revision", () =>
+    Effect.sync(() => {
+      expect(controllerRevisionForMode("abc123def4567890", "none")).toBe("abc123def4567890-host-none-skiller1")
+      expect(controllerRevisionForMode("abc123def4567890", "all")).toBe("abc123def4567890-host-all-skiller1")
+      expect(controllerRevisionForMode("abc123def4567890", "none", "0", "isolated")).toBe(
+        "abc123def4567890-isolated-none-skiller0"
+      )
+
+      fc.assert(
+        fc.property(
+          controllerSourceRevisionArbitrary,
+          controllerGpuModeArbitrary,
+          controllerBuildSkillerModeArbitrary,
+          controllerDockerRuntimeArbitrary,
+          (sourceRevision, gpuMode, buildSkillerMode, dockerRuntime) => {
+            expect(controllerRevisionForMode(sourceRevision, gpuMode, buildSkillerMode, dockerRuntime)).toBe(
+              `${sourceRevision}-${dockerRuntime}-${gpuMode}-skiller${buildSkillerMode}`
+            )
+          }
+        )
+      )
     }))
 })
