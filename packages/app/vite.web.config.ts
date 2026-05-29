@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url"
 
 import { gridlandWebPlugin } from "@gridland/web/vite-plugin"
 import react from "@vitejs/plugin-react"
-import { defineConfig, loadEnv, type PluginOption } from "vite"
+import { defineConfig, loadEnv, type Plugin, type PluginOption, type UserConfig } from "vite"
 import { type RawData, WebSocket, WebSocketServer } from "ws"
 
 const __filename = fileURLToPath(import.meta.url)
@@ -165,6 +165,57 @@ const terminalWebSocketProxyPlugin = (apiTarget: string): PluginOption => ({
   }
 })
 
+type VitePluginConfig = Omit<UserConfig, "plugins">
+
+const removeDeprecatedOptimizeDepsOptions = (
+  optimizeDeps: UserConfig["optimizeDeps"]
+): UserConfig["optimizeDeps"] => {
+  if (optimizeDeps === undefined) {
+    return undefined
+  }
+
+  const { esbuildOptions: _esbuildOptions, ...remainingOptions } = optimizeDeps
+  return remainingOptions
+}
+
+const removeDeprecatedGridlandOptions = (
+  config: VitePluginConfig | null | void
+): VitePluginConfig | null | void => {
+  if (config === undefined || config === null) {
+    return config
+  }
+
+  const { esbuild: _esbuild, optimizeDeps, ...remainingConfig } = config
+  const sanitizedOptimizeDeps = removeDeprecatedOptimizeDepsOptions(optimizeDeps)
+  return sanitizedOptimizeDeps === undefined
+    ? remainingConfig
+    : {
+      ...remainingConfig,
+      optimizeDeps: sanitizedOptimizeDeps
+    }
+}
+
+const isVitePlugin = (plugin: PluginOption): plugin is Plugin =>
+  typeof plugin === "object" && plugin !== null && !Array.isArray(plugin) && "name" in plugin
+
+const gridlandWebPluginWithoutDeprecatedOptions = (): ReadonlyArray<PluginOption> =>
+  gridlandWebPlugin().map((plugin) => {
+    if (!isVitePlugin(plugin) || plugin.name !== "gridland-web-aliases" || typeof plugin.config !== "function") {
+      return plugin
+    }
+
+    const resolveGridlandConfig = plugin.config
+    return {
+      ...plugin,
+      config(config, env) {
+        const result = resolveGridlandConfig.call(this, config, env)
+        return result instanceof Promise
+          ? result.then(removeDeprecatedGridlandOptions)
+          : removeDeprecatedGridlandOptions(result)
+      }
+    }
+  })
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, "")
   const apiTarget = env["DOCKER_GIT_API_URL"]?.trim() || defaultApiTarget
@@ -172,7 +223,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       terminalWebSocketProxyPlugin(apiTarget),
-      ...gridlandWebPlugin(),
+      ...gridlandWebPluginWithoutDeprecatedOptions(),
       react()
     ],
     publicDir: false,
@@ -211,14 +262,12 @@ export default defineConfig(({ mode }) => {
     build: {
       target: "esnext",
       outDir: "dist-web",
-      sourcemap: true
-    },
-    esbuild: {
-      target: "esnext"
-    },
-    optimizeDeps: {
-      esbuildOptions: {
-        target: "esnext"
+      sourcemap: true,
+      chunkSizeWarningLimit: 1200,
+      rolldownOptions: {
+        checks: {
+          invalidAnnotation: false
+        }
       }
     }
   }
