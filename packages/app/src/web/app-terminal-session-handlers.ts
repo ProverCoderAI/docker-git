@@ -6,13 +6,13 @@ import {
   applyProject,
   type ContainerTaskSnapshot,
   createProjectTerminalSession,
-  loadProjectBrowser,
   loadProjectTaskLogs,
   loadProjectTasks,
   openSkiller,
   projectBrowserCdpUrl,
   projectBrowserNoVncUrl,
   type ProjectBrowserSession,
+  startProjectBrowser,
   stopProjectTask
 } from "./api.js"
 import { openUrl, prepareOpenUrl } from "./open-url.js"
@@ -47,25 +47,32 @@ const confirmApplyProject = (label: string): boolean => {
     )
 }
 
-const browserStatusMessage = (browser: ProjectBrowserSession): string => {
+const browserStatusMessage = (browser: ProjectBrowserSession, opened: boolean): string => {
   if (browser.status !== "running") {
     return `Browser runtime is ${browser.status}. Enable Playwright MCP and start the project first.`
   }
   const noVncUrl = projectBrowserNoVncUrl(browser)
-  return openUrl(noVncUrl)
+  return opened
     ? `Browser opened. CDP endpoint: ${projectBrowserCdpUrl(browser)}.`
     : `Browser popup was blocked. Open ${noVncUrl} manually. CDP endpoint: ${projectBrowserCdpUrl(browser)}.`
 }
 
 const runOpenBrowser = (projectId: string, setMessage: StateMessageUpdater): void => {
+  const preparedUrl = prepareOpenUrl()
   void Effect.runPromise(
-    loadProjectBrowser(projectId).pipe(
+    startProjectBrowser(projectId).pipe(
       Effect.match({
         onFailure: (error) => {
+          preparedUrl.close()
           setMessage(`Failed to open browser: ${error}`)
         },
         onSuccess: (browser) => {
-          setMessage(browserStatusMessage(browser))
+          if (browser.status !== "running") {
+            preparedUrl.close()
+            setMessage(browserStatusMessage(browser, false))
+            return
+          }
+          setMessage(browserStatusMessage(browser, preparedUrl.navigate(projectBrowserNoVncUrl(browser))))
         }
       })
     )

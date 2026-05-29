@@ -5,13 +5,16 @@ import { afterEach, beforeEach, vi } from "vitest"
 import { openProjectBrowserById, openSelectedProjectBrowser } from "../../src/web/actions-browser.js"
 import type { ProjectBrowserSession } from "../../src/web/api.js"
 import { makeBrowserActionContext, waitForAssertion } from "./browser-action-context-fixture.js"
+import { type BrowserOpenMockWindow, makeBrowserOpenMockWindow, stubBrowserOpen } from "./browser-open-fixture.js"
 
 const loadProjectBrowserMock = vi.hoisted(() => vi.fn())
+const startProjectBrowserMock = vi.hoisted(() => vi.fn())
 
 vi.mock("../../src/web/api.js", () => ({
   loadProjectBrowser: loadProjectBrowserMock,
   projectBrowserCdpUrl: (browser: { readonly cdpPath: string }) => browser.cdpPath,
-  projectBrowserNoVncUrl: (browser: { readonly noVncPath: string }) => browser.noVncPath
+  projectBrowserNoVncUrl: (browser: { readonly noVncPath: string }) => browser.noVncPath,
+  startProjectBrowser: startProjectBrowserMock
 }))
 
 const runningBrowser: ProjectBrowserSession = {
@@ -35,8 +38,12 @@ const missingBrowser: ProjectBrowserSession = {
 }
 
 describe("web browser actions", () => {
+  let openedWindow: BrowserOpenMockWindow = makeBrowserOpenMockWindow()
+
   beforeEach(() => {
     loadProjectBrowserMock.mockReset()
+    startProjectBrowserMock.mockReset()
+    openedWindow = makeBrowserOpenMockWindow()
   })
 
   afterEach(() => {
@@ -45,9 +52,10 @@ describe("web browser actions", () => {
 
   it.effect("opens a running project browser by id", () =>
     Effect.gen(function*(_) {
-      const openMock = vi.fn<NonNullable<typeof globalThis.open>>(() => null)
-      vi.stubGlobal("open", openMock)
-      loadProjectBrowserMock.mockImplementation((projectId: string) => Effect.succeed({ ...runningBrowser, projectId }))
+      const openMock = stubBrowserOpen(openedWindow)
+      startProjectBrowserMock.mockImplementation((projectId: string) =>
+        Effect.succeed({ ...runningBrowser, projectId })
+      )
 
       const { context, setMessage, setProjectBrowser } = makeBrowserActionContext({
         selectedProjectName: "octocat/hello-world"
@@ -59,17 +67,15 @@ describe("web browser actions", () => {
         expect(setProjectBrowser).toHaveBeenCalledWith(runningBrowser)
       }))
 
-      expect(openMock).toHaveBeenCalledWith("/api/projects/project-1/browser/novnc", "_blank", "noopener")
-      expect(setMessage).toHaveBeenLastCalledWith(
-        "Browser popup was blocked. Open /api/projects/project-1/browser/novnc manually. CDP endpoint: /api/projects/project-1/browser/cdp."
-      )
+      expect(openMock).toHaveBeenCalledWith("about:blank", "_blank")
+      expect(openedWindow.location.href).toBe("/api/projects/project-1/browser/novnc")
+      expect(setMessage).toHaveBeenLastCalledWith("Browser opened. CDP endpoint: /api/projects/project-1/browser/cdp.")
     }))
 
-  it.effect("reports browser runtime status instead of opening non-running browsers", () =>
+  it.effect("starts the project browser before reporting a non-running status", () =>
     Effect.gen(function*(_) {
-      const openMock = vi.fn<NonNullable<typeof globalThis.open>>(() => null)
-      vi.stubGlobal("open", openMock)
-      loadProjectBrowserMock.mockImplementation(() => Effect.succeed(missingBrowser))
+      const openMock = stubBrowserOpen(openedWindow)
+      startProjectBrowserMock.mockImplementation(() => Effect.succeed(missingBrowser))
 
       const { context, setMessage, setProjectBrowser } = makeBrowserActionContext({
         selectedProjectId: "project-1",
@@ -82,7 +88,9 @@ describe("web browser actions", () => {
         expect(setProjectBrowser).toHaveBeenCalledWith(missingBrowser)
       }))
 
-      expect(openMock).not.toHaveBeenCalled()
+      expect(startProjectBrowserMock).toHaveBeenCalledWith("project-1")
+      expect(openMock).toHaveBeenCalledWith("about:blank", "_blank")
+      expect(openedWindow.close).toHaveBeenCalledOnce()
       expect(setMessage).toHaveBeenLastCalledWith(
         "Browser runtime is missing. Enable Playwright MCP and start the project first."
       )
@@ -93,7 +101,7 @@ describe("web browser actions", () => {
 
     openSelectedProjectBrowser(context)
 
-    expect(loadProjectBrowserMock).not.toHaveBeenCalled()
+    expect(startProjectBrowserMock).not.toHaveBeenCalled()
     expect(setMessage).toHaveBeenLastCalledWith("No project selected.")
   })
 })

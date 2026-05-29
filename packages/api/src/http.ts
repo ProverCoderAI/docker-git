@@ -117,7 +117,7 @@ import {
   writeProjectSkill
 } from "./services/project-skills.js"
 import type { ProjectSkillScope } from "./services/project-skills.js"
-import { readProjectBrowserSession, proxyProjectBrowser } from "./services/project-browser.js"
+import { readProjectBrowserSession, startProjectBrowserSession, proxyProjectBrowser } from "./services/project-browser.js"
 import { parseProjectBrowserProxyPath } from "./services/project-browser-core.js"
 import {
   readPanelCloudflareTunnel,
@@ -1367,6 +1367,15 @@ export const makeRouter = () => {
         const { projectId } = yield* _(projectParams)
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const browser = yield* _(readProjectBrowserSession(projectId, resolveRequestOrigin(request)))
+        return yield* _(jsonResponse({ browser }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/projects/:projectId/browser/start",
+      Effect.gen(function*(_) {
+        const { projectId } = yield* _(projectParams)
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const browser = yield* _(startProjectBrowserSession(projectId, resolveRequestOrigin(request)))
         return yield* _(jsonResponse({ browser }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     )

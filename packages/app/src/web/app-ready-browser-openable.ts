@@ -1,17 +1,12 @@
 import type { ProjectBrowserSession } from "./api.js"
 import type { BrowserMenuTag } from "./menu.js"
 
-export const browserSidecarUnavailableMessage =
-  "Browser runtime is not running. Enable Playwright MCP and start the project first."
+export const browserSidecarUnavailableMessage = "Select a project before opening the browser."
 
 export const canOpenProjectBrowser = (
-  projectBrowser: ProjectBrowserSession | null,
+  _projectBrowser: ProjectBrowserSession | null,
   projectId: string | null | undefined
-): boolean =>
-  projectId !== null &&
-  projectId !== undefined &&
-  projectBrowser?.projectId === projectId &&
-  projectBrowser.status === "running"
+): boolean => projectId !== null && projectId !== undefined
 
 export const canRunProjectBrowserAction = (
   menu: BrowserMenuTag,
