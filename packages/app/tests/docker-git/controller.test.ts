@@ -13,7 +13,10 @@ import {
   parseControllerGpuMode
 } from "../../src/docker-git/controller-docker.js"
 import { resolveCurrentContainerName } from "../../src/docker-git/controller-hostname.js"
-import { shouldRequireExplicitApiUrlForRemoteDocker } from "../../src/docker-git/controller-reachability.js"
+import {
+  isDefaultLocalApiBaseUrl,
+  shouldRequireExplicitApiUrlForRemoteDocker
+} from "../../src/docker-git/controller-reachability.js"
 import {
   parseControllerRevisionEnvOutput,
   parseControllerRevisionLabelOutput,
@@ -58,6 +61,8 @@ const controllerSourceRevisionArbitrary = fc
 const controllerGpuModeArbitrary = fc.constantFrom<"none" | "all">("none", "all")
 const controllerBuildSkillerModeArbitrary = fc.constantFrom<"0" | "1">("0", "1")
 const controllerDockerRuntimeArbitrary = fc.constantFrom<"host" | "isolated">("host", "isolated")
+const defaultLocalApiHostArbitrary = fc.constantFrom("127.0.0.1", "localhost", "[::1]")
+const apiBaseUrlTrailingSlashesArbitrary = fc.constantFrom("", "/", "///")
 const dockerHostArbitrary = fc.constantFrom<string | undefined>(
   undefined,
   "",
@@ -144,6 +149,20 @@ describe("controller reachability", () => {
       expect(isRemoteDockerHost("unix:///var/run/docker.sock")).toBe(false)
       expect(isRemoteDockerHost("tcp://docker.example.test:2376")).toBe(true)
       expect(isRemoteDockerHost("ssh://docker@example.test")).toBe(true)
+    }))
+
+  it.effect("classifies only default localhost API URLs as non-strict overrides", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(defaultLocalApiHostArbitrary, apiBaseUrlTrailingSlashesArbitrary, (host, trailingSlashes) => {
+          expect(isDefaultLocalApiBaseUrl(`http://${host}:3334${trailingSlashes}`, "3334")).toBe(true)
+        })
+      )
+
+      expect(isDefaultLocalApiBaseUrl(makeHttpUrl("127.0.0.1", "4444"), "3334")).toBe(false)
+      expect(isDefaultLocalApiBaseUrl(makeHttpUrl("0.0.0.0", "3334"), "3334")).toBe(false)
+      expect(isDefaultLocalApiBaseUrl("https://localhost:3334", "3334")).toBe(false)
+      expect(isDefaultLocalApiBaseUrl(`${makeHttpUrl("localhost", "3334")}/api`, "3334")).toBe(false)
     }))
 
   it.effect("requires an explicit API URL only for non-inspectable remote Docker hosts", () =>

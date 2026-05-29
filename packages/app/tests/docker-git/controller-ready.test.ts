@@ -10,6 +10,7 @@ const findReachableDirectHealthProbeMock = vi.hoisted(
     vi.fn<
       (options: {
         readonly cachedApiBaseUrl: string | undefined
+        readonly defaultLocalApiBaseUrl: string | undefined
         readonly explicitApiBaseUrl: string | undefined
       }) => Effect.Effect<{ readonly apiBaseUrl: string; readonly revision: string | null } | null>
     >()
@@ -49,7 +50,16 @@ vi.mock("../../src/docker-git/controller-reachability.js", () => ({
   isRemoteDockerHost: () => false,
   resolveApiPort: () => "3334",
   resolveConfiguredApiBaseUrl: () => "http://127.0.0.1:3334",
-  resolveExplicitApiBaseUrl: () => process.env["DOCKER_GIT_API_URL"]?.trim() || undefined,
+  resolveDefaultLocalApiBaseUrl: () => {
+    const value = process.env["DOCKER_GIT_API_URL"]?.trim()
+    return value === "http://127.0.0.1:3334" ? value : undefined
+  },
+  resolveExplicitApiBaseUrl: () => {
+    const value = process.env["DOCKER_GIT_API_URL"]?.trim()
+    return value !== undefined && value.length > 0 && value !== "http://127.0.0.1:3334"
+      ? value
+      : undefined
+  },
   shouldRequireExplicitApiUrlForRemoteDocker: () => false,
   trimTrailingSlashes: (value: string) => {
     let end = value.length
@@ -75,6 +85,7 @@ vi.mock("../../src/docker-git/controller-runtime-shell.js", () => ({
 
 describe("controller readiness bootstrap", () => {
   beforeEach(() => {
+    vi.resetModules()
     Reflect.deleteProperty(process.env, "DOCKER_GIT_API_URL")
     prepareLocalControllerRevisionMock.mockReset()
     findReachableDirectHealthProbeMock.mockReset()
@@ -106,6 +117,45 @@ describe("controller readiness bootstrap", () => {
       expect(prepareControllerResourceLimitEnvMock).not.toHaveBeenCalled()
       expect(prepareControllerRuntimeEnvMock).not.toHaveBeenCalled()
       expect(resolveApiBaseUrl()).toBe("http://api.example.test")
+    }))
+
+  it.effect("falls back to local bootstrap when the default local API URL is not reachable", () =>
+    Effect.gen(function*(_) {
+      process.env["DOCKER_GIT_API_URL"] = "http://127.0.0.1:3334"
+      findReachableDirectHealthProbeMock.mockReturnValue(Effect.succeed(null))
+
+      const { ensureControllerReady, resolveApiBaseUrl } = yield* _(
+        Effect.promise(() => import("../../src/docker-git/controller.js"))
+      )
+
+      yield* _(ensureControllerReady().pipe(Effect.provide(NodeContext.layer)))
+
+      expect(findReachableDirectHealthProbeMock).toHaveBeenCalledWith({
+        cachedApiBaseUrl: undefined,
+        defaultLocalApiBaseUrl: "http://127.0.0.1:3334",
+        explicitApiBaseUrl: undefined
+      })
+      expect(prepareLocalControllerRevisionMock).toHaveBeenCalled()
+      expect(prepareControllerResourceLimitEnvMock).toHaveBeenCalledTimes(1)
+      expect(prepareControllerRuntimeEnvMock).toHaveBeenCalledTimes(1)
+      expect(resolveApiBaseUrl()).toBe("http://127.0.0.1:3334")
+    }))
+
+  it.effect("rejects unreachable custom explicit API URLs before local bootstrap", () =>
+    Effect.gen(function*(_) {
+      process.env["DOCKER_GIT_API_URL"] = "https://api.example.test"
+      findReachableDirectHealthProbeMock.mockReturnValue(Effect.succeed(null))
+
+      const { ensureControllerReady } = yield* _(
+        Effect.promise(() => import("../../src/docker-git/controller.js"))
+      )
+      const error = yield* _(ensureControllerReady().pipe(Effect.provide(NodeContext.layer), Effect.flip))
+
+      expect(error._tag).toBe("ControllerBootstrapError")
+      expect(error.message).toContain("https://api.example.test")
+      expect(prepareLocalControllerRevisionMock).not.toHaveBeenCalled()
+      expect(prepareControllerResourceLimitEnvMock).not.toHaveBeenCalled()
+      expect(prepareControllerRuntimeEnvMock).not.toHaveBeenCalled()
     }))
 })
 /* jscpd:ignore-end */

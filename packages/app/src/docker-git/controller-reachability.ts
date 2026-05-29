@@ -5,6 +5,7 @@ export type DockerNetworkIps = Readonly<Record<string, string>>
 
 export type ApiBaseUrlCandidatesInput = {
   readonly explicitApiBaseUrl?: string | undefined
+  readonly defaultLocalApiBaseUrl?: string | undefined
   readonly cachedApiBaseUrl?: string | undefined
   readonly defaultApiBaseUrl: string
   readonly currentContainerNetworks: DockerNetworkIps
@@ -28,11 +29,69 @@ const normalizePort = (value: string | undefined): string => {
   return trimmed.length > 0 ? trimmed : defaultApiPort
 }
 
+const normalizeApiBaseUrl = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim()
+  return trimmed !== undefined && trimmed.length > 0 ? trimTrailingSlashes(trimmed) : undefined
+}
+
 export const resolveApiPort = (): string => normalizePort(process.env["DOCKER_GIT_API_PORT"])
 
+const defaultLocalHostnames = new Set(["127.0.0.1", "localhost", "[::1]"])
+
+const isRootApiUrlPath = (url: URL): boolean => url.pathname === "/" && url.search.length === 0 && url.hash.length === 0
+
+const isDefaultLocalApiUrlObject = (url: URL, port: string): boolean =>
+  url.protocol === "http:" &&
+  defaultLocalHostnames.has(url.hostname) &&
+  url.port === port &&
+  isRootApiUrlPath(url)
+
+// CHANGE: classify default localhost API URLs as non-strict bootstrap hints.
+// WHY: Windows shells can persist DOCKER_GIT_API_URL=http://127.0.0.1:3334, which should not block local controller startup.
+// QUOTE(ТЗ): "сделать из коробки что бы всё само работало"
+// REF: user-request-2026-05-29-default-local-api-url-bootstrap
+// SOURCE: n/a
+// FORMAT THEOREM: local_http(url, port) and empty(path, query, hash) -> default_local(url)
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: only localhost loopback HTTP URLs on the configured API port are default-local.
+// COMPLEXITY: O(n) where n = |value|.
+export const isDefaultLocalApiBaseUrl = (value: string, port = resolveApiPort()): boolean => {
+  const normalized = normalizeApiBaseUrl(value)
+  if (normalized === undefined || !URL.canParse(normalized)) {
+    return false
+  }
+  return isDefaultLocalApiUrlObject(new URL(normalized), port)
+}
+
+// CHANGE: preserve default-local DOCKER_GIT_API_URL as an endpoint candidate instead of a strict override.
+// WHY: a stale default localhost env var should still allow compose bootstrap when nothing is listening yet.
+// QUOTE(ТЗ): "fallback только для дефолтного localhost URL"
+// REF: user-request-2026-05-29-default-local-api-url-bootstrap
+// SOURCE: n/a
+// FORMAT THEOREM: default_local(env) -> env; otherwise -> undefined
+// PURITY: SHELL
+// EFFECT: reads process.env
+// INVARIANT: custom DOCKER_GIT_API_URL values are never returned here.
+// COMPLEXITY: O(n) where n = |DOCKER_GIT_API_URL|.
+export const resolveDefaultLocalApiBaseUrl = (): string | undefined => {
+  const explicit = normalizeApiBaseUrl(process.env["DOCKER_GIT_API_URL"])
+  return explicit !== undefined && isDefaultLocalApiBaseUrl(explicit) ? explicit : undefined
+}
+
+// CHANGE: treat only custom DOCKER_GIT_API_URL values as strict explicit controller endpoints.
+// WHY: custom remote backends should fail loudly when unreachable, while default localhost should bootstrap locally.
+// QUOTE(ТЗ): "кастомные URL остаются строгими"
+// REF: user-request-2026-05-29-default-local-api-url-bootstrap
+// SOURCE: n/a
+// FORMAT THEOREM: nonempty(env) and not default_local(env) -> env; otherwise -> undefined
+// PURITY: SHELL
+// EFFECT: reads process.env
+// INVARIANT: default-local URLs do not block local bootstrap.
+// COMPLEXITY: O(n) where n = |DOCKER_GIT_API_URL|.
 export const resolveExplicitApiBaseUrl = (): string | undefined => {
-  const explicit = process.env["DOCKER_GIT_API_URL"]?.trim()
-  return explicit !== undefined && explicit.length > 0 ? trimTrailingSlashes(explicit) : undefined
+  const explicit = normalizeApiBaseUrl(process.env["DOCKER_GIT_API_URL"])
+  return explicit !== undefined && !isDefaultLocalApiBaseUrl(explicit) ? explicit : undefined
 }
 
 export const resolveConfiguredApiBaseUrl = (): string => {
@@ -126,6 +185,7 @@ export const buildApiBaseUrlCandidates = ({
   controllerNetworks,
   currentContainerNetworks,
   defaultApiBaseUrl,
+  defaultLocalApiBaseUrl,
   explicitApiBaseUrl,
   port
 }: ApiBaseUrlCandidatesInput): ReadonlyArray<string> => {
@@ -150,6 +210,7 @@ export const buildApiBaseUrlCandidates = ({
 
   return uniqueStrings(
     [
+      defaultLocalApiBaseUrl ?? "",
       cachedApiBaseUrl ?? "",
       defaultApiBaseUrl,
       resolveControllerDnsApiBaseUrl(),

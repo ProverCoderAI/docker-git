@@ -24,6 +24,7 @@ export DOCKER_GIT_PROJECTS_ROOT_VOLUME="docker-git-e2e-browser-$RUN_ID-projects"
 export DOCKER_GIT_API_CONTAINER_NAME="docker-git-e2e-browser-$RUN_ID-api"
 DOCKER_GIT_API_PORT="$(dg_require_free_port 34000 34999 "browser API")"
 export DOCKER_GIT_API_PORT
+export DOCKER_GIT_API_URL="http://127.0.0.1:${DOCKER_GIT_API_PORT}"
 DOCKER_GIT_WEB_PORT="$(dg_require_free_port 41000 41999 "browser web")"
 export DOCKER_GIT_WEB_PORT
 export COMPOSE_PROJECT_NAME="docker-git-e2e-browser-$RUN_ID"

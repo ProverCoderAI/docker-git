@@ -38,9 +38,11 @@ glance and the CLI now distinguishes them in its error output:
   (`docker` group / rootless Docker / socket ownership). This is a host
   configuration problem, not a `docker-git` outage.
 - **Controller container not running / unreachable** – the API at
-  `DOCKER_GIT_API_URL` (default `http://127.0.0.1:3334`) does not answer.
-  Bring the controller up with `docker compose up -d --build` or point the
-  CLI at an existing controller via `DOCKER_GIT_API_URL`.
+  a custom `DOCKER_GIT_API_URL` does not answer. Bring the controller up
+  with `docker compose up -d --build` or point the CLI at an existing
+  controller via `DOCKER_GIT_API_URL`. The default local value
+  (`http://127.0.0.1:3334`, `http://localhost:3334`, or `http://[::1]:3334`)
+  does not block local Docker bootstrap.
 
 Diagnostic classification + remediation messages live in
 `packages/app/src/docker-git/controller-docker-diagnostics.ts` and are
