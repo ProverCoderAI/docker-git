@@ -100,11 +100,13 @@ export const findReachableApiBaseUrl = (
 
 export const findReachableDirectHealthProbe = (options: {
   readonly explicitApiBaseUrl: string | undefined
+  readonly defaultLocalApiBaseUrl: string | undefined
   readonly cachedApiBaseUrl: string | undefined
 }): Effect.Effect<HealthProbeResult | null> =>
   findReachableHealthProbeOrNull(
     buildApiBaseUrlCandidates({
       explicitApiBaseUrl: options.explicitApiBaseUrl,
+      defaultLocalApiBaseUrl: options.defaultLocalApiBaseUrl,
       cachedApiBaseUrl: options.cachedApiBaseUrl,
       defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
       currentContainerNetworks: {},
