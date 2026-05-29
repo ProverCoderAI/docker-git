@@ -1,6 +1,6 @@
 {
   "name": "@prover-coder-ai/docker-git-session-sync",
-  "version": "1.0.42",
+  "version": "1.0.43",
   "description": "Standalone docker-git AI agent session synchronization tool",
   "main": "dist/docker-git-session-sync.js",
   "bin": {
