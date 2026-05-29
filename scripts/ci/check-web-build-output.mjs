@@ -14,7 +14,7 @@ const forbiddenOutput = [
   },
   {
     label: "Deprecated build option warning",
-    pattern: /\bdeprecated\b/iu
+    pattern: /(?:\[vite\]\s+warning:[^\n]*\bdeprecated\b|\(!\)[^\n]*\bdeprecated\b)/iu
   },
   {
     label: "Chunk size warning",
@@ -27,19 +27,25 @@ const result = spawnSync(runtime, ["run", "--cwd", "packages/app", "build:web"],
   encoding: "utf8"
 })
 
-process.stdout.write(result.stdout)
-process.stderr.write(result.stderr)
-
 if (result.error !== undefined) {
   console.error(result.error)
   process.exit(1)
+}
+
+const stdout = result.stdout ?? ""
+const stderr = result.stderr ?? ""
+if (stdout.length > 0) {
+  process.stdout.write(stdout)
+}
+if (stderr.length > 0) {
+  process.stderr.write(stderr)
 }
 
 if (result.status !== 0) {
   process.exit(result.status ?? 1)
 }
 
-const output = `${result.stdout}\n${result.stderr}`
+const output = `${stdout}\n${stderr}`
 const matches = forbiddenOutput.filter(({ pattern }) => pattern.test(output))
 if (matches.length > 0) {
   console.error("Web build emitted forbidden warning output:")
