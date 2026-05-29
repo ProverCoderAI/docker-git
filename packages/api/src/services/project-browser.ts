@@ -10,7 +10,7 @@ import type { PlatformError } from "@effect/platform/Error"
 import * as HttpServerError from "@effect/platform/HttpServerError"
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest"
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse"
-import { Effect } from "effect"
+import { Duration, Effect, pipe, Schedule } from "effect"
 import * as Stream from "effect/Stream"
 import type { IncomingMessage, Server as HttpServer } from "node:http"
 import { createConnection, type Socket } from "node:net"
@@ -96,6 +96,7 @@ const cdpHostHeader = "127.0.0.1:9222"
 const browserActivityWriteIntervalMs = 30_000
 const browserActivityWrites = new Map<string, number>()
 const browserWebSocketCounts = new Map<string, number>()
+const browserRuntimeReadySchedule = Schedule.addDelay(Schedule.recurs(40), () => Duration.millis(250))
 
 const hopByHopRequestHeaders = new Set([
   "connection",
@@ -244,6 +245,32 @@ const startBrowserContainer = (
       new ApiConflictError({
         message:
           `Failed to start browser runtime for ${projectContainerName}. Make sure the project is running and Playwright MCP is enabled.`
+      })
+    )
+  )
+
+const renderBrowserRuntimeReadyProbeScript = (): string => [
+  "set -eu",
+  `for port in ${browserNoVncPort} ${browserVncPort} ${browserCdpPort}; do`,
+  "  timeout 1 bash -lc \"</dev/tcp/127.0.0.1/${port}\"",
+  "done"
+].join("\n")
+
+const waitForBrowserRuntimeReady = (
+  cwd: string,
+  projectContainerName: string
+) =>
+  pipe(
+    dockerCapture(
+      cwd,
+      ["exec", projectContainerName, "bash", "-lc", renderBrowserRuntimeReadyProbeScript()],
+      "docker exec browser runtime ready probe"
+    ),
+    Effect.asVoid,
+    Effect.retry(browserRuntimeReadySchedule),
+    Effect.mapError(() =>
+      new ApiConflictError({
+        message: `Browser runtime did not become ready for ${projectContainerName}.`
       })
     )
   )
@@ -439,6 +466,7 @@ export const startProjectBrowserSession = (
     const project = yield* _(getProjectItemById(projectId))
     const containerName = browserContainerName(project.containerName)
     yield* _(startBrowserContainer(project.projectDir, project.containerName))
+    yield* _(waitForBrowserRuntimeReady(project.projectDir, project.containerName))
     const state = yield* _(inspectBrowserContainerState(project.projectDir, containerName))
     return browserSessionFromState(projectId, containerName, state, externalOrigin)
   })

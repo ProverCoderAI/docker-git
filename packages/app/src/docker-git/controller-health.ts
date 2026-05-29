@@ -64,7 +64,8 @@ const probeHealth = (apiBaseUrl: string): Effect.Effect<HealthProbeResult, Contr
   )
 
 const findReachableHealthProbe = (
-  candidateUrls: ReadonlyArray<string>
+  candidateUrls: ReadonlyArray<string>,
+  expectedRevision?: string
 ): Effect.Effect<HealthProbeResult, ControllerBootstrapError> =>
   Effect.gen(function*(_) {
     if (candidateUrls.length === 0) {
@@ -73,14 +74,19 @@ const findReachableHealthProbe = (
       )
     }
 
+    const mismatches: Array<string> = []
     for (const candidateUrl of candidateUrls) {
       const healthy = yield* _(probeHealth(candidateUrl).pipe(Effect.either))
-      if (Either.isRight(healthy)) {
+      if (Either.isLeft(healthy)) {
+        continue
+      }
+      if (matchesExpectedRevision(healthy.right, expectedRevision)) {
         return healthy.right
       }
+      mismatches.push(describeRevisionMismatch(healthy.right))
     }
 
-    return yield* _(Effect.fail(controllerBootstrapError("No docker-git controller endpoint responded to /health.")))
+    return yield* _(Effect.fail(noMatchingHealthProbeError(expectedRevision, mismatches)))
   })
 
 const findReachableHealthProbeOrNull = (
@@ -93,10 +99,45 @@ const findReachableHealthProbeOrNull = (
     })
   )
 
+const matchesExpectedRevision = (
+  probe: HealthProbeResult,
+  expectedRevision: string | undefined
+): boolean => expectedRevision === undefined || probe.revision === expectedRevision
+
+const describeRevisionMismatch = (probe: HealthProbeResult): string =>
+  `${probe.apiBaseUrl} revision ${probe.revision ?? "unknown"}`
+
+const noMatchingHealthProbeError = (
+  expectedRevision: string | undefined,
+  mismatches: ReadonlyArray<string>
+): ControllerBootstrapError =>
+  expectedRevision !== undefined && mismatches.length > 0
+    ? controllerBootstrapError(
+      `No docker-git controller endpoint with revision ${expectedRevision} responded. ` +
+        `Reachable mismatched controllers: ${mismatches.join(", ")}.`
+    )
+    : controllerBootstrapError("No docker-git controller endpoint responded to /health.")
+
 export const findReachableApiBaseUrl = (
-  candidateUrls: ReadonlyArray<string>
+  candidateUrls: ReadonlyArray<string>,
+  expectedRevision?: string
 ): Effect.Effect<string, ControllerBootstrapError> =>
-  findReachableHealthProbe(candidateUrls).pipe(Effect.map(({ apiBaseUrl }) => apiBaseUrl))
+  findReachableHealthProbe(candidateUrls, expectedRevision).pipe(Effect.map(({ apiBaseUrl }) => apiBaseUrl))
+
+// CHANGE: select only controller endpoints that prove the expected source revision.
+// WHY: containerized hosts can see stale controllers through host.docker.internal before the current local controller is reachable.
+// QUOTE(ТЗ): "проверь сам что Open Browser кнопка работает"
+// REF: user-message-2026-05-29-open-browser-e2e
+// SOURCE: n/a
+// FORMAT THEOREM: selected(endpoint) -> health(endpoint).revision = expectedRevision
+// PURITY: SHELL
+// EFFECT: FetchHttpClient health probes.
+// INVARIANT: mismatched reachable controllers are rejected rather than reused.
+// COMPLEXITY: O(n) health probes where n = |candidateUrls|.
+export const findReachableApiBaseUrlMatchingRevision = (
+  candidateUrls: ReadonlyArray<string>,
+  expectedRevision: string
+): Effect.Effect<string, ControllerBootstrapError> => findReachableApiBaseUrl(candidateUrls, expectedRevision)
 
 export const findReachableDirectHealthProbe = (options: {
   readonly explicitApiBaseUrl: string | undefined
