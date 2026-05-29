@@ -1,6 +1,12 @@
 import { type BrowserActionContext, requireSelectedProjectId, withBusy } from "./actions-shared.js"
-import { loadProjectBrowser, projectBrowserCdpUrl, projectBrowserNoVncUrl, type ProjectBrowserSession } from "./api.js"
-import { openUrl } from "./open-url.js"
+import {
+  loadProjectBrowser,
+  projectBrowserCdpUrl,
+  projectBrowserNoVncUrl,
+  type ProjectBrowserSession,
+  startProjectBrowser
+} from "./api.js"
+import { prepareOpenUrl } from "./open-url.js"
 
 const browserStatusMessage = (browser: ProjectBrowserSession): string =>
   browser.status === "running"
@@ -46,19 +52,24 @@ export const openSelectedProjectBrowser = (context: BrowserActionContext) => {
 }
 
 export const openProjectBrowserById = (projectId: string, context: BrowserActionContext) => {
+  const preparedUrl = prepareOpenUrl()
   withBusy({
     context,
-    effect: loadProjectBrowser(projectId),
-    label: "Opening project browser",
+    effect: startProjectBrowser(projectId),
+    label: "Starting project browser",
+    onFailure: () => {
+      preparedUrl.close()
+    },
     onSuccess: (browser) => {
       context.setProjectBrowser(browser)
       if (browser.status !== "running") {
+        preparedUrl.close()
         context.setMessage(`Browser runtime is ${browser.status}. Enable Playwright MCP and start the project first.`)
         return
       }
       const noVncUrl = projectBrowserNoVncUrl(browser)
       context.setMessage(
-        openUrl(noVncUrl)
+        preparedUrl.navigate(noVncUrl)
           ? `Browser opened. CDP endpoint: ${projectBrowserCdpUrl(browser)}.`
           : `Browser popup was blocked. Open ${noVncUrl} manually. CDP endpoint: ${projectBrowserCdpUrl(browser)}.`
       )

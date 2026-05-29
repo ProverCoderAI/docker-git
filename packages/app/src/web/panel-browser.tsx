@@ -56,26 +56,27 @@ const BrowserLinks = ({ browser }: { readonly browser: ProjectBrowserSession }):
 const BrowserStatusDetails = (
   {
     browser,
-    canOpenBrowser
+    selectedProjectId
   }: {
     readonly browser: ProjectBrowserSession | null
-    readonly canOpenBrowser: boolean
+    readonly selectedProjectId: string | null
   }
 ): JSX.Element => {
-  if (browser === null) {
+  if (browser === null || browser.projectId !== selectedProjectId) {
     return <Text fg="#8fa6c4" marginTop={1}>Browser status is not loaded.</Text>
   }
+  const browserRunning = browser.status === "running"
   return (
     <Box flexDirection="column" gap={1} marginTop={1}>
       <Box alignItems="center" flexWrap="wrap" gap={1} justifyContent="space-between">
         <Text fg="#8fa6c4" wrap="truncate">Container: {browser.containerName}</Text>
         <Text bold={true} fg={statusColor(browser.status)}>{browser.status}</Text>
       </Box>
-      {canOpenBrowser
+      {browserRunning
         ? <BrowserLinks browser={browser} />
         : (
           <Text fg="#ffb86c" wrap="wrap">
-            Enable Playwright MCP for this project and start it before opening the browser.
+            Open browser will start the runtime for this project.
           </Text>
         )}
     </Box>
@@ -111,7 +112,8 @@ export const BrowserPanel = (
     selectedProjectSummary
   }: BrowserPanelProps
 ): JSX.Element => {
-  const canOpenBrowser = canOpenProjectBrowser(browser, selectedProjectSummary?.id ?? null)
+  const selectedProjectId = selectedProjectSummary?.id ?? null
+  const canOpenBrowser = canOpenProjectBrowser(browser, selectedProjectId)
   return (
     <Box flexDirection="column">
       <Text bold={true} fg="#8be9fd">Browser</Text>
@@ -121,7 +123,7 @@ export const BrowserPanel = (
       <Text fg="#8fa6c4" marginTop={1} wrap="truncate">
         Project: {selectedProjectSummary?.displayName ?? "not selected"}
       </Text>
-      <BrowserStatusDetails browser={browser} canOpenBrowser={canOpenBrowser} />
+      <BrowserStatusDetails browser={browser} selectedProjectId={selectedProjectId} />
       <BrowserActions
         canOpenBrowser={canOpenBrowser}
         onOpenBrowser={onOpenBrowser}
