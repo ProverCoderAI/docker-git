@@ -147,12 +147,16 @@ export const findReachableApiBaseUrlMatchingRevision = (
   expectedRevision: string
 ): Effect.Effect<string, ControllerBootstrapError> => findReachableApiBaseUrl(candidateUrls, expectedRevision)
 
-export const findReachableDirectHealthProbeWithHttpClient = (options: {
+type DirectHealthProbeOptions = {
   readonly explicitApiBaseUrl: string | undefined
   readonly defaultLocalApiBaseUrl: string | undefined
   readonly cachedApiBaseUrl: string | undefined
   readonly expectedRevision?: string | undefined
-}): Effect.Effect<HealthProbeResult | null, never, HttpClient.HttpClient> =>
+}
+
+export const findReachableDirectHealthProbeWithHttpClient = (
+  options: DirectHealthProbeOptions
+): Effect.Effect<HealthProbeResult | null, never, HttpClient.HttpClient> =>
   findReachableHealthProbeOrNull(
     buildApiBaseUrlCandidates({
       explicitApiBaseUrl: options.explicitApiBaseUrl,
@@ -166,10 +170,7 @@ export const findReachableDirectHealthProbeWithHttpClient = (options: {
     options.expectedRevision
   )
 
-export const findReachableDirectHealthProbe = (options: {
-  readonly explicitApiBaseUrl: string | undefined
-  readonly defaultLocalApiBaseUrl: string | undefined
-  readonly cachedApiBaseUrl: string | undefined
-  readonly expectedRevision?: string | undefined
-}): Effect.Effect<HealthProbeResult | null> =>
+export const findReachableDirectHealthProbe = (
+  options: DirectHealthProbeOptions
+): Effect.Effect<HealthProbeResult | null> =>
   findReachableDirectHealthProbeWithHttpClient(options).pipe(Effect.provide(FetchHttpClient.layer))
