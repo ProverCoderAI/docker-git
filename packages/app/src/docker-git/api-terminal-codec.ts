@@ -1,4 +1,4 @@
-import type { TerminalSession } from "../shared/terminal-session-schema.js"
+import type { TerminalSession } from "@prover-coder-ai/docker-git-terminal/contracts"
 import { asObject, asString, type JsonValue } from "./api-json.js"
 
 export type ApiTerminalSession = TerminalSession

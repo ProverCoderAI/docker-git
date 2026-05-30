@@ -5,7 +5,7 @@ import {
   sanitizeTerminalImageBaseName,
   terminalImagePasteDirectory,
   terminalImagePasteMaxBytes
-} from "../src/services/terminal-image-paste-core.js"
+} from "@prover-coder-ai/docker-git-terminal/core"
 
 describe("terminal image paste core", () => {
   it("creates a safe project-container path for supported images", () => {

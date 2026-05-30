@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Build (terminal package)
+        run: bun run --cwd packages/terminal build
       - name: Build (docker-git package)
         run: bun run --cwd packages/app build
       - name: Build (session sync package)
@@ -58,6 +60,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Typecheck (terminal)
+        run: bun run --cwd packages/terminal typecheck
       - name: Typecheck (app)
         run: bun run --cwd packages/app check
       - name: Typecheck (session sync)
@@ -80,6 +84,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Lint (terminal)
+        run: bun run --cwd packages/terminal lint
       - name: Lint (app)
         run: bun run --cwd packages/app lint
       - name: Lint (session sync)
@@ -103,6 +109,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Test (terminal)
+        run: bun run --cwd packages/terminal test
       - name: Test (app)
         run: bun run --cwd packages/app test
       - name: Test (session sync)
@@ -125,6 +133,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Lint Effect-TS (terminal)
+        run: bun run --cwd packages/terminal lint:effect
       - name: Lint Effect-TS (app)
         run: bun run --cwd packages/app lint:effect
       - name: Lint Effect-TS (session sync)

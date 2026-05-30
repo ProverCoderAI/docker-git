@@ -3,3 +3,4 @@ packages:
   - packages/app
   - packages/docker-git-session-sync
   - packages/lib
+  - packages/terminal

@@ -1,8 +1,10 @@
 import * as ParseResult from "@effect/schema/ParseResult"
+import {
+  type TerminalServerMessage as ParsedTerminalServerMessage,
+  TerminalServerMessageSchema
+} from "@prover-coder-ai/docker-git-terminal/contracts"
 import { Either } from "effect"
 
-import { TerminalServerMessageSchema } from "../shared/terminal-session-schema.js"
-import type { TerminalServerMessage as ParsedTerminalServerMessage } from "../shared/terminal-session-schema.js"
 import { resolveApiBaseUrl, trimTrailingSlash } from "./api-http.js"
 import type { TerminalSession } from "./api-schema.js"
 
@@ -237,4 +239,4 @@ export const resolveTerminalWebSocketUrl = (websocketPath: string, cols: number,
 export const parseTerminalServerMessage = (value: string): ParsedTerminalServerMessage | null =>
   Either.getOrNull(ParseResult.decodeUnknownEither(TerminalServerMessageSchema)(value))
 
-export { type TerminalServerMessage } from "../shared/terminal-session-schema.js"
+export { type TerminalServerMessage } from "@prover-coder-ai/docker-git-terminal/contracts"

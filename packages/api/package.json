@@ -7,19 +7,20 @@
   "type": "module",
   "packageManager": "bun@1.3.11",
   "scripts": {
-    "prebuild": "bun run --cwd ../lib build",
+    "prebuild": "bun run --cwd ../terminal build && bun run --cwd ../lib build",
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "prestart": "bun run build",
     "start": "bun dist/src/main.js",
-    "pretypecheck": "bun run --cwd ../lib build",
+    "pretypecheck": "bun run --cwd ../terminal build && bun run --cwd ../lib build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
-    "pretest": "bun run --cwd ../lib build",
+    "pretest": "bun run --cwd ../terminal build && bun run --cwd ../lib build",
     "test": "vitest run"
   },
   "dependencies": {
     "@effect-template/lib": "workspace:*",
+    "@prover-coder-ai/docker-git-terminal": "workspace:*",
     "@effect/platform": "^0.96.1",
     "@effect/platform-node": "^0.106.0",
     "@effect/schema": "^0.75.5",

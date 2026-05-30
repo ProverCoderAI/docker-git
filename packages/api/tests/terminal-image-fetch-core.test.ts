@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 
-import { planTerminalImageFetch } from "../src/services/terminal-image-fetch-core.js"
+import { planTerminalImageFetch } from "@prover-coder-ai/docker-git-terminal/server"
 
 describe("terminal image fetch core", () => {
   it("continues to accept an absolute path with a supported image extension", () => {

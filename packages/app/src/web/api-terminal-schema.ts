@@ -1,6 +1,6 @@
 import * as Schema from "@effect/schema/Schema"
+import { TerminalSessionSchema } from "@prover-coder-ai/docker-git-terminal/contracts"
 
-import { TerminalSessionSchema } from "../shared/terminal-session-schema.js"
 import { ProjectDetailsSchema } from "./api-project-schema.js"
 
 export const TerminalSessionResponseSchema = Schema.Struct({
@@ -29,4 +29,4 @@ export const AuthTerminalSessionResponseSchema = Schema.Struct({
   session: TerminalSessionSchema
 })
 
-export { TerminalServerMessageSchema } from "../shared/terminal-session-schema.js"
+export { TerminalServerMessageSchema } from "@prover-coder-ai/docker-git-terminal/contracts"
