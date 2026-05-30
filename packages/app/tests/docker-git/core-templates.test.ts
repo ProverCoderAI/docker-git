@@ -72,7 +72,9 @@ describe("app planFiles", () => {
     expect(entrypoint.contents).toContain("docker_git_stop_playwright_browser()")
     expect(entrypoint.contents).toContain("docker-git-browser-connection")
     expect(entrypoint.contents).toContain("stop --project \"$project_container\"")
-    expect(entrypoint.contents).toContain('command = "browser-connection"')
-    expect(entrypoint.contents).toContain('args = ["--project", "$DOCKER_GIT_BROWSER_PROJECT", "--network", "$DOCKER_GIT_BROWSER_NETWORK"]')
+    expect(entrypoint.contents).toContain("command = \"browser-connection\"")
+    expect(entrypoint.contents).toContain(
+      "args = [\"--project\", \"$DOCKER_GIT_BROWSER_PROJECT\", \"--network\", \"$DOCKER_GIT_BROWSER_NETWORK\"]"
+    )
   })
 })

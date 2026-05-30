@@ -20,7 +20,7 @@ export const prepareOpenUrl = (): PreparedOpenUrl => {
   if (typeof globalThis.open !== "function") {
     return blockedPreparedOpenUrl()
   }
-  const openedWindow = globalThis.open("about:blank", "_blank", "noopener")
+  const openedWindow = globalThis.open("about:blank", "_blank")
   if (openedWindow === null) {
     return blockedPreparedOpenUrl()
   }

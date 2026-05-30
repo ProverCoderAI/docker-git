@@ -4,10 +4,10 @@ import { resolveControllerComposeUpArgs, shouldBuildControllerImage } from "./co
 import * as ControllerDocker from "./controller-docker.js"
 import { findReachableApiBaseUrl, findReachableDirectHealthProbe } from "./controller-health.js"
 import { inspectControllerImageRevision } from "./controller-image-revision.js"
+import { collectReachabilityDiagnostics } from "./controller-reachability-diagnostics.js"
 import {
   buildApiBaseUrlCandidates,
   type DockerNetworkIps,
-  formatNetworkIps,
   resolveApiPort,
   resolveConfiguredApiBaseUrl,
   resolveDefaultLocalApiBaseUrl,
@@ -42,30 +42,14 @@ const rememberSelectedApiBaseUrl = (value: string): void => {
 export const resolveApiBaseUrl = (): string =>
   resolveExplicitApiBaseUrl() ?? selectedApiBaseUrl ?? resolveConfiguredApiBaseUrl()
 
-const collectReachabilityDiagnostics = (
-  candidateUrls: ReadonlyArray<string>,
-  currentContainerNetworks: DockerNetworkIps,
-  controllerNetworks: DockerNetworkIps
-): Effect.Effect<string, never, ControllerDocker.ControllerRuntime> =>
-  Effect.gen(function*(_) {
-    const publishedPorts = yield* _(ControllerDocker.inspectControllerPublishedPorts())
-
-    return [
-      "Tried endpoints:",
-      ...candidateUrls.map((candidateUrl) => `- ${candidateUrl}`),
-      `Published ports: ${publishedPorts.length > 0 ? publishedPorts : "unavailable"}`,
-      `Current runtime networks: ${formatNetworkIps(currentContainerNetworks)}`,
-      `Controller networks: ${formatNetworkIps(controllerNetworks)}`
-    ].join("\n")
-  })
-
 const waitForReachableApiBaseUrl = (
   candidateUrls: ReadonlyArray<string>,
   currentContainerNetworks: DockerNetworkIps,
-  controllerNetworks: DockerNetworkIps
+  controllerNetworks: DockerNetworkIps,
+  expectedRevision: string | undefined
 ): ControllerEffect<string> =>
   pipe(
-    findReachableApiBaseUrl(candidateUrls),
+    findReachableApiBaseUrl(candidateUrls, expectedRevision),
     Effect.retry(
       Schedule.addDelay(Schedule.recurs(30), () => Duration.seconds(2))
     ),
@@ -118,9 +102,10 @@ const failIfRemoteDockerWithoutApiUrl = (
 }
 
 const findReachableApiBaseUrlOrNull = (
-  candidateUrls: ReadonlyArray<string>
+  candidateUrls: ReadonlyArray<string>,
+  expectedRevision: string | undefined
 ): Effect.Effect<string | null> =>
-  findReachableApiBaseUrl(candidateUrls).pipe(
+  findReachableApiBaseUrl(candidateUrls, expectedRevision).pipe(
     Effect.match({
       onFailure: () => null,
       onSuccess: (apiBaseUrl) => apiBaseUrl
@@ -209,7 +194,8 @@ const reuseReachableControllerIfPossible = (
       context.explicitApiBaseUrl,
       context.currentContainerNetworks,
       context.initialControllerNetworks
-    )
+    ),
+    context.explicitApiBaseUrl === undefined ? context.localControllerRevision : undefined
   ).pipe(
     Effect.map((reachableApiBaseUrl) => {
       if (reachableApiBaseUrl === null || context.forceRecreateController) {
@@ -252,7 +238,12 @@ const startAndRememberController = (
       controllerNetworks
     )
     const reachableApiBaseUrl = yield* _(
-      waitForReachableApiBaseUrl(candidateUrls, context.currentContainerNetworks, controllerNetworks)
+      waitForReachableApiBaseUrl(
+        candidateUrls,
+        context.currentContainerNetworks,
+        controllerNetworks,
+        context.explicitApiBaseUrl === undefined ? context.localControllerRevision : undefined
+      )
     )
     rememberSelectedApiBaseUrl(reachableApiBaseUrl)
   })
@@ -292,7 +283,8 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
       findReachableDirectHealthProbe({
         cachedApiBaseUrl: selectedApiBaseUrl,
         defaultLocalApiBaseUrl,
-        explicitApiBaseUrl
+        explicitApiBaseUrl,
+        expectedRevision: localControllerRevision
       })
     )
     if (
