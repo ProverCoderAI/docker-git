@@ -90,9 +90,10 @@ const findReachableHealthProbe = (
   })
 
 const findReachableHealthProbeOrNull = (
-  candidateUrls: ReadonlyArray<string>
+  candidateUrls: ReadonlyArray<string>,
+  expectedRevision?: string
 ): Effect.Effect<HealthProbeResult | null> =>
-  findReachableHealthProbe(candidateUrls).pipe(
+  findReachableHealthProbe(candidateUrls, expectedRevision).pipe(
     Effect.match({
       onFailure: () => null,
       onSuccess: (probe) => probe
@@ -143,6 +144,7 @@ export const findReachableDirectHealthProbe = (options: {
   readonly explicitApiBaseUrl: string | undefined
   readonly defaultLocalApiBaseUrl: string | undefined
   readonly cachedApiBaseUrl: string | undefined
+  readonly expectedRevision?: string | undefined
 }): Effect.Effect<HealthProbeResult | null> =>
   findReachableHealthProbeOrNull(
     buildApiBaseUrlCandidates({
@@ -153,5 +155,6 @@ export const findReachableDirectHealthProbe = (options: {
       currentContainerNetworks: {},
       controllerNetworks: {},
       port: resolveApiPort()
-    })
+    }),
+    options.expectedRevision
   )

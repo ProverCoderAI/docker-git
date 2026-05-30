@@ -133,7 +133,8 @@ describe("controller readiness bootstrap", () => {
       expect(findReachableDirectHealthProbeMock).toHaveBeenCalledWith({
         cachedApiBaseUrl: undefined,
         defaultLocalApiBaseUrl: "http://127.0.0.1:3334",
-        explicitApiBaseUrl: undefined
+        explicitApiBaseUrl: undefined,
+        expectedRevision: "local-revision"
       })
       expect(prepareLocalControllerRevisionMock).toHaveBeenCalled()
       expect(prepareControllerResourceLimitEnvMock).toHaveBeenCalledTimes(1)

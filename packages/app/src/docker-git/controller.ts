@@ -283,7 +283,8 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
       findReachableDirectHealthProbe({
         cachedApiBaseUrl: selectedApiBaseUrl,
         defaultLocalApiBaseUrl,
-        explicitApiBaseUrl
+        explicitApiBaseUrl,
+        expectedRevision: localControllerRevision
       })
     )
     if (

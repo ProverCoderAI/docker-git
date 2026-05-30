@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import * as fc from "fast-check"
 import { afterEach, beforeEach, vi } from "vitest"
 
 import { openProjectBrowserById, openSelectedProjectBrowser } from "../../src/web/actions-browser.js"
@@ -36,6 +37,14 @@ const missingBrowser: ProjectBrowserSession = {
   noVncUrl: "",
   status: "missing"
 }
+
+const pathSegmentCharArbitrary = fc.constantFrom(
+  ..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".split("")
+)
+const projectBrowserPathArbitrary = (suffix: string) =>
+  fc
+    .array(pathSegmentCharArbitrary, { minLength: 1, maxLength: 24 })
+    .map((chars) => `/api/projects/${chars.join("")}/browser/${suffix}`)
 
 describe("web browser actions", () => {
   let openedWindow: BrowserOpenMockWindow = makeBrowserOpenMockWindow()
@@ -104,4 +113,72 @@ describe("web browser actions", () => {
     expect(startProjectBrowserMock).not.toHaveBeenCalled()
     expect(setMessage).toHaveBeenLastCalledWith("No project selected.")
   })
+
+  it.effect("keeps popup and browser state messages consistent for generated browser URLs", () =>
+    Effect.tryPromise({
+      catch: (error) => error,
+      try: () =>
+        fc.assert(
+          fc.asyncProperty(
+            projectBrowserPathArbitrary("novnc"),
+            projectBrowserPathArbitrary("cdp"),
+            fc.boolean(),
+            fc.boolean(),
+            (noVncPath, cdpPath, popupAllowed, useSelectedProject) =>
+              Effect.runPromise(
+                Effect.gen(function*(_) {
+                  vi.unstubAllGlobals()
+                  startProjectBrowserMock.mockReset()
+                  loadProjectBrowserMock.mockReset()
+                  openedWindow = makeBrowserOpenMockWindow()
+
+                  if (popupAllowed) {
+                    stubBrowserOpen(openedWindow)
+                  } else {
+                    vi.stubGlobal("open", null)
+                  }
+
+                  const browser = {
+                    ...runningBrowser,
+                    cdpPath,
+                    noVncPath,
+                    projectId: "project-1"
+                  }
+                  startProjectBrowserMock.mockImplementation(() => Effect.succeed(browser))
+                  const { context, setMessage, setProjectBrowser } = makeBrowserActionContext({
+                    selectedProjectId: "project-1",
+                    selectedProjectName: "octocat/hello-world"
+                  })
+
+                  if (useSelectedProject) {
+                    openSelectedProjectBrowser(context)
+                  } else {
+                    openProjectBrowserById("project-1", context)
+                  }
+
+                  yield* _(waitForAssertion(() => {
+                    expect(setProjectBrowser).toHaveBeenCalledWith(browser)
+                  }))
+
+                  expect(startProjectBrowserMock).toHaveBeenCalledWith("project-1")
+                  expect(setMessage).toHaveBeenLastCalledWith(
+                    popupAllowed
+                      ? `Browser opened. CDP endpoint: ${cdpPath}.`
+                      : `Browser popup was blocked. Open ${noVncPath} manually. CDP endpoint: ${cdpPath}.`
+                  )
+
+                  if (popupAllowed) {
+                    expect(openedWindow.location.href).toBe(noVncPath)
+                    expect(openedWindow.focus).toHaveBeenCalledOnce()
+                  }
+                }).pipe(
+                  Effect.ensuring(Effect.sync(() => {
+                    vi.unstubAllGlobals()
+                  }))
+                )
+              )
+          ),
+          { numRuns: 20 }
+        )
+    }))
 })

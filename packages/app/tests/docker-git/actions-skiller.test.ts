@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import * as fc from "fast-check"
 import { afterEach, beforeEach, vi } from "vitest"
 
 import { openSkillerApp } from "../../src/web/actions-skiller.js"
@@ -61,6 +62,16 @@ const mockScopedSkillerLaunch = (): void => {
     }))
   )
 }
+
+const skillerPathCharArbitrary = fc.constantFrom(
+  ..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".split("")
+)
+const skillerPathArbitrary = fc
+  .array(skillerPathCharArbitrary, { minLength: 1, maxLength: 24 })
+  .map((chars) => `/api/skiller/app/${chars.join("")}/`)
+const projectKeyArbitrary = fc
+  .array(skillerPathCharArbitrary, { minLength: 1, maxLength: 18 })
+  .map((chars) => chars.join(""))
 
 vi.mock("../../src/web/api.js", () => ({
   openSkiller: openSkillerMock
@@ -168,5 +179,54 @@ describe("web Skiller actions", () => {
         expect(openedWindow.location.href).toBe("")
         expect(setMessage).toHaveBeenCalledWith("Skiller failed")
       }))
+    }))
+
+  it.effect("keeps Skiller popup URL and launch message consistent for generated app paths", () =>
+    Effect.tryPromise({
+      catch: (error) => error,
+      try: () =>
+        fc.assert(
+          fc.asyncProperty(skillerPathArbitrary, projectKeyArbitrary, (appPath, projectKey) =>
+            Effect.runPromise(
+              Effect.gen(function*(_) {
+                vi.unstubAllGlobals()
+                vi.clearAllMocks()
+                openedWindow = makeBrowserOpenMockWindow()
+                browserOpenMock = stubBrowserOpen(openedWindow)
+                const scopedLaunch = skillerLaunch({
+                  appPath,
+                  scope: {
+                    ...proofScope,
+                    projectKey
+                  }
+                })
+                openSkillerMock.mockImplementation(() => Effect.succeed(scopedLaunch))
+                const { context, setMessage } = makeBrowserActionContext({ selectedProjectKey: projectKey })
+
+                openSkillerApp(context)
+
+                expect(browserOpenMock).toHaveBeenCalledWith("about:blank", "_blank")
+                yield* _(waitForAssertion(() => {
+                  expect(openSkillerMock).toHaveBeenCalledWith(projectKey, undefined)
+                }))
+                yield* _(waitForAssertion(() => {
+                  expect(openedWindow.location.href).toBe(appPath)
+                  expect(openedWindow.focus).toHaveBeenCalledOnce()
+                  expect(setMessage).toHaveBeenCalledWith(
+                    `Skiller launch started (pid 1234). Log: /home/dev/.docker-git/logs/skiller.log. ` +
+                      `Container FS: dg-project:/home/dev/app. Opened ${appPath}.`
+                  )
+                }))
+                expect(context.setBusyLabel).toHaveBeenCalledWith("Opening Skiller")
+                expect(context.setBusyLabel).toHaveBeenLastCalledWith(null)
+              }).pipe(
+                Effect.ensuring(Effect.sync(() => {
+                  vi.unstubAllGlobals()
+                }))
+              )
+            )
+          ),
+          { numRuns: 20 }
+        )
     }))
 })
