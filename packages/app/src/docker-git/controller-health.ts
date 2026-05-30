@@ -31,7 +31,9 @@ const parseHealthRevision = (text: string): string | null =>
     }
   })
 
-const probeHealth = (apiBaseUrl: string): Effect.Effect<HealthProbeResult, ControllerBootstrapError> =>
+const probeHealth = (
+  apiBaseUrl: string
+): Effect.Effect<HealthProbeResult, ControllerBootstrapError, HttpClient.HttpClient> =>
   Effect.gen(function*(_) {
     const client = yield* _(HttpClient.HttpClient)
     const response = yield* _(client.get(`${apiBaseUrl}/health`, { headers: { accept: "application/json" } }))
@@ -52,7 +54,6 @@ const probeHealth = (apiBaseUrl: string): Effect.Effect<HealthProbeResult, Contr
       )
     )
   }).pipe(
-    Effect.provide(FetchHttpClient.layer),
     Effect.mapError((error): ControllerBootstrapError =>
       error._tag === "ControllerBootstrapError"
         ? error
@@ -66,7 +67,7 @@ const probeHealth = (apiBaseUrl: string): Effect.Effect<HealthProbeResult, Contr
 const findReachableHealthProbe = (
   candidateUrls: ReadonlyArray<string>,
   expectedRevision?: string
-): Effect.Effect<HealthProbeResult, ControllerBootstrapError> =>
+): Effect.Effect<HealthProbeResult, ControllerBootstrapError, HttpClient.HttpClient> =>
   Effect.gen(function*(_) {
     if (candidateUrls.length === 0) {
       return yield* _(
@@ -92,7 +93,7 @@ const findReachableHealthProbe = (
 const findReachableHealthProbeOrNull = (
   candidateUrls: ReadonlyArray<string>,
   expectedRevision?: string
-): Effect.Effect<HealthProbeResult | null> =>
+): Effect.Effect<HealthProbeResult | null, never, HttpClient.HttpClient> =>
   findReachableHealthProbe(candidateUrls, expectedRevision).pipe(
     Effect.match({
       onFailure: () => null,
@@ -119,11 +120,17 @@ const noMatchingHealthProbeError = (
     )
     : controllerBootstrapError("No docker-git controller endpoint responded to /health.")
 
+export const findReachableApiBaseUrlWithHttpClient = (
+  candidateUrls: ReadonlyArray<string>,
+  expectedRevision?: string
+): Effect.Effect<string, ControllerBootstrapError, HttpClient.HttpClient> =>
+  findReachableHealthProbe(candidateUrls, expectedRevision).pipe(Effect.map(({ apiBaseUrl }) => apiBaseUrl))
+
 export const findReachableApiBaseUrl = (
   candidateUrls: ReadonlyArray<string>,
   expectedRevision?: string
 ): Effect.Effect<string, ControllerBootstrapError> =>
-  findReachableHealthProbe(candidateUrls, expectedRevision).pipe(Effect.map(({ apiBaseUrl }) => apiBaseUrl))
+  findReachableApiBaseUrlWithHttpClient(candidateUrls, expectedRevision).pipe(Effect.provide(FetchHttpClient.layer))
 
 // CHANGE: select only controller endpoints that prove the expected source revision.
 // WHY: containerized hosts can see stale controllers through host.docker.internal before the current local controller is reachable.
@@ -140,12 +147,12 @@ export const findReachableApiBaseUrlMatchingRevision = (
   expectedRevision: string
 ): Effect.Effect<string, ControllerBootstrapError> => findReachableApiBaseUrl(candidateUrls, expectedRevision)
 
-export const findReachableDirectHealthProbe = (options: {
+export const findReachableDirectHealthProbeWithHttpClient = (options: {
   readonly explicitApiBaseUrl: string | undefined
   readonly defaultLocalApiBaseUrl: string | undefined
   readonly cachedApiBaseUrl: string | undefined
   readonly expectedRevision?: string | undefined
-}): Effect.Effect<HealthProbeResult | null> =>
+}): Effect.Effect<HealthProbeResult | null, never, HttpClient.HttpClient> =>
   findReachableHealthProbeOrNull(
     buildApiBaseUrlCandidates({
       explicitApiBaseUrl: options.explicitApiBaseUrl,
@@ -158,3 +165,11 @@ export const findReachableDirectHealthProbe = (options: {
     }),
     options.expectedRevision
   )
+
+export const findReachableDirectHealthProbe = (options: {
+  readonly explicitApiBaseUrl: string | undefined
+  readonly defaultLocalApiBaseUrl: string | undefined
+  readonly cachedApiBaseUrl: string | undefined
+  readonly expectedRevision?: string | undefined
+}): Effect.Effect<HealthProbeResult | null> =>
+  findReachableDirectHealthProbeWithHttpClient(options).pipe(Effect.provide(FetchHttpClient.layer))

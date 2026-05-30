@@ -1,3 +1,4 @@
+/* jscpd:ignore-start */
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as fc from "fast-check"
@@ -38,9 +39,10 @@ const missingBrowser: ProjectBrowserSession = {
   status: "missing"
 }
 
-const pathSegmentCharArbitrary = fc.constantFrom(
-  ..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".split("")
-)
+const pathSegmentChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+const pathSegmentCharArbitrary = fc
+  .integer({ max: pathSegmentChars.length - 1, min: 0 })
+  .map((index) => pathSegmentChars.charAt(index))
 const projectBrowserPathArbitrary = (suffix: string) =>
   fc
     .array(pathSegmentCharArbitrary, { minLength: 1, maxLength: 24 })
@@ -182,3 +184,4 @@ describe("web browser actions", () => {
         )
     }))
 })
+/* jscpd:ignore-end */

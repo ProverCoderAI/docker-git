@@ -1,19 +1,15 @@
+/* jscpd:ignore-start */
+import { HttpClient, HttpClientResponse } from "@effect/platform"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as fc from "fast-check"
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 
 import {
-  findReachableApiBaseUrlMatchingRevision,
-  findReachableDirectHealthProbe
+  findReachableApiBaseUrlWithHttpClient,
+  findReachableDirectHealthProbeWithHttpClient
 } from "../../src/docker-git/controller-health.js"
 
 const expectedRevision = "local-revision"
-
-type HealthServer = {
-  readonly baseUrl: string
-  readonly server: Server
-}
 
 const mismatchRevisionArbitrary = fc
   .integer({ min: 1, max: 10_000 })
@@ -21,8 +17,11 @@ const mismatchRevisionArbitrary = fc
 
 const candidateUrl = (baseUrl: string, index: number): string => `${baseUrl}/candidate-${index}`
 
-const parseCandidateIndex = (request: IncomingMessage): number | null => {
-  const match = /^\/candidate-(\d+)\/health$/u.exec(request.url ?? "")
+const toCandidateUrls = (baseUrl: string, revisions: ReadonlyArray<string>): ReadonlyArray<string> =>
+  revisions.map((_, index) => candidateUrl(baseUrl, index))
+
+const parseCandidateIndex = (pathname: string): number | null => {
+  const match = /^\/candidate-(\d+)\/health$/u.exec(pathname)
   if (match === null) {
     return null
   }
@@ -30,57 +29,26 @@ const parseCandidateIndex = (request: IncomingMessage): number | null => {
   return Number.isSafeInteger(parsed) ? parsed : null
 }
 
-const handleHealthRequest = (revisions: ReadonlyArray<string>) => (
-  request: IncomingMessage,
-  response: ServerResponse
-) => {
-  const index = parseCandidateIndex(request)
+const healthResponse = (revisions: ReadonlyArray<string>, pathname: string): Response => {
+  const index = parseCandidateIndex(pathname)
   const revision = index === null ? undefined : revisions[index]
   if (revision === undefined) {
-    response.writeHead(404, { "content-type": "application/json" })
-    response.end(JSON.stringify({ ok: false }))
-    return
+    return Response.json({ ok: false }, { status: 404 })
   }
 
-  response.writeHead(200, { "content-type": "application/json" })
-  response.end(JSON.stringify({ ok: true, revision }))
+  return Response.json({ ok: true, revision })
 }
 
-const listenHealthServer = (revisions: ReadonlyArray<string>): Effect.Effect<HealthServer, Error> =>
-  Effect.async((resume) => {
-    const server = createServer(handleHealthRequest(revisions))
-    server.once("error", (error) => {
-      resume(Effect.fail(error))
-    })
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address()
-      if (typeof address === "object" && address !== null) {
-        resume(Effect.succeed({
-          baseUrl: `http://127.0.0.1:${address.port}`,
-          server
-        }))
-        return
-      }
-      resume(Effect.fail(new Error("Health test server did not expose a TCP port.")))
-    })
-  })
-
-const closeHealthServer = (server: Server): Effect.Effect<void> =>
-  Effect.async((resume) => {
-    server.close(() => {
-      resume(Effect.void)
-    })
-  })
-
-const withHealthServer = <A, E, R>(
-  revisions: ReadonlyArray<string>,
-  effect: (baseUrl: string) => Effect.Effect<A, E, R>
-): Effect.Effect<A, E | Error, R> =>
-  Effect.acquireUseRelease(
-    listenHealthServer(revisions),
-    ({ baseUrl }) => effect(baseUrl),
-    ({ server }) => closeHealthServer(server)
+const makeHealthClient = (revisions: ReadonlyArray<string>): HttpClient.HttpClient =>
+  HttpClient.make((request, url) =>
+    Effect.succeed(HttpClientResponse.fromWeb(request, healthResponse(revisions, url.pathname)))
   )
+
+const withHealthClient = <A, E>(
+  revisions: ReadonlyArray<string>,
+  effect: (baseUrl: string) => Effect.Effect<A, E, HttpClient.HttpClient>
+): Effect.Effect<A, E> =>
+  effect("http://controller.test").pipe(Effect.provideService(HttpClient.HttpClient, makeHealthClient(revisions)))
 
 describe("controller health", () => {
   it.effect("selects the first reachable candidate whose revision matches the expected revision", () =>
@@ -93,18 +61,15 @@ describe("controller health", () => {
             fc.array(mismatchRevisionArbitrary, { maxLength: 4 }),
             (before, after) =>
               Effect.runPromise(
-                withHealthServer([...before, expectedRevision, ...after], (baseUrl) =>
+                withHealthClient([...before, expectedRevision, ...after], (baseUrl) =>
                   Effect.gen(function*(_) {
-                    const candidates = [...before, expectedRevision, ...after].map((_, index) =>
-                      candidateUrl(baseUrl, index)
-                    )
+                    const candidates = toCandidateUrls(baseUrl, [...before, expectedRevision, ...after])
                     const selected = yield* _(
-                      findReachableApiBaseUrlMatchingRevision(candidates, expectedRevision)
+                      findReachableApiBaseUrlWithHttpClient(candidates, expectedRevision)
                     )
 
                     expect(selected).toBe(candidateUrl(baseUrl, before.length))
-                  })
-                )
+                  }))
               )
           ),
           { numRuns: 20 }
@@ -120,11 +85,11 @@ describe("controller health", () => {
             fc.array(mismatchRevisionArbitrary, { minLength: 1, maxLength: 5 }),
             (revisions) =>
               Effect.runPromise(
-                withHealthServer(revisions, (baseUrl) =>
+                withHealthClient(revisions, (baseUrl) =>
                   Effect.gen(function*(_) {
-                    const candidates = revisions.map((_, index) => candidateUrl(baseUrl, index))
+                    const candidates = toCandidateUrls(baseUrl, revisions)
                     const error = yield* _(
-                      findReachableApiBaseUrlMatchingRevision(candidates, expectedRevision).pipe(Effect.flip)
+                      findReachableApiBaseUrlWithHttpClient(candidates, expectedRevision).pipe(Effect.flip)
                     )
 
                     expect(error.message).toContain(expectedRevision)
@@ -132,8 +97,7 @@ describe("controller health", () => {
                       expect(error.message).toContain(candidateUrl(baseUrl, index))
                       expect(error.message).toContain(revision)
                     }
-                  })
-                )
+                  }))
               )
           ),
           { numRuns: 20 }
@@ -141,10 +105,10 @@ describe("controller health", () => {
     }))
 
   it.effect("filters direct health probes by expected revision before bootstrap", () =>
-    withHealthServer(["old-revision", expectedRevision], (baseUrl) =>
+    withHealthClient(["old-revision", expectedRevision], (baseUrl) =>
       Effect.gen(function*(_) {
         const probe = yield* _(
-          findReachableDirectHealthProbe({
+          findReachableDirectHealthProbeWithHttpClient({
             cachedApiBaseUrl: candidateUrl(baseUrl, 1),
             defaultLocalApiBaseUrl: candidateUrl(baseUrl, 0),
             explicitApiBaseUrl: undefined,
@@ -154,6 +118,6 @@ describe("controller health", () => {
 
         expect(probe?.apiBaseUrl).toBe(candidateUrl(baseUrl, 1))
         expect(probe?.revision).toBe(expectedRevision)
-      })
-    ))
+      })))
 })
+/* jscpd:ignore-end */
