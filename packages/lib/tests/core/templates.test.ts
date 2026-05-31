@@ -269,7 +269,7 @@ describe("renderPromptScript", () => {
 
     fc.assert(
       fc.property(
-        fc.constantFrom("PROMPT_COMMAND=", "PS1=", "trap 'docker_git_terminal_sanitize' EXIT INT TERM"),
+        fc.constantFrom("PROMPT_COMMAND=", "PS1=", "trap 'docker_git_terminal_sanitize' EXIT"),
         (interactiveMutation) => {
           const script = renderPromptScript()
           const guardIndex = script.indexOf(nonInteractiveGuard)
@@ -280,6 +280,142 @@ describe("renderPromptScript", () => {
       )
     )
   })
+
+  it("does not run terminal recovery traps for active interrupt or terminate signals", () => {
+    const script = renderPromptScript()
+
+    expect(script).toContain("trap 'docker_git_terminal_sanitize' EXIT")
+    expect(script).not.toContain("trap 'docker_git_terminal_sanitize' EXIT INT TERM")
+    expect(script).not.toContain("trap 'docker_git_terminal_sanitize' INT")
+    expect(script).not.toContain("trap 'docker_git_terminal_sanitize' TERM")
+  })
+
+  it("gates terminal recovery before stty sane can touch the TTY", () => {
+    const script = renderPromptScript()
+    const guardIndex = script.indexOf("docker_git_terminal_should_sanitize || return 0")
+    const sttyIndex = script.indexOf("{ stty sane < /dev/tty > /dev/tty; }")
+
+    expect(script).toContain("docker_git_terminal_has_agent_ancestor")
+    expect(script).toContain("docker_git_terminal_command_basename")
+    expect(script).toContain("printenv DOCKER_GIT_TERMINAL_FORCE_SANITIZE")
+    expect(script).toContain("printenv DOCKER_GIT_TERMINAL_DISABLE_SANITIZE")
+    expect(guardIndex).toBeGreaterThanOrEqual(0)
+    expect(sttyIndex).toBeGreaterThan(guardIndex)
+  })
+
+  it.effect("matches only agent command basenames for terminal recovery suppression", () =>
+    pipe(
+      Command.make(
+        "bash",
+        "-lc",
+        String.raw`set -euo pipefail
+source <(printf '%s' "$DOCKER_GIT_PROMPT_SCRIPT")
+for command_line in \
+  "claude --dangerously-skip-permissions" \
+  "/usr/bin/.docker-git-claude-real" \
+  "/usr/local/bin/codex resume" \
+  "/opt/bin/opencode" \
+  "/usr/bin/gemini --model test" \
+  "/usr/bin/grok"; do
+  docker_git_terminal_is_agent_command "$command_line" || { printf 'missing:%s' "$command_line"; exit 1; }
+done
+for command_line in "codex-helper" "/tmp/grok-cache" "myclaude" "node /usr/bin/playwright-mcp"; do
+  if docker_git_terminal_is_agent_command "$command_line"; then
+    printf 'false-positive:%s' "$command_line"
+    exit 1
+  fi
+done
+printf ok`
+      ),
+      Command.env({ DOCKER_GIT_PROMPT_SCRIPT: renderPromptScript() }),
+      Command.stdout("pipe"),
+      Command.stderr("pipe"),
+      Command.string,
+      Effect.tap((output) => Effect.sync(() => expect(output).toBe("ok"))),
+      Effect.asVoid,
+      Effect.provide(NodeContext.layer)
+    )
+  )
+
+  it.effect("skips terminal recovery when the shell is under an agent process", () =>
+    pipe(
+      Command.make(
+        "bash",
+        "-lc",
+        String.raw`set -euo pipefail
+tmp="$(mktemp -d)"
+cleanup() { rm -rf "$tmp"; }
+trap cleanup EXIT
+cat > "$tmp/ps" <<'EOS'
+#!/usr/bin/env bash
+if [ "$1" = "-o" ] && [ "$2" = "args=" ]; then
+  printf '%s\n' "/usr/bin/.docker-git-claude-real"
+  exit 0
+fi
+if [ "$1" = "-o" ] && [ "$2" = "ppid=" ]; then
+  printf '%s\n' "0"
+  exit 0
+fi
+exit 1
+EOS
+chmod +x "$tmp/ps"
+PATH="$tmp:$PATH"
+source <(printf '%s' "$DOCKER_GIT_PROMPT_SCRIPT")
+if docker_git_terminal_should_sanitize; then
+  printf bad
+else
+  printf ok
+fi`
+      ),
+      Command.env({ DOCKER_GIT_PROMPT_SCRIPT: renderPromptScript() }),
+      Command.stdout("pipe"),
+      Command.stderr("pipe"),
+      Command.string,
+      Effect.tap((output) => Effect.sync(() => expect(output).toBe("ok"))),
+      Effect.asVoid,
+      Effect.provide(NodeContext.layer)
+    )
+  )
+
+  it.effect("allows terminal recovery when no agent is in the shell ancestry", () =>
+    pipe(
+      Command.make(
+        "bash",
+        "-lc",
+        String.raw`set -euo pipefail
+tmp="$(mktemp -d)"
+cleanup() { rm -rf "$tmp"; }
+trap cleanup EXIT
+cat > "$tmp/ps" <<'EOS'
+#!/usr/bin/env bash
+if [ "$1" = "-o" ] && [ "$2" = "args=" ]; then
+  printf '%s\n' "-zsh"
+  exit 0
+fi
+if [ "$1" = "-o" ] && [ "$2" = "ppid=" ]; then
+  printf '%s\n' "0"
+  exit 0
+fi
+exit 1
+EOS
+chmod +x "$tmp/ps"
+PATH="$tmp:$PATH"
+source <(printf '%s' "$DOCKER_GIT_PROMPT_SCRIPT")
+if docker_git_terminal_should_sanitize; then
+  printf ok
+else
+  printf bad
+fi`
+      ),
+      Command.env({ DOCKER_GIT_PROMPT_SCRIPT: renderPromptScript() }),
+      Command.stdout("pipe"),
+      Command.stderr("pipe"),
+      Command.string,
+      Effect.tap((output) => Effect.sync(() => expect(output).toBe("ok"))),
+      Effect.asVoid,
+      Effect.provide(NodeContext.layer)
+    )
+  )
 })
 
 describe("renderEntrypoint clone cache", () => {
@@ -630,12 +766,14 @@ describe("renderEntrypoint auth bridge", () => {
       "{ stty sane < /dev/tty > /dev/tty; } 2>/dev/null",
       '*) return 0 2>/dev/null || exit 0 ;;',
       "docker_git_terminal_sanitize",
-      "trap 'docker_git_terminal_sanitize' EXIT INT TERM",
+      "trap 'docker_git_terminal_sanitize' EXIT",
       "add-zsh-hook zshexit docker_git_terminal_on_exit",
-      "TRAPINT() {",
       'if [[ "${DOCKER_GIT_ZSH_AUTOSUGGEST:-0}" == "1" ]]',
       "DOCKER_GIT_ZSH_AUTOSUGGEST=0"
     ])
+    expect(entrypoint).not.toContain("trap 'docker_git_terminal_sanitize' EXIT INT TERM")
+    expect(entrypoint).not.toContain("TRAPINT() {")
+    expect(entrypoint).not.toContain("TRAPTERM() {")
   })
 
   it("refreshes clone cache mirrors without fetching GitHub pull request refs", () => {

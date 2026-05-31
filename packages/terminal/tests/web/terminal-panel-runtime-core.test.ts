@@ -4,6 +4,7 @@ import { afterEach, beforeEach, vi } from "vitest"
 import { attachTerminalInput, isTerminalMouseReportInput } from "../../src/web/terminal-panel-input.js"
 
 type TerminalDataHandler = (data: string) => void
+type TerminalPasteGuard = Parameters<typeof attachTerminalInput>[2]
 
 const noop = (): void => undefined
 
@@ -47,9 +48,17 @@ const createOpenSocketRef = () => {
   }
 }
 
-const passThroughPasteGuard = {
+const passThroughPasteGuard: TerminalPasteGuard = {
   shouldSuppressTerminalInput: () => false,
   suppressNextNativeImagePaste: noop
+}
+
+const attachOpenTerminalInput = (pasteGuard: TerminalPasteGuard = passThroughPasteGuard) => {
+  const input = createTerminalInputHarness()
+  const { sent, socketRef } = createOpenSocketRef()
+  const disposable = attachTerminalInput(input.terminal, socketRef, pasteGuard)
+
+  return { disposable, input, sent }
 }
 
 describe("terminal panel runtime core", () => {
@@ -71,10 +80,7 @@ describe("terminal panel runtime core", () => {
   })
 
   it("scrolls to bottom for regular terminal input before sending it to the socket", () => {
-    const input = createTerminalInputHarness()
-    const { sent, socketRef } = createOpenSocketRef()
-
-    const disposable = attachTerminalInput(input.terminal, socketRef, passThroughPasteGuard)
+    const { disposable, input, sent } = attachOpenTerminalInput()
     input.emit("a")
     disposable.dispose()
 
@@ -83,11 +89,20 @@ describe("terminal panel runtime core", () => {
     expect(sent).toEqual([JSON.stringify({ data: "a", type: "input" })])
   })
 
-  it("keeps the viewport stable for terminal mouse click reports", () => {
-    const input = createTerminalInputHarness()
-    const { sent, socketRef } = createOpenSocketRef()
+  it("forwards arrow escape sequences as regular terminal input", () => {
+    const { input, sent } = attachOpenTerminalInput()
+    input.emit("\u001B[C")
+    input.emit("\u001B[A")
 
-    attachTerminalInput(input.terminal, socketRef, passThroughPasteGuard)
+    expect(input.state.scrolls).toBe(2)
+    expect(sent).toEqual([
+      JSON.stringify({ data: "\u001B[C", type: "input" }),
+      JSON.stringify({ data: "\u001B[A", type: "input" })
+    ])
+  })
+
+  it("keeps the viewport stable for terminal mouse click reports", () => {
+    const { input, sent } = attachOpenTerminalInput()
     input.emit("\u001B[<0;10;5M")
 
     expect(input.state.scrolls).toBe(0)
@@ -95,14 +110,12 @@ describe("terminal panel runtime core", () => {
   })
 
   it("does not scroll or send input suppressed by the paste guard", () => {
-    const input = createTerminalInputHarness()
-    const { sent, socketRef } = createOpenSocketRef()
     const pasteGuard = {
       shouldSuppressTerminalInput: () => true,
       suppressNextNativeImagePaste: noop
     }
+    const { input, sent } = attachOpenTerminalInput(pasteGuard)
 
-    attachTerminalInput(input.terminal, socketRef, pasteGuard)
     input.emit("\u0016")
 
     expect(input.state.scrolls).toBe(0)

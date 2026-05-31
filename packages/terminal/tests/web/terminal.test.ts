@@ -17,27 +17,24 @@ import {
   parseTerminalServerMessage,
   projectSshRoutePath,
   resolveTerminalWebSocketUrl,
+  setTerminalApiBaseUrlResolver,
   terminalRouteToken,
   terminalTitleById
 } from "../../src/web/terminal.js"
 import type { TerminalServerMessage } from "../../src/web/terminal.js"
 
-const resolveApiBaseUrlMock = vi.hoisted(() => vi.fn<() => string>())
+const resolveApiBaseUrlMock = vi.fn<() => string>()
 
-const readyMessagePayload: TerminalServerMessage = {
+const readyTerminalMessagePayload = (): TerminalServerMessage => ({
+  type: "ready",
   session: {
-    createdAt: "2026-04-08T10:00:00.000Z",
-    id: "session-1",
-    projectId: "project-1",
-    sshCommand: "ssh dev@127.0.0.1",
-    status: "attached"
-  },
-  type: "ready"
-}
-
-vi.mock("../../src/web/api-http.js", () => ({
-  resolveApiBaseUrl: resolveApiBaseUrlMock
-}))
+    id: "browser-session-1",
+    createdAt: "2026-05-10T11:00:00.000Z",
+    projectId: "browser-project-1",
+    status: "attached",
+    sshCommand: "ssh dev@192.0.2.1"
+  }
+})
 
 const stubSameOriginLocation = (host: string, httpProtocol: string): void => {
   resolveApiBaseUrlMock.mockReturnValue("/api")
@@ -51,9 +48,11 @@ const stubSameOriginLocation = (host: string, httpProtocol: string): void => {
 describe("browser terminal helpers", () => {
   beforeEach(() => {
     resolveApiBaseUrlMock.mockReset()
+    setTerminalApiBaseUrlResolver(resolveApiBaseUrlMock)
   })
 
   afterEach(() => {
+    setTerminalApiBaseUrlResolver(null)
     vi.unstubAllGlobals()
   })
 
@@ -80,6 +79,7 @@ describe("browser terminal helpers", () => {
   })
 
   it("parses ready terminal messages", () => {
+    const readyMessagePayload = readyTerminalMessagePayload()
     const parsed = parseTerminalServerMessage(JSON.stringify(readyMessagePayload))
 
     expect(parsed).toEqual(readyMessagePayload)
