@@ -18,6 +18,24 @@ import type * as PlatformPath from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
+import {
+  TerminalClientMessageSchema,
+  type TerminalClientMessage,
+  type TerminalServerMessage
+} from "@prover-coder-ai/docker-git-terminal/contracts"
+import {
+  appendTerminalOutput,
+  createTerminalImagePastePlan,
+  emptyTerminalOutputBuffer,
+  renderTerminalOutputBuffer,
+  terminalImagePasteDirectory,
+  type TerminalImagePastePayload,
+  type TerminalOutputBuffer
+} from "@prover-coder-ai/docker-git-terminal/core"
+import {
+  planTerminalImageFetch,
+  terminalImageFetchMaxBytes
+} from "@prover-coder-ai/docker-git-terminal/server"
 import { Effect, Either } from "effect"
 import { Buffer } from "node:buffer"
 import { spawn } from "node:child_process"
@@ -32,36 +50,9 @@ import { WebSocket, WebSocketServer, type RawData } from "ws"
 import type { TerminalSession, TerminalSessionStatus } from "../api/contracts.js"
 import { ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
 import { emitProjectEvent, latestProjectCursor } from "./events.js"
-import {
-  planTerminalImageFetch,
-  terminalImageFetchMaxBytes
-} from "./terminal-image-fetch-core.js"
-import {
-  createTerminalImagePastePlan,
-  terminalImagePasteDirectory,
-  type TerminalImagePastePayload
-} from "./terminal-image-paste-core.js"
-import {
-  appendTerminalOutput,
-  emptyTerminalOutputBuffer,
-  renderTerminalOutputBuffer,
-  type TerminalOutputBuffer
-} from "./terminal-output-buffer.js"
 import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
 import { getProject, getProjectItemById, getProjectItemByKey, upProject } from "./projects.js"
 import { attachWebSocketHeartbeat } from "./websocket-heartbeat.js"
-
-type TerminalClientMessage =
-  | { readonly type: "input"; readonly data: string }
-  | { readonly type: "resize"; readonly cols: number; readonly rows: number }
-  | ({ readonly type: "image" } & TerminalImagePastePayload)
-  | { readonly type: "close" }
-
-type TerminalServerMessage =
-  | { readonly type: "ready"; readonly session: TerminalSession }
-  | { readonly type: "output"; readonly data: string }
-  | { readonly type: "exit"; readonly exitCode: number | null; readonly signal: number | null }
-  | { readonly type: "error"; readonly message: string }
 
 type TerminalRecord = {
   session: TerminalSession
@@ -119,30 +110,6 @@ const terminalSessionStateRelativePath: ReadonlyArray<string> = [".orch", "state
 const tmuxMissingMessage =
   "tmux is not available in this project container. Apply docker-git config or rebuild the project image so tmux is installed, then reopen this SSH terminal session."
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
-
-const TerminalClientMessageSchema = Schema.parseJson(
-  Schema.Union(
-    Schema.Struct({
-      type: Schema.Literal("input"),
-      data: Schema.String
-    }),
-    Schema.Struct({
-      type: Schema.Literal("resize"),
-      cols: Schema.Number,
-      rows: Schema.Number
-    }),
-    Schema.Struct({
-      type: Schema.Literal("image"),
-      data: Schema.String,
-      mediaType: Schema.String,
-      name: Schema.String,
-      size: Schema.Number
-    }),
-    Schema.Struct({
-      type: Schema.Literal("close")
-    })
-  )
-)
 
 const DurableTerminalSessionSchema = Schema.Struct({
   id: Schema.String,

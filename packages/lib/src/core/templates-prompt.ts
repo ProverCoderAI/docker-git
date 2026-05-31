@@ -20,8 +20,65 @@ const dockerGitTerminalSanitizeShell = String.raw`docker_git_terminal_write_esca
   fi
   return 1
 }
+docker_git_terminal_process_args() {
+  ps -o args= -p "$1" 2>/dev/null || true
+}
+docker_git_terminal_parent_pid() {
+  ps -o ppid= -p "$1" 2>/dev/null | tr -d '[:space:]'
+}
+docker_git_terminal_command_basename() {
+  local command_line="$1"
+  printf "%s\n" "$command_line" | awk '{ name = $1; sub(/^.*\//, "", name); print name; exit }'
+}
+docker_git_terminal_is_agent_command() {
+  local command_name
+  command_name="$(docker_git_terminal_command_basename "$1")"
+  case "$command_name" in
+    .docker-git-claude-real|claude|codex|opencode|gemini|grok)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+docker_git_terminal_has_agent_ancestor() {
+  local pid="$1"
+  local depth=0
+  local command_line=""
+  local parent_pid=""
+  if [ -z "$pid" ]; then
+    pid="$$"
+  fi
+  while [ -n "$pid" ] && [ "$pid" != "0" ] && [ "$depth" -lt 32 ]; do
+    command_line="$(docker_git_terminal_process_args "$pid")"
+    if docker_git_terminal_is_agent_command "$command_line"; then
+      return 0
+    fi
+    parent_pid="$(docker_git_terminal_parent_pid "$pid")"
+    if [ -z "$parent_pid" ] || [ "$parent_pid" = "$pid" ]; then
+      return 1
+    fi
+    pid="$parent_pid"
+    depth=$((depth + 1))
+  done
+  return 1
+}
+docker_git_terminal_should_sanitize() {
+  if [ -n "$(printenv DOCKER_GIT_TERMINAL_FORCE_SANITIZE 2>/dev/null)" ]; then
+    return 0
+  fi
+  if [ -n "$(printenv DOCKER_GIT_TERMINAL_DISABLE_SANITIZE 2>/dev/null)" ]; then
+    return 1
+  fi
+  if docker_git_terminal_has_agent_ancestor "$$"; then
+    return 1
+  fi
+  return 0
+}
 docker_git_terminal_sanitize() {
   # Recover interactive TTY settings after abrupt exits from fullscreen/raw-mode tools.
+  docker_git_terminal_should_sanitize || return 0
   if [ -c /dev/tty ]; then
     { stty sane < /dev/tty > /dev/tty; } 2>/dev/null || { stty sane < /dev/tty; } 2>/dev/null || true
   elif [ -t 0 ]; then
@@ -107,7 +164,7 @@ else
   PROMPT_COMMAND="docker_git_prompt_apply"
 fi
 docker_git_terminal_sanitize
-trap 'docker_git_terminal_sanitize' EXIT INT TERM`
+trap 'docker_git_terminal_sanitize' EXIT`
 
 export const renderPromptScript = (): string => dockerGitPromptScript
 

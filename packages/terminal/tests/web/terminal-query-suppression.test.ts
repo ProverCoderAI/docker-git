@@ -249,10 +249,11 @@ describe("terminal query suppression", () => {
     const handlers = privateModeHandlers(mock)
 
     expectPrivateModesHandled(handlers, MOUSE_TRACKING_MODES, false)
+    expectPrivateModesHandled(handlers, ALTERNATE_SCREEN_MODES, false)
     expectPrivateModesHandled(handlers, [FOCUS_REPORTING_MODE], true)
   })
 
-  it("blocks alternate screen modes when project terminals preserve xterm scrollback", () => {
+  it("blocks alternate screen modes only when scrollback preservation is explicitly requested", () => {
     const mock = createMockTerminal()
     installTerminalQuerySuppression(mock.terminal, {
       allowMouseTracking: true,

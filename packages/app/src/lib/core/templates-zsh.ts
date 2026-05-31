@@ -100,16 +100,6 @@ docker_git_terminal_sanitize
 add-zsh-hook precmd docker_git_prompt_apply
 add-zsh-hook zshexit docker_git_terminal_on_exit
 
-TRAPINT() {
-  docker_git_terminal_sanitize
-  return 130
-}
-
-TRAPTERM() {
-  docker_git_terminal_sanitize
-  return 143
-}
-
 HISTFILE="\${HISTFILE:-$HOME/.zsh_history}"
 HISTSIZE="\${HISTSIZE:-10000}"
 SAVEHIST="\${SAVEHIST:-20000}"

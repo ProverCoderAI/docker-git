@@ -55,11 +55,12 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 FROM controller-base AS workspace-deps
 
 COPY package.json bun.lock bunfig.toml tsconfig.base.json tsconfig.json ./
-RUN mkdir -p packages/api packages/app packages/docker-git-session-sync packages/lib
+RUN mkdir -p packages/api packages/app packages/docker-git-session-sync packages/lib packages/terminal
 COPY packages/api/package.json ./packages/api/package.json
 COPY packages/app/package.json ./packages/app/package.json
 COPY packages/docker-git-session-sync/package.json ./packages/docker-git-session-sync/package.json
 COPY packages/lib/package.json ./packages/lib/package.json
+COPY packages/terminal/package.json ./packages/terminal/package.json
 
 RUN set -eu; \
     for attempt in 1 2 3 4 5; do \
@@ -68,6 +69,7 @@ RUN set -eu; \
         --silent \
         --filter @effect-template/api \
         --filter @effect-template/lib \
+        --filter @prover-coder-ai/docker-git-terminal \
         --filter @prover-coder-ai/docker-git-session-sync; then \
         exit 0; \
       fi; \
@@ -84,8 +86,10 @@ COPY patches ./patches
 COPY scripts ./scripts
 COPY packages/docker-git-session-sync ./packages/docker-git-session-sync
 COPY packages/lib ./packages/lib
+COPY packages/terminal ./packages/terminal
 
 RUN bun run --cwd packages/docker-git-session-sync build
+RUN bun run --cwd packages/terminal build
 RUN bun run --cwd packages/lib build
 
 FROM controller-base AS skiller-build

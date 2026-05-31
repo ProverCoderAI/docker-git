@@ -157,15 +157,17 @@ dg_log_duration() {
 
 # The reuse fast path assumes Bun installed the current workspace layout:
 # root node_modules plus Vite/TypeScript bins for packages/app, packages/lib,
-# and packages/docker-git-session-sync. If package names, locations, or the
-# package manager change, this check should fail closed and print the missing
-# path so CI falls back to a fresh install instead of silently using stale deps.
+# packages/docker-git-session-sync, and packages/terminal. If package names,
+# locations, or the package manager change, this check should fail closed and
+# print the missing path so CI falls back to a fresh install instead of silently
+# using stale deps.
 dg_workspace_install_ready() {
   local repo_root="$1"
   local required_bins=(
     "$repo_root/packages/app/node_modules/.bin/vite"
     "$repo_root/packages/lib/node_modules/.bin/tsc"
     "$repo_root/packages/docker-git-session-sync/node_modules/.bin/vite"
+    "$repo_root/packages/terminal/node_modules/.bin/tsc"
   )
   local bin
 

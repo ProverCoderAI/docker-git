@@ -96,4 +96,4 @@ export type ProjectAuthFlow =
   | "ProjectGrokConnect"
   | "ProjectGrokDisconnect"
 
-export { type TerminalServerMessage, type TerminalSession } from "../shared/terminal-session-schema.js"
+export { type TerminalServerMessage, type TerminalSession } from "@prover-coder-ai/docker-git-terminal/contracts"

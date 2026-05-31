@@ -4,7 +4,7 @@ import {
   appendTerminalOutput,
   emptyTerminalOutputBuffer,
   renderTerminalOutputBuffer
-} from "../src/services/terminal-output-buffer.js"
+} from "@prover-coder-ai/docker-git-terminal/core"
 
 describe("terminal output replay buffer", () => {
   it("replays appended terminal output in order", () => {

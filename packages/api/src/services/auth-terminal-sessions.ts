@@ -1,5 +1,12 @@
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
+import {
+  appendTerminalOutput,
+  emptyTerminalOutputBuffer,
+  renderTerminalOutputBuffer,
+  type TerminalOutputBuffer
+} from "@prover-coder-ai/docker-git-terminal/core"
+import type { TerminalServerMessage } from "@prover-coder-ai/docker-git-terminal/contracts"
 import { Either, Effect, Match } from "effect"
 import { randomUUID } from "node:crypto"
 import { fileURLToPath } from "node:url"
@@ -10,24 +17,12 @@ import { WebSocket, WebSocketServer, type RawData } from "ws"
 import type { AuthTerminalFlow, AuthTerminalSessionRequest, TerminalSession, TerminalSessionStatus } from "../api/contracts.js"
 import { ApiConflictError, ApiNotFoundError, describeUnknown } from "../api/errors.js"
 import { spawnPtyBridge, type PtyBridge } from "./pty-bridge.js"
-import {
-  appendTerminalOutput,
-  emptyTerminalOutputBuffer,
-  renderTerminalOutputBuffer,
-  type TerminalOutputBuffer
-} from "./terminal-output-buffer.js"
 import { attachWebSocketHeartbeat } from "./websocket-heartbeat.js"
 
 type TerminalClientMessage =
   | { readonly type: "input"; readonly data: string }
   | { readonly type: "resize"; readonly cols: number; readonly rows: number }
   | { readonly type: "close" }
-
-type TerminalServerMessage =
-  | { readonly type: "ready"; readonly session: TerminalSession }
-  | { readonly type: "output"; readonly data: string }
-  | { readonly type: "exit"; readonly exitCode: number | null; readonly signal: number | null }
-  | { readonly type: "error"; readonly message: string }
 
 type AuthTerminalRecord = {
   attachTimeout: ReturnType<typeof setTimeout> | null

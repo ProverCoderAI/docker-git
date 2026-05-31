@@ -1,0 +1,33 @@
+{
+	"priorityLevels": [
+		{
+			"level": 1,
+			"name": "Critical Compiler Errors",
+			"rules": [
+				"ts(2835)",
+				"ts(2307)",
+				"@prover-coder-ai/suggest-members/suggest-members",
+				"@prover-coder-ai/suggest-members/suggest-imports",
+				"@prover-coder-ai/suggest-members/suggest-module-paths",
+				"@prover-coder-ai/suggest-members/suggest-exports",
+				"@prover-coder-ai/suggest-members/suggest-missing-names",
+				"@typescript-eslint/no-explicit-any"
+			]
+		},
+		{
+			"level": 2,
+			"name": "Critical Compiler Errors",
+			"rules": ["all"]
+		},
+		{
+			"level": 3,
+			"name": "Critical Compiler Errors (Code must follow Clean Code and best practices)",
+			"rules": ["max-lines-per-function", "max-lines"]
+		},
+		{
+			"level": 4,
+			"name": "Critical Compiler Errors (Code must follow Clean Code and best practices)",
+			"rules": ["complexity", "max-params", "max-depth"]
+		}
+	]
+}
