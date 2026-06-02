@@ -234,7 +234,7 @@ describe("renderDockerfile", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig({ enableMcpPlaywright: true }))
 
     expectContainsAll(dockerfile, [
-      "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev acd76d19a96763c8b5616076443d15be59fc7f78 --locked --bins --root /usr/local",
+      "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev 350b0b43b15a9f1c895d06d57b08314ebf768158 --locked --bins --root /usr/local",
       "/usr/local/bin/docker-git-browser-connection --version",
       "/usr/local/bin/browser-connection --version",
       "# Unified Rust browser (dg-*-browser) start/reuse is owned by browser-connection"
@@ -850,6 +850,8 @@ describe("renderDockerCompose", () => {
     expect(entrypoint).toContain('printf "export DOCKER_HOST=%q\\n" "$DOCKER_HOST" > /etc/profile.d/docker-host.sh')
     expect(entrypoint).toContain('docker_git_upsert_ssh_env "DOCKER_HOST" "$DOCKER_HOST"')
     expect(entrypoint).toContain('elif [[ -S /var/run/docker.sock ]]; then')
+    expect(entrypoint).toContain('if getent group "$DOCKER_GROUP" >/dev/null 2>&1; then')
+    expect(entrypoint).toContain('groupmod -o -g "$DOCKER_SOCK_GID" "$DOCKER_GROUP" || true')
     expect(entrypoint).toContain('docker_git_upsert_ssh_env "DOCKER_HOST" "unix:///var/run/docker.sock"')
   })
 

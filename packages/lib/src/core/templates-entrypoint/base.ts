@@ -114,7 +114,11 @@ elif [[ -S /var/run/docker.sock ]]; then
   DOCKER_GROUP="$(getent group "$DOCKER_SOCK_GID" | cut -d: -f1 || true)"
   if [[ -z "$DOCKER_GROUP" ]]; then
     DOCKER_GROUP="docker"
-    groupadd -g "$DOCKER_SOCK_GID" "$DOCKER_GROUP" || true
+    if getent group "$DOCKER_GROUP" >/dev/null 2>&1; then
+      groupmod -o -g "$DOCKER_SOCK_GID" "$DOCKER_GROUP" || true
+    else
+      groupadd -g "$DOCKER_SOCK_GID" "$DOCKER_GROUP" || true
+    fi
   fi
   usermod -aG "$DOCKER_GROUP" ${config.sshUser} || true
   printf "export DOCKER_HOST=unix:///var/run/docker.sock\\n" > /etc/profile.d/docker-host.sh
