@@ -188,22 +188,99 @@ const sleep = (durationMs: number): Promise<void> =>
     setTimeout(resolve, durationMs)
   })
 
-const runProcess = (
+const defaultRunProcessTimeoutMs = 300_000
+
+export class SkillerProcessTimeoutError extends Error {
+  readonly args: ReadonlyArray<string>
+  readonly command: string
+  override readonly name = "SkillerProcessTimeoutError"
+  readonly timeoutMs: number
+
+  constructor(
+    command: string,
+    args: ReadonlyArray<string>,
+    timeoutMs: number,
+    cause?: Error
+  ) {
+    super(
+      `${command} ${args.join(" ")} timed out after ${timeoutMs}ms.`,
+      cause === undefined ? undefined : { cause }
+    )
+    this.args = args
+    this.command = command
+    this.timeoutMs = timeoutMs
+  }
+}
+
+export const runProcess = (
   command: string,
   args: ReadonlyArray<string>,
-  options: SpawnOptions = {}
+  options: SpawnOptions = {},
+  timeoutMs: number = defaultRunProcessTimeoutMs
 ): Promise<void> =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], options)
-    child.once("error", reject)
-    child.once("exit", (exitCode, signal) => {
+    const timeoutController = new AbortController()
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let timeoutError: SkillerProcessTimeoutError | null = null
+
+    const child = spawn(command, [...args], { ...options, signal: timeoutController.signal })
+
+    const cleanup = (): void => {
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
+      child.off("error", onError)
+      child.off("exit", onExit)
+    }
+
+    const resolveOnce = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resolve()
+    }
+
+    const rejectOnce = (error: Error): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      reject(error)
+    }
+
+    const onError = (error: Error): void => {
+      rejectOnce(
+        timeoutError === null
+          ? error
+          : new SkillerProcessTimeoutError(command, args, timeoutMs, error)
+      )
+    }
+
+    const onExit = (exitCode: number | null, signal: string | null): void => {
+      if (timeoutError !== null) {
+        rejectOnce(timeoutError)
+        return
+      }
       if (exitCode === 0) {
-        resolve()
+        resolveOnce()
         return
       }
       const reason = exitCode === null ? `signal ${signal}` : `exit code ${exitCode}`
-      reject(new Error(`${command} ${args.join(" ")} failed with ${reason}.`))
-    })
+      rejectOnce(new Error(`${command} ${args.join(" ")} failed with ${reason}.`))
+    }
+
+    child.once("error", onError)
+    child.once("exit", onExit)
+    timer = setTimeout(() => {
+      timeoutError = new SkillerProcessTimeoutError(command, args, timeoutMs)
+      timeoutController.abort(timeoutError)
+      child.kill("SIGTERM")
+    }, timeoutMs)
   })
 
 const containerHomePath = (sshUser: string): string => `/home/${sshUser}`

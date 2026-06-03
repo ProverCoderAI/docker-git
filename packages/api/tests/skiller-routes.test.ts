@@ -4,6 +4,8 @@ import {
   parseSkillerRoute,
   resolveSkillerBrowserScopeSelection,
   resolveSkillerRouteScopeSelection,
+  runProcess,
+  SkillerProcessTimeoutError,
   skillerLaunchCommand,
   type SkillerRoute
 } from "../src/services/skiller.js"
@@ -73,6 +75,14 @@ describe("skiller routes", () => {
     expect(launch.groupName).toBe("dg-skiller-g2147483002")
     expect(launch.userName).toBe("dg-skiller-u2147483001")
   })
+
+  it("fails stalled child processes with a distinct timeout error", () =>
+    expect(runProcess(
+      process.execPath,
+      ["-e", "setTimeout(() => undefined, 1_000)"],
+      {},
+      25
+    )).rejects.toBeInstanceOf(SkillerProcessTimeoutError))
 
   it("keeps the terminal session id on session-scoped app routes", () => {
     expect(parseSkillerRoute("/api/ssh/session/terminal-proof/skiller/app/")).toEqual({
