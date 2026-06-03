@@ -66,6 +66,14 @@ describe("skiller routes", () => {
     expect(launch.userName).toBe("ubuntu")
   })
 
+  it("uses deterministic scoped account names for missing local UID and GID entries", () => {
+    const launch = skillerLaunchCommand({ gid: 2_147_483_002, uid: 2_147_483_001 })
+
+    expect(launch.command).toBe("runuser")
+    expect(launch.groupName).toBe("dg-skiller-g2147483002")
+    expect(launch.userName).toBe("dg-skiller-u2147483001")
+  })
+
   it("keeps the terminal session id on session-scoped app routes", () => {
     expect(parseSkillerRoute("/api/ssh/session/terminal-proof/skiller/app/")).toEqual({
       _tag: "App",
