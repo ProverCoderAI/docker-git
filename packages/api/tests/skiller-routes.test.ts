@@ -4,6 +4,9 @@ import {
   parseSkillerRoute,
   resolveSkillerBrowserScopeSelection,
   resolveSkillerRouteScopeSelection,
+  runProcess,
+  SkillerProcessTimeoutError,
+  skillerLaunchCommand,
   type SkillerRoute
 } from "../src/services/skiller.js"
 import type { SkillerContainerScope } from "../src/services/skiller-core.js"
@@ -31,6 +34,56 @@ const scope = (projectKey: string): SkillerContainerScope => ({
 })
 
 describe("skiller routes", () => {
+  it("launches Electron through the Skiller launch script", () => {
+    const launch = skillerLaunchCommand(null)
+    const launchCommand = launch.args.join("\n")
+
+    expect(launch.command).toBe("bash")
+    expect(launch.args).toContain("-c")
+    expect(launchCommand).toContain("xvfb-run -a ./node_modules/electron/dist/electron")
+    expect(launchCommand).toContain("exec ./node_modules/electron/dist/electron")
+    expect(launchCommand).toContain("--disable-dev-shm-usage")
+  })
+
+  it("launches scoped Skiller with the selected home owner credentials", () => {
+    const launch = skillerLaunchCommand(
+      { gid: 1000, uid: 1000 },
+      (user) => ({ ...user, groupName: "ubuntu", userName: "ubuntu" })
+    )
+
+    expect(launch.command).toBe("runuser")
+    expect(launch.args).toEqual(expect.arrayContaining([
+      "--preserve-environment",
+      "-u",
+      "ubuntu",
+      "-g",
+      "ubuntu",
+      "--",
+      "bash",
+      "-c"
+    ]))
+    expect(launch.gid).toBe(1000)
+    expect(launch.groupName).toBe("ubuntu")
+    expect(launch.uid).toBe(1000)
+    expect(launch.userName).toBe("ubuntu")
+  })
+
+  it("uses deterministic scoped account names for missing local UID and GID entries", () => {
+    const launch = skillerLaunchCommand({ gid: 2_147_483_002, uid: 2_147_483_001 })
+
+    expect(launch.command).toBe("runuser")
+    expect(launch.groupName).toBe("dg-skiller-g2147483002")
+    expect(launch.userName).toBe("dg-skiller-u2147483001")
+  })
+
+  it("fails stalled child processes with a distinct timeout error", () =>
+    expect(runProcess(
+      process.execPath,
+      ["-e", "setTimeout(() => undefined, 1_000)"],
+      {},
+      25
+    )).rejects.toBeInstanceOf(SkillerProcessTimeoutError))
+
   it("keeps the terminal session id on session-scoped app routes", () => {
     expect(parseSkillerRoute("/api/ssh/session/terminal-proof/skiller/app/")).toEqual({
       _tag: "App",

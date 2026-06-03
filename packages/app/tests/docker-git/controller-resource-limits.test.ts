@@ -18,6 +18,8 @@ import {
 
 const composeFiles: ReadonlyArray<string> = ["docker-compose.yml", "docker-compose.api.yml"]
 const isolatedComposeFiles: ReadonlyArray<string> = ["docker-compose.isolated.yml", "docker-compose.api.isolated.yml"]
+const hostDockerDataBind = "/var/lib/docker:/var/lib/docker"
+const isolatedDockerDataVolume = "docker_git_docker_data:/var/lib/docker"
 
 const readComposeFile = (relativePath: string): Effect.Effect<string> =>
   Effect.gen(function*(_) {
@@ -50,6 +52,13 @@ describe("controller compose resource limits", () => {
           const contents = yield* _(readComposeFile(composeFile))
           expect(contents).toMatch(/pids_limit: \$\{DOCKER_GIT_CONTROLLER_PIDS:-\d+\}/u)
         }))
+
+      it.effect("binds host Docker data root for host runtime volume path access", () =>
+        Effect.gen(function*(_) {
+          const contents = yield* _(readComposeFile(composeFile))
+          expect(contents).toContain(`- ${hostDockerDataBind}`)
+          expect(contents).not.toContain(`- ${isolatedDockerDataVolume}`)
+        }))
     })
   }
 
@@ -75,8 +84,28 @@ describe("controller compose resource limits", () => {
           const contents = yield* _(readComposeFile(composeFile))
           expect(contents).toContain("privileged: ${DOCKER_GIT_CONTROLLER_PRIVILEGED:-true}")
         }))
+
+      it.effect("keeps Docker data inside the embedded controller daemon volume", () =>
+        Effect.gen(function*(_) {
+          const contents = yield* _(readComposeFile(composeFile))
+          expect(contents).toContain(`- ${isolatedDockerDataVolume}`)
+          expect(contents).not.toContain(`- ${hostDockerDataBind}`)
+        }))
     })
   }
+})
+
+describe("API Dockerfile Electron materialization", () => {
+  it.effect("materializes Electron binary before bundling Skiller", () =>
+    Effect.gen(function*(_) {
+      const contents = yield* _(readComposeFile("packages/api/Dockerfile"))
+      expect(contents).toMatch(/electron_zip="\$\(find "\$\{electron_config_cache:-\/root\/\.cache\/electron\}"/u)
+      expect(contents).toMatch(/Electron zip not found in cache/u)
+      expect(contents).toMatch(/unzip -Z1 "\$electron_zip"/u)
+      expect(contents).toMatch(/Unsafe paths in Electron zip/u)
+      expect(contents).toMatch(/unzip -q "\$electron_zip" -d node_modules\/electron\/dist/u)
+      expect(contents).toMatch(/test -x node_modules\/electron\/dist\/electron/u)
+    }))
 })
 
 describe("controller resource limit resolution", () => {

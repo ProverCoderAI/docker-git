@@ -1,5 +1,5 @@
-import { spawn, type ChildProcess } from "node:child_process"
-import { chownSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync } from "node:fs"
+import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process"
+import { chmodSync, chownSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync } from "node:fs"
 import { createServer } from "node:net"
 import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
@@ -49,9 +49,23 @@ type SkillerProcess = {
   readonly trpcPort: number
 }
 
-type SkillerProcessUser = {
+export type SkillerProcessUser = {
   readonly gid: number
   readonly uid: number
+}
+
+export type SkillerLaunchCommand = {
+  readonly args: ReadonlyArray<string>
+  readonly command: string
+  readonly groupName?: string
+  readonly gid?: number
+  readonly uid?: number
+  readonly userName?: string
+}
+
+type SkillerProcessAccount = SkillerProcessUser & {
+  readonly groupName: string
+  readonly userName: string
 }
 
 export type SkillerRoute =
@@ -174,6 +188,101 @@ const sleep = (durationMs: number): Promise<void> =>
     setTimeout(resolve, durationMs)
   })
 
+const defaultRunProcessTimeoutMs = 300_000
+
+export class SkillerProcessTimeoutError extends Error {
+  readonly args: ReadonlyArray<string>
+  readonly command: string
+  override readonly name = "SkillerProcessTimeoutError"
+  readonly timeoutMs: number
+
+  constructor(
+    command: string,
+    args: ReadonlyArray<string>,
+    timeoutMs: number,
+    cause?: Error
+  ) {
+    super(
+      `${command} ${args.join(" ")} timed out after ${timeoutMs}ms.`,
+      cause === undefined ? undefined : { cause }
+    )
+    this.args = args
+    this.command = command
+    this.timeoutMs = timeoutMs
+  }
+}
+
+export const runProcess = (
+  command: string,
+  args: ReadonlyArray<string>,
+  options: SpawnOptions = {},
+  timeoutMs: number = defaultRunProcessTimeoutMs
+): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const timeoutController = new AbortController()
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let timeoutError: SkillerProcessTimeoutError | null = null
+
+    const child = spawn(command, [...args], { ...options, signal: timeoutController.signal })
+
+    const cleanup = (): void => {
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
+      child.off("error", onError)
+      child.off("exit", onExit)
+    }
+
+    const resolveOnce = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resolve()
+    }
+
+    const rejectOnce = (error: Error): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      reject(error)
+    }
+
+    const onError = (error: Error): void => {
+      rejectOnce(
+        timeoutError === null
+          ? error
+          : new SkillerProcessTimeoutError(command, args, timeoutMs, error)
+      )
+    }
+
+    const onExit = (exitCode: number | null, signal: string | null): void => {
+      if (timeoutError !== null) {
+        rejectOnce(timeoutError)
+        return
+      }
+      if (exitCode === 0) {
+        resolveOnce()
+        return
+      }
+      const reason = exitCode === null ? `signal ${signal}` : `exit code ${exitCode}`
+      rejectOnce(new Error(`${command} ${args.join(" ")} failed with ${reason}.`))
+    }
+
+    child.once("error", onError)
+    child.once("exit", onExit)
+    timer = setTimeout(() => {
+      timeoutError = new SkillerProcessTimeoutError(command, args, timeoutMs)
+      timeoutController.abort(timeoutError)
+      child.kill("SIGTERM")
+    }, timeoutMs)
+  })
+
 const containerHomePath = (sshUser: string): string => `/home/${sshUser}`
 
 const inspectContainerMounts = (
@@ -285,7 +394,7 @@ const waitForSkillerReady = (trpcPort: number): Effect.Effect<void, ApiInternalE
     }
   })
 
-const launchScript = [
+const prepareLaunchScript = [
   "set -euo pipefail",
   "DOCKER_GIT_SKILLER_PATCH=../../patches/skiller/docker-git-browser-folder-picker.patch",
   "DOCKER_GIT_SKILLER_PATCH_MARKER=out/.docker-git-browser-folder-picker.patch",
@@ -296,27 +405,61 @@ const launchScript = [
   "  mkdir -p out",
   "  touch \"$DOCKER_GIT_SKILLER_PATCH_MARKER\"",
   "fi",
-  "if [ ! -e out/preload/index.js ]; then ln -sf index.mjs out/preload/index.js; fi",
-  "if [ -z \"${DISPLAY:-}\" ] && command -v xvfb-run >/dev/null 2>&1; then",
-  "  exec xvfb-run -a ./node_modules/electron/dist/electron --no-sandbox out/main/index.js",
-  "fi",
-  "exec ./node_modules/electron/dist/electron --no-sandbox out/main/index.js"
+  "if [ ! -e out/preload/index.js ]; then",
+  "  mkdir -p out/preload",
+  "  ln -sf index.mjs out/preload/index.js",
+  "fi"
 ].join("\n")
 
+const electronLaunchFlags = [
+  "--no-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+  "--no-zygote"
+].join(" ")
+
+const electronLaunchScript = [
+  "set -euo pipefail",
+  "if [ -z \"${DISPLAY:-}\" ] && command -v xvfb-run >/dev/null 2>&1; then",
+  `  exec xvfb-run -a ./node_modules/electron/dist/electron ${electronLaunchFlags} out/main/index.js`,
+  "fi",
+  `exec ./node_modules/electron/dist/electron ${electronLaunchFlags} out/main/index.js`
+].join("\n")
+
+const skillerXdgRoot = (scope: SkillerContainerScope): string =>
+  join(scope.hostHomePath, ".docker-git", "skiller")
+
+const safeRuntimeKey = (value: string): string =>
+  value.replace(/[^A-Za-z0-9._-]/gu, "_")
+
+const skillerRuntimeBase = "/tmp/docker-git-skiller"
+
+const skillerRuntimeRoot = (scope: SkillerContainerScope): string =>
+  join(skillerRuntimeBase, safeRuntimeKey(scope.projectKey))
+
+const dockerVolumeRoot = "/var/lib/docker/volumes"
+
 const skillerHomeEnv = (
-  scope: SkillerContainerScope | null
+  scope: SkillerContainerScope | null,
+  processUserName?: string
 ): Record<string, string> =>
   scope === null
     ? {}
-    : {
-      DOCKER_GIT_SKILLER_CONTAINER_HOME_PATH: scope.containerHomePath,
-      DOCKER_GIT_SKILLER_HOST_ENV_GLOBAL_PATH: scope.hostEnvGlobalPath,
-      HOME: scope.hostHomePath,
-      USER: scope.sshUser,
-      XDG_CACHE_HOME: join(scope.hostHomePath, ".cache"),
-      XDG_CONFIG_HOME: join(scope.hostHomePath, ".config"),
-      XDG_DATA_HOME: join(scope.hostHomePath, ".local", "share")
-    }
+    : (() => {
+      const runtimeRoot = skillerRuntimeRoot(scope)
+      const userName = processUserName ?? scope.sshUser
+      return {
+        DOCKER_GIT_SKILLER_CONTAINER_HOME_PATH: scope.containerHomePath,
+        DOCKER_GIT_SKILLER_HOST_ENV_GLOBAL_PATH: scope.hostEnvGlobalPath,
+        HOME: join(runtimeRoot, "home"),
+        LOGNAME: userName,
+        USER: userName,
+        XDG_CACHE_HOME: join(runtimeRoot, "cache"),
+        XDG_CONFIG_HOME: join(runtimeRoot, "config"),
+        XDG_DATA_HOME: join(runtimeRoot, "data"),
+        XDG_RUNTIME_DIR: join(runtimeRoot, "runtime")
+      }
+    })()
 
 const scopedProcessUser = (
   scope: SkillerContainerScope | null
@@ -328,11 +471,44 @@ const scopedProcessUser = (
   return { gid: stats.gid, uid: stats.uid }
 }
 
-const ensureOwnedDirectory = (path: string, user: SkillerProcessUser): void => {
-  mkdirSync(path, { recursive: true })
+const ensureOwnedDirectory = (path: string, user: SkillerProcessUser, mode?: number): void => {
+  mkdirSync(path, { mode, recursive: true })
   const stats = statSync(path)
   if (stats.uid !== user.uid || stats.gid !== user.gid) {
     chownSync(path, user.uid, user.gid)
+  }
+  if (mode !== undefined) {
+    chmodSync(path, mode)
+  }
+}
+
+const ensureDirectoryMode = (path: string, mode: number): void => {
+  mkdirSync(path, { mode, recursive: true })
+  chmodSync(path, mode)
+}
+
+const ensureOtherExecute = (path: string): void => {
+  const stats = statSync(path)
+  const mode = stats.mode & 0o7777
+  if (stats.isDirectory() && (mode & 0o001) === 0) {
+    chmodSync(path, mode | 0o001)
+  }
+}
+
+const ensureKnownDockerVolumeTraverse = (path: string): void => {
+  const normalizedRoot = `${dockerVolumeRoot}/`
+  if (!path.startsWith(normalizedRoot)) {
+    return
+  }
+  // Docker data dirs are often 0710 root:root; non-root Skiller only needs
+  // execute on known ancestors to stat an already-selected project path.
+  let current = "/var/lib/docker"
+  ensureOtherExecute(current)
+  for (const part of path.slice(current.length + 1).split("/").slice(0, -1)) {
+    current = join(current, part)
+    if (existsSync(current)) {
+      ensureOtherExecute(current)
+    }
   }
 }
 
@@ -358,27 +534,160 @@ const prepareSkillerScopeHome = (scope: SkillerContainerScope | null): SkillerPr
   ensureOwnedDirectory(join(scope.hostHomePath, ".cache"), processUser)
   ensureOwnedDirectory(join(scope.hostHomePath, ".local", "share"), processUser)
   ensureOwnedDirectory(join(scope.hostHomePath, ".skiller"), processUser)
+  ensureOwnedDirectory(join(scope.hostHomePath, ".docker-git"), processUser)
+  ensureOwnedDirectory(skillerXdgRoot(scope), processUser)
+  ensureOwnedDirectory(join(skillerXdgRoot(scope), "cache"), processUser)
+  ensureOwnedDirectory(join(skillerXdgRoot(scope), "config"), processUser)
+  ensureOwnedDirectory(join(skillerXdgRoot(scope), "data"), processUser)
+  ensureOwnedDirectory(join(skillerXdgRoot(scope), "runtime"), processUser, 0o700)
+  ensureDirectoryMode(skillerRuntimeBase, 0o711)
+  ensureOwnedDirectory(skillerRuntimeRoot(scope), processUser, 0o700)
+  ensureOwnedDirectory(join(skillerRuntimeRoot(scope), "home"), processUser, 0o700)
+  ensureOwnedDirectory(join(skillerRuntimeRoot(scope), "cache"), processUser, 0o700)
+  ensureOwnedDirectory(join(skillerRuntimeRoot(scope), "config"), processUser, 0o700)
+  ensureOwnedDirectory(join(skillerRuntimeRoot(scope), "data"), processUser, 0o700)
+  ensureOwnedDirectory(join(skillerRuntimeRoot(scope), "runtime"), processUser, 0o700)
+  ensureKnownDockerVolumeTraverse(scope.hostHomePath)
+  ensureKnownDockerVolumeTraverse(scope.hostCodexSkillsPath)
+  ensureKnownDockerVolumeTraverse(scope.hostProjectPath)
   chownIfExists(join(scope.hostHomePath, ".codex", "config.toml"), processUser)
   chownIfExists(join(scope.hostHomePath, ".skiller", "config.toml"), processUser)
   return processUser
 }
 
-const skillerLaunchCommand = (
+const nameForId = (
+  contents: string,
+  id: number,
+  idFieldIndex: number
+): string | null => {
+  for (const line of contents.split(/\r?\n/u)) {
+    const fields = line.split(":")
+    const name = fields[0]
+    const rawId = fields[idFieldIndex]
+    if (name === undefined || rawId === undefined) {
+      continue
+    }
+    if (Number.parseInt(rawId, 10) === id) {
+      return name
+    }
+  }
+  return null
+}
+
+const localUserNameForUid = (uid: number): string | null =>
+  nameForId(readFileSync("/etc/passwd", "utf8"), uid, 2)
+
+const localGroupNameForGid = (gid: number): string | null =>
+  nameForId(readFileSync("/etc/group", "utf8"), gid, 2)
+
+const skillerUserNameForUid = (uid: number): string => `dg-skiller-u${uid}`
+
+const skillerGroupNameForGid = (gid: number): string => `dg-skiller-g${gid}`
+
+const resolveSkillerProcessAccount = (user: SkillerProcessUser): SkillerProcessAccount => {
+  if (user.uid === 0 || user.gid === 0) {
+    throw new Error("Refusing to launch scoped Skiller as root; selected container home is root-owned.")
+  }
+  const userName = localUserNameForUid(user.uid) ?? skillerUserNameForUid(user.uid)
+  const groupName = localGroupNameForGid(user.gid) ?? skillerGroupNameForGid(user.gid)
+  return { ...user, groupName, userName }
+}
+
+const ensureLocalGroup = async (gid: number, groupName: string): Promise<void> => {
+  if (localGroupNameForGid(gid) !== null) {
+    return
+  }
+  try {
+    await runProcess("groupadd", ["--gid", String(gid), groupName])
+  } catch (error) {
+    if (localGroupNameForGid(gid) !== null) {
+      return
+    }
+    throw error
+  }
+  if (localGroupNameForGid(gid) === null) {
+    throw new Error(`Cannot launch scoped Skiller: failed to create local group entry for GID ${gid}.`)
+  }
+}
+
+const ensureLocalUser = async (
+  user: SkillerProcessUser,
+  userName: string,
+  groupName: string
+): Promise<void> => {
+  if (localUserNameForUid(user.uid) !== null) {
+    return
+  }
+  try {
+    await runProcess("useradd", [
+      "--uid",
+      String(user.uid),
+      "--gid",
+      groupName,
+      "--no-create-home",
+      "--home-dir",
+      "/nonexistent",
+      "--shell",
+      "/bin/false",
+      userName
+    ])
+  } catch (error) {
+    if (localUserNameForUid(user.uid) !== null) {
+      return
+    }
+    throw error
+  }
+  if (localUserNameForUid(user.uid) === null) {
+    throw new Error(`Cannot launch scoped Skiller: failed to create local passwd entry for UID ${user.uid}.`)
+  }
+}
+
+const ensureSkillerProcessAccount = async (
   user: SkillerProcessUser | null
-): readonly [string, ReadonlyArray<string>] =>
-  user === null
-    ? ["bash", ["-lc", launchScript]]
-    : [
-      "setpriv",
-      [
-        `--reuid=${user.uid}`,
-        `--regid=${user.gid}`,
-        "--clear-groups",
-        "bash",
-        "-lc",
-        launchScript
-      ]
-    ]
+): Promise<SkillerProcessAccount | null> => {
+  if (user === null) {
+    return null
+  }
+  const account = resolveSkillerProcessAccount(user)
+  await ensureLocalGroup(account.gid, account.groupName)
+  await ensureLocalUser(account, account.userName, account.groupName)
+  return resolveSkillerProcessAccount(user)
+}
+
+export const skillerLaunchCommand = (
+  user: SkillerProcessUser | null,
+  resolveAccount: (user: SkillerProcessUser) => SkillerProcessAccount = resolveSkillerProcessAccount
+): SkillerLaunchCommand => {
+  if (user === null) {
+    return { args: ["-c", electronLaunchScript], command: "bash" }
+  }
+  const account = resolveAccount(user)
+  return {
+    args: [
+      "--preserve-environment",
+      "-u",
+      account.userName,
+      "-g",
+      account.groupName,
+      "--",
+      "bash",
+      "-c",
+      electronLaunchScript
+    ],
+    command: "runuser",
+    gid: account.gid,
+    groupName: account.groupName,
+    uid: account.uid,
+    userName: account.userName
+  }
+}
+
+const prepareSkillerRuntime = (skillerDir: string, logFd: number): Promise<void> =>
+  runProcess("bash", ["-c", prepareLaunchScript], {
+    cwd: skillerDir,
+    env: process.env,
+    stdio: ["ignore", logFd, logFd]
+  })
 
 const stopSkillerProcess = (process: SkillerProcess): void => {
   const pid = process.process.pid
@@ -416,24 +725,28 @@ const registerSkillerProject = (
       }
     })
 
-const launchSkillerProcess = (
+const launchSkillerProcess = async (
   skillerDir: string,
   trpcPort: number,
   scope: SkillerContainerScope | null
-): SkillerLaunch => {
+): Promise<SkillerLaunch> => {
   mkdirSync(dirname(launchLogPath), { recursive: true })
   const processUser = prepareSkillerScopeHome(scope)
   const logFd = openSync(launchLogPath, "a")
   try {
-    const [command, args] = skillerLaunchCommand(processUser)
-    const child = spawn(command, args, {
+    const processAccount = await ensureSkillerProcessAccount(processUser)
+    await prepareSkillerRuntime(skillerDir, logFd)
+    const launchCommand = processAccount === null
+      ? skillerLaunchCommand(null)
+      : skillerLaunchCommand(processAccount, () => processAccount)
+    const child = spawn(launchCommand.command, launchCommand.args, {
       cwd: skillerDir,
       detached: true,
       env: {
         ...process.env,
         AGENTSKILLS_TRPC_PORT: String(trpcPort),
         ELECTRON_ENABLE_LOGGING: "1",
-        ...skillerHomeEnv(scope)
+        ...skillerHomeEnv(scope, launchCommand.userName)
       },
       stdio: ["ignore", logFd, logFd]
     })
@@ -519,7 +832,7 @@ export const openSkiller = (
       }),
       try: () => findAvailablePort(skillerPreferredTrpcPort)
     }))
-    const launch = yield* _(Effect.try({
+    const launch = yield* _(Effect.tryPromise({
       catch: (cause) => new ApiInternalError({
         message: "Failed to launch Skiller.",
         cause
