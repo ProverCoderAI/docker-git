@@ -95,6 +95,18 @@ describe("controller compose resource limits", () => {
   }
 })
 
+describe("controller Skiller Dockerfile", () => {
+  it.effect("materializes Electron binary before bundling Skiller", () =>
+    Effect.gen(function*(_) {
+      const contents = yield* _(readComposeFile("packages/api/Dockerfile"))
+      expect(contents).toContain(
+        `electron_zip="$(find "\${electron_config_cache:-/root/.cache/electron}" -name 'electron-v*-linux-*.zip' -print -quit)"`
+      )
+      expect(contents).toContain("unzip -q \"$electron_zip\" -d node_modules/electron/dist")
+      expect(contents).toContain("test -x node_modules/electron/dist/electron")
+    }))
+})
+
 describe("controller resource limit resolution", () => {
   it.effect("resolves CPU and RAM defaults to 90% of host resources", () =>
     Effect.sync(() => {

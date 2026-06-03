@@ -4,6 +4,7 @@ import {
   parseSkillerRoute,
   resolveSkillerBrowserScopeSelection,
   resolveSkillerRouteScopeSelection,
+  skillerLaunchCommand,
   type SkillerRoute
 } from "../src/services/skiller.js"
 import type { SkillerContainerScope } from "../src/services/skiller-core.js"
@@ -31,6 +32,14 @@ const scope = (projectKey: string): SkillerContainerScope => ({
 })
 
 describe("skiller routes", () => {
+  it("launches Electron as the controller process user", () => {
+    const [command, args] = skillerLaunchCommand()
+
+    expect(command).toBe("bash")
+    expect(args.join(" ")).not.toContain("setpriv")
+    expect(args).toContainEqual(expect.stringContaining("node_modules/electron/dist/electron"))
+  })
+
   it("keeps the terminal session id on session-scoped app routes", () => {
     expect(parseSkillerRoute("/api/ssh/session/terminal-proof/skiller/app/")).toEqual({
       _tag: "App",

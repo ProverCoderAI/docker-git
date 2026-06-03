@@ -363,22 +363,10 @@ const prepareSkillerScopeHome = (scope: SkillerContainerScope | null): SkillerPr
   return processUser
 }
 
-const skillerLaunchCommand = (
-  user: SkillerProcessUser | null
-): readonly [string, ReadonlyArray<string>] =>
-  user === null
-    ? ["bash", ["-lc", launchScript]]
-    : [
-      "setpriv",
-      [
-        `--reuid=${user.uid}`,
-        `--regid=${user.gid}`,
-        "--clear-groups",
-        "bash",
-        "-lc",
-        launchScript
-      ]
-    ]
+// Electron aborts under setpriv in the controller image even with --no-sandbox.
+// Project scope still comes from explicit host paths and the browser bootstrap.
+export const skillerLaunchCommand = (): readonly [string, ReadonlyArray<string>] =>
+  ["bash", ["-lc", launchScript]]
 
 const stopSkillerProcess = (process: SkillerProcess): void => {
   const pid = process.process.pid
@@ -422,10 +410,10 @@ const launchSkillerProcess = (
   scope: SkillerContainerScope | null
 ): SkillerLaunch => {
   mkdirSync(dirname(launchLogPath), { recursive: true })
-  const processUser = prepareSkillerScopeHome(scope)
+  prepareSkillerScopeHome(scope)
   const logFd = openSync(launchLogPath, "a")
   try {
-    const [command, args] = skillerLaunchCommand(processUser)
+    const [command, args] = skillerLaunchCommand()
     const child = spawn(command, args, {
       cwd: skillerDir,
       detached: true,

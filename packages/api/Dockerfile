@@ -121,6 +121,13 @@ RUN if [ "$DOCKER_GIT_CONTROLLER_BUILD_SKILLER" = "1" ]; then \
           rm -rf /root/.bun/install/cache node_modules; \
           sleep $((attempt * 2)); \
         done \
+      && electron_zip="$(find "${electron_config_cache:-/root/.cache/electron}" -name 'electron-v*-linux-*.zip' -print -quit)" \
+      && test -n "$electron_zip" \
+      && rm -rf node_modules/electron/dist node_modules/electron/path.txt \
+      && mkdir -p node_modules/electron/dist \
+      && unzip -q "$electron_zip" -d node_modules/electron/dist \
+      && printf '%s' electron > node_modules/electron/path.txt \
+      && test -x node_modules/electron/dist/electron \
       && bun run build \
       && touch out/.docker-git-browser-folder-picker.patch \
       && mkdir -p out/preload \
