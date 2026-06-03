@@ -12,14 +12,16 @@ This is now the intended controller plane:
 ## Runtime contract: host-Docker-backed
 
 `docker-git` is host-Docker-backed by default. The primary controller
-container created from this package binds the host socket
-(`/var/run/docker.sock:/var/run/docker.sock`, see `docker-compose.yml`) and
-uses it to spawn per-project containers. `DOCKER_GIT_DOCKER_RUNTIME=isolated`
-is an opt-in fallback for environments that explicitly require an embedded
-controller daemon. In isolated mode, start the controller through the host CLI
-or include `docker-compose.isolated.yml`; that overlay removes the host socket
-bind and defaults project containers to the embedded daemon endpoint
-`tcp://host.docker.internal:2375`.
+container created from this package binds the host socket and Docker data root
+(`/var/run/docker.sock:/var/run/docker.sock` and
+`/var/lib/docker:/var/lib/docker`, see `docker-compose.yml`) and uses them to
+spawn per-project containers and access the Docker volume paths reported by
+`docker inspect`. `DOCKER_GIT_DOCKER_RUNTIME=isolated` is an opt-in fallback for
+environments that explicitly require an embedded controller daemon. In isolated
+mode, start the controller through the host CLI or include
+`docker-compose.isolated.yml`; that overlay removes the host socket bind, keeps
+Docker data inside the controller volume, and defaults project containers to the
+embedded daemon endpoint `tcp://host.docker.internal:2375`.
 
 Security note: binding `/var/run/docker.sock` gives the controller container
 root-equivalent control over the host Docker daemon, including the ability to

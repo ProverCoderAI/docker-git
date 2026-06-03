@@ -18,6 +18,8 @@ import {
 
 const composeFiles: ReadonlyArray<string> = ["docker-compose.yml", "docker-compose.api.yml"]
 const isolatedComposeFiles: ReadonlyArray<string> = ["docker-compose.isolated.yml", "docker-compose.api.isolated.yml"]
+const hostDockerDataBind = "/var/lib/docker:/var/lib/docker"
+const isolatedDockerDataVolume = "docker_git_docker_data:/var/lib/docker"
 
 const readComposeFile = (relativePath: string): Effect.Effect<string> =>
   Effect.gen(function*(_) {
@@ -50,6 +52,13 @@ describe("controller compose resource limits", () => {
           const contents = yield* _(readComposeFile(composeFile))
           expect(contents).toMatch(/pids_limit: \$\{DOCKER_GIT_CONTROLLER_PIDS:-\d+\}/u)
         }))
+
+      it.effect("binds host Docker data root for host runtime volume path access", () =>
+        Effect.gen(function*(_) {
+          const contents = yield* _(readComposeFile(composeFile))
+          expect(contents).toContain(`- ${hostDockerDataBind}`)
+          expect(contents).not.toContain(`- ${isolatedDockerDataVolume}`)
+        }))
     })
   }
 
@@ -74,6 +83,13 @@ describe("controller compose resource limits", () => {
         Effect.gen(function*(_) {
           const contents = yield* _(readComposeFile(composeFile))
           expect(contents).toContain("privileged: ${DOCKER_GIT_CONTROLLER_PRIVILEGED:-true}")
+        }))
+
+      it.effect("keeps Docker data inside the embedded controller daemon volume", () =>
+        Effect.gen(function*(_) {
+          const contents = yield* _(readComposeFile(composeFile))
+          expect(contents).toContain(`- ${isolatedDockerDataVolume}`)
+          expect(contents).not.toContain(`- ${hostDockerDataBind}`)
         }))
     })
   }
