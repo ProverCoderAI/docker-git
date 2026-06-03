@@ -234,7 +234,7 @@ describe("renderDockerfile", () => {
     const dockerfile = renderDockerfile(makeTemplateConfig({ enableMcpPlaywright: true }))
 
     expectContainsAll(dockerfile, [
-      "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev 350b0b43b15a9f1c895d06d57b08314ebf768158 --locked --bins --root /usr/local",
+      "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection --rev 8f0aa06397030a198259e9ad9a1dc0e6a5aed967 --locked --bins --root /usr/local",
       "/usr/local/bin/docker-git-browser-connection --version",
       "/usr/local/bin/browser-connection --version",
       "# Unified Rust browser (dg-*-browser) start/reuse is owned by browser-connection"
