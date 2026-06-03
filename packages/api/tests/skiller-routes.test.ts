@@ -32,12 +32,13 @@ const scope = (projectKey: string): SkillerContainerScope => ({
 })
 
 describe("skiller routes", () => {
-  it("launches Electron as the controller process user", () => {
+  it("launches Electron through the Skiller launch script", () => {
     const [command, args] = skillerLaunchCommand()
+    const launchCommand = args.join("\n")
 
     expect(command).toBe("bash")
-    expect(args.join(" ")).not.toContain("setpriv")
-    expect(args).toContainEqual(expect.stringContaining("node_modules/electron/dist/electron"))
+    expect(launchCommand).toContain("xvfb-run -a ./node_modules/electron/dist/electron")
+    expect(launchCommand).toContain("exec ./node_modules/electron/dist/electron")
   })
 
   it("keeps the terminal session id on session-scoped app routes", () => {

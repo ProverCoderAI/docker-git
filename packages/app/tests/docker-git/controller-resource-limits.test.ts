@@ -95,15 +95,16 @@ describe("controller compose resource limits", () => {
   }
 })
 
-describe("controller Skiller Dockerfile", () => {
+describe("API Dockerfile Electron materialization", () => {
   it.effect("materializes Electron binary before bundling Skiller", () =>
     Effect.gen(function*(_) {
       const contents = yield* _(readComposeFile("packages/api/Dockerfile"))
-      expect(contents).toContain(
-        `electron_zip="$(find "\${electron_config_cache:-/root/.cache/electron}" -name 'electron-v*-linux-*.zip' -print -quit)"`
-      )
-      expect(contents).toContain("unzip -q \"$electron_zip\" -d node_modules/electron/dist")
-      expect(contents).toContain("test -x node_modules/electron/dist/electron")
+      expect(contents).toMatch(/electron_zip="\$\(find "\$\{electron_config_cache:-\/root\/\.cache\/electron\}"/u)
+      expect(contents).toMatch(/Electron zip not found in cache/u)
+      expect(contents).toMatch(/unzip -Z1 "\$electron_zip"/u)
+      expect(contents).toMatch(/Unsafe paths in Electron zip/u)
+      expect(contents).toMatch(/unzip -q "\$electron_zip" -d node_modules\/electron\/dist/u)
+      expect(contents).toMatch(/test -x node_modules\/electron\/dist\/electron/u)
     }))
 })
 

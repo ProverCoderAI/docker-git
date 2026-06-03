@@ -122,7 +122,10 @@ RUN if [ "$DOCKER_GIT_CONTROLLER_BUILD_SKILLER" = "1" ]; then \
           sleep $((attempt * 2)); \
         done \
       && electron_zip="$(find "${electron_config_cache:-/root/.cache/electron}" -name 'electron-v*-linux-*.zip' -print -quit)" \
-      && test -n "$electron_zip" \
+      && if [ -z "$electron_zip" ]; then echo "Electron zip not found in cache: ${electron_config_cache:-/root/.cache/electron}" >&2; exit 1; fi \
+      && unzip -Z1 "$electron_zip" > /tmp/electron-zip-entries \
+      && if grep -Eq '(^/|(^|/)\.\.($|/))' /tmp/electron-zip-entries; then echo "Unsafe paths in Electron zip: $electron_zip" >&2; exit 1; fi \
+      && rm -f /tmp/electron-zip-entries \
       && rm -rf node_modules/electron/dist node_modules/electron/path.txt \
       && mkdir -p node_modules/electron/dist \
       && unzip -q "$electron_zip" -d node_modules/electron/dist \
