@@ -26,8 +26,8 @@ export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_STATE_AUTO_PULL=0
 export DOCKER_GIT_STATE_AUTO_SYNC=0
 
-REPO_URL="https://github.com/octocat/Hello-World/issues/1"
-TARGET_DIR="/home/dev/workspaces/octocat/hello-world/issue-1"
+REPO_URL="https://github.com/octocat/Hello-World/tree/master"
+TARGET_DIR="/home/dev/workspaces/octocat/hello-world"
 MIRROR_PREFIX="/home/dev/.docker-git/.cache/git-mirrors"
 
 ACTIVE_OUT_DIR=""
@@ -174,7 +174,7 @@ EOF_ENV
 
   local branch
   branch="$(dg_project_docker exec -u dev "$container_name" bash -lc "cd '$TARGET_DIR' && git rev-parse --abbrev-ref HEAD")"
-  [[ "$branch" == "issue-1" ]] || fail "expected branch issue-1, got: $branch"
+  [[ "$branch" == "master" ]] || fail "expected branch master, got: $branch"
 
   if [[ "$expect_cache_use" == "1" ]]; then
     if [[ -n "$expected_mirror_name" ]]; then
@@ -184,6 +184,8 @@ EOF_ENV
       grep -Fq -- "[clone-cache] using mirror: $MIRROR_PREFIX/" "$log_path" \
         || fail "expected cache reuse log in second clone"
     fi
+    grep -Fq -- "[clone-cache] pulled branch: master" "$log_path" \
+      || fail "expected branch pull from warm cache in second clone"
   else
     grep -Fq -- "[clone-cache] mirror created: $MIRROR_PREFIX/" "$log_path" \
       || grep -Fq -- "[clone-cache] using mirror: $MIRROR_PREFIX/" "$log_path" \
