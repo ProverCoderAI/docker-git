@@ -1,0 +1,11 @@
+{
+  "click": {
+    "clicked": true,
+    "text": "Projects1",
+    "href": "#/projects"
+  },
+  "page": {
+    "href": "http://127.0.0.1:45112/api/skiller/app/#/projects",
+    "text": "Import from Git\nImport from Local\nWORKSPACE\nDashboard\nAll Skills\n0\nMarketplace\nProjects\n1\nSettings\nProjects\nAdd project\n\napp\n\n/home/dev/app\n\napp\n/home/dev/app\nImport from Git\nImport Local\nCopy from installed\nSKILLS IN THIS PROJECT\n\nNo project-scoped skills yet.\n\nNo skills here yet. Copy one you already have installed, import from Git, or browse the Marketplace — use the buttons above or below.\n\nCopy from installed\nImport from Git\nBrowse Marketplace\nSYSTEM PROMPTS\n\nEdit the prompt files that Codex, Claude Code, and Gemini read from this container.\n\nProject system prompts\n\nFiles in this repository workspace.\n\nCodex\n\nnot created\n\n/home/dev/app/AGENTS.md\n\nDelete\nSave\n\nClaude Code\n\nnot created\n\n/home/dev/app/CLAUDE.md\n\nDelete\nSave\n\nGemini\n\nnot created\n\n/home/dev/app/GEMINI.md\n\nDelete\nSave\nGlobal system prompts\n\nFiles in the selected container home.\n\nCodex\n\nnot created\n\n/tmp/docker-git-skiller/0e9c63fe5287/home/.codex/AGENTS.md\n\nDelete\nSave\n\nClaude Code\n\nnot created\n\n/tmp/docker-git-skiller/"
+  }
+}

@@ -33,12 +33,37 @@ const scope = (projectKey: string): SkillerContainerScope => ({
 
 describe("skiller routes", () => {
   it("launches Electron through the Skiller launch script", () => {
-    const [command, args] = skillerLaunchCommand()
-    const launchCommand = args.join("\n")
+    const launch = skillerLaunchCommand(null)
+    const launchCommand = launch.args.join("\n")
 
-    expect(command).toBe("bash")
+    expect(launch.command).toBe("bash")
+    expect(launch.args).toContain("-c")
     expect(launchCommand).toContain("xvfb-run -a ./node_modules/electron/dist/electron")
     expect(launchCommand).toContain("exec ./node_modules/electron/dist/electron")
+    expect(launchCommand).toContain("--disable-dev-shm-usage")
+  })
+
+  it("launches scoped Skiller with the selected home owner credentials", () => {
+    const launch = skillerLaunchCommand(
+      { gid: 1000, uid: 1000 },
+      (user) => ({ ...user, groupName: "ubuntu", userName: "ubuntu" })
+    )
+
+    expect(launch.command).toBe("runuser")
+    expect(launch.args).toEqual(expect.arrayContaining([
+      "--preserve-environment",
+      "-u",
+      "ubuntu",
+      "-g",
+      "ubuntu",
+      "--",
+      "bash",
+      "-c"
+    ]))
+    expect(launch.gid).toBe(1000)
+    expect(launch.groupName).toBe("ubuntu")
+    expect(launch.uid).toBe(1000)
+    expect(launch.userName).toBe("ubuntu")
   })
 
   it("keeps the terminal session id on session-scoped app routes", () => {
