@@ -83,16 +83,33 @@ RUN cargo install --git https://github.com/ProverCoderAI/rust-browser-connection
 RUN printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
   && chmod 0440 /etc/sudoers.d/zz-all`
 
+const planToGitRevision = "06fe8bdf1d2e48a1f5a0218a3bb7af19e63deb5e"
+
+// CHANGE: install plan-to-git in generated project containers.
+// WHY: issue #369 requires agent plans to be captured and uploaded to pull requests.
+// QUOTE(ТЗ): "Надо что бы у нас план загружался в PR"
+// REF: issue-369
+// SOURCE: https://github.com/ProverCoderAI/plan-to-git/tree/v0.19.0
+// FORMAT THEOREM: image_build_success -> executable(/usr/local/bin/plan-to-git)
+// PURITY: SHELL
+// EFFECT: Docker build downloads and installs a pinned Rust CLI from GitHub.
+// INVARIANT: plan-to-git is available on PATH before Codex hooks or git post-push actions run.
+// COMPLEXITY: O(network + cargo_build)
+const renderDockerfilePlanToGit = (): string =>
+  `# Install plan-to-git for Codex plan capture and PR sync (issue #369)
+RUN cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev ${planToGitRevision} --locked --bins --root /usr/local \
+  && /usr/local/bin/plan-to-git --help >/dev/null`
+
 /**
- * Renders the base image, package prelude, Rust toolchain, and browser module install.
+ * Renders the base image, package prelude, Rust toolchain, browser module, and plan sync CLI install.
  *
  * @returns Dockerfile fragment that establishes the shared project container base.
  * @pure true
  * @effect none; CORE template renderer only constructs a string.
- * @invariant the returned fragment starts from the configured shared JS box image and installs the Rust browser lifecycle + MCP CLIs.
+ * @invariant the returned fragment starts from the configured shared JS box image and installs the Rust browser lifecycle, MCP CLIs, and plan-to-git.
  * @precondition docker-git generated entrypoint remains the container entrypoint.
- * @postcondition the fragment keeps root available for setup and publishes both Rust browser binaries on PATH.
+ * @postcondition the fragment keeps root available for setup and publishes Rust helper binaries on PATH.
  * @complexity O(1) time / O(1) space.
  */
 export const renderDockerfilePrelude = (): string =>
-  [renderDockerfileBase(), renderDockerfileRustBrowserConnection()].join("\n\n")
+  [renderDockerfileBase(), renderDockerfileRustBrowserConnection(), renderDockerfilePlanToGit()].join("\n\n")

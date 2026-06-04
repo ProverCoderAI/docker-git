@@ -5,6 +5,8 @@ const entrypointGitHooksTemplate = String
 HOOKS_DIR="/opt/docker-git/hooks"
 PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"
 POST_PUSH_ACTION="$HOOKS_DIR/post-push"
+PLAN_TO_GIT_CODEX_HOOK="$HOOKS_DIR/plan-to-git-codex-hook"
+CODEX_REQUIREMENTS_FILE="/etc/codex/requirements.toml"
 mkdir -p "$HOOKS_DIR"
 
 cat <<'EOF' > "$PRE_PUSH_HOOK"
@@ -136,12 +138,23 @@ cat <<'EOF' > "$POST_PUSH_ACTION"
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 5) Run session backup after successful push
+# 5) Run plan sync and session backup after successful push
 REPO_ROOT="${"${"}DOCKER_GIT_POST_PUSH_REPO_ROOT:-}"
 if [[ -z "$REPO_ROOT" || ! -d "$REPO_ROOT" ]]; then
   REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 fi
 cd "$REPO_ROOT"
+
+# CHANGE: sync captured Codex plans to the current branch PR after push.
+# WHY: issue #369 requires the agent plan to be uploaded to PR discussion.
+# REF: issue-369
+if [ "${"${"}DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" != "1" ]; then
+  if ! command -v plan-to-git >/dev/null 2>&1; then
+    echo "[plan-to-git] Error: plan-to-git not found" >&2
+    exit 1
+  fi
+  plan-to-git sync
+fi
 
 # CHANGE: keep post-push backup logic in a reusable action script
 # WHY: git has no client-side post-push hook, so the global git wrapper
@@ -160,6 +173,47 @@ if [ "${"${"}DOCKER_GIT_SKIP_SESSION_BACKUP:-}" != "1" ]; then
 fi
 EOF
 chmod 0755 "$POST_PUSH_ACTION"
+
+cat <<'EOF' > "$PLAN_TO_GIT_CODEX_HOOK"
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "${"${"}DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" = "1" ]; then
+  exit 0
+fi
+
+if ! command -v plan-to-git >/dev/null 2>&1; then
+  echo "[plan-to-git] Error: plan-to-git not found" >&2
+  exit 1
+fi
+
+plan-to-git hook --source codex
+EOF
+chmod 0755 "$PLAN_TO_GIT_CODEX_HOOK"
+
+mkdir -p "$(dirname "$CODEX_REQUIREMENTS_FILE")"
+cat <<'EOF' > "$CODEX_REQUIREMENTS_FILE"
+# docker-git managed Codex requirements
+
+[features]
+hooks = true
+
+[hooks]
+managed_dir = "/opt/docker-git/hooks"
+
+[[hooks.UserPromptSubmit]]
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = "/opt/docker-git/hooks/plan-to-git-codex-hook"
+statusMessage = "Capturing plan decision"
+
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = "/opt/docker-git/hooks/plan-to-git-codex-hook"
+statusMessage = "Capturing agent plan"
+EOF
+chmod 0644 "$CODEX_REQUIREMENTS_FILE"
 
 ${renderEntrypointGitPostPushWrapperInstall()}
 

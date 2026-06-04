@@ -63,6 +63,10 @@ describe("app planFiles", () => {
     expect(dockerfile.contents).toContain(
       "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection"
     )
+    expect(dockerfile.contents).toContain(
+      "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev 06fe8bdf1d2e48a1f5a0218a3bb7af19e63deb5e --locked --bins --root /usr/local"
+    )
+    expect(dockerfile.contents).toContain("/usr/local/bin/plan-to-git --help >/dev/null")
     expect(dockerfile.contents).toContain("make build-essential docker.io")
     expect(dockerfile.contents).toContain("/usr/local/bin/browser-connection --version")
     expect(dockerfile.contents).not.toContain("docker-git-playwright-mcp")
@@ -76,5 +80,21 @@ describe("app planFiles", () => {
     expect(entrypoint.contents).toContain(
       "args = [\"--project\", \"$DOCKER_GIT_BROWSER_PROJECT\", \"--network\", \"$DOCKER_GIT_BROWSER_NETWORK\"]"
     )
+    expect(entrypoint.contents).toContain("plan-to-git sync")
+    expect(entrypoint.contents).toContain("plan-to-git hook --source codex")
+    expect(entrypoint.contents).toContain("CODEX_REQUIREMENTS_FILE=\"/etc/codex/requirements.toml\"")
+    expect(entrypoint.contents).toContain("managed_dir = \"/opt/docker-git/hooks\"")
+    expect(entrypoint.contents).toContain("[[hooks.UserPromptSubmit]]")
+    expect(entrypoint.contents).toContain("[[hooks.Stop]]")
+    expect(entrypoint.contents).toContain("command = \"/opt/docker-git/hooks/plan-to-git-codex-hook\"")
+  })
+
+  it("keeps plan-to-git state out of generated git and docker contexts", () => {
+    const files = planFiles(makeTemplateConfig())
+    const gitignore = getGeneratedFile(files, ".gitignore")
+    const dockerignore = getGeneratedFile(files, ".dockerignore")
+
+    expect(gitignore.contents).toContain(".agent-plan.json")
+    expect(dockerignore.contents).toContain(".agent-plan.json")
   })
 })
