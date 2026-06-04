@@ -512,18 +512,22 @@ describe("renderEntrypointGitHooks", () => {
 
 describe("planFiles generated ignores", () => {
   it("keeps plan-to-git state out of git and docker build contexts", () => {
-    const files = planFiles(makeTemplateConfig())
-    const gitignore = files.find(
-      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
-        file._tag === "File" && file.relativePath === ".gitignore"
-    )
-    const dockerignore = files.find(
-      (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
-        file._tag === "File" && file.relativePath === ".dockerignore"
-    )
+    fc.assert(
+      fc.property(generatedTemplateConfigArbitrary, (config) => {
+        const files = planFiles(config)
+        const gitignore = files.find(
+          (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+            file._tag === "File" && file.relativePath === ".gitignore"
+        )
+        const dockerignore = files.find(
+          (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+            file._tag === "File" && file.relativePath === ".dockerignore"
+        )
 
-    expect(gitignore?.contents).toContain(".agent-plan.json")
-    expect(dockerignore?.contents).toContain(".agent-plan.json")
+        expect(gitignore?.contents).toContain(".agent-plan.json")
+        expect(dockerignore?.contents).toContain(".agent-plan.json")
+      })
+    )
   })
 })
 

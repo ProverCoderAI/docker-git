@@ -117,6 +117,14 @@ if [[ -n "\${FAKE_PLAN_TO_GIT_LOG_PATH:-}" ]]; then
   printf '%s\\t%s\\n' "$PWD" "$*" >> "$FAKE_PLAN_TO_GIT_LOG_PATH"
 fi
 
+if [[ "\${1:-}" != "sync" ]]; then
+  if [[ -n "\${FAKE_PLAN_TO_GIT_LOG_PATH:-}" ]]; then
+    printf '%s\\tunexpected-command:%s\\n' "$PWD" "\${1:-<empty>}" >> "$FAKE_PLAN_TO_GIT_LOG_PATH"
+  fi
+  echo "fakePlanToGit: expected sync command, got: \${1:-<empty>}" >&2
+  exit 127
+fi
+
 if [[ -n "\${FAKE_PLAN_TO_GIT_EXIT_CODE:-}" ]]; then
   exit "$FAKE_PLAN_TO_GIT_EXIT_CODE"
 fi
