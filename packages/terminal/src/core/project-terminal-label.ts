@@ -5,9 +5,7 @@ export type ProjectTerminalLabelInput = {
   readonly repoUrl: string
 }
 
-const issueRefPattern = /^issue-(\d+)$/u
-const githubPullRefPattern = /^refs\/pull\/(\d+)\/head$/u
-const gitlabMergeRequestRefPattern = /^refs\/merge-requests\/(\d+)\/head$/u
+const decimalDigitsPattern = /^\d+$/u
 
 const stripGitSuffix = (value: string): string => value.endsWith(".git") ? value.slice(0, -4) : value
 
@@ -67,28 +65,29 @@ const renderSourceContext = (repoUrl: string, repoRef: string): string => {
     : `source ${repoUrl.trim()} (${trimmedRef})`
 }
 
+const parseWrappedNumericRef = (value: string, prefix: string, suffix: string): string | null => {
+  if (!value.startsWith(prefix) || !value.endsWith(suffix)) {
+    return null
+  }
+  const id = value.slice(prefix.length, value.length - suffix.length)
+  return decimalDigitsPattern.test(id) ? id : null
+}
+
 const renderWorkspaceContext = (
   repoUrl: string,
   repoRef: string
 ): string => {
-  const issueMatch = issueRefPattern.exec(repoRef)
-  if (issueMatch !== null) {
-    const issueId = issueMatch[1]
-    return issueId === undefined ? renderSourceContext(repoUrl, repoRef) : renderIssueContext(repoUrl, issueId)
+  const issueId = parseWrappedNumericRef(repoRef, "issue-", "")
+  if (issueId !== null) {
+    return renderIssueContext(repoUrl, issueId)
   }
-  const pullMatch = githubPullRefPattern.exec(repoRef)
-  if (pullMatch !== null) {
-    const pullRequestId = pullMatch[1]
-    return pullRequestId === undefined
-      ? renderSourceContext(repoUrl, repoRef)
-      : renderPullRequestContext(repoUrl, pullRequestId)
+  const pullRequestId = parseWrappedNumericRef(repoRef, "refs/pull/", "/head")
+  if (pullRequestId !== null) {
+    return renderPullRequestContext(repoUrl, pullRequestId)
   }
-  const mergeRequestMatch = gitlabMergeRequestRefPattern.exec(repoRef)
-  if (mergeRequestMatch !== null) {
-    const mergeRequestId = mergeRequestMatch[1]
-    return mergeRequestId === undefined
-      ? renderSourceContext(repoUrl, repoRef)
-      : renderMergeRequestContext(mergeRequestId)
+  const mergeRequestId = parseWrappedNumericRef(repoRef, "refs/merge-requests/", "/head")
+  if (mergeRequestId !== null) {
+    return renderMergeRequestContext(mergeRequestId)
   }
   return renderSourceContext(repoUrl, repoRef)
 }
