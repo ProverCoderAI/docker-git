@@ -25,6 +25,7 @@ type WrapperHarness = {
   readonly nodeCwdLogPath: string
   readonly nodeRepoRootLogPath: string
   readonly nodeScriptLogPath: string
+  readonly planToGitLogPath: string
 }
 
 const fakeGitScript = `#!/usr/bin/env bash
@@ -106,6 +107,28 @@ exit 0
 
 const fakeGhScript = `#!/usr/bin/env bash
 set -euo pipefail
+exit 0
+`
+
+const fakePlanToGitScript = `#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "\${FAKE_PLAN_TO_GIT_LOG_PATH:-}" ]]; then
+  printf '%s\\t%s\\n' "$PWD" "$*" >> "$FAKE_PLAN_TO_GIT_LOG_PATH"
+fi
+
+if [[ "\${1:-}" != "sync" ]]; then
+  if [[ -n "\${FAKE_PLAN_TO_GIT_LOG_PATH:-}" ]]; then
+    printf '%s\\tunexpected-command:%s\\n' "$PWD" "\${1:-<empty>}" >> "$FAKE_PLAN_TO_GIT_LOG_PATH"
+  fi
+  echo "fakePlanToGit: expected sync command, got: \${1:-<empty>}" >&2
+  exit 127
+fi
+
+if [[ -n "\${FAKE_PLAN_TO_GIT_EXIT_CODE:-}" ]]; then
+  exit "$FAKE_PLAN_TO_GIT_EXIT_CODE"
+fi
+
 exit 0
 `
 
@@ -203,6 +226,7 @@ const makeHarnessEnv = (
   FAKE_NODE_CWD_LOG_PATH: harness.nodeCwdLogPath,
   FAKE_NODE_REPO_ROOT_LOG_PATH: harness.nodeRepoRootLogPath,
   FAKE_NODE_SCRIPT_LOG_PATH: harness.nodeScriptLogPath,
+  FAKE_PLAN_TO_GIT_LOG_PATH: harness.planToGitLogPath,
   ...overrides
 })
 
@@ -244,6 +268,7 @@ const withHarness = <A, E, R>(
       const nodeCwdLogPath = path.join(rootDir, "node-cwd.log")
       const nodeRepoRootLogPath = path.join(rootDir, "node-repo-root.log")
       const nodeScriptLogPath = path.join(rootDir, "node-script.log")
+      const planToGitLogPath = path.join(rootDir, "plan-to-git.log")
 
       yield* _(fs.makeDirectory(path.join(repoDir, ".git"), { recursive: true }))
       yield* _(fs.makeDirectory(externalDir, { recursive: true }))
@@ -254,6 +279,7 @@ const withHarness = <A, E, R>(
       yield* _(writeExecutable(path.join(binDir, "git-real"), fakeGitScript))
       yield* _(writeExecutable(path.join(binDir, "gh"), fakeGhScript))
       yield* _(writeExecutable(path.join(binDir, "docker-git-session-sync"), fakeSessionSyncScript))
+      yield* _(writeExecutable(path.join(binDir, "plan-to-git"), fakePlanToGitScript))
 
       const postPushScript = extractEmbeddedScript(renderEntrypointGitHooks(), "$POST_PUSH_ACTION")
       const postPushPath = path.join(hooksDir, "post-push")
@@ -278,7 +304,8 @@ const withHarness = <A, E, R>(
           gitLogPath,
           nodeCwdLogPath,
           nodeRepoRootLogPath,
-          nodeScriptLogPath
+          nodeScriptLogPath,
+          planToGitLogPath
         })
       )
     })
@@ -293,10 +320,12 @@ describe("git post-push wrapper", () => {
         const nodeCwd = yield* _(readLogLines(harness.nodeCwdLogPath))
         const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
 
         expect(nodeCwd).toEqual([harness.repoDir])
         expect(nodeRepoRoot).toEqual([harness.repoDir])
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
+        expect(planToGit).toEqual([`${harness.repoDir}\tsync`])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -309,10 +338,12 @@ describe("git post-push wrapper", () => {
         const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
         const gitLog = yield* _(readLogLines(harness.gitLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
 
         expect(nodeCwd).toEqual([harness.repoDir])
         expect(nodeRepoRoot).toEqual([harness.repoDir])
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
+        expect(planToGit).toEqual([`${harness.repoDir}\tsync`])
         expect(gitLog.some((line) => line.startsWith(`${harness.externalDir}\t-C ${harness.repoDir} push`))).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
@@ -326,10 +357,12 @@ describe("git post-push wrapper", () => {
         const nodeCwd = yield* _(readLogLines(harness.nodeCwdLogPath))
         const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
 
         expect(nodeCwd).toEqual([])
         expect(nodeRepoRoot).toEqual([])
         expect(nodeScript).toEqual([])
+        expect(planToGit).toEqual([])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -351,10 +384,47 @@ describe("git post-push wrapper", () => {
         const nodeCwd = yield* _(readLogLines(harness.nodeCwdLogPath))
         const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
 
         expect(nodeCwd).toEqual([])
         expect(nodeRepoRoot).toEqual([])
         expect(nodeScript).toEqual([])
+        expect(planToGit).toEqual([])
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("skips plan sync when disabled but still runs session backup", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(
+          runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"], {
+            env: { DOCKER_GIT_SKIP_PLAN_TO_GIT: "1" }
+          })
+        )
+
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+
+        expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
+        expect(planToGit).toEqual([])
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("propagates plan sync failures before session backup", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(
+          runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"], {
+            env: { FAKE_PLAN_TO_GIT_EXIT_CODE: "37" },
+            okExitCodes: [37]
+          })
+        )
+
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+
+        expect(nodeScript).toEqual([])
+        expect(planToGit).toEqual([`${harness.repoDir}\tsync`])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -369,8 +439,10 @@ describe("git post-push wrapper", () => {
         )
 
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
 
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
+        expect(planToGit).toEqual([`${harness.repoDir}\tsync`])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

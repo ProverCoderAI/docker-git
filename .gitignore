@@ -10,6 +10,7 @@ dev_ssh_key.pub
 .docker-git/
 .e2e/
 effect-template1/
+.agent-plan.json
 
 # Node / build artifacts
 node_modules/

@@ -39,6 +39,7 @@ scripts/
 
 # Volatile Codex artifacts (do not commit)
 authorized_keys
+.agent-plan.json
 .orch/auth/codex/auth.json
 .orch/auth/claude/
 .orch/auth/codex/log/
@@ -50,6 +51,7 @@ authorized_keys
 const renderDockerignore = (): string =>
   `# docker-git build context
 authorized_keys
+.agent-plan.json
 .orch/env/
 .orch/auth/codex/
 .orch/auth/claude/

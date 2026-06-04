@@ -207,6 +207,9 @@ describe("renderDockerfile", () => {
       'RTK_VERSION="${RTK_VERSION}" RTK_INSTALL_DIR=/usr/local/bin sh /tmp/rtk-install.sh',
       "rtk --version",
       "rtk gain >/dev/null 2>&1 || true",
+      "# Install plan-to-git for Codex plan capture and PR sync (issue #369)",
+      "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev 06fe8bdf1d2e48a1f5a0218a3bb7af19e63deb5e --locked --bins --root /usr/local",
+      "/usr/local/bin/plan-to-git --help >/dev/null",
       'ARG DOCKER_GIT_SESSION_SYNC_PACKAGE="@prover-coder-ai/docker-git-session-sync@latest"',
       'COPY .docker-git-tools/docker-git-session-sync /opt/docker-git/tools/docker-git-session-sync',
       'npm install -g "$DOCKER_GIT_SESSION_SYNC_PACKAGE"',
@@ -461,18 +464,32 @@ describe("renderEntrypoint clone cache", () => {
 })
 
 describe("renderEntrypointGitHooks", () => {
-  it("installs pre-push protection checks and a global git post-push runtime", () => {
+  it("installs pre-push protection checks, plan sync, and a global git post-push runtime", () => {
     const hooks = renderEntrypointGitHooks()
 
     expect(hooks).toContain('PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"')
     expect(hooks).toContain('POST_PUSH_ACTION="$HOOKS_DIR/post-push"')
+    expect(hooks).toContain('PLAN_TO_GIT_CODEX_HOOK="$HOOKS_DIR/plan-to-git-codex-hook"')
+    expect(hooks).toContain('CODEX_REQUIREMENTS_FILE="/etc/codex/requirements.toml"')
     expect(hooks).toContain('GIT_WRAPPER_BIN="/usr/local/bin/git"')
     expect(hooks).toContain('type -aP git')
     expect(hooks).toContain("cat <<'EOF' > \"$PRE_PUSH_HOOK\"")
     expect(hooks).toContain("cat <<'EOF' > \"$POST_PUSH_ACTION\"")
+    expect(hooks).toContain("cat <<'EOF' > \"$PLAN_TO_GIT_CODEX_HOOK\"")
+    expect(hooks).toContain("cat <<'EOF' > \"$CODEX_REQUIREMENTS_FILE\"")
     expect(hooks).toContain("cat <<'EOF' > \"$GIT_WRAPPER_BIN\"")
     expect(hooks).toContain("check_issue_managed_block_range")
-    expect(hooks).toContain("Run session backup after successful push")
+    expect(hooks).toContain("Run plan sync and session backup after successful push")
+    expect(hooks).toContain("DOCKER_GIT_SKIP_PLAN_TO_GIT")
+    expect(hooks).toContain("plan-to-git sync")
+    expect(hooks).toContain("plan-to-git hook --source codex")
+    expect(hooks).toContain("[features]")
+    expect(hooks).toContain("hooks = true")
+    expect(hooks).toContain('managed_dir = "/opt/docker-git/hooks"')
+    expect(hooks).toContain("[[hooks.UserPromptSubmit]]")
+    expect(hooks).toContain("[[hooks.Stop]]")
+    expect(hooks).toContain('command = "/opt/docker-git/hooks/plan-to-git-codex-hook"')
+    expect(hooks).not.toContain("allow_managed_hooks_only")
     expect(hooks).toContain("git has no client-side post-push hook")
     expect(hooks).toContain("docker-git managed git wrapper")
     expect(hooks).toContain("DOCKER_GIT_SKIP_POST_PUSH_ACTION=1")
@@ -490,6 +507,27 @@ describe("renderEntrypointGitHooks", () => {
     expect(hooks).not.toContain("node \"$BACKUP_SCRIPT\"")
     expect(hooks).not.toContain("session-backup-gist.js")
     expect(hooks).toContain("[session-backup] Error: gh CLI not found")
+  })
+})
+
+describe("planFiles generated ignores", () => {
+  it("keeps plan-to-git state out of git and docker build contexts", () => {
+    fc.assert(
+      fc.property(generatedTemplateConfigArbitrary, (config) => {
+        const files = planFiles(config)
+        const gitignore = files.find(
+          (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+            file._tag === "File" && file.relativePath === ".gitignore"
+        )
+        const dockerignore = files.find(
+          (file): file is Extract<(typeof files)[number], { readonly _tag: "File" }> =>
+            file._tag === "File" && file.relativePath === ".dockerignore"
+        )
+
+        expect(gitignore?.contents).toContain(".agent-plan.json")
+        expect(dockerignore?.contents).toContain(".agent-plan.json")
+      })
+    )
   })
 })
 

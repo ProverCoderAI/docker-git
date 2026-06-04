@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
+import * as fc from "fast-check"
 
 import { defaultTemplateConfig, planFiles, type TemplateConfig } from "../../test-adapters/core-templates.js"
 
@@ -41,6 +42,32 @@ const getGeneratedFile = (files: ReadonlyArray<PlannedFile>, relativePath: strin
 const getGeneratedFilePaths = (files: ReadonlyArray<PlannedFile>): ReadonlyArray<string> =>
   files.flatMap((file) => file._tag === "File" ? [file.relativePath] : [])
 
+const generatedTemplateConfigArbitrary: fc.Arbitrary<TemplateConfig> = fc
+  .record({
+    gpu: fc.constantFrom<TemplateConfig["gpu"]>("none", "all"),
+    projectIndex: fc.integer({ min: 1, max: 100_000 }),
+    sshPort: fc.integer({ min: 1024, max: 65_535 }),
+    sshUserIndex: fc.integer({ min: 1, max: 100_000 })
+  })
+  .map(({ gpu, projectIndex, sshPort, sshUserIndex }) => {
+    const sshUser = `dev${sshUserIndex}`
+    const projectName = `repo-${projectIndex}`
+    const home = `/home/${sshUser}`
+
+    return makeTemplateConfig({
+      codexHome: `${home}/.codex`,
+      containerName: `dg-test-${projectIndex}`,
+      geminiHome: `${home}/.gemini`,
+      gpu,
+      grokHome: `${home}/.grok`,
+      serviceName: `dg-test-${projectIndex}`,
+      sshPort,
+      sshUser,
+      targetDir: `${home}/org/${projectName}`,
+      volumeName: `dg-test-${projectIndex}-home`
+    })
+  })
+
 describe("app planFiles", () => {
   it("includes Grok auth bootstrap wiring in the generated entrypoint", () => {
     const files = planFiles(makeTemplateConfig())
@@ -52,29 +79,57 @@ describe("app planFiles", () => {
   })
 
   it("uses the Rust browser connection module when Playwright is enabled", () => {
-    const files = planFiles(makeTemplateConfig({ enableMcpPlaywright: true }))
-    const filePaths = getGeneratedFilePaths(files)
-    const dockerfile = getGeneratedFile(files, "Dockerfile")
-    const entrypoint = getGeneratedFile(files, "entrypoint.sh")
+    fc.assert(
+      fc.property(generatedTemplateConfigArbitrary, (generatedConfig) => {
+        const files = planFiles({ ...generatedConfig, enableMcpPlaywright: true })
+        const filePaths = getGeneratedFilePaths(files)
+        const dockerfile = getGeneratedFile(files, "Dockerfile")
+        const entrypoint = getGeneratedFile(files, "entrypoint.sh")
 
-    expect(filePaths).not.toContain("Dockerfile.browser")
-    expect(filePaths).not.toContain("docker-git-cdp-guard")
-    expect(filePaths).not.toContain("docker-git-browser-runtime.sh")
-    expect(dockerfile.contents).toContain(
-      "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection"
+        expect(filePaths).not.toContain("Dockerfile.browser")
+        expect(filePaths).not.toContain("docker-git-cdp-guard")
+        expect(filePaths).not.toContain("docker-git-browser-runtime.sh")
+        expect(dockerfile.contents).toContain(
+          "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection"
+        )
+        expect(dockerfile.contents).toContain(
+          "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev 06fe8bdf1d2e48a1f5a0218a3bb7af19e63deb5e --locked --bins --root /usr/local"
+        )
+        expect(dockerfile.contents).toContain("/usr/local/bin/plan-to-git --help >/dev/null")
+        expect(dockerfile.contents).toContain("make build-essential docker.io")
+        expect(dockerfile.contents).toContain("/usr/local/bin/browser-connection --version")
+        expect(dockerfile.contents).not.toContain("docker-git-playwright-mcp")
+        expect(entrypoint.contents).not.toContain("docker_git_start_rust_browser_connection")
+        expect(entrypoint.contents).not.toContain("start --project")
+        expect(entrypoint.contents).not.toContain("--no-start-browser")
+        expect(entrypoint.contents).toContain("docker_git_stop_playwright_browser()")
+        expect(entrypoint.contents).toContain("docker-git-browser-connection")
+        expect(entrypoint.contents).toContain("stop --project \"$project_container\"")
+        expect(entrypoint.contents).toContain("command = \"browser-connection\"")
+        expect(entrypoint.contents).toContain(
+          "args = [\"--project\", \"$DOCKER_GIT_BROWSER_PROJECT\", \"--network\", \"$DOCKER_GIT_BROWSER_NETWORK\"]"
+        )
+        expect(entrypoint.contents).toContain("plan-to-git sync")
+        expect(entrypoint.contents).toContain("plan-to-git hook --source codex")
+        expect(entrypoint.contents).toContain("CODEX_REQUIREMENTS_FILE=\"/etc/codex/requirements.toml\"")
+        expect(entrypoint.contents).toContain("managed_dir = \"/opt/docker-git/hooks\"")
+        expect(entrypoint.contents).toContain("[[hooks.UserPromptSubmit]]")
+        expect(entrypoint.contents).toContain("[[hooks.Stop]]")
+        expect(entrypoint.contents).toContain("command = \"/opt/docker-git/hooks/plan-to-git-codex-hook\"")
+      })
     )
-    expect(dockerfile.contents).toContain("make build-essential docker.io")
-    expect(dockerfile.contents).toContain("/usr/local/bin/browser-connection --version")
-    expect(dockerfile.contents).not.toContain("docker-git-playwright-mcp")
-    expect(entrypoint.contents).not.toContain("docker_git_start_rust_browser_connection")
-    expect(entrypoint.contents).not.toContain("start --project")
-    expect(entrypoint.contents).not.toContain("--no-start-browser")
-    expect(entrypoint.contents).toContain("docker_git_stop_playwright_browser()")
-    expect(entrypoint.contents).toContain("docker-git-browser-connection")
-    expect(entrypoint.contents).toContain("stop --project \"$project_container\"")
-    expect(entrypoint.contents).toContain("command = \"browser-connection\"")
-    expect(entrypoint.contents).toContain(
-      "args = [\"--project\", \"$DOCKER_GIT_BROWSER_PROJECT\", \"--network\", \"$DOCKER_GIT_BROWSER_NETWORK\"]"
+  })
+
+  it("keeps plan-to-git state out of generated git and docker contexts", () => {
+    fc.assert(
+      fc.property(generatedTemplateConfigArbitrary, (config) => {
+        const files = planFiles(config)
+        const gitignore = getGeneratedFile(files, ".gitignore")
+        const dockerignore = getGeneratedFile(files, ".dockerignore")
+
+        expect(gitignore.contents).toContain(".agent-plan.json")
+        expect(dockerignore.contents).toContain(".agent-plan.json")
+      })
     )
   })
 })
