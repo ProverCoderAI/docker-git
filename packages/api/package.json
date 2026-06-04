@@ -22,10 +22,10 @@
     "@effect-template/lib": "workspace:*",
     "@prover-coder-ai/docker-git-terminal": "workspace:*",
     "@effect/platform": "^0.96.1",
-    "@effect/platform-node": "^0.106.0",
+    "@effect/platform-node": "^0.107.0",
     "@effect/schema": "^0.75.5",
-    "@fedify/fedify": "^2.2.3",
-    "@fedify/vocab": "^2.2.3",
+    "@fedify/fedify": "^2.2.4",
+    "@fedify/vocab": "^2.2.4",
     "effect": "^3.21.2",
     "node-pty": "^1.1.0",
     "ws": "^8.21.0"
