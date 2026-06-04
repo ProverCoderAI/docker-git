@@ -27,6 +27,7 @@ import {
   appendTerminalOutput,
   createTerminalImagePastePlan,
   emptyTerminalOutputBuffer,
+  projectTerminalLabel,
   renderTerminalOutputBuffer,
   terminalImagePasteDirectory,
   type TerminalImagePastePayload,
@@ -1399,7 +1400,7 @@ export const createTerminalSession = (
       const session = yield* _(registerRecord(
         resolvedProjectId,
         project.projectKey,
-        project.displayName,
+        projectTerminalLabel(project),
         prepared,
         projectItem.containerName,
         projectItem.targetDir,
@@ -1421,7 +1422,7 @@ export const createTerminalSession = (
     const session = yield* _(registerRecord(
       resolvedProjectId,
       startedProject.projectKey,
-      startedProject.displayName,
+      projectTerminalLabel(startedProject),
       prepared,
       reachableProjectItem.containerName,
       reachableProjectItem.targetDir,

@@ -1,6 +1,7 @@
 import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
+import { projectTerminalLabel } from "@prover-coder-ai/docker-git-terminal/core"
 import { Duration, Effect } from "effect"
 
 import { createProjectTerminalSession, upProject } from "./api-client.js"
@@ -156,7 +157,7 @@ const resolveHostSshLaunchSpec = (
 
 const writeProjectSshHeader = (item: ProjectItem): Effect.Effect<void> =>
   Effect.sync(() => {
-    writeToTerminal(`\n[docker-git] SSH terminal: ${item.displayName}\n`)
+    writeToTerminal(`\n[docker-git] SSH terminal: ${projectTerminalLabel(item)}\n`)
     writeToTerminal(`[docker-git] ${item.sshCommand}\n\n`)
   })
 
@@ -203,9 +204,9 @@ export const openResolvedProjectSshWithUpEffect = <E, R>(
 ) =>
   Effect.gen(function*(_) {
     const writeProgress = deps.writeProgress ?? writeProjectOpenProgress
-    yield* _(writeProgress(`Starting project before SSH: ${item.displayName}`))
+    yield* _(writeProgress(`Starting project before SSH: ${projectTerminalLabel(item)}`))
     const refreshedItem = yield* _(deps.upProject(item.projectDir))
-    yield* _(writeProgress(`Opening SSH terminal: ${(refreshedItem ?? item).displayName}`))
+    yield* _(writeProgress(`Opening SSH terminal: ${projectTerminalLabel(refreshedItem ?? item)}`))
     yield* _(deps.openProjectSsh(refreshedItem ?? item))
   })
 
@@ -241,7 +242,7 @@ export const openResolvedProjectSshViaController = (item: ProjectItem) =>
     createSession: (projectId) => createProjectTerminalSession(projectId),
     attach: (project, session) =>
       attachTerminalSession({
-        header: `SSH terminal: ${project.displayName}`,
+        header: `SSH terminal: ${projectTerminalLabel(project)}`,
         session,
         websocketPath: `/projects/${encodeURIComponent(project.projectDir)}/terminal-sessions/${
           encodeURIComponent(session.id)

@@ -1,3 +1,5 @@
+import { projectTerminalLabel } from "@prover-coder-ai/docker-git-terminal/core"
+
 import type { DashboardData } from "./api.js"
 import { createActionContext } from "./app-ready-actions.js"
 import type { ReadyState } from "./app-ready-hooks.js"
@@ -23,7 +25,7 @@ export const createReadyActionContext = (
     refreshDashboard,
     selectedProjectId: state.selectedProjectId,
     selectedProjectKey: selectedProjectSummary?.projectKey ?? null,
-    selectedProjectName: selectedProjectSummary?.displayName ?? null,
+    selectedProjectName: selectedProjectSummary === undefined ? null : projectTerminalLabel(selectedProjectSummary),
     setActionPrompt: state.setActionPrompt,
     setActiveScreen: state.setActiveScreen,
     setAuthSnapshot: state.setAuthSnapshot,
