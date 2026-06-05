@@ -414,7 +414,7 @@ describe("terminal sessions service", () => {
       status: "ready"
     })
     await expect(runTestEffect(lookupTerminalSessionById(second.session.id))).resolves.toMatchObject({
-      projectDisplayName: "org/repo | issue #7 (https://github.com/org/repo/issues/7) | container dg-repo-issue-7",
+      projectDisplayName: "https://github.com/org/repo/issues/7 | container dg-repo-issue-7",
       projectKey,
       session: {
         id: second.session.id,

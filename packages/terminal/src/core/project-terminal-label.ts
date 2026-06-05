@@ -48,21 +48,25 @@ const sourceUrlForContext = (repoUrl: string, path: string): string | null => {
 
 const renderIssueContext = (repoUrl: string, issueId: string): string => {
   const issueUrl = sourceUrlForContext(repoUrl, `issues/${issueId}`)
-  return issueUrl === null ? `issue #${issueId}` : `issue #${issueId} (${issueUrl})`
+  return issueUrl === null ? `issue #${issueId}` : issueUrl
 }
 
 const renderPullRequestContext = (repoUrl: string, pullRequestId: string): string => {
   const pullRequestUrl = sourceUrlForContext(repoUrl, `pull/${pullRequestId}`)
-  return pullRequestUrl === null ? `PR #${pullRequestId}` : `PR #${pullRequestId} (${pullRequestUrl})`
+  return pullRequestUrl === null ? `PR #${pullRequestId}` : pullRequestUrl
 }
 
 const renderMergeRequestContext = (mergeRequestId: string): string => `MR #${mergeRequestId}`
 
 const renderSourceContext = (repoUrl: string, repoRef: string): string => {
+  const trimmedUrl = repoUrl.trim()
   const trimmedRef = repoRef.trim()
+  if (trimmedUrl.length === 0) {
+    return trimmedRef.length === 0 || trimmedRef === "main" ? "" : trimmedRef
+  }
   return trimmedRef.length === 0 || trimmedRef === "main"
-    ? `source ${repoUrl.trim()}`
-    : `source ${repoUrl.trim()} (${trimmedRef})`
+    ? trimmedUrl
+    : `${trimmedUrl} (${trimmedRef})`
 }
 
 const parseWrappedNumericRef = (value: string, prefix: string, suffix: string): string | null => {
@@ -98,36 +102,38 @@ const appendNonEmpty = (parts: ReadonlyArray<string>, value: string): ReadonlyAr
 }
 
 /**
- * Builds the terminal-facing project label with source workspace context.
+ * Builds the terminal-facing project label with source link and container identity.
  *
  * @param project - Project identity returned by the docker-git API.
  * @returns A deterministic label for SSH terminal headers and ready messages.
  *
  * @pure true
  * @effect none
- * @invariant issue refs include an issue marker; PR refs include a PR marker; labels never omit displayName.
+ * @invariant GitHub issue/PR refs prefer canonical source URLs; labels preserve non-empty containerName.
  * @precondition project.displayName identifies the repository or fallback project label.
- * @postcondition result contains displayName, workspace source context, and non-empty containerName when present.
+ * @postcondition result contains workspace source link/context and non-empty containerName when present.
  * @complexity O(n) where n = |repoUrl| + |repoRef|
  * @throws Never
  */
-// CHANGE: surface clone-source context in SSH terminal labels
-// WHY: terminal headers must identify issue/PR source and container instead of only the repo path
-// QUOTE(ТЗ): "надо писать какой Issues какой PR вообещ что за конетейнер"
+// CHANGE: keep SSH terminal labels to source link/context plus container identity
+// WHY: verbose repository + issue text duplicates the source URL and crowds the terminal header
+// QUOTE(ТЗ): "ссылки и название контейнера будет предостаточно"
 // REF: issue-370
 // SOURCE: n/a
-// FORMAT THEOREM: forall p: label(p) contains displayName(p) and context(repoUrl(p), repoRef(p))
+// FORMAT THEOREM: forall p: label(p) contains context(repoUrl(p), repoRef(p)) or containerName(p)
 // PURITY: CORE
 // EFFECT: none
 // INVARIANT: issue-* -> issue context; refs/pull/*/head -> PR context; containerName is preserved when non-empty
 // COMPLEXITY: O(n)
 export const projectTerminalLabel = (project: ProjectTerminalLabelInput): string => {
-  const displayName = project.displayName.trim()
-  const baseName = displayName.length === 0 ? project.repoUrl.trim() : displayName
-  const withContext = appendNonEmpty([baseName], renderWorkspaceContext(project.repoUrl, project.repoRef))
+  const withContext = appendNonEmpty([], renderWorkspaceContext(project.repoUrl, project.repoRef))
   const containerName = project.containerName?.trim() ?? ""
   const withContainer = containerName.length === 0
     ? withContext
     : appendNonEmpty(withContext, `container ${containerName}`)
-  return withContainer.join(" | ")
+  if (withContainer.length > 0) {
+    return withContainer.join(" | ")
+  }
+  const displayName = project.displayName.trim()
+  return displayName.length === 0 ? project.repoUrl.trim() : displayName
 }
