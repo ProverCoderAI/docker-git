@@ -69,9 +69,9 @@ describe("openResolvedProjectSshWithUpEffect", () => {
       })
       const events = yield* _(captureOpenResolvedProjectSshWithUpEvents(item))
       expect(events).toEqual([
-        "progress:Starting project before SSH: org/repo",
+        "progress:Starting project before SSH: https://github.com/org/repo.git | container dg-repo",
         "up:/controller/org/repo/issue-9",
-        "progress:Opening SSH terminal: org/repo",
+        "progress:Opening SSH terminal: https://github.com/org/repo.git | container dg-repo",
         "open:ssh -p 2299 dev@127.0.0.1"
       ])
     }))

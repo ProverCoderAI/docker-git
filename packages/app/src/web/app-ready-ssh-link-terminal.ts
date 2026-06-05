@@ -1,3 +1,5 @@
+import { projectTerminalLabel } from "@prover-coder-ai/docker-git-terminal/core"
+
 import type { BrowserActionContext } from "./actions-shared.js"
 import type { TerminalSession } from "./api-types.js"
 import type { DashboardProject } from "./app-ready-ssh-link-core.js"
@@ -135,7 +137,7 @@ const buildProjectTerminalSession = (
   buildProjectActiveTerminalSession({
     onExit: args.actionContext.reloadDashboard,
     onReady: args.actionContext.reloadDashboard,
-    projectDisplayName: project.displayName,
+    projectDisplayName: projectTerminalLabel(project),
     projectId: project.id,
     projectKey: project.projectKey,
     session

@@ -246,8 +246,8 @@ fi
 grep -Fq -- "Project created: octocat/hello-world" "$CLONE_LOG" \
   || fail "expected clone log to confirm project creation"
 
-grep -Fq -- "SSH terminal: octocat/hello-world" "$CLONE_LOG" \
-  || fail "expected clone log to show SSH auto-open header"
+grep -Fq -- "SSH terminal: https://github.com/octocat/Hello-World/issues/1 | container $CONTAINER_NAME" "$CLONE_LOG" \
+  || fail "expected clone log to show SSH auto-open header with issue URL and container"
 
 [[ -f "$SSH_INVOCATION_LOG" ]] || fail "expected ssh wrapper to be invoked"
 grep -Fq -- "<-tt>" "$SSH_INVOCATION_LOG" || fail "expected ssh to request a tty"
