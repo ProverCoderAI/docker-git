@@ -110,12 +110,34 @@ describe("app planFiles", () => {
           "args = [\"--project\", \"$DOCKER_GIT_BROWSER_PROJECT\", \"--network\", \"$DOCKER_GIT_BROWSER_NETWORK\"]"
         )
         expect(entrypoint.contents).toContain("plan-to-git sync")
+        expect(entrypoint.contents).toContain("docker_git_ensure_open_pr")
+        expect(entrypoint.contents).toContain("gh pr list --repo \"$base_repo\" --state open --head \"$head_arg\"")
+        expect(entrypoint.contents).toContain(
+          "gh pr create --repo \"$base_repo\" --base \"$base_branch\" --head \"$head_arg\" --fill"
+        )
         expect(entrypoint.contents).toContain("plan-to-git hook --source codex")
+        expect(entrypoint.contents).toContain("plan-to-git import-codex --no-sync")
         expect(entrypoint.contents).toContain("CODEX_REQUIREMENTS_FILE=\"/etc/codex/requirements.toml\"")
         expect(entrypoint.contents).toContain("managed_dir = \"/opt/docker-git/hooks\"")
         expect(entrypoint.contents).toContain("[[hooks.UserPromptSubmit]]")
         expect(entrypoint.contents).toContain("[[hooks.Stop]]")
         expect(entrypoint.contents).toContain("command = \"/opt/docker-git/hooks/plan-to-git-codex-hook\"")
+
+        const cdIndex = entrypoint.contents.indexOf("cd \"$REPO_ROOT\"")
+        const ensurePrIndex = entrypoint.contents.indexOf(
+          "docker_git_ensure_open_pr\n\n# CHANGE: backfill Codex session plans"
+        )
+        const planImportIndex = entrypoint.contents.indexOf("plan-to-git import-codex --no-sync")
+        const planSyncIndex = entrypoint.contents.indexOf("plan-to-git sync")
+        const sessionBackupIndex = entrypoint.contents.indexOf(
+          "docker-git-session-sync backup --verbose --background --require-comment"
+        )
+
+        expect(cdIndex).toBeGreaterThanOrEqual(0)
+        expect(ensurePrIndex).toBeGreaterThan(cdIndex)
+        expect(planImportIndex).toBeGreaterThan(ensurePrIndex)
+        expect(planSyncIndex).toBeGreaterThan(planImportIndex)
+        expect(sessionBackupIndex).toBeGreaterThan(planSyncIndex)
       })
     )
   })

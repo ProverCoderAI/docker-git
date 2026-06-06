@@ -11,7 +11,9 @@ import { renderDockerfile } from "../../src/core/templates/dockerfile.js"
 import { renderEntrypoint } from "../../src/core/templates-entrypoint.js"
 import { renderEntrypointDnsRepair } from "../../src/core/templates-entrypoint/dns-repair.js"
 import { renderEntrypointGitHooks } from "../../src/core/templates-entrypoint/git.js"
+import { renderPostPushPrEnsure as renderLibPostPushPrEnsure } from "../../src/core/templates-entrypoint/post-push-pr.js"
 import { renderPromptScript } from "../../src/core/templates-prompt.js"
+import { renderPostPushPrEnsure as renderAppPostPushPrEnsure } from "../../../app/src/lib/core/templates-entrypoint/post-push-pr.js"
 
 const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateConfig => ({
   ...defaultTemplateConfig,
@@ -464,6 +466,10 @@ describe("renderEntrypoint clone cache", () => {
 })
 
 describe("renderEntrypointGitHooks", () => {
+  it("keeps the app mirror of the post-push PR fragment in sync with lib", () => {
+    expect(renderAppPostPushPrEnsure()).toBe(renderLibPostPushPrEnsure())
+  })
+
   it("installs pre-push protection checks, plan sync, and a global git post-push runtime", () => {
     const hooks = renderEntrypointGitHooks()
 
@@ -480,7 +486,14 @@ describe("renderEntrypointGitHooks", () => {
     expect(hooks).toContain("cat <<'EOF' > \"$GIT_WRAPPER_BIN\"")
     expect(hooks).toContain("check_issue_managed_block_range")
     expect(hooks).toContain("Run plan sync and session backup after successful push")
+    expect(hooks).toContain("docker_git_ensure_open_pr")
+    expect(hooks).toContain("docker_git_github_repo_from_remote_url")
+    expect(hooks).toContain("gh pr list --repo \"$base_repo\" --state open --head \"$head_arg\"")
+    expect(hooks).toContain("gh pr create --repo \"$base_repo\" --base \"$base_branch\" --head \"$head_arg\" --fill")
+    expect(hooks).toContain("[post-push-pr] Error: cannot create PR from detached HEAD")
+    expect(hooks).toContain("[post-push-pr] Error: failed to list open PRs")
     expect(hooks).toContain("DOCKER_GIT_SKIP_PLAN_TO_GIT")
+    expect(hooks).toContain("plan-to-git import-codex --no-sync")
     expect(hooks).toContain("plan-to-git sync")
     expect(hooks).toContain("plan-to-git hook --source codex")
     expect(hooks).toContain("[features]")
@@ -507,6 +520,18 @@ describe("renderEntrypointGitHooks", () => {
     expect(hooks).not.toContain("node \"$BACKUP_SCRIPT\"")
     expect(hooks).not.toContain("session-backup-gist.js")
     expect(hooks).toContain("[session-backup] Error: gh CLI not found")
+
+    const cdIndex = hooks.indexOf('cd "$REPO_ROOT"')
+    const ensurePrIndex = hooks.indexOf("docker_git_ensure_open_pr\n\n# CHANGE: backfill Codex session plans")
+    const planImportIndex = hooks.indexOf("plan-to-git import-codex --no-sync")
+    const planSyncIndex = hooks.indexOf("plan-to-git sync")
+    const sessionBackupIndex = hooks.indexOf("docker-git-session-sync backup --verbose --background --require-comment")
+
+    expect(cdIndex).toBeGreaterThanOrEqual(0)
+    expect(ensurePrIndex).toBeGreaterThan(cdIndex)
+    expect(planImportIndex).toBeGreaterThan(ensurePrIndex)
+    expect(planSyncIndex).toBeGreaterThan(planImportIndex)
+    expect(sessionBackupIndex).toBeGreaterThan(planSyncIndex)
   })
 })
 
