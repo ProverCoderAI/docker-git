@@ -20,6 +20,7 @@ import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { defaultProjectsRoot, resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
 import { deleteDockerGitProject } from "@effect-template/lib/usecases/projects"
+import { autoPullState } from "@effect-template/lib/usecases/state-repo"
 import type { RawOptions } from "@effect-template/lib/core/command-options"
 import type { CreateCommand as LibCreateCommand } from "@effect-template/lib/core/domain"
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
@@ -216,6 +217,43 @@ const toProjectDetails = (
 
 const dbProjectDetails = (project: ProjectItem): ProjectDetails => toProjectDetails(project, dbProjectSummary(project))
 
+const toProjectInventoryReadError = (error: unknown): ApiInternalError =>
+  new ApiInternalError({
+    message: `Failed to read docker-git project inventory: ${String(error)}`,
+    cause: error
+  })
+
+/**
+ * Refreshes controller project inventory from the shared state repository.
+ *
+ * @returns Effect that completes after best-effort state auto-pull.
+ *
+ * @pure false
+ * @effect FileSystem, Path, CommandExecutor through autoPullState.
+ * @invariant Respects DOCKER_GIT_STATE_AUTO_PULL=false and never fails.
+ * @precondition Controller state root may or may not be a git repository.
+ * @postcondition If auto-pull is enabled and succeeds, local inventory includes latest remote state.
+ * @complexity O(1) git remote round-trip when enabled.
+ * @throws Never - failures are logged by autoPullState.
+ */
+// CHANGE: refresh shared state before project inventory reads
+// WHY: shell and web both read `/projects`; stale controller state caused issue #372
+// QUOTE(ТЗ): "project not synchronized"
+// REF: issue-372
+// SOURCE: https://github.com/ProverCoderAI/docker-git/issues/372
+// FORMAT THEOREM: remote_has(p) and pull_enabled -> p in inventory_after_refresh
+// PURITY: SHELL
+// EFFECT: Effect<void, never, FileSystem | Path | CommandExecutor>
+// INVARIANT: refresh failure cannot masquerade as an empty project list
+// COMPLEXITY: O(git pull)
+export const refreshProjectStateForInventory = () => autoPullState
+
+const readProjectItemsForInventory = () =>
+  refreshProjectStateForInventory().pipe(
+    Effect.zipRight(listProjectItems),
+    Effect.mapError(toProjectInventoryReadError)
+  )
+
 const runtimeProjectDetails = (project: ProjectItem) =>
   Effect.gen(function*(_) {
     const runtimeByProject = yield* _(loadProjectRuntimeByProject([project]))
@@ -255,7 +293,7 @@ const findProjectById = (projectId: string) =>
   Effect.gen(function*(_) {
     const path = yield* _(Path.Path)
     const aliases = projectIdAliases(path, projectId)
-    const projects = yield* _(listProjectItems)
+    const projects = yield* _(readProjectItemsForInventory())
     const project = projects.find((item) => item.projectDir === projectId)
       ?? projects.find((item) => aliases.has(item.projectDir) || aliases.has(path.resolve(item.projectDir)))
     if (project) {
@@ -268,7 +306,7 @@ export const getProjectItemById = (projectId: string) => findProjectById(project
 
 const findProjectByKey = (projectKey: string) =>
   Effect.gen(function*(_) {
-    const projects = yield* _(listProjectItems)
+    const projects = yield* _(readProjectItemsForInventory())
     const matches = projects.filter((item) => projectShortKey(item.projectDir) === projectKey)
     if (matches.length === 0) {
       return yield* _(Effect.fail(new ApiNotFoundError({ message: `Project key not found: ${projectKey}` })))
@@ -587,9 +625,8 @@ const startCreateProjectJob = (
   })
 
 export const listProjects = () =>
-  listProjectItems.pipe(
-    Effect.map((projects) => projects.map((project) => dbProjectSummary(project))),
-    Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<ProjectSummary>))
+  readProjectItemsForInventory().pipe(
+    Effect.map((projects) => projects.map((project) => dbProjectSummary(project)))
   )
 
 export const applyAllProjects = (activeOnly: boolean) =>
@@ -650,6 +687,7 @@ export const createProjectFromRequest = (
   request: CreateProjectRequest
 ) =>
   Effect.gen(function*(_) {
+    yield* _(refreshProjectStateForInventory())
     const prepared = yield* _(prepareCreateProjectRequest(request).pipe(Effect.mapError(toProjectApiError)))
     if (request.async === true) {
       return yield* _(startCreateProjectJob(prepared))

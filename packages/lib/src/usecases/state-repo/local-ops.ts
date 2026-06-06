@@ -7,6 +7,7 @@ import type { CommandFailedError } from "../../shell/errors.js"
 import { defaultProjectsRoot } from "../menu-helpers.js"
 import { git, gitBaseEnv, gitCapture, gitExitCode, successExitCode } from "./git-commands.js"
 import { ensureStateGitignore } from "./gitignore.js"
+import { withStateGitLock } from "./lock.js"
 
 type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 
@@ -24,14 +25,16 @@ const ensureStateIgnoreAndUntrackCaches = (
     yield* _(git(root, ["rm", "-r", "--cached", "--ignore-unmatch", ...managedRepositoryCachePaths], gitBaseEnv))
   }).pipe(Effect.asVoid)
 
-export const stateStatus = Effect.gen(function*(_) {
+const stateStatusRaw = Effect.gen(function*(_) {
   const path = yield* _(Path.Path)
   const root = resolveStateRoot(path, process.cwd())
   const output = yield* _(gitCapture(root, ["status", "-sb", "--porcelain=v1"], gitBaseEnv))
   yield* _(Effect.log(output.trim().length > 0 ? output.trimEnd() : "(clean)"))
 }).pipe(Effect.asVoid)
 
-export const stateCommit = (
+export const stateStatus = withStateGitLock(stateStatusRaw)
+
+const stateCommitRaw = (
   message: string
 ): Effect.Effect<
   void,
@@ -51,3 +54,11 @@ export const stateCommit = (
     }
     yield* _(git(root, ["commit", "-m", message], gitBaseEnv))
   }).pipe(Effect.asVoid)
+
+export const stateCommit = (
+  message: string
+): Effect.Effect<
+  void,
+  CommandFailedError | PlatformError,
+  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+> => withStateGitLock(stateCommitRaw(message))

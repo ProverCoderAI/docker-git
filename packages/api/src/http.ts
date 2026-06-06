@@ -806,7 +806,7 @@ export const makeRouter = () => {
       "/health",
       Effect.gen(function*(_) {
         const cwd = yield* _(resolveWorkspaceRoot(process.cwd()).pipe(Effect.orElseSucceed(() => process.cwd())))
-        const projectsRoot = defaultProjectsRoot(cwd)
+        const projectsRoot = defaultProjectsRoot(process.cwd())
         return yield* _(jsonResponse({ ok: true, revision: controllerRevision, cwd, projectsRoot }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),

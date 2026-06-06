@@ -9,13 +9,17 @@ import { git, gitBaseEnv, gitCapture, gitExitCode, successExitCode } from "./git
 import { resolveStateGithubContext, withGithubAuthHintOnFailure } from "./github-auth-state.js"
 import { isGithubHttpsRemote, withGithubAskpassEnv } from "./github-auth.js"
 import { isGitlabHttpsRemote, resolveGitlabToken, withGitlabAskpassEnv } from "./gitlab-auth.js"
+import { withStateGitLock } from "./lock.js"
 
 const resolveStateRoot = (path: Path.Path, cwd: string): string => path.resolve(defaultProjectsRoot(cwd))
 
-export const statePull: Effect.Effect<
+type StateRepoRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+type StateRepoError = CommandFailedError | PlatformError
+
+const statePullRaw: Effect.Effect<
   void,
-  CommandFailedError | PlatformError,
-  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+  StateRepoError,
+  StateRepoRuntime
 > = Effect.gen(function*(_) {
   const fs = yield* _(FileSystem.FileSystem)
   const path = yield* _(Path.Path)
@@ -52,10 +56,16 @@ export const statePull: Effect.Effect<
   yield* _(withGithubAuthHintOnFailure(effect, auth.authHintNeeded))
 }).pipe(Effect.asVoid)
 
-export const statePush: Effect.Effect<
+export const statePull: Effect.Effect<
   void,
-  CommandFailedError | PlatformError,
-  FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
+  StateRepoError,
+  StateRepoRuntime
+> = withStateGitLock(statePullRaw)
+
+const statePushRaw: Effect.Effect<
+  void,
+  StateRepoError,
+  StateRepoRuntime
 > = Effect.gen(function*(_) {
   const fs = yield* _(FileSystem.FileSystem)
   const path = yield* _(Path.Path)
@@ -100,3 +110,9 @@ export const statePush: Effect.Effect<
   })()
   yield* _(withGithubAuthHintOnFailure(effect, auth.authHintNeeded))
 }).pipe(Effect.asVoid)
+
+export const statePush: Effect.Effect<
+  void,
+  StateRepoError,
+  StateRepoRuntime
+> = withStateGitLock(statePushRaw)

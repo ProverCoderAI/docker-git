@@ -38,6 +38,7 @@ import {
 import type { GitAuthEnv } from "./state-repo/github-auth.js"
 import { resolveGithubToken } from "./state-repo/github-auth.js"
 import { ensureStateGitignore } from "./state-repo/gitignore.js"
+import { withStateGitLock } from "./state-repo/lock.js"
 
 type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 const resolveStateRoot = (path: Path.Path, cwd: string): string => path.resolve(defaultProjectsRoot(cwd))
@@ -60,7 +61,7 @@ export const statePath: Effect.Effect<void, PlatformError, Path.Path> = Effect.g
   yield* _(Effect.log(root))
 }).pipe(Effect.asVoid)
 
-export const stateSync = (
+const stateSyncRaw = (
   message: string | null
 ): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
   Effect.gen(function*(_) {
@@ -102,7 +103,9 @@ export const stateSync = (
     )
   }).pipe(Effect.asVoid)
 
-export const autoSyncState = (message: string): Effect.Effect<void, never, StateRepoEnv> =>
+export const stateSync = (message: string | null) => withStateGitLock(stateSyncRaw(message))
+
+const autoSyncStateRaw = (message: string): Effect.Effect<void, never, StateRepoEnv> =>
   Effect.gen(function*(_) {
     const path = yield* _(Path.Path)
     const root = resolveStateRoot(path, process.cwd())
@@ -117,7 +120,7 @@ export const autoSyncState = (message: string): Effect.Effect<void, never, State
     }
     const strictValue = process.env[autoSyncStrictEnvKey]
     const strict = strictValue !== undefined && strictValue.trim().length > 0 ? isTruthyEnv(strictValue) : false
-    const effect = stateSync(message)
+    const effect = stateSyncRaw(message)
     if (strict) {
       yield* _(effect)
       return
@@ -153,9 +156,14 @@ export const autoSyncState = (message: string): Effect.Effect<void, never, State
 // EFFECT: Effect<void, never, StateRepoEnv>
 // INVARIANT: never fails — errors are logged as warnings; does not block CLI execution
 // COMPLEXITY: O(1) network round-trip
-export const autoPullState: Effect.Effect<void, never, StateRepoEnv> = Effect.gen(function*(_) {
+const autoPullStateRaw: Effect.Effect<void, never, StateRepoEnv> = Effect.gen(function*(_) {
+  const fs = yield* _(FileSystem.FileSystem)
   const path = yield* _(Path.Path)
   const root = resolveStateRoot(path, process.cwd())
+  const rootExists = yield* _(fs.exists(root))
+  if (!rootExists) {
+    return
+  }
   const repoOk = yield* _(isGitRepo(root))
   if (!repoOk) {
     return
@@ -181,6 +189,10 @@ export const autoPullState: Effect.Effect<void, never, StateRepoEnv> = Effect.ge
   }),
   Effect.asVoid
 )
+
+export const autoSyncState = (message: string) => withStateGitLock(autoSyncStateRaw(message))
+
+export const autoPullState: Effect.Effect<void, never, StateRepoEnv> = withStateGitLock(autoPullStateRaw)
 
 // Internal pull that takes an already-resolved root, reusing auth logic from pull-push.
 const statePullInternal = (
@@ -304,7 +316,7 @@ const checkoutBranchBestEffort = (
     yield* _(Effect.logWarning(`git checkout -B ${repoRef} failed (exit ${checkoutExit})`))
   })
 
-export const stateInit = (
+const stateInitRaw = (
   input: StateInitInput
 ): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> => {
   const doInit = (env: GitAuthEnv) =>
@@ -326,6 +338,8 @@ export const stateInit = (
   const token = input.token?.trim() ?? ""
   return selectStateInitEffect(input.repoUrl, token, doInit)
 }
+
+export const stateInit = (input: StateInitInput) => withStateGitLock(stateInitRaw(input))
 
 export { stateCommit, stateStatus } from "./state-repo/local-ops.js"
 export { statePull, statePush } from "./state-repo/pull-push.js"
