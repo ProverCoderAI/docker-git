@@ -248,7 +248,7 @@ const toProjectInventoryReadError = (error: unknown): ApiInternalError =>
 // COMPLEXITY: O(git pull)
 export const refreshProjectStateForInventory = () => autoPullState
 
-const readProjectItemsForInventory = () =>
+export const readProjectItemsForInventory = () =>
   refreshProjectStateForInventory().pipe(
     Effect.zipRight(listProjectItems),
     Effect.mapError(toProjectInventoryReadError)

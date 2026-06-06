@@ -4,13 +4,13 @@ import * as HttpServerRequest from "@effect/platform/HttpServerRequest"
 import * as HttpServerError from "@effect/platform/HttpServerError"
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse"
 import type { PlatformError } from "@effect/platform/Error"
-import { listProjectItems } from "@effect-template/lib"
 import type { ListProjectsContext } from "@effect-template/lib/usecases/projects-list"
 import { Effect } from "effect"
 import * as Stream from "effect/Stream"
 
 import { ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError } from "../api/errors.js"
 import { listProjectPortForwards } from "./project-port-forwards.js"
+import { readProjectItemsForInventory } from "./projects.js"
 import {
   normalizeForwardedPrefix,
   parseLinuxDefaultGatewayIp,
@@ -134,13 +134,13 @@ const fetchUpstream = (
 
 const resolveProxyProjectId = (
   target: ProjectPortProxyPath
-): Effect.Effect<string, ApiConflictError | ApiNotFoundError | PlatformError, ListProjectsContext> => {
+): Effect.Effect<string, ApiConflictError | ApiInternalError | ApiNotFoundError, ListProjectsContext> => {
   if (target._tag === "ProjectId") {
     return Effect.succeed(target.projectId)
   }
 
   return Effect.gen(function*(_) {
-    const projects = yield* _(listProjectItems)
+    const projects = yield* _(readProjectItemsForInventory())
     const matches = projects.filter((project) => projectShortKey(project.projectDir) === target.projectKey)
     if (matches.length === 0) {
       return yield* _(Effect.fail(new ApiNotFoundError({ message: `Project key not found: ${target.projectKey}` })))
