@@ -163,8 +163,10 @@ import {
   openSkillerForTerminalSession,
   parseSkillerRoute,
   proxySkillerTrpc,
+  readSkillerProjectContext,
   serveSkillerApp
 } from "./services/skiller.js"
+import { resolveDockerGitSkillerBackendUrl } from "./services/skiller-core.js"
 import {
   commitStateFromRequest,
   initStateFromRequest,
@@ -596,6 +598,9 @@ const resolveRequestOrigin = (request: HttpServerRequest.HttpServerRequest): str
   return `${proto}://${host}`
 }
 
+const resolveSkillerBackendUrl = (request: HttpServerRequest.HttpServerRequest): string =>
+  resolveDockerGitSkillerBackendUrl(process.env, resolveRequestOrigin(request))
+
 const resolveFederationContext = (
   request: HttpServerRequest.HttpServerRequest,
   requestedDomain?: string | undefined
@@ -812,24 +817,43 @@ export const makeRouter = () => {
     ),
     HttpRouter.post(
       "/skiller/open",
-      openSkiller().pipe(
-        Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
-        Effect.catchAll(errorResponse)
-      )
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const launch = yield* _(openSkiller(undefined, undefined, resolveSkillerBackendUrl(request)))
+        return yield* _(jsonResponse({ ok: true, ...launch }, 202))
+      }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(
       "/projects/by-key/:projectKey/skiller/open",
-      projectKeyParams.pipe(
-        Effect.flatMap(({ projectKey }) => openSkiller(projectKey)),
-        Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
-        Effect.catchAll(errorResponse)
-      )
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const { projectKey } = yield* _(projectKeyParams)
+        const launch = yield* _(openSkiller(projectKey, undefined, resolveSkillerBackendUrl(request)))
+        return yield* _(jsonResponse({ ok: true, ...launch }, 202))
+      }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(
       "/projects/by-key/:projectKey/terminal-sessions/:sessionId/skiller/open",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const { projectKey, sessionId } = yield* _(terminalSessionByProjectKeyParams)
+        const launch = yield* _(openSkillerForTerminalSession(projectKey, sessionId, resolveSkillerBackendUrl(request)))
+        return yield* _(jsonResponse({ ok: true, ...launch }, 202))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/projects/by-key/:projectKey/skiller/context",
+      projectKeyParams.pipe(
+        Effect.flatMap(({ projectKey }) => readSkillerProjectContext(projectKey, null)),
+        Effect.flatMap((context) => jsonResponse({ ok: true, ...context }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/projects/by-key/:projectKey/terminal-sessions/:sessionId/skiller/context",
       terminalSessionByProjectKeyParams.pipe(
-        Effect.flatMap(({ projectKey, sessionId }) => openSkillerForTerminalSession(projectKey, sessionId)),
-        Effect.flatMap((launch) => jsonResponse({ ok: true, ...launch }, 202)),
+        Effect.flatMap(({ projectKey, sessionId }) => readSkillerProjectContext(projectKey, sessionId)),
+        Effect.flatMap((context) => jsonResponse({ ok: true, ...context }, 200)),
         Effect.catchAll(errorResponse)
       )
     ),

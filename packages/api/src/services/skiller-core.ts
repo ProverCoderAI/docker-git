@@ -35,6 +35,65 @@ export type SkillerBrowserScope = {
   readonly sessionId: string | null
 }
 
+export type ConfiguredSkillerWebUrl =
+  | { readonly _tag: "Disabled" }
+  | { readonly _tag: "Enabled"; readonly baseUrl: string }
+  | { readonly _tag: "Invalid"; readonly message: string }
+
+export type ExternalSkillerLaunchUrlInput = {
+  readonly backendUrl: string
+  readonly projectKey: string | undefined
+  readonly sessionId: string | undefined
+  readonly skillerWebUrl: string
+}
+
+const trimTrailingSlashes = (value: string): string =>
+  value.replace(/\/+$/u, "")
+
+export const resolveConfiguredSkillerWebUrl = (
+  env: Record<string, string | undefined>
+): ConfiguredSkillerWebUrl => {
+  const raw = env["DOCKER_GIT_SKILLER_WEB_URL"]?.trim()
+  if (raw === undefined || raw.length === 0) {
+    return { _tag: "Disabled" }
+  }
+  if (!URL.canParse(raw)) {
+    return { _tag: "Invalid", message: `Invalid DOCKER_GIT_SKILLER_WEB_URL: ${raw}` }
+  }
+  const parsed = new URL(raw)
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { _tag: "Invalid", message: "DOCKER_GIT_SKILLER_WEB_URL must use http or https." }
+  }
+  parsed.hash = ""
+  parsed.search = ""
+  return { _tag: "Enabled", baseUrl: trimTrailingSlashes(parsed.toString()) }
+}
+
+export const resolveDockerGitSkillerBackendUrl = (
+  env: Record<string, string | undefined>,
+  requestOrigin: string
+): string => {
+  const configured = [
+    env["DOCKER_GIT_SKILLER_BACKEND_URL"],
+    env["DOCKER_GIT_API_PUBLIC_URL"]
+  ]
+    .map((value) => value?.trim())
+    .find((value) => value !== undefined && value.length > 0)
+  return configured ?? requestOrigin
+}
+
+export const externalSkillerLaunchUrl = (input: ExternalSkillerLaunchUrlInput): string => {
+  const url = new URL(`${trimTrailingSlashes(input.skillerWebUrl)}/launch`)
+  url.searchParams.set("backendUrl", input.backendUrl)
+  if (input.projectKey !== undefined) {
+    url.searchParams.set("projectKey", input.projectKey)
+  }
+  if (input.sessionId !== undefined) {
+    url.searchParams.set("sessionId", input.sessionId)
+  }
+  return url.toString()
+}
+
 export const parseDockerMountLines = (output: string): ReadonlyArray<DockerContainerMount> =>
   output
     .split(/\r?\n/u)

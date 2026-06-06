@@ -19,10 +19,13 @@ import * as Stream from "effect/Stream"
 import { ApiConflictError, ApiInternalError, ApiNotFoundError } from "../api/errors.js"
 import {
   containerCodexSkillsPath,
+  externalSkillerLaunchUrl,
   parseDockerMountLines,
   remapContainerPathToMountedHost,
+  resolveConfiguredSkillerWebUrl,
   sameSkillerScope,
   skillerBrowserScopeForContainer,
+  type SkillerBrowserScope,
   type SkillerContainerScope
 } from "./skiller-core.js"
 import { getProjectItemByKey } from "./projects.js"
@@ -31,12 +34,19 @@ import { getProjectTerminalSession } from "./terminal-sessions.js"
 export type SkillerLaunch = {
   readonly alreadyRunning: boolean
   readonly appPath: string
+  readonly backendUrl: string | null
   readonly logPath: string
+  readonly mode: "bundled" | "external"
   readonly pid: number | null
   readonly scope: SkillerContainerScope | null
   readonly startedAtIso: string
   readonly trpcBasePath: string
   readonly trpcPort: number
+}
+
+export type SkillerProjectContext = {
+  readonly browserScope: SkillerBrowserScope
+  readonly scope: SkillerContainerScope
 }
 
 type SkillerProcess = {
@@ -133,7 +143,9 @@ const toLaunch = (
 ): SkillerLaunch => ({
   alreadyRunning,
   appPath: sessionId === undefined ? process.appPath : sessionSkillerAppPath(sessionId),
+  backendUrl: null,
   logPath: process.logPath,
+  mode: "bundled",
   pid: process.process.pid ?? null,
   scope: process.scope,
   startedAtIso: process.startedAtIso,
@@ -368,6 +380,27 @@ const resolveRequestedSkillerScope = (
     : getProjectItemByKey(projectKey).pipe(
       Effect.flatMap((project) => resolveSkillerScope(projectKey, project))
     )
+
+export const readSkillerProjectContext = (
+  projectKey: string,
+  sessionId: string | null
+): Effect.Effect<
+  SkillerProjectContext,
+  ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
+  ListProjectsContext
+> =>
+  getProjectItemByKey(projectKey).pipe(
+    Effect.flatMap((project) =>
+      sessionId === null
+        ? Effect.succeed(project)
+        : getProjectTerminalSession(project.projectDir, sessionId).pipe(Effect.as(project))
+    ),
+    Effect.flatMap((project) => resolveSkillerScope(projectKey, project)),
+    Effect.map((scope) => ({
+      browserScope: skillerBrowserScopeForContainer(scope, sessionId),
+      scope
+    }))
+  )
 
 const waitForSkillerReady = (trpcPort: number): Effect.Effect<void, ApiInternalError> =>
   Effect.tryPromise({
@@ -794,9 +827,43 @@ const touchSkillerActivity = (
       )
     )
 
+const externalSkillerLaunch = (
+  scope: SkillerContainerScope | null,
+  projectKey: string | undefined,
+  sessionId: string | undefined,
+  backendUrl: string
+): Effect.Effect<SkillerLaunch | null, ApiInternalError> => {
+  const config = resolveConfiguredSkillerWebUrl(process.env)
+  if (config._tag === "Disabled") {
+    return Effect.succeed(null)
+  }
+  if (config._tag === "Invalid") {
+    return Effect.fail(new ApiInternalError({ message: config.message }))
+  }
+  const appPath = externalSkillerLaunchUrl({
+    backendUrl,
+    projectKey,
+    sessionId,
+    skillerWebUrl: config.baseUrl
+  })
+  return Effect.succeed({
+    alreadyRunning: true,
+    appPath,
+    backendUrl,
+    logPath: "",
+    mode: "external",
+    pid: null,
+    scope,
+    startedAtIso: new Date().toISOString(),
+    trpcBasePath: `${config.baseUrl}/trpc`,
+    trpcPort: 0
+  })
+}
+
 export const openSkiller = (
   projectKey?: string,
-  sessionId?: string
+  sessionId?: string,
+  backendUrl = "http://localhost:3334"
 ): Effect.Effect<
   SkillerLaunch,
   ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
@@ -806,6 +873,10 @@ export const openSkiller = (
     const scope = yield* _(resolveRequestedSkillerScope(projectKey))
     yield* _(touchSkillerActivity(scope))
     rememberSessionScope(sessionId, scope)
+    const externalLaunch = yield* _(externalSkillerLaunch(scope, projectKey, sessionId, backendUrl))
+    if (externalLaunch !== null) {
+      return externalLaunch
+    }
     if (currentProcess !== null && isRunning(currentProcess.process)) {
       if (sameSkillerScope(currentProcess.scope, scope)) {
         yield* _(Effect.try({
@@ -851,7 +922,8 @@ export const hasLiveProjectSkillerSession = (projectId: string): boolean =>
 
 export const openSkillerForTerminalSession = (
   projectKey: string,
-  sessionId: string
+  sessionId: string,
+  backendUrl = "http://localhost:3334"
 ): Effect.Effect<
   SkillerLaunch,
   ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
@@ -863,7 +935,7 @@ export const openSkillerForTerminalSession = (
         Effect.as(projectKey)
       )
     ),
-    Effect.flatMap((resolvedProjectKey) => openSkiller(resolvedProjectKey, sessionId))
+    Effect.flatMap((resolvedProjectKey) => openSkiller(resolvedProjectKey, sessionId, backendUrl))
   )
 
 export const parseSkillerRoute = (pathname: string): SkillerRoute | null => {

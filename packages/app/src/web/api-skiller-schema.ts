@@ -17,7 +17,12 @@ export const SkillerScopeResponseSchema = Schema.Struct({
 export const SkillerLaunchResponseSchema = Schema.Struct({
   alreadyRunning: Schema.Boolean,
   appPath: Schema.String,
+  backendUrl: Schema.NullOr(Schema.String),
   logPath: Schema.String,
+  mode: Schema.optionalWith(
+    Schema.Union(Schema.Literal("bundled"), Schema.Literal("external")),
+    { default: () => "bundled" }
+  ),
   ok: Schema.Boolean,
   pid: Schema.NullOr(Schema.Number),
   scope: Schema.NullOr(SkillerScopeResponseSchema),
