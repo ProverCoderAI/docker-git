@@ -26,6 +26,7 @@ type WrapperHarness = {
   readonly nodeRepoRootLogPath: string
   readonly nodeScriptLogPath: string
   readonly planToGitLogPath: string
+  readonly ghLogPath: string
 }
 
 const fakeGitScript = `#!/usr/bin/env bash
@@ -76,6 +77,28 @@ if [[ "$subcommand" == "rev-parse" ]]; then
     fi
     exit 128
   fi
+  next_next_index=$((index + 2))
+  if [[ "$next_index" -lt "$#" && "$next_next_index" -lt "$#" && "\${args[$next_index]}" == "--abbrev-ref" && "\${args[$next_next_index]}" == "HEAD" ]]; then
+    printf '%s\\n' "\${FAKE_GIT_BRANCH:-issue-375}"
+    exit 0
+  fi
+fi
+
+if [[ "$subcommand" == "remote" ]]; then
+  next_index=$((index + 1))
+  next_next_index=$((index + 2))
+  if [[ "$next_index" -lt "$#" && "$next_next_index" -lt "$#" && "\${args[$next_index]}" == "get-url" ]]; then
+    remote_name="\${args[$next_next_index]}"
+    if [[ "$remote_name" == "upstream" && -n "\${FAKE_GIT_UPSTREAM_URL:-}" ]]; then
+      printf '%s\\n' "$FAKE_GIT_UPSTREAM_URL"
+      exit 0
+    fi
+    if [[ "$remote_name" == "origin" ]]; then
+      printf '%s\\n' "\${FAKE_GIT_ORIGIN_URL:-https://github.com/org/repo.git}"
+      exit 0
+    fi
+    exit 2
+  fi
 fi
 
 if [[ "$subcommand" == "push" && -n "\${FAKE_GIT_PUSH_EXIT_CODE:-}" ]]; then
@@ -107,6 +130,37 @@ exit 0
 
 const fakeGhScript = `#!/usr/bin/env bash
 set -euo pipefail
+
+if [[ -n "\${FAKE_GH_LOG_PATH:-}" ]]; then
+  printf '%s\\t%s\\n' "$PWD" "$*" >> "$FAKE_GH_LOG_PATH"
+fi
+
+if [[ "\${1:-}" == "repo" && "\${2:-}" == "view" ]]; then
+  if [[ -n "\${FAKE_GH_REPO_VIEW_EXIT_CODE:-}" ]]; then
+    exit "$FAKE_GH_REPO_VIEW_EXIT_CODE"
+  fi
+  printf '%s\\n' "\${FAKE_GH_DEFAULT_BRANCH:-main}"
+  exit 0
+fi
+
+if [[ "\${1:-}" == "pr" && "\${2:-}" == "list" ]]; then
+  if [[ -n "\${FAKE_GH_PR_LIST_EXIT_CODE:-}" ]]; then
+    exit "$FAKE_GH_PR_LIST_EXIT_CODE"
+  fi
+  if [[ -n "\${FAKE_GH_OPEN_PR_URL:-}" ]]; then
+    printf '%s\\n' "$FAKE_GH_OPEN_PR_URL"
+  fi
+  exit 0
+fi
+
+if [[ "\${1:-}" == "pr" && "\${2:-}" == "create" ]]; then
+  if [[ -n "\${FAKE_GH_PR_CREATE_EXIT_CODE:-}" ]]; then
+    exit "$FAKE_GH_PR_CREATE_EXIT_CODE"
+  fi
+  printf '%s\\n' "\${FAKE_GH_CREATED_PR_URL:-https://github.com/org/repo/pull/375}"
+  exit 0
+fi
+
 exit 0
 `
 
@@ -227,6 +281,7 @@ const makeHarnessEnv = (
   FAKE_NODE_REPO_ROOT_LOG_PATH: harness.nodeRepoRootLogPath,
   FAKE_NODE_SCRIPT_LOG_PATH: harness.nodeScriptLogPath,
   FAKE_PLAN_TO_GIT_LOG_PATH: harness.planToGitLogPath,
+  FAKE_GH_LOG_PATH: harness.ghLogPath,
   ...overrides
 })
 
@@ -269,6 +324,7 @@ const withHarness = <A, E, R>(
       const nodeRepoRootLogPath = path.join(rootDir, "node-repo-root.log")
       const nodeScriptLogPath = path.join(rootDir, "node-script.log")
       const planToGitLogPath = path.join(rootDir, "plan-to-git.log")
+      const ghLogPath = path.join(rootDir, "gh.log")
 
       yield* _(fs.makeDirectory(path.join(repoDir, ".git"), { recursive: true }))
       yield* _(fs.makeDirectory(externalDir, { recursive: true }))
@@ -305,7 +361,8 @@ const withHarness = <A, E, R>(
           nodeCwdLogPath,
           nodeRepoRootLogPath,
           nodeScriptLogPath,
-          planToGitLogPath
+          planToGitLogPath,
+          ghLogPath
         })
       )
     })
@@ -321,11 +378,13 @@ describe("git post-push wrapper", () => {
         const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
         const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
 
         expect(nodeCwd).toEqual([harness.repoDir])
         expect(nodeRepoRoot).toEqual([harness.repoDir])
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
         expect(planToGit).toEqual([`${harness.repoDir}\tsync`])
+        expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head issue-375 --fill`)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -339,11 +398,13 @@ describe("git post-push wrapper", () => {
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
         const gitLog = yield* _(readLogLines(harness.gitLogPath))
         const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
 
         expect(nodeCwd).toEqual([harness.repoDir])
         expect(nodeRepoRoot).toEqual([harness.repoDir])
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
         expect(planToGit).toEqual([`${harness.repoDir}\tsync`])
+        expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head issue-375 --fill`)
         expect(gitLog.some((line) => line.startsWith(`${harness.externalDir}\t-C ${harness.repoDir} push`))).toBe(true)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
@@ -358,11 +419,13 @@ describe("git post-push wrapper", () => {
         const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
         const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
 
         expect(nodeCwd).toEqual([])
         expect(nodeRepoRoot).toEqual([])
         expect(nodeScript).toEqual([])
         expect(planToGit).toEqual([])
+        expect(gh).toEqual([])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -385,15 +448,17 @@ describe("git post-push wrapper", () => {
         const nodeRepoRoot = yield* _(readLogLines(harness.nodeRepoRootLogPath))
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
         const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
 
         expect(nodeCwd).toEqual([])
         expect(nodeRepoRoot).toEqual([])
         expect(nodeScript).toEqual([])
         expect(planToGit).toEqual([])
+        expect(gh).toEqual([])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("skips plan sync when disabled but still runs session backup", () =>
+  it.effect("skips plan sync when disabled but still ensures a PR and runs session backup", () =>
     withHarness((harness) =>
       Effect.gen(function*(_) {
         yield* _(
@@ -404,13 +469,15 @@ describe("git post-push wrapper", () => {
 
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
         const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
 
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
         expect(planToGit).toEqual([])
+        expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head issue-375 --fill`)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("propagates plan sync failures before session backup", () =>
+  it.effect("propagates plan sync failures after ensuring a PR and before session backup", () =>
     withHarness((harness) =>
       Effect.gen(function*(_) {
         yield* _(
@@ -422,9 +489,11 @@ describe("git post-push wrapper", () => {
 
         const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
         const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
 
         expect(nodeScript).toEqual([])
         expect(planToGit).toEqual([`${harness.repoDir}\tsync`])
+        expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head issue-375 --fill`)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -443,6 +512,108 @@ describe("git post-push wrapper", () => {
 
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
         expect(planToGit).toEqual([`${harness.repoDir}\tsync`])
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("reuses an existing open PR instead of creating a duplicate", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(
+          runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"], {
+            env: { FAKE_GH_OPEN_PR_URL: "https://github.com/org/repo/pull/375" }
+          })
+        )
+
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
+
+        expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
+        expect(planToGit).toEqual([`${harness.repoDir}\tsync`])
+        expect(gh).toContain(`${harness.repoDir}\tpr list --repo org/repo --state open --head issue-375 --json url --jq .[0].url // ""`)
+        expect(gh.some((line) => line.includes("pr create"))).toBe(false)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("creates fork PRs against upstream with an owner-qualified head branch", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(
+          runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"], {
+            env: {
+              FAKE_GIT_ORIGIN_URL: "https://github.com/me/repo.git",
+              FAKE_GIT_UPSTREAM_URL: "https://github.com/org/repo.git"
+            }
+          })
+        )
+
+        const gh = yield* _(readLogLines(harness.ghLogPath))
+
+        expect(gh).toContain(`${harness.repoDir}\trepo view org/repo --json defaultBranchRef --jq .defaultBranchRef.name`)
+        expect(gh).toContain(`${harness.repoDir}\tpr list --repo org/repo --state open --head me:issue-375 --json url --jq .[0].url // ""`)
+        expect(gh).toContain(`${harness.repoDir}\tpr list --repo org/repo --state open --head issue-375 --json url --jq .[0].url // ""`)
+        expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head me:issue-375 --fill`)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("propagates PR creation failures before plan sync and session backup", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(
+          runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"], {
+            env: { FAKE_GH_PR_CREATE_EXIT_CODE: "41" },
+            okExitCodes: [41]
+          })
+        )
+
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
+
+        expect(nodeScript).toEqual([])
+        expect(planToGit).toEqual([])
+        expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head issue-375 --fill`)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("propagates PR list failures without creating a duplicate PR", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(
+          runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"], {
+            env: { FAKE_GH_PR_LIST_EXIT_CODE: "42" },
+            okExitCodes: [1]
+          })
+        )
+
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
+
+        expect(nodeScript).toEqual([])
+        expect(planToGit).toEqual([])
+        expect(gh).toContain(`${harness.repoDir}\tpr list --repo org/repo --state open --head issue-375 --json url --jq .[0].url // ""`)
+        expect(gh.some((line) => line.includes("pr create"))).toBe(false)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("fails on detached HEAD before listing or creating PRs", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(
+          runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"], {
+            env: { FAKE_GIT_BRANCH: "HEAD" },
+            okExitCodes: [1]
+          })
+        )
+
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
+
+        expect(nodeScript).toEqual([])
+        expect(planToGit).toEqual([])
+        expect(gh).toEqual([])
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })
