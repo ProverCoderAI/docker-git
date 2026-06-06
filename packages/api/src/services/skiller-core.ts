@@ -50,6 +50,21 @@ export type ExternalSkillerLaunchUrlInput = {
 const trimTrailingSlashes = (value: string): string =>
   value.replace(/\/+$/u, "")
 
+const configuredOrigin = (raw: string): string | null => {
+  const value = raw.trim()
+  if (!URL.canParse(value)) {
+    return null
+  }
+  const parsed = new URL(value)
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null
+  }
+  return parsed.origin
+}
+
+const uniqueOrigins = (origins: ReadonlyArray<string>): ReadonlyArray<string> =>
+  [...new Set(origins)]
+
 export const resolveConfiguredSkillerWebUrl = (
   env: Record<string, string | undefined>
 ): ConfiguredSkillerWebUrl => {
@@ -81,6 +96,31 @@ export const resolveDockerGitSkillerBackendUrl = (
     .find((value) => value !== undefined && value.length > 0)
   return configured ?? requestOrigin
 }
+
+export const configuredSkillerWebCorsOrigins = (
+  env: Record<string, string | undefined>
+): ReadonlyArray<string> => {
+  const configuredWeb = resolveConfiguredSkillerWebUrl(env)
+  const fromWeb = configuredWeb._tag === "Enabled"
+    ? [configuredOrigin(configuredWeb.baseUrl)].filter((origin): origin is string => origin !== null)
+    : []
+  const fromAllowed = (env["DOCKER_GIT_SKILLER_ALLOWED_ORIGINS"] ?? "")
+    .split(",")
+    .map(configuredOrigin)
+    .filter((origin): origin is string => origin !== null)
+  return uniqueOrigins([
+    ...fromWeb,
+    ...fromAllowed,
+    "http://localhost:5180",
+    "http://127.0.0.1:5180"
+  ])
+}
+
+export const isSkillerWebCorsOriginAllowed = (
+  origin: string | undefined,
+  env: Record<string, string | undefined>
+): boolean =>
+  origin !== undefined && configuredSkillerWebCorsOrigins(env).includes(origin)
 
 export const externalSkillerLaunchUrl = (input: ExternalSkillerLaunchUrlInput): string => {
   const url = new URL(`${trimTrailingSlashes(input.skillerWebUrl)}/launch`)

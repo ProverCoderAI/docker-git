@@ -49,6 +49,20 @@ export type SkillerProjectContext = {
   readonly scope: SkillerContainerScope
 }
 
+export type SkillerWebConnection = {
+  readonly alreadyRunning: boolean
+  readonly browserScope: SkillerBrowserScope | null
+  readonly eventsBaseUrl: string
+  readonly logPath: string
+  readonly pid: number | null
+  readonly projectKey: string
+  readonly sessionId: string | null
+  readonly startedAtIso: string
+  readonly trpcBasePath: string
+  readonly trpcBaseUrl: string
+  readonly trpcPort: number
+}
+
 type SkillerProcess = {
   readonly appPath: string
   readonly logPath: string
@@ -860,23 +874,14 @@ const externalSkillerLaunch = (
   })
 }
 
-export const openSkiller = (
-  projectKey?: string,
-  sessionId?: string,
-  backendUrl = "http://localhost:3334"
+const ensureBundledSkillerRuntimeForScope = (
+  scope: SkillerContainerScope | null,
+  sessionId: string | undefined
 ): Effect.Effect<
   SkillerLaunch,
-  ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
-  ListProjectsContext
+  ApiConflictError | ApiInternalError | ApiNotFoundError
 > =>
   Effect.gen(function*(_) {
-    const scope = yield* _(resolveRequestedSkillerScope(projectKey))
-    yield* _(touchSkillerActivity(scope))
-    rememberSessionScope(sessionId, scope)
-    const externalLaunch = yield* _(externalSkillerLaunch(scope, projectKey, sessionId, backendUrl))
-    if (externalLaunch !== null) {
-      return externalLaunch
-    }
     if (currentProcess !== null && isRunning(currentProcess.process)) {
       if (sameSkillerScope(currentProcess.scope, scope)) {
         yield* _(Effect.try({
@@ -915,6 +920,79 @@ export const openSkiller = (
     return sessionId === undefined || currentProcess === null ? launch : toLaunch(currentProcess, false, sessionId)
   })
 
+const ensureBundledSkillerRuntime = (
+  projectKey: string | undefined,
+  sessionId: string | undefined
+): Effect.Effect<
+  SkillerLaunch,
+  ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
+  ListProjectsContext
+> =>
+  Effect.gen(function*(_) {
+    const scope = yield* _(resolveRequestedSkillerScope(projectKey))
+    yield* _(touchSkillerActivity(scope))
+    rememberSessionScope(sessionId, scope)
+    return yield* _(ensureBundledSkillerRuntimeForScope(scope, sessionId))
+  })
+
+const absoluteBackendUrl = (backendUrl: string, path: string): string =>
+  new URL(path, `${backendUrl.replace(/\/+$/u, "")}/`).toString().replace(/\/$/u, "")
+
+export const connectSkillerWeb = (
+  projectKey: string,
+  sessionId: string | undefined,
+  backendUrl = "http://localhost:3334"
+): Effect.Effect<
+  SkillerWebConnection,
+  ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
+  ListProjectsContext
+> =>
+  getProjectItemByKey(projectKey).pipe(
+    Effect.flatMap((project) =>
+      sessionId === undefined
+        ? Effect.succeed(project)
+        : getProjectTerminalSession(project.projectDir, sessionId).pipe(Effect.as(project))
+    ),
+    Effect.flatMap(() => ensureBundledSkillerRuntime(projectKey, sessionId)),
+    Effect.map((launch) => {
+      const trpcBaseUrl = absoluteBackendUrl(backendUrl, launch.trpcBasePath)
+      const normalizedSessionId = sessionId ?? null
+      return {
+        alreadyRunning: launch.alreadyRunning,
+        browserScope: launch.scope === null ? null : skillerBrowserScopeForContainer(launch.scope, normalizedSessionId),
+        eventsBaseUrl: `${trpcBaseUrl}/events`,
+        logPath: launch.logPath,
+        pid: launch.pid,
+        projectKey,
+        sessionId: normalizedSessionId,
+        startedAtIso: launch.startedAtIso,
+        trpcBasePath: launch.trpcBasePath,
+        trpcBaseUrl,
+        trpcPort: launch.trpcPort
+      }
+    })
+  )
+
+export const openSkiller = (
+  projectKey?: string,
+  sessionId?: string,
+  backendUrl = "http://localhost:3334"
+): Effect.Effect<
+  SkillerLaunch,
+  ApiConflictError | ApiInternalError | ApiNotFoundError | PlatformError,
+  ListProjectsContext
+> =>
+  Effect.gen(function*(_) {
+    const scope = yield* _(resolveRequestedSkillerScope(projectKey))
+    yield* _(touchSkillerActivity(scope))
+    rememberSessionScope(sessionId, scope)
+    const externalLaunch = yield* _(externalSkillerLaunch(scope, projectKey, sessionId, backendUrl))
+    if (externalLaunch !== null) {
+      return externalLaunch
+    }
+    return yield* _(ensureBundledSkillerRuntimeForScope(scope, sessionId))
+  })
+
 export const hasLiveProjectSkillerSession = (projectId: string): boolean =>
   currentProcess !== null &&
   isRunning(currentProcess.process) &&
@@ -940,7 +1018,7 @@ export const openSkillerForTerminalSession = (
 
 export const parseSkillerRoute = (pathname: string): SkillerRoute | null => {
   const normalized = pathname.startsWith("/api/") ? pathname.slice("/api".length) : pathname
-  const sessionMatch = /^\/ssh\/session\/([^/]+)\/skiller(?:\/(app|trpc)(\/.*)?)?$/u.exec(normalized)
+  const sessionMatch = /^\/ssh\/session\/([^/]+)\/skiller(?:\/(app|trpc|events)(\/.*)?)?$/u.exec(normalized)
   if (sessionMatch !== null) {
     const sessionId = decodeURIComponent(sessionMatch[1] ?? "")
     const routeKind = sessionMatch[2] ?? ""
@@ -951,6 +1029,9 @@ export const parseSkillerRoute = (pathname: string): SkillerRoute | null => {
     if (routeKind === "trpc") {
       return { _tag: "Trpc", sessionId, upstreamPath: `/trpc${tail}` }
     }
+    if (routeKind === "events") {
+      return { _tag: "Trpc", sessionId, upstreamPath: `/events${tail}` }
+    }
   }
   if (normalized === "/skiller/app" || normalized === "/skiller/app/") {
     return { _tag: "App", relativePath: "/", sessionId: null }
@@ -960,6 +1041,9 @@ export const parseSkillerRoute = (pathname: string): SkillerRoute | null => {
   }
   if (normalized === "/skiller/trpc" || normalized.startsWith("/skiller/trpc/")) {
     return { _tag: "Trpc", sessionId: null, upstreamPath: normalized.slice("/skiller".length) || "/trpc" }
+  }
+  if (normalized === "/skiller/events" || normalized.startsWith("/skiller/events/")) {
+    return { _tag: "Trpc", sessionId: null, upstreamPath: normalized.slice("/skiller".length) || "/events" }
   }
   return null
 }

@@ -159,6 +159,7 @@ import {
   startTerminalSession
 } from "./services/terminal-sessions.js"
 import {
+  connectSkillerWeb,
   openSkiller,
   openSkillerForTerminalSession,
   parseSkillerRoute,
@@ -166,7 +167,10 @@ import {
   readSkillerProjectContext,
   serveSkillerApp
 } from "./services/skiller.js"
-import { resolveDockerGitSkillerBackendUrl } from "./services/skiller-core.js"
+import {
+  isSkillerWebCorsOriginAllowed,
+  resolveDockerGitSkillerBackendUrl
+} from "./services/skiller-core.js"
 import {
   commitStateFromRequest,
   initStateFromRequest,
@@ -228,6 +232,11 @@ const ContainerTaskParamsSchema = Schema.Struct({
 
 const AuthTerminalSessionParamsSchema = Schema.Struct({
   sessionId: Schema.String
+})
+
+const SkillerConnectRequestSchema = Schema.Struct({
+  projectKey: Schema.String,
+  sessionId: Schema.optional(Schema.String)
 })
 
 type ApiError =
@@ -448,6 +457,7 @@ const readCodexAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(CodexAu
 const readGrokAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GrokAuthLogoutRequestSchema)
 const readCodexAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthLogoutRequestSchema)
 const readProjectAuthRequest = () => HttpServerRequest.schemaBodyJson(ProjectAuthRequestSchema)
+const readSkillerConnectRequest = () => HttpServerRequest.schemaBodyJson(SkillerConnectRequestSchema)
 const readProjectPromptUpdateRequest = () => HttpServerRequest.schemaBodyJson(ProjectPromptUpdateRequestSchema)
 const readProjectSkillUpdateRequest = () => HttpServerRequest.schemaBodyJson(ProjectSkillUpdateRequestSchema)
 const readActiveProjectTerminalSessionRequest = () =>
@@ -600,6 +610,66 @@ const resolveRequestOrigin = (request: HttpServerRequest.HttpServerRequest): str
 
 const resolveSkillerBackendUrl = (request: HttpServerRequest.HttpServerRequest): string =>
   resolveDockerGitSkillerBackendUrl(process.env, resolveRequestOrigin(request))
+
+const skillerCorsHeaders = (
+  request: HttpServerRequest.HttpServerRequest
+): Record<string, string> => {
+  const origin = readHeader(request, "origin")
+  if (origin === undefined || !isSkillerWebCorsOriginAllowed(origin, process.env)) {
+    return {}
+  }
+  return {
+    "access-control-allow-credentials": "true",
+    "access-control-allow-headers": readHeader(request, "access-control-request-headers") ??
+      "content-type,trpc-accept,x-trpc-source",
+    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-origin": origin,
+    "access-control-max-age": "600",
+    "access-control-expose-headers": "content-type",
+    vary: "origin"
+  }
+}
+
+const withSkillerCors = (
+  request: HttpServerRequest.HttpServerRequest,
+  response: HttpServerResponse.HttpServerResponse
+): HttpServerResponse.HttpServerResponse => {
+  const headers = skillerCorsHeaders(request)
+  return Object.keys(headers).length === 0 ? response : HttpServerResponse.setHeaders(response, headers)
+}
+
+const skillerJsonResponse = (
+  request: HttpServerRequest.HttpServerRequest,
+  data: unknown,
+  status: number
+) =>
+  jsonResponse(data, status).pipe(
+    Effect.map((response) => withSkillerCors(request, response))
+  )
+
+const skillerErrorResponse = (
+  request: HttpServerRequest.HttpServerRequest,
+  error: unknown
+) =>
+  errorResponse(error).pipe(
+    Effect.map((response) => withSkillerCors(request, response))
+  )
+
+const isSkillerCorsPath = (pathname: string): boolean => {
+  const normalized = pathname.startsWith("/api/") ? pathname.slice("/api".length) : pathname
+  return normalized === "/skiller/connect" || parseSkillerRoute(pathname) !== null
+}
+
+const skillerCorsPreflightResponse = (
+  request: HttpServerRequest.HttpServerRequest
+) => {
+  const origin = readHeader(request, "origin")
+  const allowed = origin === undefined || isSkillerWebCorsOriginAllowed(origin, process.env)
+  return Effect.succeed(HttpServerResponse.empty({
+    headers: allowed ? skillerCorsHeaders(request) : noStoreHeaders,
+    status: allowed ? 204 : 403
+  }))
+}
 
 const resolveFederationContext = (
   request: HttpServerRequest.HttpServerRequest,
@@ -776,11 +846,25 @@ const terminalWebSocketUpgradeResponse = Effect.gen(function*(_) {
 const projectProxyResponse = Effect.gen(function*(_) {
   const request = yield* _(HttpServerRequest.HttpServerRequest)
   const pathname = new URL(request.url, "http://localhost").pathname
+  if (request.method === "OPTIONS" && isSkillerCorsPath(pathname)) {
+    return yield* _(skillerCorsPreflightResponse(request))
+  }
   const skillerRoute = parseSkillerRoute(pathname)
   if (skillerRoute !== null) {
-    return skillerRoute._tag === "App"
-      ? yield* _(serveSkillerApp(skillerRoute))
-      : yield* _(proxySkillerTrpc(request, skillerRoute))
+    if (skillerRoute._tag === "App") {
+      return yield* _(
+        serveSkillerApp(skillerRoute).pipe(
+          Effect.map((response) => withSkillerCors(request, response)),
+          Effect.catchAll((error) => skillerErrorResponse(request, error))
+        )
+      )
+    }
+    return yield* _(
+      proxySkillerTrpc(request, skillerRoute).pipe(
+        Effect.map((response) => withSkillerCors(request, response)),
+        Effect.catchAll((error) => skillerErrorResponse(request, error))
+      )
+    )
   }
   const browserTarget = parseProjectBrowserProxyPath(pathname)
   if (browserTarget !== null) {
@@ -805,6 +889,38 @@ const projectProxyResponse = Effect.gen(function*(_) {
   return yield* _(proxyProjectPortForward(request, target))
 })
 
+const normalizedOptionalString = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim()
+  return trimmed === undefined || trimmed.length === 0 ? undefined : trimmed
+}
+
+const skillerConnectInfoResponse = (
+  request: HttpServerRequest.HttpServerRequest
+) =>
+  listProjects().pipe(
+    Effect.flatMap((projects) => skillerJsonResponse(request, { ok: true, projects }, 200)),
+    Effect.catchAll((error) => skillerErrorResponse(request, error))
+  )
+
+const skillerConnectResponse = (
+  request: HttpServerRequest.HttpServerRequest
+) =>
+  Effect.gen(function*(_) {
+    const body = yield* _(readSkillerConnectRequest())
+    const projectKey = body.projectKey.trim()
+    if (projectKey.length === 0) {
+      return yield* _(Effect.fail(new ApiBadRequestError({ message: "projectKey is required." })))
+    }
+    const connection = yield* _(connectSkillerWeb(
+      projectKey,
+      normalizedOptionalString(body.sessionId),
+      resolveSkillerBackendUrl(request)
+    ))
+    return yield* _(skillerJsonResponse(request, { ok: true, ...connection }, 202))
+  }).pipe(
+    Effect.catchAll((error) => skillerErrorResponse(request, error))
+  )
+
 export const makeRouter = () => {
   const withCoreRoutes = HttpRouter.empty.pipe(
     HttpRouter.get(
@@ -814,6 +930,34 @@ export const makeRouter = () => {
         const projectsRoot = defaultProjectsRoot(cwd)
         return yield* _(jsonResponse({ ok: true, revision: controllerRevision, cwd, projectsRoot }, 200))
       }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/skiller/connect",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        return yield* _(skillerConnectInfoResponse(request))
+      })
+    ),
+    HttpRouter.get(
+      "/api/skiller/connect",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        return yield* _(skillerConnectInfoResponse(request))
+      })
+    ),
+    HttpRouter.post(
+      "/skiller/connect",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        return yield* _(skillerConnectResponse(request))
+      })
+    ),
+    HttpRouter.post(
+      "/api/skiller/connect",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        return yield* _(skillerConnectResponse(request))
+      })
     ),
     HttpRouter.post(
       "/skiller/open",

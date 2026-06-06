@@ -125,10 +125,20 @@ describe("skiller routes", () => {
       sessionId: "terminal-proof",
       upstreamPath: "/trpc/list_projects"
     })
+    expect(parseSkillerRoute("/api/ssh/session/terminal-proof/skiller/events")).toEqual({
+      _tag: "Trpc",
+      sessionId: "terminal-proof",
+      upstreamPath: "/events"
+    })
     expect(parseSkillerRoute("/api/skiller/app/")).toEqual({
       _tag: "App",
       relativePath: "/",
       sessionId: null
+    })
+    expect(parseSkillerRoute("/api/skiller/events")).toEqual({
+      _tag: "Trpc",
+      sessionId: null,
+      upstreamPath: "/events"
     })
   })
 

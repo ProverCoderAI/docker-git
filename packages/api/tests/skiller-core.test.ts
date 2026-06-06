@@ -1,8 +1,10 @@
 import { describe, expect, it } from "@effect/vitest"
 
 import {
+  configuredSkillerWebCorsOrigins,
   containerCodexSkillsPath,
   externalSkillerLaunchUrl,
+  isSkillerWebCorsOriginAllowed,
   parseDockerMountLines,
   remapContainerPathToMountedHost,
   remapSkillerBrowserContainerPath,
@@ -52,6 +54,24 @@ describe("skiller container filesystem mapping", () => {
     }, "http://localhost:3334")).toBe("https://public-api.example")
 
     expect(resolveDockerGitSkillerBackendUrl({}, "http://localhost:3334")).toBe("http://localhost:3334")
+  })
+
+  it("allows Skiller Web CORS only from configured exact origins and local dev", () => {
+    const env = {
+      DOCKER_GIT_SKILLER_ALLOWED_ORIGINS: "https://preview.example/app, file:///tmp/ignored",
+      DOCKER_GIT_SKILLER_WEB_URL: "https://skiller.example/ui"
+    }
+
+    expect(configuredSkillerWebCorsOrigins(env)).toEqual([
+      "https://skiller.example",
+      "https://preview.example",
+      "http://localhost:5180",
+      "http://127.0.0.1:5180"
+    ])
+    expect(isSkillerWebCorsOriginAllowed("https://skiller.example", env)).toBe(true)
+    expect(isSkillerWebCorsOriginAllowed("https://preview.example", env)).toBe(true)
+    expect(isSkillerWebCorsOriginAllowed("https://preview.example.evil", env)).toBe(false)
+    expect(isSkillerWebCorsOriginAllowed(undefined, env)).toBe(false)
   })
 
   it("maps a project container path through the most specific writable Docker mount", () => {
