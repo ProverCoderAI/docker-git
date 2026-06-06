@@ -1,6 +1,9 @@
 import { describe, expect, it } from "@effect/vitest"
+import { NodeContext } from "@effect/platform-node"
+import { Effect } from "effect"
 
 import {
+  openSkiller,
   parseSkillerRoute,
   resolveSkillerBrowserScopeSelection,
   resolveSkillerRouteScopeSelection,
@@ -76,6 +79,33 @@ describe("skiller routes", () => {
     expect(launch.userName).toBe("dg-skiller-u2147483001")
   })
 
+  it("returns an external Skiller Web launch when DOCKER_GIT_SKILLER_WEB_URL is configured", async () => {
+    const previous = process.env["DOCKER_GIT_SKILLER_WEB_URL"]
+    process.env["DOCKER_GIT_SKILLER_WEB_URL"] = "https://skiller.example/ui"
+    try {
+      const launch = await Effect.runPromise(
+        openSkiller(undefined, undefined, "https://docker-git.example").pipe(Effect.provide(NodeContext.layer))
+      )
+      const launchUrl = new URL(launch.appPath)
+
+      expect(launch.mode).toBe("external")
+      expect(launch.alreadyRunning).toBe(true)
+      expect(launch.backendUrl).toBe("https://docker-git.example")
+      expect(launch.pid).toBeNull()
+      expect(launch.trpcPort).toBe(0)
+      expect(launchUrl.pathname).toBe("/ui/launch")
+      expect(launchUrl.searchParams.get("backendUrl")).toBe("https://docker-git.example")
+      expect(launchUrl.searchParams.has("projectKey")).toBe(false)
+      expect(launchUrl.searchParams.has("sessionId")).toBe(false)
+    } finally {
+      if (previous === undefined) {
+        delete process.env["DOCKER_GIT_SKILLER_WEB_URL"]
+      } else {
+        process.env["DOCKER_GIT_SKILLER_WEB_URL"] = previous
+      }
+    }
+  })
+
   it("fails stalled child processes with a distinct timeout error", () =>
     expect(runProcess(
       process.execPath,
@@ -95,10 +125,20 @@ describe("skiller routes", () => {
       sessionId: "terminal-proof",
       upstreamPath: "/trpc/list_projects"
     })
+    expect(parseSkillerRoute("/api/ssh/session/terminal-proof/skiller/events")).toEqual({
+      _tag: "Trpc",
+      sessionId: "terminal-proof",
+      upstreamPath: "/events"
+    })
     expect(parseSkillerRoute("/api/skiller/app/")).toEqual({
       _tag: "App",
       relativePath: "/",
       sessionId: null
+    })
+    expect(parseSkillerRoute("/api/skiller/events")).toEqual({
+      _tag: "Trpc",
+      sessionId: null,
+      upstreamPath: "/events"
     })
   })
 

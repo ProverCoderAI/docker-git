@@ -5,7 +5,9 @@ import { type PreparedOpenUrl, prepareOpenUrl } from "./open-url.js"
 export type SkillerLaunch = {
   readonly alreadyRunning: boolean
   readonly appPath: string
+  readonly backendUrl: string | null
   readonly logPath: string
+  readonly mode: "bundled" | "external"
   readonly pid: number | null
   readonly scope: {
     readonly containerName: string
@@ -30,6 +32,14 @@ export const skillerLaunchMessage = (launch: SkillerLaunch, openedPath: string, 
 export const openPreparedSkillerLaunch = (launch: SkillerLaunch, preparedUrl: PreparedOpenUrl): string => {
   const openedPath = launch.appPath
   const opened = preparedUrl.navigate(openedPath)
+  if (launch.mode === "external") {
+    const scope = launch.scope === null
+      ? ""
+      : ` Container FS: ${launch.scope.containerName}:${launch.scope.containerProjectPath}.`
+    return opened
+      ? `Skiller Web opened.${scope} Opened ${openedPath}.`
+      : `Skiller Web popup was blocked.${scope} Open ${openedPath} manually.`
+  }
   return skillerLaunchMessage(launch, openedPath, opened)
 }
 

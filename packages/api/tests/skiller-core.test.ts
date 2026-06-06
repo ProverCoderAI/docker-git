@@ -1,16 +1,81 @@
 import { describe, expect, it } from "@effect/vitest"
 
 import {
+  configuredSkillerWebCorsOrigins,
   containerCodexSkillsPath,
+  externalSkillerLaunchUrl,
+  isSkillerWebCorsOriginAllowed,
   parseDockerMountLines,
   remapContainerPathToMountedHost,
   remapSkillerBrowserContainerPath,
   remapSkillerBrowserHostPath,
+  resolveConfiguredSkillerWebUrl,
+  resolveDockerGitSkillerBackendUrl,
   sameSkillerScope,
   skillerBrowserScopeForContainer
 } from "../src/services/skiller-core.js"
 
 describe("skiller container filesystem mapping", () => {
+  it("resolves external Skiller web URLs from docker-git environment", () => {
+    expect(resolveConfiguredSkillerWebUrl({})).toEqual({ _tag: "Disabled" })
+    expect(resolveConfiguredSkillerWebUrl({ DOCKER_GIT_SKILLER_WEB_URL: "  " })).toEqual({ _tag: "Disabled" })
+    expect(resolveConfiguredSkillerWebUrl({
+      DOCKER_GIT_SKILLER_WEB_URL: "https://skiller.example/app/?ignored=1#hash"
+    })).toEqual({
+      _tag: "Enabled",
+      baseUrl: "https://skiller.example/app"
+    })
+    expect(resolveConfiguredSkillerWebUrl({ DOCKER_GIT_SKILLER_WEB_URL: "file:///tmp/skiller" })._tag).toBe("Invalid")
+  })
+
+  it("builds external Skiller launch URLs with docker-git context parameters", () => {
+    const launchUrl = new URL(externalSkillerLaunchUrl({
+      backendUrl: "https://docker-git.example/api",
+      projectKey: "project one",
+      sessionId: "session/1",
+      skillerWebUrl: "https://skiller.example/ui/"
+    }))
+
+    expect(launchUrl.origin).toBe("https://skiller.example")
+    expect(launchUrl.pathname).toBe("/ui/launch")
+    expect(launchUrl.searchParams.get("backendUrl")).toBe("https://docker-git.example/api")
+    expect(launchUrl.searchParams.get("projectKey")).toBe("project one")
+    expect(launchUrl.searchParams.get("sessionId")).toBe("session/1")
+  })
+
+  it("prefers explicit Skiller backend URLs before request origin", () => {
+    expect(resolveDockerGitSkillerBackendUrl({
+      DOCKER_GIT_API_PUBLIC_URL: "https://public-api.example",
+      DOCKER_GIT_SKILLER_BACKEND_URL: "https://skiller-backend.example"
+    }, "http://localhost:3334")).toBe("https://skiller-backend.example")
+
+    expect(resolveDockerGitSkillerBackendUrl({
+      DOCKER_GIT_API_PUBLIC_URL: " https://public-api.example "
+    }, "http://localhost:3334")).toBe("https://public-api.example")
+
+    expect(resolveDockerGitSkillerBackendUrl({}, "http://localhost:3334")).toBe("http://localhost:3334")
+  })
+
+  it("allows Skiller Web CORS only from configured exact origins and local dev", () => {
+    const env = {
+      DOCKER_GIT_SKILLER_ALLOWED_ORIGINS: "https://preview.example/app, file:///tmp/ignored",
+      DOCKER_GIT_SKILLER_WEB_URL: "https://skiller.example/ui"
+    }
+
+    expect(configuredSkillerWebCorsOrigins(env)).toEqual([
+      "https://skiller.example",
+      "https://preview.example",
+      "https://skiller-web-henna.vercel.app",
+      "http://localhost:5180",
+      "http://127.0.0.1:5180"
+    ])
+    expect(isSkillerWebCorsOriginAllowed("https://skiller.example", env)).toBe(true)
+    expect(isSkillerWebCorsOriginAllowed("https://preview.example", env)).toBe(true)
+    expect(isSkillerWebCorsOriginAllowed("https://skiller-web-henna.vercel.app", env)).toBe(true)
+    expect(isSkillerWebCorsOriginAllowed("https://preview.example.evil", env)).toBe(false)
+    expect(isSkillerWebCorsOriginAllowed(undefined, env)).toBe(false)
+  })
+
   it("maps a project container path through the most specific writable Docker mount", () => {
     const mounts = parseDockerMountLines([
       "/var/lib/docker/volumes/project-home/_data\t/home/dev\ttrue",
