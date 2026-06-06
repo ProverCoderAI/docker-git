@@ -11,7 +11,9 @@ import { renderDockerfile } from "../../src/core/templates/dockerfile.js"
 import { renderEntrypoint } from "../../src/core/templates-entrypoint.js"
 import { renderEntrypointDnsRepair } from "../../src/core/templates-entrypoint/dns-repair.js"
 import { renderEntrypointGitHooks } from "../../src/core/templates-entrypoint/git.js"
+import { renderPostPushPrEnsure as renderLibPostPushPrEnsure } from "../../src/core/templates-entrypoint/post-push-pr.js"
 import { renderPromptScript } from "../../src/core/templates-prompt.js"
+import { renderPostPushPrEnsure as renderAppPostPushPrEnsure } from "../../../app/src/lib/core/templates-entrypoint/post-push-pr.js"
 
 const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateConfig => ({
   ...defaultTemplateConfig,
@@ -464,6 +466,10 @@ describe("renderEntrypoint clone cache", () => {
 })
 
 describe("renderEntrypointGitHooks", () => {
+  it("keeps the app mirror of the post-push PR fragment in sync with lib", () => {
+    expect(renderAppPostPushPrEnsure()).toBe(renderLibPostPushPrEnsure())
+  })
+
   it("installs pre-push protection checks, plan sync, and a global git post-push runtime", () => {
     const hooks = renderEntrypointGitHooks()
 
