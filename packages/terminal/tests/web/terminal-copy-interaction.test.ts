@@ -5,7 +5,9 @@ import {
   forceTerminalSelectionModifier,
   shouldForceBrowserTerminalSelection,
   shouldForceTerminalSelectionContext,
+  shouldLetBrowserHandleTerminalCopyShortcut,
   type TerminalCopyInteractionTerminal,
+  type TerminalCopyKeyboardEvent,
   type TerminalMouseTrackingMode,
   writeTerminalSelectionToClipboardData
 } from "../../src/web/terminal-copy-interaction.js"
@@ -27,6 +29,26 @@ const terminalWithSelection = (
   modes: { mouseTrackingMode }
 })
 
+const keyboardEvent = (
+  key: string,
+  options: Partial<Pick<TerminalCopyKeyboardEvent, "altKey" | "ctrlKey" | "metaKey" | "type">> = {}
+): TerminalCopyKeyboardEvent => ({
+  altKey: options.altKey ?? false,
+  ctrlKey: options.ctrlKey ?? false,
+  key,
+  metaKey: options.metaKey ?? false,
+  type: options.type ?? "keydown"
+})
+
+const requireKeyHandler = (
+  keyHandler: ((event: TerminalCopyKeyboardEvent) => boolean) | null
+): (event: TerminalCopyKeyboardEvent) => boolean => {
+  if (keyHandler === null) {
+    return expect.fail("Expected terminal copy key handler to be registered.")
+  }
+  return keyHandler
+}
+
 describe("terminal copy interaction", () => {
   it("forces browser selection for primary mouse input while terminal mouse tracking is active", () => {
     expect(shouldForceBrowserTerminalSelection({ button: 0 }, terminalWithSelection("any", ""))).toBe(true)
@@ -40,6 +62,49 @@ describe("terminal copy interaction", () => {
     expect(shouldForceTerminalSelectionContext({ button: 2 }, terminalWithSelection("any", ""))).toBe(false)
     expect(shouldForceTerminalSelectionContext({ button: 2 }, terminalWithSelection("none", "selected"))).toBe(false)
     expect(shouldForceTerminalSelectionContext({ button: 0 }, terminalWithSelection("any", "selected"))).toBe(false)
+  })
+
+  it("lets browser copy handle Ctrl/Cmd+C only for selected terminal text", () => {
+    const selectedTerminal = terminalWithSelection("any", "selected")
+    const emptyTerminal = terminalWithSelection("any", "")
+
+    expect(shouldLetBrowserHandleTerminalCopyShortcut(keyboardEvent("c", { ctrlKey: true }), selectedTerminal))
+      .toBe(true)
+    expect(shouldLetBrowserHandleTerminalCopyShortcut(keyboardEvent("C", { metaKey: true }), selectedTerminal))
+      .toBe(true)
+    expect(shouldLetBrowserHandleTerminalCopyShortcut(keyboardEvent("c", { ctrlKey: true }), emptyTerminal))
+      .toBe(false)
+    expect(
+      shouldLetBrowserHandleTerminalCopyShortcut(keyboardEvent("c", { altKey: true, ctrlKey: true }), selectedTerminal)
+    )
+      .toBe(false)
+    expect(shouldLetBrowserHandleTerminalCopyShortcut(keyboardEvent("v", { ctrlKey: true }), selectedTerminal))
+      .toBe(false)
+    expect(
+      shouldLetBrowserHandleTerminalCopyShortcut(keyboardEvent("c", { ctrlKey: true, type: "keyup" }), selectedTerminal)
+    ).toBe(false)
+  })
+
+  it("registers a custom key handler that bypasses xterm input for selected text copy", () => {
+    let keyHandler: ((event: TerminalCopyKeyboardEvent) => boolean) | null = null
+    const terminal: TerminalCopyInteractionTerminal = {
+      attachCustomKeyEventHandler: (handler) => {
+        keyHandler = handler
+      },
+      getSelection: () => "selected",
+      hasSelection: () => true,
+      modes: { mouseTrackingMode: "none" }
+    }
+    const host = new FakeTerminalCopyHost(null)
+
+    const disposable = attachTerminalCopyInteraction({ host, terminal })
+    const handleKey = requireKeyHandler(keyHandler)
+
+    expect(handleKey(keyboardEvent("c", { ctrlKey: true }))).toBe(false)
+    expect(handleKey(keyboardEvent("c", { ctrlKey: true, type: "keyup" }))).toBe(true)
+    expect(handleKey(keyboardEvent("c"))).toBe(true)
+
+    disposable.dispose()
   })
 
   it("uses Shift as the forced selection modifier on non-Mac platforms", () => {
