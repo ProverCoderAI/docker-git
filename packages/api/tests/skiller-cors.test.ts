@@ -12,7 +12,12 @@ const apiHandler = HttpApp.toWebHandler(
   Effect.provide(Effect.flatten(HttpRouter.toHttpApp(makeRouter())), NodeContext.layer)
 )
 
-const requestApiRoute = (path: string, init: RequestInit) =>
+type ApiRequestInit = {
+  readonly headers: Record<string, string>
+  readonly method: string
+}
+
+const requestApiRoute = (path: string, init: ApiRequestInit) =>
   Effect.tryPromise({
     try: () => apiHandler(new Request(`http://127.0.0.1${path}`, init)),
     catch: (cause) => new Error(String(cause))
