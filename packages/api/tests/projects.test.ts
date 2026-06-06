@@ -333,7 +333,7 @@ describe("projects service", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("lists lightweight project summaries while getProject returns project details", () =>
+  it.effect("lists project details without Docker access for TUI selection", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const path = yield* _(Path.Path)
@@ -374,16 +374,17 @@ describe("projects service", () => {
         expect(projects).toHaveLength(1)
         expect(projects[0]).toMatchObject({
           id: projectId,
+          projectDir: projectId,
           status: "unknown",
           statusLabel: "unknown",
           sshSessions: 0,
           startedAtIso: null,
-          startedAtEpochMs: null
+          startedAtEpochMs: null,
+          sshCommand: details.sshCommand,
+          authorizedKeysPath: details.authorizedKeysPath,
+          envGlobalPath: details.envGlobalPath,
+          codexHome: details.codexHome
         })
-        expect(projects[0]).not.toHaveProperty("sshCommand")
-        expect(projects[0]).not.toHaveProperty("authorizedKeysPath")
-        expect(projects[0]).not.toHaveProperty("envGlobalPath")
-        expect(projects[0]).not.toHaveProperty("codexHome")
         expect(details).toMatchObject({
           id: projectId,
           projectDir: projectId,

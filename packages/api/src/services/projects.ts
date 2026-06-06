@@ -626,7 +626,7 @@ const startCreateProjectJob = (
 
 export const listProjects = () =>
   readProjectItemsForInventory().pipe(
-    Effect.map((projects) => projects.map((project) => dbProjectSummary(project)))
+    Effect.map((projects) => projects.map((project) => dbProjectDetails(project)))
   )
 
 export const applyAllProjects = (activeOnly: boolean) =>
