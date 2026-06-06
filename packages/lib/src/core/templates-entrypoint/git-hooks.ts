@@ -148,14 +148,15 @@ cd "$REPO_ROOT"
 
 ${renderPostPushPrEnsure()}
 
-# CHANGE: sync captured Codex plans to the current branch PR after push.
-# WHY: issue #369 requires the agent plan to be uploaded to PR discussion.
-# REF: issue-369
+# CHANGE: backfill Codex session plans before syncing the current branch PR.
+# WHY: live Codex hooks can be unavailable in already-running sessions; session logs are the durable fallback.
+# REF: issue-375
 if [ "${"${"}DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" != "1" ]; then
   if ! command -v plan-to-git >/dev/null 2>&1; then
     echo "[plan-to-git] Error: plan-to-git not found" >&2
     exit 1
   fi
+  plan-to-git import-codex --no-sync
   plan-to-git sync
 fi
 

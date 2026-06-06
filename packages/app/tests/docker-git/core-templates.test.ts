@@ -116,6 +116,7 @@ describe("app planFiles", () => {
           "gh pr create --repo \"$base_repo\" --base \"$base_branch\" --head \"$head_arg\" --fill"
         )
         expect(entrypoint.contents).toContain("plan-to-git hook --source codex")
+        expect(entrypoint.contents).toContain("plan-to-git import-codex --no-sync")
         expect(entrypoint.contents).toContain("CODEX_REQUIREMENTS_FILE=\"/etc/codex/requirements.toml\"")
         expect(entrypoint.contents).toContain("managed_dir = \"/opt/docker-git/hooks\"")
         expect(entrypoint.contents).toContain("[[hooks.UserPromptSubmit]]")
@@ -124,8 +125,9 @@ describe("app planFiles", () => {
 
         const cdIndex = entrypoint.contents.indexOf("cd \"$REPO_ROOT\"")
         const ensurePrIndex = entrypoint.contents.indexOf(
-          "docker_git_ensure_open_pr\n\n# CHANGE: sync captured Codex plans"
+          "docker_git_ensure_open_pr\n\n# CHANGE: backfill Codex session plans"
         )
+        const planImportIndex = entrypoint.contents.indexOf("plan-to-git import-codex --no-sync")
         const planSyncIndex = entrypoint.contents.indexOf("plan-to-git sync")
         const sessionBackupIndex = entrypoint.contents.indexOf(
           "docker-git-session-sync backup --verbose --background --require-comment"
@@ -133,7 +135,8 @@ describe("app planFiles", () => {
 
         expect(cdIndex).toBeGreaterThanOrEqual(0)
         expect(ensurePrIndex).toBeGreaterThan(cdIndex)
-        expect(planSyncIndex).toBeGreaterThan(ensurePrIndex)
+        expect(planImportIndex).toBeGreaterThan(ensurePrIndex)
+        expect(planSyncIndex).toBeGreaterThan(planImportIndex)
         expect(sessionBackupIndex).toBeGreaterThan(planSyncIndex)
       })
     )
