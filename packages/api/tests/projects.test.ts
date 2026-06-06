@@ -1,3 +1,4 @@
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import * as FileSystem from "@effect/platform/FileSystem"
 import type { PlatformError } from "@effect/platform/Error"
 import * as Path from "@effect/platform/Path"
@@ -129,29 +130,61 @@ const gitEnv: Readonly<Record<string, string>> = {
   GIT_TERMINAL_PROMPT: "0"
 }
 
+/**
+ * Runs a git command with the deterministic test git environment.
+ *
+ * @param cwd - Working directory for the git process.
+ * @param args - Git CLI arguments passed without shell interpolation.
+ * @returns Effect that yields captured stdout or fails with a typed command/platform error.
+ *
+ * @pure false
+ * @effect CommandExecutor service for process execution
+ * @complexity O(1) process spawn plus O(git operation)
+ */
 const runGit = (
   cwd: string,
   args: ReadonlyArray<string>
-) =>
+): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCommandCapture(
     { cwd, command: "git", args, env: gitEnv },
     [0],
     (exitCode) => new CommandFailedError({ command: `git ${args[0] ?? ""}`, exitCode })
   )
 
+/**
+ * Runs a shell script with the deterministic test git environment.
+ *
+ * @param cwd - Working directory for the shell process.
+ * @param script - POSIX shell script to execute.
+ * @returns Effect that yields captured stdout or fails with a typed command/platform error.
+ *
+ * @pure false
+ * @effect CommandExecutor service for process execution
+ * @complexity O(1) process spawn plus O(script)
+ */
 const runShell = (
   cwd: string,
   script: string
-) =>
+): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   runCommandCapture(
     { cwd, command: "sh", args: ["-c", script], env: gitEnv },
     [0],
     (exitCode) => new CommandFailedError({ command: "sh -c", exitCode })
   )
 
+/**
+ * Creates a bare state remote and seeds an initial main branch commit.
+ *
+ * @param root - Directory that will contain the remote and seed repositories.
+ * @returns Effect that yields the bare remote path.
+ *
+ * @pure false
+ * @effect Path and CommandExecutor services for path construction and git processes
+ * @complexity O(1) filesystem paths plus O(git init + commit + push)
+ */
 const makeStateRemote = (
   root: string
-) =>
+): Effect.Effect<string, CommandFailedError | PlatformError, Path.Path | CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
     const path = yield* _(Path.Path)
     const remotePath = path.join(root, "remote.git")
@@ -178,11 +211,24 @@ const makeStateRemote = (
     return remotePath
   })
 
+/**
+ * Clones a seeded state remote into a target directory.
+ *
+ * @param root - Working directory for the clone command.
+ * @param remoteUrl - Remote repository URL or path.
+ * @param target - Target clone directory.
+ * @returns Effect that yields captured git stdout or fails with a typed command/platform error.
+ *
+ * @pure false
+ * @effect CommandExecutor service for git process execution
+ * @complexity O(1) process spawn plus O(repository size)
+ */
 const cloneStateRemote = (
   root: string,
   remoteUrl: string,
   target: string
-) => runGit(root, ["clone", remoteUrl, target])
+): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runGit(root, ["clone", remoteUrl, target])
 
 describe("projects service", () => {
   it.effect("seeds host SSH keys into the controller managed authorized_keys file", () =>
