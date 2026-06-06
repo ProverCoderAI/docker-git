@@ -4,6 +4,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect, Either } from "effect"
 import * as fc from "fast-check"
 
+import { controllerComposeProjectArgs } from "../../src/docker-git/controller-compose.js"
 import { inspectControllerImageRevision } from "../../src/docker-git/controller-image-revision.js"
 import type { ControllerBootstrapError } from "../../src/docker-git/host-errors.js"
 import {
@@ -189,6 +190,29 @@ const expectRevisionFailureMessage = (
   )
 
 describe("controller image revision", () => {
+  it.effect("resolves compose images under the stable controller project name", () => {
+    const composeImageCommands: Array<ReadonlyArray<string>> = []
+
+    return inspectRevisionWithCommandHandler((command) => {
+      if (command.command === "docker" && command.args.includes("--images")) {
+        composeImageCommands.push(command.args)
+        return { exitCode: 0, stderr: "", stdout: "app-api:latest\n" }
+      }
+      if (command.command === "docker" && command.args.includes("image") && command.args.includes("inspect")) {
+        return { exitCode: 0, stderr: "", stdout: " rev123 \n" }
+      }
+      return emptyCommandResult
+    }).pipe(
+      Effect.map((revision) => {
+        expect(revision).toBe("rev123")
+        expect(composeImageCommands[0]?.slice(0, 1 + controllerComposeProjectArgs.length)).toEqual([
+          "compose",
+          ...controllerComposeProjectArgs
+        ])
+      })
+    )
+  })
+
   it.effect("falls back to null for non-reusable compose image output cardinalities", () =>
     Effect.tryPromise({
       catch: (cause) => cause,

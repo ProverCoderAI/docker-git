@@ -4,16 +4,9 @@ import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
 
-import { composeFilesToArgs, prepareControllerRevision, resolveControllerComposeFiles } from "./controller-compose.js"
-import { readCurrentContainerName } from "./controller-hostname.js"
-import {
-  runCommandCaptureWithFailureOutput,
-  runCommandExitCode,
-  runCommandExitCodeStreaming,
-  runCommandWithCapturedOutput
-} from "./frontend-lib/shell/command-runner.js"
-
+import * as ControllerCompose from "./controller-compose.js"
 import { type DockerProbeOutcome, renderDockerAccessDeniedMessage } from "./controller-docker-diagnostics.js"
+import { readCurrentContainerName } from "./controller-hostname.js"
 import {
   type DockerNetworkIps,
   parseDockerNetworkIps,
@@ -21,6 +14,12 @@ import {
   uniqueStrings
 } from "./controller-reachability.js"
 import { parseControllerRevisionEnvOutput } from "./controller-revision.js"
+import {
+  runCommandCaptureWithFailureOutput,
+  runCommandExitCode,
+  runCommandExitCodeStreaming,
+  runCommandWithCapturedOutput
+} from "./frontend-lib/shell/command-runner.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
 export {
@@ -32,10 +31,7 @@ export {
 } from "./controller-compose.js"
 export { parseControllerDockerRuntime } from "./controller-runtime.js"
 
-export type ControllerRuntime =
-  | CommandExecutor.CommandExecutor
-  | FileSystem.FileSystem
-  | Path.Path
+export type ControllerRuntime = CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
 
 export const controllerContainerName = process.env["DOCKER_GIT_API_CONTAINER_NAME"]?.trim() || "docker-git-api"
 
@@ -383,10 +379,10 @@ export const runCompose = (
 ): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
     const dockerCommand = yield* _(resolveDockerCommand())
-    const composeFiles = yield* _(resolveControllerComposeFiles())
     const invocation = buildDockerInvocation(dockerCommand, [
       "compose",
-      ...composeFilesToArgs(composeFiles),
+      ...ControllerCompose.controllerComposeProjectArgs,
+      ...ControllerCompose.composeFilesToArgs(yield* _(ControllerCompose.resolveControllerComposeFiles())),
       ...args
     ])
     const exitCode = yield* _(
@@ -440,7 +436,7 @@ export const inspectControllerRevision = (): Effect.Effect<
   )
 
 export const prepareLocalControllerRevision = (): Effect.Effect<string, ControllerBootstrapError, ControllerRuntime> =>
-  prepareControllerRevision()
+  ControllerCompose.prepareControllerRevision()
 
 export const inspectContainerNetworks = (
   containerName: string

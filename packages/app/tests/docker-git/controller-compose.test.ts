@@ -8,11 +8,13 @@ import * as fc from "fast-check"
 import { resolveControllerRuntimeOverlayPath } from "../../src/docker-git/controller-compose-runtime.js"
 import {
   controllerBuildSkillerEnvKey,
+  controllerComposeProjectName,
   controllerGpuModeEnvKey,
   ensureSkillerSubmoduleInitialized,
   prepareControllerRevision,
   resolveControllerComposeFiles
 } from "../../src/docker-git/controller-compose.js"
+import { runCompose } from "../../src/docker-git/controller-docker.js"
 import { controllerRevisionEnvKey } from "../../src/docker-git/controller-revision.js"
 import { controllerDockerRuntimeEnvKey } from "../../src/docker-git/controller-runtime.js"
 import type { TestCommandResult } from "./fixtures/command-executor.js"
@@ -205,6 +207,33 @@ const assertControllerComposeProperty = <PropertyArgs>(property: fc.IAsyncProper
   })
 
 describe("controller compose preparation", () => {
+  it.effect("runs controller compose under the stable controller project name", () => {
+    const startedCommands: Array<string> = []
+
+    return withMinimalControllerRoot(() =>
+      Effect.gen(function*(_) {
+        yield* _(
+          withControllerEnv([
+            [controllerBuildSkillerEnvKey, "0"],
+            [controllerDockerRuntimeEnvKey, undefined],
+            [controllerGpuModeEnvKey, undefined]
+          ])
+        )
+        yield* _(
+          runCompose(["up", "-d"]).pipe(
+            Effect.provide(recordedCommandExecutorLayer(startedCommands, emptyCommandResult))
+          )
+        )
+
+        const composeCommand = startedCommands.find((command) =>
+          command.startsWith(`docker compose --project-name ${controllerComposeProjectName} -f `)
+        )
+        expect(composeCommand).toBeDefined()
+        expect(composeCommand?.endsWith(" up -d")).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer))
+  })
+
   it.effect("does not initialize the Skiller submodule when package metadata already exists", () => {
     const startedCommands: Array<string> = []
 

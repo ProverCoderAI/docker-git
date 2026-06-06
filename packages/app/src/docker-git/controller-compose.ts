@@ -23,6 +23,23 @@ export type ControllerComposeFiles = {
   readonly runtimeOverlayPath: string | null
 }
 
+export const controllerComposeProjectName = "docker-git"
+
+// CHANGE: pin the controller compose project name across checkout directories
+// WHY: fixed controller container_name must be recreated by the same compose project, not by cwd-derived names
+// QUOTE(ТЗ): "container name \"/docker-git-api\" is already in use"
+// REF: user-message-2026-06-06-controller-compose-conflict
+// SOURCE: n/a
+// FORMAT THEOREM: forall cwd: compose_project(controller_bootstrap(cwd)) = "docker-git"
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: controller bootstrap compose commands use one global project name
+// COMPLEXITY: O(1)
+export const controllerComposeProjectArgs: ReadonlyArray<string> = [
+  "--project-name",
+  controllerComposeProjectName
+]
+
 const skillerSubmodulePath = "third_party/skiller-desktop-skills-manager"
 const skillerPackagePath = `${skillerSubmodulePath}/package.json`
 
