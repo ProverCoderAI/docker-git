@@ -611,6 +611,11 @@ const resolveRequestOrigin = (request: HttpServerRequest.HttpServerRequest): str
 const resolveSkillerBackendUrl = (request: HttpServerRequest.HttpServerRequest): string =>
   resolveDockerGitSkillerBackendUrl(process.env, resolveRequestOrigin(request))
 
+const isPrivateNetworkCorsRequest = (
+  request: HttpServerRequest.HttpServerRequest
+): boolean =>
+  readHeader(request, "access-control-request-private-network")?.toLowerCase() === "true"
+
 const skillerCorsHeaders = (
   request: HttpServerRequest.HttpServerRequest
 ): Record<string, string> => {
@@ -618,7 +623,11 @@ const skillerCorsHeaders = (
   if (origin === undefined || !isSkillerWebCorsOriginAllowed(origin, process.env)) {
     return {}
   }
+  const privateNetworkHeaders = isPrivateNetworkCorsRequest(request)
+    ? { "access-control-allow-private-network": "true" }
+    : {}
   return {
+    ...privateNetworkHeaders,
     "access-control-allow-credentials": "true",
     "access-control-allow-headers": readHeader(request, "access-control-request-headers") ??
       "content-type,trpc-accept,x-trpc-source",
@@ -626,7 +635,7 @@ const skillerCorsHeaders = (
     "access-control-allow-origin": origin,
     "access-control-max-age": "600",
     "access-control-expose-headers": "content-type",
-    vary: "origin"
+    vary: "origin, access-control-request-private-network"
   }
 }
 
@@ -657,7 +666,9 @@ const skillerErrorResponse = (
 
 const isSkillerCorsPath = (pathname: string): boolean => {
   const normalized = pathname.startsWith("/api/") ? pathname.slice("/api".length) : pathname
-  return normalized === "/skiller/connect" || parseSkillerRoute(pathname) !== null
+  return normalized === "/skiller/connect" ||
+    /^\/projects\/by-key\/[^/]+(?:\/terminal-sessions\/[^/]+)?\/skiller\/context$/u.test(normalized) ||
+    parseSkillerRoute(pathname) !== null
 }
 
 const skillerCorsPreflightResponse = (
@@ -987,19 +998,29 @@ export const makeRouter = () => {
     ),
     HttpRouter.get(
       "/projects/by-key/:projectKey/skiller/context",
-      projectKeyParams.pipe(
-        Effect.flatMap(({ projectKey }) => readSkillerProjectContext(projectKey, null)),
-        Effect.flatMap((context) => jsonResponse({ ok: true, ...context }, 200)),
-        Effect.catchAll(errorResponse)
-      )
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        return yield* _(
+          projectKeyParams.pipe(
+            Effect.flatMap(({ projectKey }) => readSkillerProjectContext(projectKey, null)),
+            Effect.flatMap((context) => skillerJsonResponse(request, { ok: true, ...context }, 200)),
+            Effect.catchAll((error) => skillerErrorResponse(request, error))
+          )
+        )
+      })
     ),
     HttpRouter.get(
       "/projects/by-key/:projectKey/terminal-sessions/:sessionId/skiller/context",
-      terminalSessionByProjectKeyParams.pipe(
-        Effect.flatMap(({ projectKey, sessionId }) => readSkillerProjectContext(projectKey, sessionId)),
-        Effect.flatMap((context) => jsonResponse({ ok: true, ...context }, 200)),
-        Effect.catchAll(errorResponse)
-      )
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        return yield* _(
+          terminalSessionByProjectKeyParams.pipe(
+            Effect.flatMap(({ projectKey, sessionId }) => readSkillerProjectContext(projectKey, sessionId)),
+            Effect.flatMap((context) => skillerJsonResponse(request, { ok: true, ...context }, 200)),
+            Effect.catchAll((error) => skillerErrorResponse(request, error))
+          )
+        )
+      })
     ),
     HttpRouter.get(
       "/cloudflare-tunnels/panel",

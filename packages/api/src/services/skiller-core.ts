@@ -65,6 +65,12 @@ const configuredOrigin = (raw: string): string | null => {
 const uniqueOrigins = (origins: ReadonlyArray<string>): ReadonlyArray<string> =>
   [...new Set(origins)]
 
+const defaultSkillerWebCorsOrigins = [
+  "https://skiller-web-henna.vercel.app",
+  "http://localhost:5180",
+  "http://127.0.0.1:5180"
+] as const
+
 export const resolveConfiguredSkillerWebUrl = (
   env: Record<string, string | undefined>
 ): ConfiguredSkillerWebUrl => {
@@ -111,8 +117,7 @@ export const configuredSkillerWebCorsOrigins = (
   return uniqueOrigins([
     ...fromWeb,
     ...fromAllowed,
-    "http://localhost:5180",
-    "http://127.0.0.1:5180"
+    ...defaultSkillerWebCorsOrigins
   ])
 }
 

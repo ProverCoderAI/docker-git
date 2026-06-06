@@ -65,11 +65,13 @@ describe("skiller container filesystem mapping", () => {
     expect(configuredSkillerWebCorsOrigins(env)).toEqual([
       "https://skiller.example",
       "https://preview.example",
+      "https://skiller-web-henna.vercel.app",
       "http://localhost:5180",
       "http://127.0.0.1:5180"
     ])
     expect(isSkillerWebCorsOriginAllowed("https://skiller.example", env)).toBe(true)
     expect(isSkillerWebCorsOriginAllowed("https://preview.example", env)).toBe(true)
+    expect(isSkillerWebCorsOriginAllowed("https://skiller-web-henna.vercel.app", env)).toBe(true)
     expect(isSkillerWebCorsOriginAllowed("https://preview.example.evil", env)).toBe(false)
     expect(isSkillerWebCorsOriginAllowed(undefined, env)).toBe(false)
   })
