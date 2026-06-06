@@ -17,7 +17,18 @@ type TerminalSelectionTarget = {
   readonly hasSelection: () => boolean
 }
 
+export type TerminalCopyKeyboardEvent = {
+  readonly altKey: boolean
+  readonly ctrlKey: boolean
+  readonly key: string
+  readonly metaKey: boolean
+  readonly type: string
+}
+
 export type TerminalCopyInteractionTerminal = TerminalSelectionTarget & {
+  readonly attachCustomKeyEventHandler?: (
+    handler: (event: TerminalCopyKeyboardEvent) => boolean
+  ) => void
   readonly modes: {
     readonly mouseTrackingMode: TerminalMouseTrackingMode
   }
@@ -59,6 +70,41 @@ const isSecondaryMouseButton = (event: TerminalMouseButtonEvent): boolean => eve
 
 const hasActiveMouseTracking = (terminal: TerminalCopyInteractionTerminal): boolean =>
   terminal.modes.mouseTrackingMode !== "none"
+
+const isKeyboardCopyShortcut = (event: TerminalCopyKeyboardEvent): boolean =>
+  event.type === "keydown" &&
+  !event.altKey &&
+  (event.ctrlKey || event.metaKey) &&
+  event.key.toLowerCase() === "c"
+
+/**
+ * Decides whether xterm key processing must step aside for native browser copy.
+ *
+ * @param event - Keyboard event seen by xterm before it translates keys into pty input.
+ * @param terminal - Terminal selection facade.
+ * @returns True iff the event is a system copy shortcut and selected terminal text is non-empty.
+ * @pure true
+ * @effect terminal.hasSelection(), terminal.getSelection().
+ * @invariant result => no ETX input is sent for selected terminal text copy.
+ * @precondition `event` and `terminal` are non-null.
+ * @postcondition True means xterm should return false from its custom key handler.
+ * @complexity O(n) where n = selected text length.
+ * @throws Never
+ */
+// CHANGE: keep keyboard copy shortcuts out of terminal input when text is selected
+// WHY: Ctrl/Cmd+C must copy the selected terminal text instead of sending SIGINT to the pty
+// QUOTE(ТЗ): "Text easy coping"
+// REF: issue-353
+// SOURCE: n/a
+// FORMAT THEOREM: selected(t) and copyShortcut(e) => browserCopy(e,t)
+// PURITY: CORE
+// EFFECT: reads terminal selection through the injected terminal facade
+// INVARIANT: empty selection never blocks terminal Ctrl+C semantics
+// COMPLEXITY: O(n)/O(1)
+export const shouldLetBrowserHandleTerminalCopyShortcut = (
+  event: TerminalCopyKeyboardEvent,
+  terminal: TerminalSelectionTarget
+): boolean => isKeyboardCopyShortcut(event) && terminal.hasSelection() && terminal.getSelection().length > 0
 
 export const shouldForceBrowserTerminalSelection = (
   event: TerminalMouseButtonEvent,
@@ -158,12 +204,16 @@ class TerminalCopyInteractionController {
   }
 
   readonly attach = (): { readonly dispose: () => void } => {
+    this.args.terminal.attachCustomKeyEventHandler?.(this.onTerminalKeyEvent)
     this.args.host.addEventListener("mousedown", this.onMouseDown, true)
     this.args.host.addEventListener("mouseup", this.onMouseUp, true)
     this.args.host.addEventListener("contextmenu", this.onContextMenu, true)
     this.args.host.addEventListener("copy", this.onCopy, true)
     return { dispose: this.dispose }
   }
+
+  private readonly onTerminalKeyEvent = (event: TerminalCopyKeyboardEvent): boolean =>
+    !shouldLetBrowserHandleTerminalCopyShortcut(event, this.args.terminal)
 
   private readonly shouldProtectSelectionContext = (event: TerminalCopyMouseEvent): boolean =>
     isSecondaryMouseButton(event) &&
