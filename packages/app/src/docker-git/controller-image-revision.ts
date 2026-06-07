@@ -1,6 +1,10 @@
 import { Effect } from "effect"
 
-import { composeFilesToArgs, resolveControllerComposeFiles } from "./controller-compose.js"
+import {
+  composeFilesToArgs,
+  controllerComposeProjectArgs,
+  resolveControllerComposeFiles
+} from "./controller-compose.js"
 import { type ControllerRuntime, runDockerCapture, runDockerCaptureWithFailureOutput } from "./controller-docker.js"
 import { parseControllerRevisionLabelOutput } from "./controller-revision.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
@@ -131,6 +135,7 @@ const inspectControllerComposeImageName = (): Effect.Effect<
       runDockerCapture(
         [
           "compose",
+          ...controllerComposeProjectArgs,
           ...composeFilesToArgs(composeFiles),
           "config",
           "--images"

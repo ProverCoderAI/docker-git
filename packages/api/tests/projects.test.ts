@@ -1,3 +1,4 @@
+import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import * as FileSystem from "@effect/platform/FileSystem"
 import type { PlatformError } from "@effect/platform/Error"
 import * as Path from "@effect/platform/Path"
@@ -5,6 +6,9 @@ import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as Scope from "effect/Scope"
+
+import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
+import { CommandFailedError } from "@effect-template/lib/shell/errors"
 
 import type { ApiEvent } from "../src/api/contracts.js"
 import { ApiConflictError, ApiInternalError } from "../src/api/errors.js"
@@ -112,6 +116,119 @@ const waitForEvents = (
     yield* _(realSleep(50))
     return yield* _(waitForEvents(projectId, predicate, attempts - 1))
   })
+
+const gitEnv: Readonly<Record<string, string>> = {
+  DOCKER_GIT_SKIP_POST_PUSH_ACTION: "1",
+  GIT_AUTHOR_EMAIL: "docker-git@test",
+  GIT_AUTHOR_NAME: "docker-git",
+  GIT_COMMITTER_EMAIL: "docker-git@test",
+  GIT_COMMITTER_NAME: "docker-git",
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "core.hooksPath",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_VALUE_0: ".git/hooks",
+  GIT_TERMINAL_PROMPT: "0"
+}
+
+/**
+ * Runs a git command with the deterministic test git environment.
+ *
+ * @param cwd - Working directory for the git process.
+ * @param args - Git CLI arguments passed without shell interpolation.
+ * @returns Effect that yields captured stdout or fails with a typed command/platform error.
+ *
+ * @pure false
+ * @effect CommandExecutor service for process execution
+ * @complexity O(1) process spawn plus O(git operation)
+ */
+const runGit = (
+  cwd: string,
+  args: ReadonlyArray<string>
+): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runCommandCapture(
+    { cwd, command: "git", args, env: gitEnv },
+    [0],
+    (exitCode) => new CommandFailedError({ command: `git ${args[0] ?? ""}`, exitCode })
+  )
+
+/**
+ * Runs a shell script with the deterministic test git environment.
+ *
+ * @param cwd - Working directory for the shell process.
+ * @param script - POSIX shell script to execute.
+ * @returns Effect that yields captured stdout or fails with a typed command/platform error.
+ *
+ * @pure false
+ * @effect CommandExecutor service for process execution
+ * @complexity O(1) process spawn plus O(script)
+ */
+const runShell = (
+  cwd: string,
+  script: string
+): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runCommandCapture(
+    { cwd, command: "sh", args: ["-c", script], env: gitEnv },
+    [0],
+    (exitCode) => new CommandFailedError({ command: "sh -c", exitCode })
+  )
+
+/**
+ * Creates a bare state remote and seeds an initial main branch commit.
+ *
+ * @param root - Directory that will contain the remote and seed repositories.
+ * @returns Effect that yields the bare remote path.
+ *
+ * @pure false
+ * @effect Path and CommandExecutor services for path construction and git processes
+ * @complexity O(1) filesystem paths plus O(git init + commit + push)
+ */
+const makeStateRemote = (
+  root: string
+): Effect.Effect<string, CommandFailedError | PlatformError, Path.Path | CommandExecutor.CommandExecutor> =>
+  Effect.gen(function*(_) {
+    const path = yield* _(Path.Path)
+    const remotePath = path.join(root, "remote.git")
+    const seedPath = path.join(root, "seed")
+
+    yield* _(
+      runShell(
+        root,
+        `git init --bare --initial-branch=main "${remotePath}" 2>/dev/null || git init --bare "${remotePath}"`
+      )
+    )
+    yield* _(
+      runShell(
+        root,
+        `git init --initial-branch=main "${seedPath}" 2>/dev/null || git init "${seedPath}"`
+      )
+    )
+    yield* _(runGit(seedPath, ["remote", "add", "origin", remotePath]))
+    yield* _(runShell(seedPath, "printf '# docker-git state\\n' > README.md"))
+    yield* _(runGit(seedPath, ["add", "-A"]))
+    yield* _(runGit(seedPath, ["commit", "-m", "initial state"]))
+    yield* _(runGit(seedPath, ["push", "origin", "HEAD:refs/heads/main"]))
+
+    return remotePath
+  })
+
+/**
+ * Clones a seeded state remote into a target directory.
+ *
+ * @param root - Working directory for the clone command.
+ * @param remoteUrl - Remote repository URL or path.
+ * @param target - Target clone directory.
+ * @returns Effect that yields captured git stdout or fails with a typed command/platform error.
+ *
+ * @pure false
+ * @effect CommandExecutor service for git process execution
+ * @complexity O(1) process spawn plus O(repository size)
+ */
+const cloneStateRemote = (
+  root: string,
+  remoteUrl: string,
+  target: string
+): Effect.Effect<string, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runGit(root, ["clone", remoteUrl, target])
 
 describe("projects service", () => {
   it.effect("seeds host SSH keys into the controller managed authorized_keys file", () =>
@@ -262,7 +379,7 @@ describe("projects service", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("lists lightweight project summaries while getProject returns project details", () =>
+  it.effect("lists project details without Docker access for TUI selection", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {
         const path = yield* _(Path.Path)
@@ -303,16 +420,17 @@ describe("projects service", () => {
         expect(projects).toHaveLength(1)
         expect(projects[0]).toMatchObject({
           id: projectId,
+          projectDir: projectId,
           status: "unknown",
           statusLabel: "unknown",
           sshSessions: 0,
           startedAtIso: null,
-          startedAtEpochMs: null
+          startedAtEpochMs: null,
+          sshCommand: details.sshCommand,
+          authorizedKeysPath: details.authorizedKeysPath,
+          envGlobalPath: details.envGlobalPath,
+          codexHome: details.codexHome
         })
-        expect(projects[0]).not.toHaveProperty("sshCommand")
-        expect(projects[0]).not.toHaveProperty("authorizedKeysPath")
-        expect(projects[0]).not.toHaveProperty("envGlobalPath")
-        expect(projects[0]).not.toHaveProperty("codexHome")
         expect(details).toMatchObject({
           id: projectId,
           projectDir: projectId,
@@ -323,6 +441,142 @@ describe("projects service", () => {
         expect(details).toHaveProperty("authorizedKeysPath")
         expect(details).toHaveProperty("envGlobalPath")
         expect(details).toHaveProperty("codexHome")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("refreshes the state remote before listing projects", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const remoteUrl = yield* _(makeStateRemote(root))
+        const controllerRoot = path.join(root, "controller-state")
+        const pusherRoot = path.join(root, "pusher-state")
+        const remoteProjectId = path.join(pusherRoot, "remote-owner", "remote-only")
+
+        yield* _(cloneStateRemote(root, remoteUrl, controllerRoot))
+        yield* _(cloneStateRemote(root, remoteUrl, pusherRoot))
+
+        yield* _(
+          withProjectsRoot(
+            pusherRoot,
+            withWorkingDirectory(
+              root,
+              createProjectFromRequest({
+                repoUrl: "https://git.example.test/remote-owner/remote-only.git",
+                repoRef: "main",
+                outDir: remoteProjectId,
+                skipGithubAuth: true,
+                up: false
+              })
+            )
+          )
+        )
+
+        const staleProjects = yield* _(
+          withEnvVar(
+            "DOCKER_GIT_STATE_AUTO_PULL",
+            "false",
+            withProjectsRoot(controllerRoot, withWorkingDirectory(root, listProjects()))
+          )
+        )
+        expect(staleProjects).toHaveLength(0)
+
+        const refreshedProjects = yield* _(
+          withProjectsRoot(controllerRoot, withWorkingDirectory(root, listProjects()))
+        )
+
+        expect(refreshedProjects).toHaveLength(1)
+        expect(refreshedProjects[0]).toMatchObject({
+          displayName: "remote-owner/remote-only",
+          id: path.join(controllerRoot, "remote-owner", "remote-only"),
+          repoUrl: "https://git.example.test/remote-owner/remote-only.git"
+        })
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("respects DOCKER_GIT_STATE_AUTO_PULL=false for project inventory reads", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const remoteUrl = yield* _(makeStateRemote(root))
+        const controllerRoot = path.join(root, "controller-state")
+        const pusherRoot = path.join(root, "pusher-state")
+
+        yield* _(cloneStateRemote(root, remoteUrl, controllerRoot))
+        yield* _(cloneStateRemote(root, remoteUrl, pusherRoot))
+        yield* _(
+          withProjectsRoot(
+            pusherRoot,
+            withWorkingDirectory(
+              root,
+              createProjectFromRequest({
+                repoUrl: "https://git.example.test/remote-owner/disabled-pull.git",
+                repoRef: "main",
+                outDir: path.join(pusherRoot, "remote-owner", "disabled-pull"),
+                skipGithubAuth: true,
+                up: false
+              })
+            )
+          )
+        )
+
+        const projects = yield* _(
+          withEnvVar(
+            "DOCKER_GIT_STATE_AUTO_PULL",
+            "false",
+            withProjectsRoot(controllerRoot, withWorkingDirectory(root, listProjects()))
+          )
+        )
+
+        expect(projects).toHaveLength(0)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("lists web absolute and shell relative project output directories from one root", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const webProjectId = path.join(projectsRoot, "web-owner", "absolute")
+        const shellProjectId = path.join(projectsRoot, "shell-owner", "relative")
+
+        yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              createProjectFromRequest({
+                repoUrl: "https://git.example.test/web-owner/absolute.git",
+                repoRef: "main",
+                outDir: webProjectId,
+                skipGithubAuth: true,
+                up: false
+              })
+            )
+          )
+        )
+        yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              createProjectFromRequest({
+                repoUrl: "https://git.example.test/shell-owner/relative.git",
+                repoRef: "main",
+                outDir: ".docker-git/shell-owner/relative",
+                skipGithubAuth: true,
+                up: false
+              })
+            )
+          )
+        )
+
+        const projects = yield* _(
+          withProjectsRoot(projectsRoot, withWorkingDirectory(root, listProjects()))
+        )
+        const projectIds = projects.map((project) => project.id).toSorted()
+
+        expect(projectIds).toEqual([shellProjectId, webProjectId].toSorted())
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
