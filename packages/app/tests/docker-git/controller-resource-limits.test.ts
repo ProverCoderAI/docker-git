@@ -108,6 +108,19 @@ describe("API Dockerfile Electron materialization", () => {
     }))
 })
 
+describe("API Dockerfile controller tooling install", () => {
+  it.effect("retries network-bound controller tooling downloads", () =>
+    Effect.gen(function*(_) {
+      const contents = yield* _(readComposeFile("packages/api/Dockerfile"))
+      expect(contents).toContain("https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh")
+      expect(contents).toContain("npm install -g --prefix /opt/bun --no-audit --no-fund bun@1.3.11 node-gyp")
+      expect(contents).toContain("curl -fsSL --retry 5 --retry-all-errors --retry-delay 2")
+      expect(contents).toContain("controller tooling install failed after retries")
+      expect(contents).toContain("test \"$(bun --version)\" = \"1.3.11\"")
+      expect(contents).toContain("node-gyp --version")
+    }))
+})
+
 describe("controller resource limit resolution", () => {
   it.effect("resolves CPU and RAM defaults to 90% of host resources", () =>
     Effect.sync(() => {
