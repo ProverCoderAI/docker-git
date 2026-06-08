@@ -1,7 +1,7 @@
 export { formatParseError } from "../frontend-lib/core/parse-errors.js"
 
 export const usageText = `docker-git menu
-docker-git browser
+docker-git browser [-d|--daemon]
 docker-git create [--repo-url <url>] [options]
 docker-git clone <url> [options]
 docker-git open [<selector>] [options]
@@ -21,7 +21,7 @@ docker-git state <action> [options]
 
 Commands:
   menu                Interactive menu (default when no args)
-  browser             Build and serve the browser frontend for the docker-git controller
+  browser             Build and serve the browser frontend for the docker-git controller; use -d to run it as a daemon
   create, init        Generate docker development environment (repo URL optional)
   clone               Create + run container and clone repo
   open                Open an existing docker-git project by selector, URL, or path
@@ -79,6 +79,7 @@ Options:
   --ssh | --no-ssh          Auto-open SSH after create/clone (default: clone=--ssh, create=--no-ssh)
   --mcp-playwright | --no-mcp-playwright  Enable Rust browser MCP + noVNC/CDP session (default: --no-mcp-playwright)
   --auto[=claude|codex|gemini|grok]  Auto-execute an agent; without value picks by auth, random if multiple are available
+  -d, --daemon             browser: run the browser frontend server in the background after build
   --active                  apply-all: apply only to currently running containers (skip stopped ones)
   --force                   Overwrite existing files, replace conflicting docker-git projects/containers, and wipe compose volumes
   --force-env               Reset project env defaults only (keep workspace volume/data)

@@ -20,9 +20,22 @@ const isHelpFlag = (token: string): boolean => token === "--help" || token === "
 
 const helpCommand: Command = { _tag: "Help", message: usageText }
 const menuCommand: Command = { _tag: "Menu" }
-const browserCommand: Command = { _tag: "Browser" }
 const statusCommand: Command = { _tag: "Status" }
 const downAllCommand: Command = { _tag: "DownAll" }
+const browserDaemonFlags = new Set(["-d", "--daemon"])
+
+// CHANGE: parse browser daemon mode without side effects.
+// WHY: CLI intent must be a typed pure value before the shell starts web processes.
+// QUOTE(ТЗ): "Run browser with support dameon mode, like a flag -d"
+// REF: issue-373
+// SOURCE: n/a
+// FORMAT THEOREM: forall args: daemon(parseBrowser(args)) <-> exists a in args: a in {"-d","--daemon"}
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: browser foreground mode is the default when no daemon flag is present
+// COMPLEXITY: O(n)/O(1) where n = |args|
+const parseBrowser = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> =>
+  Either.right({ _tag: "Browser", daemon: args.some((arg) => browserDaemonFlags.has(arg)) })
 
 // CHANGE: parse --active flag for apply-all command to restrict to running containers
 // WHY: allow users to apply config only to currently active containers via --active flag
@@ -90,8 +103,8 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("ui", () => Either.right(menuCommand))
     )
     .pipe(
-      Match.when("browser", () => Either.right(browserCommand)),
-      Match.when("web", () => Either.right(browserCommand)),
+      Match.when("browser", () => parseBrowser(rest)),
+      Match.when("web", () => parseBrowser(rest)),
       Match.when("apply-all", () => parseApplyAll(rest)),
       Match.when("update-all", () => parseApplyAll(rest)),
       Match.when("auth", () => parseAuth(rest)),

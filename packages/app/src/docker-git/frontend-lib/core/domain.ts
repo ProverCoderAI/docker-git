@@ -139,6 +139,7 @@ export interface MenuCommand {
 
 export interface BrowserCommand {
   readonly _tag: "Browser"
+  readonly daemon: boolean
 }
 
 export interface AttachCommand {

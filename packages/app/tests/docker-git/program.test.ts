@@ -6,7 +6,9 @@ import { beforeEach, vi } from "vitest"
 import type { Command } from "../../src/docker-git/frontend-lib/core/domain.js"
 
 const ensureControllerReadyMock = vi.hoisted(() => vi.fn(() => Effect.void))
-const runBrowserFrontendCommandMock = vi.hoisted(() => vi.fn(() => Effect.void))
+const runBrowserFrontendCommandMock = vi.hoisted(
+  () => vi.fn<(options: { readonly daemon: boolean }) => Effect.Effect<void>>(() => Effect.void)
+)
 const runMenuCallMock = vi.hoisted(() => vi.fn(() => {}))
 const readCommandMock = vi.hoisted(() => vi.fn<() => Command>())
 const codexLoginMock = vi.hoisted(() => vi.fn(() => Effect.void))
@@ -16,7 +18,15 @@ const gitlabLoginMock = vi.hoisted(() => vi.fn(() => Effect.succeed({ ok: true }
 const readStatePullMock = vi.hoisted(() => vi.fn(() => Effect.succeed("State pull completed.")))
 
 const menuCommand: Extract<Command, { readonly _tag: "Menu" }> = { _tag: "Menu" }
-const browserCommand: Extract<Command, { readonly _tag: "Browser" }> = { _tag: "Browser" }
+const browserCommand: Extract<Command, { readonly _tag: "Browser" }> = { _tag: "Browser", daemon: false }
+const browserDaemonCommand: Extract<Command, { readonly _tag: "Browser" }> = { _tag: "Browser", daemon: true }
+const browserRoutingCases: ReadonlyArray<{
+  readonly command: Extract<Command, { readonly _tag: "Browser" }>
+  readonly options: { readonly daemon: boolean }
+}> = [
+  { command: browserCommand, options: { daemon: false } },
+  { command: browserDaemonCommand, options: { daemon: true } }
+]
 const codexLoginCommand: Extract<Command, { readonly _tag: "AuthCodexLogin" }> = {
   _tag: "AuthCodexLogin",
   label: null,
@@ -50,7 +60,8 @@ vi.mock("../../src/docker-git/controller.js", () => ({
 }))
 
 vi.mock("../../src/docker-git/browser-frontend.js", () => ({
-  runBrowserFrontendCommand: Effect.flatMap(Effect.sync(() => runBrowserFrontendCommandMock()), (effect) => effect)
+  runBrowserFrontendCommandWithOptions: (options: { readonly daemon: boolean }) =>
+    Effect.flatMap(Effect.sync(() => runBrowserFrontendCommandMock(options)), (effect) => effect)
 }))
 
 vi.mock("../../src/docker-git/api-client.js", () => ({
@@ -140,15 +151,25 @@ describe("program menu dispatch", () => {
       expect(process.exitCode ?? 0).toBe(0)
     }))
 
-  it.effect("routes browser frontend through the browser command runner", () =>
-    Effect.gen(function*(_) {
-      readCommandMock.mockReturnValue(browserCommand)
-      yield* _(runProgram())
+  it.effect("routes browser frontend modes through the browser command runner", () =>
+    Effect.forEach(
+      browserRoutingCases,
+      ({ command, options }) =>
+        Effect.gen(function*(_) {
+          readCommandMock.mockReturnValue(command)
+          ensureControllerReadyMock.mockClear()
+          runBrowserFrontendCommandMock.mockClear()
+          process.exitCode = 0
 
-      expect(ensureControllerReadyMock).not.toHaveBeenCalled()
-      expect(runBrowserFrontendCommandMock).toHaveBeenCalledTimes(1)
-      expect(process.exitCode ?? 0).toBe(0)
-    }))
+          yield* _(runProgram())
+
+          expect(ensureControllerReadyMock).not.toHaveBeenCalled()
+          expect(runBrowserFrontendCommandMock).toHaveBeenCalledTimes(1)
+          expect(runBrowserFrontendCommandMock).toHaveBeenCalledWith(options)
+          expect(process.exitCode).toBe(0)
+        }),
+      { discard: true }
+    ))
 
   it.effect("routes state pull through the controller API", () =>
     Effect.gen(function*(_) {

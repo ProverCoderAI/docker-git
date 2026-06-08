@@ -6,7 +6,7 @@ import { Effect, pipe } from "effect"
 import * as Chunk from "effect/Chunk"
 import * as Stream from "effect/Stream"
 
-type RunCommandSpec = {
+export type RunCommandSpec = {
   readonly cwd: string
   readonly command: string
   readonly args: ReadonlyArray<string>

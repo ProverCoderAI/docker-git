@@ -6,14 +6,8 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { afterEach, beforeEach, vi } from "vitest"
 
+import type { RunCommandSpec } from "../../src/docker-git/frontend-lib/shell/command-runner.js"
 import type { ControllerBootstrapError } from "../../src/docker-git/host-errors.js"
-
-type CommandSpec = {
-  readonly args: ReadonlyArray<string>
-  readonly command: string
-  readonly cwd: string
-  readonly env?: Readonly<Record<string, string | undefined>>
-}
 
 const ensureControllerReadyMock = vi.hoisted(() => vi.fn<() => Effect.Effect<void>>())
 const resolveApiBaseUrlMock = vi.hoisted(() => vi.fn<() => string>())
@@ -23,9 +17,11 @@ const findReachableApiBaseUrlMock = vi.hoisted(
 const resolveConfiguredApiBaseUrlMock = vi.hoisted(() => vi.fn<() => string>())
 const resolveDefaultLocalApiBaseUrlMock = vi.hoisted(() => vi.fn<() => string | undefined>())
 const resolveExplicitApiBaseUrlMock = vi.hoisted(() => vi.fn<() => string | undefined>())
-const runCommandCaptureMock = vi.hoisted(() => vi.fn<(spec: CommandSpec) => Effect.Effect<string>>())
-const runCommandExitCodeMock = vi.hoisted(() => vi.fn<(spec: CommandSpec) => Effect.Effect<number>>())
-const runCommandExitCodeStreamingMock = vi.hoisted(() => vi.fn<(spec: CommandSpec) => Effect.Effect<number>>())
+const runCommandCaptureMock = vi.hoisted(() => vi.fn<(spec: RunCommandSpec) => Effect.Effect<string>>())
+const runCommandExitCodeMock = vi.hoisted(() => vi.fn<(spec: RunCommandSpec) => Effect.Effect<number>>())
+const runCommandExitCodeStreamingMock = vi.hoisted(
+  () => vi.fn<(spec: RunCommandSpec) => Effect.Effect<number>>()
+)
 
 vi.mock("../../src/docker-git/controller.js", () => ({
   ensureControllerReady: ensureControllerReadyMock,
