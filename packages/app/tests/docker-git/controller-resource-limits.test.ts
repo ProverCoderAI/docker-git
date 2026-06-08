@@ -121,6 +121,21 @@ describe("API Dockerfile controller tooling install", () => {
     }))
 })
 
+describe("OpenCode E2E auth bootstrap", () => {
+  it.effect("retries controller auth commands before the clone scenario", () =>
+    Effect.gen(function*(_) {
+      const contents = yield* _(readComposeFile("scripts/e2e/opencode-autoconnect.sh"))
+      expect(contents).toContain("auth_attempts=3")
+      expect(contents).toContain(": > \"$AUTH_LOG\"")
+      expect(contents).toContain("if (")
+      expect(contents).toContain("dg_run_docker_git \"$REPO_ROOT\" auth codex import")
+      expect(contents).toContain("dg_run_docker_git \"$REPO_ROOT\" auth codex status")
+      expect(contents).toContain(") >>\"$AUTH_LOG\" 2>&1")
+      expect(contents).toContain("auth bootstrap attempt $auth_attempt/$auth_attempts failed")
+      expect(contents).toContain("docker-git auth bootstrap failed after $auth_attempts attempts")
+    }))
+})
+
 describe("controller resource limit resolution", () => {
   it.effect("resolves CPU and RAM defaults to 90% of host resources", () =>
     Effect.sync(() => {
