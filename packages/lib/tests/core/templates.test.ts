@@ -249,6 +249,23 @@ describe("renderDockerfile", () => {
     expect(dockerfile).not.toContain("playwright-mcp --cdp-endpoint")
     expect(dockerfile).not.toContain("MCP_PLAYWRIGHT_CDP_TIMEOUT")
   })
+
+  it("omits the NVIDIA EGL vendor ICD for non-GPU projects", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig({ gpu: "none" }))
+
+    expect(dockerfile).not.toContain("egl_vendor.d/10_nvidia.json")
+    expect(dockerfile).not.toContain("libEGL_nvidia.so.0")
+  })
+
+  it("registers the NVIDIA EGL vendor ICD when GPU access is enabled", () => {
+    const dockerfile = renderDockerfile(makeTemplateConfig({ gpu: "all" }))
+
+    expectContainsAll(dockerfile, [
+      "mkdir -p /usr/share/glvnd/egl_vendor.d",
+      '"library_path" : "libEGL_nvidia.so.0"',
+      "> /usr/share/glvnd/egl_vendor.d/10_nvidia.json"
+    ])
+  })
 })
 
 describe("renderPromptScript", () => {
@@ -874,6 +891,8 @@ describe("renderDockerCompose", () => {
     expect(compose).toContain('    extra_hosts:\n      - "host.docker.internal:host-gateway"')
     expect(compose).toContain("    dns:\n      - 8.8.8.8\n      - 8.8.4.4\n      - 1.1.1.1\n    networks:")
     expect(compose).not.toContain("    gpus: all\n")
+    expect(compose).not.toContain("NVIDIA_DRIVER_CAPABILITIES")
+    expect(compose).not.toContain("NVIDIA_VISIBLE_DEVICES")
     expect(compose).not.toContain("dg-test-browser")
     expect(compose).not.toContain("/var/run/docker.sock:/var/run/docker.sock")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
@@ -902,6 +921,9 @@ describe("renderDockerCompose", () => {
 
     expect(compose).toContain("    gpus: all\n")
     expect((compose.match(/\n    gpus: all\n/g) ?? []).length).toBe(1)
+    expect(compose).toContain('NVIDIA_VISIBLE_DEVICES: "all"')
+    expect(compose).toContain('NVIDIA_DRIVER_CAPABILITIES: "all"')
+    expect((compose.match(/NVIDIA_DRIVER_CAPABILITIES: "all"/g) ?? []).length).toBe(1)
     expect(compose).toContain('DOCKER_GIT_BROWSER_CONTAINER_NAME: "dg-test-browser"')
     expect(compose).not.toContain("\n  dg-test-browser:\n")
   })

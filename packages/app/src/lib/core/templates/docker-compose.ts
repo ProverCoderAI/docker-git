@@ -20,6 +20,7 @@ type ComposeFragments = {
   readonly maybeGrokAuthLabelEnv: string
   readonly maybeAgentModeEnv: string
   readonly maybeAgentAutoEnv: string
+  readonly maybeGpuEnv: string
   readonly maybeDependsOn: string
   readonly maybeDockerSocketMount: string
   readonly maybePlaywrightEnv: string
@@ -106,6 +107,25 @@ const renderResourceLimits = (resourceLimits: ResolvedComposeResourceLimits | un
 const renderGpu = (gpu: TemplateConfig["gpu"]): string =>
   gpu === "all"
     ? "    gpus: all\n"
+    : ""
+
+// CHANGE: request the full NVIDIA driver capability set for GPU-enabled containers.
+// WHY: `gpus: all` alone only exposes compute/utility, so the NVIDIA runtime never injects the
+//      graphics/display userspace libraries (libGLX_nvidia, libEGL_nvidia). Setting
+//      NVIDIA_DRIVER_CAPABILITIES=all makes graphical GPU work out of the box, removing the manual
+//      per-container env edit + recreate that issue-395 documents.
+// QUOTE(ТЗ): "В конфиге docker-git ... добавить переменную окружения: NVIDIA_DRIVER_CAPABILITIES=all"
+// REF: issue-395
+// SOURCE: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/docker-specialized.html#driver-capabilities
+// PURITY: CORE
+// INVARIANT: gpu === "all" => both NVIDIA_* vars are emitted; gpu === "none" => empty fragment
+// COMPLEXITY: O(1)/O(1)
+const renderGpuEnv = (gpu: TemplateConfig["gpu"]): string =>
+  gpu === "all"
+    ? `      # GPU: request every driver capability (graphics/display, not just compute) so the
+      # NVIDIA runtime injects EGL/GLX libraries when the container is (re)created.
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "all"\n`
     : ""
 
 const renderBootstrapMounts = (): string => `      - ${bootstrapVolumeKey}:/opt/docker-git/bootstrap/source:ro`
@@ -210,6 +230,7 @@ const buildComposeFragments = (
     maybeDockerSocketMount: playwright.maybeDockerSocketMount,
     maybePlaywrightEnv: playwright.maybePlaywrightEnv,
     maybeBrowserVolume: playwright.maybeBrowserVolume,
+    maybeGpuEnv: renderGpuEnv(config.gpu),
     maybeBootstrapMounts: renderBootstrapMounts(),
     forkRepoUrl
   }
@@ -231,7 +252,7 @@ ${renderGpu(config.gpu)}${
       REPO_URL: "${config.repoUrl}"
       REPO_REF: "${config.repoRef}"
       FORK_REPO_URL: "${fragments.forkRepoUrl}"
-${fragments.maybeGithubAuthSkipEnv}      # Optional anonymous public GitHub clone override
+${fragments.maybeGpuEnv}${fragments.maybeGithubAuthSkipEnv}      # Optional anonymous public GitHub clone override
 ${fragments.maybeGitTokenLabelEnv}      # Optional token label selector (maps to GITHUB_TOKEN__<LABEL>/GIT_AUTH_TOKEN__<LABEL>)
 ${fragments.maybeCodexAuthLabelEnv}      # Optional Codex account label selector (maps to CODEX_AUTH_LABEL)
 ${fragments.maybeClaudeAuthLabelEnv}      # Optional Claude account label selector (maps to CLAUDE_AUTH_LABEL)

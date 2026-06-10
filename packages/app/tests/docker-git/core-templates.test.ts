@@ -142,6 +142,31 @@ describe("app planFiles", () => {
     )
   })
 
+  it("enables graphical GPU access end to end when gpu is set to all", () => {
+    const files = planFiles(makeTemplateConfig({ gpu: "all" }))
+    const compose = getGeneratedFile(files, "docker-compose.yml")
+    const dockerfile = getGeneratedFile(files, "Dockerfile")
+
+    expect(compose.contents).toContain("    gpus: all\n")
+    expect(compose.contents).toContain('NVIDIA_VISIBLE_DEVICES: "all"')
+    expect(compose.contents).toContain('NVIDIA_DRIVER_CAPABILITIES: "all"')
+    expect(dockerfile.contents).toContain("mkdir -p /usr/share/glvnd/egl_vendor.d")
+    expect(dockerfile.contents).toContain('"library_path" : "libEGL_nvidia.so.0"')
+    expect(dockerfile.contents).toContain("> /usr/share/glvnd/egl_vendor.d/10_nvidia.json")
+  })
+
+  it("omits GPU env and EGL ICD wiring when gpu is none", () => {
+    const files = planFiles(makeTemplateConfig({ gpu: "none" }))
+    const compose = getGeneratedFile(files, "docker-compose.yml")
+    const dockerfile = getGeneratedFile(files, "Dockerfile")
+
+    expect(compose.contents).not.toContain("    gpus: all\n")
+    expect(compose.contents).not.toContain("NVIDIA_DRIVER_CAPABILITIES")
+    expect(compose.contents).not.toContain("NVIDIA_VISIBLE_DEVICES")
+    expect(dockerfile.contents).not.toContain("egl_vendor.d/10_nvidia.json")
+    expect(dockerfile.contents).not.toContain("libEGL_nvidia.so.0")
+  })
+
   it("keeps plan-to-git state out of generated git and docker contexts", () => {
     fc.assert(
       fc.property(generatedTemplateConfigArbitrary, (config) => {

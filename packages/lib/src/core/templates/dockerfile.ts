@@ -82,6 +82,32 @@ RUN set -eu; \
   rtk --version; \
   rtk gain >/dev/null 2>&1 || true`
 
+// CHANGE: register the NVIDIA EGL vendor ICD in GPU-enabled dev images.
+// WHY: with NVIDIA_DRIVER_CAPABILITIES=all the runtime injects libEGL_nvidia.so.0 at container
+//      creation, but it does NOT install the glvnd vendor JSON that points EGL clients at it. Baking
+//      the tiny static ICD into the image makes graphical EGL resolve without the manual file-copy
+//      step issue-395 documents. The fragment is empty for non-GPU projects so their images stay lean.
+// QUOTE(ТЗ): "ls /usr/share/glvnd/egl_vendor.d/10_nvidia.json"
+// REF: issue-395
+// SOURCE: https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md
+// PURITY: CORE (pure template renderer)
+// INVARIANT: gpu === "all" => rendered Dockerfile writes 10_nvidia.json; gpu === "none" => empty fragment
+// COMPLEXITY: O(1)/O(1)
+const renderDockerfileGpu = (config: TemplateConfig): string =>
+  config.gpu === "all"
+    ? `# GPU graphics: register the NVIDIA EGL vendor ICD so glvnd resolves libEGL_nvidia at runtime.
+# The driver library itself is injected by the NVIDIA runtime (NVIDIA_DRIVER_CAPABILITIES=all).
+RUN mkdir -p /usr/share/glvnd/egl_vendor.d \
+  && printf '%s\\n' \
+    '{' \
+    '    "file_format_version" : "1.0.0",' \
+    '    "ICD" : {' \
+    '        "library_path" : "libEGL_nvidia.so.0"' \
+    '    }' \
+    '}' \
+    > /usr/share/glvnd/egl_vendor.d/10_nvidia.json`
+    : ""
+
 const dockerGitSessionSyncPackage = "@prover-coder-ai/docker-git-session-sync@latest"
 
 const renderDockerfilePlaywrightRuntime = (config: TemplateConfig): string =>
@@ -245,6 +271,7 @@ export const renderDockerfile = (config: TemplateConfig): string =>
     renderDockerfileBun(config),
     renderDockerfilePlaywrightRuntime(config),
     renderDockerfileRtk(),
+    renderDockerfileGpu(config),
     renderDockerfileOpenCode(),
     renderDockerfileGitleaks(),
     renderDockerfileUsers(config),
