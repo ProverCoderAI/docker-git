@@ -31,6 +31,30 @@ describe("container task classification", () => {
       .toHaveLength(1)
   })
 
+  it("hides browser-connection MCP helpers as internal system tasks", () => {
+    const browserCommand =
+      "browser-connection --project dg-docker-git-issue-376 --network container:dg-docker-git-issue-376"
+    const visible = buildContainerTasks(
+      [
+        processOf({ command: browserCommand, pid: 11502, ppid: 5142, tty: "pts/1" }),
+        processOf({ command: "/usr/local/bin/docker-git-browser-connection start", pid: 11600, ppid: 5142, tty: "pts/1" }),
+        processOf({ command: "node server.js", pid: 20, ppid: 1, tty: "pts/2" })
+      ],
+      [],
+      false
+    )
+
+    expect(visible.map((task) => task.pid)).toEqual([20])
+
+    const withSystem = buildContainerTasks(
+      [processOf({ command: browserCommand, pid: 11502, ppid: 5142, tty: "pts/1" })],
+      [],
+      true
+    )
+
+    expect(withSystem.map((task) => [task.pid, task.kind])).toEqual([[11502, "system"]])
+  })
+
   it("marks descendants of managed agent pid as agent tasks", () => {
     const tasks = buildContainerTasks(
       [
