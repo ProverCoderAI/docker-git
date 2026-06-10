@@ -602,6 +602,30 @@ describe("renderEntrypoint auth bridge", () => {
     expect(entrypoint).not.toContain('if [[ "$GITHUB_AUTH_SKIP" != "1" && -n "$AUTH_LABEL_RAW" ]]; then')
   })
 
+  // CHANGE: assert the per-host generic git credential resolution + env export
+  // WHY: issue #368 wants git connections to providers other than github/gitlab via token
+  // QUOTE(ТЗ): "реализовать возможность добавлять git подключения отличных от gitlab, github"
+  // REF: issue-368
+  // SOURCE: https://git-scm.com/docs/gitcredentials
+  // FORMAT THEOREM: helper resolves GIT_AUTH_TOKEN__<HOST_KEY> before github/gitlab defaults
+  // PURITY: CORE (string assertions over rendered shell)
+  // EFFECT: n/a
+  // INVARIANT: HOST_KEY normalization mirrors the CLI/web auth flows
+  // COMPLEXITY: O(n) where n = |entrypoint|
+  it("renders host-scoped generic git credential resolution and env export", () => {
+    const entrypoint = renderAuthEntrypoint()
+
+    expectContainsAll(entrypoint, [
+      "GIT_AUTH_HOSTS_ENV_FILE=\"/etc/profile.d/git-auth-hosts.sh\"",
+      "for GIT_AUTH_HOST_VAR in $(compgen -v | grep -E '^GIT_AUTH_(TOKEN|USER)__' || true); do",
+      "docker_git_upsert_ssh_env \"$GIT_AUTH_HOST_VAR\" \"$GIT_AUTH_HOST_VAL\"",
+      "host_key=\"$(printf \"%s\" \"$host\" | tr '[:lower:]' '[:upper:]' | sed -E 's/[^A-Z0-9]+/_/g; s/^_+//; s/_+$//')\"",
+      "if [[ \"$protocol\" == \"https\" && -n \"$host_key\" ]]; then",
+      "host_token_key=\"GIT_AUTH_TOKEN__$host_key\"",
+      "host_user_key=\"GIT_AUTH_USER__$host_key\""
+    ])
+  })
+
   it("renders Claude auth and wrapper bootstrap wiring", () => {
     const entrypoint = renderAuthEntrypoint()
 

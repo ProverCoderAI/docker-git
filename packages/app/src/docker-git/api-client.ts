@@ -34,6 +34,9 @@ export {
   gitlabLogin,
   gitlabLogout,
   gitlabStatus,
+  gitLogin,
+  gitLogout,
+  gitStatus,
   grokLogout,
   grokStatus
 } from "./api-client-auth.js"

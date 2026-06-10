@@ -76,4 +76,64 @@ describe("parse auth commands", () => {
 
   it.effect("rejects gitlab login scopes", () =>
     expectParseErrorTag(["auth", "gitlab", "login", "--scopes", "api"], "InvalidOption"))
+
+  // CHANGE: parse `auth git login|status|logout` for generic per-host git providers
+  // WHY: issue #368 wants git connections to providers other than github/gitlab via a token
+  // QUOTE(ТЗ): "реализовать возможность добавлять git подключения отличных от gitlab, github ... просто здавая токен"
+  // REF: issue-368
+  // SOURCE: n/a
+  // FORMAT THEOREM: parse(["auth","git","login","--host",h,"--token",t]) = AuthGitLogin{host:h,token:t}
+  // PURITY: CORE
+  // EFFECT: n/a
+  // INVARIANT: login/logout require --host; login requires --token and forbids --scopes
+  // COMPLEXITY: O(1)
+  it.effect("parses generic git token login with host and optional user", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow([
+        "auth",
+        "git",
+        "login",
+        "--host",
+        "git.example.com",
+        "--token",
+        "glpat-generic",
+        "--user",
+        "deploy-bot"
+      ])
+      expect(command._tag).toBe("AuthGitLogin")
+      if (command._tag !== "AuthGitLogin") {
+        throw new Error("expected AuthGitLogin command")
+      }
+      expect(command.host).toBe("git.example.com")
+      expect(command.token).toBe("glpat-generic")
+      expect(command.user).toBe("deploy-bot")
+      expect(command.envGlobalPath).toBe(".docker-git/.orch/env/global.env")
+    }))
+
+  it.effect("parses generic git status and logout", () =>
+    Effect.sync(() => {
+      const status = parseOrThrow(["auth", "git", "status"])
+      const logout = parseOrThrow(["auth", "git", "logout", "--host", "git.example.com"])
+      expect(status._tag).toBe("AuthGitStatus")
+      expect(logout._tag).toBe("AuthGitLogout")
+      if (logout._tag !== "AuthGitLogout") {
+        throw new Error("expected AuthGitLogout command")
+      }
+      expect(logout.host).toBe("git.example.com")
+    }))
+
+  it.effect("rejects generic git login without --host", () =>
+    expectParseErrorTag(["auth", "git", "login", "--token", "t"], "MissingRequiredOption"))
+
+  it.effect("rejects generic git login without --token", () =>
+    expectParseErrorTag(["auth", "git", "login", "--host", "git.example.com"], "MissingRequiredOption"))
+
+  it.effect("rejects generic git login scopes", () =>
+    expectParseErrorTag(
+      ["auth", "git", "login", "--host", "git.example.com", "--token", "t", "--scopes", "api"],
+      "InvalidOption"
+    ))
+
+  it.effect("rejects generic git logout without --host", () =>
+    expectParseErrorTag(["auth", "git", "logout"], "MissingRequiredOption"))
 })

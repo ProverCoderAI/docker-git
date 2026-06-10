@@ -192,6 +192,26 @@ export type GitlabAuthStatus = {
   readonly tokens: ReadonlyArray<GitlabAuthTokenStatus>
 }
 
+export type GitAuthConnectionStatus = {
+  readonly host: string
+  readonly user: string
+}
+
+export type GitAuthStatus = {
+  readonly summary: string
+  readonly connections: ReadonlyArray<GitAuthConnectionStatus>
+}
+
+export type GitAuthLoginRequest = {
+  readonly host: string
+  readonly token?: string | null | undefined
+  readonly user?: string | null | undefined
+}
+
+export type GitAuthLogoutRequest = {
+  readonly host: string
+}
+
 export type GithubAuthLoginRequest = {
   readonly label?: string | null | undefined
   readonly token?: string | null | undefined

@@ -37,6 +37,8 @@ interface ValueOptionSpec {
     | "grokTokenLabel"
     | "token"
     | "scopes"
+    | "host"
+    | "user"
     | "message"
     | "outDir"
     | "projectDir"
@@ -82,6 +84,8 @@ const valueOptionSpecs: ReadonlyArray<ValueOptionSpec> = [
   { flag: "--grok-token", key: "grokTokenLabel" },
   { flag: "--token", key: "token" },
   { flag: "--scopes", key: "scopes" },
+  { flag: "--host", key: "host" },
+  { flag: "--user", key: "user" },
   { flag: "--message", key: "message" },
   { flag: "-m", key: "message" },
   { flag: "--out-dir", key: "outDir" },
@@ -145,6 +149,8 @@ const valueFlagUpdaters: { readonly [K in ValueKey]: (raw: RawOptions, value: st
   grokTokenLabel: (raw, value) => ({ ...raw, grokTokenLabel: value }),
   token: (raw, value) => ({ ...raw, token: value }),
   scopes: (raw, value) => ({ ...raw, scopes: value }),
+  host: (raw, value) => ({ ...raw, host: value }),
+  user: (raw, value) => ({ ...raw, user: value }),
   message: (raw, value) => ({ ...raw, message: value }),
   outDir: (raw, value) => ({ ...raw, outDir: value }),
   projectDir: (raw, value) => ({ ...raw, projectDir: value }),

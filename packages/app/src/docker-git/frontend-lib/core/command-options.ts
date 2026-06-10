@@ -45,6 +45,8 @@ export interface RawOptions {
   readonly grokTokenLabel?: string
   readonly token?: string
   readonly scopes?: string
+  readonly host?: string
+  readonly user?: string
   readonly message?: string
   readonly authWeb?: boolean
   readonly authOauth?: boolean

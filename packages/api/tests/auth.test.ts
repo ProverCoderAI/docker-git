@@ -15,9 +15,12 @@ import {
   ensureGithubAuthForCreate,
   ensureGitlabAuthForCreate,
   importCodexAuth,
+  loginGitAuth,
   logoutCodexAuth,
+  logoutGitAuth,
   logoutGrokAuth,
   readCodexAuthStatus,
+  readGitAuthStatus,
   readGrokAuthStatus,
   readGitlabAuthStatus,
   readGithubAuthStatus
@@ -535,6 +538,109 @@ describe("api auth", () => {
         expect(status.method).toBe("none")
         expect(status.authPath).toBe(accountDir)
         expect(status.message).toBe("Grok not connected (team-a).")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  // CHANGE: cover the generic per-host git auth login/status/logout endpoints
+  // WHY: issue #368 wants git connections to providers other than github/gitlab via token
+  // QUOTE(ТЗ): "реализовать возможность добавлять git подключения отличных от gitlab, github ... просто здавая токен"
+  // REF: issue-368
+  // SOURCE: https://git-scm.com/docs/gitcredentials
+  // FORMAT THEOREM: login(host, token) then status() reports {host_key, user} and NEVER the token
+  // PURITY: SHELL (filesystem-backed Effects)
+  // EFFECT: Effect<GitAuthStatus, ApiBadRequestError | PlatformError, FileSystem | Path>
+  // INVARIANT: token values are never serialized into the status payload
+  // COMPLEXITY: O(n) where n = |env entries|
+  it.effect("logs in, lists and logs out a generic per-host git connection without leaking the token", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const envDir = path.join(projectsRoot, ".orch", "env")
+        const envPath = path.join(envDir, "global.env")
+
+        yield* _(fs.makeDirectory(envDir, { recursive: true }))
+        yield* _(fs.writeFileString(envPath, "# docker-git env\n"))
+
+        const afterLogin = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              loginGitAuth({ host: "git.example.com", token: "secret-token", user: "deploy-bot" })
+            )
+          )
+        )
+
+        expect(afterLogin.summary).toBe("Git connections (1):")
+        expect(afterLogin.connections).toEqual([{ host: "GIT_EXAMPLE_COM", user: "deploy-bot" }])
+        // SECURITY: the status payload must never carry token values
+        expect(JSON.stringify(afterLogin)).not.toContain("secret-token")
+
+        const envText = yield* _(fs.readFileString(envPath))
+        expect(envText).toContain("GIT_AUTH_TOKEN__GIT_EXAMPLE_COM=secret-token")
+        expect(envText).toContain("GIT_AUTH_USER__GIT_EXAMPLE_COM=deploy-bot")
+
+        const status = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(root, readGitAuthStatus())
+          )
+        )
+        expect(status.connections).toEqual([{ host: "GIT_EXAMPLE_COM", user: "deploy-bot" }])
+
+        const afterLogout = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              logoutGitAuth({ host: "git.example.com" })
+            )
+          )
+        )
+        expect(afterLogout.summary).toBe("No generic git connections.")
+        expect(afterLogout.connections).toEqual([])
+
+        const finalEnv = yield* _(fs.readFileString(envPath))
+        expect(finalEnv).not.toContain("GIT_AUTH_TOKEN__GIT_EXAMPLE_COM")
+        expect(finalEnv).not.toContain("GIT_AUTH_USER__GIT_EXAMPLE_COM")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("rejects generic git login when host or token is missing", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const envDir = path.join(projectsRoot, ".orch", "env")
+        const envPath = path.join(envDir, "global.env")
+
+        yield* _(fs.makeDirectory(envDir, { recursive: true }))
+        yield* _(fs.writeFileString(envPath, "# docker-git env\n"))
+
+        const missingHost = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              loginGitAuth({ host: "  ", token: "t", user: null }).pipe(Effect.flip)
+            )
+          )
+        )
+        expect(missingHost._tag).toBe("ApiBadRequestError")
+
+        const missingToken = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(
+              root,
+              loginGitAuth({ host: "git.example.com", token: "  ", user: null }).pipe(Effect.flip)
+            )
+          )
+        )
+        expect(missingToken._tag).toBe("ApiBadRequestError")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 })

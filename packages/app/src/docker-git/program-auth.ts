@@ -13,6 +13,9 @@ import {
   gitlabLogin,
   gitlabLogout,
   gitlabStatus,
+  gitLogin,
+  gitLogout,
+  gitStatus,
   grokLogout,
   grokStatus,
   type JsonValue,
@@ -37,6 +40,9 @@ export type RoutedAuthCommand = Extract<
       | "AuthGitlabLogin"
       | "AuthGitlabStatus"
       | "AuthGitlabLogout"
+      | "AuthGitLogin"
+      | "AuthGitStatus"
+      | "AuthGitLogout"
       | "AuthClaudeLogin"
       | "AuthGeminiLogin"
       | "AuthGrokLogin"
@@ -77,6 +83,9 @@ const routedAuthTags: Readonly<Record<string, true>> = {
   AuthGitlabLogin: true,
   AuthGitlabLogout: true,
   AuthGitlabStatus: true,
+  AuthGitLogin: true,
+  AuthGitLogout: true,
+  AuthGitStatus: true,
   AuthGrokStatus: true
 }
 
@@ -107,6 +116,19 @@ const handleGitlabLogoutCommand = (
 ) =>
   withControllerReady(
     pipe(gitlabLogout(command), Effect.zipRight(Effect.log("GitLab auth removed from controller state.")))
+  )
+
+const handleGitLoginCommand = (command: Extract<OperationalCommand, { readonly _tag: "AuthGitLogin" }>) =>
+  withControllerReady(pipe(gitLogin(command), Effect.flatMap((payload) => renderAuthPayload(payload))))
+
+const handleGitStatusCommand = (command: Extract<OperationalCommand, { readonly _tag: "AuthGitStatus" }>) =>
+  withControllerReady(pipe(gitStatus(command), Effect.flatMap((payload) => renderAuthPayload(payload))))
+
+const handleGitLogoutCommand = (
+  command: Extract<OperationalCommand, { readonly _tag: "AuthGitLogout" }>
+) =>
+  withControllerReady(
+    pipe(gitLogout(command), Effect.zipRight(Effect.log(`Git auth removed from controller state (${command.host}).`)))
   )
 
 const handleCodexLoginCommand = (
@@ -188,6 +210,9 @@ export const dispatchRoutedAuthCommand = (
     Match.when({ _tag: "AuthGitlabLogin" }, handleGitlabLoginCommand),
     Match.when({ _tag: "AuthGitlabStatus" }, handleGitlabStatusCommand),
     Match.when({ _tag: "AuthGitlabLogout" }, handleGitlabLogoutCommand),
+    Match.when({ _tag: "AuthGitLogin" }, handleGitLoginCommand),
+    Match.when({ _tag: "AuthGitStatus" }, handleGitStatusCommand),
+    Match.when({ _tag: "AuthGitLogout" }, handleGitLogoutCommand),
     Match.when({ _tag: "AuthClaudeLogin" }, handleClaudeLoginCommand),
     Match.when({ _tag: "AuthGeminiLogin" }, handleGeminiLoginCommand),
     Match.when({ _tag: "AuthGrokLogin" }, handleGrokLoginCommand),

@@ -35,6 +35,35 @@ export interface AuthGitlabLogoutCommand {
   readonly envGlobalPath: string
 }
 
+// CHANGE: add generic git host auth commands
+// WHY: issue #368 requires connecting git providers other than github/gitlab via token
+// QUOTE(ТЗ): "реализовать возможность добавлять git подключения отличных от gitlab, github"
+// REF: issue-368
+// SOURCE: https://git-scm.com/docs/gitcredentials
+// FORMAT THEOREM: forall cmd ∈ AuthGitCommand: cmd.host normalizes to a token env key suffix
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: credentials are isolated per normalized host key
+// COMPLEXITY: O(1)
+export interface AuthGitLoginCommand {
+  readonly _tag: "AuthGitLogin"
+  readonly host: string
+  readonly token: string | null
+  readonly user: string | null
+  readonly envGlobalPath: string
+}
+
+export interface AuthGitStatusCommand {
+  readonly _tag: "AuthGitStatus"
+  readonly envGlobalPath: string
+}
+
+export interface AuthGitLogoutCommand {
+  readonly _tag: "AuthGitLogout"
+  readonly host: string
+  readonly envGlobalPath: string
+}
+
 export interface AuthCodexLoginCommand {
   readonly _tag: "AuthCodexLogin"
   readonly label: string | null
@@ -142,6 +171,9 @@ export type AuthCommand =
   | AuthGitlabLoginCommand
   | AuthGitlabStatusCommand
   | AuthGitlabLogoutCommand
+  | AuthGitLoginCommand
+  | AuthGitStatusCommand
+  | AuthGitLogoutCommand
   | AuthCodexLoginCommand
   | AuthCodexStatusCommand
   | AuthCodexLogoutCommand
