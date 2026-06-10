@@ -53,7 +53,7 @@ RUN set -eu; \
       if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh \
         && bash /tmp/nodesource-setup.sh \
         && apt-get -o Acquire::Retries=3 install -y --no-install-recommends nodejs \
-        && npm install -g --prefix /opt/bun --no-audit --no-fund bun@1.3.11 node-gyp \
+        && npm install -g --prefix /opt/bun --no-audit --no-fund bun@1.3.11 node-gyp@12.4.0 \
         && node -v \
         && npm -v \
         && bun --version \

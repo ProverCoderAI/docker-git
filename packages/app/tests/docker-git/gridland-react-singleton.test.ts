@@ -19,6 +19,21 @@ const gridlandRendererReactVersion = "19.2.4"
 
 const stripCaret = (value: string): string => value.replace(/^\^/u, "")
 
+// CHANGE: resolve a dependency version from either dependencies or devDependencies.
+// WHY: the terminal package exports React components but never renders to the DOM itself,
+//      so `react-dom` is a devDependency there; the singleton pin must still be enforced
+//      wherever the dependency is declared. REF: PR-386 CodeRabbit review.
+const resolveDepVersion = (
+  pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> },
+  name: string
+): string => {
+  const version = pkg.dependencies?.[name] ?? pkg.devDependencies?.[name]
+  if (version === undefined) {
+    throw new Error(`Expected ${name} to be declared in dependencies or devDependencies`)
+  }
+  return stripCaret(version)
+}
+
 describe("Gridland React singleton contract", () => {
   it.effect("pins React across workspace dependencies for the Gridland renderer", () =>
     Effect.sync(() => {
@@ -26,7 +41,7 @@ describe("Gridland React singleton contract", () => {
       expect(rootPackage.overrides["react-dom"]).toBe(gridlandRendererReactVersion)
       expect(stripCaret(appPackage.dependencies.react)).toBe(gridlandRendererReactVersion)
       expect(stripCaret(appPackage.dependencies["react-dom"])).toBe(gridlandRendererReactVersion)
-      expect(stripCaret(terminalPackage.dependencies.react)).toBe(gridlandRendererReactVersion)
-      expect(stripCaret(terminalPackage.devDependencies["react-dom"])).toBe(gridlandRendererReactVersion)
+      expect(resolveDepVersion(terminalPackage, "react")).toBe(gridlandRendererReactVersion)
+      expect(resolveDepVersion(terminalPackage, "react-dom")).toBe(gridlandRendererReactVersion)
     }))
 })
