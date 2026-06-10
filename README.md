@@ -71,6 +71,11 @@ bun run docker-git apply-all --active
 - `apply` применяет конфиг к одному проекту. `--no-up` только обновляет файлы без `docker compose up`.
 - `apply-all` применяет конфиг ко всем проектам. `--active` только к запущенным контейнерам.
 
+## Процесс разработки
+
+Канонический цикл разработки (SDD: Spec-Driven Development) — от issue до
+проверяемого PR — описан в [docs/process.md](docs/process.md).
+
 ## Подробности
 
 ```bash
