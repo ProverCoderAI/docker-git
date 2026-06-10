@@ -26,6 +26,17 @@ export type {
 } from "./auth-domain.js"
 export type { MenuAction, ParseError } from "./menu.js"
 export { parseMenuSelection } from "./menu.js"
+export type {
+  ProjectSourceKind,
+  ProjectSourceProvider,
+  ProjectSourceRef,
+  ProjectSourceState
+} from "./project-source-ref.js"
+export {
+  normalizeProjectSourceState,
+  parseProjectSourceRef,
+  shouldDeleteForSourceState
+} from "./project-source-ref.js"
 export { deriveRepoPathParts, deriveRepoSlug, resolveRepoInput } from "./repo.js"
 export type {
   SessionsCommand,
