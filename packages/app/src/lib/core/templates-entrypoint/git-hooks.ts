@@ -1,4 +1,10 @@
 import { renderEntrypointGitPostPushWrapperInstall } from "./git-post-push-wrapper.js"
+import {
+  renderPlanToGitAgentHooksInstall,
+  renderPlanToGitHookPaths,
+  renderPlanToGitPostPushSync,
+  renderPlanToGitSyncHelperInstall
+} from "./plan-to-git.js"
 import { renderPostPushPrEnsure } from "./post-push-pr.js"
 
 const entrypointGitHooksTemplate = String
@@ -6,11 +12,7 @@ const entrypointGitHooksTemplate = String
 HOOKS_DIR="/opt/docker-git/hooks"
 PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"
 POST_PUSH_ACTION="$HOOKS_DIR/post-push"
-PLAN_TO_GIT_SYNC_HELPER="$HOOKS_DIR/plan-to-git-sync"
-PLAN_TO_GIT_CODEX_HOOK="$HOOKS_DIR/plan-to-git-codex-hook"
-PLAN_TO_GIT_CLAUDE_HOOK="$HOOKS_DIR/plan-to-git-claude-hook"
-CODEX_REQUIREMENTS_FILE="/etc/codex/requirements.toml"
-CLAUDE_PLAN_TO_GIT_SETTINGS_FILE="$CLAUDE_CONFIG_DIR/settings.json"
+${renderPlanToGitHookPaths()}
 mkdir -p "$HOOKS_DIR"
 
 cat <<'EOF' > "$PRE_PUSH_HOOK"
@@ -138,74 +140,7 @@ done
 EOF
 chmod 0755 "$PRE_PUSH_HOOK"
 
-cat <<'EOF' > "$PLAN_TO_GIT_SYNC_HELPER"
-#!/usr/bin/env bash
-set -euo pipefail
-
-if [ "${"${"}DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" = "1" ]; then
-  exit 0
-fi
-
-if ! command -v plan-to-git >/dev/null 2>&1; then
-  echo "[plan-to-git] Error: plan-to-git not found" >&2
-  exit 1
-fi
-
-export PLAN_TO_GIT_STATE_DIR="${"${"}PLAN_TO_GIT_STATE_DIR:-/tmp/plan-to-git}"
-
-docker_git_plan_to_git_explicit_pr_supported() {
-  plan-to-git sync --help 2>/dev/null | grep -q -- "--pr <PR>"
-}
-
-docker_git_plan_to_git_resolve_pr_number() {
-  local candidate=""
-  local key=""
-  for key in DOCKER_GIT_PR_NUMBER PR_NUMBER GITHUB_PR_NUMBER; do
-    candidate="${"${"}!key:-}"
-    if [[ "$candidate" =~ ^[0-9]+$ ]]; then
-      printf "%s\n" "$candidate"
-      return 0
-    fi
-  done
-
-  candidate="${"${"}REPO_REF:-}"
-  if [[ "$candidate" =~ ^refs/pull/([0-9]+)/head$ ]]; then
-    printf "%s\n" "${"${"}BASH_REMATCH[1]}"
-    return 0
-  fi
-  if [[ "$candidate" =~ ^pull/([0-9]+)$ ]]; then
-    printf "%s\n" "${"${"}BASH_REMATCH[1]}"
-    return 0
-  fi
-
-  if command -v gh >/dev/null 2>&1; then
-    candidate="$(gh pr view --json number --jq .number 2>/dev/null || true)"
-    if [[ "$candidate" =~ ^[0-9]+$ ]]; then
-      printf "%s\n" "$candidate"
-      return 0
-    fi
-  fi
-
-  return 0
-}
-
-docker_git_plan_to_git_sync() {
-  local pr_number=""
-  pr_number="$(docker_git_plan_to_git_resolve_pr_number || true)"
-
-  if [[ -n "$pr_number" ]] && docker_git_plan_to_git_explicit_pr_supported; then
-    echo "[plan-to-git] Syncing queued agent plans to PR #$pr_number"
-    plan-to-git sync --pr "$pr_number"
-    return 0
-  fi
-
-  echo "[plan-to-git] Syncing queued agent plans via current branch discovery"
-  plan-to-git sync
-}
-
-docker_git_plan_to_git_sync
-EOF
-chmod 0755 "$PLAN_TO_GIT_SYNC_HELPER"
+${renderPlanToGitSyncHelperInstall()}
 
 cat <<'EOF' > "$POST_PUSH_ACTION"
 #!/usr/bin/env bash
@@ -220,25 +155,7 @@ cd "$REPO_ROOT"
 
 ${renderPostPushPrEnsure()}
 
-# CHANGE: backfill agent session plans before syncing the current branch or explicit PR.
-# WHY: live agent hooks can be unavailable in already-running sessions; session logs are the durable fallback.
-# QUOTE(ТЗ): "что бы всё уходило на гитхаб автоматически"
-# REF: issue-397
-if [ "${"${"}DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" != "1" ]; then
-  if ! command -v plan-to-git >/dev/null 2>&1; then
-    echo "[plan-to-git] Error: plan-to-git not found" >&2
-    exit 1
-  fi
-  plan-to-git import-codex --no-sync
-  plan-to-git import-claude --no-sync
-  PLAN_TO_GIT_SYNC_HELPER="${"${"}DOCKER_GIT_PLAN_TO_GIT_SYNC_HELPER:-/opt/docker-git/hooks/plan-to-git-sync}"
-  if [[ -x "$PLAN_TO_GIT_SYNC_HELPER" ]]; then
-    "$PLAN_TO_GIT_SYNC_HELPER"
-  else
-    echo "[plan-to-git] Sync helper not found; falling back to current branch discovery" >&2
-    plan-to-git sync
-  fi
-fi
+${renderPlanToGitPostPushSync()}
 
 # CHANGE: keep post-push backup logic in a reusable action script
 # WHY: git has no client-side post-push hook, so the global git wrapper
@@ -258,125 +175,7 @@ fi
 EOF
 chmod 0755 "$POST_PUSH_ACTION"
 
-cat <<'EOF' > "$PLAN_TO_GIT_CODEX_HOOK"
-#!/usr/bin/env bash
-set -euo pipefail
-
-if [ "${"${"}DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" = "1" ]; then
-  exit 0
-fi
-
-if ! command -v plan-to-git >/dev/null 2>&1; then
-  echo "[plan-to-git] Error: plan-to-git not found" >&2
-  exit 1
-fi
-
-export PLAN_TO_GIT_STATE_DIR="${"${"}PLAN_TO_GIT_STATE_DIR:-/tmp/plan-to-git}"
-plan-to-git hook --source codex
-PLAN_TO_GIT_SYNC_HELPER="${"${"}DOCKER_GIT_PLAN_TO_GIT_SYNC_HELPER:-/opt/docker-git/hooks/plan-to-git-sync}"
-"$PLAN_TO_GIT_SYNC_HELPER" >&2 || true
-EOF
-chmod 0755 "$PLAN_TO_GIT_CODEX_HOOK"
-
-cat <<'EOF' > "$PLAN_TO_GIT_CLAUDE_HOOK"
-#!/usr/bin/env bash
-set -euo pipefail
-
-if [ "${"${"}DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" = "1" ]; then
-  exit 0
-fi
-
-if ! command -v plan-to-git >/dev/null 2>&1; then
-  echo "[plan-to-git] Error: plan-to-git not found" >&2
-  exit 1
-fi
-
-export PLAN_TO_GIT_STATE_DIR="${"${"}PLAN_TO_GIT_STATE_DIR:-/tmp/plan-to-git}"
-plan-to-git hook --source claude
-PLAN_TO_GIT_SYNC_HELPER="${"${"}DOCKER_GIT_PLAN_TO_GIT_SYNC_HELPER:-/opt/docker-git/hooks/plan-to-git-sync}"
-"$PLAN_TO_GIT_SYNC_HELPER" >&2 || true
-EOF
-chmod 0755 "$PLAN_TO_GIT_CLAUDE_HOOK"
-
-mkdir -p "$(dirname "$CODEX_REQUIREMENTS_FILE")"
-cat <<'EOF' > "$CODEX_REQUIREMENTS_FILE"
-# docker-git managed Codex requirements
-
-[features]
-hooks = true
-
-[hooks]
-managed_dir = "/opt/docker-git/hooks"
-
-[[hooks.UserPromptSubmit]]
-[[hooks.UserPromptSubmit.hooks]]
-type = "command"
-command = "/opt/docker-git/hooks/plan-to-git-codex-hook"
-statusMessage = "Capturing plan decision"
-
-[[hooks.Stop]]
-[[hooks.Stop.hooks]]
-type = "command"
-command = "/opt/docker-git/hooks/plan-to-git-codex-hook"
-statusMessage = "Capturing agent plan"
-EOF
-chmod 0644 "$CODEX_REQUIREMENTS_FILE"
-
-docker_git_install_claude_plan_to_git_hooks() {
-  if [ "${"${"}DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" = "1" ]; then
-    return 0
-  fi
-
-  CLAUDE_PLAN_TO_GIT_SETTINGS_FILE="${"${"}CLAUDE_PLAN_TO_GIT_SETTINGS_FILE:-${"${"}CLAUDE_CONFIG_DIR:-/home/dev/.claude}/settings.json}"
-  CLAUDE_PLAN_TO_GIT_SETTINGS_FILE="$CLAUDE_PLAN_TO_GIT_SETTINGS_FILE" PLAN_TO_GIT_CLAUDE_HOOK="$PLAN_TO_GIT_CLAUDE_HOOK" node - <<'NODE'
-const fs = require("node:fs")
-const path = require("node:path")
-
-const settingsPath = process.env.CLAUDE_PLAN_TO_GIT_SETTINGS_FILE
-const hookCommand = process.env.PLAN_TO_GIT_CLAUDE_HOOK || "/opt/docker-git/hooks/plan-to-git-claude-hook"
-if (typeof settingsPath !== "string" || settingsPath.length === 0) {
-  process.exit(0)
-}
-
-const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value)
-
-let settings = {}
-try {
-  const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"))
-  settings = isRecord(parsed) ? parsed : {}
-} catch {
-  settings = {}
-}
-
-const currentHooks = isRecord(settings.hooks) ? settings.hooks : {}
-const nextHooks = { ...currentHooks }
-const managedHook = { type: "command", command: hookCommand }
-const ensureEventHook = (eventName) => {
-  const currentEventHooks = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
-  const alreadyInstalled = currentEventHooks.some((entry) =>
-    isRecord(entry) &&
-    Array.isArray(entry.hooks) &&
-    entry.hooks.some((hook) => isRecord(hook) && hook.type === "command" && hook.command === hookCommand)
-  )
-  nextHooks[eventName] = alreadyInstalled ? currentEventHooks : [...currentEventHooks, { hooks: [managedHook] }]
-}
-
-ensureEventHook("UserPromptSubmit")
-ensureEventHook("Stop")
-
-const nextSettings = { ...settings, hooks: nextHooks }
-if (JSON.stringify(settings) === JSON.stringify(nextSettings)) {
-  process.exit(0)
-}
-
-fs.mkdirSync(path.dirname(settingsPath), { recursive: true })
-fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2) + "\n", { mode: 0o600 })
-NODE
-  chmod 0600 "$CLAUDE_PLAN_TO_GIT_SETTINGS_FILE" 2>/dev/null || true
-  chown 1000:1000 "$CLAUDE_PLAN_TO_GIT_SETTINGS_FILE" 2>/dev/null || true
-}
-
-docker_git_install_claude_plan_to_git_hooks
+${renderPlanToGitAgentHooksInstall()}
 
 ${renderEntrypointGitPostPushWrapperInstall()}
 
