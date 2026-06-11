@@ -1,6 +1,6 @@
 {
   "name": "@effect-template/api",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "docker-git API controller",
   "main": "dist/src/main.js",
