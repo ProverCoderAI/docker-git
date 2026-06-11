@@ -93,9 +93,11 @@ describe("app planFiles", () => {
           "cargo install --git https://github.com/ProverCoderAI/rust-browser-connection"
         )
         expect(dockerfile.contents).toContain(
-          "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev 06fe8bdf1d2e48a1f5a0218a3bb7af19e63deb5e --locked --bins --root /usr/local"
+          "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev f60fbe71131854be4c6c1d9fb79abafd2dd6949b --locked --bins --root /usr/local"
         )
         expect(dockerfile.contents).toContain("/usr/local/bin/plan-to-git --help >/dev/null")
+        expect(dockerfile.contents).toContain("/usr/local/bin/plan-to-git hook --help | grep -q -- \"claude\"")
+        expect(dockerfile.contents).toContain("/usr/local/bin/plan-to-git sync --help | grep -q -- \"--pr <PR>\"")
         expect(dockerfile.contents).toContain("make build-essential docker.io")
         expect(dockerfile.contents).toContain("/usr/local/bin/browser-connection --version")
         expect(dockerfile.contents).not.toContain("docker-git-playwright-mcp")
@@ -110,14 +112,24 @@ describe("app planFiles", () => {
           "args = [\"--project\", \"$DOCKER_GIT_BROWSER_PROJECT\", \"--network\", \"$DOCKER_GIT_BROWSER_NETWORK\"]"
         )
         expect(entrypoint.contents).toContain("plan-to-git sync")
+        expect(entrypoint.contents).toContain("PLAN_TO_GIT_SYNC_HELPER=\"$HOOKS_DIR/plan-to-git-sync\"")
+        expect(entrypoint.contents).toContain("plan-to-git sync --pr \"$pr_number\"")
         expect(entrypoint.contents).toContain("docker_git_ensure_open_pr")
         expect(entrypoint.contents).toContain("gh pr list --repo \"$base_repo\" --state open --head \"$head_arg\"")
         expect(entrypoint.contents).toContain(
           "gh pr create --repo \"$base_repo\" --base \"$base_branch\" --head \"$head_arg\" --fill"
         )
         expect(entrypoint.contents).toContain("plan-to-git hook --source codex")
+        expect(entrypoint.contents).toContain("plan-to-git hook --source claude")
         expect(entrypoint.contents).toContain("plan-to-git import-codex --no-sync")
+        expect(entrypoint.contents).toContain("plan-to-git import-claude --no-sync")
         expect(entrypoint.contents).toContain("CODEX_REQUIREMENTS_FILE=\"/etc/codex/requirements.toml\"")
+        expect(entrypoint.contents).toContain("PLAN_TO_GIT_CLAUDE_HOOK=\"$HOOKS_DIR/plan-to-git-claude-hook\"")
+        expect(entrypoint.contents).toContain("docker_git_install_claude_plan_to_git_hooks")
+        expect(entrypoint.contents).toContain("CLAUDE_PLAN_TO_GIT_SETTINGS_FILE=\"$CLAUDE_CONFIG_DIR/settings.json\"")
+        expect(entrypoint.contents).toContain("ensureEventHook(\"UserPromptSubmit\")")
+        expect(entrypoint.contents).toContain("ensureEventHook(\"Stop\")")
+        expect(entrypoint.contents).toContain("PLAN_TO_GIT_STATE_DIR:-/tmp/plan-to-git")
         expect(entrypoint.contents).toContain("managed_dir = \"/opt/docker-git/hooks\"")
         expect(entrypoint.contents).toContain("[[hooks.UserPromptSubmit]]")
         expect(entrypoint.contents).toContain("[[hooks.Stop]]")
@@ -125,10 +137,11 @@ describe("app planFiles", () => {
 
         const cdIndex = entrypoint.contents.indexOf("cd \"$REPO_ROOT\"")
         const ensurePrIndex = entrypoint.contents.indexOf(
-          "docker_git_ensure_open_pr\n\n# CHANGE: backfill Codex session plans"
+          "docker_git_ensure_open_pr\n\n# CHANGE: backfill agent session plans"
         )
         const planImportIndex = entrypoint.contents.indexOf("plan-to-git import-codex --no-sync")
-        const planSyncIndex = entrypoint.contents.indexOf("plan-to-git sync")
+        const claudeImportIndex = entrypoint.contents.indexOf("plan-to-git import-claude --no-sync")
+        const planSyncIndex = entrypoint.contents.indexOf("\"$PLAN_TO_GIT_SYNC_HELPER\"", claudeImportIndex)
         const sessionBackupIndex = entrypoint.contents.indexOf(
           "docker-git-session-sync backup --verbose --background --require-comment"
         )
@@ -136,7 +149,8 @@ describe("app planFiles", () => {
         expect(cdIndex).toBeGreaterThanOrEqual(0)
         expect(ensurePrIndex).toBeGreaterThan(cdIndex)
         expect(planImportIndex).toBeGreaterThan(ensurePrIndex)
-        expect(planSyncIndex).toBeGreaterThan(planImportIndex)
+        expect(claudeImportIndex).toBeGreaterThan(planImportIndex)
+        expect(planSyncIndex).toBeGreaterThan(claudeImportIndex)
         expect(sessionBackupIndex).toBeGreaterThan(planSyncIndex)
       })
     )

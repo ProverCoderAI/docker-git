@@ -1,4 +1,10 @@
 import { renderEntrypointGitPostPushWrapperInstall } from "./git-post-push-wrapper.js"
+import {
+  renderPlanToGitAgentHooksInstall,
+  renderPlanToGitHookPaths,
+  renderPlanToGitPostPushSync,
+  renderPlanToGitSyncHelperInstall
+} from "./plan-to-git.js"
 import { renderPostPushPrEnsure } from "./post-push-pr.js"
 
 const entrypointGitHooksTemplate = String
@@ -6,8 +12,7 @@ const entrypointGitHooksTemplate = String
 HOOKS_DIR="/opt/docker-git/hooks"
 PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"
 POST_PUSH_ACTION="$HOOKS_DIR/post-push"
-PLAN_TO_GIT_CODEX_HOOK="$HOOKS_DIR/plan-to-git-codex-hook"
-CODEX_REQUIREMENTS_FILE="/etc/codex/requirements.toml"
+${renderPlanToGitHookPaths()}
 mkdir -p "$HOOKS_DIR"
 
 cat <<'EOF' > "$PRE_PUSH_HOOK"
@@ -135,6 +140,8 @@ done
 EOF
 chmod 0755 "$PRE_PUSH_HOOK"
 
+${renderPlanToGitSyncHelperInstall()}
+
 cat <<'EOF' > "$POST_PUSH_ACTION"
 #!/usr/bin/env bash
 set -euo pipefail
@@ -148,17 +155,7 @@ cd "$REPO_ROOT"
 
 ${renderPostPushPrEnsure()}
 
-# CHANGE: backfill Codex session plans before syncing the current branch PR.
-# WHY: live Codex hooks can be unavailable in already-running sessions; session logs are the durable fallback.
-# REF: issue-375
-if [ "${"${"}DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" != "1" ]; then
-  if ! command -v plan-to-git >/dev/null 2>&1; then
-    echo "[plan-to-git] Error: plan-to-git not found" >&2
-    exit 1
-  fi
-  plan-to-git import-codex --no-sync
-  plan-to-git sync
-fi
+${renderPlanToGitPostPushSync()}
 
 # CHANGE: keep post-push backup logic in a reusable action script
 # WHY: git has no client-side post-push hook, so the global git wrapper
@@ -178,46 +175,7 @@ fi
 EOF
 chmod 0755 "$POST_PUSH_ACTION"
 
-cat <<'EOF' > "$PLAN_TO_GIT_CODEX_HOOK"
-#!/usr/bin/env bash
-set -euo pipefail
-
-if [ "${"${"}DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" = "1" ]; then
-  exit 0
-fi
-
-if ! command -v plan-to-git >/dev/null 2>&1; then
-  echo "[plan-to-git] Error: plan-to-git not found" >&2
-  exit 1
-fi
-
-plan-to-git hook --source codex
-EOF
-chmod 0755 "$PLAN_TO_GIT_CODEX_HOOK"
-
-mkdir -p "$(dirname "$CODEX_REQUIREMENTS_FILE")"
-cat <<'EOF' > "$CODEX_REQUIREMENTS_FILE"
-# docker-git managed Codex requirements
-
-[features]
-hooks = true
-
-[hooks]
-managed_dir = "/opt/docker-git/hooks"
-
-[[hooks.UserPromptSubmit]]
-[[hooks.UserPromptSubmit.hooks]]
-type = "command"
-command = "/opt/docker-git/hooks/plan-to-git-codex-hook"
-statusMessage = "Capturing plan decision"
-
-[[hooks.Stop]]
-[[hooks.Stop.hooks]]
-type = "command"
-command = "/opt/docker-git/hooks/plan-to-git-codex-hook"
-statusMessage = "Capturing agent plan"
-EOF
-chmod 0644 "$CODEX_REQUIREMENTS_FILE"
+${renderPlanToGitAgentHooksInstall()}
 
 ${renderEntrypointGitPostPushWrapperInstall()}
 
