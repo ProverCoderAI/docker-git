@@ -171,11 +171,11 @@ if [[ -n "\${FAKE_PLAN_TO_GIT_LOG_PATH:-}" ]]; then
   printf '%s\\t%s\\n' "$PWD" "$*" >> "$FAKE_PLAN_TO_GIT_LOG_PATH"
 fi
 
-if [[ "\${1:-}" != "import-codex" && "\${1:-}" != "sync" ]]; then
+if [[ "\${1:-}" != "import-codex" && "\${1:-}" != "import-claude" && "\${1:-}" != "sync" ]]; then
   if [[ -n "\${FAKE_PLAN_TO_GIT_LOG_PATH:-}" ]]; then
     printf '%s\\tunexpected-command:%s\\n' "$PWD" "\${1:-<empty>}" >> "$FAKE_PLAN_TO_GIT_LOG_PATH"
   fi
-  echo "fakePlanToGit: expected import-codex or sync command, got: \${1:-<empty>}" >&2
+  echo "fakePlanToGit: expected import-codex, import-claude, or sync command, got: \${1:-<empty>}" >&2
   exit 127
 fi
 
@@ -385,6 +385,7 @@ describe("git post-push wrapper", () => {
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
         expect(planToGit).toEqual([
           `${harness.repoDir}\timport-codex --no-sync`,
+          `${harness.repoDir}\timport-claude --no-sync`,
           `${harness.repoDir}\tsync`
         ])
         expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head issue-375 --fill`)
@@ -408,6 +409,7 @@ describe("git post-push wrapper", () => {
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
         expect(planToGit).toEqual([
           `${harness.repoDir}\timport-codex --no-sync`,
+          `${harness.repoDir}\timport-claude --no-sync`,
           `${harness.repoDir}\tsync`
         ])
         expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head issue-375 --fill`)
@@ -519,6 +521,7 @@ describe("git post-push wrapper", () => {
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
         expect(planToGit).toEqual([
           `${harness.repoDir}\timport-codex --no-sync`,
+          `${harness.repoDir}\timport-claude --no-sync`,
           `${harness.repoDir}\tsync`
         ])
       })
@@ -540,6 +543,7 @@ describe("git post-push wrapper", () => {
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
         expect(planToGit).toEqual([
           `${harness.repoDir}\timport-codex --no-sync`,
+          `${harness.repoDir}\timport-claude --no-sync`,
           `${harness.repoDir}\tsync`
         ])
         expect(gh).toContain(`${harness.repoDir}\tpr list --repo org/repo --state open --head issue-375 --json url --jq .[0].url // ""`)
