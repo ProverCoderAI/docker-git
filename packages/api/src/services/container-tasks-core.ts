@@ -27,9 +27,18 @@ const commandSuggestsSsh = (command: string): boolean => command.startsWith("ssh
 const commandSuggestsAgent = (command: string): boolean =>
   interactiveAgentPattern.test(command) || command.includes("docker-git-agent-")
 
-// Rust browser MCP helpers (`browser-connection`, `docker-git-browser-connection`)
-// run on an allocated pty, so without this they would be misclassified as visible
-// `ssh` terminals and flood the task manager (issue #383).
+// CHANGE: classify browser-connection / docker-git-browser-connection helpers as system
+// WHY: these Rust MCP helpers run on allocated ptys (pts/N); without this guard
+//      hasInteractiveTty classifies each as a visible "ssh" terminal and floods the
+//      task manager with duplicate rows (issue #383)
+// QUOTE(ТЗ): n/a
+// REF: https://github.com/ProverCoderAI/docker-git/issues/383
+// SOURCE: n/a
+// FORMAT THEOREM: ∀ cmd ∈ Commands: commandSuggestsBrowserHelper(cmd) → classifyProcess(cmd) = "system"
+// PURITY: CORE
+// INVARIANT: browserConnectionPattern matches the binary name at start or after '/'
+//            with a word boundary — covers bare invocations and full absolute paths
+// COMPLEXITY: O(1) time / O(1) space — single constant regex test
 const browserConnectionPattern = /(?:^|\/)(?:docker-git-browser-connection|browser-connection)\b/u
 
 const commandSuggestsBrowserHelper = (command: string): boolean => browserConnectionPattern.test(command)
