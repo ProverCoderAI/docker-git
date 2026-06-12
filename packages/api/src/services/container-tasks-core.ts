@@ -27,6 +27,13 @@ const commandSuggestsSsh = (command: string): boolean => command.startsWith("ssh
 const commandSuggestsAgent = (command: string): boolean =>
   interactiveAgentPattern.test(command) || command.includes("docker-git-agent-")
 
+// Rust browser MCP helpers (`browser-connection`, `docker-git-browser-connection`)
+// run on an allocated pty, so without this they would be misclassified as visible
+// `ssh` terminals and flood the task manager (issue #383).
+const browserConnectionPattern = /(?:^|\/)(?:docker-git-browser-connection|browser-connection)\b/u
+
+const commandSuggestsBrowserHelper = (command: string): boolean => browserConnectionPattern.test(command)
+
 const resolveAncestorManagedId = (
   process: RawContainerProcess,
   pidToProcess: ReadonlyMap<number, RawContainerProcess>,
@@ -49,6 +56,9 @@ const classifyProcess = (
   process: RawContainerProcess,
   managedId: string | undefined
 ): ContainerTaskKind => {
+  if (commandSuggestsBrowserHelper(process.command)) {
+    return "system"
+  }
   if (managedId !== undefined || commandSuggestsAgent(process.command)) {
     return "agent"
   }
@@ -78,7 +88,7 @@ const compareTasks = (left: ContainerTask, right: ContainerTask): number => {
 // FORMAT THEOREM: forall p in Processes: classify(p) in ContainerTaskKind
 // PURITY: CORE
 // EFFECT: none
-// INVARIANT: includeDefault=false excludes only baseline system processes
+// INVARIANT: includeDefault=false excludes system processes (baseline + browser helpers)
 // COMPLEXITY: O(n * h) where h is maximum process ancestry depth
 export const buildContainerTasks = (
   processes: ReadonlyArray<RawContainerProcess>,
