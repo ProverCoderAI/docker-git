@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
  && curl -fsSL https://bun.sh/install | bash \
- && npm i -g node-gyp @openai/codex
+ && npm i -g node-gyp@12.4.0 @openai/codex
 
 # Create non-root user for SSH
 RUN useradd -m -s /bin/bash dev

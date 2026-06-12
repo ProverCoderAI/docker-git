@@ -124,11 +124,26 @@ OPENCODE_AUTO_CONNECT=1
 EOF_ENV
 
 AUTH_LOG="$ROOT/codex-auth.log"
-(
-  cd "$REPO_ROOT"
-  dg_run_docker_git "$REPO_ROOT" auth codex import --codex-auth "$ROOT/.orch/auth/codex"
-  dg_run_docker_git "$REPO_ROOT" auth codex status --codex-auth "$ROOT/.orch/auth/codex"
-) >"$AUTH_LOG" 2>&1
+auth_attempts=3
+auth_attempt=1
+auth_exit=0
+: > "$AUTH_LOG"
+while [[ "$auth_attempt" -le "$auth_attempts" ]]; do
+  if (
+    cd "$REPO_ROOT"
+    dg_run_docker_git "$REPO_ROOT" auth codex import --codex-auth "$ROOT/.orch/auth/codex"
+    dg_run_docker_git "$REPO_ROOT" auth codex status --codex-auth "$ROOT/.orch/auth/codex"
+  ) >>"$AUTH_LOG" 2>&1; then
+    auth_exit=0
+    break
+  else
+    auth_exit=$?
+  fi
+  echo "e2e/opencode-autoconnect: auth bootstrap attempt $auth_attempt/$auth_attempts failed (exit: $auth_exit); retrying..." >&2
+  auth_attempt="$((auth_attempt + 1))"
+  sleep 2
+done
+[[ "$auth_exit" -eq 0 ]] || fail "docker-git auth bootstrap failed after $auth_attempts attempts (last exit: $auth_exit)"
 
 auth_confirmation_count="$(grep -Fc -- "Codex auth imported into controller state (account: ci@example.com)." "$AUTH_LOG" || true)"
 [[ "$auth_confirmation_count" -ge 2 ]] \

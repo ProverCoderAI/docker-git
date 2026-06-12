@@ -108,6 +108,35 @@ describe("API Dockerfile Electron materialization", () => {
     }))
 })
 
+describe("API Dockerfile controller tooling install", () => {
+  it.effect("retries network-bound controller tooling downloads", () =>
+    Effect.gen(function*(_) {
+      const contents = yield* _(readComposeFile("packages/api/Dockerfile"))
+      expect(contents).toContain("https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh")
+      expect(contents).toContain("npm install -g --prefix /opt/bun --no-audit --no-fund bun@1.3.11 node-gyp@12.4.0")
+      expect(contents).toContain("curl -fsSL --retry 5 --retry-all-errors --retry-delay 2")
+      expect(contents).toContain("for attempt in 1 2 3 4 5; do")
+      expect(contents).toContain("controller tooling install failed after retries")
+      expect(contents).toContain("test \"$(bun --version)\" = \"1.3.11\"")
+      expect(contents).toContain("node-gyp --version")
+    }))
+})
+
+describe("OpenCode E2E auth bootstrap", () => {
+  it.effect("retries controller auth commands before the clone scenario", () =>
+    Effect.gen(function*(_) {
+      const contents = yield* _(readComposeFile("scripts/e2e/opencode-autoconnect.sh"))
+      expect(contents).toContain("auth_attempts=3")
+      expect(contents).toContain(": > \"$AUTH_LOG\"")
+      expect(contents).toContain("if (")
+      expect(contents).toContain("dg_run_docker_git \"$REPO_ROOT\" auth codex import")
+      expect(contents).toContain("dg_run_docker_git \"$REPO_ROOT\" auth codex status")
+      expect(contents).toContain(") >>\"$AUTH_LOG\" 2>&1")
+      expect(contents).toContain("auth bootstrap attempt $auth_attempt/$auth_attempts failed")
+      expect(contents).toContain("docker-git auth bootstrap failed after $auth_attempts attempts")
+    }))
+})
+
 describe("controller resource limit resolution", () => {
   it.effect("resolves CPU and RAM defaults to 90% of host resources", () =>
     Effect.sync(() => {

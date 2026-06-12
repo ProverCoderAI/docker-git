@@ -46,11 +46,32 @@ RUN set -eu; \
  && nvidia-ctk runtime configure --runtime=docker \
  && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
- && apt-get install -y --no-install-recommends nodejs \
- && curl -fsSL https://bun.sh/install | bash \
- && npm i -g node-gyp \
- && rm -rf /var/lib/apt/lists/*
+RUN set -eu; \
+    installed=0; \
+    for attempt in 1 2 3 4 5; do \
+      rm -rf /var/lib/apt/lists/* /opt/bun; \
+      if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh \
+        && bash /tmp/nodesource-setup.sh \
+        && apt-get -o Acquire::Retries=3 install -y --no-install-recommends nodejs \
+        && npm install -g --prefix /opt/bun --no-audit --no-fund bun@1.3.11 node-gyp@12.4.0 \
+        && node -v \
+        && npm -v \
+        && bun --version \
+        && test "$(bun --version)" = "1.3.11" \
+        && node-gyp --version; then \
+        installed=1; \
+        break; \
+      fi; \
+      echo "controller tooling install attempt ${attempt} failed; retrying..." >&2; \
+      rm -f /tmp/nodesource-setup.sh; \
+      sleep $((attempt * 2)); \
+    done; \
+    if [ "$installed" != "1" ]; then \
+      echo "controller tooling install failed after retries" >&2; \
+      exit 1; \
+    fi; \
+    rm -f /tmp/nodesource-setup.sh; \
+    rm -rf /var/lib/apt/lists/*
 
 FROM controller-base AS workspace-deps
 
