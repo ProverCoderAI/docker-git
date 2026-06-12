@@ -14,9 +14,10 @@ export const resolveAutoAgentFlags = (
   if (requested === "auto") {
     return Either.right({ agentMode: undefined, agentAuto: true })
   }
-  // eslint-disable-next-line unicorn/prefer-includes-over-repeated-comparisons
-  if (requested === "claude" || requested === "codex" || requested === "gemini" || requested === "grok") {
-    return Either.right({ agentMode: requested, agentAuto: true })
+  const agentModes: readonly AgentMode[] = ["claude", "codex", "gemini", "grok"]
+  const matchedMode = agentModes.find((mode) => mode === requested)
+  if (matchedMode !== undefined) {
+    return Either.right({ agentMode: matchedMode, agentAuto: true })
   }
   return Either.left({
     _tag: "InvalidOption",
