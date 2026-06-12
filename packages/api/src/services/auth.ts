@@ -7,6 +7,7 @@ import { parseGithubRepoUrl, parseGitlabRepoUrl } from "@effect-template/lib/cor
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { authCodexLogin as runCodexLogin } from "@effect-template/lib/usecases/auth-codex"
 import { authGrokLogout as runGrokLogout } from "@effect-template/lib/usecases/auth-grok-logout"
+import { authGitLogin as runGitLogin, authGitLogout as runGitLogout, listGitConnections } from "@effect-template/lib/usecases/auth-git"
 import { authGitlabLogin as runGitlabLogin, authGitlabLogout as runGitlabLogout, listGitlabTokens } from "@effect-template/lib/usecases/auth-gitlab"
 import { authGithubLogin as runGithubLogin, authGithubLogout as runGithubLogout } from "@effect-template/lib/usecases/auth-github"
 import { readEnvText } from "@effect-template/lib/usecases/env-file"
@@ -38,6 +39,9 @@ import type {
   CodexAuthStatus,
   GrokAuthLogoutRequest,
   GrokAuthStatus,
+  GitAuthLoginRequest,
+  GitAuthLogoutRequest,
+  GitAuthStatus,
   GitlabAuthLoginRequest,
   GitlabAuthLogoutRequest,
   GitlabAuthStatus,
@@ -403,6 +407,83 @@ export const logoutGitlabAuth = (request: GitlabAuthLogoutRequest) =>
       })
     )
     return yield* _(readGitlabAuthTokens(githubAuthEnvGlobalPath))
+  })
+
+// CHANGE: read generic per-host git connections for the controller status endpoint
+// WHY: issue #368 wants to add git connections to providers other than github/gitlab
+// QUOTE(ТЗ): "реализовать возможность добавлять git подключения отличных от gitlab, github"
+// REF: issue-368
+// SOURCE: https://git-scm.com/docs/gitcredentials
+// FORMAT THEOREM: forall env: readGitAuthStatus(env).connections = listGitConnections(env) without secrets
+// PURITY: SHELL
+// EFFECT: Effect<GitAuthStatus, PlatformError, FileSystem | Path>
+// INVARIANT: token values are never included in the returned status
+// COMPLEXITY: O(n) where n = |env entries|
+const buildGitStatusSummary = (connections: GitAuthStatus["connections"]): string =>
+  connections.length === 0
+    ? "No generic git connections."
+    : `Git connections (${connections.length}):`
+
+const readGitAuthConnections = (
+  envGlobalPath: string
+): Effect.Effect<GitAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const resolvedEnvPath = resolveControllerEnvPath(path, envGlobalPath)
+    const envText = yield* _(readEnvText(fs, resolvedEnvPath))
+    const connections = listGitConnections(envText).map((entry) => ({
+      host: entry.host,
+      user: entry.user
+    }))
+    return {
+      summary: buildGitStatusSummary(connections),
+      connections
+    } satisfies GitAuthStatus
+  })
+
+export const readGitAuthStatus = (): Effect.Effect<
+  GitAuthStatus,
+  PlatformError,
+  FileSystem.FileSystem | Path.Path
+> => readGitAuthConnections(githubAuthEnvGlobalPath)
+
+export const loginGitAuth = (request: GitAuthLoginRequest) =>
+  Effect.gen(function*(_) {
+    const host = (request.host ?? "").trim()
+    if (host.length === 0) {
+      return yield* _(Effect.fail(new ApiBadRequestError({ message: "Git host is required." })))
+    }
+    const token = request.token?.trim() ?? ""
+    if (token.length === 0) {
+      return yield* _(Effect.fail(new ApiBadRequestError({ message: "Git token is required." })))
+    }
+    yield* _(
+      runGitLogin({
+        _tag: "AuthGitLogin",
+        host,
+        token,
+        user: request.user ?? null,
+        envGlobalPath: githubAuthEnvGlobalPath
+      })
+    )
+    return yield* _(readGitAuthConnections(githubAuthEnvGlobalPath))
+  })
+
+export const logoutGitAuth = (request: GitAuthLogoutRequest) =>
+  Effect.gen(function*(_) {
+    const host = (request.host ?? "").trim()
+    if (host.length === 0) {
+      return yield* _(Effect.fail(new ApiBadRequestError({ message: "Git host is required." })))
+    }
+    yield* _(
+      runGitLogout({
+        _tag: "AuthGitLogout",
+        host,
+        envGlobalPath: githubAuthEnvGlobalPath
+      })
+    )
+    return yield* _(readGitAuthConnections(githubAuthEnvGlobalPath))
   })
 
 const codexAuthStatus = (

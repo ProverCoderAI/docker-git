@@ -104,6 +104,7 @@ Container runtime env (set via .orch/env/project.env):
 Auth providers:
   github, gh         GitHub CLI auth (tokens saved to env file)
   gitlab             GitLab CLI auth (tokens saved to env file)
+  git                Generic per-host git auth via token (any HTTPS git host; saved to env file)
   codex             Codex CLI auth (stored under .orch/auth/codex)
   claude, cc        Claude Code CLI auth (OAuth cache stored under .orch/auth/claude)
   gemini            Gemini CLI auth (stored under .orch/auth/gemini)
@@ -120,6 +121,8 @@ Auth options:
   --token <token>        GitHub/GitLab token override (login only; useful for non-interactive/CI)
   --web                 Force OAuth web flow where supported (login only; ignores --token)
   --scopes <scopes>      GitHub scopes (login only, default: repo,workflow,read:org)
+  --host <host>          Git host for the generic git provider (e.g. git.example.com; login/logout only)
+  --user <user>          HTTPS username for the generic git provider (login only, default: x-access-token)
   --env-global <path>    Env file path for GitHub/GitLab tokens (default: <projectsRoot>/.orch/env/global.env)
   --codex-auth <path>    Codex auth root path (default: <projectsRoot>/.orch/auth/codex)
   --gemini-auth <path>   Gemini auth root path (default: <projectsRoot>/.orch/auth/gemini)

@@ -26,6 +26,8 @@ import {
   CreateProjectRequestSchema,
   ExchangePollRequestSchema,
   ExchangeSubscribeRequestSchema,
+  GitAuthLoginRequestSchema,
+  GitAuthLogoutRequestSchema,
   GitlabAuthLoginRequestSchema,
   GitlabAuthLogoutRequestSchema,
   GrokAuthLogoutRequestSchema,
@@ -48,14 +50,17 @@ import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import { resolveWorkspaceRoot } from "@effect-template/lib/shell/workspace-root"
 import {
   importCodexAuth,
+  loginGitAuth,
   loginGitlabAuth,
   loginGithubAuth,
   logoutCodexAuth,
   logoutGrokAuth,
+  logoutGitAuth,
   logoutGitlabAuth,
   logoutGithubAuth,
   readCodexAuthStatus,
   readGrokAuthStatus,
+  readGitAuthStatus,
   readGitlabAuthStatus,
   readGithubAuthStatus,
 } from "./services/auth.js"
@@ -450,6 +455,8 @@ const readGithubAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(Github
 const readGithubAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GithubAuthLogoutRequestSchema)
 const readGitlabAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GitlabAuthLoginRequestSchema)
 const readGitlabAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GitlabAuthLogoutRequestSchema)
+const readGitAuthLoginRequest = () => HttpServerRequest.schemaBodyJson(GitAuthLoginRequestSchema)
+const readGitAuthLogoutRequest = () => HttpServerRequest.schemaBodyJson(GitAuthLogoutRequestSchema)
 const readAuthMenuRequest = () => HttpServerRequest.schemaBodyJson(AuthMenuRequestSchema)
 const readAuthTerminalSessionRequest = () => HttpServerRequest.schemaBodyJson(AuthTerminalSessionRequestSchema)
 const readCodexAuthImportRequest = () => HttpServerRequest.schemaBodyJson(CodexAuthImportRequestSchema)
@@ -1046,7 +1053,7 @@ export const makeRouter = () => {
     )
   )
 
-  const withAuth = withCoreRoutes.pipe(
+  const withAuthHead = withCoreRoutes.pipe(
     HttpRouter.get(
       "/auth/github/status",
       Effect.gen(function*(_) {
@@ -1058,6 +1065,13 @@ export const makeRouter = () => {
       "/auth/gitlab/status",
       Effect.gen(function*(_) {
         const status = yield* _(readGitlabAuthStatus())
+        return yield* _(jsonResponse({ status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/auth/git/status",
+      Effect.gen(function*(_) {
+        const status = yield* _(readGitAuthStatus())
         return yield* _(jsonResponse({ status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),
@@ -1122,13 +1136,34 @@ export const makeRouter = () => {
       }).pipe(Effect.catchAll(errorResponse))
     ),
     HttpRouter.post(
+      "/auth/git/login",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGitAuthLoginRequest())
+        const status = yield* _(loginGitAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
       "/auth/menu",
       Effect.gen(function*(_) {
         const request = yield* _(readAuthMenuRequest())
         const snapshot = yield* _(runAuthMenuFlow(request))
         return yield* _(jsonResponse({ ok: true, snapshot }, 200))
       }).pipe(Effect.catchAll(errorResponse))
-    ),
+    )
+  )
+
+  // CHANGE: split the auth router pipe into two chains
+  // WHY: Effect's `.pipe` overloads accept at most 20 arguments; adding the generic git routes exceeded that limit
+  // QUOTE(ТЗ): "реализовать возможность добавлять git подключения отличных от gitlab, github"
+  // REF: issue-368
+  // SOURCE: n/a
+  // FORMAT THEOREM: forall r in routes: route(withAuth) ⊇ route(withAuthHead) ∪ route(tail)
+  // PURITY: SHELL
+  // EFFECT: HttpRouter composition only
+  // INVARIANT: route set is preserved; only the pipe arity is reduced
+  // COMPLEXITY: O(1)
+  const withAuth = withAuthHead.pipe(
     HttpRouter.post(
       "/auth/terminal-sessions",
       Effect.gen(function*(_) {
@@ -1170,6 +1205,14 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(readGitlabAuthLogoutRequest())
         const status = yield* _(logoutGitlabAuth(request))
+        return yield* _(jsonResponse({ ok: true, status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/auth/git/logout",
+      Effect.gen(function*(_) {
+        const request = yield* _(readGitAuthLogoutRequest())
+        const status = yield* _(logoutGitAuth(request))
         return yield* _(jsonResponse({ ok: true, status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),

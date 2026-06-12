@@ -28,6 +28,9 @@ import type {
   AuthGitlabLoginCommand,
   AuthGitlabLogoutCommand,
   AuthGitlabStatusCommand,
+  AuthGitLoginCommand,
+  AuthGitLogoutCommand,
+  AuthGitStatusCommand,
   AuthGrokLogoutCommand,
   AuthGrokStatusCommand
 } from "./frontend-lib/core/domain.js"
@@ -144,6 +147,32 @@ export const gitlabStatus = (_command: AuthGitlabStatusCommand) => request("GET"
 export const gitlabLogout = (command: AuthGitlabLogoutCommand) =>
   requestVoid("POST", "/auth/gitlab/logout", {
     label: command.label
+  })
+
+// CHANGE: route generic per-host git auth through the controller HTTP API
+// WHY: issue #368 enables connecting git providers other than github/gitlab via token
+// QUOTE(ТЗ): "реализовать возможность добавлять git подключения отличных от gitlab, github ... просто здавая токен"
+// REF: issue-368
+// SOURCE: n/a
+// FORMAT THEOREM: forall cmd: gitLogin(cmd) -> POST /auth/git/login {host, token, user}
+// PURITY: SHELL
+// EFFECT: Effect<JsonValue | void, ApiRequestError | ApiAuthRequiredError, ControllerRuntime>
+// INVARIANT: token-only flow; host is always forwarded
+// COMPLEXITY: O(1)
+export const gitLogin = (
+  command: AuthGitLoginCommand
+): Effect.Effect<JsonValue, ApiRequestError | ApiAuthRequiredError, ControllerRuntime> =>
+  request("POST", "/auth/git/login", {
+    host: command.host,
+    token: command.token,
+    user: command.user
+  })
+
+export const gitStatus = (_command: AuthGitStatusCommand) => request("GET", "/auth/git/status")
+
+export const gitLogout = (command: AuthGitLogoutCommand) =>
+  requestVoid("POST", "/auth/git/logout", {
+    host: command.host
   })
 
 export const codexLogin = (command: AuthCodexLoginCommand) =>

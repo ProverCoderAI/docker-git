@@ -28,6 +28,29 @@ bun run docker-git auth claude login --web
 bun run docker-git auth grok login --web
 ```
 
+GitHub и GitLab можно подключить и без OAuth — просто передав токен:
+
+```bash
+bun run docker-git auth github login --token <token>
+bun run docker-git auth gitlab login --token <token>
+```
+
+Для любых других git-хостов (Gitea, Bitbucket, self-hosted и т.д.) есть
+универсальный провайдер `git` — подключение задаётся хостом и токеном:
+
+```bash
+bun run docker-git auth git login --host git.example.com --token <token>
+bun run docker-git auth git login --host git.example.com --token <token> --user deploy-bot
+bun run docker-git auth git status
+bun run docker-git auth git logout --host git.example.com
+```
+
+Токены сохраняются в общий env-файл как `GIT_AUTH_TOKEN__<HOST>` /
+`GIT_AUTH_USER__<HOST>`, а внутри контейнера git credential helper сам
+подбирает нужный токен по хосту при `clone`/`push` по HTTPS. Команда
+`status` показывает только хост и имя пользователя — значения токенов
+никогда не выводятся.
+
 Для запуска WEB версии:
 ```bash
 bun run docker-git -- browser

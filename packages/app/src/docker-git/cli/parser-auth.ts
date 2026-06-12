@@ -15,6 +15,8 @@ type AuthOptions = {
   readonly label: string | null
   readonly token: string | null
   readonly scopes: string | null
+  readonly host: string | null
+  readonly user: string | null
   readonly authWeb: boolean
 }
 
@@ -55,6 +57,8 @@ const resolveAuthOptions = (raw: RawOptions): AuthOptions => ({
   label: normalizeOptionalText(raw.label),
   token: normalizeOptionalText(raw.token),
   scopes: normalizeOptionalText(raw.scopes),
+  host: normalizeOptionalText(raw.host),
+  user: normalizeOptionalText(raw.user),
   authWeb: raw.authWeb === true
 })
 
@@ -105,6 +109,52 @@ const buildGitlabCommand = (action: string, options: AuthOptions): Either.Either
         envGlobalPath: options.envGlobalPath
       })),
     Match.when("logout", () => Either.right<AuthCommand>(providerLogoutCommand("AuthGitlabLogout", options))),
+    Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
+  )
+
+// CHANGE: parse `docker-git auth git <action>` for generic per-host git connections
+// WHY: issue #368 wants git connections to providers other than github/gitlab via a token
+// QUOTE(ТЗ): "реализовать возможность добавлять git подключения отличных от gitlab, github. ... просто здавая токен"
+// REF: issue-368
+// SOURCE: https://git-scm.com/docs/gitcredentials
+// FORMAT THEOREM: forall action: buildGitCommand(action, opts) = AuthCommand | ParseError
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: login/logout require --host; status lists all hosts
+// COMPLEXITY: O(1)
+const buildGitCommand = (action: string, options: AuthOptions): Either.Either<AuthCommand, ParseError> =>
+  Match.value(action).pipe(
+    Match.when("login", () => {
+      if (options.scopes !== null) {
+        return Either.left(invalidArgument("--scopes", "git auth does not support --scopes"))
+      }
+      if (options.host === null) {
+        return Either.left(missingArgument("--host"))
+      }
+      if (options.token === null) {
+        return Either.left(missingArgument("--token"))
+      }
+      return Either.right<AuthCommand>({
+        _tag: "AuthGitLogin",
+        host: options.host,
+        token: options.token,
+        user: options.user,
+        envGlobalPath: options.envGlobalPath
+      })
+    }),
+    Match.when("status", () =>
+      Either.right<AuthCommand>({
+        _tag: "AuthGitStatus",
+        envGlobalPath: options.envGlobalPath
+      })),
+    Match.when("logout", () =>
+      options.host === null
+        ? Either.left(missingArgument("--host"))
+        : Either.right<AuthCommand>({
+          _tag: "AuthGitLogout",
+          host: options.host,
+          envGlobalPath: options.envGlobalPath
+        })),
     Match.orElse(() => Either.left(invalidArgument("auth action", `unknown action '${action}'`)))
   )
 
@@ -237,6 +287,7 @@ const buildAuthCommand = (
     Match.when("github", () => buildGithubCommand(action, options)),
     Match.when("gh", () => buildGithubCommand(action, options)),
     Match.when("gitlab", () => buildGitlabCommand(action, options)),
+    Match.when("git", () => buildGitCommand(action, options)),
     Match.when("codex", () => buildCodexCommand(action, options)),
     Match.when("claude", () => buildClaudeCommand(action, options)),
     Match.when("cc", () => buildClaudeCommand(action, options)),

@@ -67,7 +67,7 @@ if [[ -n "$RESOLVED_AUTH_LABEL" ]]; then
   fi
 fi`
 
-const renderAuthBridgeFinalize = (config: TemplateConfig): string =>
+const renderGithubTokenBridge = (config: TemplateConfig): string =>
   String.raw`EFFECTIVE_GH_TOKEN="$EFFECTIVE_GITHUB_TOKEN"
 EFFECTIVE_GIT_AUTH_TOKEN="$EFFECTIVE_GITHUB_TOKEN"
 if [[ "$REPO_URL" == https://gitlab.com/* ]]; then
@@ -96,9 +96,10 @@ if [[ -n "$EFFECTIVE_GH_TOKEN" ]]; then
   if [[ -z "$GIT_USER_EMAIL" && -n "$GH_LOGIN" && -n "$GH_ID" ]]; then
     GIT_USER_EMAIL="${"${"}GH_ID}+${"${"}GH_LOGIN}@users.noreply.github.com"
   fi
-fi
+fi`
 
-if [[ -n "$EFFECTIVE_GITLAB_TOKEN" ]]; then
+const renderGitlabTokenBridge = (): string =>
+  String.raw`if [[ -n "$EFFECTIVE_GITLAB_TOKEN" ]]; then
   printf "export GITLAB_TOKEN=%q\n" "$EFFECTIVE_GITLAB_TOKEN" > /etc/profile.d/gitlab-token.sh
   chmod 0644 /etc/profile.d/gitlab-token.sh
   docker_git_upsert_ssh_env "GITLAB_TOKEN" "$EFFECTIVE_GITLAB_TOKEN"
@@ -118,13 +119,35 @@ if [[ -n "$EFFECTIVE_GITLAB_TOKEN" ]]; then
     docker_git_upsert_ssh_env "GLAB_IS_OAUTH2" "$EFFECTIVE_GLAB_IS_OAUTH2"
     export GLAB_IS_OAUTH2="$EFFECTIVE_GLAB_IS_OAUTH2"
   fi
-fi
+fi`
 
-if [[ -n "$EFFECTIVE_GIT_AUTH_TOKEN" ]]; then
+const renderGenericTokenBridge = (): string =>
+  String.raw`if [[ -n "$EFFECTIVE_GIT_AUTH_TOKEN" ]]; then
   printf "export GIT_AUTH_TOKEN=%q\n" "$EFFECTIVE_GIT_AUTH_TOKEN" > /etc/profile.d/git-auth-token.sh
   chmod 0644 /etc/profile.d/git-auth-token.sh
   docker_git_upsert_ssh_env "GIT_AUTH_TOKEN" "$EFFECTIVE_GIT_AUTH_TOKEN"
-fi`
+fi
+
+# Export host-scoped generic git credentials (GIT_AUTH_TOKEN__<HOST>,
+# GIT_AUTH_USER__<HOST>) to login + SSH shells so the credential helper can
+# resolve per-host tokens during clone/push, not only inside this entrypoint.
+GIT_AUTH_HOSTS_ENV_FILE="/etc/profile.d/git-auth-hosts.sh"
+: > "$GIT_AUTH_HOSTS_ENV_FILE"
+for GIT_AUTH_HOST_VAR in $(compgen -v | grep -E '^GIT_AUTH_(TOKEN|USER)__' || true); do
+  GIT_AUTH_HOST_VAL="${"${"}!GIT_AUTH_HOST_VAR-}"
+  if [[ -n "$GIT_AUTH_HOST_VAL" ]]; then
+    printf "export %s=%q\n" "$GIT_AUTH_HOST_VAR" "$GIT_AUTH_HOST_VAL" >> "$GIT_AUTH_HOSTS_ENV_FILE"
+    docker_git_upsert_ssh_env "$GIT_AUTH_HOST_VAR" "$GIT_AUTH_HOST_VAL"
+  fi
+done
+chmod 0644 "$GIT_AUTH_HOSTS_ENV_FILE"`
+
+const renderAuthBridgeFinalize = (config: TemplateConfig): string =>
+  [
+    renderGithubTokenBridge(config),
+    renderGitlabTokenBridge(),
+    renderGenericTokenBridge()
+  ].join("\n\n")
 
 const renderEntrypointAuthEnvBridge = (config: TemplateConfig): string =>
   [
@@ -133,11 +156,18 @@ const renderEntrypointAuthEnvBridge = (config: TemplateConfig): string =>
     renderAuthBridgeFinalize(config)
   ].join("\n\n")
 
-const renderEntrypointGitCredentialHelper = (config: TemplateConfig): string =>
-  String.raw`# 3) Configure git credential helper for HTTPS remotes
-GIT_CREDENTIAL_HELPER_PATH="/usr/local/bin/docker-git-credential-helper"
-cat <<'EOF' > "$GIT_CREDENTIAL_HELPER_PATH"
-#!/usr/bin/env bash
+// CHANGE: make the HTTPS credential helper resolve per-host generic git tokens
+// WHY: support git connections to providers other than github.com/gitlab.com
+// QUOTE(ТЗ): "реализовать возможность добавлять git подключения отличных от gitlab, github"
+// REF: issue-368
+// SOURCE: https://git-scm.com/docs/gitcredentials
+// FORMAT THEOREM: forall host: helper(host) prefers GIT_AUTH_TOKEN__<HOST_KEY> when set
+// PURITY: CORE
+// EFFECT: renders shell text only; no IO at render time
+// INVARIANT: github.com/gitlab.com defaults remain backward compatible
+// COMPLEXITY: O(1)
+const renderCredentialHelperScriptHead = (): string =>
+  String.raw`#!/usr/bin/env bash
 set -euo pipefail
 
 if [[ "$#" -lt 1 || "$1" != "get" ]]; then
@@ -156,13 +186,36 @@ done
 
 token=""
 username="${"${"}GIT_AUTH_USER:-}"
-if [[ "$protocol" == "https" && "$host" == "gitlab.com" ]]; then
-  token="${"${"}GITLAB_TOKEN:-}"
+
+# Resolve per-host generic git credentials first so connections to providers
+# other than github.com/gitlab.com (Gitea, Bitbucket, self-hosted, ...) route to
+# their own token. HOST_KEY mirrors the label normalization used by the CLI/web
+# auth flows: uppercase, non-alphanumeric -> "_", trimmed of leading/trailing "_".
+host_key=""
+if [[ -n "$host" ]]; then
+  host_key="$(printf "%s" "$host" | tr '[:lower:]' '[:upper:]' | sed -E 's/[^A-Z0-9]+/_/g; s/^_+//; s/_+$//')"
+fi
+if [[ "$protocol" == "https" && -n "$host_key" ]]; then
+  host_token_key="GIT_AUTH_TOKEN__$host_key"
+  host_user_key="GIT_AUTH_USER__$host_key"
+  token="${"${"}!host_token_key:-}"
+  if [[ -z "$username" ]]; then
+    username="${"${"}!host_user_key:-}"
+  fi
+fi`
+
+const renderCredentialHelperScriptTail = (): string =>
+  String.raw`if [[ "$protocol" == "https" && "$host" == "gitlab.com" ]]; then
+  if [[ -z "$token" ]]; then
+    token="${"${"}GITLAB_TOKEN:-}"
+  fi
   if [[ -z "$username" ]]; then
     username="oauth2"
   fi
 elif [[ "$protocol" == "https" && "$host" == "github.com" ]]; then
-  token="${"${"}GITHUB_TOKEN:-}"
+  if [[ -z "$token" ]]; then
+    token="${"${"}GITHUB_TOKEN:-}"
+  fi
   if [[ -z "$token" ]]; then
     token="${"${"}GH_TOKEN:-}"
   fi
@@ -183,7 +236,15 @@ if [[ -z "$token" ]]; then
 fi
 
 printf "%s\n" "username=$username"
-printf "%s\n" "password=$token"
+printf "%s\n" "password=$token"`
+
+const renderEntrypointGitCredentialHelper = (config: TemplateConfig): string =>
+  String.raw`# 3) Configure git credential helper for HTTPS remotes
+GIT_CREDENTIAL_HELPER_PATH="/usr/local/bin/docker-git-credential-helper"
+cat <<'EOF' > "$GIT_CREDENTIAL_HELPER_PATH"
+${renderCredentialHelperScriptHead()}
+
+${renderCredentialHelperScriptTail()}
 EOF
 chmod 0755 "$GIT_CREDENTIAL_HELPER_PATH"
 su - ${config.sshUser} -c "git config --global credential.helper '$GIT_CREDENTIAL_HELPER_PATH'"`

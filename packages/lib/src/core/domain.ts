@@ -20,6 +20,9 @@ export type {
   AuthGitlabLoginCommand,
   AuthGitlabLogoutCommand,
   AuthGitlabStatusCommand,
+  AuthGitLoginCommand,
+  AuthGitLogoutCommand,
+  AuthGitStatusCommand,
   AuthGrokLoginCommand,
   AuthGrokLogoutCommand,
   AuthGrokStatusCommand
