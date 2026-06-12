@@ -1,5 +1,11 @@
 # @effect-template/lib
 
+## 1.1.1
+
+### Patch Changes
+
+- [#398](https://github.com/ProverCoderAI/docker-git/pull/398) [`8a14af1`](https://github.com/ProverCoderAI/docker-git/commit/8a14af1dc1b2f1de881fff679edbc3117bc69b77) Thanks [@skulidropek](https://github.com/skulidropek)! - Connect the generated project containers to the new multi-agent plan-to-git build, install Claude Code plan hooks, and route queued agent plans through explicit PR-aware sync.
+
 ## 1.1.0
 
 ### Minor Changes

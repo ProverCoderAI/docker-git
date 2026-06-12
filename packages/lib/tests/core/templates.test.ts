@@ -209,9 +209,11 @@ describe("renderDockerfile", () => {
       'RTK_VERSION="${RTK_VERSION}" RTK_INSTALL_DIR=/usr/local/bin sh /tmp/rtk-install.sh',
       "rtk --version",
       "rtk gain >/dev/null 2>&1 || true",
-      "# Install plan-to-git for Codex plan capture and PR sync (issue #369)",
-      "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev 06fe8bdf1d2e48a1f5a0218a3bb7af19e63deb5e --locked --bins --root /usr/local",
+      "# Install plan-to-git for multi-agent plan capture and explicit PR sync (issue #397)",
+      "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev f60fbe71131854be4c6c1d9fb79abafd2dd6949b --locked --bins --root /usr/local",
       "/usr/local/bin/plan-to-git --help >/dev/null",
+      '/usr/local/bin/plan-to-git hook --help | grep -q -- "claude"',
+      '/usr/local/bin/plan-to-git sync --help | grep -q -- "--pr <PR>"',
       'ARG DOCKER_GIT_SESSION_SYNC_PACKAGE="@prover-coder-ai/docker-git-session-sync@latest"',
       'COPY .docker-git-tools/docker-git-session-sync /opt/docker-git/tools/docker-git-session-sync',
       'npm install -g "$DOCKER_GIT_SESSION_SYNC_PACKAGE"',
@@ -475,13 +477,18 @@ describe("renderEntrypointGitHooks", () => {
 
     expect(hooks).toContain('PRE_PUSH_HOOK="$HOOKS_DIR/pre-push"')
     expect(hooks).toContain('POST_PUSH_ACTION="$HOOKS_DIR/post-push"')
+    expect(hooks).toContain('PLAN_TO_GIT_SYNC_HELPER="$HOOKS_DIR/plan-to-git-sync"')
     expect(hooks).toContain('PLAN_TO_GIT_CODEX_HOOK="$HOOKS_DIR/plan-to-git-codex-hook"')
+    expect(hooks).toContain('PLAN_TO_GIT_CLAUDE_HOOK="$HOOKS_DIR/plan-to-git-claude-hook"')
     expect(hooks).toContain('CODEX_REQUIREMENTS_FILE="/etc/codex/requirements.toml"')
+    expect(hooks).toContain('CLAUDE_PLAN_TO_GIT_SETTINGS_FILE="$CLAUDE_CONFIG_DIR/settings.json"')
     expect(hooks).toContain('GIT_WRAPPER_BIN="/usr/local/bin/git"')
     expect(hooks).toContain('type -aP git')
     expect(hooks).toContain("cat <<'EOF' > \"$PRE_PUSH_HOOK\"")
+    expect(hooks).toContain("cat <<'EOF' > \"$PLAN_TO_GIT_SYNC_HELPER\"")
     expect(hooks).toContain("cat <<'EOF' > \"$POST_PUSH_ACTION\"")
     expect(hooks).toContain("cat <<'EOF' > \"$PLAN_TO_GIT_CODEX_HOOK\"")
+    expect(hooks).toContain("cat <<'EOF' > \"$PLAN_TO_GIT_CLAUDE_HOOK\"")
     expect(hooks).toContain("cat <<'EOF' > \"$CODEX_REQUIREMENTS_FILE\"")
     expect(hooks).toContain("cat <<'EOF' > \"$GIT_WRAPPER_BIN\"")
     expect(hooks).toContain("check_issue_managed_block_range")
@@ -494,8 +501,22 @@ describe("renderEntrypointGitHooks", () => {
     expect(hooks).toContain("[post-push-pr] Error: failed to list open PRs")
     expect(hooks).toContain("DOCKER_GIT_SKIP_PLAN_TO_GIT")
     expect(hooks).toContain("plan-to-git import-codex --no-sync")
+    expect(hooks).toContain("plan-to-git import-claude --no-sync")
+    expect(hooks).toContain("docker_git_plan_to_git_explicit_pr_supported")
+    expect(hooks).toContain("docker_git_plan_to_git_resolve_pr_number")
+    expect(hooks).toContain("DOCKER_GIT_PR_NUMBER PR_NUMBER GITHUB_PR_NUMBER")
+    expect(hooks).toContain('candidate="${REPO_REF:-}"')
+    expect(hooks).toContain('plan-to-git sync --pr "$pr_number"')
     expect(hooks).toContain("plan-to-git sync")
+    expect(hooks).toContain('[plan-to-git] Syncing queued agent plans to PR #$pr_number')
     expect(hooks).toContain("plan-to-git hook --source codex")
+    expect(hooks).toContain("plan-to-git hook --source claude")
+    expect(hooks).toContain('export PLAN_TO_GIT_STATE_DIR="${PLAN_TO_GIT_STATE_DIR:-/tmp/plan-to-git}"')
+    expect(hooks).toContain('"$PLAN_TO_GIT_SYNC_HELPER" >&2 || true')
+    expect(hooks).toContain("docker_git_install_claude_plan_to_git_hooks")
+    expect(hooks).toContain('const hookCommand = process.env.PLAN_TO_GIT_CLAUDE_HOOK || "/opt/docker-git/hooks/plan-to-git-claude-hook"')
+    expect(hooks).toContain('ensureEventHook("UserPromptSubmit")')
+    expect(hooks).toContain('ensureEventHook("Stop")')
     expect(hooks).toContain("[features]")
     expect(hooks).toContain("hooks = true")
     expect(hooks).toContain('managed_dir = "/opt/docker-git/hooks"')
@@ -522,15 +543,17 @@ describe("renderEntrypointGitHooks", () => {
     expect(hooks).toContain("[session-backup] Error: gh CLI not found")
 
     const cdIndex = hooks.indexOf('cd "$REPO_ROOT"')
-    const ensurePrIndex = hooks.indexOf("docker_git_ensure_open_pr\n\n# CHANGE: backfill Codex session plans")
+    const ensurePrIndex = hooks.indexOf("docker_git_ensure_open_pr\n\n# CHANGE: backfill agent session plans")
     const planImportIndex = hooks.indexOf("plan-to-git import-codex --no-sync")
-    const planSyncIndex = hooks.indexOf("plan-to-git sync")
+    const claudeImportIndex = hooks.indexOf("plan-to-git import-claude --no-sync")
+    const planSyncIndex = hooks.indexOf('"$PLAN_TO_GIT_SYNC_HELPER"', claudeImportIndex)
     const sessionBackupIndex = hooks.indexOf("docker-git-session-sync backup --verbose --background --require-comment")
 
     expect(cdIndex).toBeGreaterThanOrEqual(0)
     expect(ensurePrIndex).toBeGreaterThan(cdIndex)
     expect(planImportIndex).toBeGreaterThan(ensurePrIndex)
-    expect(planSyncIndex).toBeGreaterThan(planImportIndex)
+    expect(claudeImportIndex).toBeGreaterThan(planImportIndex)
+    expect(planSyncIndex).toBeGreaterThan(claudeImportIndex)
     expect(sessionBackupIndex).toBeGreaterThan(planSyncIndex)
   })
 })
