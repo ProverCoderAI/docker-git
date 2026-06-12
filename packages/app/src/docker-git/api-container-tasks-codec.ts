@@ -29,11 +29,7 @@ const readNumber = (value: JsonValue | undefined): number | null =>
 const readBoolean = (value: JsonValue | undefined): boolean | null => typeof value === "boolean" ? value : null
 
 const isTaskKind = (value: string): value is ApiContainerTaskKind =>
-  value === "ssh" ||
-  value === "web-terminal" ||
-  value === "agent" ||
-  value === "background" ||
-  value === "system"
+  ["ssh", "web-terminal", "agent", "background", "system"].includes(value)
 
 type DecodedContainerTaskFields = {
   readonly command: string | null

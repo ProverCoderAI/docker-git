@@ -7,10 +7,10 @@ import { Box, Text } from "./elements.js"
 import { ActionLine, ActionPromptPanel, SnapshotLine } from "./panel-auth-shared.js"
 
 const actionHint = (action: string | null): string | undefined => {
-  if (action === "ClaudeOauth" || action === "GeminiOauth" || action === "GrokOauth") {
+  if (["ClaudeOauth", "GeminiOauth", "GrokOauth"].includes(action ?? "")) {
     return "opens embedded terminal"
   }
-  if (action === "GithubOauth" || action === "CodexOauth") {
+  if (["GithubOauth", "CodexOauth"].includes(action ?? "")) {
     return "controller web login"
   }
   return undefined

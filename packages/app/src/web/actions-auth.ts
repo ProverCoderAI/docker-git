@@ -184,13 +184,13 @@ const openProjectAuthPrompt = (
 
 const isMenuNavigationAction = (
   action: AuthMenuAction | ProjectAuthMenuAction
-): action is "Back" | "Refresh" => action === "Back" || action === "Refresh"
+): action is "Back" | "Refresh" => ["Back", "Refresh"].includes(action)
 
 const isCodexAuthAction = (action: BrowserAuthPrompt["action"]): action is CodexAuthAction =>
-  action === "CodexOauth" || action === "CodexLogout"
+  ["CodexOauth", "CodexLogout"].includes(action)
 
 const isTerminalOnlyAuthAction = (action: BrowserAuthPrompt["action"]): action is TerminalAuthFlow =>
-  action === "ClaudeOauth" || action === "GeminiOauth" || action === "GrokOauth"
+  ["ClaudeOauth", "GeminiOauth", "GrokOauth"].includes(action)
 
 const runCodexAuthAction = (
   action: CodexAuthAction,
