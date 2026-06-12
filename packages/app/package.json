@@ -80,8 +80,8 @@
     "@gridland/bun": "0.4.3",
     "@gridland/web": "0.4.3",
     "effect": "^3.21.3",
-    "react": "19.2.7",
-    "react-dom": "19.2.7",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
     "react-reconciler": "^0.33.0",
     "ts-morph": "^28.0.0"
   },

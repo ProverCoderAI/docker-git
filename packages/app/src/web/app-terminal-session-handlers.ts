@@ -183,12 +183,12 @@ const projectTerminalAction = (
   projectKey: string | undefined,
   terminalSessionId: string | undefined,
   action: (projectKey: string, terminalSessionId: string) => void
-): (() => void) | undefined =>
-  projectId === undefined || projectKey === undefined || terminalSessionId === undefined
-    ? undefined
-    : () => {
-      action(projectKey, terminalSessionId)
-    }
+): (() => void) | undefined => {
+  if (projectId === undefined) return undefined
+  if (projectKey === undefined) return undefined
+  if (terminalSessionId === undefined) return undefined
+  return () => { action(projectKey, terminalSessionId) }
+}
 
 export const useProjectActionHandlers = (
   { onOpenTaskManagerRequest, projectId, projectKey, projectLabel, setMessage, terminalSessionId }:
