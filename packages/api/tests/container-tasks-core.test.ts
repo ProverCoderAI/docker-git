@@ -1,3 +1,4 @@
+import fc from "fast-check"
 import { describe, expect, it } from "vitest"
 
 import { buildContainerTasks } from "../src/services/container-tasks-core.js"
@@ -54,6 +55,42 @@ describe("container task classification", () => {
 
     expect(withSystem.map((task) => [task.pid, task.kind])).toEqual([[11502, "system"]])
   })
+
+  it("hides any browser-helper command variant regardless of path prefix or arguments", () => {
+    const optArgs = fc.option(fc.string({ maxLength: 40 }), { nil: undefined })
+
+    const browserCommandArbitrary = fc.oneof(
+      optArgs.map((args) => (args === undefined ? "browser-connection" : `browser-connection ${args}`)),
+      optArgs.map((args) =>
+        args === undefined ? "docker-git-browser-connection" : `docker-git-browser-connection ${args}`
+      ),
+      optArgs.map((args) =>
+        args === undefined ? "/usr/local/bin/browser-connection" : `/usr/local/bin/browser-connection ${args}`
+      ),
+      optArgs.map((args) =>
+        args === undefined
+          ? "/usr/local/bin/docker-git-browser-connection"
+          : `/usr/local/bin/docker-git-browser-connection ${args}`
+      )
+    )
+
+    fc.assert(
+      fc.property(browserCommandArbitrary, fc.integer({ min: 1, max: 99999 }), (command, pid) => {
+        const hidden = buildContainerTasks(
+          [processOf({ command, pid, ppid: 0, tty: "pts/1" })],
+          [],
+          false
+        )
+        const shown = buildContainerTasks(
+          [processOf({ command, pid, ppid: 0, tty: "pts/1" })],
+          [],
+          true
+        )
+        return hidden.length === 0 && shown.every((t) => t.kind === "system")
+      })
+    )
+  })
+
 
   it("marks descendants of managed agent pid as agent tasks", () => {
     const tasks = buildContainerTasks(
