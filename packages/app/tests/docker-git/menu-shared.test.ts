@@ -49,10 +49,9 @@ const restoreTerminalBindings = (): void => {
 }
 
 const createRawModeStub = (events: Array<string>): typeof process.stdin.setRawMode =>
-  // eslint-disable-next-line unicorn/no-this-outside-of-class
-  function setRawModeStub(this: typeof process.stdin, enabled: boolean) {
+  (enabled: boolean) => {
     events.push(`raw:${String(enabled)}`)
-    return this
+    return process.stdin
   }
 
 const createWriteStub = (
