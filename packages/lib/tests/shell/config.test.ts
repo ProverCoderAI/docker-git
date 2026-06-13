@@ -5,7 +5,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as fc from "fast-check"
 
-import { defaultTemplateConfig, isUnixUserName, type TemplateConfig } from "../../src/core/domain.js"
+import { defaultTemplateConfig, isUnixUsername, type TemplateConfig } from "../../src/core/domain.js"
 import { readProjectConfig } from "../../src/shell/config.js"
 
 const makeTemplateConfig = (overrides: Partial<TemplateConfig> = {}): TemplateConfig => ({
@@ -53,7 +53,7 @@ const invalidPersistedSshUserArbitrary = fc.oneof(
     "dev:foo",
     "dev\nfoo"
   ),
-  fc.string({ minLength: 33, maxLength: 96 }).filter((value) => !isUnixUserName(value))
+  fc.string({ minLength: 33, maxLength: 96 }).filter((value) => !isUnixUsername(value))
 )
 
 describe("readProjectConfig", () => {
@@ -85,7 +85,7 @@ describe("readProjectConfig", () => {
   it("generates only invalid persisted sshUser candidates", () => {
     fc.assert(
       fc.property(invalidPersistedSshUserArbitrary, (sshUser) => {
-        expect(isUnixUserName(sshUser)).toBe(false)
+        expect(isUnixUsername(sshUser)).toBe(false)
       })
     )
   })
