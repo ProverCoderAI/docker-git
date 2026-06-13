@@ -12,5 +12,7 @@
   "prBodyNotes": ["cc @skulidropek"],
 
   "prConcurrentLimit": 1,
-  "prHourlyLimit": 1
+  "prHourlyLimit": 1,
+
+  "ignoreDeps": ["react", "react-dom"]
 }
