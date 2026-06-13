@@ -141,7 +141,7 @@ const createMemoryFileSystemLayer = () => {
           if (candidate === directory || !candidate.startsWith(prefix)) {
             continue
           }
-          const name = candidate.slice(prefix.length).split("/")[0]
+          const name = candidate.slice(prefix.length).split("/", 1)[0]
           if (name !== undefined && name.length > 0) {
             names.add(name)
           }

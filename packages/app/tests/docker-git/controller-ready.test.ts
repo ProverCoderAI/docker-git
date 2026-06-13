@@ -98,10 +98,10 @@ describe("controller readiness bootstrap", () => {
 
   it.effect("probes explicit API URL before preparing a local controller revision", () =>
     Effect.gen(function*(_) {
-      process.env["DOCKER_GIT_API_URL"] = "http://api.example.test"
+      process.env["DOCKER_GIT_API_URL"] = "https://api.example.test"
       findReachableDirectHealthProbeMock.mockImplementation(({ explicitApiBaseUrl }) =>
         Effect.succeed({
-          apiBaseUrl: explicitApiBaseUrl ?? "http://api.example.test",
+          apiBaseUrl: explicitApiBaseUrl ?? "https://api.example.test",
           revision: "remote-revision"
         })
       )
@@ -116,7 +116,7 @@ describe("controller readiness bootstrap", () => {
       expect(prepareLocalControllerRevisionMock).not.toHaveBeenCalled()
       expect(prepareControllerResourceLimitEnvMock).not.toHaveBeenCalled()
       expect(prepareControllerRuntimeEnvMock).not.toHaveBeenCalled()
-      expect(resolveApiBaseUrl()).toBe("http://api.example.test")
+      expect(resolveApiBaseUrl()).toBe("https://api.example.test")
     }))
 
   it.effect("falls back to local bootstrap when the default local API URL is not reachable", () =>
