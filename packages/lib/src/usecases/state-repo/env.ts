@@ -1,11 +1,11 @@
 export const isTruthyEnv = (value: string): boolean => {
   const normalized = value.trim().toLowerCase()
-  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on"
+  return ["1", "true", "yes", "on"].includes(normalized)
 }
 
 export const isFalsyEnv = (value: string): boolean => {
   const normalized = value.trim().toLowerCase()
-  return normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off"
+  return ["0", "false", "no", "off"].includes(normalized)
 }
 
 export const autoPullEnvKey = "DOCKER_GIT_STATE_AUTO_PULL"
