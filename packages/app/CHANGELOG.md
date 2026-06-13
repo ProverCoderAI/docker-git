@@ -1,5 +1,11 @@
 # @prover-coder-ai/docker-git
 
+## 1.3.0
+
+### Minor Changes
+
+- [#388](https://github.com/ProverCoderAI/docker-git/pull/388) [`6975aa9`](https://github.com/ProverCoderAI/docker-git/commit/6975aa94e1d201d0a0d480a1a1311b916af0ae3f) Thanks [@konard](https://github.com/konard)! - Add daemon mode for `docker-git browser` via `-d` and `--daemon`.
+
 ## 1.2.1
 
 ### Patch Changes
