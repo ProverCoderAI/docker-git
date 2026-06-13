@@ -194,7 +194,7 @@ describe("terminal-session-client", () => {
     vi.useFakeTimers()
     vi.resetModules()
     resolveApiBaseUrlMock.mockReset()
-    resolveApiBaseUrlMock.mockReturnValue("http://controller.example/api")
+    resolveApiBaseUrlMock.mockReturnValue("https://controller.example/api")
     writeToTerminalMock.mockReset()
     setRawModeMock.mockClear()
     stdinOnMock.mockClear()
@@ -247,7 +247,7 @@ describe("terminal-session-client", () => {
 
       const socket = firstSocket()
       expect(socket.url).toBe(
-        "ws://controller.example/api/projects/%2Fcontroller%2Fprovercoderai%2Fdocker-git%2Fmain/terminal-sessions/session-1/ws?cols=132&rows=40"
+        "wss://controller.example/api/projects/%2Fcontroller%2Fprovercoderai%2Fdocker-git%2Fmain/terminal-sessions/session-1/ws?cols=132&rows=40"
       )
       expect(socket.sent).toEqual([])
       expect(setRawModeMock).toHaveBeenCalledWith(false)

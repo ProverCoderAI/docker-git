@@ -8,9 +8,9 @@ import { Effect, Either } from "effect"
 
 import {
   defaultTemplateConfig,
-  isUnixUserName,
+  isUnixUsername,
   type ProjectConfig,
-  sshUserNamePatternDescription
+  sshUsernamePatternDescription
 } from "../core/domain.js"
 import { ConfigDecodeError, ConfigNotFoundError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
@@ -101,12 +101,12 @@ const validateProjectConfig = (
   path: string,
   config: ProjectConfig
 ): Effect.Effect<ProjectConfig, ConfigDecodeError> =>
-  isUnixUserName(config.template.sshUser)
+  isUnixUsername(config.template.sshUser)
     ? Effect.succeed(config)
     : Effect.fail(
       new ConfigDecodeError({
         path,
-        message: `template.sshUser must match ${sshUserNamePatternDescription}`
+        message: `template.sshUser must match ${sshUsernamePatternDescription}`
       })
     )
 

@@ -48,7 +48,7 @@ const withHealthClient = <A, E>(
   revisions: ReadonlyArray<string>,
   effect: (baseUrl: string) => Effect.Effect<A, E, HttpClient.HttpClient>
 ): Effect.Effect<A, E> =>
-  effect("http://controller.test").pipe(Effect.provideService(HttpClient.HttpClient, makeHealthClient(revisions)))
+  effect("https://controller.test").pipe(Effect.provideService(HttpClient.HttpClient, makeHealthClient(revisions)))
 
 describe("controller health", () => {
   it.effect("selects the first reachable candidate whose revision matches the expected revision", () =>

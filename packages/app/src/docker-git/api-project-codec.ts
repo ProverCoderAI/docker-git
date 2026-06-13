@@ -55,7 +55,7 @@ type RawProjectDetailFields = {
 
 const isProjectStatus = (
   value: string
-): value is ApiProjectSummary["status"] => value === "running" || value === "stopped" || value === "unknown"
+): value is ApiProjectSummary["status"] => ["running", "stopped", "unknown"].includes(value)
 
 const stringOrEmpty = (value: string | null): string => value ?? ""
 

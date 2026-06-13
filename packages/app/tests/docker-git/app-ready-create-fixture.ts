@@ -292,7 +292,7 @@ export const expectEmptyRepoInlineError = (
   submitCreateInputsMock: SubmitCreateInputsMock,
   mode: CreateSubmitMode = "advance"
 ) => {
-  const createView = createInitialFlowView("   ")
+  const createView = createInitialFlowView(" ".repeat(3))
   const { context, setCreateViewSpy } = runSubmitCreateView(submitCreateView, createView, { mode })
 
   expect(submitCreateInputsMock).not.toHaveBeenCalled()

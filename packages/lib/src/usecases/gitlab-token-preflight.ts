@@ -93,7 +93,7 @@ const mapGitlabRepoAccessStatus = (status: number): GitlabRepoAccessStatus => {
   if (status >= 200 && status < 300) {
     return "accessible"
   }
-  if (status === 401 || status === 403 || status === 404) {
+  if ([401, 403, 404].includes(status)) {
     return "notAccessible"
   }
   return "unknown"

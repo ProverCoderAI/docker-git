@@ -117,9 +117,7 @@ const resolveProjectId = (
     return null
   }
   const project = projects.find((candidate) =>
-    candidate.id === normalizedToken ||
-    candidate.projectKey === normalizedToken ||
-    candidate.displayName === normalizedToken
+    [candidate.id, candidate.projectKey, candidate.displayName].includes(normalizedToken)
   )
   return project?.id ?? null
 }

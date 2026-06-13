@@ -99,8 +99,7 @@ const submitAuthPrompt = (view: AuthPromptView, context: AuthInputContext) => {
       const label = defaultLabel(nextValues["label"] ?? "")
       const effect = resolveAuthPromptEffect(view, context.state.cwd, nextValues)
       runAuthPromptEffect(effect, view, label, { ...context, cwd: context.state.cwd }, {
-        suspendTui: view.flow === "GithubOauth" || view.flow === "CodexOauth" || view.flow === "ClaudeOauth" ||
-          view.flow === "ClaudeLogout" || view.flow === "GeminiOauth" || view.flow === "GrokOauth"
+        suspendTui: ["GithubOauth", "CodexOauth", "ClaudeOauth", "ClaudeLogout", "GeminiOauth", "GrokOauth"].includes(view.flow)
       })
     }
   )

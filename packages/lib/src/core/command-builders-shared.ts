@@ -5,9 +5,9 @@ import {
   defaultTemplateConfig,
   isDockerNetworkMode,
   isGpuMode,
-  isUnixUserName,
+  isUnixUsername,
   type ParseError,
-  sshUserNamePatternDescription
+  sshUsernamePatternDescription
 } from "./domain.js"
 
 const parsePort = (value: string): Either.Either<number, ParseError> => {
@@ -105,11 +105,11 @@ export const parseSshUser = (
       option: "--ssh-user"
     })
   }
-  if (!isUnixUserName(candidate)) {
+  if (!isUnixUsername(candidate)) {
     return Either.left({
       _tag: "InvalidOption",
       option: "--ssh-user",
-      reason: `expected Linux user name matching ${sshUserNamePatternDescription}`
+      reason: `expected Linux user name matching ${sshUsernamePatternDescription}`
     })
   }
   return Either.right(candidate)

@@ -43,7 +43,7 @@ const readJsonArray = (value: JsonValue | undefined): ReadonlyArray<JsonValue> |
 const isStoredTerminalStatus = (
   value: string | null
 ): value is ActiveTerminalSession["session"]["status"] =>
-  value === "ready" || value === "attached" || value === "exited" || value === "failed"
+  value !== null && ["ready", "attached", "exited", "failed"].includes(value)
 
 type StoredTerminalSessionFields = {
   readonly createdAt: string | null
