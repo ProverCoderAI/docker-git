@@ -130,6 +130,7 @@ const cloneCacheRefreshRefspecs = "'+refs/heads/*:refs/heads/*' '+refs/tags/*:re
 
 const renderCloneCacheInit = (config: TemplateConfig): string =>
   `  CLONE_CACHE_ARGS=""
+  CLONE_SOURCE_REPO_URL="$AUTH_REPO_URL"
   CACHE_REPO_DIR=""
   CACHE_ROOT="/home/${config.sshUser}/.docker-git/.cache/git-mirrors"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -146,11 +147,21 @@ const renderCloneCacheInit = (config: TemplateConfig): string =>
     chown 1000:1000 "$CACHE_ROOT" || true
     if [[ -d "$CACHE_REPO_DIR" ]]; then
       if su - ${config.sshUser} -c "git --git-dir '$CACHE_REPO_DIR' rev-parse --is-bare-repository >/dev/null 2>&1"; then
-        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' ${cloneCacheRefreshRefspecs}"; then
+        if su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch --progress --prune '$AUTH_REPO_URL' ${cloneCacheRefreshRefspecs}"; then
+          CACHE_HEAD_REF="$(git --git-dir "$CACHE_REPO_DIR" symbolic-ref -q HEAD 2>/dev/null || true)"
+          if [[ -z "$CACHE_HEAD_REF" ]] || ! git --git-dir "$CACHE_REPO_DIR" show-ref --verify --quiet "$CACHE_HEAD_REF"; then
+            CACHE_HEAD_REF="$(git --git-dir "$CACHE_REPO_DIR" for-each-ref --format='%(refname)' refs/heads/main refs/heads/master refs/heads | head -n 1 || true)"
+          fi
+          if [[ -n "$CACHE_HEAD_REF" ]] && git --git-dir "$CACHE_REPO_DIR" symbolic-ref HEAD "$CACHE_HEAD_REF"; then
+            CLONE_SOURCE_REPO_URL="$CACHE_REPO_DIR"
+            CLONE_CACHE_ARGS="--no-local"
+            echo "[clone-cache] using mirror: $CACHE_REPO_DIR"
+          else
+            echo "[clone-cache] mirror has no usable HEAD for $REPO_URL"
+          fi
+        else
           echo "[clone-cache] mirror refresh failed for $REPO_URL"
         fi
-        CLONE_CACHE_ARGS="--reference-if-able '$CACHE_REPO_DIR' --dissociate"
-        echo "[clone-cache] using mirror: $CACHE_REPO_DIR"
       else
         echo "[clone-cache] invalid mirror removed: $CACHE_REPO_DIR"
         rm -rf "$CACHE_REPO_DIR"
@@ -170,19 +181,19 @@ const renderCloneBodyRef = (config: TemplateConfig): string =>
   String.raw`  if [[ -n "$REPO_REF" ]]; then
     if [[ "$REPO_REF" == refs/pull/* || "$REPO_REF" == refs/merge-requests/* ]]; then
       REF_BRANCH="$(printf "%s" "$REPO_REF" | sed -E 's#^refs/pull/([^/]+)/head$#pr-\1#; s#^refs/merge-requests/([^/]+)/head$#mr-\1#')"
-      if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$AUTH_REPO_URL' '$TARGET_DIR'"; then
+      if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$CLONE_SOURCE_REPO_URL' '$TARGET_DIR'"; then
         echo "[clone] git clone failed for $REPO_URL"
         CLONE_OK=0
       else
-        if ! su - ${config.sshUser} -c "cd '$TARGET_DIR' && GIT_TERMINAL_PROMPT=0 git fetch --progress origin '$REPO_REF':'$REF_BRANCH' && git checkout '$REF_BRANCH'"; then
+        if ! su - ${config.sshUser} -c "cd '$TARGET_DIR' && GIT_TERMINAL_PROMPT=0 git fetch --progress '$AUTH_REPO_URL' '$REPO_REF':'$REF_BRANCH' && git checkout '$REF_BRANCH'"; then
           echo "[clone] git fetch failed for $REPO_REF"
           CLONE_OK=0
         fi
       fi
     else
-      if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS --branch '$REPO_REF' '$AUTH_REPO_URL' '$TARGET_DIR'"; then
+      if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS --branch '$REPO_REF' '$CLONE_SOURCE_REPO_URL' '$TARGET_DIR'"; then
         echo "[clone] branch '$REPO_REF' missing; retrying without --branch"
-        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$AUTH_REPO_URL' '$TARGET_DIR'"; then
+        if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$CLONE_SOURCE_REPO_URL' '$TARGET_DIR'"; then
           echo "[clone] git clone failed for $REPO_URL"
           CLONE_OK=0
         elif [[ "$REPO_REF" == issue-* ]]; then
@@ -194,7 +205,7 @@ const renderCloneBodyRef = (config: TemplateConfig): string =>
       fi
     fi
   else
-    if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$AUTH_REPO_URL' '$TARGET_DIR'"; then
+    if ! su - ${config.sshUser} -c "GIT_TERMINAL_PROMPT=0 git clone --progress $CLONE_CACHE_ARGS '$CLONE_SOURCE_REPO_URL' '$TARGET_DIR'"; then
       echo "[clone] git clone failed for $REPO_URL"
       CLONE_OK=0
     fi

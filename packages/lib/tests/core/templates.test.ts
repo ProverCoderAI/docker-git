@@ -441,11 +441,29 @@ describe("renderEntrypoint clone cache", () => {
     const entrypoint = renderEntrypoint(makeTemplateConfig())
 
     expect(entrypoint).toContain("git --git-dir '$CACHE_REPO_DIR' fetch")
+    expect(entrypoint).toContain('CLONE_SOURCE_REPO_URL="$AUTH_REPO_URL"')
+    expect(entrypoint).toContain('CLONE_SOURCE_REPO_URL="$CACHE_REPO_DIR"')
+    expect(entrypoint).toContain('CLONE_CACHE_ARGS="--no-local"')
+    expect(entrypoint).toContain("if su - dev -c \"GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch")
+    expect(entrypoint).toContain('CACHE_HEAD_REF="$(git --git-dir "$CACHE_REPO_DIR" symbolic-ref -q HEAD')
+    expect(entrypoint).toContain('git --git-dir "$CACHE_REPO_DIR" show-ref --verify --quiet "$CACHE_HEAD_REF"')
+    expect(entrypoint).toContain("for-each-ref --format='%(refname)' refs/heads/main refs/heads/master refs/heads")
+    expect(entrypoint).toContain('git --git-dir "$CACHE_REPO_DIR" symbolic-ref HEAD "$CACHE_HEAD_REF"')
+    expect(entrypoint).toContain("git clone --progress $CLONE_CACHE_ARGS '$CLONE_SOURCE_REPO_URL' '$TARGET_DIR'")
     expect(entrypoint).toContain("'+refs/heads/*:refs/heads/*'")
     expect(entrypoint).toContain("'+refs/tags/*:refs/tags/*'")
+    expect(entrypoint).toContain("git fetch --progress '$AUTH_REPO_URL' '$REPO_REF':'$REF_BRANCH'")
     expect(entrypoint).not.toContain("'+refs/*:refs/*'")
     expect(entrypoint).not.toContain("'+refs/pull/*:refs/pull/*'")
     expect(entrypoint).not.toContain("'+refs/merge-requests/*:refs/merge-requests/*'")
+    expect(entrypoint).not.toContain("--reference-if-able")
+    expect(entrypoint).not.toContain("if ! su - dev -c \"GIT_TERMINAL_PROMPT=0 git --git-dir '$CACHE_REPO_DIR' fetch")
+
+    const refreshFailureBlock = entrypoint.slice(
+      entrypoint.indexOf('echo "[clone-cache] mirror refresh failed for $REPO_URL"'),
+      entrypoint.indexOf('echo "[clone-cache] invalid mirror removed: $CACHE_REPO_DIR"')
+    )
+    expect(refreshFailureBlock).not.toContain('CLONE_SOURCE_REPO_URL="$CACHE_REPO_DIR"')
   })
 
   it("preserves branch/tag-only clone-cache refspecs for generated configs", () => {
