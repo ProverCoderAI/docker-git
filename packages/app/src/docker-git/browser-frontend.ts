@@ -63,6 +63,23 @@ type BrowserFrontendRuntimeState = {
   readonly webState: BrowserFrontendStateFile | null
 }
 
+export interface BrowserFrontendCommandOptions {
+  readonly daemon: boolean
+}
+
+const browserFrontendForegroundOptions: BrowserFrontendCommandOptions = { daemon: false }
+
+type BrowserFrontendLaunch = {
+  readonly env: Readonly<Record<string, string>>
+  readonly localUrl: string
+}
+
+type BrowserFrontendRunnerEffect = Effect.Effect<
+  void,
+  ControllerBootstrapError | PlatformError,
+  CommandExecutor.CommandExecutor
+>
+
 const browserEnv = (decision: BrowserFrontendStartDecision): Readonly<Record<string, string>> => ({
   ...copyProcessEnv(),
   DOCKER_GIT_API_URL: decision.apiBaseUrl,
@@ -76,18 +93,55 @@ const runStreaming = (
   args: ReadonlyArray<string>,
   env: Readonly<Record<string, string>>
 ): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
-  runCommandExitCodeStreaming({
-    args,
-    command: "bun",
-    cwd: process.cwd(),
-    env
-  })
+  runCommandExitCodeStreaming({ args, command: "bun", cwd: process.cwd(), env })
 
 const parsePids = (output: string): ReadonlyArray<string> =>
   output
     .split(/\s+/u)
     .map((pid) => pid.trim())
     .filter((pid) => /^\d+$/u.test(pid))
+
+// CHANGE: derive a stable daemon log path beside the browser runtime state file.
+// WHY: detached mode must preserve diagnostics after the parent CLI exits.
+// QUOTE(ТЗ): "Run browser with support dameon mode, like a flag -d"
+// REF: issue-373
+// SOURCE: n/a
+// FORMAT THEOREM: suffix(statePath,".json") -> logPath = prefix(statePath,".json") + ".log"
+// PURITY: CORE
+// EFFECT: n/a
+// INVARIANT: every state path maps deterministically to exactly one log path
+// COMPLEXITY: O(n)/O(n) where n = |statePath|
+const browserFrontendLogPath = (statePath: string): string =>
+  statePath.endsWith(".json") ? `${statePath.slice(0, -".json".length)}.log` : `${statePath}.log`
+
+const parseDaemonPid = (output: string): Effect.Effect<string, ControllerBootstrapError> => {
+  const pid = parsePids(output)[0]
+  return pid === undefined
+    ? Effect.fail(browserFrontendError("Browser frontend daemon did not report a pid."))
+    : Effect.succeed(pid)
+}
+
+const startDaemon = (
+  args: ReadonlyArray<string>,
+  env: Readonly<Record<string, string>>,
+  logPath: string
+): Effect.Effect<string, ControllerBootstrapError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const script = [
+    "log_path=\"$1\"",
+    "shift",
+    "command -v nohup >/dev/null 2>&1 || exit 127",
+    "command -v \"$1\" >/dev/null 2>&1 || exit 127",
+    "mkdir -p \"$(dirname \"$log_path\")\"",
+    "nohup \"$@\" >>\"$log_path\" 2>&1 < /dev/null &",
+    String.raw`printf '%s\n' "$!"`
+  ].join("\n")
+
+  return runCommandCapture(
+    { args: ["-c", script, "sh", logPath, "bun", ...args], command: "sh", cwd: process.cwd(), env },
+    [0],
+    () => browserFrontendError("Failed to start browser frontend daemon.")
+  ).pipe(Effect.flatMap((output) => parseDaemonPid(output)))
+}
 
 const findWebServerPids = (): Effect.Effect<ReadonlyArray<string>, never, CommandExecutor.CommandExecutor> => {
   const script = [
@@ -271,13 +325,19 @@ const ensureSuccess = (
     ? Effect.void
     : Effect.fail(browserFrontendError(`${action} failed with exit code ${exitCode}.`))
 
-export const runBrowserFrontend = (
+// CHANGE: share the browser frontend build phase between foreground and daemon modes.
+// WHY: daemon mode must not drift from foreground mode in revision, environment, or build failure semantics.
+// QUOTE(ТЗ): "Run browser with support dameon mode, like a flag -d"
+// REF: issue-373
+// SOURCE: n/a
+// FORMAT THEOREM: forall mode in {foreground,daemon}: launch(mode) -> built(webRevision)
+// PURITY: SHELL
+// EFFECT: Effect<BrowserFrontendLaunch, ControllerBootstrapError | PlatformError, CommandExecutor>
+// INVARIANT: launch env is derived exactly once from BrowserFrontendStartDecision
+// COMPLEXITY: O(build)/O(env)
+const buildBrowserFrontendLaunch = (
   decision: BrowserFrontendStartDecision
-): Effect.Effect<
-  void,
-  ControllerBootstrapError | PlatformError,
-  CommandExecutor.CommandExecutor
-> =>
+): Effect.Effect<BrowserFrontendLaunch, ControllerBootstrapError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
     const env = browserEnv(decision)
     const localUrl = `http://${decision.host}:${decision.port}/`
@@ -285,11 +345,26 @@ export const runBrowserFrontend = (
     yield* _(Effect.log(`Building docker-git browser frontend ${decision.webRevision} for API ${decision.apiBaseUrl}.`))
     const buildExitCode = yield* _(runStreaming(["run", "--cwd", "packages/app", "build:web"], env))
     yield* _(ensureSuccess(buildExitCode, "Browser frontend build"))
+    return { env, localUrl }
+  })
 
-    yield* _(Effect.log(`docker-git browser frontend: ${localUrl}`))
+export const runBrowserFrontend = (decision: BrowserFrontendStartDecision): BrowserFrontendRunnerEffect =>
+  Effect.gen(function*(_) {
+    const launch = yield* _(buildBrowserFrontendLaunch(decision))
+    yield* _(Effect.log(`docker-git browser frontend: ${launch.localUrl}`))
     yield* _(Effect.log("Press Ctrl+C to stop the browser frontend."))
-    const serveExitCode = yield* _(runStreaming(["run", "--cwd", "packages/app", "serve:web"], env))
+    const serveExitCode = yield* _(runStreaming(["run", "--cwd", "packages/app", "serve:web"], launch.env))
     yield* _(ensureSuccess(serveExitCode, "Browser frontend server"))
+  })
+
+export const runBrowserFrontendDaemon = (decision: BrowserFrontendStartDecision): BrowserFrontendRunnerEffect =>
+  Effect.gen(function*(_) {
+    const launch = yield* _(buildBrowserFrontendLaunch(decision))
+    const logPath = browserFrontendLogPath(decision.statePath)
+
+    const pid = yield* _(startDaemon(["run", "--cwd", "packages/app", "serve:web"], launch.env, logPath))
+    yield* _(Effect.log(`docker-git browser frontend daemon: ${launch.localUrl} (pid ${pid})`))
+    yield* _(Effect.log(`docker-git browser frontend daemon log: ${logPath}`))
   })
 
 // CHANGE: make `docker-git browser` idempotent for local development
@@ -302,15 +377,25 @@ export const runBrowserFrontend = (
 // EFFECT: Effect<void, ControllerBootstrapError | PlatformError, ControllerRuntime>
 // INVARIANT: controller readiness is checked independently from browser runtime reuse
 // COMPLEXITY: O(total_bytes(web_inputs) + processes + controller_probe)
+export const runBrowserFrontendCommandWithOptions = (
+  options: BrowserFrontendCommandOptions
+): Effect.Effect<
+  void,
+  ControllerBootstrapError | PlatformError,
+  ControllerRuntime
+> =>
+  pipe(
+    prepareBrowserStack(),
+    Effect.flatMap((decision) => {
+      if (!decision.shouldStartWeb) {
+        return Effect.log(`docker-git browser frontend is already running at http://${decision.host}:${decision.port}/`)
+      }
+      return options.daemon ? runBrowserFrontendDaemon(decision) : runBrowserFrontend(decision)
+    })
+  )
+
 export const runBrowserFrontendCommand: Effect.Effect<
   void,
   ControllerBootstrapError | PlatformError,
   ControllerRuntime
-> = pipe(
-  prepareBrowserStack(),
-  Effect.flatMap((decision) =>
-    decision.shouldStartWeb
-      ? runBrowserFrontend(decision)
-      : Effect.log(`docker-git browser frontend is already running at http://${decision.host}:${decision.port}/`)
-  )
-)
+> = runBrowserFrontendCommandWithOptions(browserFrontendForegroundOptions)
