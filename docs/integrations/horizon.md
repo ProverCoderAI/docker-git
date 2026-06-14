@@ -81,6 +81,71 @@ The Skiller model (pin as a `third_party` submodule, launch as a separate proces
 3. **Track Option B separately.** The infinite-canvas + workspaces + minimap UX is the part worth bringing to docker-git's web UI, built natively on the existing terminal panels. It deserves its own scoped issue rather than being folded into "integrate Horizon."
 4. **Re-evaluate Option C** only if Horizon upstream ships a headless or web/remote mode that exposes a controllable session API.
 
+## Proof-of-Concept: Running Horizon in a Container (June 2026)
+
+As part of this analysis, Horizon v0.2.6 was run inside a Docker container (the `dg-docker-git-pr-391` workspace) to empirically verify the claims above and explore what *is* feasible today.
+
+### What was done
+
+1. Downloaded the pre-built Linux x64 binary (`horizon-linux-x64.tar.gz`, v0.2.6).
+2. Started a virtual display (`Xvfb :100 1920×1080`) inside the container.
+3. Launched Horizon with Vulkan software rendering (`lvp_icd.json` / lavapipe): `WGPU_BACKEND=vulkan VK_ICD_FILENAMES=.../lvp_icd.json ./horizon`.
+4. Exposed the display over VNC (`x11vnc`) → WebSocket (`websockify`) → browser-friendly viewer (custom noVNC HTML page, no toolbar).
+5. Served the viewer via Cloudflare Tunnel (`trycloudflare.com`) for remote access.
+6. Generated SSH keys, injected them into all running docker-git containers, and opened SSH terminal sessions from within Horizon onto sibling containers (`pr-387`, `megapolos-gui`, etc.).
+
+### Screenshots
+
+**Command Palette — built-in AI agent presets:**
+
+![Horizon Command Palette](screenshots/horizon/command-palette.png)
+
+Horizon ships first-class launchers for Shell, Codex, **Claude Code**, OpenCode, Gemini CLI, KiloCode, and Git Changes — accessible via `Ctrl+Shift+K`.
+
+**Canvas with Shell + Claude Code panels (Workspace 1):**
+
+![Horizon canvas with terminals](screenshots/horizon/canvas-terminals.png)
+
+Two panels on the infinite canvas: a local Shell (`~/app pr-391`) and Claude Code (`v2.1.162 · Sonnet 4.6`) — the agent launched automatically and is waiting for input (`ATTENTION agent — Ready for input`).
+
+**Horizon running as a browser tab via noVNC + Cloudflare Tunnel:**
+
+![Horizon in browser tab](screenshots/horizon/browser-tab.png)
+
+The VNC stream is served as a clean HTML page (no noVNC chrome) accessible via a public Cloudflare URL.
+
+### Key finding: GPU is required for production use
+
+Horizon ran and rendered correctly with lavapipe (Vulkan software renderer), but the experience is **not production-viable without a real GPU**:
+
+| Metric | Software rendering (llvmpipe/lavapipe) | GPU (expected) |
+|--------|----------------------------------------|----------------|
+| Render FPS | 2–7 FPS | 60 FPS |
+| Latency (VNC stream) | High — VNC encodes slow frames | Low |
+| Usability | Functional for screenshots/demo | Full interactive speed |
+
+The entire lag in the browser tab comes from this chain:
+```
+Horizon (CPU render ~5 FPS) → Xvfb → x11vnc → websockify → Cloudflare → browser
+```
+
+**To make this genuinely usable, the container needs a passthrough GPU** (NVIDIA via `nvidia-container-toolkit`, or AMD via `amdgpu`). docker-git already has `docker-compose.gpu.yml` overlays — adding a GPU allocation to the browser container would unlock hardware-accelerated Horizon rendering.
+
+### Task status
+
+| Item | Status |
+|------|--------|
+| Horizon runs in a container | ✅ Verified (v0.2.6, Vulkan lavapipe) |
+| AI agent presets (Claude Code, Codex, etc.) | ✅ Confirmed built-in |
+| SSH into sibling docker-git containers | ✅ Works (key-based auth) |
+| Remote browser access via noVNC + Cloudflare | ✅ Works |
+| Interactive speed without GPU | ❌ 2–7 FPS — not usable |
+| Remote Hosts (Tailscale discovery) | ❌ Requires Tailscale — not available |
+| Custom SSH presets in `config.yaml` | ❌ Horizon only supports built-in preset types |
+| **GPU acceleration in container** | 🔲 **Blocked — needs GPU passthrough** |
+
+**Recommendation unchanged**: Option A (SSH workflow docs) is the right immediate step. However, this PoC confirms that *if GPU passthrough is enabled*, Horizon can run fully inside a docker-git browser container and be accessed remotely via the existing noVNC/Cloudflare pattern.
+
 ## Watch List (re-evaluate triggers)
 
 Revisit this analysis if any of the following land upstream:
