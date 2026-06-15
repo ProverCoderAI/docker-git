@@ -1,4 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
+import * as fc from "fast-check"
 
 import {
   attachTerminalCopyInteraction,
@@ -28,6 +30,8 @@ const terminalWithSelection = (
   hasSelection: () => selection.length > 0,
   modes: { mouseTrackingMode }
 })
+
+const activeMouseTrackingModeArbitrary = fc.constantFrom<TerminalMouseTrackingMode>("any", "drag", "vt200", "x10")
 
 const keyboardEvent = (
   key: string,
@@ -237,6 +241,43 @@ describe("terminal copy interaction", () => {
 
     disposable.dispose()
   })
+
+  it.effect("suppresses generated protected context menus without blocking the native menu", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(
+          activeMouseTrackingModeArbitrary,
+          fc.string({ maxLength: 64, minLength: 1 }),
+          fc.constantFrom(0, 2),
+          (mouseTrackingMode, selectedText, contextMenuButton) => {
+            const host = new FakeTerminalCopyHost(null)
+            const contextMenuReports: Array<TerminalCopyTestMouseEvent> = []
+            host.addBubbleMouseListener("contextmenu", (event) => {
+              contextMenuReports.push(event)
+            })
+            const disposable = attachTerminalCopyInteraction({
+              host,
+              terminal: terminalWithSelection(mouseTrackingMode, selectedText)
+            })
+            const contextMenu = mouseEvent(contextMenuButton, "contextmenu")
+
+            if (contextMenuButton === 2) {
+              host.dispatchMouse("mousedown", mouseEvent(2))
+            }
+            host.dispatchMouse("contextmenu", contextMenu)
+
+            expect(contextMenu.shiftKey).toBe(true)
+            expect(contextMenu.preventDefaultCalls).toBe(0)
+            expect(contextMenu.stopImmediatePropagationCalls).toBe(1)
+            expect(contextMenu.stopPropagationCalls).toBeGreaterThanOrEqual(1)
+            expect(contextMenuReports).toEqual([])
+
+            disposable.dispose()
+          }
+        ),
+        { numRuns: 100 }
+      )
+    }))
 
   it("does not start a forced selection drag when mouse tracking is inactive", () => {
     const documentTarget = new FakeTerminalCopyEventTarget()
