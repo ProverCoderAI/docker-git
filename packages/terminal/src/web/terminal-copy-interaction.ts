@@ -5,6 +5,15 @@ import {
   type TerminalNativeCopyMenuHost
 } from "./terminal-copy-native-menu.js"
 import {
+  hasActiveMouseTracking,
+  isKeyboardCopyShortcut,
+  shouldForceBrowserTerminalSelection,
+  shouldLetBrowserHandleTerminalCopyShortcut,
+  type TerminalCopyKeyboardEvent,
+  type TerminalMouseTrackingMode,
+  writeTerminalSelectionToClipboardData
+} from "./terminal-copy-rules.js"
+import {
   createTerminalSelectionDragController,
   forceTerminalSelectionModifier,
   suppressTerminalMouseReport,
@@ -13,26 +22,24 @@ import {
   type TerminalMouseButtonEvent,
   type TerminalSelectionDragTarget
 } from "./terminal-copy-selection-drag.js"
+import {
+  type TerminalCopyClipboardData,
+  TerminalSelectionContextSnapshot,
+  type TerminalSelectionRestoreTarget,
+  type TerminalSelectionTarget
+} from "./terminal-copy-selection-snapshot.js"
 
+export {
+  shouldForceBrowserTerminalSelection,
+  shouldForceTerminalSelectionContext,
+  shouldLetBrowserHandleTerminalCopyShortcut,
+  writeTerminalSelectionToClipboardData
+} from "./terminal-copy-rules.js"
+export type { TerminalCopyKeyboardEvent, TerminalMouseTrackingMode } from "./terminal-copy-rules.js"
 export { forceTerminalSelectionModifier } from "./terminal-copy-selection-drag.js"
-
-export type TerminalMouseTrackingMode = "any" | "drag" | "none" | "vt200" | "x10"
-
-type TerminalSelectionTarget = {
-  readonly getSelection: () => string
-  readonly hasSelection: () => boolean
-}
 
 type TerminalDisposable = {
   readonly dispose: () => void
-}
-
-export type TerminalCopyKeyboardEvent = {
-  readonly altKey: boolean
-  readonly ctrlKey: boolean
-  readonly key: string
-  readonly metaKey: boolean
-  readonly type: string
 }
 
 export type TerminalCopyInteractionTerminal = TerminalSelectionTarget & {
@@ -44,11 +51,7 @@ export type TerminalCopyInteractionTerminal = TerminalSelectionTarget & {
   }
   readonly onSelectionChange?: (handler: () => void) => TerminalDisposable
   readonly textarea?: TerminalCopyTextarea | undefined
-}
-
-type TerminalCopyClipboardData = {
-  readonly setData: (format: string, data: string) => void
-}
+} & TerminalSelectionRestoreTarget
 
 type TerminalCopyClipboardEvent = {
   readonly clipboardData: TerminalCopyClipboardData | null
@@ -74,139 +77,10 @@ type TerminalCopyInteractionArgs = {
 
 const primaryMouseButton = 0
 const secondaryMouseButton = 2
-const terminalSelectionContextSnapshotTtlMs = 10_000
 
 const isPrimaryMouseButton = (event: TerminalMouseButtonEvent): boolean => event.button === primaryMouseButton
 
 const isSecondaryMouseButton = (event: TerminalMouseButtonEvent): boolean => event.button === secondaryMouseButton
-
-const hasActiveMouseTracking = (terminal: TerminalCopyInteractionTerminal): boolean =>
-  terminal.modes.mouseTrackingMode !== "none"
-
-const isKeyboardCopyShortcut = (event: TerminalCopyKeyboardEvent): boolean =>
-  event.type === "keydown" &&
-  !event.altKey &&
-  (event.ctrlKey || event.metaKey) &&
-  event.key.toLowerCase() === "c"
-
-/**
- * Decides whether xterm key processing must step aside for native browser copy.
- *
- * @param event - Keyboard event seen by xterm before it translates keys into pty input.
- * @param terminal - Terminal selection facade.
- * @returns True iff the event is a system copy shortcut and selected terminal text is non-empty.
- * @pure true
- * @effect terminal.hasSelection(), terminal.getSelection().
- * @invariant result => no ETX input is sent for selected terminal text copy.
- * @precondition `event` and `terminal` are non-null.
- * @postcondition True means xterm should return false from its custom key handler.
- * @complexity O(n) where n = selected text length.
- * @throws Never
- */
-// CHANGE: keep keyboard copy shortcuts out of terminal input when text is selected
-// WHY: Ctrl/Cmd+C must copy the selected terminal text instead of sending SIGINT to the pty
-// QUOTE(ТЗ): "Text easy coping"
-// REF: issue-353
-// SOURCE: n/a
-// FORMAT THEOREM: selected(t) and copyShortcut(e) => browserCopy(e,t)
-// PURITY: CORE
-// EFFECT: reads terminal selection through the injected terminal facade
-// INVARIANT: empty selection never blocks terminal Ctrl+C semantics
-// COMPLEXITY: O(n)/O(1)
-export const shouldLetBrowserHandleTerminalCopyShortcut = (
-  event: TerminalCopyKeyboardEvent,
-  terminal: TerminalSelectionTarget
-): boolean => isKeyboardCopyShortcut(event) && terminal.hasSelection() && terminal.getSelection().length > 0
-
-export const shouldForceBrowserTerminalSelection = (
-  event: TerminalMouseButtonEvent,
-  terminal: TerminalCopyInteractionTerminal
-): boolean => isPrimaryMouseButton(event) && hasActiveMouseTracking(terminal)
-
-/**
- * Decides whether a secondary-button event must preserve the terminal selection context.
- *
- * @param event - Mouse button event captured before xterm/tmux handlers can clear the selection.
- * @param terminal - Terminal selection and mouse-tracking facade.
- * @returns True iff the event is a secondary click, mouse tracking is active, and a selection exists.
- * @pure true
- * @effect isSecondaryMouseButton(event), hasActiveMouseTracking(terminal), terminal.hasSelection().
- * @invariant result <=> secondary(event) and tracking(terminal) and selected(terminal).
- * @precondition `event` and `terminal` are non-null; mouse tracking may be `none`, which disables forcing.
- * @postcondition True means the caller may snapshot selection text before suppressing terminal mouse reporting.
- * @complexity O(1)
- * @throws Never
- */
-// CHANGE: document the guarded right-click selection preservation predicate
-// WHY: selection protection is valid only while terminal mouse tracking can consume right-click events
-// QUOTE(ТЗ): "right-click with selection should remain copyable in the terminal"
-// REF: issue-340
-// SOURCE: n/a
-// FORMAT THEOREM: forall e,t: force(e,t) <-> secondary(e) and tracking(t) and hasSelection(t)
-// PURITY: CORE
-// EFFECT: reads terminal.hasSelection through the injected terminal facade
-// INVARIANT: mouseTrackingMode = none always yields false
-// COMPLEXITY: O(1)
-export const shouldForceTerminalSelectionContext = (
-  event: TerminalMouseButtonEvent,
-  terminal: TerminalCopyInteractionTerminal
-): boolean => isSecondaryMouseButton(event) && hasActiveMouseTracking(terminal) && terminal.hasSelection()
-
-export const writeTerminalSelectionToClipboardData = (
-  terminal: TerminalSelectionTarget,
-  clipboardData: TerminalCopyClipboardData | null
-): boolean => {
-  if (clipboardData === null || !terminal.hasSelection()) {
-    return false
-  }
-  const selection = terminal.getSelection()
-  if (selection.length === 0) {
-    return false
-  }
-  clipboardData.setData("text/plain", selection)
-  return true
-}
-
-class TerminalSelectionContextSnapshot {
-  private selection = ""
-  private timer: ReturnType<typeof setTimeout> | null = null
-
-  constructor(private readonly terminal: TerminalSelectionTarget) {}
-
-  readonly clear = (): void => {
-    this.selection = ""
-    if (this.timer !== null) {
-      clearTimeout(this.timer)
-      this.timer = null
-    }
-  }
-
-  readonly has = (): boolean => this.selection.length > 0
-
-  readonly read = (): string => this.selection
-
-  readonly refresh = (): boolean => {
-    const selection = this.terminal.getSelection()
-    if (selection.length === 0) {
-      this.clear()
-      return false
-    }
-    this.selection = selection
-    if (this.timer !== null) {
-      clearTimeout(this.timer)
-    }
-    this.timer = setTimeout(this.clear, terminalSelectionContextSnapshotTtlMs)
-    return true
-  }
-
-  readonly writeToClipboardData = (clipboardData: TerminalCopyClipboardData | null): boolean => {
-    if (clipboardData === null || this.selection.length === 0) {
-      return false
-    }
-    clipboardData.setData("text/plain", this.selection)
-    return true
-  }
-}
 
 class TerminalCopyInteractionController {
   private readonly selectionContext: TerminalSelectionContextSnapshot
@@ -232,8 +106,13 @@ class TerminalCopyInteractionController {
     shouldLetBrowserHandleTerminalCopyShortcut(event, this.args.terminal) ||
     (isKeyboardCopyShortcut(event) && this.selectionContext.has())
 
-  private readonly onTerminalKeyEvent = (event: TerminalCopyKeyboardEvent): boolean =>
-    !this.shouldLetBrowserHandleCopyShortcut(event)
+  private readonly onTerminalKeyEvent = (event: TerminalCopyKeyboardEvent): boolean => {
+    const shouldLetBrowserHandleCopy = this.shouldLetBrowserHandleCopyShortcut(event)
+    if (!shouldLetBrowserHandleCopy && event.type === "keydown") {
+      this.selectionContext.clear()
+    }
+    return !shouldLetBrowserHandleCopy
+  }
 
   private readonly onTerminalSelectionChange = (): void => {
     // CHANGE: keep a copyable snapshot before terminal redraws can drop xterm's live selection.
@@ -246,9 +125,11 @@ class TerminalCopyInteractionController {
     // EFFECT: reads terminal.hasSelection() and terminal.getSelection().
     // INVARIANT: empty redraw selection events do not erase the last user-created non-empty selection snapshot.
     // COMPLEXITY: O(n)/O(1) where n = selected text length.
-    if (this.args.terminal.hasSelection()) {
-      this.selectionContext.refresh()
+    if (!this.args.terminal.hasSelection()) {
+      this.selectionContext.restore()
+      return
     }
+    this.selectionContext.refresh()
   }
 
   private readonly hasProtectedSelectionContext = (): boolean =>
