@@ -10,12 +10,17 @@ import type { AuthGithubLoginCommand, AuthGithubLogoutCommand, AuthGithubStatusC
 import { defaultTemplateConfig } from "../core/domain.js"
 import { trimLeftChar, trimRightChar } from "../core/strings.js"
 import { runDockerAuth, runDockerAuthCapture } from "../shell/docker-auth.js"
-import type { AuthError } from "../shell/errors.js"
-import { CommandFailedError } from "../shell/errors.js"
+import { AuthError, CommandFailedError } from "../shell/errors.js"
 import { buildDockerAuthSpec, normalizeAccountLabel } from "./auth-helpers.js"
 import { migrateLegacyOrchLayout } from "./auth-sync.js"
 import { ensureEnvFile, parseEnvEntries, readEnvText, removeEnvKey, upsertEnvKey } from "./env-file.js"
 import { ensureGhAuthImage, ghAuthDir, ghAuthRoot, ghImageName } from "./github-auth-image.js"
+import {
+  githubForbiddenDeleteRepoScopeMessage,
+  githubUnverifiedTokenScopesMessage,
+  hasGithubRepositoryDeleteScope,
+  normalizeGithubScopes
+} from "./github-scope-policy.js"
 import type { GithubTokenValidationResult } from "./github-token-validation.js"
 import { validateGithubToken } from "./github-token-validation.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
@@ -86,28 +91,6 @@ const listGithubTokens = (envText: string): ReadonlyArray<GithubTokenEntry> =>
     }))
     .filter((entry) => entry.token.trim().length > 0)
 
-const defaultGithubScopes = "repo,workflow,read:org"
-
-// CHANGE: normalize GitHub scopes for gh auth login
-// WHY: ensure required scopes are requested without delete_repo
-// QUOTE(ТЗ): "Передай все нужные скопы"
-// REF: user-request-2026-02-05-gh-scopes
-// SOURCE: n/a
-// FORMAT THEOREM: ∀s: normalize(s) -> scopes(s) ⊆ required
-// PURITY: CORE
-// EFFECT: n/a
-// INVARIANT: empty input yields default scopes
-// COMPLEXITY: O(n) where n = |scopes|
-const normalizeGithubScopes = (value: string | null | undefined): ReadonlyArray<string> => {
-  const raw = value?.trim() ?? ""
-  const input = raw.length === 0 ? defaultGithubScopes : raw
-  const scopes = input
-    .split(/[,\s]+/g)
-    .map((scope) => scope.trim())
-    .filter((scope) => scope.length > 0 && scope !== "delete_repo")
-  return scopes.length === 0 ? defaultGithubScopes.split(",") : scopes
-}
-
 const withEnvContext = <A, E, R>(
   envGlobalPath: string,
   run: (context: EnvContext) => Effect.Effect<A, E, FileSystem.FileSystem | R>
@@ -144,7 +127,8 @@ const validateGithubTokenEntry = (
       label: entry.label,
       token: entry.token,
       status: validation.status,
-      login: validation.login
+      login: validation.login,
+      oauthScopes: validation.oauthScopes
     }))
   )
 
@@ -200,6 +184,36 @@ const runGithubLogin = (
     (exitCode) => new CommandFailedError({ command: "gh auth login --web", exitCode })
   )
 
+const runGithubRemoveDeleteRepoScope = (
+  cwd: string,
+  accountPath: string
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  runDockerAuth(
+    buildDockerAuthSpec({
+      cwd,
+      image: ghImageName,
+      hostPath: accountPath,
+      containerPath: ghAuthDir,
+      env: ["BROWSER=echo", `GH_CONFIG_DIR=${ghAuthDir}`],
+      args: ["auth", "refresh", "-h", "github.com", "--remove-scopes", "delete_repo"],
+      interactive: false
+    }),
+    [0],
+    (exitCode) => new CommandFailedError({ command: "gh auth refresh --remove-scopes delete_repo", exitCode })
+  )
+
+const rejectGithubTokenWithRepositoryDeleteScope = (token: string): Effect.Effect<void, AuthError> =>
+  validateGithubToken(token).pipe(
+    Effect.flatMap((validation) => {
+      if (validation.status !== "valid" || validation.oauthScopes === null) {
+        return Effect.fail(new AuthError({ message: githubUnverifiedTokenScopesMessage }))
+      }
+      return hasGithubRepositoryDeleteScope(validation.oauthScopes)
+        ? Effect.fail(new AuthError({ message: githubForbiddenDeleteRepoScopeMessage }))
+        : Effect.void
+    })
+  )
+
 const retryGithubLogin = (
   effect: Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor>
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
@@ -243,7 +257,10 @@ const runGithubInteractiveLogin = (
     yield* _(ensureGhAuthImage(fs, path, cwd, "gh auth"))
     yield* _(Effect.log(`Starting GH auth login in container (scopes: ${scopes.join(", ")})...`))
     yield* _(retryGithubLogin(runGithubLogin(cwd, accountPath, scopes)))
+    yield* _(Effect.log("Removing repository delete scope from GH auth token..."))
+    yield* _(runGithubRemoveDeleteRepoScope(cwd, accountPath))
     const resolved = yield* _(resolveGithubTokenFromGh(cwd, accountPath))
+    yield* _(rejectGithubTokenWithRepositoryDeleteScope(resolved))
     yield* _(ensureEnvFile(fs, path, envPath))
     const key = buildGithubTokenKey(command.label)
     yield* _(persistGithubToken(fs, envPath, key, resolved))
@@ -271,6 +288,7 @@ export const authGithubLogin = (
       const key = buildGithubTokenKey(command.label)
       const label = labelFromKey(key)
       if (token.length > 0) {
+        yield* _(rejectGithubTokenWithRepositoryDeleteScope(token))
         yield* _(ensureEnvFile(fs, path, envPath))
         yield* _(persistGithubToken(fs, envPath, key, token))
         yield* _(ensureStateDotDockerGitRepo(token))

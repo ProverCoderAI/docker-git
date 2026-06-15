@@ -1,7 +1,10 @@
 import { FetchHttpClient, HttpClient } from "@effect/platform"
+import * as Headers from "@effect/platform/Headers"
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
-import { Effect, Either } from "effect"
+import { Effect, Either, Option } from "effect"
+
+import { parseGithubOauthScopesHeader } from "./github-scope-policy.js"
 
 const githubTokenValidationUrl = "https://api.github.com/user"
 
@@ -20,6 +23,7 @@ export type GithubTokenValidationStatus = "valid" | "invalid" | "unknown"
 export type GithubTokenValidationResult = {
   readonly status: GithubTokenValidationStatus
   readonly login: string | null
+  readonly oauthScopes: ReadonlyArray<string> | null
 }
 
 const GithubUserSchema: Schema.Schema<GithubUser> = Schema.Struct({
@@ -29,7 +33,8 @@ const GithubUserJsonSchema = Schema.parseJson(GithubUserSchema)
 
 const unknownGithubTokenValidationResult = (): GithubTokenValidationResult => ({
   status: "unknown",
-  login: null
+  login: null,
+  oauthScopes: null
 })
 
 const decodeGithubUserLogin = (input: string): string | null =>
@@ -45,8 +50,8 @@ const mapGithubTokenValidationStatus = (status: number): GithubTokenValidationSt
   return status >= 200 && status < 300 ? "valid" : "unknown"
 }
 
-// CHANGE: validate GitHub token and decode the authenticated account login on success
-// WHY: auth status and create preflight must share one live GitHub validation boundary
+// CHANGE: validate GitHub token and decode the authenticated account login/scopes on success
+// WHY: auth status, create preflight, and auth persistence must share one live GitHub validation boundary
 // QUOTE(ТЗ): "status проверял валидность токена и если он валидный то писал бы кто овнер"
 // REF: user-request-2026-03-19-github-token-status-owner
 // SOURCE: n/a
@@ -68,17 +73,20 @@ export const validateGithubToken = (token: string): Effect.Effect<GithubTokenVal
     )
 
     const status = mapGithubTokenValidationStatus(response.status)
+    const oauthScopes = parseGithubOauthScopesHeader(Option.getOrNull(Headers.get(response.headers, "x-oauth-scopes")))
     if (status !== "valid") {
       return {
         status,
-        login: null
+        login: null,
+        oauthScopes
       } satisfies GithubTokenValidationResult
     }
 
     const body = yield* _(response.text)
     return {
       status,
-      login: decodeGithubUserLogin(body)
+      login: decodeGithubUserLogin(body),
+      oauthScopes
     } satisfies GithubTokenValidationResult
   }).pipe(
     Effect.provide(FetchHttpClient.layer),

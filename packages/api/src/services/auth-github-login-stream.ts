@@ -4,15 +4,21 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { defaultTemplateConfig } from "@effect-template/lib/core/template-defaults"
 import { buildDockerAuthArgs, resolveDockerVolumeHostPath, runDockerAuthCapture } from "@effect-template/lib/shell/docker-auth"
+import type { AuthError } from "@effect-template/lib/shell/errors"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
+import {
+  rejectGithubTokenWithRepositoryDeleteScope,
+  runGithubRemoveDeleteRepoScope
+} from "@effect-template/lib/usecases/auth-github"
 import { buildDockerAuthSpec, normalizeAccountLabel } from "@effect-template/lib/usecases/auth-helpers"
 import { ensureEnvFile, readEnvText, upsertEnvKey } from "@effect-template/lib/usecases/env-file"
 import { ensureGhAuthImage, ghAuthDir, ghAuthRoot, ghImageName } from "@effect-template/lib/usecases/github-auth-image"
+import { normalizeGithubScopes } from "@effect-template/lib/usecases/github-scope-policy"
 import { resolvePathFromCwd } from "@effect-template/lib/usecases/path-helpers"
 import { autoSyncState } from "@effect-template/lib/usecases/state-repo"
 import { ensureStateDotDockerGitRepo } from "@effect-template/lib/usecases/state-repo-github"
 import { migrateLegacyOrchLayout } from "@effect-template/lib/usecases/auth-sync"
-import { Effect, Logger, Runtime } from "effect"
+import { Effect, Logger, Match, Runtime } from "effect"
 import * as Stream from "effect/Stream"
 import { spawn, type ChildProcess } from "node:child_process"
 
@@ -20,7 +26,7 @@ import type { GithubAuthLoginRequest } from "../api/contracts.js"
 import { ApiBadRequestError, ApiInternalError } from "../api/errors.js"
 
 type GithubRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
-type GithubSetupError = CommandFailedError | PlatformError
+type GithubSetupError = AuthError | CommandFailedError | PlatformError
 
 type PreparedGithubLogin = {
   readonly cwd: string
@@ -36,7 +42,6 @@ const githubLoginStreamSuccessMarker = "__DOCKER_GIT_GITHUB_LOGIN_STATUS__:ok"
 const githubLoginStreamErrorMarkerPrefix = "__DOCKER_GIT_GITHUB_LOGIN_STATUS__:error:"
 const githubTokenKey = "GITHUB_TOKEN"
 const githubTokenPrefix = "GITHUB_TOKEN__"
-const defaultGithubScopes = "repo,workflow,read:org"
 
 const ensureGithubOrchLayout = (
   cwd: string,
@@ -71,25 +76,22 @@ const buildGithubTokenKey = (label: string | null): string => {
 
 const labelFromKey = (key: string): string => key.startsWith(githubTokenPrefix) ? key.slice(githubTokenPrefix.length) : "default"
 
-const normalizeGithubScopes = (value: string | null | undefined): ReadonlyArray<string> => {
-  const raw = value?.trim() ?? ""
-  const input = raw.length === 0 ? defaultGithubScopes : raw
-  const scopes = input
-    .split(/[,\s]+/g)
-    .map((scope) => scope.trim())
-    .filter((scope) => scope.length > 0 && scope !== "delete_repo")
-  return scopes.length === 0 ? defaultGithubScopes.split(",") : scopes
-}
-
 const toApiError = (error: GithubSetupError): ApiBadRequestError | ApiInternalError =>
-  error._tag === "CommandFailedError"
-    ? new ApiBadRequestError({
-      message: `${error.command} failed (exit ${error.exitCode}).`
-    })
-    : new ApiInternalError({
-      message: String(error),
-      cause: error
-    })
+  Match.value(error).pipe(
+    Match.tag("AuthError", (authError) =>
+      new ApiBadRequestError({
+        message: authError.message
+      })),
+    Match.tag("CommandFailedError", (commandError) =>
+      new ApiBadRequestError({
+        message: `${commandError.command} failed (exit ${commandError.exitCode}).`
+      })),
+    Match.orElse((platformError) =>
+      new ApiInternalError({
+        message: String(platformError),
+        cause: platformError
+      }))
+  )
 
 const prepareGithubLogin = (
   request: GithubAuthLoginRequest
@@ -216,7 +218,10 @@ const finalizeGithubLogin = (
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
+    yield* _(Effect.log("Removing repository delete scope from GH auth token..."))
+    yield* _(runGithubRemoveDeleteRepoScope(prepared.cwd, prepared.accountPath).pipe(Effect.mapError(toApiError)))
     const token = yield* _(resolveGithubToken(prepared.cwd, prepared.accountPath).pipe(Effect.mapError(toApiError)))
+    yield* _(rejectGithubTokenWithRepositoryDeleteScope(token).pipe(Effect.mapError(toApiError)))
     yield* _(ensureEnvFile(fs, path, prepared.envPath).pipe(Effect.mapError(toApiError)))
     yield* _(persistGithubToken(fs, prepared.envPath, prepared.key, token).pipe(Effect.mapError(toApiError)))
     yield* _(ensureStateDotDockerGitRepo(token))

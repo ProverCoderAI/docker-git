@@ -16,6 +16,16 @@ describe("GitHub auth login stream", () => {
     expect(output.indexOf("State dir ready")).toBeLessThan(output.indexOf("GitHub login completed."))
   })
 
+  it("renders repository delete scope refresh output before the success marker", () => {
+    const output = renderGithubPostLoginOutput([
+      "Removing repository delete scope from GH auth token..."
+    ], "ok")
+
+    expect(output).toContain("Removing repository delete scope")
+    expect(output).toContain("__DOCKER_GIT_GITHUB_LOGIN_STATUS__:ok")
+    expect(output.indexOf("Removing repository delete scope")).toBeLessThan(output.indexOf("GitHub login completed."))
+  })
+
   it("renders post-login failure details before the failure marker", () => {
     const output = renderGithubPostLoginOutput([
       "GitHub login finished in browser, but post-login sync failed: git fetch failed"
