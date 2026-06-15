@@ -1,4 +1,10 @@
 import {
+  clearNativeBrowserCopyMenu,
+  prepareNativeBrowserCopyMenu,
+  type TerminalCopyTextarea,
+  type TerminalNativeCopyMenuHost
+} from "./terminal-copy-native-menu.js"
+import {
   createTerminalSelectionDragController,
   forceTerminalSelectionModifier,
   suppressTerminalMouseReport,
@@ -37,6 +43,7 @@ export type TerminalCopyInteractionTerminal = TerminalSelectionTarget & {
     readonly mouseTrackingMode: TerminalMouseTrackingMode
   }
   readonly onSelectionChange?: (handler: () => void) => TerminalDisposable
+  readonly textarea?: TerminalCopyTextarea | undefined
 }
 
 type TerminalCopyClipboardData = {
@@ -54,7 +61,7 @@ type TerminalCopyListenerRegistration = {
   (type: TerminalCopyMouseEventType, listener: (event: TerminalCopyMouseEvent) => void, options: true): void
 }
 
-type TerminalCopyInteractionHost = {
+type TerminalCopyInteractionHost = TerminalNativeCopyMenuHost & {
   readonly ownerDocument?: TerminalSelectionDragTarget | null
   readonly addEventListener: TerminalCopyListenerRegistration
   readonly removeEventListener: TerminalCopyListenerRegistration
@@ -176,6 +183,8 @@ class TerminalSelectionContextSnapshot {
 
   readonly has = (): boolean => this.selection.length > 0
 
+  readonly read = (): string => this.selection
+
   readonly refresh = (): boolean => {
     const selection = this.terminal.getSelection()
     if (selection.length === 0) {
@@ -246,6 +255,18 @@ class TerminalCopyInteractionController {
     hasActiveMouseTracking(this.args.terminal) &&
     (this.selectionContext.has() || this.args.terminal.hasSelection())
 
+  private readonly prepareNativeBrowserCopyMenu = (event: TerminalCopyMouseEvent): boolean =>
+    prepareNativeBrowserCopyMenu({
+      event,
+      host: this.args.host,
+      selection: this.selectionContext.read(),
+      textarea: this.args.terminal.textarea
+    })
+
+  private readonly clearNativeBrowserCopyMenu = (): void => {
+    clearNativeBrowserCopyMenu(this.args.terminal.textarea)
+  }
+
   private readonly shouldProtectSelectionContext = (event: TerminalCopyMouseEvent): boolean =>
     isSecondaryMouseButton(event) && this.hasProtectedSelectionContext()
 
@@ -263,18 +284,23 @@ class TerminalCopyInteractionController {
   private readonly onMouseDown = (event: TerminalCopyMouseEvent): void => {
     if (isPrimaryMouseButton(event)) {
       this.selectionContext.clear()
+      this.clearNativeBrowserCopyMenu()
     }
     const forceBrowserSelection = shouldForceBrowserTerminalSelection(event, this.args.terminal)
-    const forceSelectionContext = shouldForceTerminalSelectionContext(event, this.args.terminal)
+    const forceSelectionContext = this.shouldProtectSelectionContext(event)
     if (!forceBrowserSelection && !forceSelectionContext) {
       if (isSecondaryMouseButton(event)) {
         this.selectionContext.clear()
+        this.clearNativeBrowserCopyMenu()
       }
       return
     }
     forceTerminalSelectionModifier(event)
     if (forceSelectionContext) {
-      this.selectionContext.refresh()
+      if (this.args.terminal.hasSelection()) {
+        this.selectionContext.refresh()
+      }
+      this.prepareNativeBrowserCopyMenu(event)
       suppressTerminalMouseReport(event)
       return
     }
@@ -307,6 +333,7 @@ class TerminalCopyInteractionController {
     if (this.args.terminal.hasSelection()) {
       this.selectionContext.refresh()
     }
+    this.prepareNativeBrowserCopyMenu(event)
     suppressTerminalMouseReport(event)
   }
 
@@ -317,6 +344,7 @@ class TerminalCopyInteractionController {
       return
     }
     this.selectionContext.clear()
+    this.clearNativeBrowserCopyMenu()
     event.preventDefault()
     event.stopPropagation()
   }
@@ -326,6 +354,7 @@ class TerminalCopyInteractionController {
     this.selectionChangeDisposable = null
     this.selectionDrag.dispose()
     this.selectionContext.clear()
+    this.clearNativeBrowserCopyMenu()
     this.args.host.removeEventListener("mousedown", this.onMouseDown, true)
     this.args.host.removeEventListener("mouseup", this.onMouseUp, true)
     this.args.host.removeEventListener("contextmenu", this.onContextMenu, true)
