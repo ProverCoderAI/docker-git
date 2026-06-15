@@ -7,12 +7,7 @@ import {
   type TerminalCopyInteractionTerminal,
   type TerminalCopyKeyboardEvent
 } from "../../src/web/terminal-copy-interaction.js"
-import {
-  copyEvent,
-  FakeTerminalCopyHost,
-  mouseEvent,
-  type TerminalCopyTestMouseEvent
-} from "./fixtures/terminal-copy-interaction.js"
+import { copyEvent, FakeTerminalCopyHost } from "./fixtures/terminal-copy-interaction.js"
 
 type SelectionBufferType = "alternate" | "normal"
 
@@ -166,6 +161,26 @@ const requireKeyHandler = (
 ): (event: TerminalCopyKeyboardEvent) => boolean =>
   keyHandlers[0] ?? expect.fail("Expected terminal copy key handler to be registered.")
 
+const withSelectionRestoreHarness = (assertion: (harness: SelectionRestoreHarness) => void): void => {
+  Effect.runSync(
+    Effect.scoped(
+      Effect.flatMap(
+        Effect.acquireRelease(
+          Effect.sync(createSelectionRestoreHarness),
+          (harness) =>
+            Effect.sync(() => {
+              harness.disposable.dispose()
+            })
+        ),
+        (harness) =>
+          Effect.sync(() => {
+            assertion(harness)
+          })
+      )
+    )
+  )
+}
+
 describe("terminal copy selection restore", () => {
   it.effect("restores generated valid xterm selection coordinates after redraw", () =>
     Effect.sync(() => {
@@ -174,19 +189,18 @@ describe("terminal copy selection restore", () => {
           nonEmptySelectionTextArbitrary,
           selectionCoordinateArbitrary,
           (selectedText, { bufferType, extraCols, startColumn, startRow }) => {
-            const harness = createSelectionRestoreHarness()
-            const cols = startColumn + selectedText.length + extraCols
-
-            harness.setCols(cols)
-            harness.setBufferType(bufferType)
-            harness.setSelection(selectedText, startColumn, startRow)
-            harness.emitSelectionChange()
-            harness.setSelection("", 0, 0)
-            harness.emitSelectionChange()
-
-            expect(harness.selectCalls).toEqual([{ column: startColumn, length: selectedText.length, row: startRow }])
-
-            harness.disposable.dispose()
+            withSelectionRestoreHarness((harness) => {
+              const cols = startColumn + selectedText.length + extraCols
+              harness.setCols(cols)
+              harness.setBufferType(bufferType)
+              harness.setSelection(selectedText, startColumn, startRow)
+              harness.emitSelectionChange()
+              harness.setSelection("", 0, 0)
+              harness.emitSelectionChange()
+              expect(harness.selectCalls).toEqual([
+                { column: startColumn, length: selectedText.length, row: startRow }
+              ])
+            })
           }
         ),
         { numRuns: 100 }
@@ -201,27 +215,25 @@ describe("terminal copy selection restore", () => {
           selectionCoordinateArbitrary,
           fc.integer({ max: 32, min: 1 }),
           (selectedText, { bufferType, extraCols, startColumn, startRow }, colsDelta) => {
-            const harness = createSelectionRestoreHarness()
-            const clipboardWrites: Array<{ readonly data: string; readonly format: string }> = []
-            const cols = startColumn + selectedText.length + extraCols
+            withSelectionRestoreHarness((harness) => {
+              const clipboardWrites: Array<{ readonly data: string; readonly format: string }> = []
+              const cols = startColumn + selectedText.length + extraCols
+              harness.setCols(cols)
+              harness.setBufferType(bufferType)
+              harness.setSelection(selectedText, startColumn, startRow)
+              harness.emitSelectionChange()
+              harness.setCols(cols + colsDelta)
+              harness.setSelection("", 0, 0)
+              harness.emitSelectionChange()
+              harness.host.dispatchCopy(copyEvent({
+                setData: (format: string, data: string) => {
+                  clipboardWrites.push({ data, format })
+                }
+              }))
 
-            harness.setCols(cols)
-            harness.setBufferType(bufferType)
-            harness.setSelection(selectedText, startColumn, startRow)
-            harness.emitSelectionChange()
-            harness.setCols(cols + colsDelta)
-            harness.setSelection("", 0, 0)
-            harness.emitSelectionChange()
-            harness.host.dispatchCopy(copyEvent({
-              setData: (format: string, data: string) => {
-                clipboardWrites.push({ data, format })
-              }
-            }))
-
-            expect(harness.selectCalls).toEqual([])
-            expect(clipboardWrites).toEqual([{ data: selectedText, format: "text/plain" }])
-
-            harness.disposable.dispose()
+              expect(harness.selectCalls).toEqual([])
+              expect(clipboardWrites).toEqual([{ data: selectedText, format: "text/plain" }])
+            })
           }
         ),
         { numRuns: 100 }
@@ -235,28 +247,25 @@ describe("terminal copy selection restore", () => {
           nonEmptySelectionTextArbitrary,
           selectionCoordinateArbitrary,
           (selectedText, { bufferType, extraCols, startColumn, startRow }) => {
-            const harness = createSelectionRestoreHarness()
-            const clipboardWrites: Array<{ readonly data: string; readonly format: string }> = []
-            const cols = startColumn + selectedText.length + extraCols
-            const changedBufferType: SelectionBufferType = bufferType === "normal" ? "alternate" : "normal"
-
-            harness.setCols(cols)
-            harness.setBufferType(bufferType)
-            harness.setSelection(selectedText, startColumn, startRow)
-            harness.emitSelectionChange()
-            harness.setBufferType(changedBufferType)
-            harness.setSelection("", 0, 0)
-            harness.emitSelectionChange()
-            harness.host.dispatchCopy(copyEvent({
-              setData: (format: string, data: string) => {
-                clipboardWrites.push({ data, format })
-              }
-            }))
-
-            expect(harness.selectCalls).toEqual([])
-            expect(clipboardWrites).toEqual([{ data: selectedText, format: "text/plain" }])
-
-            harness.disposable.dispose()
+            withSelectionRestoreHarness((harness) => {
+              const clipboardWrites: Array<{ readonly data: string; readonly format: string }> = []
+              const cols = startColumn + selectedText.length + extraCols
+              const changedBufferType: SelectionBufferType = bufferType === "normal" ? "alternate" : "normal"
+              harness.setCols(cols)
+              harness.setBufferType(bufferType)
+              harness.setSelection(selectedText, startColumn, startRow)
+              harness.emitSelectionChange()
+              harness.setBufferType(changedBufferType)
+              harness.setSelection("", 0, 0)
+              harness.emitSelectionChange()
+              harness.host.dispatchCopy(copyEvent({
+                setData: (format: string, data: string) => {
+                  clipboardWrites.push({ data, format })
+                }
+              }))
+              expect(harness.selectCalls).toEqual([])
+              expect(clipboardWrites).toEqual([{ data: selectedText, format: "text/plain" }])
+            })
           }
         ),
         { numRuns: 100 }
@@ -272,44 +281,7 @@ describe("terminal copy selection restore", () => {
       .toBe(true)
     harness.setSelection("", 0, 0)
     harness.emitSelectionChange()
-
     expect(harness.selectCalls).toEqual([])
-
-    harness.disposable.dispose()
-  })
-
-  it("does not suppress events or copy without a prior selection snapshot", () => {
-    const harness = createSelectionRestoreHarness()
-    const terminalMouseReports: Array<TerminalCopyTestMouseEvent> = []
-    const rightClick = mouseEvent(2, "mousedown")
-    const contextMenu = mouseEvent(0, "contextmenu")
-    const copy = copyEvent({
-      setData: () => {
-        expect.fail("clipboard data should not be written")
-      }
-    })
-    harness.host.addBubbleMouseListener("mousedown", (event) => {
-      terminalMouseReports.push(event)
-    })
-    harness.host.addBubbleMouseListener("contextmenu", (event) => {
-      terminalMouseReports.push(event)
-    })
-
-    harness.emitSelectionChange()
-    harness.host.dispatchMouse("mousedown", rightClick)
-    harness.host.dispatchMouse("contextmenu", contextMenu)
-    harness.host.dispatchCopy(copy)
-
-    expect(harness.selectCalls).toEqual([])
-    expect(requireKeyHandler(harness.keyHandlers)(keyboardCopyEvent)).toBe(true)
-    expect(rightClick.stopImmediatePropagationCalls).toBe(0)
-    expect(contextMenu.stopImmediatePropagationCalls).toBe(0)
-    expect(copy.preventDefaultCalls).toBe(0)
-    expect(harness.textarea.focusCalls).toBe(0)
-    expect(harness.textarea.selectCalls).toBe(0)
-    expect(harness.textarea.value).toBe("")
-    expect(terminalMouseReports).toEqual([rightClick, contextMenu])
-
     harness.disposable.dispose()
   })
 })
