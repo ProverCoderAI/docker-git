@@ -1,5 +1,12 @@
 # @effect-template/api
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`77b8694`](https://github.com/ProverCoderAI/docker-git/commit/77b8694d73fdf8383d5089f42dc33e131d69d2b2)]:
+  - @prover-coder-ai/docker-git-terminal@0.1.1
+
 ## 0.2.0
 
 ### Minor Changes

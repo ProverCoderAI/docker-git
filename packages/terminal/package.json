@@ -1,6 +1,6 @@
 {
   "name": "@prover-coder-ai/docker-git-terminal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Shared docker-git terminal contracts, core logic, and runtime adapters",
   "main": "dist/index.js",
