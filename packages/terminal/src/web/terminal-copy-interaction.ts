@@ -17,6 +17,10 @@ type TerminalSelectionTarget = {
   readonly hasSelection: () => boolean
 }
 
+type TerminalDisposable = {
+  readonly dispose: () => void
+}
+
 export type TerminalCopyKeyboardEvent = {
   readonly altKey: boolean
   readonly ctrlKey: boolean
@@ -32,6 +36,7 @@ export type TerminalCopyInteractionTerminal = TerminalSelectionTarget & {
   readonly modes: {
     readonly mouseTrackingMode: TerminalMouseTrackingMode
   }
+  readonly onSelectionChange?: (handler: () => void) => TerminalDisposable
 }
 
 type TerminalCopyClipboardData = {
@@ -197,6 +202,7 @@ class TerminalSelectionContextSnapshot {
 class TerminalCopyInteractionController {
   private readonly selectionContext: TerminalSelectionContextSnapshot
   private readonly selectionDrag: ReturnType<typeof createTerminalSelectionDragController>
+  private selectionChangeDisposable: TerminalDisposable | null = null
 
   constructor(private readonly args: TerminalCopyInteractionArgs) {
     this.selectionContext = new TerminalSelectionContextSnapshot(args.terminal)
@@ -205,6 +211,7 @@ class TerminalCopyInteractionController {
 
   readonly attach = (): { readonly dispose: () => void } => {
     this.args.terminal.attachCustomKeyEventHandler?.(this.onTerminalKeyEvent)
+    this.selectionChangeDisposable = this.args.terminal.onSelectionChange?.(this.onTerminalSelectionChange) ?? null
     this.args.host.addEventListener("mousedown", this.onMouseDown, true)
     this.args.host.addEventListener("mouseup", this.onMouseUp, true)
     this.args.host.addEventListener("contextmenu", this.onContextMenu, true)
@@ -212,8 +219,28 @@ class TerminalCopyInteractionController {
     return { dispose: this.dispose }
   }
 
+  private readonly shouldLetBrowserHandleCopyShortcut = (event: TerminalCopyKeyboardEvent): boolean =>
+    shouldLetBrowserHandleTerminalCopyShortcut(event, this.args.terminal) ||
+    (isKeyboardCopyShortcut(event) && this.selectionContext.has())
+
   private readonly onTerminalKeyEvent = (event: TerminalCopyKeyboardEvent): boolean =>
-    !shouldLetBrowserHandleTerminalCopyShortcut(event, this.args.terminal)
+    !this.shouldLetBrowserHandleCopyShortcut(event)
+
+  private readonly onTerminalSelectionChange = (): void => {
+    // CHANGE: keep a copyable snapshot before terminal redraws can drop xterm's live selection.
+    // WHY: Claude Code periodically repaints the TUI; xterm selection is buffer-bound and may vanish during repaint.
+    // QUOTE(ТЗ): "когда очистился выделение бы не спадало"
+    // REF: user-message-2026-06-15-terminal-redraw-selection
+    // SOURCE: n/a
+    // FORMAT THEOREM: selected(t) before redraw(t) => cachedSelection(t)
+    // PURITY: SHELL
+    // EFFECT: reads terminal.hasSelection() and terminal.getSelection().
+    // INVARIANT: empty redraw selection events do not erase the last user-created non-empty selection snapshot.
+    // COMPLEXITY: O(n)/O(1) where n = selected text length.
+    if (this.args.terminal.hasSelection()) {
+      this.selectionContext.refresh()
+    }
+  }
 
   private readonly hasProtectedSelectionContext = (): boolean =>
     hasActiveMouseTracking(this.args.terminal) &&
@@ -295,6 +322,8 @@ class TerminalCopyInteractionController {
   }
 
   private readonly dispose = (): void => {
+    this.selectionChangeDisposable?.dispose()
+    this.selectionChangeDisposable = null
     this.selectionDrag.dispose()
     this.selectionContext.clear()
     this.args.host.removeEventListener("mousedown", this.onMouseDown, true)
