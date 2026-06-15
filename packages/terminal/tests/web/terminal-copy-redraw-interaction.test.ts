@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
 
 import {
   attachTerminalCopyInteraction,
@@ -13,7 +14,7 @@ const keyboardCopyEvent: TerminalCopyKeyboardEvent = {
   key: "c",
   metaKey: false,
   type: "keydown"
-}
+} as const
 
 class FakeTerminalCopyTextarea {
   focusCalls = 0
@@ -60,94 +61,95 @@ class FakeTerminalCopyScreenHost extends FakeTerminalCopyHost {
 }
 
 describe("terminal copy redraw interaction", () => {
-  it("keeps selection snapshot copyable after terminal redraw clears live selection", () => {
-    let terminalSelection = ""
-    const keyHandlers: Array<(event: TerminalCopyKeyboardEvent) => boolean> = []
-    const selectionChangeHandlers: Array<() => void> = []
-    const clipboardWrites: Array<{ readonly data: string; readonly format: string }> = []
-    const host = new FakeTerminalCopyScreenHost(100, 200)
-    const textarea = new FakeTerminalCopyTextarea()
-    const terminal: TerminalCopyInteractionTerminal = {
-      attachCustomKeyEventHandler: (handler) => {
-        keyHandlers.push(handler)
-      },
-      getSelection: () => terminalSelection,
-      hasSelection: () => terminalSelection.length > 0,
-      modes: { mouseTrackingMode: "any" },
-      onSelectionChange: (handler) => {
-        selectionChangeHandlers.push(handler)
-        return {
-          dispose: () => {
-            const handlerIndex = selectionChangeHandlers.indexOf(handler)
-            if (handlerIndex !== -1) {
-              selectionChangeHandlers.splice(handlerIndex, 1)
+  it.effect("keeps selection snapshot copyable after terminal redraw clears live selection", () =>
+    Effect.sync(() => {
+      let terminalSelection = ""
+      const keyHandlers: Array<(event: TerminalCopyKeyboardEvent) => boolean> = []
+      const selectionChangeHandlers: Array<() => void> = []
+      const clipboardWrites: Array<{ readonly data: string; readonly format: string }> = []
+      const host = new FakeTerminalCopyScreenHost(100, 200)
+      const textarea = new FakeTerminalCopyTextarea()
+      const terminal: TerminalCopyInteractionTerminal = {
+        attachCustomKeyEventHandler: (handler) => {
+          keyHandlers.push(handler)
+        },
+        getSelection: () => terminalSelection,
+        hasSelection: () => terminalSelection.length > 0,
+        modes: { mouseTrackingMode: "any" },
+        onSelectionChange: (handler) => {
+          selectionChangeHandlers.push(handler)
+          return {
+            dispose: () => {
+              const handlerIndex = selectionChangeHandlers.indexOf(handler)
+              if (handlerIndex !== -1) {
+                selectionChangeHandlers.splice(handlerIndex, 1)
+              }
             }
           }
-        }
-      },
-      textarea
-    }
-    const disposable = attachTerminalCopyInteraction({ host, terminal })
-
-    terminalSelection = "selected before redraw"
-    for (const handler of selectionChangeHandlers) {
-      handler()
-    }
-    terminalSelection = ""
-
-    expect(keyHandlers).toHaveLength(1)
-    const handleKey = keyHandlers[0] ?? expect.fail("Expected terminal copy key handler to be registered.")
-    expect(handleKey(keyboardCopyEvent)).toBe(false)
-
-    const rightClick = mouseEvent(2, "mousedown", {
-      clientX: 150,
-      clientY: 260
-    })
-    const contextMenu = mouseEvent(0, "contextmenu", {
-      clientX: 155,
-      clientY: 265
-    })
-    const copy = copyEvent({
-      setData: (format: string, data: string) => {
-        clipboardWrites.push({ data, format })
+        },
+        textarea
       }
-    })
-    host.dispatchMouse("mousedown", rightClick)
+      const disposable = attachTerminalCopyInteraction({ host, terminal })
 
-    expect(rightClick.shiftKey).toBe(true)
-    expect(rightClick.preventDefaultCalls).toBe(0)
-    expect(rightClick.stopImmediatePropagationCalls).toBe(1)
-    expect(textarea.value).toBe("selected before redraw")
-    expect(textarea.focusCalls).toBe(1)
-    expect(textarea.selectCalls).toBe(1)
+      terminalSelection = "selected before redraw"
+      for (const handler of selectionChangeHandlers) {
+        handler()
+      }
+      terminalSelection = ""
 
-    host.dispatchMouse("contextmenu", contextMenu)
+      expect(keyHandlers).toHaveLength(1)
+      const handleKey = keyHandlers[0] ?? expect.fail("Expected terminal copy key handler to be registered.")
+      expect(handleKey(keyboardCopyEvent)).toBe(false)
 
-    expect(contextMenu.shiftKey).toBe(true)
-    expect(contextMenu.preventDefaultCalls).toBe(0)
-    expect(contextMenu.stopImmediatePropagationCalls).toBe(1)
-    expect(contextMenu.stopPropagationCalls).toBeGreaterThanOrEqual(1)
-    expect(textarea.value).toBe("selected before redraw")
-    expect(textarea.focusCalls).toBe(2)
-    expect(textarea.selectCalls).toBe(2)
-    expect(textarea.style).toEqual({
-      height: "20px",
-      left: "45px",
-      top: "55px",
-      width: "20px",
-      zIndex: "1000"
-    })
+      const rightClick = mouseEvent(2, "mousedown", {
+        clientX: 150,
+        clientY: 260
+      })
+      const contextMenu = mouseEvent(0, "contextmenu", {
+        clientX: 155,
+        clientY: 265
+      })
+      const copy = copyEvent({
+        setData: (format: string, data: string) => {
+          clipboardWrites.push({ data, format })
+        }
+      })
+      host.dispatchMouse("mousedown", rightClick)
 
-    host.dispatchCopy(copy)
+      expect(rightClick.shiftKey).toBe(true)
+      expect(rightClick.preventDefaultCalls).toBe(0)
+      expect(rightClick.stopImmediatePropagationCalls).toBe(1)
+      expect(textarea.value).toBe("selected before redraw")
+      expect(textarea.focusCalls).toBe(1)
+      expect(textarea.selectCalls).toBe(1)
 
-    expect(clipboardWrites).toEqual([{ data: "selected before redraw", format: "text/plain" }])
-    expect(copy.preventDefaultCalls).toBe(1)
-    expect(copy.stopPropagationCalls).toBe(1)
-    expect(textarea.value).toBe("")
-    expect(selectionChangeHandlers).toHaveLength(1)
-    expect(handleKey(keyboardCopyEvent)).toBe(true)
+      host.dispatchMouse("contextmenu", contextMenu)
 
-    disposable.dispose()
-    expect(selectionChangeHandlers).toHaveLength(0)
-  })
+      expect(contextMenu.shiftKey).toBe(true)
+      expect(contextMenu.preventDefaultCalls).toBe(0)
+      expect(contextMenu.stopImmediatePropagationCalls).toBe(1)
+      expect(contextMenu.stopPropagationCalls).toBeGreaterThanOrEqual(1)
+      expect(textarea.value).toBe("selected before redraw")
+      expect(textarea.focusCalls).toBe(2)
+      expect(textarea.selectCalls).toBe(2)
+      expect(textarea.style).toEqual({
+        height: "20px",
+        left: "45px",
+        top: "55px",
+        width: "20px",
+        zIndex: "1000"
+      })
+
+      host.dispatchCopy(copy)
+
+      expect(clipboardWrites).toEqual([{ data: "selected before redraw", format: "text/plain" }])
+      expect(copy.preventDefaultCalls).toBe(1)
+      expect(copy.stopPropagationCalls).toBe(1)
+      expect(textarea.value).toBe("")
+      expect(selectionChangeHandlers).toHaveLength(1)
+      expect(handleKey(keyboardCopyEvent)).toBe(true)
+
+      disposable.dispose()
+      expect(selectionChangeHandlers).toHaveLength(0)
+    }))
 })

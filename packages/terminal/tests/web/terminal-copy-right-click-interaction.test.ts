@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
 import * as fc from "fast-check"
 
 import {
@@ -124,31 +125,33 @@ const expectEmptySelectionPassthroughInvariant = (flow: RightClickCopyHarness): 
 }
 
 describe("terminal copy right-click interaction", () => {
-  it("preserves generated right-click copy selections while mouse tracking is active", () => {
-    fc.assert(
-      fc.property(fc.string({ minLength: 1 }), (selectedText) => {
-        const { flow } = createMutableSelectionFlow(selectedText)
+  it.effect("preserves generated right-click copy selections while mouse tracking is active", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(fc.string({ minLength: 1 }), (selectedText) => {
+          const { flow } = createMutableSelectionFlow(selectedText)
 
-        dispatchRightClickCopyFlow(flow)
-        expectCopiedSelectionInvariant(flow, selectedText)
-        flow.disposable.dispose()
-      }),
-      { numRuns: 100 }
-    )
-  })
+          dispatchRightClickCopyFlow(flow)
+          expectCopiedSelectionInvariant(flow, selectedText)
+          flow.disposable.dispose()
+        }),
+        { numRuns: 100 }
+      )
+    }))
 
-  it("preserves generated empty-selection right-click passthrough", () => {
-    fc.assert(
-      fc.property(fc.constant(""), (selectedText) => {
-        const flow = createStaticSelectionFlow(selectedText)
+  it.effect("preserves generated empty-selection right-click passthrough", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(fc.constant(""), (selectedText) => {
+          const flow = createStaticSelectionFlow(selectedText)
 
-        dispatchRightClickCopyFlow(flow)
-        expectEmptySelectionPassthroughInvariant(flow)
-        flow.disposable.dispose()
-      }),
-      { numRuns: 10 }
-    )
-  })
+          dispatchRightClickCopyFlow(flow)
+          expectEmptySelectionPassthroughInvariant(flow)
+          flow.disposable.dispose()
+        }),
+        { numRuns: 10 }
+      )
+    }))
 
   it("keeps right-click selection handling one-shot", () => {
     const documentTarget = new FakeTerminalCopyEventTarget()
@@ -205,29 +208,34 @@ describe("terminal copy right-click interaction", () => {
     flow.disposable.dispose()
   })
 
-  it("keeps snapshot text copyable when live selection clears before context menu", () => {
-    const selectedText = "snapshot line"
-    let terminalSelection = selectedText
-    const flow = createRightClickCopyHarness({
-      getSelection: () => terminalSelection,
-      hasSelection: () => terminalSelection.length > 0,
-      modes: { mouseTrackingMode: "any" }
-    })
+  it.effect("keeps generated snapshot text copyable when live selection clears before context menu", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(fc.string({ maxLength: 64, minLength: 1 }), (selectedText) => {
+          let terminalSelection = selectedText
+          const flow = createRightClickCopyHarness({
+            getSelection: () => terminalSelection,
+            hasSelection: () => terminalSelection.length > 0,
+            modes: { mouseTrackingMode: "any" }
+          })
 
-    flow.host.dispatchMouse("mousedown", flow.rightClick)
-    terminalSelection = ""
-    flow.host.dispatchMouse("contextmenu", flow.contextMenu)
-    flow.host.dispatchCopy(flow.copy)
+          flow.host.dispatchMouse("mousedown", flow.rightClick)
+          terminalSelection = ""
+          flow.host.dispatchMouse("contextmenu", flow.contextMenu)
+          flow.host.dispatchCopy(flow.copy)
 
-    expect(flow.contextMenu.shiftKey).toBe(true)
-    expect(flow.contextMenu.preventDefaultCalls).toBe(0)
-    expect(flow.contextMenu.stopImmediatePropagationCalls).toBe(1)
-    expect(flow.contextMenu.stopPropagationCalls).toBeGreaterThanOrEqual(1)
-    expect(flow.contextMenuEvents).toEqual([])
-    expectCopiedSelectionInvariant(flow, selectedText)
+          expect(flow.contextMenu.shiftKey).toBe(true)
+          expect(flow.contextMenu.preventDefaultCalls).toBe(0)
+          expect(flow.contextMenu.stopImmediatePropagationCalls).toBe(1)
+          expect(flow.contextMenu.stopPropagationCalls).toBeGreaterThanOrEqual(1)
+          expect(flow.contextMenuEvents).toEqual([])
+          expectCopiedSelectionInvariant(flow, selectedText)
 
-    flow.disposable.dispose()
-  })
+          flow.disposable.dispose()
+        }),
+        { numRuns: 100 }
+      )
+    }))
 
   it("does not suppress right-click release events without a terminal selection", () => {
     const flow = createStaticSelectionFlow("")

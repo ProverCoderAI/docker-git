@@ -1,4 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
+import * as fc from "fast-check"
 
 import {
   attachTerminalCopyInteraction,
@@ -43,7 +45,16 @@ const keyboardCopyEvent: TerminalCopyKeyboardEvent = {
   key: "c",
   metaKey: false,
   type: "keydown"
-}
+} as const
+
+const nonEmptySelectionTextArbitrary = fc.string({ maxLength: 32, minLength: 1 })
+
+const selectionCoordinateArbitrary = fc.record({
+  bufferType: fc.constantFrom<SelectionBufferType>("alternate", "normal"),
+  extraCols: fc.integer({ max: 128, min: 0 }),
+  startColumn: fc.integer({ max: 32, min: 0 }),
+  startRow: fc.integer({ max: 98, min: 0 })
+})
 
 class FakeTerminalRestoreTextarea {
   focusCalls = 0
@@ -156,18 +167,101 @@ const requireKeyHandler = (
   keyHandlers[0] ?? expect.fail("Expected terminal copy key handler to be registered.")
 
 describe("terminal copy selection restore", () => {
-  it("restores xterm selection coordinates after redraw clears live selection", () => {
-    const harness = createSelectionRestoreHarness()
+  it.effect("restores generated valid xterm selection coordinates after redraw", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(
+          nonEmptySelectionTextArbitrary,
+          selectionCoordinateArbitrary,
+          (selectedText, { bufferType, extraCols, startColumn, startRow }) => {
+            const harness = createSelectionRestoreHarness()
+            const cols = startColumn + selectedText.length + extraCols
 
-    harness.setSelection("selected text", 3, 5)
-    harness.emitSelectionChange()
-    harness.setSelection("", 0, 0)
-    harness.emitSelectionChange()
+            harness.setCols(cols)
+            harness.setBufferType(bufferType)
+            harness.setSelection(selectedText, startColumn, startRow)
+            harness.emitSelectionChange()
+            harness.setSelection("", 0, 0)
+            harness.emitSelectionChange()
 
-    expect(harness.selectCalls).toEqual([{ column: 3, length: 13, row: 5 }])
+            expect(harness.selectCalls).toEqual([{ column: startColumn, length: selectedText.length, row: startRow }])
 
-    harness.disposable.dispose()
-  })
+            harness.disposable.dispose()
+          }
+        ),
+        { numRuns: 100 }
+      )
+    }))
+
+  it.effect("keeps generated copy snapshots but skips reselect after column changes", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(
+          nonEmptySelectionTextArbitrary,
+          selectionCoordinateArbitrary,
+          fc.integer({ max: 32, min: 1 }),
+          (selectedText, { bufferType, extraCols, startColumn, startRow }, colsDelta) => {
+            const harness = createSelectionRestoreHarness()
+            const clipboardWrites: Array<{ readonly data: string; readonly format: string }> = []
+            const cols = startColumn + selectedText.length + extraCols
+
+            harness.setCols(cols)
+            harness.setBufferType(bufferType)
+            harness.setSelection(selectedText, startColumn, startRow)
+            harness.emitSelectionChange()
+            harness.setCols(cols + colsDelta)
+            harness.setSelection("", 0, 0)
+            harness.emitSelectionChange()
+            harness.host.dispatchCopy(copyEvent({
+              setData: (format: string, data: string) => {
+                clipboardWrites.push({ data, format })
+              }
+            }))
+
+            expect(harness.selectCalls).toEqual([])
+            expect(clipboardWrites).toEqual([{ data: selectedText, format: "text/plain" }])
+
+            harness.disposable.dispose()
+          }
+        ),
+        { numRuns: 100 }
+      )
+    }))
+
+  it.effect("keeps generated copy snapshots but skips reselect after buffer type changes", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(
+          nonEmptySelectionTextArbitrary,
+          selectionCoordinateArbitrary,
+          (selectedText, { bufferType, extraCols, startColumn, startRow }) => {
+            const harness = createSelectionRestoreHarness()
+            const clipboardWrites: Array<{ readonly data: string; readonly format: string }> = []
+            const cols = startColumn + selectedText.length + extraCols
+            const changedBufferType: SelectionBufferType = bufferType === "normal" ? "alternate" : "normal"
+
+            harness.setCols(cols)
+            harness.setBufferType(bufferType)
+            harness.setSelection(selectedText, startColumn, startRow)
+            harness.emitSelectionChange()
+            harness.setBufferType(changedBufferType)
+            harness.setSelection("", 0, 0)
+            harness.emitSelectionChange()
+            harness.host.dispatchCopy(copyEvent({
+              setData: (format: string, data: string) => {
+                clipboardWrites.push({ data, format })
+              }
+            }))
+
+            expect(harness.selectCalls).toEqual([])
+            expect(clipboardWrites).toEqual([{ data: selectedText, format: "text/plain" }])
+
+            harness.disposable.dispose()
+          }
+        ),
+        { numRuns: 100 }
+      )
+    }))
 
   it("does not restore xterm selection after intentional keyboard input clears the snapshot", () => {
     const harness = createSelectionRestoreHarness()
@@ -176,42 +270,6 @@ describe("terminal copy selection restore", () => {
     harness.emitSelectionChange()
     expect(requireKeyHandler(harness.keyHandlers)({ ...keyboardCopyEvent, ctrlKey: false, key: "Enter" }))
       .toBe(true)
-    harness.setSelection("", 0, 0)
-    harness.emitSelectionChange()
-
-    expect(harness.selectCalls).toEqual([])
-
-    harness.disposable.dispose()
-  })
-
-  it("keeps copy snapshot but skips reselect when terminal column count changes", () => {
-    const harness = createSelectionRestoreHarness()
-    const clipboardWrites: Array<{ readonly data: string; readonly format: string }> = []
-
-    harness.setSelection("snapshot", 8, 2)
-    harness.emitSelectionChange()
-    harness.setCols(81)
-    harness.setSelection("", 0, 0)
-    harness.emitSelectionChange()
-    harness.host.dispatchCopy(copyEvent({
-      setData: (format: string, data: string) => {
-        clipboardWrites.push({ data, format })
-      }
-    }))
-
-    expect(harness.selectCalls).toEqual([])
-    expect(clipboardWrites).toEqual([{ data: "snapshot", format: "text/plain" }])
-
-    harness.disposable.dispose()
-  })
-
-  it("skips reselect when the active terminal buffer type changes", () => {
-    const harness = createSelectionRestoreHarness()
-
-    harness.setSelection("alternate text", 2, 7)
-    harness.setBufferType("alternate")
-    harness.emitSelectionChange()
-    harness.setBufferType("normal")
     harness.setSelection("", 0, 0)
     harness.emitSelectionChange()
 
