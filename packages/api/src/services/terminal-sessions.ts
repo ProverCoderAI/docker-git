@@ -111,6 +111,8 @@ const terminalSessionStateRelativePath: ReadonlyArray<string> = [".orch", "state
 const tmuxMissingMessage =
   "tmux is not available in this project container. Apply docker-git config or rebuild the project image so tmux is installed, then reopen this SSH terminal session."
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+const tmuxInitialScrollbackLines = 10_000
+const tmuxInitialScrollbackMaxBytes = 1024 * 1024
 
 const DurableTerminalSessionSchema = Schema.Struct({
   id: Schema.String,
@@ -901,6 +903,22 @@ const renderTmuxRightClickBindingCommands = (): ReadonlyArray<string> => [
   ...tmuxRightClickSuppressBindings.map(renderTmuxRightClickSuppressBinding)
 ]
 
+// CHANGE: Build a bounded tmux pane-history preload before browser attach.
+// WHY: Browser scrolling must use xterm's local scrollback instead of sending wheel input to tmux.
+// QUOTE(ТЗ): "при открытии страницы он загружает сразу например историю из последних 10к символов"
+// REF: user-message-2026-06-15-native-terminal-scrollback
+// SOURCE: n/a
+// FORMAT THEOREM: attach(tmux) -> preload(suffix(history(tmux)), <= tmuxInitialScrollbackMaxBytes)
+// PURITY: CORE
+// INVARIANT: emitted command is bounded and shell-quotes the tmux target.
+// COMPLEXITY: O(1)/O(1)
+const renderTmuxInitialScrollbackCommand = (tmuxName: string): string =>
+  [
+    `tmux capture-pane -p -J -S -${tmuxInitialScrollbackLines} -t ${shellQuote(tmuxName)} 2>/dev/null`,
+    `tail -c ${tmuxInitialScrollbackMaxBytes}`,
+    "sed 's/$/\\r/'"
+  ].join(" | ") + " || true"
+
 const writeBufferToProjectContainer = (
   containerName: string,
   containerPath: string,
@@ -1119,6 +1137,7 @@ export const renderTmuxAttachCommand = (
     `tmux set-option -t ${shellQuote(args.tmuxName)} history-limit 50000 >/dev/null 2>&1 || true`,
     `tmux set-option -t ${shellQuote(args.tmuxName)} mouse on >/dev/null 2>&1 || true`,
     ...renderTmuxRightClickBindingCommands(),
+    renderTmuxInitialScrollbackCommand(args.tmuxName),
     `exec tmux attach-session -t ${shellQuote(args.tmuxName)}`
   ].join("; ")
   return `bash --noprofile --norc -lc ${shellQuote(script)}`

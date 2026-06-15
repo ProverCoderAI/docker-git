@@ -276,6 +276,11 @@ describe("terminal sessions service", () => {
     expect(command).toContain("unbind-key -T root M-MouseDown3StatusRight")
     expect(command).toContain("unbind-key -T root M-MouseDown3Border")
     expect(command).not.toContain("display-menu")
+    expect(command).toContain("tmux capture-pane")
+    expect(command).toContain("-S -10000")
+    expect(command).toContain("tail -c 1048576")
+    expect(command).toContain("sed")
+    expect(command).toContain("s/$/\\r/")
     expect(command).toContain("tmux attach-session -t")
     expect(command).toContain("docker-git-session-1")
     expect(command).toContain("/home/dev/project with spaces")
@@ -287,6 +292,7 @@ describe("terminal sessions service", () => {
     const sessionHistoryLimitIndex = command.lastIndexOf("history-limit 50000")
     const mouseOnIndex = command.indexOf("mouse on")
     const rightClickBindingIndex = command.indexOf("MouseDown3Pane")
+    const initialScrollbackIndex = command.indexOf("tmux capture-pane")
     const attachSessionIndex = command.indexOf("tmux attach-session -t")
 
     expect(startServerIndex).toBeGreaterThanOrEqual(0)
@@ -296,6 +302,7 @@ describe("terminal sessions service", () => {
     expect(sessionHistoryLimitIndex).toBeGreaterThanOrEqual(0)
     expect(mouseOnIndex).toBeGreaterThanOrEqual(0)
     expect(rightClickBindingIndex).toBeGreaterThan(mouseOnIndex)
+    expect(initialScrollbackIndex).toBeGreaterThan(rightClickBindingIndex)
     expect(attachSessionIndex).toBeGreaterThanOrEqual(0)
     expect(startServerIndex).toBeLessThan(globalHistoryLimitIndex)
     expect(globalHistoryLimitIndex).toBeLessThan(newSessionIndex)
@@ -303,7 +310,8 @@ describe("terminal sessions service", () => {
     expect(statusOffIndex).toBeLessThan(sessionHistoryLimitIndex)
     expect(sessionHistoryLimitIndex).toBeLessThan(mouseOnIndex)
     expect(mouseOnIndex).toBeLessThan(rightClickBindingIndex)
-    expect(rightClickBindingIndex).toBeLessThan(attachSessionIndex)
+    expect(rightClickBindingIndex).toBeLessThan(initialScrollbackIndex)
+    expect(initialScrollbackIndex).toBeLessThan(attachSessionIndex)
   })
 
   it("fails before creating a durable session when tmux is unavailable", async () => {
