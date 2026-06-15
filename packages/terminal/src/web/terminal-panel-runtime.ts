@@ -21,6 +21,7 @@ import type {
   TerminalSocketConnectArgs,
   TerminalSocketRef
 } from "./terminal-panel-runtime-types.js"
+import { shouldAllowTerminalMouseTracking, shouldSuppressTerminalAlternateScreen } from "./terminal-screen-policy.js"
 import { attachTerminalWheelScroll } from "./terminal-wheel-scroll.js"
 import { isPendingActiveTerminalSession } from "./terminal.js"
 
@@ -190,9 +191,6 @@ const resolveMountHost = (
   return hostRef.current
 }
 
-const shouldAllowTerminalMouseTracking = (session: TerminalLifecycleArgs["session"]): boolean =>
-  session.browserProjectId !== undefined
-
 const mountTerminalSession = (args: TerminalLifecycleArgs): (() => void) | undefined => {
   const host = resolveMountHost(args)
   if (host === null) {
@@ -204,7 +202,8 @@ const mountTerminalSession = (args: TerminalLifecycleArgs): (() => void) | undef
   const socketRef: TerminalSocketRef = { current: null }
   const { fitAddon, terminal } = createTerminalRuntime(host, {
     querySuppression: {
-      allowMouseTracking: shouldAllowTerminalMouseTracking(args.session)
+      allowMouseTracking: shouldAllowTerminalMouseTracking(args.session),
+      suppressAlternateScreen: shouldSuppressTerminalAlternateScreen(args.session)
     }
   })
   const terminalInputController = createTerminalInputController(terminal, socketRef)
