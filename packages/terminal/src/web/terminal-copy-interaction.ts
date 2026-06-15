@@ -215,10 +215,12 @@ class TerminalCopyInteractionController {
   private readonly onTerminalKeyEvent = (event: TerminalCopyKeyboardEvent): boolean =>
     !shouldLetBrowserHandleTerminalCopyShortcut(event, this.args.terminal)
 
-  private readonly shouldProtectSelectionContext = (event: TerminalCopyMouseEvent): boolean =>
-    isSecondaryMouseButton(event) &&
+  private readonly hasProtectedSelectionContext = (): boolean =>
     hasActiveMouseTracking(this.args.terminal) &&
     (this.selectionContext.has() || this.args.terminal.hasSelection())
+
+  private readonly shouldProtectSelectionContext = (event: TerminalCopyMouseEvent): boolean =>
+    isSecondaryMouseButton(event) && this.hasProtectedSelectionContext()
 
   private readonly onSelectionContextMouseEvent = (event: TerminalCopyMouseEvent): boolean => {
     if (!this.shouldProtectSelectionContext(event)) {
@@ -271,8 +273,12 @@ class TerminalCopyInteractionController {
     // PURITY: SHELL
     // INVARIANT: empty selection context menus still pass through.
     // COMPLEXITY: O(1)/O(1)
-    if (!this.onSelectionContextMouseEvent(event)) {
+    if (!this.hasProtectedSelectionContext()) {
       return
+    }
+    forceTerminalSelectionModifier(event)
+    if (this.args.terminal.hasSelection()) {
+      this.selectionContext.refresh()
     }
     suppressTerminalMouseReport(event)
   }
