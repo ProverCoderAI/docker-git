@@ -194,12 +194,36 @@ describe("terminal copy right-click interaction", () => {
     expect(flow.rightRelease.stopPropagationCalls).toBeGreaterThanOrEqual(1)
     expect(flow.contextMenu.shiftKey).toBe(true)
     expect(flow.contextMenu.preventDefaultCalls).toBe(0)
-    expect(flow.contextMenu.stopImmediatePropagationCalls).toBe(0)
-    expect(flow.contextMenu.stopPropagationCalls).toBe(0)
+    expect(flow.contextMenu.stopImmediatePropagationCalls).toBe(1)
+    expect(flow.contextMenu.stopPropagationCalls).toBeGreaterThanOrEqual(1)
     expect(flow.terminalMouseReports).toEqual([])
-    expect(flow.contextMenuEvents).toEqual([flow.contextMenu])
-    expect(readSelection()).toBe("")
+    expect(flow.contextMenuEvents).toEqual([])
+    expect(readSelection()).toBe(selectedText)
     expectNoDragListeners(flow.documentTarget)
+    expectCopiedSelectionInvariant(flow, selectedText)
+
+    flow.disposable.dispose()
+  })
+
+  it("keeps snapshot text copyable when live selection clears before context menu", () => {
+    const selectedText = "snapshot line"
+    let terminalSelection = selectedText
+    const flow = createRightClickCopyHarness({
+      getSelection: () => terminalSelection,
+      hasSelection: () => terminalSelection.length > 0,
+      modes: { mouseTrackingMode: "any" }
+    })
+
+    flow.host.dispatchMouse("mousedown", flow.rightClick)
+    terminalSelection = ""
+    flow.host.dispatchMouse("contextmenu", flow.contextMenu)
+    flow.host.dispatchCopy(flow.copy)
+
+    expect(flow.contextMenu.shiftKey).toBe(true)
+    expect(flow.contextMenu.preventDefaultCalls).toBe(0)
+    expect(flow.contextMenu.stopImmediatePropagationCalls).toBe(1)
+    expect(flow.contextMenu.stopPropagationCalls).toBeGreaterThanOrEqual(1)
+    expect(flow.contextMenuEvents).toEqual([])
     expectCopiedSelectionInvariant(flow, selectedText)
 
     flow.disposable.dispose()

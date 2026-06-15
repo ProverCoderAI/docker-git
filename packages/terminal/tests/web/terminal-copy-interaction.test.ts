@@ -238,6 +238,28 @@ describe("terminal copy interaction", () => {
     disposable.dispose()
   })
 
+  it("suppresses protected context menus without blocking the native menu", () => {
+    const host = new FakeTerminalCopyHost(null)
+    const contextMenuReports: Array<TerminalCopyTestMouseEvent> = []
+    host.addBubbleMouseListener("contextmenu", (event) => {
+      contextMenuReports.push(event)
+    })
+    const disposable = attachTerminalCopyInteraction({ host, terminal: terminalWithSelection("any", "selected") })
+    const down = mouseEvent(2)
+    const contextMenu = mouseEvent(2, "contextmenu")
+
+    host.dispatchMouse("mousedown", down)
+    host.dispatchMouse("contextmenu", contextMenu)
+
+    expect(contextMenu.shiftKey).toBe(true)
+    expect(contextMenu.preventDefaultCalls).toBe(0)
+    expect(contextMenu.stopImmediatePropagationCalls).toBe(1)
+    expect(contextMenu.stopPropagationCalls).toBeGreaterThanOrEqual(1)
+    expect(contextMenuReports).toEqual([])
+
+    disposable.dispose()
+  })
+
   it("does not start a forced selection drag when mouse tracking is inactive", () => {
     const documentTarget = new FakeTerminalCopyEventTarget()
     const host = new FakeTerminalCopyHost(documentTarget)

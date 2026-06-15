@@ -262,7 +262,19 @@ class TerminalCopyInteractionController {
   }
 
   private readonly onContextMenu = (event: TerminalCopyMouseEvent): void => {
-    this.onSelectionContextMouseEvent(event)
+    // CHANGE: stop protected context menus before xterm can rewrite terminal selection.
+    // WHY: xterm's rightClickHandler prepares a textarea for copy and can clear TUI selections while mouse tracking is active.
+    // QUOTE(ТЗ): "Когда я выделяю что-то и нажимаю правую кнопку ... выделение слетает"
+    // REF: user-message-2026-06-15-claude-code-selection
+    // SOURCE: n/a
+    // FORMAT THEOREM: protected(e,t) => stopped(e) and not defaultPrevented(e)
+    // PURITY: SHELL
+    // INVARIANT: empty selection context menus still pass through.
+    // COMPLEXITY: O(1)/O(1)
+    if (!this.onSelectionContextMouseEvent(event)) {
+      return
+    }
+    suppressTerminalMouseReport(event)
   }
 
   private readonly onCopy = (event: TerminalCopyClipboardEvent): void => {
