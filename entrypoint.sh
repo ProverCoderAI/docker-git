@@ -49,7 +49,7 @@ docker_git_repair_dns || true
 
 REPO_URL="${REPO_URL:-}"
 REPO_REF="${REPO_REF:-}"
-TARGET_DIR="${TARGET_DIR:-/work/app}"
+TARGET_DIR="${TARGET_DIR:-/home/dev/app}"
 
 # 1) Authorized keys are mounted from host at /authorized_keys
 mkdir -p /home/dev/.ssh
@@ -70,6 +70,11 @@ chown -R dev:dev /home/dev/.codex
 if [[ -n "$REPO_URL" && ! -d "$TARGET_DIR/.git" ]]; then
   mkdir -p "$TARGET_DIR"
   chown -R dev:dev /home/dev
+  # git clone runs as `su - dev`, so the target must be writable by dev even when
+  # TARGET_DIR is overridden to a path outside /home/dev (otherwise clone fails silently).
+  if [[ "$TARGET_DIR" != "/" ]]; then
+    chown -R dev:dev "$TARGET_DIR"
+  fi
 
   if [[ -n "$REPO_REF" ]]; then
     su - dev -c "git clone --branch '$REPO_REF' '$REPO_URL' '$TARGET_DIR'"
