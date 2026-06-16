@@ -1,5 +1,18 @@
 # @prover-coder-ai/docker-git
 
+## 1.3.4
+
+### Patch Changes
+
+- [#409](https://github.com/ProverCoderAI/docker-git/pull/409) [`b38ae32`](https://github.com/ProverCoderAI/docker-git/commit/b38ae32e3d473708057a10dd998295831eb73ee7) Thanks [@konard](https://github.com/konard)! - Fix the standalone base image cloning the repo outside the prepared `app` folder.
+
+  The Dockerfile prepares and chowns `/home/dev/app` to the unprivileged `dev`
+  user, but `entrypoint.sh` defaulted `TARGET_DIR` to `/work/app`. Because the
+  auto-clone runs as `su - dev`, cloning into the root-created `/work/app` failed
+  with permission denied, so the repository never landed in the `app` folder.
+  The default now points at `/home/dev/app`, and the resolved `TARGET_DIR` is
+  chowned to `dev` so overrides outside `/home/dev` keep working too.
+
 ## 1.3.3
 
 ### Patch Changes
