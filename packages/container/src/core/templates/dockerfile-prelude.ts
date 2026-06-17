@@ -83,13 +83,13 @@ RUN cargo install --git https://github.com/ProverCoderAI/rust-browser-connection
 RUN printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
   && chmod 0440 /etc/sudoers.d/zz-all`
 
-const planToGitRevision = "3286a253381798f679145ca95be4e309e7bd8d63"
+const planToGitRevision = "debc5f5b08a02f9038d7df8938cf72a6ec24a22a"
 
 // CHANGE: install plan-to-git in generated project containers.
 // WHY: issue #397 requires multi-agent plan capture, Claude Code hooks, temp-backed state, and explicit PR sync.
 // QUOTE(ТЗ): "подключение новое версии plan-to-git и настройки hooks для claude code и настройки что бы всё уходило на гитхаб автоматически"
 // REF: issue-397
-// SOURCE: https://github.com/ProverCoderAI/plan-to-git/tree/3286a253381798f679145ca95be4e309e7bd8d63
+// SOURCE: https://github.com/ProverCoderAI/plan-to-git/tree/debc5f5b08a02f9038d7df8938cf72a6ec24a22a
 // FORMAT THEOREM: image_build_success -> executable(/usr/local/bin/plan-to-git)
 // PURITY: SHELL
 // EFFECT: Docker build downloads and installs a pinned Rust CLI from GitHub.
