@@ -1,5 +1,12 @@
 # @effect-template/api
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`046a3dd`](https://github.com/ProverCoderAI/docker-git/commit/046a3ddde6a346bc5bfe927ff63bc25907b9def4)]:
+  - @effect-template/lib@1.2.1
+
 ## 0.2.1
 
 ### Patch Changes
