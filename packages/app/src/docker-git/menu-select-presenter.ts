@@ -8,6 +8,16 @@ export type SelectListProject = {
   readonly displayName: string
   readonly repoRef: string
   readonly projectDir: string
+  /**
+   * Hostname where this selectable project was cloned, when known.
+   *
+   * @pure true - immutable presenter input field.
+   * @effect none
+   * @invariant presenter preserves this field for display/search only.
+   * @precondition omitted when clone host identity is unknown.
+   * @postcondition selection views can show host affinity without reading OS state.
+   * @complexity O(1)/O(1)
+   */
   readonly clonedOnHostname?: string | undefined
 }
 

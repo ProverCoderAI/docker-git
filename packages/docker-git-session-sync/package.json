@@ -12,6 +12,7 @@
   "scripts": {
     "build": "vite build && bun ../../scripts/mark-executable.mjs dist/docker-git-session-sync.js",
     "check": "bun run typecheck",
+    "lint:effect": "eslint --config eslint.effect-ts-check.config.mjs .",
     "prepack": "bun run build",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -36,11 +37,22 @@
   },
   "homepage": "https://github.com/ProverCoderAI/docker-git#readme",
   "packageManager": "bun@1.3.11",
+  "dependencies": {
+    "@effect/platform": "^0.96.1",
+    "@effect/platform-node": "^0.107.0",
+    "@effect/schema": "^0.75.5",
+    "effect": "^3.21.3"
+  },
   "devDependencies": {
     "@effect/vitest": "^0.29.0",
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.7.2",
     "@types/node": "^25.9.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "eslint": "^10.5.0",
+    "fast-check": "4.8.0",
+    "globals": "^17.6.0",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1",
     "vite": "^8.0.16",
     "vitest": "^4.1.9"
   }

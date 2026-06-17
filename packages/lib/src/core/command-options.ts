@@ -59,6 +59,17 @@ export interface RawOptions {
   readonly force?: boolean
   readonly forceEnv?: boolean
   readonly agentAutoMode?: string
+  /**
+   * Hostname where the project was cloned; passed explicitly to keep command builders pure.
+   *
+   * @pure true - immutable command-builder input.
+   * @effect none
+   * @invariant if present, command config preserves this value without reading OS hostname.
+   * @precondition boundary validation rejects malformed hostnames before constructing RawOptions.
+   * @postcondition buildCreateCommand propagates the value to docker-git.json.
+   * @complexity O(1)/O(1)
+   */
+  readonly clonedOnHostname?: string
   // Session gist options (issue-143)
   readonly prNumber?: string
   readonly repo?: string

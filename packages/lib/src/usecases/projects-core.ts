@@ -54,6 +54,16 @@ export type ProjectItem = {
   readonly envProjectPath: string
   readonly codexAuthPath: string
   readonly codexHome: string
+  /**
+   * Hostname of the machine where this project was cloned, when known.
+   *
+   * @pure true - immutable project item DTO field.
+   * @effect none
+   * @invariant if present, the value originated from validated project config.
+   * @precondition omitted when clone host identity is unknown.
+   * @postcondition list/search callers can display host affinity without reading OS state.
+   * @complexity O(1)/O(1)
+   */
   readonly clonedOnHostname?: string | undefined
   readonly lastStartedAtIso: string | null
   readonly lastStartedAtEpochMs: number | null

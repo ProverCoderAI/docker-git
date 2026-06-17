@@ -15,6 +15,7 @@
     "pretypecheck": "bun run --cwd ../terminal build && bun run --cwd ../container build && bun run --cwd ../lib build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
+    "lint:effect": "eslint --config eslint.effect-ts-check.config.mjs .",
     "pretest": "bun run --cwd ../terminal build && bun run --cwd ../container build && bun run --cwd ../lib build",
     "test": "vitest run"
   },
@@ -41,6 +42,7 @@
   "homepage": "https://github.com/ProverCoderAI/docker-git#readme",
   "devDependencies": {
     "@effect/vitest": "^0.29.0",
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.7.2",
     "@eslint/js": "10.0.1",
     "@types/node": "^25.9.3",
     "@types/ws": "^8.18.1",
@@ -50,6 +52,7 @@
     "fast-check": "4.8.0",
     "globals": "^17.6.0",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1",
     "vitest": "^4.1.9"
   }
 }

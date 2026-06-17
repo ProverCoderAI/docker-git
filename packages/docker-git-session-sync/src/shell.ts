@@ -3,6 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
+import { Effect, Either } from "effect"
 
 import {
   backupDefaultBranch,
@@ -15,7 +16,14 @@ import {
   githubEnvKeys,
   maxRepoFileSize
 } from "./core.js"
-import { arrayField, errorMessage, isRecord, numberField, recordField, stringField } from "./json.js"
+import { errorMessage, recordField, stringField } from "./json.js"
+import {
+  decodeGitHubContentResponse,
+  decodeGitHubPrComment,
+  decodeGitHubRepoInfo,
+  decodeGitHubSha,
+  decodeGitHubTreeEntries
+} from "./schemas.js"
 import type {
   BackupRepo,
   GhEnv,
@@ -127,6 +135,20 @@ const ghApiJson = (endpoint: string, ghEnv: GhEnv, options: Parameters<typeof gh
   }
 }
 
+const decodeOrNull = <A>(effect: Effect.Effect<A, unknown>): A | null =>
+  Either.match(Effect.runSync(Effect.either(effect)), {
+    onLeft: () => null,
+    onRight: (value) => value
+  })
+
+const decodeOrThrow = <A>(effect: Effect.Effect<A, unknown>, context: string): A =>
+  Either.match(Effect.runSync(Effect.either(effect)), {
+    onLeft: (error) => {
+      throw new Error(`${context}: ${errorMessage(error)}`)
+    },
+    onRight: (value) => value
+  })
+
 export const runGitCapture = (
   cwd: string,
   args: ReadonlyArray<string>,
@@ -166,12 +188,25 @@ export const ensureBackupRepo = (ghEnv: GhEnv, log: Log, createIfMissing: boolea
   if (!repoResult.success || repoResult.json === null) {
     return null
   }
+  const repoInfo = decodeOrNull(decodeGitHubRepoInfo(repoResult.json))
+  if (repoInfo === null) {
+    log(`GitHub repository response for ${repoFullName} was invalid`)
+    return null
+  }
+  const defaultBranch = repoInfo.defaultBranch ?? backupDefaultBranch
+  const htmlUrl = repoInfo.htmlUrl ?? `https://github.com/${repoFullName}`
+  if (repoInfo.defaultBranch === null) {
+    log(`GitHub repository response for ${repoFullName} missing default_branch; using ${defaultBranch}`)
+  }
+  if (repoInfo.htmlUrl === null) {
+    log(`GitHub repository response for ${repoFullName} missing html_url; using ${htmlUrl}`)
+  }
   return {
     owner: login,
     repo: backupRepoName,
     fullName: repoFullName,
-    defaultBranch: stringField(repoResult.json, "default_branch") ?? backupDefaultBranch,
-    htmlUrl: stringField(repoResult.json, "html_url") ?? `https://github.com/${repoFullName}`
+    defaultBranch,
+    htmlUrl
   }
 }
 
@@ -187,18 +222,6 @@ const getCommitTreeSha = (repoFullName: string, commitSha: string, ghEnv: GhEnv)
     `failed to resolve tree for commit ${commitSha}`
   ).stdout
 
-const isTreeEntry = (value: unknown): value is TreeEntry => {
-  if (!isRecord(value)) {
-    return false
-  }
-  return (
-    typeof value["path"] === "string" &&
-    typeof value["mode"] === "string" &&
-    typeof value["type"] === "string" &&
-    typeof value["sha"] === "string"
-  )
-}
-
 export const getTreeEntries = (repoFullName: string, branch: string, ghEnv: GhEnv): TreeSnapshot => {
   const headSha = getBranchHeadSha(repoFullName, branch, ghEnv)
   const treeSha = getCommitTreeSha(repoFullName, headSha, ghEnv)
@@ -206,10 +229,14 @@ export const getTreeEntries = (repoFullName: string, branch: string, ghEnv: GhEn
     ghApiJson(`/repos/${repoFullName}/git/trees/${treeSha}?recursive=1`, ghEnv),
     `failed to list tree for ${repoFullName}@${branch}`
   )
+  const entries = decodeOrThrow(
+    decodeGitHubTreeEntries(result.json),
+    `GitHub tree response invalid for ${repoFullName}@${branch}`
+  )
   return {
     headSha,
     treeSha,
-    entries: arrayField(result.json, "tree").filter(isTreeEntry)
+    entries
   }
 }
 
@@ -223,31 +250,34 @@ export const getFileContent = (
     ghApiJson(`/repos/${repoFullName}/contents/${repoPath}?ref=${encodeURIComponent(ref)}`, ghEnv),
     `failed to fetch ${repoFullName}:${repoPath}`
   )
-  const encoding = stringField(result.json, "encoding")
-  const content = stringField(result.json, "content")?.replace(/\n/gu, "") ?? ""
-  if (encoding !== "base64" || content.length === 0) {
+  const contentResponse = decodeOrNull(decodeGitHubContentResponse(result.json))
+  if (contentResponse === null) {
     throw new Error(`unexpected content payload for ${repoFullName}:${repoPath}`)
   }
+  const content = contentResponse.content.replace(/\n/gu, "")
   return Buffer.from(content, "base64")
-}
-
-const parsePrComment = (value: unknown): PrComment | null => {
-  const id = numberField(value, "id")
-  const url = stringField(value, "html_url")
-  return id === null || url === null ? null : { id, url }
 }
 
 export const createPrComment = (
   repoFullName: string,
   prNumber: number,
   body: string,
-  ghEnv: GhEnv
+  ghEnv: GhEnv,
+  log: Log = () => undefined
 ): PrComment | null => {
   const result = ghApiJson(`/repos/${repoFullName}/issues/${prNumber}/comments`, ghEnv, {
     method: "POST",
     body: { body }
   })
-  return result.success ? parsePrComment(result.json) : null
+  if (!result.success) {
+    log(`GitHub PR comment API failed for ${repoFullName}#${prNumber}: ${result.stderr || result.stdout || `exit ${result.status}`}`)
+    return null
+  }
+  const comment = decodeOrNull(decodeGitHubPrComment(result.json))
+  if (comment === null) {
+    log(`GitHub PR comment response invalid for ${repoFullName}#${prNumber}`)
+  }
+  return comment
 }
 
 export const updatePrComment = (
@@ -545,10 +575,10 @@ const createGitBlob = (repoFullName: string, entry: UploadEntry, ghEnv: GhEnv): 
     }),
     `failed to create blob for ${repoFullName}:${entry.repoPath}`
   )
-  const sha = stringField(result.json, "sha")
-  if (sha === null) {
-    throw new Error(`GitHub blob response missing sha for ${entry.repoPath}`)
-  }
+  const sha = decodeOrThrow(
+    decodeGitHubSha(result.json, `GitHub blob response for ${entry.repoPath}`),
+    `GitHub blob response invalid for ${entry.repoPath}`
+  )
   if (sha !== entry.blobSha) {
     throw new Error(`GitHub blob sha mismatch for ${entry.repoPath}`)
   }
@@ -571,11 +601,10 @@ const createGitTree = (
     }),
     `failed to create tree in ${repoFullName}`
   )
-  const sha = stringField(result.json, "sha")
-  if (sha === null) {
-    throw new Error(`GitHub tree response missing sha for ${repoFullName}`)
-  }
-  return sha
+  return decodeOrThrow(
+    decodeGitHubSha(result.json, `GitHub tree response for ${repoFullName}`),
+    `GitHub tree response invalid for ${repoFullName}`
+  )
 }
 
 const createGitCommit = (
@@ -603,11 +632,10 @@ const createGitCommit = (
     }),
     `failed to create commit in ${backupRepo.fullName}`
   )
-  const sha = stringField(result.json, "sha")
-  if (sha === null) {
-    throw new Error(`GitHub commit response missing sha for ${backupRepo.fullName}`)
-  }
-  return sha
+  return decodeOrThrow(
+    decodeGitHubSha(result.json, `GitHub commit response for ${backupRepo.fullName}`),
+    `GitHub commit response invalid for ${backupRepo.fullName}`
+  )
 }
 
 const updateGitRef = (repoFullName: string, branch: string, commitSha: string, ghEnv: GhEnv): CommandResult =>

@@ -1474,9 +1474,9 @@ const ensureConfiguredExchangeSubscriptions = (
     (target) =>
       ensureExchangeSubscription({ target }, context).pipe(
         Effect.tapError((error) =>
-          Effect.sync(() => {
-            console.warn("[ActivityPub] Failed to subscribe to exchange target:", target, error)
-          })
+          Effect.logWarning(
+            `[ActivityPub] Failed to subscribe to exchange target ${target}: ${String(error)}`
+          )
         ),
         Effect.ignore
       ),
@@ -1903,9 +1903,7 @@ export const startOutboxPolling = (
 
     const poll = pollExchangeOutboxes({}, context).pipe(
       Effect.tapError((error) =>
-        Effect.sync(() => {
-          console.warn("[ActivityPub Polling] poll failed:", error)
-        })
+        Effect.logWarning(`[ActivityPub Polling] poll failed: ${String(error)}`)
       ),
       Effect.ignore
     )
