@@ -25,8 +25,8 @@ const statusColor = (status: ProjectPortForward["status"]): string => {
 }
 
 const openUrl = (url: string): void => {
-  if (typeof globalThis.open === "function") {
-    globalThis.open(url, "_blank", "noopener")
+  if (typeof open === "function") {
+    open(url, "_blank", "noopener")
   }
 }
 

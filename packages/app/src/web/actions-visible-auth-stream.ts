@@ -3,7 +3,7 @@ import { Effect } from "effect"
 import {
   authStreamMarkerExitCode,
   type AuthStreamMarkers,
-  authStreamSucceeded,
+  didAuthStreamSucceed,
   makeVisibleAuthStreamWriter
 } from "../shared/auth-stream-markers.js"
 import {
@@ -40,12 +40,13 @@ export const runVisibleAuthStreamMutation = (config: VisibleAuthStreamMutationCo
   })
   config.context.setOutput("")
   config.context.setMessage(config.startMessage)
+  const flushVisiblePending = Effect.sync(writer.flushVisiblePending)
   withBusy({
     context: config.context,
     effect: config.runStream(nullableValue(config.values["label"]), writer.writeChunk).pipe(
-      Effect.ensuring(Effect.sync(writer.flushVisiblePending)),
+      Effect.ensuring(flushVisiblePending),
       Effect.flatMap((output) =>
-        authStreamSucceeded(output, config.markers)
+        didAuthStreamSucceed(output, config.markers)
           ? Effect.all({
             githubStatus: loadGithubStatus(),
             snapshot: loadAuthSnapshot()

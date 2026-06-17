@@ -173,13 +173,13 @@ describe("controller reachability", () => {
           explicitApiBaseUrlArbitrary,
           dockerNetworkIpsArbitrary,
           (dockerHost, explicitApiBaseUrl, currentContainerNetworks) => {
-            const expected = isRemoteDockerHost(dockerHost) &&
+            const isExpected = isRemoteDockerHost(dockerHost) &&
               explicitApiBaseUrl === undefined &&
               Object.keys(currentContainerNetworks).length === 0
 
             expect(
               shouldRequireExplicitApiUrlForRemoteDocker(dockerHost, explicitApiBaseUrl, currentContainerNetworks)
-            ).toBe(expected)
+            ).toBe(isExpected)
           }
         )
       )
@@ -187,9 +187,10 @@ describe("controller reachability", () => {
 
   it.effect("resolves the current container name from HOSTNAME or OS hostname", () =>
     Effect.sync(() => {
+      const optionalHostnameArbitrary = fc.option(fc.string(), { nil: undefined })
       fc.assert(
         fc.property(
-          fc.option(fc.string(), { nil: undefined }),
+          optionalHostnameArbitrary,
           fc.string(),
           (envHostname, systemHostname) => {
             expect(resolveCurrentContainerName(envHostname, systemHostname)).toBe(

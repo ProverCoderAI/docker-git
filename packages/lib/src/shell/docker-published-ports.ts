@@ -15,8 +15,8 @@ const parsePublishedHostPortsFromLine = (line: string): ReadonlyArray<number> =>
     if (rawPort === undefined) {
       continue
     }
-    const value = Number.parseInt(rawPort, 10)
-    if (Number.isInteger(value) && value > 0 && value <= 65_535) {
+    const value = Number(rawPort)
+    if (Number.isSafeInteger(value) && value > 0 && value <= 65_535) {
       parsed.push(value)
     }
   }
@@ -65,16 +65,18 @@ export const parseDockerPublishedHostPorts = (output: string): ReadonlyArray<num
 // COMPLEXITY: O(command + |stdout|)
 export const runDockerPsPublishedHostPorts = (
   cwd: string
-): Effect.Effect<ReadonlyArray<number>, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  pipe(
+): Effect.Effect<ReadonlyArray<number>, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const successExitCode = Number(ExitCode(0))
+  return pipe(
     runCommandCapture(
       {
         cwd,
         command: "docker",
         args: ["ps", "--format", "{{.Ports}}"]
       },
-      [Number(ExitCode(0))],
+      [successExitCode],
       (exitCode) => new CommandFailedError({ command: "docker ps", exitCode })
     ),
     Effect.map((output) => parseDockerPublishedHostPorts(output))
   )
+}

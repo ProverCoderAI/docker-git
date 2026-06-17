@@ -48,13 +48,13 @@ const makeScrapExportCommand = (projectDir: string, archivePath: string, mode: "
 const makeScrapImportCommand = (
   projectDir: string,
   archivePath: string,
-  wipe: boolean,
+  shouldWipe: boolean,
   mode: "session"
 ): Command => ({
   _tag: "ScrapImport",
   projectDir,
   archivePath,
-  wipe,
+  wipe: shouldWipe,
   mode
 })
 

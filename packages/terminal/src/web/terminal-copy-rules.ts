@@ -95,7 +95,7 @@ export const shouldForceTerminalSelectionContext = (
   terminal: TerminalMouseTrackingTarget & TerminalSelectionTarget
 ): boolean => event.button === secondaryMouseButton && hasActiveMouseTracking(terminal) && terminal.hasSelection()
 
-export const writeTerminalSelectionToClipboardData = (
+export const didWriteTerminalSelectionToClipboardData = (
   terminal: TerminalSelectionTarget,
   clipboardData: TerminalCopyClipboardData | null
 ): boolean => {

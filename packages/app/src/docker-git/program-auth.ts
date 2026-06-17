@@ -100,10 +100,10 @@ const handleGithubStatusCommand = (command: Extract<OperationalCommand, { readon
 
 const handleGithubLogoutCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthGithubLogout" }>
-) =>
-  withControllerReady(
-    pipe(githubLogout(command), Effect.zipRight(Effect.log("GitHub auth removed from controller state.")))
-  )
+) => {
+  const logRemoved = Effect.log("GitHub auth removed from controller state.")
+  return withControllerReady(pipe(githubLogout(command), Effect.zipRight(logRemoved)))
+}
 
 const handleGitlabLoginCommand = (command: Extract<OperationalCommand, { readonly _tag: "AuthGitlabLogin" }>) =>
   withControllerReady(pipe(gitlabLogin(command), Effect.flatMap((payload) => renderAuthPayload(payload))))
@@ -113,10 +113,10 @@ const handleGitlabStatusCommand = (command: Extract<OperationalCommand, { readon
 
 const handleGitlabLogoutCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthGitlabLogout" }>
-) =>
-  withControllerReady(
-    pipe(gitlabLogout(command), Effect.zipRight(Effect.log("GitLab auth removed from controller state.")))
-  )
+) => {
+  const logRemoved = Effect.log("GitLab auth removed from controller state.")
+  return withControllerReady(pipe(gitlabLogout(command), Effect.zipRight(logRemoved)))
+}
 
 const handleGitLoginCommand = (command: Extract<OperationalCommand, { readonly _tag: "AuthGitLogin" }>) =>
   withControllerReady(pipe(gitLogin(command), Effect.flatMap((payload) => renderAuthPayload(payload))))
@@ -126,10 +126,10 @@ const handleGitStatusCommand = (command: Extract<OperationalCommand, { readonly 
 
 const handleGitLogoutCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthGitLogout" }>
-) =>
-  withControllerReady(
-    pipe(gitLogout(command), Effect.zipRight(Effect.log(`Git auth removed from controller state (${command.host}).`)))
-  )
+) => {
+  const logRemoved = Effect.log(`Git auth removed from controller state (${command.host}).`)
+  return withControllerReady(pipe(gitLogout(command), Effect.zipRight(logRemoved)))
+}
 
 const handleCodexLoginCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthCodexLogin" }>
@@ -188,17 +188,17 @@ const handleGrokStatusCommand = (
 
 const handleGrokLogoutCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthGrokLogout" }>
-) =>
-  withControllerReady(
-    pipe(grokLogout(command), Effect.zipRight(Effect.log("Grok auth removed from controller state.")))
-  )
+) => {
+  const logRemoved = Effect.log("Grok auth removed from controller state.")
+  return withControllerReady(pipe(grokLogout(command), Effect.zipRight(logRemoved)))
+}
 
 const handleCodexLogoutCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthCodexLogout" }>
-) =>
-  withControllerReady(
-    pipe(codexLogout(command), Effect.zipRight(Effect.log("Codex auth removed from controller state.")))
-  )
+) => {
+  const logRemoved = Effect.log("Codex auth removed from controller state.")
+  return withControllerReady(pipe(codexLogout(command), Effect.zipRight(logRemoved)))
+}
 
 export const dispatchRoutedAuthCommand = (
   command: RoutedAuthCommand

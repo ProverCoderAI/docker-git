@@ -9,8 +9,7 @@ const defaultRuntime = (): SelectProjectRuntime => ({
   startedAtEpochMs: null
 })
 
-const startedAtEpochForSort = (runtime: SelectProjectRuntime): number =>
-  runtime.startedAtEpochMs ?? Number.NEGATIVE_INFINITY
+const startedAtEpochForSort = (runtime: SelectProjectRuntime): number => runtime.startedAtEpochMs ?? -Infinity
 
 type SelectOrderAccessors<A> = {
   readonly displayName: (item: A) => string

@@ -19,6 +19,10 @@ vi.mock("../../src/web/api.js", () => ({
   startProjectBrowser: startProjectBrowserMock
 }))
 
+const globalsCleanup = Effect.sync(() => {
+  vi.unstubAllGlobals()
+})
+
 const runningBrowser: ProjectBrowserSession = {
   cdpPath: "/api/projects/project-1/browser/cdp",
   cdpUrl: "ws://172.17.0.2:9222/devtools/browser/session",
@@ -174,9 +178,7 @@ describe("web browser actions", () => {
                     expect(openedWindow.focus).toHaveBeenCalledOnce()
                   }
                 }).pipe(
-                  Effect.ensuring(Effect.sync(() => {
-                    vi.unstubAllGlobals()
-                  }))
+                  Effect.ensuring(globalsCleanup)
                 )
               )
           ),

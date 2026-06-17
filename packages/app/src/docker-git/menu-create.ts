@@ -142,9 +142,9 @@ const finalizeCreateFlow = (input: {
 
 const handleCreateReturn = (
   context: CreateReturnContext,
-  quickCreate = false
+  shouldQuickCreate = false
 ) => {
-  const next = advanceCreateFlow(context.state.cwd, context.view, { quickCreate })
+  const next = advanceCreateFlow(context.state.cwd, context.view, { quickCreate: shouldQuickCreate })
   handleAdvanceCreateFlowResult(next, {
     onComplete: (inputs) => {
       finalizeCreateFlow({

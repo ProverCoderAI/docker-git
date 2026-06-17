@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest"
 import * as fc from "fast-check"
 import { afterEach, vi } from "vitest"
 
-import { openUrl, prepareOpenUrl } from "../../src/web/open-url.js"
+import { didOpenUrl, prepareOpenUrl } from "../../src/web/open-url.js"
 import { makeBrowserOpenMockWindow, stubBrowserOpen } from "./browser-open-fixture.js"
 
 const urlChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_/.:?=&"
@@ -47,7 +47,7 @@ describe("open-url helpers", () => {
   it("reports direct opens as blocked when no browser open function exists", () => {
     vi.stubGlobal("open", null)
 
-    expect(openUrl("/api/projects/project-1/browser/novnc")).toBe(false)
+    expect(didOpenUrl("/api/projects/project-1/browser/novnc")).toBe(false)
     expect(prepareOpenUrl().navigate("/api/projects/project-1/browser/novnc")).toBe(false)
   })
 
@@ -56,7 +56,7 @@ describe("open-url helpers", () => {
       fc.property(urlArbitrary, (url) => {
         vi.stubGlobal("open", null)
 
-        expect(openUrl(url)).toBe(false)
+        expect(didOpenUrl(url)).toBe(false)
         expect(prepareOpenUrl().navigate(url)).toBe(false)
       }),
       { numRuns: 30 }

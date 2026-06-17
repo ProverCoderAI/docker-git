@@ -25,7 +25,7 @@ type TerminalPasteTrapState = {
 
 const terminalImagePasteMaxBytes = 10 * 1024 * 1024
 const dataUrlBase64Marker = ";base64,"
-const nativeImagePasteControlInput = "\u0016"
+const nativeImagePasteControlInput = "\u{16}"
 const nativeImagePasteSuppressWindowMs = 800
 const pasteTrapRestoreDelayMs = 800
 const supportedImageMediaTypes = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"])
@@ -69,7 +69,7 @@ const hasImageFileTransfer = (dataTransfer: DataTransfer | null): boolean => {
     [...dataTransfer.files].some((file) => file.type.toLowerCase().startsWith("image/"))
 }
 
-const socketCanSend = (socket: WebSocket | null): socket is WebSocket =>
+const canSocketSend = (socket: WebSocket | null): socket is WebSocket =>
   socket !== null && socket.readyState === WebSocket.OPEN
 
 const sendTerminalInput = (
@@ -77,7 +77,7 @@ const sendTerminalInput = (
   data: string
 ): void => {
   const socket = args.socketRef.current
-  if (!socketCanSend(socket)) {
+  if (!canSocketSend(socket)) {
     args.notifyMessage("Terminal is not connected; clipboard was not pasted.")
     return
   }
@@ -101,7 +101,7 @@ const sendImagePasteMessage = (
   base64: string
 ): void => {
   const socket = args.socketRef.current
-  if (!socketCanSend(socket)) {
+  if (!canSocketSend(socket)) {
     args.notifyMessage("Terminal is not connected; image was not pasted.")
     return
   }
@@ -116,7 +116,7 @@ const readAndSendImageFile = (
     args.notifyMessage(`Unsupported image type: ${file.type || "unknown"}.`)
     return
   }
-  if (file.size <= 0) {
+  if (file.size === 0) {
     args.notifyMessage("Image clipboard item is empty.")
     return
   }
@@ -159,17 +159,17 @@ const handleImageFiles = (
 
 const textFromTransfer = (dataTransfer: DataTransfer | null): string => dataTransfer?.getData("text/plain") ?? ""
 
-const handleTerminalClipboardTransfer = (
+const didHandleTerminalClipboardTransfer = (
   args: TerminalImagePasteArgs,
   dataTransfer: DataTransfer | null,
-  includeText: boolean
+  shouldIncludeText: boolean
 ): boolean => {
   const files = terminalImageFilesFromTransfer(dataTransfer)
   if (files.length > 0) {
     handleImageFiles(args, files)
     return true
   }
-  if (!includeText) {
+  if (!shouldIncludeText) {
     return false
   }
   const text = textFromTransfer(dataTransfer)
@@ -197,17 +197,17 @@ export const createTerminalPasteGuard = (
   currentTimeMillis: () => number = () => Date.now()
 ): TerminalPasteGuard => {
   let expiresAtMs = 0
-  let pending = false
+  let isPending = false
   return {
     shouldSuppressTerminalInput: (data) => {
-      if (!pending || data !== nativeImagePasteControlInput || currentTimeMillis() > expiresAtMs) {
+      if (!isPending || data !== nativeImagePasteControlInput || currentTimeMillis() > expiresAtMs) {
         return false
       }
-      pending = false
+      isPending = false
       return true
     },
     suppressNextNativeImagePaste: () => {
-      pending = true
+      isPending = true
       expiresAtMs = currentTimeMillis() + nativeImagePasteSuppressWindowMs
     }
   }
@@ -216,7 +216,7 @@ export const createTerminalPasteGuard = (
 export const isTerminalPasteShortcut = (event: TerminalPasteShortcutEvent): boolean =>
   (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "v"
 
-const eventTargetInsideHost = (
+const isEventTargetInsideHost = (
   host: HTMLDivElement,
   event: Event
 ): boolean => event.target instanceof Node && host.contains(event.target)
@@ -237,10 +237,12 @@ const createTerminalPasteTrap = (host: HTMLDivElement): HTMLTextAreaElement => {
 }
 
 const clearPasteTrapTimer = (state: TerminalPasteTrapState): void => {
-  if (state.restoreTimer !== null) {
-    clearTimeout(state.restoreTimer)
-    state.restoreTimer = null
+  if (state.restoreTimer === null) {
+    return
   }
+
+  clearTimeout(state.restoreTimer)
+  state.restoreTimer = null
 }
 
 const deactivatePasteTrap = (
@@ -273,8 +275,8 @@ export const attachTerminalImagePaste = (
   const pasteTrap = createTerminalPasteTrap(args.host)
   const trapState: TerminalPasteTrapState = { active: false, restoreTimer: null }
   const onPaste = (event: ClipboardEvent): void => {
-    const handled = handleTerminalClipboardTransfer(args, event.clipboardData, trapState.active)
-    if (!handled) {
+    const isHandled = didHandleTerminalClipboardTransfer(args, event.clipboardData, trapState.active)
+    if (!isHandled) {
       return
     }
     event.preventDefault()
@@ -282,7 +284,7 @@ export const attachTerminalImagePaste = (
     deactivatePasteTrap(args, trapState)
   }
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (!isTerminalPasteShortcut(event) || !eventTargetInsideHost(args.host, event)) {
+    if (!isTerminalPasteShortcut(event) || !isEventTargetInsideHost(args.host, event)) {
       return
     }
     args.pasteGuard.suppressNextNativeImagePaste()
@@ -299,16 +301,16 @@ export const attachTerminalImagePaste = (
     handleImageFiles(args, files)
   }
 
-  args.host.addEventListener("paste", onPaste, true)
-  globalThis.addEventListener("keydown", onKeyDown, true)
-  args.host.addEventListener("dragover", handleTerminalImageDragOver, true)
-  args.host.addEventListener("drop", onDrop, true)
+  args.host.addEventListener("paste", onPaste, { capture: true })
+  addEventListener("keydown", onKeyDown, { capture: true })
+  args.host.addEventListener("dragover", handleTerminalImageDragOver, { capture: true })
+  args.host.addEventListener("drop", onDrop, { capture: true })
 
   return {
     dispose: () => {
       clearPasteTrapTimer(trapState)
       args.host.removeEventListener("paste", onPaste, true)
-      globalThis.removeEventListener("keydown", onKeyDown, true)
+      removeEventListener("keydown", onKeyDown, true)
       args.host.removeEventListener("dragover", handleTerminalImageDragOver, true)
       args.host.removeEventListener("drop", onDrop, true)
       pasteTrap.remove()

@@ -1,7 +1,7 @@
 import { Match } from "effect"
 
 import type { CreateInputs, CreateStep } from "./menu-types.js"
-import { createSteps } from "./menu-types.js"
+import { orderedCreateSteps } from "./menu-types.js"
 
 const hasOwn = (values: Partial<CreateInputs>, key: keyof CreateInputs): boolean =>
   Object.prototype.hasOwnProperty.call(values, key)
@@ -44,7 +44,7 @@ export const resolveCreateFlowSteps = (
   values: Partial<CreateInputs>
 ): ReadonlyArray<CreateStep> => [
   "repoUrl",
-  ...createSteps
+  ...orderedCreateSteps
     .filter((step) => step !== "repoUrl")
     .filter((step) => !isCreateStepSatisfied(step, values))
 ]
@@ -61,11 +61,11 @@ export const resolveCreateFlowSteps = (
 // QUOTE(ТЗ): "Add concise but compliant TSDoc + functional comments"
 // REF: issue-339
 // SOURCE: n/a
-// FORMAT THEOREM: forall v: displaySteps(v) = createSteps
+// FORMAT THEOREM: forall v: displaySteps(v) = orderedCreateSteps
 // PURITY: CORE
 // EFFECT: n/a
 // INVARIANT: display mode never filters satisfied settings
 // COMPLEXITY: O(1)
 export const resolveCreateDisplaySteps = (
   _values: Partial<CreateInputs> = {}
-): ReadonlyArray<CreateStep> => createSteps
+): ReadonlyArray<CreateStep> => orderedCreateSteps

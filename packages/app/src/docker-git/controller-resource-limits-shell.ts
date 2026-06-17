@@ -63,16 +63,11 @@ export const prepareControllerResourceLimitEnv = (): Effect.Effect<void, Control
     const resolved = resolveControllerResourceLimitEnv(currentControllerResourceLimitIntent(), hostResources)
 
     if (Either.isLeft(resolved)) {
-      return yield* _(
-        Effect.fail(
-          controllerBootstrapError(
-            [
-              "Invalid docker-git controller resource limit.",
-              formatParseError(resolved.left)
-            ].join("\n")
-          )
-        )
-      )
+      const message = [
+        "Invalid docker-git controller resource limit.",
+        formatParseError(resolved.left)
+      ].join("\n")
+      return yield* _(Effect.fail(controllerBootstrapError(message)))
     }
 
     yield* _(

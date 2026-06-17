@@ -4,22 +4,22 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import * as FileSystem from "@effect/platform/FileSystem"
 import { Effect, Option, pipe } from "effect"
 
-const terminalSaneEscape = "\u001B[0m" + // reset rendition
-  "\u001B[?25h" + // show cursor
-  "\u001B[?1l" + // normal cursor keys mode
-  "\u001B>" + // normal keypad mode
-  "\u001B[?1000l" + // disable mouse click tracking
-  "\u001B[?1002l" + // disable mouse drag tracking
-  "\u001B[?1003l" + // disable any-event mouse tracking
-  "\u001B[?1005l" + // disable UTF-8 mouse mode
-  "\u001B[?1006l" + // disable SGR mouse mode
-  "\u001B[?1015l" + // disable urxvt mouse mode
-  "\u001B[?1007l" + // disable alternate scroll mode
-  "\u001B[?1004l" + // disable focus reporting
-  "\u001B[?2004l" + // disable bracketed paste
-  "\u001B[>4;0m" + // disable xterm modifyOtherKeys
-  "\u001B[>4m" + // reset xterm modifyOtherKeys
-  "\u001B[<u" // disable kitty keyboard protocol
+const terminalSaneEscape = "\u{1B}[0m" + // reset rendition
+  "\u{1B}[?25h" + // show cursor
+  "\u{1B}[?1l" + // normal cursor keys mode
+  "\u{1B}>" + // normal keypad mode
+  "\u{1B}[?1000l" + // disable mouse click tracking
+  "\u{1B}[?1002l" + // disable mouse drag tracking
+  "\u{1B}[?1003l" + // disable any-event mouse tracking
+  "\u{1B}[?1005l" + // disable UTF-8 mouse mode
+  "\u{1B}[?1006l" + // disable SGR mouse mode
+  "\u{1B}[?1015l" + // disable urxvt mouse mode
+  "\u{1B}[?1007l" + // disable alternate scroll mode
+  "\u{1B}[?1004l" + // disable focus reporting
+  "\u{1B}[?2004l" + // disable bracketed paste
+  "\u{1B}[>4;0m" + // disable xterm modifyOtherKeys
+  "\u{1B}[>4m" + // reset xterm modifyOtherKeys
+  "\u{1B}[<u" // disable kitty keyboard protocol
 
 const controllingTtyPath = "/dev/tty"
 const shellPath = "/bin/sh"
@@ -101,8 +101,8 @@ const writeTerminalReset = (
 ): Effect.Effect<boolean, never, FileSystem.FileSystem> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
-    const wroteTty = yield* _(succeeds(fs.writeFileString(controllingTtyPath, terminalSaneEscape)))
-    if (wroteTty) {
+    const isWroteTty = yield* _(succeeds(fs.writeFileString(controllingTtyPath, terminalSaneEscape)))
+    if (isWroteTty) {
       return true
     }
 
@@ -156,9 +156,9 @@ export const repairInteractiveTerminal = (
 
   return Effect.gen(function*(_) {
     yield* _(disableRawMode())
-    const sane = yield* _(runSttySane())
-    const wroteReset = sane ? yield* _(writeTerminalReset(fallbackWrite)) : false
-    if (!wroteReset) {
+    const isSane = yield* _(runSttySane())
+    const isWroteReset = isSane ? yield* _(writeTerminalReset(fallbackWrite)) : false
+    if (!isWroteReset) {
       yield* _(writeTerminalReset(fallbackWrite))
     }
   })
@@ -173,8 +173,8 @@ const restoreTerminalState = (
 
   return Effect.gen(function*(_) {
     yield* _(disableRawMode())
-    const restored = snapshot === null ? false : yield* _(restoreSttySnapshot(snapshot))
-    if (!restored) {
+    const isRestored = snapshot === null ? false : yield* _(restoreSttySnapshot(snapshot))
+    if (!isRestored) {
       yield* _(runSttySane())
     }
     yield* _(writeTerminalReset())
@@ -200,6 +200,7 @@ export const withPreservedTerminalState = <A, E, R>(
   Effect.gen(function*(_) {
     const snapshot = yield* _(snapshotTerminalState())
     yield* _(ensureTerminalCursorVisible())
-    return yield* _(use.pipe(Effect.ensuring(restoreTerminalState(snapshot))))
+    const restore = restoreTerminalState(snapshot)
+    return yield* _(use.pipe(Effect.ensuring(restore)))
   })
 /* jscpd:ignore-end */

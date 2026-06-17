@@ -11,7 +11,7 @@ const parsePortInput = (value: string): number | null => {
   if (!/^\d+$/u.test(trimmed)) {
     return null
   }
-  const port = Number.parseInt(trimmed, 10)
+  const port = Number(trimmed)
   return port > 0 && port <= 65_535 ? port : null
 }
 

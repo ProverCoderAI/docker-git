@@ -52,8 +52,8 @@ const boxProps = ({ children, ...props }: UiBoxProps): GridlandBoxHostProps => (
 
 const textProps = ({ backgroundColor, children, wrap, ...props }: UiTextProps): GridlandTextHostProps => ({
   ...props,
-  ...(backgroundColor === undefined ? {} : { bg: backgroundColor }),
-  ...(wrap === "truncate" ? { truncate: true } : {}),
+  ...(backgroundColor !== undefined && { bg: backgroundColor }),
+  ...((wrap === "truncate") && { truncate: true }),
   children
 })
 

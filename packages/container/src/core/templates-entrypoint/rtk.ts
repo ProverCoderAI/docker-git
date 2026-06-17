@@ -41,5 +41,5 @@ docker_git_rtk_init_as_user "codex" "HOME=/home/__SSH_USER__ CODEX_HOME='__CODEX
 docker_git_rtk_init_as_user "claude" "HOME=/home/__SSH_USER__ RTK_CLAUDE_DIR='$CLAUDE_CONFIG_DIR' rtk init -g --auto-patch"
 docker_git_rtk_init_as_user "gemini" "HOME=/home/__SSH_USER__ rtk init -g --gemini --auto-patch"
 docker_git_rtk_init_as_user "opencode" "HOME=/home/__SSH_USER__ rtk init -g --opencode"`
-    .replaceAll("__SSH_USER__", config.sshUser)
-    .replaceAll("__CODEX_HOME__", config.codexHome)
+    .replaceAll("__SSH_USER__", () => config.sshUser)
+    .replaceAll("__CODEX_HOME__", () => config.codexHome)

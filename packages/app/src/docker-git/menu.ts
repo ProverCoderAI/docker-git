@@ -189,9 +189,9 @@ const runInteractiveMenu = (): Effect.Effect<void, MenuError, MenuEnv> =>
   Effect.gen(function*(_) {
     const store: MenuSnapshotStore = { current: defaultMenuSnapshot() }
     const queuedInteractiveEffect: { current: InteractiveMenuEffect | null } = { current: null }
-    let keepRunning = true
+    let isKeepRunning = true
 
-    while (keepRunning) {
+    while (isKeepRunning) {
       yield* _(
         runGridlandMenuOnce(store, (effect) => {
           queuedInteractiveEffect.current = effect
@@ -200,23 +200,20 @@ const runInteractiveMenu = (): Effect.Effect<void, MenuError, MenuEnv> =>
 
       const nextInteractiveEffect = queuedInteractiveEffect.current
       if (nextInteractiveEffect === null) {
-        keepRunning = false
+        isKeepRunning = false
         continue
       }
 
       queuedInteractiveEffect.current = null
+      const restoreMenu = Effect.sync(() => {
+        restoreMenuAfterInteractiveEffect(store)
+      })
+      const restoreAfterInteractive = pipe(restoreMenu, Effect.zipRight(leaveTui()))
       yield* _(
         pipe(
           leaveTui(),
           Effect.zipRight(nextInteractiveEffect),
-          Effect.ensuring(
-            pipe(
-              Effect.sync(() => {
-                restoreMenuAfterInteractiveEffect(store)
-              }),
-              Effect.zipRight(leaveTui())
-            )
-          )
+          Effect.ensuring(restoreAfterInteractive)
         )
       )
     }
@@ -224,7 +221,7 @@ const runInteractiveMenu = (): Effect.Effect<void, MenuError, MenuEnv> =>
 
 export const runMenu: Effect.Effect<void, MenuError, MenuEnv> = pipe(
   Effect.sync(() => process.stdin.isTTY && process.stdout.isTTY),
-  Effect.flatMap((hasTty) => (hasTty ? runInteractiveMenu() : renderMenuProjectSummaries()))
+  Effect.flatMap((hasTty) => (hasTty ? runInteractiveMenu : renderMenuProjectSummaries)())
 )
 
 export type MenuRuntimeError = MenuError

@@ -110,23 +110,19 @@ export const waitForProjectSshReady = (
   const host = item.ipAddress ?? "localhost"
   const port = item.ipAddress ? 22 : item.sshPort
   const probe = Effect.gen(function*(_) {
-    const ready = yield* _(probeProjectSshReady(item))
-    if (!ready) {
+    const isReady = yield* _(probeProjectSshReady(item))
+    if (!isReady) {
       return yield* _(Effect.fail(new CommandFailedError({ command: "ssh wait", exitCode: 1 })))
     }
   })
 
+  const retrySchedule = pipe(
+    Schedule.spaced(Duration.seconds(2)),
+    Schedule.intersect(Schedule.recurs(30))
+  )
   return pipe(
     Effect.log(`Waiting for SSH on ${host}:${port} ...`),
-    Effect.zipRight(
-      Effect.retry(
-        probe,
-        pipe(
-          Schedule.spaced(Duration.seconds(2)),
-          Schedule.intersect(Schedule.recurs(30))
-        )
-      )
-    ),
+    Effect.zipRight(Effect.retry(probe, retrySchedule)),
     Effect.tap(() => Effect.log("SSH is ready."))
   )
 }

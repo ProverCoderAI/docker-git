@@ -106,22 +106,21 @@ const handleOpenCommand = (command: Extract<OperationalCommand, { readonly _tag:
 const handleStatusCommand = () =>
   withControllerReady(pipe(listProjects(), Effect.flatMap((projects) => renderProjectList(projects))))
 
-const handleDownAllCommand = () =>
-  withControllerReady(pipe(downAllProjects(), Effect.zipRight(Effect.log("All docker-git projects were stopped."))))
+const handleDownAllCommand = () => {
+  const logStopped = Effect.log("All docker-git projects were stopped.")
+  return withControllerReady(pipe(downAllProjects(), Effect.zipRight(logStopped)))
+}
 
-const handleApplyAllCommand = (command: Extract<OperationalCommand, { readonly _tag: "ApplyAll" }>) =>
-  withControllerReady(
-    pipe(
-      applyAllProjects(command.activeOnly),
-      Effect.zipRight(
-        Effect.log(
-          command.activeOnly
-            ? "Applied docker-git config to running projects."
-            : "Applied docker-git config to all projects."
-        )
-      )
-    )
+const handleApplyAllCommand = (command: Extract<OperationalCommand, { readonly _tag: "ApplyAll" }>) => {
+  const logApplied = Effect.log(
+    command.activeOnly
+      ? "Applied docker-git config to running projects."
+      : "Applied docker-git config to all projects."
   )
+  return withControllerReady(
+    pipe(applyAllProjects(command.activeOnly), Effect.zipRight(logApplied))
+  )
+}
 
 const logOutput = (output: string) => Effect.log(output)
 
@@ -158,13 +157,12 @@ const handleSessionsListCommand = (command: Extract<OperationalCommand, { readon
     )
   )
 
-const handleSessionsKillCommand = (command: Extract<OperationalCommand, { readonly _tag: "SessionsKill" }>) =>
-  withControllerReady(
-    pipe(
-      stopContainerTask(command.projectDir, command.pid),
-      Effect.zipRight(Effect.log(`Sent SIGTERM to PID ${command.pid}`))
-    )
+const handleSessionsKillCommand = (command: Extract<OperationalCommand, { readonly _tag: "SessionsKill" }>) => {
+  const logSignalled = Effect.log(`Sent SIGTERM to PID ${command.pid}`)
+  return withControllerReady(
+    pipe(stopContainerTask(command.projectDir, command.pid), Effect.zipRight(logSignalled))
   )
+}
 
 const handleSessionsLogsCommand = (command: Extract<OperationalCommand, { readonly _tag: "SessionsLogs" }>) =>
   withControllerReady(

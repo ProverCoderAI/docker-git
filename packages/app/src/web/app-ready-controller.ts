@@ -79,7 +79,7 @@ const useProjectSyncEffects = (args: ReadySideEffectsArgs) => {
 }
 
 const useReadyResetEffects = (args: ReadySideEffectsArgs) => {
-  useCreateMenuReset(args.currentMenu, args.state.setCreateView)
+  useCreateMenuReset(args.currentMenu, args.state.setCreationView)
   useActionPromptReset(args.state.actionPrompt, args.currentMenu, args.state.setActionPrompt)
   useGithubAuthGate({
     actionPrompt: args.state.actionPrompt,
@@ -148,12 +148,12 @@ const useReadyShortcutEffects = (args: ReadySideEffectsArgs) => {
     context: args.actionContext,
     controllerCwd: args.dashboard.health.cwd,
     projectsRoot: args.dashboard.health.projectsRoot,
-    createView: args.state.createView,
+    creationView: args.state.creationView,
     currentMenu: args.currentMenu,
     dashboard: args.navigationDashboard,
     projectBrowser: args.state.projectBrowser,
     selectedProjectId: args.state.selectedProjectId,
-    setCreateView: args.state.setCreateView,
+    setCreationView: args.state.setCreationView,
     setActiveScreen: args.state.setActiveScreen,
     setProjectNavigationArmed: args.state.setProjectNavigationArmed,
     setSelectedMenuIndex: args.state.setSelectedMenuIndex,
@@ -199,19 +199,19 @@ const bindCreateActions = (
   state: ReturnType<typeof useReadyState>
 ) => ({
   onCreateBufferChange: (buffer: string) => {
-    setCreateBuffer(state.createView, state.setCreateView, buffer)
+    setCreateBuffer(state.creationView, state.setCreationView, buffer)
   },
   onCreateCancel: () => {
-    cancelCreate(actionContext, state.setCreateView)
+    cancelCreate(actionContext, state.setCreationView)
   },
   onCreateSubmit: (mode: CreateSubmitMode) => {
     submitCreateView({
       context: actionContext,
       controllerCwd: dashboard.health.cwd,
       projectsRoot: dashboard.health.projectsRoot,
-      createView: state.createView,
+      creationView: state.creationView,
       mode,
-      setCreateView: state.setCreateView
+      setCreationView: state.setCreationView
     })
   }
 })

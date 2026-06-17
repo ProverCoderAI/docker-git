@@ -73,11 +73,11 @@ const createWheelHost = () => {
       removeEventListener: (
         type: "wheel",
         next: TestWheelListener,
-        options: boolean
+        isCapture: boolean
       ) => {
         expect(type).toBe("wheel")
         expect(next).toBe(listener)
-        expect(options).toBe(true)
+        expect(isCapture).toBe(true)
         state.removed += 1
       }
     },
@@ -200,7 +200,7 @@ describe("terminal wheel scroll", () => {
     })).toEqual({ lines: -2, nextPixelDeltaY: 0 })
     expect(resolveTerminalWheelScrollDelta({
       deltaMode: 0,
-      deltaY: Number.NaN,
+      deltaY: NaN,
       previousPixelDeltaY: 0,
       rows: 24
     })).toEqual({ lines: 0, nextPixelDeltaY: 0 })

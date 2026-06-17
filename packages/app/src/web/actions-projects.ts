@@ -6,7 +6,7 @@ import { connectProjectById } from "./actions-project-terminal.js"
 import { loadSelectedProjectPrompts } from "./actions-prompts.js"
 import {
   type BrowserActionContext,
-  confirmAction,
+  isActionConfirmed,
   projectActionLabel,
   requireSelectedProjectId,
   requireSelectedProjectKey,
@@ -73,7 +73,7 @@ export const applyProjectById = (
   const label = context.selectedProjectId === projectId
     ? projectActionLabel(context)
     : projectId
-  if (!confirmAction(applyProjectConfirmMessage(label, gpu))) {
+  if (!isActionConfirmed(applyProjectConfirmMessage(label, gpu))) {
     return
   }
   context.setSelectedProjectId(projectId)

@@ -4,8 +4,8 @@
 // PURITY: CORE
 // COMPLEXITY: O(n) where n = string length
 
-const ansiEscape = "\u001B"
-const ansiBell = "\u0007"
+const ansiEscape = "\u{1B}"
+const ansiBell = "\u{7}"
 
 const isAnsiFinalByte = (codePoint: number | undefined): boolean =>
   codePoint !== undefined && codePoint >= 0x40 && codePoint <= 0x7E

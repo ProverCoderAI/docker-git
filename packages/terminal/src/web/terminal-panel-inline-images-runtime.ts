@@ -9,9 +9,9 @@ import {
   writeTerminalOutputSegment
 } from "./terminal-inline-images-core.js"
 import {
-  appendTerminalInlineImagePreview,
   cachedTerminalInlineImageEntry,
   cacheTerminalInlineImageBlob,
+  didAppendTerminalInlineImagePreview,
   terminalInlineImageSpacer,
   unavailableTerminalInlineImageEntry
 } from "./terminal-inline-images.js"
@@ -60,7 +60,7 @@ const readContentLength = (headers: Readonly<Record<string, string | undefined>>
   if (value === undefined) {
     return null
   }
-  const parsed = Number.parseInt(value, 10)
+  const parsed = Math.trunc(Number(value))
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
 
@@ -192,12 +192,12 @@ const writeInlineImagePreviewEntry = (
   entry: TerminalInlineImageEntry,
   onComplete: () => void
 ): void => {
-  const appended = appendTerminalInlineImagePreview(
+  const isAppended = didAppendTerminalInlineImagePreview(
     handlers.terminal,
     handlers.lifecycle,
     entry
   )
-  if (!appended) {
+  if (!isAppended) {
     onComplete()
     return
   }

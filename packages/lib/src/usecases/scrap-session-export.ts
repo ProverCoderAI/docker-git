@@ -98,8 +98,8 @@ const exportHostEnvFiles = (
   Effect.gen(function*(_) {
     const copyIfExists = (srcAbs: string, dstName: string) =>
       Effect.gen(function*(__) {
-        const exists = yield* __(ctx.fs.exists(srcAbs))
-        if (!exists) {
+        const isExists = yield* __(ctx.fs.exists(srcAbs))
+        if (!isExists) {
           return null
         }
         const contents = yield* __(ctx.fs.readFileString(srcAbs))

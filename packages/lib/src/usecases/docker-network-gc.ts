@@ -44,7 +44,7 @@ const createSharedNetworkWithSubnetFallback = (
 ): Effect.Effect<boolean, PlatformError, CommandExecutor> =>
   Effect.gen(function*(_) {
     for (const subnet of sharedNetworkFallbackSubnets) {
-      const created = yield* _(
+      const isCreated = yield* _(
         runDockerNetworkCreateBridgeWithSubnet(cwd, networkName, subnet).pipe(
           Effect.as(true),
           Effect.catchTag("DockerCommandError", (error) =>
@@ -53,7 +53,7 @@ const createSharedNetworkWithSubnetFallback = (
             ).pipe(Effect.as(false)))
         )
       )
-      if (created) {
+      if (isCreated) {
         yield* _(Effect.log(`Created shared Docker network ${networkName} with subnet ${subnet}.`))
         return true
       }

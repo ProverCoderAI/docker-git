@@ -20,7 +20,7 @@ import type { CreateSubmitMode } from "./app-ready-create.js"
 type CreatePanelProps = {
   readonly compact: boolean
   readonly controllerCwd: string
-  readonly createView: CreateFlowView
+  readonly creationView: CreateFlowView
   readonly projectsRoot: string
   readonly onBufferChange: (buffer: string) => void
   readonly onCancel: () => void
@@ -36,27 +36,27 @@ type CreatePanelModel = {
   readonly visibleSteps: ReadonlyArray<CreateStep>
 }
 
-const renderStepColor = (active: boolean): string => active ? "#56f39a" : "#8fa6c4"
+const renderStepColor = (isActive: boolean): string => isActive ? "#56f39a" : "#8fa6c4"
 
 const webCreateSettingsNavigationHint = "↑ - up, ↓ - down, Enter - apply + down"
 const webCreateSettingsChoiceHint = "←/→ - choose yes/no or GPU"
 
 const createPrompt = (
-  createContext: CreateFlowContext,
-  createView: CreateFlowView
+  flowContext: CreateFlowContext,
+  creationView: CreateFlowView
 ): { readonly label: string; readonly defaults: ReturnType<typeof resolveCreateInputs> } => {
-  const defaults = resolveCreateInputs(createContext, createView.values)
+  const defaults = resolveCreateInputs(flowContext, creationView.values)
   const steps = resolveCreateDisplaySteps()
-  const step = steps[createView.step] ?? steps[0] ?? "repoUrl"
+  const step = steps[creationView.step] ?? steps[0] ?? "repoUrl"
   return {
-    label: renderCreateStepLabelWithBufferPreview(step, defaults, createView.buffer),
+    label: renderCreateStepLabelWithBufferPreview(step, defaults, creationView.buffer),
     defaults
   }
 }
 
 const CreatePromptInput = (
   {
-    createView,
+    creationView,
     isRepoStep,
     onArrowLeft,
     onArrowRight,
@@ -65,7 +65,7 @@ const CreatePromptInput = (
     onSubmit,
     promptLabel
   }: {
-    readonly createView: CreateFlowView
+    readonly creationView: CreateFlowView
     readonly isRepoStep: boolean
     readonly onArrowLeft?: () => void
     readonly onArrowRight?: () => void
@@ -89,49 +89,49 @@ const CreatePromptInput = (
       }}
       onEscape={onCancel}
       placeholder={isRepoStep ? "https://github.com/org/repo/tree/branch --force --mcp-playwright" : promptLabel}
-      value={createView.buffer}
+      value={creationView.buffer}
     />
-    {createView.inputError === null || !isRepoStep
+    {creationView.inputError === null || !isRepoStep
       ? null
-      : <Text fg="#ff6b6b">{createView.inputError}</Text>}
+      : <Text fg="#ff6b6b">{creationView.inputError}</Text>}
   </>
 )
 
 const resolveCreatePanelModel = (
-  { compact, controllerCwd, createView, projectsRoot }: Pick<
+  { compact, controllerCwd, creationView, projectsRoot }: Pick<
     CreatePanelProps,
-    "compact" | "controllerCwd" | "createView" | "projectsRoot"
+    "compact" | "controllerCwd" | "creationView" | "projectsRoot"
   >
 ): CreatePanelModel => {
-  const prompt = createPrompt({ cwd: controllerCwd, projectsRoot }, createView)
+  const prompt = createPrompt({ cwd: controllerCwd, projectsRoot }, creationView)
   const steps = resolveCreateDisplaySteps()
-  const activeStep = isDisplayModeFlowView(createView) ? steps[createView.step] ?? "repoUrl" : "repoUrl"
-  const isRepoStep = isCreateFlowRepoStep(createView)
+  const activeStep = isDisplayModeFlowView(creationView) ? steps[creationView.step] ?? "repoUrl" : "repoUrl"
+  const isRepoStep = isCreateFlowRepoStep(creationView)
 
   return {
     activeStep,
     isRepoStep,
-    leftChoiceBuffer: isDisplayModeFlowView(createView)
-      ? resolveCreateSettingsChoiceBuffer(createView, "left")
+    leftChoiceBuffer: isDisplayModeFlowView(creationView)
+      ? resolveCreateSettingsChoiceBuffer(creationView, "left")
       : null,
     prompt,
-    rightChoiceBuffer: isDisplayModeFlowView(createView)
-      ? resolveCreateSettingsChoiceBuffer(createView, "right")
+    rightChoiceBuffer: isDisplayModeFlowView(creationView)
+      ? resolveCreateSettingsChoiceBuffer(creationView, "right")
       : null,
     visibleSteps: compact && isRepoStep ? [activeStep] : steps
   }
 }
 
 const createChoiceHandler = (
-  createView: CreateFlowView,
+  creationView: CreateFlowView,
   direction: CreateSettingsChoiceDirection,
   onBufferChange: (buffer: string) => void
 ): () => void =>
 () => {
-  if (!isDisplayModeFlowView(createView)) {
+  if (!isDisplayModeFlowView(creationView)) {
     return
   }
-  const nextBuffer = resolveCreateSettingsChoiceBuffer(createView, direction)
+  const nextBuffer = resolveCreateSettingsChoiceBuffer(creationView, direction)
   if (nextBuffer !== null) {
     onBufferChange(nextBuffer)
   }
@@ -178,28 +178,28 @@ const CreateSubmitButtons = (
 export const CreatePanel = (
   props: CreatePanelProps
 ): JSX.Element => {
-  const { compact, controllerCwd, createView, onBufferChange, onCancel, onSubmit } = props
+  const { compact: isCompact, controllerCwd, creationView, onBufferChange, onCancel, onSubmit } = props
   const model = resolveCreatePanelModel(props)
   const leftChoiceAction = model.leftChoiceBuffer === null
     ? undefined
-    : createChoiceHandler(createView, "left", onBufferChange)
+    : createChoiceHandler(creationView, "left", onBufferChange)
   const rightChoiceAction = model.rightChoiceBuffer === null
     ? undefined
-    : createChoiceHandler(createView, "right", onBufferChange)
+    : createChoiceHandler(creationView, "right", onBufferChange)
 
   return (
     <Box flexDirection="column">
       <Text bold={true} fg="#8be9fd">docker-git / Create</Text>
       <CreateStepsList
         activeStep={model.activeStep}
-        activeBuffer={createView.buffer}
+        activeBuffer={creationView.buffer}
         defaults={model.prompt.defaults}
         visibleSteps={model.visibleSteps}
       />
       <Box flexDirection="column" marginTop={1}>
         <Text fg="#d6e5f7">{model.prompt.label}:</Text>
         <CreatePromptInput
-          createView={createView}
+          creationView={creationView}
           isRepoStep={model.isRepoStep}
           {...(leftChoiceAction === undefined ? {} : { onArrowLeft: leftChoiceAction })}
           {...(rightChoiceAction === undefined ? {} : { onArrowRight: rightChoiceAction })}
@@ -210,7 +210,7 @@ export const CreatePanel = (
         />
       </Box>
       <CreateSubmitButtons isRepoStep={model.isRepoStep} onSubmit={onSubmit} />
-      <CreateHintBlock compact={compact} controllerCwd={controllerCwd} isRepoStep={model.isRepoStep} />
+      <CreateHintBlock compact={isCompact} controllerCwd={controllerCwd} isRepoStep={model.isRepoStep} />
     </Box>
   )
 }
@@ -230,11 +230,11 @@ const CreateStepsList = (
 ): JSX.Element => (
   <Box flexDirection="column" marginTop={1}>
     {visibleSteps.map((step) => {
-      const active = step === activeStep
+      const isActive = step === activeStep
       return (
-        <Text key={step} fg={renderStepColor(active)}>
-          {active ? "> " : "  "}
-          {active
+        <Text key={step} fg={renderStepColor(isActive)}>
+          {isActive ? "> " : "  "}
+          {isActive
             ? renderCreateStepLabelWithBufferPreview(step, defaults, activeBuffer)
             : renderCreateStepLabel(step, defaults)}
         </Text>

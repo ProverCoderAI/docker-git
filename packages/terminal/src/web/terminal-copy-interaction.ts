@@ -1,21 +1,21 @@
 import {
   clearNativeBrowserCopyMenu,
-  prepareNativeBrowserCopyMenu,
+  didPrepareNativeBrowserCopyMenu,
   type TerminalCopyTextarea,
   type TerminalNativeCopyMenuHost
 } from "./terminal-copy-native-menu.js"
 import {
+  didWriteTerminalSelectionToClipboardData,
   hasActiveMouseTracking,
   isKeyboardCopyShortcut,
   shouldForceBrowserTerminalSelection,
   shouldLetBrowserHandleTerminalCopyShortcut,
   type TerminalCopyKeyboardEvent,
-  type TerminalMouseTrackingMode,
-  writeTerminalSelectionToClipboardData
+  type TerminalMouseTrackingMode
 } from "./terminal-copy-rules.js"
 import {
   createTerminalSelectionDragController,
-  forceTerminalSelectionModifier,
+  didForceTerminalSelectionModifier,
   suppressTerminalMouseReport,
   type TerminalCopyMouseEvent,
   type TerminalCopyMouseEventType,
@@ -30,28 +30,28 @@ import {
 } from "./terminal-copy-selection-snapshot.js"
 
 export {
+  didWriteTerminalSelectionToClipboardData,
   shouldForceBrowserTerminalSelection,
   shouldForceTerminalSelectionContext,
-  shouldLetBrowserHandleTerminalCopyShortcut,
-  writeTerminalSelectionToClipboardData
+  shouldLetBrowserHandleTerminalCopyShortcut
 } from "./terminal-copy-rules.js"
 export type { TerminalCopyKeyboardEvent, TerminalMouseTrackingMode } from "./terminal-copy-rules.js"
-export { forceTerminalSelectionModifier } from "./terminal-copy-selection-drag.js"
+export { didForceTerminalSelectionModifier } from "./terminal-copy-selection-drag.js"
 
 type TerminalDisposable = {
   readonly dispose: () => void
 }
 
-export type TerminalCopyInteractionTerminal = TerminalSelectionTarget & {
+export type TerminalCopyInteractionTerminal = TerminalSelectionTarget & TerminalSelectionRestoreTarget & {
   readonly attachCustomKeyEventHandler?: (
-    handler: (event: TerminalCopyKeyboardEvent) => boolean
+    shouldHandleKeyEvent: (event: TerminalCopyKeyboardEvent) => boolean
   ) => void
   readonly modes: {
     readonly mouseTrackingMode: TerminalMouseTrackingMode
   }
   readonly onSelectionChange?: (handler: () => void) => TerminalDisposable
   readonly textarea?: TerminalCopyTextarea | undefined
-} & TerminalSelectionRestoreTarget
+}
 
 type TerminalCopyClipboardEvent = {
   readonly clipboardData: TerminalCopyClipboardData | null
@@ -60,8 +60,16 @@ type TerminalCopyClipboardEvent = {
 }
 
 type TerminalCopyListenerRegistration = {
-  (type: "copy", listener: (event: TerminalCopyClipboardEvent) => void, options: true): void
-  (type: TerminalCopyMouseEventType, listener: (event: TerminalCopyMouseEvent) => void, options: true): void
+  (
+    type: "copy",
+    listener: (event: TerminalCopyClipboardEvent) => void,
+    isCapture: true | { readonly capture: true }
+  ): void
+  (
+    type: TerminalCopyMouseEventType,
+    listener: (event: TerminalCopyMouseEvent) => void,
+    isCapture: true | { readonly capture: true }
+  ): void
 }
 
 type TerminalCopyInteractionHost = TerminalNativeCopyMenuHost & {
@@ -86,21 +94,6 @@ class TerminalCopyInteractionController {
   private readonly selectionContext: TerminalSelectionContextSnapshot
   private readonly selectionDrag: ReturnType<typeof createTerminalSelectionDragController>
   private selectionChangeDisposable: TerminalDisposable | null = null
-
-  constructor(private readonly args: TerminalCopyInteractionArgs) {
-    this.selectionContext = new TerminalSelectionContextSnapshot(args.terminal)
-    this.selectionDrag = createTerminalSelectionDragController(args.host)
-  }
-
-  readonly attach = (): { readonly dispose: () => void } => {
-    this.args.terminal.attachCustomKeyEventHandler?.(this.onTerminalKeyEvent)
-    this.selectionChangeDisposable = this.args.terminal.onSelectionChange?.(this.onTerminalSelectionChange) ?? null
-    this.args.host.addEventListener("mousedown", this.onMouseDown, true)
-    this.args.host.addEventListener("mouseup", this.onMouseUp, true)
-    this.args.host.addEventListener("contextmenu", this.onContextMenu, true)
-    this.args.host.addEventListener("copy", this.onCopy, true)
-    return { dispose: this.dispose }
-  }
 
   private readonly shouldLetBrowserHandleCopyShortcut = (event: TerminalCopyKeyboardEvent): boolean =>
     shouldLetBrowserHandleTerminalCopyShortcut(event, this.args.terminal) ||
@@ -137,7 +130,7 @@ class TerminalCopyInteractionController {
     (this.selectionContext.has() || this.args.terminal.hasSelection())
 
   private readonly prepareNativeBrowserCopyMenu = (event: TerminalCopyMouseEvent): boolean =>
-    prepareNativeBrowserCopyMenu({
+    didPrepareNativeBrowserCopyMenu({
       event,
       host: this.args.host,
       selection: this.selectionContext.read(),
@@ -155,7 +148,7 @@ class TerminalCopyInteractionController {
     if (!this.shouldProtectSelectionContext(event)) {
       return false
     }
-    forceTerminalSelectionModifier(event)
+    didForceTerminalSelectionModifier(event)
     if (this.args.terminal.hasSelection()) {
       this.selectionContext.refresh()
     }
@@ -167,17 +160,17 @@ class TerminalCopyInteractionController {
       this.selectionContext.clear()
       this.clearNativeBrowserCopyMenu()
     }
-    const forceBrowserSelection = shouldForceBrowserTerminalSelection(event, this.args.terminal)
-    const forceSelectionContext = this.shouldProtectSelectionContext(event)
-    if (!forceBrowserSelection && !forceSelectionContext) {
+    const isForceBrowserSelection = shouldForceBrowserTerminalSelection(event, this.args.terminal)
+    const isForceSelectionContext = this.shouldProtectSelectionContext(event)
+    if (!isForceBrowserSelection && !isForceSelectionContext) {
       if (isSecondaryMouseButton(event)) {
         this.selectionContext.clear()
         this.clearNativeBrowserCopyMenu()
       }
       return
     }
-    forceTerminalSelectionModifier(event)
-    if (forceSelectionContext) {
+    didForceTerminalSelectionModifier(event)
+    if (isForceSelectionContext) {
       if (this.args.terminal.hasSelection()) {
         this.selectionContext.refresh()
       }
@@ -185,7 +178,7 @@ class TerminalCopyInteractionController {
       suppressTerminalMouseReport(event)
       return
     }
-    if (forceBrowserSelection) {
+    if (isForceBrowserSelection) {
       this.selectionDrag.start()
     }
   }
@@ -210,7 +203,7 @@ class TerminalCopyInteractionController {
     if (!this.hasProtectedSelectionContext()) {
       return
     }
-    forceTerminalSelectionModifier(event)
+    didForceTerminalSelectionModifier(event)
     if (this.args.terminal.hasSelection()) {
       this.selectionContext.refresh()
     }
@@ -219,9 +212,9 @@ class TerminalCopyInteractionController {
   }
 
   private readonly onCopy = (event: TerminalCopyClipboardEvent): void => {
-    const wroteSelection = writeTerminalSelectionToClipboardData(this.args.terminal, event.clipboardData)
-    const wroteSnapshot = wroteSelection ? false : this.selectionContext.writeToClipboardData(event.clipboardData)
-    if (!wroteSelection && !wroteSnapshot) {
+    const isWroteSelection = didWriteTerminalSelectionToClipboardData(this.args.terminal, event.clipboardData)
+    const isWroteSnapshot = isWroteSelection ? false : this.selectionContext.writeToClipboardData(event.clipboardData)
+    if (!isWroteSelection && !isWroteSnapshot) {
       return
     }
     this.selectionContext.clear()
@@ -240,6 +233,21 @@ class TerminalCopyInteractionController {
     this.args.host.removeEventListener("mouseup", this.onMouseUp, true)
     this.args.host.removeEventListener("contextmenu", this.onContextMenu, true)
     this.args.host.removeEventListener("copy", this.onCopy, true)
+  }
+
+  readonly attach = (): { readonly dispose: () => void } => {
+    this.args.terminal.attachCustomKeyEventHandler?.(this.onTerminalKeyEvent)
+    this.selectionChangeDisposable = this.args.terminal.onSelectionChange?.(this.onTerminalSelectionChange) ?? null
+    this.args.host.addEventListener("mousedown", this.onMouseDown, { capture: true })
+    this.args.host.addEventListener("mouseup", this.onMouseUp, { capture: true })
+    this.args.host.addEventListener("contextmenu", this.onContextMenu, { capture: true })
+    this.args.host.addEventListener("copy", this.onCopy, { capture: true })
+    return { dispose: this.dispose }
+  }
+
+  constructor(private readonly args: TerminalCopyInteractionArgs) {
+    this.selectionContext = new TerminalSelectionContextSnapshot(args.terminal)
+    this.selectionDrag = createTerminalSelectionDragController(args.host)
   }
 }
 

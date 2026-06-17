@@ -37,7 +37,9 @@ export type TerminalApiBaseUrlResolver = () => string
 
 const defaultApiBaseUrl = "/api"
 
-let terminalApiBaseUrlResolver: TerminalApiBaseUrlResolver | null = null
+const terminalApiBaseUrlResolverState: { resolver: TerminalApiBaseUrlResolver | null } = {
+  resolver: null
+}
 
 export const trimTerminalTrailingSlash = (value: string): string => {
   let next = value
@@ -50,7 +52,7 @@ export const trimTerminalTrailingSlash = (value: string): string => {
 export const setTerminalApiBaseUrlResolver = (
   resolver: TerminalApiBaseUrlResolver | null
 ): void => {
-  terminalApiBaseUrlResolver = resolver
+  terminalApiBaseUrlResolverState.resolver = resolver
 }
 
 type ProjectActiveTerminalSessionArgs = {
@@ -165,8 +167,8 @@ export const buildProjectActiveTerminalSession = (
   return {
     ...base,
     exitMessage: "SSH session ended.",
-    ...(onExit === undefined ? {} : { onExit }),
-    ...(onReady === undefined ? {} : { onReady }),
+    ...(onExit !== undefined && { onExit }),
+    ...(onReady !== undefined && { onReady }),
     pendingDeleteMessage: `Terminal session was closed before attach: ${projectDisplayName}.`,
     session,
     sessionPath: projectSshRoutePath(projectKey, session.id),
@@ -209,7 +211,7 @@ export const buildPendingProjectActiveTerminalSession = (
   return {
     ...base,
     exitMessage: "Pending SSH session closed.",
-    ...(onExit === undefined ? {} : { onExit }),
+    ...(onExit !== undefined && { onExit }),
     pendingConnection: {
       message: resolvedMessage,
       phase
@@ -229,9 +231,10 @@ export const buildPendingProjectActiveTerminalSession = (
 }
 
 export const resolveTerminalApiBaseUrl = (): string => {
-  return terminalApiBaseUrlResolver === null
+  const resolver = terminalApiBaseUrlResolverState.resolver
+  return resolver === null
     ? defaultApiBaseUrl
-    : trimTerminalTrailingSlash(terminalApiBaseUrlResolver())
+    : trimTerminalTrailingSlash(resolver())
 }
 
 export const resolveTerminalApiOriginUrl = (): URL => {
@@ -239,7 +242,7 @@ export const resolveTerminalApiOriginUrl = (): URL => {
   if (configured.startsWith("http://") || configured.startsWith("https://")) {
     return new URL(configured)
   }
-  return new URL(configured, globalThis.location.origin)
+  return new URL(configured, location.origin)
 }
 
 export const resolveTerminalWebSocketUrl = (websocketPath: string, cols: number, rows: number): string => {
@@ -248,7 +251,7 @@ export const resolveTerminalWebSocketUrl = (websocketPath: string, cols: number,
   apiUrl.pathname = `${apiUrl.pathname.replace(/\/$/u, "")}${websocketPath}`
   apiUrl.searchParams.set("cols", String(cols))
   apiUrl.searchParams.set("rows", String(rows))
-  return apiUrl.toString()
+  return apiUrl.href
 }
 
 export const parseTerminalServerMessage = (value: string): ParsedTerminalServerMessage | null =>

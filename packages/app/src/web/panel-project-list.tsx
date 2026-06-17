@@ -27,11 +27,11 @@ type ProjectListModel = {
   readonly noProjectLabel: string
 }
 
-export const showsProjectPanel = (currentMenu: BrowserMenuTag): boolean => currentMenu === "Select"
+export const isProjectPanelShown = (currentMenu: BrowserMenuTag): boolean => currentMenu === "Select"
 
 const renderListPurpose = (currentMenu: BrowserMenuTag): SelectPurpose => selectPurposeForMenu(currentMenu) ?? "Connect"
 
-const projectPanelMaxHeight = (compact: boolean): string => compact ? "30%" : "100%"
+const projectPanelMaxHeight = (isCompact: boolean): string => isCompact ? "30%" : "100%"
 
 const runtimeByProject = (dashboard: DashboardData) =>
   Object.fromEntries(
@@ -51,10 +51,10 @@ const stripSelectionPrefix = (label: string): string => label.slice(2)
 const resolveProjectListSelectionIndex = (
   currentMenu: BrowserMenuTag,
   dashboard: DashboardData,
-  projectNavigationArmed: boolean,
+  isProjectNavigationArmed: boolean,
   selectedProjectId: string | null
 ): number =>
-  !showsProjectPanel(currentMenu) || projectNavigationArmed
+  !isProjectPanelShown(currentMenu) || isProjectNavigationArmed
     ? dashboard.projects.findIndex((project) => project.id === selectedProjectId)
     : -1
 

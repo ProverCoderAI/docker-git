@@ -172,14 +172,12 @@ const decodeStoredActiveTerminalSession = (value: JsonValue | undefined): Active
     closePath: fields.closePath,
     exitMessage: fields.exitMessage,
     header: fields.header,
-    ...(fields.pendingConnectionMessage !== null && fields.pendingConnectionPhase !== null
-      ? {
-        pendingConnection: {
-          message: fields.pendingConnectionMessage,
-          phase: fields.pendingConnectionPhase
-        }
+    ...(fields.pendingConnectionMessage !== null && fields.pendingConnectionPhase !== null && {
+      pendingConnection: {
+        message: fields.pendingConnectionMessage,
+        phase: fields.pendingConnectionPhase
       }
-      : {}),
+    }),
     pendingDeleteMessage: fields.pendingDeleteMessage,
     readyMessage: fields.readyMessage,
     session: fields.session,
@@ -212,7 +210,7 @@ const decodeStoredTerminalWorkspace = (value: JsonValue | undefined): TerminalWo
 
 export const readStoredTerminalWorkspace = (): TerminalWorkspaceState => {
   const read = Effect.try({
-    try: () => globalThis.sessionStorage.getItem(terminalWorkspaceStorageKey),
+    try: () => sessionStorage.getItem(terminalWorkspaceStorageKey),
     catch: () => null
   }).pipe(
     Effect.either,
@@ -254,7 +252,7 @@ export const writeStoredTerminalWorkspace = (state: TerminalWorkspaceState): voi
   const write = Effect.try({
     try: () => {
       if (state.terminalSessions.length === 0) {
-        globalThis.sessionStorage.removeItem(terminalWorkspaceStorageKey)
+        sessionStorage.removeItem(terminalWorkspaceStorageKey)
         return
       }
       const payload: StoredTerminalWorkspaceState = {
@@ -262,7 +260,7 @@ export const writeStoredTerminalWorkspace = (state: TerminalWorkspaceState): voi
         savedAt: Date.now(),
         terminalSessions: state.terminalSessions.map((session) => toStoredActiveTerminalSession(session))
       }
-      globalThis.sessionStorage.setItem(terminalWorkspaceStorageKey, JSON.stringify(payload))
+      sessionStorage.setItem(terminalWorkspaceStorageKey, JSON.stringify(payload))
     },
     catch: () => null
   }).pipe(

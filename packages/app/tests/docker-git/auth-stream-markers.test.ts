@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest"
 
 import {
   authStreamMarkerExitCode,
-  authStreamSucceeded,
   authStreamVisibleLines,
   codexLoginFailureMessage,
   codexLoginStreamMarkers,
+  didAuthStreamSucceed,
   githubLoginFailureMessage,
   githubLoginStreamMarkers,
   gitlabLoginFailureMessage,
@@ -20,7 +20,7 @@ describe("auth stream markers", () => {
       githubLoginStreamMarkers.success
     ].join("\n")
 
-    expect(authStreamSucceeded(output, githubLoginStreamMarkers)).toBe(true)
+    expect(didAuthStreamSucceed(output, githubLoginStreamMarkers)).toBe(true)
     expect(authStreamVisibleLines(output, githubLoginStreamMarkers)).toEqual([
       "Copy your one-time code: ABCD-1234"
     ])
@@ -42,7 +42,7 @@ describe("auth stream markers", () => {
       `${gitlabLoginStreamMarkers.errorPrefix}post-login`
     ].join("\n")
 
-    expect(authStreamSucceeded(`${gitlabLoginStreamMarkers.success}\n`, gitlabLoginStreamMarkers)).toBe(true)
+    expect(didAuthStreamSucceed(`${gitlabLoginStreamMarkers.success}\n`, gitlabLoginStreamMarkers)).toBe(true)
     expect(authStreamMarkerExitCode(output, gitlabLoginStreamMarkers)).toBe("post-login")
     expect(gitlabLoginFailureMessage(output, "post-login")).toBe("GitLab login failed")
     expect(authStreamVisibleLines(output, gitlabLoginStreamMarkers)).toEqual(["GitLab login failed"])
@@ -54,7 +54,7 @@ describe("auth stream markers", () => {
       `${codexLoginStreamMarkers.errorPrefix}1`
     ].join("\n")
 
-    expect(authStreamSucceeded(`${codexLoginStreamMarkers.success}\n`, codexLoginStreamMarkers)).toBe(true)
+    expect(didAuthStreamSucceed(`${codexLoginStreamMarkers.success}\n`, codexLoginStreamMarkers)).toBe(true)
     expect(authStreamMarkerExitCode(output, codexLoginStreamMarkers)).toBe("1")
     expect(codexLoginFailureMessage(output, "1")).toContain("rate-limited")
     expect(authStreamVisibleLines(output, codexLoginStreamMarkers)).toEqual([

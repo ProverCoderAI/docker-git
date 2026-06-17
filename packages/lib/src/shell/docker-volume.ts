@@ -8,7 +8,7 @@ import { DockerCommandError } from "./errors.js"
 
 const escapedSingleQuote = String.raw`'\''`
 
-const shellEscape = (value: string): string => `'${value.replaceAll("'", escapedSingleQuote)}'`
+const shellEscape = (value: string): string => `'${value.replaceAll("'", () => escapedSingleQuote)}'`
 
 export const runDockerVolumeCreate = (
   cwd: string,

@@ -58,7 +58,7 @@ type ReadyLayoutRenderArgs = {
     readonly onRefreshProjectSkills: () => void
     readonly onRefreshProjectTasks: () => void
     readonly onRefreshPanelShareTunnel: () => void
-    readonly onProjectTasksIncludeDefaultChange: (includeDefault: boolean) => void
+    readonly onProjectTasksIncludeDefaultChange: (shouldIncludeDefault: boolean) => void
     readonly onRestartProjectDatabaseEditor: () => void
     readonly onRunAuthAction: (index: number) => void
     readonly onRunCurrentMenuAction: () => void
@@ -143,7 +143,7 @@ const readyStateProps = (state: ReadyLayoutRenderArgs["state"]) => ({
   activeTerminalSessionId: state.activeTerminalSessionId,
   authSnapshot: state.authSnapshot,
   busyLabel: state.busyLabel,
-  createView: state.createView,
+  creationView: state.creationView,
   databaseConnectionInput: state.databaseConnectionInput,
   databaseForwards: state.databaseForwards,
   databaseLabelInput: state.databaseLabelInput,

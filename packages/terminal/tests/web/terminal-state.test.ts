@@ -106,9 +106,10 @@ describe("terminal workspace state", () => {
   })
 
   it("removes the active session and selects the right neighbor first", () => {
+    const stateWithA = addTerminalSessionState(emptyTerminalWorkspaceState, makeSession("a"))
     const state = addTerminalSessionState(
       addTerminalSessionState(
-        addTerminalSessionState(emptyTerminalWorkspaceState, makeSession("a")),
+        stateWithA,
         makeSession("b")
       ),
       makeSession("c")

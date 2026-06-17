@@ -25,9 +25,9 @@ export const buildCreateProjectRequest = (
     containerName: config.containerName,
     serviceName: config.serviceName,
     volumeName: config.volumeName,
-    authorizedKeysPath: resolvedPaths.authorizedKeysContents === undefined
-      ? resolvedPaths.authorizedKeysPath
-      : defaultTemplateConfig.authorizedKeysPath,
+    authorizedKeysPath: (resolvedPaths.authorizedKeysContents === undefined
+      ? resolvedPaths
+      : defaultTemplateConfig).authorizedKeysPath,
     authorizedKeysContents: resolvedPaths.authorizedKeysContents,
     envGlobalPath: config.envGlobalPath,
     envProjectPath: config.envProjectPath,
@@ -55,6 +55,6 @@ export const buildCreateProjectRequest = (
     force: command.force,
     forceEnv: command.forceEnv,
     waitForClone: command.waitForClone,
-    ...(options?.async === true ? { async: true } : {})
+    ...((options?.async === true) && { async: true })
   } satisfies JsonRequest
 }

@@ -48,7 +48,7 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
     const repoPathParts = deriveRepoPathParts(repoUrl).pathParts
     const workspaceSuffix = resolvedRepo.workspaceSuffix
     const projectSlug = workspaceSuffix ? `${repoSlug}-${workspaceSuffix}` : repoSlug
-    const repoPath = workspaceSuffix ? [...repoPathParts, workspaceSuffix].join("/") : repoPathParts.join("/")
+    const repoPath = (workspaceSuffix ? [...repoPathParts, workspaceSuffix] : repoPathParts).join("/")
     const repoRef = yield* _(
       nonEmpty("--repo-ref", raw.repoRef ?? resolvedRepo.repoRef, defaultTemplateConfig.repoRef)
     )
@@ -244,7 +244,7 @@ export const buildCreateCommand = (
     const dockerSharedNetworkName = yield* _(
       nonEmpty("--shared-network", raw.dockerSharedNetworkName, defaultTemplateConfig.dockerSharedNetworkName)
     )
-    const { agentAuto, agentMode } = yield* _(resolveAutoAgentFlags(raw))
+    const { agentAuto: isAgentAuto, agentMode } = yield* _(resolveAutoAgentFlags(raw))
 
     return {
       _tag: "Create",
@@ -269,7 +269,7 @@ export const buildCreateCommand = (
         skipGithubAuth: behavior.skipGithubAuth,
         enableMcpPlaywright: behavior.enableMcpPlaywright,
         agentMode,
-        agentAuto
+        agentAuto: isAgentAuto
       })
     }
   })

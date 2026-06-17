@@ -122,8 +122,8 @@ const resolveProjectId = (
   return project?.id ?? null
 }
 
-export const activeScreenFromMenu = (menu: BrowserMenuTag, outputRequested: boolean): BrowserScreen => {
-  if (outputRequested && (menu === "Logs" || menu === "Status")) {
+export const activeScreenFromMenu = (menu: BrowserMenuTag, isOutputRequested: boolean): BrowserScreen => {
+  if (isOutputRequested && (menu === "Logs" || menu === "Status")) {
     return outputScreen()
   }
   if (menu === "ProjectAuth") {
@@ -154,11 +154,11 @@ const parseMenuActionUrl = (
     return null
   }
 
-  const outputRequested = rest.at(-1) === "output"
-  const projectSegments = outputRequested ? rest.slice(0, -1) : rest
+  const isOutputRequested = rest.at(-1) === "output"
+  const projectSegments = isOutputRequested ? rest.slice(0, -1) : rest
   const selectedProjectId = isProjectMenu(menu) ? resolveProjectId(projects, decodePathTail(projectSegments)) : null
   return {
-    activeScreen: activeScreenFromMenu(menu, outputRequested),
+    activeScreen: activeScreenFromMenu(menu, isOutputRequested),
     menu,
     projectNavigationArmed: false,
     selectedProjectId
@@ -215,7 +215,7 @@ const applyReadyUrlNavigation = (
   args: ReadyUrlSyncArgs,
   skipNextWriteRef: { current: boolean }
 ): void => {
-  const next = parseReadyUrlNavigation(globalThis.location.href, args.dashboard.projects)
+  const next = parseReadyUrlNavigation(location.href, args.dashboard.projects)
   if (next === null) {
     return
   }
@@ -240,7 +240,7 @@ const writeReadyUrl = (
     return
   }
 
-  const currentUrl = new URL(globalThis.location.href)
+  const currentUrl = new URL(location.href)
   if (isSshLinkUrl(currentUrl) && args.state.activeTerminalSession === null) {
     return
   }
@@ -255,7 +255,7 @@ const writeReadyUrl = (
   if (path === null || `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}` === path) {
     return
   }
-  globalThis.history.replaceState(globalThis.history.state, "", path)
+  history.replaceState(history.state, "", path)
 }
 
 export const useReadyUrlSync = (args: ReadyUrlSyncArgs) => {
@@ -274,9 +274,9 @@ export const useReadyUrlSync = (args: ReadyUrlSyncArgs) => {
 
     applyCurrentLocation()
     const onPopState = applyCurrentLocation
-    globalThis.addEventListener("popstate", onPopState)
+    addEventListener("popstate", onPopState)
     return () => {
-      globalThis.removeEventListener("popstate", onPopState)
+      removeEventListener("popstate", onPopState)
     }
   }, [])
 

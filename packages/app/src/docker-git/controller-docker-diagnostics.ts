@@ -17,7 +17,7 @@ export type DockerProbeOutcome = {
 
 const lowercase = (text: string): string => text.toLowerCase()
 
-const containsAny = (haystack: string, needles: ReadonlyArray<string>): boolean =>
+const hasAny = (haystack: string, needles: ReadonlyArray<string>): boolean =>
   needles.some((needle) => haystack.includes(needle))
 
 const isCliMissingExitCode = (exitCode: number): boolean => exitCode === 127
@@ -44,15 +44,15 @@ const daemonDownMarkers: ReadonlyArray<string> = [
 export const classifyDockerProbeFailure = (outcome: DockerProbeOutcome): DockerProbeFailureKind => {
   const normalized = lowercase(outcome.stderr)
 
-  if (containsAny(normalized, permissionMarkers)) {
+  if (hasAny(normalized, permissionMarkers)) {
     return "socket-permission-denied"
   }
 
-  if (isCliMissingExitCode(outcome.exitCode) && containsAny(normalized, cliMissingMarkers)) {
+  if (isCliMissingExitCode(outcome.exitCode) && hasAny(normalized, cliMissingMarkers)) {
     return "docker-cli-missing"
   }
 
-  if (containsAny(normalized, daemonDownMarkers)) {
+  if (hasAny(normalized, daemonDownMarkers)) {
     return "daemon-unreachable"
   }
 

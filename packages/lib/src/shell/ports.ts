@@ -53,8 +53,8 @@ export const findAvailablePort = (
     const max = Math.max(1, attempts)
     for (let offset = 0; offset < max; offset += 1) {
       const candidate = preferred + offset
-      const available = yield* _(isPortAvailable(candidate, host))
-      if (available) {
+      const isAvailable = yield* _(isPortAvailable(candidate, host))
+      if (isAvailable) {
         return candidate
       }
     }

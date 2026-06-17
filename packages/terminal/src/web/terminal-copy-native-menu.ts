@@ -180,7 +180,7 @@ const resolveContextMenuScreenElement = (
 // EFFECT: DOM textarea style/value/focus/select and layout reads
 // INVARIANT: false result leaves textarea unmodified by this function
 // COMPLEXITY: O(n)/O(1)
-export const prepareNativeBrowserCopyMenu = (
+export const didPrepareNativeBrowserCopyMenu = (
   { event, host, selection, textarea }: PrepareNativeBrowserCopyMenuArgs
 ): boolean => {
   const screenElement = resolveContextMenuScreenElement(host)

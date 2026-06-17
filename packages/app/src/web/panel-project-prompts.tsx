@@ -64,7 +64,7 @@ const PromptEditorActions = (
 
 const usePromptDraft = (prompt: ProjectPromptFile) => {
   const [draft, setDraft] = useState(prompt.content)
-  const [dirty, setDirty] = useState(false)
+  const [isDirty, setDirty] = useState(false)
 
   useEffect(() => {
     setDraft(prompt.content)
@@ -76,7 +76,7 @@ const usePromptDraft = (prompt: ProjectPromptFile) => {
     setDirty(value !== prompt.content)
   }
 
-  return { dirty, draft, handleChange }
+  return { dirty: isDirty, draft, handleChange }
 }
 
 const PromptEditor = (
@@ -90,7 +90,7 @@ const PromptEditor = (
     readonly prompt: ProjectPromptFile
   }
 ): JSX.Element => {
-  const { dirty, draft, handleChange } = usePromptDraft(prompt)
+  const { dirty: isDirty, draft, handleChange } = usePromptDraft(prompt)
   const handleSave = () => {
     onSave(draft)
   }
@@ -108,7 +108,7 @@ const PromptEditor = (
         placeholder={`Write your ${prompt.fileName} content here…`}
         value={draft}
       />
-      <PromptEditorActions dirty={dirty} exists={prompt.exists} onDelete={onDelete} onSave={handleSave} />
+      <PromptEditorActions dirty={isDirty} exists={prompt.exists} onDelete={onDelete} onSave={handleSave} />
     </Box>
   )
 }

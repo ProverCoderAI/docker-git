@@ -31,18 +31,18 @@ const trimAliasEdges = (value: string): string => {
 
 const sanitizeSshHostAlias = (value: string): string => {
   let normalized = ""
-  let previousWasDash = false
+  let isPreviousWasDash = false
 
   for (const char of value.trim()) {
     if (isAliasChar(char)) {
       normalized += char
-      previousWasDash = false
+      isPreviousWasDash = false
       continue
     }
 
-    if (!previousWasDash) {
+    if (!isPreviousWasDash) {
       normalized += "-"
-      previousWasDash = true
+      isPreviousWasDash = true
     }
   }
 
@@ -190,7 +190,7 @@ export const resolveProjectSshAccess = (
       : undefined
 
     const authorizedKeysPath = resolveAuthorizedKeysPath(path, baseDir, config.authorizedKeysPath)
-    const authorizedKeysExists = yield* _(fs.exists(authorizedKeysPath))
+    const isAuthorizedKeysExists = yield* _(fs.exists(authorizedKeysPath))
     const sshKeyPath = yield* _(findSshPrivateKey(fs, path, process.cwd()))
     const editor = buildEditorSshAccess(config, sshKeyPath, ipAddress)
 
@@ -198,7 +198,7 @@ export const resolveProjectSshAccess = (
       sshCommand: buildSshCommand(config, sshKeyPath, ipAddress),
       editor,
       authorizedKeysPath,
-      authorizedKeysExists,
+      authorizedKeysExists: isAuthorizedKeysExists,
       ipAddress
     }
   })

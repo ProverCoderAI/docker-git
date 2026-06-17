@@ -75,8 +75,8 @@ export const ensureStateGitignore = (
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
     const gitignorePath = path.join(root, ".gitignore")
-    const exists = yield* _(fs.exists(gitignorePath))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(gitignorePath))
+    if (!isExists) {
       yield* _(fs.writeFileString(gitignorePath, defaultStateGitignore))
       return
     }

@@ -184,16 +184,16 @@ export const ensureSkillerSubmoduleInitialized = (
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const packagePath = path.join(rootDir, skillerPackagePath)
-    const existsBeforeInit = yield* _(fs.exists(packagePath).pipe(Effect.mapError(mapSkillerPathError)))
-    if (existsBeforeInit) {
+    const isExistsBeforeInit = yield* _(fs.exists(packagePath).pipe(Effect.mapError(mapSkillerPathError)))
+    if (isExistsBeforeInit) {
       return
     }
 
     yield* _(Effect.log("Initializing Skiller submodule for docker-git controller build."))
     yield* _(runSkillerSubmoduleInit(rootDir))
 
-    const existsAfterInit = yield* _(fs.exists(packagePath).pipe(Effect.mapError(mapSkillerPathError)))
-    if (existsAfterInit) {
+    const isExistsAfterInit = yield* _(fs.exists(packagePath).pipe(Effect.mapError(mapSkillerPathError)))
+    if (isExistsAfterInit) {
       return
     }
 
@@ -231,8 +231,8 @@ const requireGpuOverlayPath = (
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const gpuOverlayPath = path.join(path.dirname(composePath), "docker-compose.gpu.yml")
-    const exists = yield* _(fs.exists(gpuOverlayPath).pipe(Effect.mapError(mapComposePathError)))
-    return exists
+    const isExists = yield* _(fs.exists(gpuOverlayPath).pipe(Effect.mapError(mapComposePathError)))
+    return isExists
       ? gpuOverlayPath
       : yield* _(
         Effect.fail(

@@ -92,7 +92,7 @@ const resolveSshPort = (sshCommand: string, fallback: number): number => {
     return fallback
   }
 
-  const parsed = Number.parseInt(match[1] ?? "", 10)
+  const parsed = Math.trunc(Number(match[1] ?? ""))
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 

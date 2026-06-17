@@ -14,13 +14,16 @@ export const SkillerScopeResponseSchema = Schema.Struct({
   sshUser: Schema.String
 })
 
+const bundledModeLiteral = Schema.Literal("bundled")
+const externalModeLiteral = Schema.Literal("external")
+
 export const SkillerLaunchResponseSchema = Schema.Struct({
   alreadyRunning: Schema.Boolean,
   appPath: Schema.String,
   backendUrl: Schema.NullOr(Schema.String),
   logPath: Schema.String,
   mode: Schema.optionalWith(
-    Schema.Union(Schema.Literal("bundled"), Schema.Literal("external")),
+    Schema.Union(bundledModeLiteral, externalModeLiteral),
     { default: () => "bundled" }
   ),
   ok: Schema.Boolean,

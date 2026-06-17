@@ -65,7 +65,7 @@ const renderCreateContent = (props: ContentPanelProps): JSX.Element => (
     compact={props.compact}
     controllerCwd={props.controllerCwd}
     projectsRoot={props.projectsRoot}
-    createView={props.createView}
+    creationView={props.creationView}
     onBufferChange={props.onCreateBufferChange}
     onCancel={props.onCreateCancel}
     onSubmit={props.onCreateSubmit}

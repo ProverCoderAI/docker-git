@@ -153,8 +153,8 @@ export const readProjectConfig = (
     const { fs, path, resolved } = yield* _(resolveBaseDir(baseDir))
     const configPath = path.join(resolved, "docker-git.json")
 
-    const exists = yield* _(fs.exists(configPath))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(configPath))
+    if (!isExists) {
       return yield* _(Effect.fail(new ConfigNotFoundError({ path: configPath })))
     }
 

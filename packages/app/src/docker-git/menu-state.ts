@@ -58,7 +58,7 @@ export const defaultMenuSnapshot = (): MenuSnapshot => ({
 
 const withBusyCleanup = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
-  setBusy: (busy: boolean) => void
+  setBusy: (isBusy: boolean) => void
 ): Effect.Effect<A, E, R> =>
   pipe(
     effect,
@@ -85,16 +85,17 @@ const handleInteractiveMenuError = (setMessage: (message: string | null) => void
 }
 
 const useRunEffect = (
-  setBusy: (busy: boolean) => void,
+  setBusy: (isBusy: boolean) => void,
   setMessage: (message: string | null) => void
 ) =>
   function<E extends MenuError>(effect: Effect.Effect<void, E, MenuEnv>) {
     setBusy(true)
+    const onFailure = handleMenuError(setMessage)
     const program = withBusyCleanup(
       pipe(
         effect,
         Effect.matchEffect({
-          onFailure: handleMenuError(setMessage),
+          onFailure,
           onSuccess: () => Effect.void
         })
       ),
@@ -104,28 +105,25 @@ const useRunEffect = (
   }
 
 const useRunInteractiveEffect = (
-  setBusy: (busy: boolean) => void,
+  setBusy: (isBusy: boolean) => void,
   setMessage: (message: string | null) => void,
   queueInteractiveEffect: QueueInteractiveEffect
 ) =>
   function<E extends MenuError>(effect: Effect.Effect<void, E, MenuEnv>) {
     setBusy(true)
-    queueInteractiveEffect(
-      withBusyCleanup(
-        pipe(
-          effect,
-          Effect.matchEffect({
-            onFailure: handleInteractiveMenuError(setMessage),
-            onSuccess: () => Effect.void
-          })
-        ),
-        setBusy
-      )
+    const onFailure = handleInteractiveMenuError(setMessage)
+    const handledEffect = pipe(
+      effect,
+      Effect.matchEffect({
+        onFailure,
+        onSuccess: () => Effect.void
+      })
     )
+    queueInteractiveEffect(withBusyCleanup(handledEffect, setBusy))
   }
 
 const useRunner = (
-  setBusy: (busy: boolean) => void,
+  setBusy: (isBusy: boolean) => void,
   setMessage: (message: string | null) => void,
   queueInteractiveEffect: QueueInteractiveEffect
 ) => {
@@ -167,8 +165,8 @@ const useMenuSetters = (
     setActiveDir: (value: string | null) => {
       commit((snapshot) => ({ ...snapshot, activeDir: value }))
     },
-    setBusy: (value: boolean) => {
-      commit((snapshot) => ({ ...snapshot, busy: value }))
+    setBusy: (isBusy: boolean) => {
+      commit((snapshot) => ({ ...snapshot, busy: isBusy }))
     },
     setInputStage: (value: InputStage) => {
       commit((snapshot) => ({ ...snapshot, inputStage: value }))
@@ -176,8 +174,8 @@ const useMenuSetters = (
     setMessage: (value: string | null) => {
       commit((snapshot) => ({ ...snapshot, message: value }))
     },
-    setReady: (value: boolean) => {
-      commit((snapshot) => ({ ...snapshot, ready: value }))
+    setReady: (isReady: boolean) => {
+      commit((snapshot) => ({ ...snapshot, ready: isReady }))
     },
     setRunningDockerGitContainers: (value: number) => {
       commit((snapshot) => ({ ...snapshot, runningDockerGitContainers: value }))
@@ -188,8 +186,8 @@ const useMenuSetters = (
     setSkipInputs: (update: (value: number) => number) => {
       commit((snapshot) => ({ ...snapshot, skipInputs: update(snapshot.skipInputs) }))
     },
-    setSshActive: (value: boolean) => {
-      commit((snapshot) => ({ ...snapshot, sshActive: value }))
+    setSshActive: (isActive: boolean) => {
+      commit((snapshot) => ({ ...snapshot, sshActive: isActive }))
     },
     setView: (value: ViewState) => {
       commit((snapshot) => ({ ...snapshot, view: value }))
@@ -207,7 +205,7 @@ export const useMenuState = (store: MenuSnapshotStore, queueInteractiveEffect: Q
   return { ...snapshot, ...setters, ignoreUntil, state, runner }
 }
 
-export const useReadyGate = (setReady: (ready: boolean) => void) => {
+export const useReadyGate = (setReady: (isReady: boolean) => void) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setReady(true)
@@ -228,7 +226,7 @@ export const useStartupSnapshot = (
     if (store.current.startupLoaded) {
       return
     }
-    let cancelled = false
+    let isCancelled = false
     const startup = pipe(
       listMenuProjectItems,
       Effect.map((items) => resolveMenuStartupSnapshot(items)),
@@ -238,8 +236,8 @@ export const useStartupSnapshot = (
       }),
       Effect.provide(NodeContext.layer)
     )
-    void Effect.runPromise(startup).then((snapshot) => {
-      if (cancelled) {
+    const applyStartupSnapshot = (snapshot: Effect.Effect.Success<typeof startup>): void => {
+      if (isCancelled) {
         return
       }
       store.current = { ...store.current, startupLoaded: true }
@@ -248,17 +246,27 @@ export const useStartupSnapshot = (
       if (snapshot.activeDir !== null) {
         setActiveDir(snapshot.activeDir)
       }
-    })
+    }
+    void Effect.runPromise(
+      pipe(
+        startup,
+        Effect.tap((snapshot) =>
+          Effect.sync(() => {
+            applyStartupSnapshot(snapshot)
+          })
+        )
+      )
+    )
     return () => {
-      cancelled = true
+      isCancelled = true
     }
   }, [setActiveDir, setMessage, setRunningDockerGitContainers, store])
 }
 
-export const useSigintGuard = (exit: () => void, sshActive: boolean) => {
+export const useSigintGuard = (exit: () => void, isSshActive: boolean) => {
   useEffect(() => {
     const handleSigint = () => {
-      if (!sshActive) {
+      if (!isSshActive) {
         exit()
       }
     }
@@ -266,5 +274,5 @@ export const useSigintGuard = (exit: () => void, sshActive: boolean) => {
     return () => {
       process.off("SIGINT", handleSigint)
     }
-  }, [exit, sshActive])
+  }, [exit, isSshActive])
 }

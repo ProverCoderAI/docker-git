@@ -13,7 +13,7 @@ import {
 
 const parsePort = (value: string): Either.Either<number, ParseError> => {
   const parsed = Number(value)
-  if (!Number.isInteger(parsed)) {
+  if (!Number.isSafeInteger(parsed)) {
     return Either.left({
       _tag: "InvalidOption",
       option: "--ssh-port",
@@ -35,14 +35,14 @@ const isAsciiLetterCode = (code: number): boolean => (code >= 65 && code <= 90) 
 const isPathSeparator = (value: string | undefined): boolean => value === "/" || value === "\\"
 
 const rootPathLength = (value: string): number => {
-  if (isPathSeparator(value[0])) {
+  if (isPathSeparator(value.at(0))) {
     return 1
   }
   if (
     value.length >= 3 &&
     isAsciiLetterCode(value.codePointAt(0) ?? 0) &&
-    value[1] === ":" &&
-    isPathSeparator(value[2])
+    value.at(1) === ":" &&
+    isPathSeparator(value.at(2))
   ) {
     return 3
   }

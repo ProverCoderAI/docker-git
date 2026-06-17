@@ -18,11 +18,20 @@ type MenuResetContext = Pick<MenuViewContext, "setView" | "setMessage">
 
 type OutputWrite = typeof process.stdout.write
 
-let stdoutPatched = false
-let stdoutMuted = false
-let baseStdoutWrite: OutputWrite | null = null
-let baseStderrWrite: OutputWrite | null = null
-const primaryScreenEscape = "\u001B[?1049l\r\u001B[2K"
+type StdoutPatchState = {
+  isStdoutPatched: boolean
+  isStdoutMuted: boolean
+  baseStdoutWrite: OutputWrite | null
+  baseStderrWrite: OutputWrite | null
+}
+
+const stdoutPatchState: StdoutPatchState = {
+  isStdoutPatched: false,
+  isStdoutMuted: false,
+  baseStdoutWrite: null,
+  baseStderrWrite: null
+}
+const primaryScreenEscape = "\u{1B}[?1049l\r\u{1B}[2K"
 
 const wrapWrite = (baseWrite: OutputWrite): OutputWrite =>
 (
@@ -30,7 +39,7 @@ const wrapWrite = (baseWrite: OutputWrite): OutputWrite =>
   encoding?: BufferEncoding | ((err?: Error | null) => void),
   cb?: (err?: Error | null) => void
 ) => {
-  if (stdoutMuted) {
+  if (stdoutPatchState.isStdoutMuted) {
     const callback = typeof encoding === "function" ? encoding : cb
     if (typeof callback === "function") {
       callback()
@@ -45,20 +54,20 @@ const wrapWrite = (baseWrite: OutputWrite): OutputWrite =>
 
 const writeTerminalControl = (text: string): void => {
   ensureStdoutPatched()
-  const write = baseStdoutWrite ?? process.stdout.write.bind(process.stdout)
+  const write = stdoutPatchState.baseStdoutWrite ?? process.stdout.write.bind(process.stdout)
   write(text)
 }
 
 const disableTerminalInputModes = (): void => {
   // Disable mouse/input modes that can leak across TUI <-> SSH transitions.
   writeTerminalControl(
-    "\u001B[0m" +
-      "\u001B[?25h" +
-      "\u001B[?1l" +
-      "\u001B>" +
-      "\u001B[?1000l\u001B[?1002l\u001B[?1003l\u001B[?1005l\u001B[?1006l\u001B[?1015l\u001B[?1007l" +
-      "\u001B[?1004l\u001B[?2004l" +
-      "\u001B[>4;0m\u001B[>4m\u001B[<u"
+    "\u{1B}[0m" +
+      "\u{1B}[?25h" +
+      "\u{1B}[?1l" +
+      "\u{1B}>" +
+      "\u{1B}[?1000l\u{1B}[?1002l\u{1B}[?1003l\u{1B}[?1005l\u{1B}[?1006l\u{1B}[?1015l\u{1B}[?1007l" +
+      "\u{1B}[?1004l\u{1B}[?2004l" +
+      "\u{1B}[>4;0m\u{1B}[>4m\u{1B}[<u"
   )
 }
 
@@ -73,15 +82,17 @@ const disableTerminalInputModes = (): void => {
 // INVARIANT: wrapper preserves original stdout write when not muted
 // COMPLEXITY: O(1)
 const ensureStdoutPatched = (): void => {
-  if (stdoutPatched) {
+  if (stdoutPatchState.isStdoutPatched) {
     return
   }
-  baseStdoutWrite = process.stdout.write.bind(process.stdout)
-  baseStderrWrite = process.stderr.write.bind(process.stderr)
+  const baseStdoutWrite = process.stdout.write.bind(process.stdout)
+  const baseStderrWrite = process.stderr.write.bind(process.stderr)
+  stdoutPatchState.baseStdoutWrite = baseStdoutWrite
+  stdoutPatchState.baseStderrWrite = baseStderrWrite
 
   process.stdout.write = wrapWrite(baseStdoutWrite)
   process.stderr.write = wrapWrite(baseStderrWrite)
-  stdoutPatched = true
+  stdoutPatchState.isStdoutPatched = true
 }
 
 // CHANGE: allow writing to the terminal even while stdout is muted
@@ -151,19 +162,15 @@ export const withSuspendedTui = <A, E, R>(
     ? pipe(effect, Effect.tapError((error) => Effect.ignore(options.onError?.(error) ?? Effect.void)))
     : effect
 
+  const notifyResume = Effect.sync(() => {
+    options?.onResume?.()
+  })
+  const resumeAndNotify = pipe(resumeTui(), Effect.zipRight(notifyResume))
+
   return pipe(
     suspendTui(),
     Effect.zipRight(withError),
-    Effect.ensuring(
-      pipe(
-        resumeTui(),
-        Effect.zipRight(
-          Effect.sync(() => {
-            options?.onResume?.()
-          })
-        )
-      )
-    )
+    Effect.ensuring(resumeAndNotify)
   )
 }
 
@@ -172,7 +179,7 @@ export type SkipInputsContext = {
 }
 
 export type SshActiveContext = {
-  readonly setSshActive: (active: boolean) => void
+  readonly setSshActive: (isActive: boolean) => void
 }
 
 export const resumeWithSkipInputs = (context: SkipInputsContext, extra?: () => void) => () => {
@@ -198,14 +205,14 @@ export const pauseOnError = <E>(render: (error: E) => string) => (error: E): Eff
 // EFFECT: n/a
 // INVARIANT: stdout wrapper is installed at most once
 // COMPLEXITY: O(1)
-const setStdoutMuted = (muted: boolean): void => {
+const setStdoutMuted = (isMuted: boolean): void => {
   ensureStdoutPatched()
-  stdoutMuted = muted
+  stdoutPatchState.isStdoutMuted = isMuted
 }
 
-const setStdoutMutedEffect = (muted: boolean): Effect.Effect<void> =>
+const setStdoutMutedEffect = (isMuted: boolean): Effect.Effect<void> =>
   Effect.sync(() => {
-    setStdoutMuted(muted)
+    setStdoutMuted(isMuted)
   })
 
 const writeTerminalControlEffect = (text: string): Effect.Effect<void> =>
@@ -213,11 +220,11 @@ const writeTerminalControlEffect = (text: string): Effect.Effect<void> =>
     writeTerminalControl(text)
   })
 
-const setRawModeEffect = (enabled: boolean): Effect.Effect<void> =>
+const setRawModeEffect = (isEnabled: boolean): Effect.Effect<void> =>
   process.stdin.isTTY && typeof process.stdin.setRawMode === "function"
     ? pipe(
       Effect.try(() => {
-        process.stdin.setRawMode(enabled)
+        process.stdin.setRawMode(isEnabled)
       }),
       Effect.ignore
     )
@@ -267,7 +274,7 @@ export const resumeTui = (): Effect.Effect<void, never, TerminalCursorRuntime> =
     Effect.gen(function*(_) {
       yield* _(repairInteractiveTerminal(writeTerminalControl))
       // Return to the alternate screen for Ink rendering.
-      yield* _(writeTerminalControlEffect("\u001B[?1049h\u001B[2J\u001B[H"))
+      yield* _(writeTerminalControlEffect("\u{1B}[?1049h\u{1B}[2J\u{1B}[H"))
       yield* _(setRawModeEffect(true))
       yield* _(Effect.sync(() => {
         disableTerminalInputModes()

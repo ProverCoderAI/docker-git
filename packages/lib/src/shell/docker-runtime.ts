@@ -80,15 +80,16 @@ export const runDockerInspectContainerBridgeIp = createDockerInspectReader(
 
 export const runDockerPsNames = (
   cwd: string
-): Effect.Effect<ReadonlyArray<string>, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  pipe(
+): Effect.Effect<ReadonlyArray<string>, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const successExitCode = Number(ExitCode(0))
+  return pipe(
     runCommandCapture(
       {
         cwd,
         command: "docker",
         args: ["ps", "--format", "{{.Names}}"]
       },
-      [Number(ExitCode(0))],
+      [successExitCode],
       (exitCode) => new CommandFailedError({ command: "docker ps", exitCode })
     ),
     Effect.map((output) =>
@@ -98,3 +99,4 @@ export const runDockerPsNames = (
         .filter((line) => line.length > 0)
     )
   )
+}

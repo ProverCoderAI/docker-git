@@ -224,7 +224,7 @@ describe("menu-create-shared", () => {
   })
 
   it("maps create-mode steps to the matching display row when opening browser Settings", () => {
-    const createView = {
+    const creationView = {
       ...createFeatureRepoSettingsView(cwd),
       step: 1,
       values: {
@@ -232,12 +232,12 @@ describe("menu-create-shared", () => {
         cpuLimit: "40%"
       }
     }
-    const displayView = createDisplayFlowView(createView)
+    const displayView = createDisplayFlowView(creationView)
 
-    expect(resolveCreateFlowSteps(createView.values)[createView.step]).toBe("ramLimit")
+    expect(resolveCreateFlowSteps(creationView.values)[creationView.step]).toBe("ramLimit")
     expect(resolveCreateDisplaySteps()[displayView.step]).toBe("ramLimit")
-    expect(displayView.buffer).toBe(createView.buffer)
-    expect(displayView.values).toEqual(createView.values)
+    expect(displayView.buffer).toBe(creationView.buffer)
+    expect(displayView.values).toEqual(creationView.values)
   })
 
   it("does not navigate settings from the repo URL step", () => {
@@ -301,16 +301,17 @@ describe("menu-create-shared", () => {
   })
 
   it("completes after applying generated only remaining create settings", () => {
+    const generatedSettingsArbitrary = fc.record({
+      cpuLimit: fc.constantFrom("", "25%", "50%"),
+      enableMcpPlaywright: fc.boolean(),
+      force: fc.boolean(),
+      gpu: fc.constantFrom<CreateInputs["gpu"]>("none", "all"),
+      ramLimit: fc.constantFrom("", "2g", "4g"),
+      runUp: fc.boolean()
+    })
     fc.assert(
       fc.property(
-        fc.record({
-          cpuLimit: fc.constantFrom("", "25%", "50%"),
-          enableMcpPlaywright: fc.boolean(),
-          force: fc.boolean(),
-          gpu: fc.constantFrom<CreateInputs["gpu"]>("none", "all"),
-          ramLimit: fc.constantFrom("", "2g", "4g"),
-          runUp: fc.boolean()
-        }),
+        generatedSettingsArbitrary,
         ({ force, ...generatedValues }) => {
           const values = {
             outDir: defaultRoot,

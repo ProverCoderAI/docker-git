@@ -43,10 +43,10 @@ class FakeWebSocket {
   static readonly CLOSED = 3
   static readonly instances: Array<FakeWebSocket> = []
 
+  private readonly listeners: Array<FakeSocketListener> = []
   readonly sent: Array<string> = []
   readonly url: string
   readyState = FakeWebSocket.CONNECTING
-  private readonly listeners: Array<FakeSocketListener> = []
 
   constructor(url: string) {
     this.url = url
@@ -63,16 +63,8 @@ class FakeWebSocket {
       this.listeners.push({ listener, type: "message" })
       return
     }
-    if (isVoidSocketListener(type, listener)) {
-      if (type === "close") {
-        this.listeners.push({ listener, type: "close" })
-      }
-      if (type === "error") {
-        this.listeners.push({ listener, type: "error" })
-      }
-      if (type === "open") {
-        this.listeners.push({ listener, type: "open" })
-      }
+    if (type !== "message" && isVoidSocketListener(type, listener)) {
+      this.listeners.push({ listener, type })
     }
   }
 
@@ -115,8 +107,8 @@ const loadTerminalSessionClient = Effect.tryPromise({
   catch: (error) => (error instanceof Error ? error : new Error(String(error)))
 })
 
-const originalStdinIsTty = process.stdin.isTTY
-const originalStdoutIsTty = process.stdout.isTTY
+const isOriginalStdinIsTty = process.stdin.isTTY
+const isOriginalStdoutIsTty = process.stdout.isTTY
 const originalStdoutColumns = process.stdout.columns
 const originalStdoutRows = process.stdout.rows
 const originalStdinOff = process.stdin.off.bind(process.stdin)
@@ -128,7 +120,7 @@ const originalSetRawMode = typeof process.stdin.setRawMode === "function"
   ? process.stdin.setRawMode.bind(process.stdin)
   : undefined
 
-const setRawModeMock = vi.fn((_enabled: boolean) => process.stdin)
+const setRawModeMock = vi.fn((_isEnabled: boolean) => process.stdin)
 const stdinOnMock = vi.fn((_event: string, _listener: StdinListener) => process.stdin)
 const stdinOffMock = vi.fn((_event: string, _listener: StdinListener) => process.stdin)
 const stdoutOnMock = vi.fn((_event: string, _listener: StdoutListener) => process.stdout)
@@ -206,39 +198,52 @@ describe("terminal-session-client", () => {
 
     vi.stubGlobal("WebSocket", FakeWebSocket)
     Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true })
-    Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true })
-    Object.defineProperty(process.stdout, "columns", { configurable: true, value: 132 })
-    Object.defineProperty(process.stdout, "rows", { configurable: true, value: 40 })
-    Object.defineProperty(process.stdin, "setRawMode", { configurable: true, value: setRawModeMock })
-    Object.defineProperty(process.stdin, "on", { configurable: true, value: stdinOnMock })
-    Object.defineProperty(process.stdin, "off", { configurable: true, value: stdinOffMock })
-    Object.defineProperty(process.stdout, "on", { configurable: true, value: stdoutOnMock })
-    Object.defineProperty(process.stdout, "off", { configurable: true, value: stdoutOffMock })
+    Object.defineProperties(process.stdout, {
+      isTTY: { configurable: true, value: true },
+      columns: { configurable: true, value: 132 },
+      rows: { configurable: true, value: 40 }
+    })
+    Object.defineProperties(process.stdin, {
+      setRawMode: { configurable: true, value: setRawModeMock },
+      on: { configurable: true, value: stdinOnMock },
+      off: { configurable: true, value: stdinOffMock }
+    })
+    Object.defineProperties(process.stdout, {
+      on: { configurable: true, value: stdoutOnMock },
+      off: { configurable: true, value: stdoutOffMock }
+    })
     Object.defineProperty(process.stdin, "resume", { configurable: true, value: stdinResumeMock })
   })
 
   afterEach(() => {
     vi.useRealTimers()
-    Object.defineProperty(process.stdin, "setRawMode", { configurable: true, value: originalSetRawMode })
-    Object.defineProperty(process.stdin, "on", { configurable: true, value: originalStdinOn })
-    Object.defineProperty(process.stdin, "off", { configurable: true, value: originalStdinOff })
-    Object.defineProperty(process.stdout, "on", { configurable: true, value: originalStdoutOn })
-    Object.defineProperty(process.stdout, "off", { configurable: true, value: originalStdoutOff })
-    Object.defineProperty(process.stdin, "resume", { configurable: true, value: originalStdinResume })
-    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: originalStdinIsTty })
-    Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: originalStdoutIsTty })
-    Object.defineProperty(process.stdout, "columns", { configurable: true, value: originalStdoutColumns })
-    Object.defineProperty(process.stdout, "rows", { configurable: true, value: originalStdoutRows })
+    Object.defineProperties(process.stdin, {
+      setRawMode: { configurable: true, value: originalSetRawMode },
+      on: { configurable: true, value: originalStdinOn },
+      off: { configurable: true, value: originalStdinOff }
+    })
+    Object.defineProperties(process.stdout, {
+      on: { configurable: true, value: originalStdoutOn },
+      off: { configurable: true, value: originalStdoutOff }
+    })
+    Object.defineProperties(process.stdin, {
+      resume: { configurable: true, value: originalStdinResume },
+      isTTY: { configurable: true, value: isOriginalStdinIsTty }
+    })
+    Object.defineProperties(process.stdout, {
+      isTTY: { configurable: true, value: isOriginalStdoutIsTty },
+      columns: { configurable: true, value: originalStdoutColumns },
+      rows: { configurable: true, value: originalStdoutRows }
+    })
     vi.unstubAllGlobals()
   })
 
   it("fails fast when the websocket never opens", () =>
     Effect.gen(function*(_) {
       const { attachTerminalSession } = yield* _(loadTerminalSessionClient)
-      const result = yield* _(Effect.promise(() => {
-        const promise = Effect.runPromise(attachTerminalSession(makeAttachment()).pipe(Effect.either))
-        return vi.advanceTimersByTimeAsync(3001).then(() => promise)
-      }))
+      const attachPromise = Effect.runPromise(attachTerminalSession(makeAttachment()).pipe(Effect.either))
+      yield* _(Effect.promise(() => vi.advanceTimersByTimeAsync(3001)))
+      const result = yield* _(Effect.promise(() => attachPromise))
 
       expect(Either.isLeft(result)).toBe(true)
       if (Either.isLeft(result)) {
@@ -259,7 +264,8 @@ describe("terminal-session-client", () => {
       const { attachTerminalSession } = yield* _(loadTerminalSessionClient)
       const { promise, socket } = startOpenedAttachment(attachTerminalSession)
 
-      const result = yield* _(Effect.promise(() => vi.advanceTimersByTimeAsync(5001).then(() => promise)))
+      yield* _(Effect.promise(() => vi.advanceTimersByTimeAsync(5001)))
+      const result = yield* _(Effect.promise(() => promise))
 
       expect(Either.isLeft(result)).toBe(true)
       if (Either.isLeft(result)) {

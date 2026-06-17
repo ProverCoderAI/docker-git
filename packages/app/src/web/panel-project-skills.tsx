@@ -70,7 +70,7 @@ const SkillEditorActions = (
 
 const useSkillDraft = (skill: ProjectSkillFile) => {
   const [draft, setDraft] = useState(skill.content)
-  const [dirty, setDirty] = useState(false)
+  const [isDirty, setDirty] = useState(false)
 
   useEffect(() => {
     setDraft(skill.content)
@@ -82,7 +82,7 @@ const useSkillDraft = (skill: ProjectSkillFile) => {
     setDirty(value !== skill.content)
   }
 
-  return { dirty, draft, handleChange }
+  return { dirty: isDirty, draft, handleChange }
 }
 
 const SkillEditor = (
@@ -96,7 +96,7 @@ const SkillEditor = (
     readonly skill: ProjectSkillFile
   }
 ): JSX.Element => {
-  const { dirty, draft, handleChange } = useSkillDraft(skill)
+  const { dirty: isDirty, draft, handleChange } = useSkillDraft(skill)
   const handleSave = () => {
     onSave(draft)
   }
@@ -113,7 +113,7 @@ const SkillEditor = (
         placeholder="# Skill\n\nDescribe what this skill does…"
         value={draft}
       />
-      <SkillEditorActions dirty={dirty} onDelete={onDelete} onSave={handleSave} />
+      <SkillEditorActions dirty={isDirty} onDelete={onDelete} onSave={handleSave} />
     </Box>
   )
 }

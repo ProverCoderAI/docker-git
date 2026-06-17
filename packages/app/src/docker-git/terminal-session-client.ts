@@ -72,7 +72,7 @@ const resolveTerminalWebSocketUrl = (websocketPath: string): string => {
   apiBaseUrl.pathname = `${apiBaseUrl.pathname.replace(/\/$/u, "")}${websocketPath}`
   apiBaseUrl.searchParams.set("cols", String(cols))
   apiBaseUrl.searchParams.set("rows", String(rows))
-  return apiBaseUrl.toString()
+  return apiBaseUrl.href
 }
 
 const sendResize = (socket: WebSocket): void => {
@@ -84,9 +84,9 @@ const sendResize = (socket: WebSocket): void => {
   }))
 }
 
-const setRawMode = (enabled: boolean): void => {
+const setRawMode = (isEnabled: boolean): void => {
   if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
-    process.stdin.setRawMode(enabled)
+    process.stdin.setRawMode(isEnabled)
   }
 }
 
@@ -313,10 +313,12 @@ const registerTerminalSocketHandlers = (socket: WebSocket, handlers: TerminalHan
 
 const createTerminalCancel = (lifecycle: TerminalLifecycle, cleanup: () => void): Effect.Effect<void> =>
   Effect.sync(() => {
-    if (!lifecycle.settled) {
-      lifecycle.settled = true
-      cleanup()
+    if (lifecycle.settled) {
+      return
     }
+
+    lifecycle.settled = true
+    cleanup()
   })
 
 export const attachTerminalSession = (

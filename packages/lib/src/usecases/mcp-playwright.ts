@@ -42,11 +42,11 @@ export const enableMcpPlaywrightProjectFiles = (
 ): Effect.Effect<TemplateConfig, McpPlaywrightFilesError, McpPlaywrightFilesEnv> =>
   Effect.gen(function*(_) {
     const config = yield* _(readProjectConfig(projectDir))
-    const alreadyEnabled = config.template.enableMcpPlaywright
-    const updated = alreadyEnabled ? config.template : enableInTemplate(config.template)
+    const wasAlreadyEnabled = config.template.enableMcpPlaywright
+    const updated = wasAlreadyEnabled ? config.template : enableInTemplate(config.template)
 
     yield* _(
-      alreadyEnabled
+      wasAlreadyEnabled
         ? Effect.log("Playwright MCP is already enabled for this project.")
         : Effect.log("Enabling Playwright MCP for this project (templates only)...")
     )

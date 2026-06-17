@@ -40,7 +40,7 @@ export const authStreamMarkerExitCode = (output: string, markers: AuthStreamMark
     : failureLine.slice(markers.errorPrefix.length)
 }
 
-export const authStreamSucceeded = (output: string, markers: AuthStreamMarkers): boolean =>
+export const didAuthStreamSucceed = (output: string, markers: AuthStreamMarkers): boolean =>
   output.includes(markers.success)
 
 const providerLoginFailureMessage = (

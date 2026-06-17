@@ -2,7 +2,7 @@ import * as fc from "fast-check"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { submitCreateInputs } from "../../src/web/actions-projects.js"
-import { handleCreateKey, setCreateBuffer, submitCreateView } from "../../src/web/app-ready-create.js"
+import { didHandleCreateKey, setCreateBuffer, submitCreateView } from "../../src/web/app-ready-create.js"
 import {
   type CreateFlowView,
   createInitialFlowView,
@@ -94,32 +94,32 @@ describe("app-ready-create", () => {
     { name: "Enter", shiftKey: false },
     { name: "Shift+Enter", shiftKey: true }
   ])("shows an inline error for empty repo URL keyboard submit on $name", ({ shiftKey }) => {
-    expectEmptyRepoKeyboardInlineError(handleCreateKey, submitCreateInputsMock, shiftKey)
+    expectEmptyRepoKeyboardInlineError(didHandleCreateKey, submitCreateInputsMock, shiftKey)
   })
 
   it("validates empty repo URL before GitHub auth", () => {
-    const createView = createInitialFlowView("")
-    const { context, setCreateViewSpy } = runSubmitCreateView(submitCreateView, createView, {
+    const creationView = createInitialFlowView("")
+    const { context, setCreateViewSpy } = runSubmitCreateView(submitCreateView, creationView, {
       contextOverrides: {},
       mode: "quick-create"
     })
 
-    expectCreateViewInputError(setCreateViewSpy, createView)
+    expectCreateViewInputError(setCreateViewSpy, creationView)
     expect(context.setMessage).not.toHaveBeenCalled()
     expect(context.setActiveScreen).not.toHaveBeenCalled()
   })
 
   it("clears the inline repo URL error after editing the buffer", () => {
-    const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-    const createView: CreateFlowView = {
+    const { setCreationView, spy: setCreateViewSpy } = createSetCreateViewSpy()
+    const creationView: CreateFlowView = {
       ...createInitialFlowView(""),
       inputError: EMPTY_REPO_URL_ERROR
     }
 
-    setCreateBuffer(createView, setCreateView, "https://github.com/org/repo")
+    setCreateBuffer(creationView, setCreationView, "https://github.com/org/repo")
 
     expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])).toEqual({
-      ...createView,
+      ...creationView,
       buffer: "https://github.com/org/repo",
       inputError: null
     })

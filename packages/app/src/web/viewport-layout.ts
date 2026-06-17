@@ -43,7 +43,7 @@ export const resolveViewportLayout = (size: ViewportSize): ViewportLayout => {
   const mode = resolveViewportLayoutMode(size)
   const layoutHeight = size.layoutHeight ?? size.height
   const visibleRatio = layoutHeight <= 0 ? 1 : size.height / layoutHeight
-  const keyboardOpen = mode === "mobile" &&
+  const isKeyboardOpen = mode === "mobile" &&
     layoutHeight - size.height >= keyboardViewportLossThresholdPx &&
     visibleRatio <= keyboardVisibleRatioThreshold
 
@@ -51,7 +51,7 @@ export const resolveViewportLayout = (size: ViewportSize): ViewportLayout => {
     compact: mode !== "desktop",
     dense: size.height <= denseMaxHeight,
     fontSize: stableWebFontSize,
-    keyboardOpen,
+    keyboardOpen: isKeyboardOpen,
     mode,
     viewportHeight: size.height,
     viewportOffsetLeft: size.offsetLeft ?? 0,

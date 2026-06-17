@@ -10,6 +10,10 @@ import { type BrowserOpenMockWindow, makeBrowserOpenMockWindow, stubBrowserOpen 
 
 const openSkillerMock = vi.hoisted(() => vi.fn())
 
+const globalsCleanup = Effect.sync(() => {
+  vi.unstubAllGlobals()
+})
+
 const proofScope = {
   containerCodexSkillsPath: "/home/dev/.codex/skills",
   containerHomePath: "/home/dev",
@@ -222,9 +226,7 @@ describe("web Skiller actions", () => {
                 expect(context.setBusyLabel).toHaveBeenCalledWith("Opening Skiller")
                 expect(context.setBusyLabel).toHaveBeenLastCalledWith(null)
               }).pipe(
-                Effect.ensuring(Effect.sync(() => {
-                  vi.unstubAllGlobals()
-                }))
+                Effect.ensuring(globalsCleanup)
               )
             )),
           { numRuns: 20 }

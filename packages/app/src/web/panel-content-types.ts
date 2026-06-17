@@ -11,7 +11,7 @@ export type ContentPanelProps = {
   readonly controllerCwd: string
   readonly dashboardRefreshTick: number
   readonly projectsRoot: string
-  readonly createView: CreateFlowView
+  readonly creationView: CreateFlowView
   readonly currentMenu: BrowserMenuTag
   readonly githubStatus: GithubAuthStatus | null
   readonly onActionPromptCancel: () => void

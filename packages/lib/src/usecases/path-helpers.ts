@@ -34,7 +34,7 @@ const expandHome = (value: string, home: string | null): string => {
 const trimTrailingSlash = (value: string): string => {
   let end = value.length
   while (end > 0) {
-    if (end === 1 && value[0] === "/") {
+    if (end === 1 && value.at(0) === "/") {
       break
     }
     if (end === 3 && /^[a-z]:[\\/]/iu.test(value.slice(0, end))) {
@@ -108,8 +108,8 @@ export const findExistingUpwards = (
 
     for (let depth = 0; depth <= maxDepth; depth += 1) {
       const candidate = path.join(current, fileName)
-      const exists = yield* _(fs.exists(candidate))
-      if (exists) {
+      const isExists = yield* _(fs.exists(candidate))
+      if (isExists) {
         return candidate
       }
 

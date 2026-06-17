@@ -204,7 +204,11 @@ export const collectRemoteIdentities = (
       const identity = normalizeRepoIdentity(url)
       identityMap.set(`${identity.fullPath}|${identity.repo}`, identity)
     }
-    return [...identityMap.values()]
+    const identities: Array<RepoIdentity> = []
+    identityMap.forEach((identity) => {
+      identities.push(identity)
+    })
+    return identities
   })
 
 export const gitCapture = tryGitCapture

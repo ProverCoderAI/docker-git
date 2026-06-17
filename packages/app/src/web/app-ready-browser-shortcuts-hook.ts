@@ -11,9 +11,9 @@ export const useBrowserShortcuts = ({ ...args }: BrowserShortcutArgs) => {
     const handleKeyDown = (event: KeyboardEvent) => {
       onKeyDown(event)
     }
-    globalThis.addEventListener("keydown", handleKeyDown)
+    addEventListener("keydown", handleKeyDown)
     return () => {
-      globalThis.removeEventListener("keydown", handleKeyDown)
+      removeEventListener("keydown", handleKeyDown)
     }
   }, [onKeyDown])
 }

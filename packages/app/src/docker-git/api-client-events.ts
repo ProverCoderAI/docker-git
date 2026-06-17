@@ -206,15 +206,14 @@ export const waitForProjectCreation = (
 export const startProjectEventPolling = (projectId: string, initialCursor: number) =>
   Effect.gen(function*(_) {
     const cursorRef = yield* _(Ref.make(initialCursor))
+    const pollSchedule = Schedule.addDelay(
+      Schedule.forever,
+      () => projectEventPollInterval
+    )
     const fiber = yield* _(
       pollProjectEventsOnce(projectId, cursorRef).pipe(
         Effect.ignore,
-        Effect.repeat(
-          Schedule.addDelay(
-            Schedule.forever,
-            () => projectEventPollInterval
-          )
-        ),
+        Effect.repeat(pollSchedule),
         Effect.fork
       )
     )

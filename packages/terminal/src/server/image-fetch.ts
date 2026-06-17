@@ -41,9 +41,9 @@ const supportedExtensionMediaTypes = new Map<string, string>([
 ])
 
 const controlCharRange = `${String.fromCodePoint(0)}-${String.fromCodePoint(0x1F)}`
-const deleteChar = String.fromCodePoint(0x7F)
+const ruboutChar = String.fromCodePoint(0x7F)
 const invalidCharacterPattern = new RegExp(
-  String.raw`[\s${controlCharRange}${deleteChar}]`,
+  String.raw`[\s${controlCharRange}${ruboutChar}]`,
   "u"
 )
 const traversalPattern = /(?:^|\/)(?:\.|\.\.)(?=\/|$)/u

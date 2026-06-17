@@ -31,17 +31,17 @@ const defaultGitlabTokenKeys: ReadonlyArray<string> = [
 ]
 
 export const gitlabRepoAccessMessage = (repoUrl: string, hasToken: boolean): string =>
-  hasToken
+  (hasToken
     ? [
       `GitLab access denied for repository: ${repoUrl}`,
       "Reason: the repository does not exist, is private, or the selected token has no rights.",
       "If you need access, run: docker-git auth gitlab login"
-    ].join("\n")
+    ]
     : [
       `GitLab repository is not accessible without auth: ${repoUrl}`,
       "Reason: the repository does not exist, is private, or a GitLab token/key is required.",
       "If you need access, run: docker-git auth gitlab login"
-    ].join("\n")
+    ]).join("\n")
 
 const findFirstEnvValue = (input: string, keys: ReadonlyArray<string>): string | null => {
   for (const key of keys) {

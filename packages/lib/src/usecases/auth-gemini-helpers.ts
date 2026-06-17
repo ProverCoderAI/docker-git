@@ -157,8 +157,8 @@ export const hasOauthCredentials = (
 ): Effect.Effect<boolean, PlatformError> =>
   Effect.gen(function*(_) {
     const credentialsDir = geminiCredentialsPath(accountPath)
-    const dirExists = yield* _(fs.exists(credentialsDir))
-    if (!dirExists) {
+    const isDirExists = yield* _(fs.exists(credentialsDir))
+    if (!isDirExists) {
       return false
     }
     // Check for various possible credential files Gemini CLI might create
@@ -169,8 +169,8 @@ export const hasOauthCredentials = (
       `${credentialsDir}/application_default_credentials.json`
     ]
     for (const filePath of possibleFiles) {
-      const fileExists = yield* _(isRegularFile(fs, filePath))
-      if (fileExists) {
+      const isFileExists = yield* _(isRegularFile(fs, filePath))
+      if (isFileExists) {
         return true
       }
     }
@@ -212,7 +212,7 @@ export const prepareGeminiCredentialsDir = (
 ) =>
   Effect.gen(function*(_) {
     const credentialsDir = geminiCredentialsPath(accountPath)
-    const removeFallback = pipe(
+    const fallbackRemoval = pipe(
       runCommandExitCode({
         cwd,
         command: "docker",
@@ -233,7 +233,7 @@ export const prepareGeminiCredentialsDir = (
 
     yield* _(
       fs.remove(credentialsDir, { recursive: true, force: true }).pipe(
-        Effect.orElse(() => removeFallback)
+        Effect.orElse(() => fallbackRemoval)
       )
     )
     yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))

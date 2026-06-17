@@ -25,8 +25,8 @@ const statusColor = (status: ProjectBrowserSession["status"]): string => {
 }
 
 const openUrl = (url: string): void => {
-  if (typeof globalThis.open === "function") {
-    globalThis.open(url, "_blank", "noopener")
+  if (typeof open === "function") {
+    open(url, "_blank", "noopener")
   }
 }
 
@@ -65,14 +65,14 @@ const BrowserStatusDetails = (
   if (browser === null || browser.projectId !== selectedProjectId) {
     return <Text fg="#8fa6c4" marginTop={1}>Browser status is not loaded.</Text>
   }
-  const browserRunning = browser.status === "running"
+  const isBrowserRunning = browser.status === "running"
   return (
     <Box flexDirection="column" gap={1} marginTop={1}>
       <Box alignItems="center" flexWrap="wrap" gap={1} justifyContent="space-between">
         <Text fg="#8fa6c4" wrap="truncate">Container: {browser.containerName}</Text>
         <Text bold={true} fg={statusColor(browser.status)}>{browser.status}</Text>
       </Box>
-      {browserRunning
+      {isBrowserRunning
         ? <BrowserLinks browser={browser} />
         : (
           <Text fg="#ffb86c" wrap="wrap">

@@ -91,7 +91,7 @@ export const attachLoadedSshSessionLink = (
   args: LoadedSshSessionAttachArgs,
   { projectDisplayName, projectKey, session }: LoadedSshSessionLink
 ): void => {
-  globalThis.history.replaceState(globalThis.history.state, "", projectSshRoutePath(projectKey, session.id))
+  history.replaceState(history.state, "", projectSshRoutePath(projectKey, session.id))
   showProjectTerminalScreen(args.actionContext, session.projectId)
   args.addTerminalSession(buildProjectActiveTerminalSession({
     onExit: args.actionContext.reloadDashboard,

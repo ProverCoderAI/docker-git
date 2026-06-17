@@ -11,8 +11,8 @@ export type DashboardProject = DashboardData["projects"][number]
 type SessionLookupResult = { readonly sessionId: string }
 export type ProjectLookupResult = { readonly terminalId?: string | undefined; readonly token: string }
 export type SshLinkRequest =
-  | ({ readonly kind: "project" } & ProjectLookupResult)
-  | ({ readonly kind: "session" } & SessionLookupResult)
+  | (ProjectLookupResult & { readonly kind: "project" })
+  | (SessionLookupResult & { readonly kind: "session" })
 
 const safeDecodeURIComponent = (value: string): string | null =>
   Either.getOrNull(Either.try({ try: () => decodeURIComponent(value), catch: () => null }))

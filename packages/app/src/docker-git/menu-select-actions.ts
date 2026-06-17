@@ -14,16 +14,16 @@ import type { ProjectItem } from "./project-item.js"
 export type SelectContext = MenuViewContext & {
   readonly activeDir: string | null
   readonly runner: MenuRunner
-  readonly setSshActive: (active: boolean) => void
+  readonly setSshActive: (isActive: boolean) => void
   readonly setSkipInputs: (update: (value: number) => number) => void
 }
 
 export const runConnectSelection = (
   selected: ProjectItem,
   context: SelectContext,
-  enableMcpPlaywright: boolean
+  shouldEnableMcpPlaywright: boolean
 ) => {
-  if (enableMcpPlaywright) {
+  if (shouldEnableMcpPlaywright) {
     context.setMessage(
       "Playwright MCP pre-connect toggle is not routed through the controller yet."
     )
@@ -32,23 +32,22 @@ export const runConnectSelection = (
 
   context.setMessage(`Connecting to ${selected.displayName}...`)
   context.setSshActive(true)
+  const connectEffect = buildConnectEffect(selected, false, {
+    connectWithUp: (item) => openResolvedProjectSshViaControllerWithUp(item),
+    enableMcpPlaywright: () => Effect.void
+  })
+  const onSessionEnded = Effect.sync(() => {
+    context.setMessage("SSH session ended. Press Esc to return to the menu.")
+  })
+  const onConnectFinalized = Effect.sync(() => {
+    context.setSshActive(false)
+    context.setSkipInputs(() => 2)
+  })
   context.runner.runInteractiveEffect(
     pipe(
-      buildConnectEffect(selected, false, {
-        connectWithUp: (item) => openResolvedProjectSshViaControllerWithUp(item),
-        enableMcpPlaywright: () => Effect.void
-      }),
-      Effect.tap(() =>
-        Effect.sync(() => {
-          context.setMessage("SSH session ended. Press Esc to return to the menu.")
-        })
-      ),
-      Effect.ensuring(
-        Effect.sync(() => {
-          context.setSshActive(false)
-          context.setSkipInputs(() => 2)
-        })
-      ),
+      connectEffect,
+      Effect.tap(() => onSessionEnded),
+      Effect.ensuring(onConnectFinalized),
       Effect.asVoid
     )
   )
@@ -56,35 +55,36 @@ export const runConnectSelection = (
 
 export const runDownSelection = (selected: ProjectItem, context: SelectContext) => {
   context.setMessage(`Stopping ${selected.displayName}...`)
-  context.runner.runEffect(
-    withSuspendedTui(
-      pipe(
-        downMenuProject(selected),
-        Effect.zipRight(listMenuRunningProjectItems),
-        Effect.flatMap((items) =>
-          pipe(
-            loadRuntimeByProject(items),
-            Effect.map((runtimeByProject) => ({ items, runtimeByProject }))
-          )
-        ),
-        Effect.tap(({ items, runtimeByProject }) =>
-          Effect.sync(() => {
-            if (items.length === 0) {
-              resetToMenu(context)
-              context.setMessage("No running docker-git containers.")
-              return
-            }
-            startSelectView(items, "Down", context, runtimeByProject)
-            context.setMessage("Container stopped. Select another to stop, or Esc to return.")
-          })
-        ),
-        Effect.asVoid
-      ),
-      {
-        onError: pauseOnError(renderMenuError),
-        onResume: resumeWithSkipInputs(context)
-      }
+  const loadItemsWithRuntime = (items: ReadonlyArray<ProjectItem>) =>
+    pipe(
+      loadRuntimeByProject(items),
+      Effect.map((runtimeByProject) => ({ items, runtimeByProject }))
     )
+  const presentRemainingItems = ({
+    items,
+    runtimeByProject
+  }: Effect.Effect.Success<ReturnType<typeof loadItemsWithRuntime>>) =>
+    Effect.sync(() => {
+      if (items.length === 0) {
+        resetToMenu(context)
+        context.setMessage("No running docker-git containers.")
+        return
+      }
+      startSelectView(items, "Down", context, runtimeByProject)
+      context.setMessage("Container stopped. Select another to stop, or Esc to return.")
+    })
+  const downEffect = pipe(
+    downMenuProject(selected),
+    Effect.zipRight(listMenuRunningProjectItems),
+    Effect.flatMap(loadItemsWithRuntime),
+    Effect.tap(presentRemainingItems),
+    Effect.asVoid
+  )
+  context.runner.runEffect(
+    withSuspendedTui(downEffect, {
+      onError: pauseOnError(renderMenuError),
+      onResume: resumeWithSkipInputs(context)
+    })
   )
 }
 
@@ -98,30 +98,27 @@ export const runAuthSelection = (selected: ProjectItem, context: SelectContext) 
 
 export const runDeleteSelection = (selected: ProjectItem, context: SelectContext) => {
   context.setMessage(`Deleting ${selected.displayName}...`)
+  const onProjectRemoved = Effect.sync(() => {
+    if (context.activeDir === selected.projectDir) {
+      context.setActiveDir(null)
+    }
+    context.setView({ _tag: "Menu" })
+  })
+  const onDeleteSucceeded = Effect.sync(() => {
+    context.setMessage("Project deleted.")
+  })
+  const projectRemovalEffect = deleteMenuProject(selected).pipe(
+    Effect.tap(() => onProjectRemoved),
+    Effect.asVoid
+  )
+  const suspendedDelete = withSuspendedTui(projectRemovalEffect, {
+    onError: pauseOnError(renderMenuError),
+    onResume: resumeWithSkipInputs(context)
+  })
   context.runner.runEffect(
     pipe(
-      withSuspendedTui(
-        deleteMenuProject(selected).pipe(
-          Effect.tap(() =>
-            Effect.sync(() => {
-              if (context.activeDir === selected.projectDir) {
-                context.setActiveDir(null)
-              }
-              context.setView({ _tag: "Menu" })
-            })
-          ),
-          Effect.asVoid
-        ),
-        {
-          onError: pauseOnError(renderMenuError),
-          onResume: resumeWithSkipInputs(context)
-        }
-      ),
-      Effect.tap(() =>
-        Effect.sync(() => {
-          context.setMessage("Project deleted.")
-        })
-      ),
+      suspendedDelete,
+      Effect.tap(() => onDeleteSucceeded),
       Effect.asVoid
     )
   )

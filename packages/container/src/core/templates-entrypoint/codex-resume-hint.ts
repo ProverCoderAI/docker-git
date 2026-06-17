@@ -3,10 +3,10 @@ import type { TemplateConfig } from "../domain.js"
 const escapeForDoubleQuotes = (value: string): string => {
   const backslash = String.fromCodePoint(92)
   return value
-    .replaceAll(backslash, `${backslash}${backslash}`)
+    .replaceAll(backslash, () => `${backslash}${backslash}`)
     .replaceAll(
       String.fromCodePoint(34),
-      `${backslash}${String.fromCodePoint(34)}`
+      () => `${backslash}${String.fromCodePoint(34)}`
     )
 }
 
@@ -99,5 +99,5 @@ export const renderEntrypointCodexResumeHint = (
   config: TemplateConfig
 ): string =>
   entrypointCodexResumeHintTemplate
-    .replaceAll("__REPO_REF_DEFAULT__", escapeForDoubleQuotes(config.repoRef))
-    .replaceAll("__REPO_URL_DEFAULT__", escapeForDoubleQuotes(config.repoUrl))
+    .replaceAll("__REPO_REF_DEFAULT__", () => escapeForDoubleQuotes(config.repoRef))
+    .replaceAll("__REPO_URL_DEFAULT__", () => escapeForDoubleQuotes(config.repoUrl))

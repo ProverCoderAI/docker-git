@@ -23,7 +23,7 @@ vi.mock("../../src/web/project-events.js", () => ({
   openProjectEventStream: openProjectEventStreamMock
 }))
 
-const createInputConfig = {
+const inputConfig = {
   cpuLimit: "75%",
   enableMcpPlaywright: true,
   force: false,
@@ -35,14 +35,14 @@ const createInputConfig = {
   repoUrl: "https://github.com/octocat/Hello-World.git"
 } satisfies Omit<CreateInputs, "runUp">
 
-const createInputs: CreateInputs = {
-  ...createInputConfig,
+const inputs: CreateInputs = {
+  ...inputConfig,
   runUp: true
 }
 
 const expectedCreateDraft = {
-  ...createInputConfig,
-  up: createInputs.runUp
+  ...inputConfig,
+  up: inputs.runUp
 }
 
 const project = {
@@ -124,7 +124,7 @@ const runCreateFlow = (
   Effect.gen(function*(_) {
     const { context, output, reloadDashboard, setMessage } = makeBrowserActionContext()
 
-    submitCreateInputs(createInputs, context)
+    submitCreateInputs(inputs, context)
 
     yield* _(waitForAssertion(() => {
       expect(openProjectEventStreamMock).toHaveBeenCalledTimes(1)

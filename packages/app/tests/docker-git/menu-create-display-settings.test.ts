@@ -84,9 +84,10 @@ describe("menu-create-shared display settings", () => {
   })
 
   it("applies a browser display setting and advances to the next row", () => {
+    const mcpPlaywrightView = createFlowViewAtStep(createFeatureRepoDisplaySettingsView(cwd), "mcpPlaywright")
     const next = expectDisplayModeView(expectCreateContinueView(advanceCreateDisplaySettingsStep(
       cwd,
-      { ...createFlowViewAtStep(createFeatureRepoDisplaySettingsView(cwd), "mcpPlaywright"), buffer: "y" }
+      { ...mcpPlaywrightView, buffer: "y" }
     )))
 
     expect(next.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
@@ -114,9 +115,10 @@ describe("menu-create-shared display settings", () => {
 
   it("navigates browser display settings without skipping applied rows", () => {
     const view = createFeatureRepoDisplaySettingsView(cwd)
+    const mcpPlaywrightView = createFlowViewAtStep(view, "mcpPlaywright")
     const applied = expectDisplayModeView(expectCreateContinueView(applyCreateDisplaySettingsStep(
       cwd,
-      { ...createFlowViewAtStep(view, "mcpPlaywright"), buffer: "y" }
+      { ...mcpPlaywrightView, buffer: "y" }
     )))
     const down = moveCreateDisplaySettingsStep(applied, "down")
     const up = moveCreateDisplaySettingsStep(applied, "up")
@@ -128,9 +130,10 @@ describe("menu-create-shared display settings", () => {
   })
 
   it("resolves horizontal choices against applied browser display rows", () => {
+    const mcpPlaywrightView = createFlowViewAtStep(createFeatureRepoDisplaySettingsView(cwd), "mcpPlaywright")
     const applied = expectDisplayModeView(expectCreateContinueView(applyCreateDisplaySettingsStep(
       cwd,
-      { ...createFlowViewAtStep(createFeatureRepoDisplaySettingsView(cwd), "mcpPlaywright"), buffer: "y" }
+      { ...mcpPlaywrightView, buffer: "y" }
     )))
 
     expect(resolveCreateSettingsChoiceBuffer(applied, "left")).toBe("n")
@@ -138,9 +141,10 @@ describe("menu-create-shared display settings", () => {
   })
 
   it("completes browser display settings with a valid active buffer", () => {
+    const mcpPlaywrightView = createFlowViewAtStep(createFeatureRepoDisplaySettingsView(cwd), "mcpPlaywright")
     const complete = expectCreateCompleteInputs(completeCreateDisplaySettingsFlow(
       cwd,
-      { ...createFlowViewAtStep(createFeatureRepoDisplaySettingsView(cwd), "mcpPlaywright"), buffer: "y" }
+      { ...mcpPlaywrightView, buffer: "y" }
     ))
 
     expect(complete.enableMcpPlaywright).toBe(true)

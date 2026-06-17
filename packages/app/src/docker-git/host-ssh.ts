@@ -22,13 +22,13 @@ export const autoOpenProjectSsh = (
   project: ApiProjectDetails | null
 ) =>
   Effect.gen(function*(_) {
-    const autoOpenSsh = yield* _(
+    const isAutoOpenSsh = yield* _(
       shouldAutoOpenSsh({
         shouldOpen: shouldOpenSsh(command),
         runUp: command.runUp
       })
     )
-    if (!autoOpenSsh) {
+    if (!isAutoOpenSsh) {
       return
     }
 

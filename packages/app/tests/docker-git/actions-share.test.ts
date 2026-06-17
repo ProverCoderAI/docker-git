@@ -55,8 +55,8 @@ const stoppedAtArbitrary = fc.integer({ max: 86_399_999, min: 0 }).map((millisec
   new Date(Date.UTC(2026, 4, 18, 0, 0, 0, milliseconds)).toISOString()
 )
 
-const clipboardImplementation = (succeeds: boolean): ClipboardWriteText => () =>
-  succeeds ? Effect.runPromise(Effect.void) : Effect.runPromise(Effect.fail(new Error("denied")))
+const clipboardImplementation = (willSucceed: boolean): ClipboardWriteText => () =>
+  willSucceed ? Effect.runPromise(Effect.void) : Effect.runPromise(Effect.fail(new Error("denied")))
 
 const copyTunnelWithClipboard = (implementation: ClipboardWriteText) => {
   const writeText = vi.fn(implementation)
@@ -185,11 +185,11 @@ describe("web share actions", () => {
 
   it.effect("reports generated clipboard copy outcomes", () =>
     assertAsyncFastCheck(
-      fc.asyncProperty(fc.boolean(), (succeeds) =>
+      fc.asyncProperty(fc.boolean(), (willSucceed) =>
         Effect.runPromise(
           expectCopyTunnelMessage(
-            clipboardImplementation(succeeds),
-            succeeds ? "Tunnel URL copied." : "Failed to copy tunnel URL."
+            clipboardImplementation(willSucceed),
+            willSucceed ? "Tunnel URL copied." : "Failed to copy tunnel URL."
           )
         )),
       { numRuns: 10 }

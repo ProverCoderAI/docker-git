@@ -83,7 +83,7 @@ const handleMenuNavigation = (
   setSelected: (update: (value: number) => number) => void
 ) => {
   if (key.upArrow) {
-    setSelected((prev) => (prev === 0 ? menuItems.length - 1 : prev - 1))
+    setSelected((prev) => (prev === 0 ? menuItems.length : prev) - 1)
     return
   }
   if (key.downArrow) {
@@ -99,7 +99,7 @@ const handleMenuEnter = (context: MenuSelectionContext) => {
   handleMenuActionSelection(action, context)
 }
 
-const handleMenuTextInput = (input: string, context: MenuSelectionContext): boolean => {
+const didHandleMenuTextInput = (input: string, context: MenuSelectionContext): boolean => {
   const trimmed = input.trim()
   if (trimmed.length > 0 && isRepoUrlInput(trimmed)) {
     context.setSkipInputs(() => 1)
@@ -128,5 +128,5 @@ export const handleMenuInput = (
     handleMenuEnter(context)
     return
   }
-  handleMenuTextInput(input, context)
+  didHandleMenuTextInput(input, context)
 }

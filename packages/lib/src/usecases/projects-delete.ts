@@ -91,8 +91,8 @@ export const deleteDockerGitProject = (
       return
     }
 
-    const exists = yield* _(fs.exists(targetDir))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(targetDir))
+    if (!isExists) {
       yield* _(Effect.logWarning(`Project directory already missing: ${targetDir}`))
       return
     }

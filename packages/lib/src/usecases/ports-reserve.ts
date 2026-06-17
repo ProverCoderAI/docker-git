@@ -90,9 +90,9 @@ export const loadReservedPorts = (
       if (!filter(item)) {
         continue
       }
-      const occupiedByDocker = publishedByDocker.has(item.sshPort)
-      const occupiedBySocket = occupiedByDocker ? false : !(yield* _(isPortAvailable(item.sshPort)))
-      if (occupiedByDocker || occupiedBySocket) {
+      const isOccupiedByDocker = publishedByDocker.has(item.sshPort)
+      const isOccupiedBySocket = isOccupiedByDocker ? false : !(yield* _(isPortAvailable(item.sshPort)))
+      if (isOccupiedByDocker || isOccupiedBySocket) {
         reservePort(reserved, seen, item.sshPort, item.projectDir)
       }
     }
@@ -144,11 +144,12 @@ export const selectAvailablePort = (
     if (Option.isSome(selected)) {
       return selected.value
     }
+    const effectiveAttempts = Math.max(1, attempts)
     return yield* _(
       Effect.fail(
         new PortProbeError({
           port: preferred,
-          message: `no available port in range ${preferred}-${preferred + Math.max(1, attempts) - 1}`
+          message: `no available port in range ${preferred}-${preferred + effectiveAttempts - 1}`
         })
       )
     )

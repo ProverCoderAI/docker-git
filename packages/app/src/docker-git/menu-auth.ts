@@ -29,7 +29,7 @@ type AuthContext = MenuViewContext & {
 }
 
 type AuthInputContext = AuthContext & {
-  readonly setSshActive: (active: boolean) => void
+  readonly setSshActive: (isActive: boolean) => void
   readonly setSkipInputs: (update: (value: number) => number) => void
 }
 

@@ -53,7 +53,7 @@ export const normalizeGithubHttpsRemote = (url: string): string | null => {
   return parts === null ? null : `https://github.com/${parts.owner}/${parts.repo}.git`
 }
 
-export const requiresGithubAuthHint = (originUrl: string, token: string | null | undefined): boolean =>
+export const shouldHintGithubAuth = (originUrl: string, token: string | null | undefined): boolean =>
   isGithubHttpsRemote(originUrl) && (token?.trim() ?? "").length === 0
 
 const resolveTokenFromProcessEnv = (): string | null => {
@@ -120,8 +120,8 @@ export const resolveGithubToken = (
     ]
 
     for (const envPath of candidates) {
-      const exists = yield* _(fs.exists(envPath))
-      if (!exists) {
+      const isExists = yield* _(fs.exists(envPath))
+      if (!isExists) {
         continue
       }
       const text = yield* _(fs.readFileString(envPath))

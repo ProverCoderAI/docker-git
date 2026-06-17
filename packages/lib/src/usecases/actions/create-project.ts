@@ -123,11 +123,11 @@ const resolveFinalAgentConfig = (
   })
 
 const maybeCleanupAfterAgent = (
-  waitForAgent: boolean,
+  shouldWaitForAgent: boolean,
   resolvedOutDir: string
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
-    if (!waitForAgent) {
+    if (!shouldWaitForAgent) {
       return
     }
     yield* _(Effect.log("Agent finished. Cleaning up container..."))
@@ -172,14 +172,14 @@ export const runPreparedProject = (
 ): Effect.Effect<void, CreateProjectError, CreateProjectRuntime> =>
   Effect.gen(function*(_) {
     const hasAgent = prepared.finalConfig.agentMode !== undefined
-    const waitForAgent = hasAgent && (prepared.finalConfig.agentAuto ?? false)
+    const shouldWaitForAgent = hasAgent && (prepared.finalConfig.agentAuto ?? false)
 
     yield* _(autoSyncState(`chore(state): update ${formatStateSyncLabel(prepared.projectConfig.repoUrl)}`))
     yield* _(
       runDockerUpIfNeeded(prepared.resolvedOutDir, prepared.projectConfig, {
         runUp: command.runUp,
         waitForClone: command.waitForClone,
-        waitForAgent,
+        waitForAgent: shouldWaitForAgent,
         force: command.force,
         forceEnv: command.forceEnv
       })
@@ -188,8 +188,8 @@ export const runPreparedProject = (
       yield* _(logDockerAccessInfo(prepared.resolvedOutDir, prepared.projectConfig))
     }
 
-    yield* _(maybeCleanupAfterAgent(waitForAgent, prepared.resolvedOutDir))
-    yield* _(maybeOpenSsh(command, hasAgent, waitForAgent, prepared.projectConfig))
+    yield* _(maybeCleanupAfterAgent(shouldWaitForAgent, prepared.resolvedOutDir))
+    yield* _(maybeOpenSsh(command, hasAgent, shouldWaitForAgent, prepared.projectConfig))
   }).pipe(Effect.asVoid)
 
 const runCreateProject = (

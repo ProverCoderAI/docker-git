@@ -12,9 +12,9 @@ const panelStyle: CSSProperties = {
   overflow: "hidden"
 }
 
-export const terminalPanelStyle = (mobileMode: boolean, keyboardOpen: boolean): CSSProperties => ({
+export const terminalPanelStyle = (isMobileMode: boolean, isKeyboardOpen: boolean): CSSProperties => ({
   ...panelStyle,
-  marginTop: mobileMode || keyboardOpen ? 0 : "8px"
+  marginTop: isMobileMode || isKeyboardOpen ? 0 : "8px"
 })
 
 export const headerStyle: CSSProperties = {
@@ -55,15 +55,15 @@ const bodyStyleKeyboardOpen: CSSProperties = {
   padding: 0
 }
 
-const terminalBodyStyle = (compactTypingMode: boolean, mobileMode: boolean): CSSProperties => {
-  if (compactTypingMode) {
+const terminalBodyStyle = (isCompactTypingMode: boolean, isMobileMode: boolean): CSSProperties => {
+  if (isCompactTypingMode) {
     return bodyStyleKeyboardOpen
   }
-  return mobileMode ? bodyStyleMobile : bodyStyle
+  return isMobileMode ? bodyStyleMobile : bodyStyle
 }
 
-export const terminalBodyFrameStyle = (compactTypingMode: boolean, mobileMode: boolean): CSSProperties => ({
-  ...terminalBodyStyle(compactTypingMode, mobileMode),
+export const terminalBodyFrameStyle = (isCompactTypingMode: boolean, isMobileMode: boolean): CSSProperties => ({
+  ...terminalBodyStyle(isCompactTypingMode, isMobileMode),
   boxSizing: "border-box",
   overflow: "hidden",
   position: "relative"
@@ -154,11 +154,11 @@ export const mobileArrowRowStyle: CSSProperties = {
   gridTemplateColumns: "repeat(4, minmax(0, 1fr))"
 }
 
-export const mobileControlButtonStyle = (active = false): CSSProperties => ({
-  background: active ? "#1d3550" : "#121a23",
-  border: `1px solid ${active ? "#78f0a3" : "#3a4652"}`,
+export const mobileControlButtonStyle = (isActive = false): CSSProperties => ({
+  background: isActive ? "#1d3550" : "#121a23",
+  border: `1px solid ${isActive ? "#78f0a3" : "#3a4652"}`,
   borderRadius: "8px",
-  color: active ? "#e8fff0" : "#d6e5f7",
+  color: isActive ? "#e8fff0" : "#d6e5f7",
   cursor: "pointer",
   font: "inherit",
   fontWeight: 600,

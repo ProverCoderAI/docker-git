@@ -24,10 +24,10 @@ const formatProjectStatusLine = (payload: JsonValue | undefined): string | null 
 
 const formatProjectSshLine = (payload: JsonValue | undefined): string | null => {
   const phase = readProjectEventPayloadField(payload, "phase")
-  const sessionId = readProjectEventPayloadField(payload, "sessionId")
   if (phase === null) {
     return null
   }
+  const sessionId = readProjectEventPayloadField(payload, "sessionId")
   return sessionId === null ? `[ssh] ${phase}` : `[ssh] ${phase} (${sessionId})`
 }
 

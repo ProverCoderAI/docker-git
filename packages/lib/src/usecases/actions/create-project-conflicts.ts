@@ -160,7 +160,7 @@ const deleteConflictingProjects = (
 export const deleteConflictingProjectsIfNeeded = (
   resolvedOutDir: string,
   config: DockerIdentityOwner,
-  force: boolean
+  shouldForce: boolean
 ): Effect.Effect<void, DockerIdentityConflictError | PlatformError | DockerCommandError, CreateProjectRuntime> =>
   Effect.gen(function*(_) {
     const state = yield* _(scanConflicts(resolvedOutDir, config))
@@ -168,7 +168,7 @@ export const deleteConflictingProjectsIfNeeded = (
       return
     }
 
-    if (!force) {
+    if (!shouldForce) {
       return yield* _(
         Effect.fail(new DockerIdentityConflictError({ projectDir: resolvedOutDir, conflicts: state.conflicts }))
       )

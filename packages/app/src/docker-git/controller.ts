@@ -26,7 +26,7 @@ import type { ControllerBootstrapError } from "./host-errors.js"
 export type { ControllerRuntime } from "./controller-docker.js"
 export { buildApiBaseUrlCandidates, isRemoteDockerHost } from "./controller-reachability.js"
 
-let selectedApiBaseUrl: string | undefined
+const apiBaseUrlCache: { selected: string | undefined } = { selected: undefined }
 
 const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
   _tag: "ControllerBootstrapError",
@@ -36,44 +36,39 @@ const controllerBootstrapError = (message: string): ControllerBootstrapError => 
 type ControllerEffect<A> = Effect.Effect<A, ControllerBootstrapError, ControllerDocker.ControllerRuntime>
 
 const rememberSelectedApiBaseUrl = (value: string): void => {
-  selectedApiBaseUrl = trimTrailingSlashes(value)
+  apiBaseUrlCache.selected = trimTrailingSlashes(value)
 }
 
 export const resolveApiBaseUrl = (): string =>
-  resolveExplicitApiBaseUrl() ?? selectedApiBaseUrl ?? resolveConfiguredApiBaseUrl()
+  resolveExplicitApiBaseUrl() ?? apiBaseUrlCache.selected ?? resolveConfiguredApiBaseUrl()
 
 const waitForReachableApiBaseUrl = (
   candidateUrls: ReadonlyArray<string>,
   currentContainerNetworks: DockerNetworkIps,
   controllerNetworks: DockerNetworkIps,
   expectedRevision: string | undefined
-): ControllerEffect<string> =>
-  pipe(
+): ControllerEffect<string> => {
+  const retrySchedule = Schedule.addDelay(Schedule.recurs(30), () => Duration.seconds(2))
+  return pipe(
     findReachableApiBaseUrl(candidateUrls, expectedRevision),
-    Effect.retry(
-      Schedule.addDelay(Schedule.recurs(30), () => Duration.seconds(2))
-    ),
+    Effect.retry(retrySchedule),
     Effect.matchEffect({
       onFailure: (error) =>
         Effect.gen(function*(_) {
           const diagnostics = yield* _(
             collectReachabilityDiagnostics(candidateUrls, currentContainerNetworks, controllerNetworks)
           )
-          return yield* _(
-            Effect.fail(
-              controllerBootstrapError(
-                [
-                  "docker-git controller did not become reachable.",
-                  error.message,
-                  diagnostics
-                ].join("\n")
-              )
-            )
-          )
+          const message = [
+            "docker-git controller did not become reachable.",
+            error.message,
+            diagnostics
+          ].join("\n")
+          return yield* _(Effect.fail(controllerBootstrapError(message)))
         }),
       onSuccess: (apiBaseUrl) => Effect.succeed(apiBaseUrl)
     })
   )
+}
 
 const failIfRemoteDockerWithoutApiUrl = (
   currentContainerNetworks: DockerNetworkIps
@@ -143,16 +138,16 @@ const loadControllerBootstrapContext = (): ControllerEffect<ControllerBootstrapC
     yield* _(prepareControllerResourceLimitEnv())
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
     const localControllerRevision = yield* _(ControllerDocker.prepareLocalControllerRevision())
-    const currentControllerExists = yield* _(ControllerDocker.controllerExists())
+    const isCurrentControllerExists = yield* _(ControllerDocker.controllerExists())
     const currentControllerRevision = yield* _(ControllerDocker.inspectControllerRevision())
     const currentImageRevision = yield* _(inspectControllerImageRevision())
     const currentContainerNetworks = yield* _(ControllerDocker.resolveCurrentContainerNetworks())
     const initialControllerNetworks = yield* _(
       ControllerDocker.inspectContainerNetworks(ControllerDocker.controllerContainerName)
     )
-    const forceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
-    const forceRecreateController = forceRecreateForResourceLimits ||
-      shouldForceRecreateController(currentControllerExists, localControllerRevision, currentControllerRevision)
+    const isForceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
+    const isForceRecreateController = isForceRecreateForResourceLimits ||
+      shouldForceRecreateController(isCurrentControllerExists, localControllerRevision, currentControllerRevision)
 
     return {
       explicitApiBaseUrl,
@@ -162,10 +157,10 @@ const loadControllerBootstrapContext = (): ControllerEffect<ControllerBootstrapC
       buildController: shouldBuildControllerImage({
         currentControllerRevision,
         currentImageRevision,
-        forceRecreateController,
+        forceRecreateController: isForceRecreateController,
         localControllerRevision
       }),
-      forceRecreateController,
+      forceRecreateController: isForceRecreateController,
       currentContainerNetworks,
       initialControllerNetworks
     }
@@ -179,7 +174,7 @@ const buildBootstrapCandidateUrls = (
   buildApiBaseUrlCandidates({
     explicitApiBaseUrl,
     defaultLocalApiBaseUrl: resolveDefaultLocalApiBaseUrl(),
-    cachedApiBaseUrl: selectedApiBaseUrl,
+    cachedApiBaseUrl: apiBaseUrlCache.selected,
     defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
     currentContainerNetworks,
     controllerNetworks,
@@ -265,7 +260,7 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
     if (explicitApiBaseUrl !== undefined) {
       const reachableBeforeDocker = yield* _(
         findReachableDirectHealthProbe({
-          cachedApiBaseUrl: selectedApiBaseUrl,
+          cachedApiBaseUrl: apiBaseUrlCache.selected,
           defaultLocalApiBaseUrl,
           explicitApiBaseUrl
         })
@@ -278,10 +273,10 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
     }
 
     const localControllerRevision = yield* _(ControllerDocker.prepareLocalControllerRevision())
-    const forceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
+    const isForceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
     const reachableBeforeDocker = yield* _(
       findReachableDirectHealthProbe({
-        cachedApiBaseUrl: selectedApiBaseUrl,
+        cachedApiBaseUrl: apiBaseUrlCache.selected,
         defaultLocalApiBaseUrl,
         explicitApiBaseUrl,
         expectedRevision: localControllerRevision
@@ -290,7 +285,7 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
     if (
       reachableBeforeDocker !== null &&
       reachableBeforeDocker.revision === localControllerRevision &&
-      !forceRecreateForResourceLimits
+      !isForceRecreateForResourceLimits
     ) {
       rememberSelectedApiBaseUrl(reachableBeforeDocker.apiBaseUrl)
       return
@@ -298,8 +293,8 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
 
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
     yield* _(failIfRemoteDockerWithoutApiUrl(bootstrapContext.currentContainerNetworks))
-    const reusedExistingController = yield* _(reuseReachableControllerIfPossible(bootstrapContext))
-    if (reusedExistingController) {
+    const isReusedExistingController = yield* _(reuseReachableControllerIfPossible(bootstrapContext))
+    if (isReusedExistingController) {
       return
     }
     yield* _(startAndRememberController(bootstrapContext))
@@ -315,12 +310,18 @@ export const restartController = (): ControllerEffect<void> =>
 
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
     yield* _(failIfRemoteDockerWithoutApiUrl(bootstrapContext.currentContainerNetworks))
-    const forceRecreateController = true
-    const buildController = shouldBuildControllerImage({
+    const isForceRecreateController = true
+    const isBuildController = shouldBuildControllerImage({
       currentControllerRevision: bootstrapContext.currentControllerRevision,
       currentImageRevision: bootstrapContext.currentImageRevision,
-      forceRecreateController,
+      forceRecreateController: isForceRecreateController,
       localControllerRevision: bootstrapContext.localControllerRevision
     })
-    yield* _(startAndRememberController({ ...bootstrapContext, buildController, forceRecreateController }))
+    yield* _(
+      startAndRememberController({
+        ...bootstrapContext,
+        buildController: isBuildController,
+        forceRecreateController: isForceRecreateController
+      })
+    )
   })

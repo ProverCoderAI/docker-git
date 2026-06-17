@@ -55,14 +55,14 @@ const normalizeDockerPathForCompare = (value: string): string => {
 
 const originalPrefixLength = (prefix: string): number => trimDockerPathTrailingSlash(prefix.trim()).length
 
-const pathStartsWith = (candidate: string, prefix: string): boolean => {
+const isPathUnderPrefix = (candidate: string, prefix: string): boolean => {
   const normalizedCandidate = normalizeDockerPathForCompare(candidate)
   const normalizedPrefix = normalizeDockerPathForCompare(prefix)
   return normalizedCandidate === normalizedPrefix || normalizedCandidate.startsWith(`${normalizedPrefix}/`)
 }
 
 const translatePathPrefix = (candidate: string, sourcePrefix: string, targetPrefix: string): string | null =>
-  pathStartsWith(candidate, sourcePrefix)
+  isPathUnderPrefix(candidate, sourcePrefix)
     ? `${targetPrefix}${candidate.slice(originalPrefixLength(sourcePrefix))}`
     : null
 
@@ -125,7 +125,7 @@ export const remapDockerBindHostPathFromMounts = (
 ): string => {
   let match: DockerMountBinding | null = null
   for (const mount of mounts) {
-    if (!pathStartsWith(hostPath, mount.destination)) {
+    if (!isPathUnderPrefix(hostPath, mount.destination)) {
       continue
     }
     if (match === null || mount.destination.length > match.destination.length) {

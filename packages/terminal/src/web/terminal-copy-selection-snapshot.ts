@@ -58,15 +58,15 @@ type TerminalSelectionNormalizedRangeSnapshot = {
 
 const terminalSelectionContextSnapshotTtlMs = 10_000
 
-const isNonNegativeInteger = (value: number): boolean => Number.isInteger(value) && value >= 0
+const isNonNegativeInteger = (value: number): boolean => Number.isSafeInteger(value) && value >= 0
 
-const isPositiveInteger = (value: number): boolean => Number.isInteger(value) && value > 0
+const isPositiveInteger = (value: number): boolean => Number.isSafeInteger(value) && value > 0
 
-const validTerminalSelectionColumn = (column: number, cols: number): boolean =>
+const isValidTerminalSelectionColumn = (column: number, cols: number): boolean =>
   isNonNegativeInteger(column) && column <= cols
 
-const validTerminalSelectionCell = (cell: TerminalSelectionCellPosition, cols: number): boolean =>
-  validTerminalSelectionColumn(cell.x, cols) && isNonNegativeInteger(cell.y)
+const isValidTerminalSelectionCell = (cell: TerminalSelectionCellPosition, cols: number): boolean =>
+  isValidTerminalSelectionColumn(cell.x, cols) && isNonNegativeInteger(cell.y)
 
 const terminalSelectionCellCompare = (
   left: TerminalSelectionCellPosition,
@@ -119,13 +119,13 @@ const readTerminalSelectionActiveBuffer = (
   }
 }
 
-const validTerminalSelectionRange = (
+const isValidTerminalSelectionRange = (
   range: TerminalSelectionBufferRange,
   cols: number,
   bufferLength: number
 ): boolean =>
-  validTerminalSelectionCell(range.start, cols) &&
-  validTerminalSelectionCell(range.end, cols) &&
+  isValidTerminalSelectionCell(range.start, cols) &&
+  isValidTerminalSelectionCell(range.end, cols) &&
   range.end.y < bufferLength
 
 const readTerminalSelectionNormalizedRangeSnapshot = (
@@ -138,7 +138,7 @@ const readTerminalSelectionNormalizedRangeSnapshot = (
     return null
   }
   const normalizedRange = normalizeTerminalSelectionRange(range)
-  if (!validTerminalSelectionRange(normalizedRange, cols, bufferLength)) {
+  if (!isValidTerminalSelectionRange(normalizedRange, cols, bufferLength)) {
     return null
   }
   const length = terminalSelectionRangeLength(normalizedRange, cols)
@@ -188,7 +188,7 @@ const canRestoreTerminalSelection = (
     snapshot.endRow < activeBuffer.length
 }
 
-const restoreTerminalSelection = (
+const didRestoreTerminalSelection = (
   terminal: TerminalSelectionRestoreTarget,
   snapshot: TerminalSelectionRestoreSnapshot
 ): boolean => {
@@ -203,8 +203,6 @@ export class TerminalSelectionContextSnapshot {
   private restoreSnapshot: TerminalSelectionRestoreSnapshot | null = null
   private selection = ""
   private timer: ReturnType<typeof setTimeout> | null = null
-
-  constructor(private readonly terminal: TerminalSelectionTarget & TerminalSelectionRestoreTarget) {}
 
   readonly clear = (): void => {
     this.restoreSnapshot = null
@@ -260,7 +258,7 @@ export class TerminalSelectionContextSnapshot {
     if (this.restoreSnapshot === null) {
       return false
     }
-    return restoreTerminalSelection(this.terminal, this.restoreSnapshot)
+    return didRestoreTerminalSelection(this.terminal, this.restoreSnapshot)
   }
 
   readonly writeToClipboardData = (clipboardData: TerminalCopyClipboardData | null): boolean => {
@@ -270,4 +268,6 @@ export class TerminalSelectionContextSnapshot {
     clipboardData.setData("text/plain", this.selection)
     return true
   }
+
+  constructor(private readonly terminal: TerminalSelectionTarget & TerminalSelectionRestoreTarget) {}
 }

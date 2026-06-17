@@ -6,7 +6,7 @@ import type { ContainerTask, ContainerTaskSnapshot, ProjectDetails, ProjectSumma
 type TaskPanelProps = {
   readonly includeDefault: boolean
   readonly logs: string
-  readonly onIncludeDefaultChange: (includeDefault: boolean) => void
+  readonly onIncludeDefaultChange: (shouldIncludeDefault: boolean) => void
   readonly onLoadLogs: (pid: number) => void
   readonly onRefreshTasks: () => void
   readonly onStopTask: (pid: number) => void

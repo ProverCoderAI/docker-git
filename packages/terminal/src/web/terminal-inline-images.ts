@@ -204,7 +204,7 @@ const renderInlineImageElement = (
   element.replaceChildren(link)
 }
 
-export const appendTerminalInlineImagePreview = (
+export const didAppendTerminalInlineImagePreview = (
   terminal: Terminal,
   lifecycle: TerminalLifecycleState,
   entry: TerminalInlineImageEntry

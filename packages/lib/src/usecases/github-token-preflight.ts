@@ -31,17 +31,17 @@ const defaultGithubTokenKeys: ReadonlyArray<string> = [
 ]
 
 export const githubRepoAccessMessage = (repoUrl: string, hasToken: boolean): string =>
-  hasToken
+  (hasToken
     ? [
       `GitHub access denied for repository: ${repoUrl}`,
       "Reason: the repository does not exist, is private, or the selected token has no rights.",
       "If you need access, run: docker-git auth github login --web"
-    ].join("\n")
+    ]
     : [
       `GitHub repository is not accessible without auth: ${repoUrl}`,
       "Reason: the repository does not exist, is private, or a GitHub token/key is required.",
       "If you need access, run: docker-git auth github login --web"
-    ].join("\n")
+    ]).join("\n")
 
 const findFirstEnvValue = (input: string, keys: ReadonlyArray<string>): string | null => {
   for (const key of keys) {
@@ -132,7 +132,7 @@ export const probeGithubRepoAccess = (
     const response = yield* _(
       client.get(`https://api.github.com/repos/${repo.owner}/${repo.repo}`, {
         headers: {
-          ...(token === null ? {} : { Authorization: `Bearer ${token}` }),
+          ...(token !== null && { Authorization: `Bearer ${token}` }),
           Accept: "application/vnd.github+json"
         }
       })

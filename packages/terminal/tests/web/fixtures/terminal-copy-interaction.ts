@@ -71,8 +71,6 @@ const isTerminalCopyTestMouseEvent = (event: Event): event is TerminalCopyTestMo
   "screenY" in event &&
   "shiftKey" in event
 
-const optionalBoolean = (value: boolean | undefined): boolean => value ?? false
-
 const optionalNumber = (value: number | undefined): number => value ?? 0
 
 const pressedButtonsByMouseButton: ReadonlyArray<number> = [1, 4, 2]
@@ -89,13 +87,13 @@ const resolveMouseOptions = (
   button: number,
   options: Partial<TerminalCopyTestMouseOptions>
 ): TerminalCopyTestMouseOptions => ({
-  altKey: optionalBoolean(options.altKey),
+  altKey: options.altKey ?? false,
   buttons: options.buttons ?? defaultButtons(type, button),
   clientX: optionalNumber(options.clientX),
   clientY: optionalNumber(options.clientY),
   screenX: optionalNumber(options.screenX),
   screenY: optionalNumber(options.screenY),
-  shiftKey: optionalBoolean(options.shiftKey)
+  shiftKey: options.shiftKey ?? false
 })
 
 export class FakeTerminalCopyMouseEvent extends Event {
@@ -173,12 +171,20 @@ export class FakeTerminalCopyEventTarget {
   private listeners: Array<TerminalCopyTestListener> = []
   readonly dispatchedEvents: Array<Event> = []
 
-  addEventListener(type: "copy", listener: TerminalCopyTestCopyListener, options: true): void
-  addEventListener(type: TerminalCopyTestMouseType, listener: TerminalCopyTestMouseListener, options: true): void
+  addEventListener(
+    type: "copy",
+    listener: TerminalCopyTestCopyListener,
+    isCapture: true | { readonly capture: true }
+  ): void
+  addEventListener(
+    type: TerminalCopyTestMouseType,
+    listener: TerminalCopyTestMouseListener,
+    isCapture: true | { readonly capture: true }
+  ): void
   addEventListener(
     type: TerminalCopyTestEventType,
     listener: TerminalCopyTestAnyListener,
-    _options: true
+    _isCapture: true | { readonly capture: true }
   ): void {
     if (isCopyTestListener(type, listener)) {
       this.listeners.push({ listener, type: "copy" })
@@ -193,12 +199,20 @@ export class FakeTerminalCopyEventTarget {
     this.listeners.push({ listener, phase: "bubble", type })
   }
 
-  removeEventListener(type: "copy", listener: TerminalCopyTestCopyListener, options: true): void
-  removeEventListener(type: TerminalCopyTestMouseType, listener: TerminalCopyTestMouseListener, options: true): void
+  removeEventListener(
+    type: "copy",
+    listener: TerminalCopyTestCopyListener,
+    isCapture: true | { readonly capture: true }
+  ): void
+  removeEventListener(
+    type: TerminalCopyTestMouseType,
+    listener: TerminalCopyTestMouseListener,
+    isCapture: true | { readonly capture: true }
+  ): void
   removeEventListener(
     type: TerminalCopyTestEventType,
     listener: TerminalCopyTestAnyListener,
-    _options: true
+    _isCapture: true | { readonly capture: true }
   ): void {
     this.listeners = this.listeners.filter((entry) => entry.type !== type || entry.listener !== listener)
   }

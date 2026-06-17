@@ -127,8 +127,8 @@ export const ensureCodexConfigFile = (
       const resolved = resolvePathFromBase(path, baseDir, codexAuthPath)
       const configPath = path.join(resolved, "config.toml")
       const writeConfig = Effect.gen(function*(__) {
-        const exists = yield* __(fs.exists(configPath))
-        if (exists) {
+        const isExists = yield* __(fs.exists(configPath))
+        if (isExists) {
           const current = yield* __(fs.readFileString(configPath))
           if (!shouldRewriteDockerGitCodexConfig(current)) {
             return
@@ -197,8 +197,8 @@ export const migrateLegacyOrchLayout = (
   withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
       const legacyRoot = path.resolve(baseDir, ".orch")
-      const legacyExists = yield* _(fs.exists(legacyRoot))
-      if (!legacyExists) {
+      const isLegacyExists = yield* _(fs.exists(legacyRoot))
+      if (!isLegacyExists) {
         return
       }
       const legacyInfo = yield* _(fs.stat(legacyRoot))

@@ -114,7 +114,7 @@ const runCodexAuthCommand = (
   accountPath: string,
   args: ReadonlyArray<string>,
   commandLabel: string,
-  interactive: boolean
+  isInteractive: boolean
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   runDockerAuth(
     buildDockerAuthSpec({
@@ -124,7 +124,7 @@ const runCodexAuthCommand = (
       containerPath: codexHome,
       env: `CODEX_HOME=${codexHome}`,
       args,
-      interactive
+      interactive: isInteractive
     }),
     [0],
     (exitCode) => new CommandFailedError({ command: commandLabel, exitCode })
@@ -182,13 +182,15 @@ const runCodexLogout = (
 // COMPLEXITY: O(command)
 export const authCodexLogin = (
   command: AuthCodexLoginCommand
-): Effect.Effect<void, CommandFailedError | PlatformError, CodexRuntime> =>
-  withCodexAuth(command, ({ accountPath, cwd }) =>
+): Effect.Effect<void, CommandFailedError | PlatformError, CodexRuntime> => {
+  const accountLabel = normalizeAccountLabel(command.label, "default")
+  return withCodexAuth(command, ({ accountPath, cwd }) =>
     runCodexLogin(cwd, accountPath).pipe(
       Effect.flatMap((output) => (output.length === 0 ? Effect.void : Effect.log(output)))
     )).pipe(
-      Effect.zipRight(autoSyncState(`chore(state): auth codex ${normalizeAccountLabel(command.label, "default")}`))
+      Effect.zipRight(autoSyncState(`chore(state): auth codex ${accountLabel}`))
     )
+}
 
 // CHANGE: show Codex auth status for a given label
 // WHY: make it obvious whether Codex is connected
@@ -229,7 +231,9 @@ export const authCodexStatus = (
 // COMPLEXITY: O(command)
 export const authCodexLogout = (
   command: AuthCodexLogoutCommand
-): Effect.Effect<void, CommandFailedError | PlatformError, CodexRuntime> =>
-  withCodexAuth(command, ({ accountPath, cwd }) => runCodexLogout(cwd, accountPath)).pipe(
-    Effect.zipRight(autoSyncState(`chore(state): auth codex logout ${normalizeAccountLabel(command.label, "default")}`))
+): Effect.Effect<void, CommandFailedError | PlatformError, CodexRuntime> => {
+  const accountLabel = normalizeAccountLabel(command.label, "default")
+  return withCodexAuth(command, ({ accountPath, cwd }) => runCodexLogout(cwd, accountPath)).pipe(
+    Effect.zipRight(autoSyncState(`chore(state): auth codex logout ${accountLabel}`))
   )
+}

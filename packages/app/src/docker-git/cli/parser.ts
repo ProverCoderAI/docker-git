@@ -46,8 +46,8 @@ const parseBrowser = (args: ReadonlyArray<string>): Either.Either<Command, Parse
 // INVARIANT: activeOnly is true only when --active flag is present
 // COMPLEXITY: O(n) where n = |args|
 const parseApplyAll = (args: ReadonlyArray<string>): Either.Either<Command, ParseError> => {
-  const activeOnly = args.includes("--active")
-  const command: Command = { _tag: "ApplyAll", activeOnly }
+  const isActiveOnly = args.includes("--active")
+  const command: Command = { _tag: "ApplyAll", activeOnly: isActiveOnly }
   return Either.right(command)
 }
 

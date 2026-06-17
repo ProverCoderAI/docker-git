@@ -23,6 +23,17 @@ export const renderProjectAuthMenu = (
   const el = React.createElement
   const list = renderSelectableMenuList(projectAuthMenuLabels(), selected)
 
+  const githubLabelLine = `GitHub label: ${renderActiveLabel(snapshot.activeGithubLabel)}`
+  const githubTokenLine = renderCountLine("Available GitHub tokens", snapshot.githubTokenEntries)
+  const gitLabelLine = `Git label: ${renderActiveLabel(snapshot.activeGitLabel)}`
+  const gitTokenLine = renderCountLine("Available Git tokens", snapshot.gitTokenEntries)
+  const claudeLabelLine = `Claude label: ${renderActiveLabel(snapshot.activeClaudeLabel)}`
+  const claudeLoginLine = renderCountLine("Available Claude logins", snapshot.claudeAuthEntries)
+  const geminiLabelLine = `Gemini label: ${renderActiveLabel(snapshot.activeGeminiLabel)}`
+  const geminiLoginLine = renderCountLine("Available Gemini logins", snapshot.geminiAuthEntries)
+  const grokLabelLine = `Grok label: ${renderActiveLabel(snapshot.activeGrokLabel)}`
+  const grokLoginLine = renderCountLine("Available Grok logins", snapshot.grokAuthEntries)
+
   return renderLayout(
     "docker-git / Project auth",
     [
@@ -36,16 +47,16 @@ export const renderProjectAuthMenu = (
       el(
         Box,
         { marginTop: 1, flexDirection: "column" },
-        el(Text, { fg: "gray" }, `GitHub label: ${renderActiveLabel(snapshot.activeGithubLabel)}`),
-        el(Text, { fg: "gray" }, renderCountLine("Available GitHub tokens", snapshot.githubTokenEntries)),
-        el(Text, { fg: "gray" }, `Git label: ${renderActiveLabel(snapshot.activeGitLabel)}`),
-        el(Text, { fg: "gray" }, renderCountLine("Available Git tokens", snapshot.gitTokenEntries)),
-        el(Text, { fg: "gray" }, `Claude label: ${renderActiveLabel(snapshot.activeClaudeLabel)}`),
-        el(Text, { fg: "gray" }, renderCountLine("Available Claude logins", snapshot.claudeAuthEntries)),
-        el(Text, { fg: "gray" }, `Gemini label: ${renderActiveLabel(snapshot.activeGeminiLabel)}`),
-        el(Text, { fg: "gray" }, renderCountLine("Available Gemini logins", snapshot.geminiAuthEntries)),
-        el(Text, { fg: "gray" }, `Grok label: ${renderActiveLabel(snapshot.activeGrokLabel)}`),
-        el(Text, { fg: "gray" }, renderCountLine("Available Grok logins", snapshot.grokAuthEntries))
+        el(Text, { fg: "gray" }, githubLabelLine),
+        el(Text, { fg: "gray" }, githubTokenLine),
+        el(Text, { fg: "gray" }, gitLabelLine),
+        el(Text, { fg: "gray" }, gitTokenLine),
+        el(Text, { fg: "gray" }, claudeLabelLine),
+        el(Text, { fg: "gray" }, claudeLoginLine),
+        el(Text, { fg: "gray" }, geminiLabelLine),
+        el(Text, { fg: "gray" }, geminiLoginLine),
+        el(Text, { fg: "gray" }, grokLabelLine),
+        el(Text, { fg: "gray" }, grokLoginLine)
       ),
       el(Box, { flexDirection: "column", marginTop: 1 }, ...list),
       renderMenuHelp("Use arrows + Enter, or type a number from the list.")

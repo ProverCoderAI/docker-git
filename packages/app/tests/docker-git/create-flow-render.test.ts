@@ -8,12 +8,12 @@ import {
   type CreateFlowView,
   createInitialFlowView,
   type CreateModeFlowView,
-  createSettingsHint,
   type DisplayModeFlowView,
   renderCreateStepLabel,
   resolveCreateDisplaySteps,
   resolveCreateFlowSteps,
-  resolveCreateInputs
+  resolveCreateInputs,
+  settingsHint
 } from "../../src/docker-git/menu-create-shared.js"
 import { renderCreate } from "../../src/docker-git/menu-render.js"
 import { webPrimitives } from "../../src/ui/primitives-web.js"
@@ -26,7 +26,7 @@ import {
   featureCreateRepoUrl
 } from "./create-flow-test-helpers.js"
 
-const createContext: CreateFlowContext = {
+const context: CreateFlowContext = {
   cwd: "/workspace",
   projectsRoot: "/home/dev/.docker-git"
 }
@@ -36,20 +36,20 @@ const renderWithUi = (element: ReactElement): string =>
 
 const webCreateSettingsNavigationHint = "↑ - up, ↓ - down, Enter - apply + down"
 const webCreateSettingsChoiceHint = "←/→ - choose yes/no or GPU"
-const createSettingsView = (): DisplayModeFlowView => createFeatureRepoDisplaySettingsView(createContext)
+const createSettingsView = (): DisplayModeFlowView => createFeatureRepoDisplaySettingsView(context)
 
 const renderCreatePanel = (
-  createView: CreateFlowView,
+  creationView: CreateFlowView,
   options: { readonly compact?: boolean } = {}
 ): string =>
   renderWithUi(createElement(CreatePanel, {
     compact: options.compact ?? false,
-    controllerCwd: createContext.cwd,
-    createView,
+    controllerCwd: context.cwd,
+    creationView,
     onBufferChange: vi.fn(),
     onCancel: vi.fn(),
     onSubmit: vi.fn(),
-    projectsRoot: createContext.projectsRoot ?? ""
+    projectsRoot: context.projectsRoot ?? ""
   }))
 
 const activeStepMarker = "&gt; "
@@ -57,14 +57,14 @@ const activeStepMarker = "&gt; "
 const countActiveStepMarkers = (html: string): number => html.split(activeStepMarker).length - 1
 const renderedHelpLine = (line: string): string => `>${line}</div>`
 
-const renderStepLabels = (createView: CreateFlowView): ReadonlyArray<string> => {
-  const defaults = resolveCreateInputs(createContext, createView.values)
-  return resolveCreateDisplaySteps(createView.values).map((step) => renderCreateStepLabel(step, defaults))
+const renderStepLabels = (creationView: CreateFlowView): ReadonlyArray<string> => {
+  const defaults = resolveCreateInputs(context, creationView.values)
+  return resolveCreateDisplaySteps(creationView.values).map((step) => renderCreateStepLabel(step, defaults))
 }
 
-const renderSettingsStepLabels = (createView: CreateFlowView): ReadonlyArray<string> => {
-  const defaults = resolveCreateInputs(createContext, createView.values)
-  return resolveCreateDisplaySteps(createView.values)
+const renderSettingsStepLabels = (creationView: CreateFlowView): ReadonlyArray<string> => {
+  const defaults = resolveCreateInputs(context, creationView.values)
+  return resolveCreateDisplaySteps(creationView.values)
     .filter((step) => step !== "repoUrl")
     .map((step) => renderCreateStepLabel(step, defaults))
 }
@@ -74,18 +74,18 @@ const createSettingsViewAtStep = (
   buffer: string
 ): CreateFlowView => createFlowViewAtStep(createSettingsView(), stepName, buffer)
 
-const createTerminalSettingsView = (): CreateModeFlowView => createFeatureRepoSettingsView(createContext)
+const createTerminalSettingsView = (): CreateModeFlowView => createFeatureRepoSettingsView(context)
 
-const renderTerminalCreate = (createView: CreateModeFlowView): string => {
-  const defaults = resolveCreateInputs(createContext, createView.values)
-  const steps = resolveCreateFlowSteps(createView.values)
-  const step = steps[createView.step] ?? "repoUrl"
+const renderTerminalCreate = (creationView: CreateModeFlowView): string => {
+  const defaults = resolveCreateInputs(context, creationView.values)
+  const steps = resolveCreateFlowSteps(creationView.values)
+  const step = steps[creationView.step] ?? "repoUrl"
   return renderWithUi(renderCreate({
-    buffer: createView.buffer,
+    buffer: creationView.buffer,
     defaults,
     label: renderCreateStepLabel(step, defaults),
     message: null,
-    stepIndex: createView.step,
+    stepIndex: creationView.step,
     steps
   }))
 }
@@ -132,27 +132,27 @@ describe("Create flow rendering", () => {
   })
 
   it("keeps the compact repo URL step focused on the repo input and action buttons", () => {
-    const createView = createInitialFlowView(featureCreateRepoUrl)
-    const html = renderCreatePanel(createView, { compact: true })
+    const creationView = createInitialFlowView(featureCreateRepoUrl)
+    const html = renderCreatePanel(creationView, { compact: true })
 
     expect(html).toContain("Repo URL (optional for empty workspace)")
     expect(html).not.toContain(webCreateSettingsChoiceHint)
-    for (const label of renderSettingsStepLabels(createView)) {
+    for (const label of renderSettingsStepLabels(creationView)) {
       expect(html).not.toContain(label)
     }
   })
 
   it("renders every create row in compact settings mode", () => {
-    const createView = createSettingsView()
-    const html = renderCreatePanel(createView, { compact: true })
+    const creationView = createSettingsView()
+    const html = renderCreatePanel(creationView, { compact: true })
 
-    for (const label of renderStepLabels(createView)) {
+    for (const label of renderStepLabels(creationView)) {
       expect(html).toContain(label)
     }
   })
 
   it("keeps applied create rows visible with confirmed values", () => {
-    const createView: CreateFlowView = {
+    const creationView: CreateFlowView = {
       ...createSettingsViewAtStep("mcpPlaywright", ""),
       values: {
         ...createSettingsView().values,
@@ -160,7 +160,7 @@ describe("Create flow rendering", () => {
         force: true
       }
     }
-    const html = renderCreatePanel(createView, { compact: true })
+    const html = renderCreatePanel(creationView, { compact: true })
 
     expect(html).toContain("Enable Playwright MCP (nested Chromium browser)? [Y]")
     expect(html).toContain("Force recreate (overwrite files + wipe volumes)? [Y]")
@@ -179,17 +179,17 @@ describe("Create flow rendering", () => {
   })
 
   it("marks only the current row active in compact settings mode", () => {
-    const createView = createSettingsView()
-    const html = renderCreatePanel(createView, { compact: true })
-    const activeLabel = renderStepLabels(createView)[createView.step] ?? "Repo URL (optional for empty workspace)"
+    const creationView = createSettingsView()
+    const html = renderCreatePanel(creationView, { compact: true })
+    const activeLabel = renderStepLabels(creationView)[creationView.step] ?? "Repo URL (optional for empty workspace)"
 
     expect(countActiveStepMarkers(html)).toBe(1)
     expect(html).toContain(`${activeStepMarker}${activeLabel}`)
   })
 
   it("previews side-arrow choices in the active settings row brackets without applying values", () => {
-    const createView = createSettingsViewAtStep("mcpPlaywright", "y")
-    const html = renderCreatePanel(createView, { compact: true })
+    const creationView = createSettingsViewAtStep("mcpPlaywright", "y")
+    const html = renderCreatePanel(creationView, { compact: true })
 
     expect(html).toContain(`${activeStepMarker}Enable Playwright MCP (nested Chromium browser)? [Y]`)
     expect(html).toContain("Enable Playwright MCP (nested Chromium browser)? [Y]:")
@@ -198,8 +198,8 @@ describe("Create flow rendering", () => {
   })
 
   it("drops unapplied bracket previews after settings navigation clears the buffer", () => {
-    const createView = createSettingsViewAtStep("force", "")
-    const html = renderCreatePanel(createView, { compact: true })
+    const creationView = createSettingsViewAtStep("force", "")
+    const html = renderCreatePanel(creationView, { compact: true })
 
     expect(html).toContain(`${activeStepMarker}Force recreate (overwrite files + wipe volumes)? [N]`)
     expect(html).not.toContain("Force recreate (overwrite files + wipe volumes)? [Y]")
@@ -207,7 +207,7 @@ describe("Create flow rendering", () => {
 
   it("renders the settings navigation hint only after leaving the repo URL step", () => {
     expect(renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))).not.toContain(
-      renderedHelpLine(createSettingsHint)
+      renderedHelpLine(settingsHint)
     )
     expect(renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))).not.toContain(
       renderedHelpLine(webCreateSettingsNavigationHint)
@@ -215,7 +215,7 @@ describe("Create flow rendering", () => {
     expect(renderCreatePanel(createInitialFlowView(featureCreateRepoUrl))).not.toContain(
       renderedHelpLine(webCreateSettingsChoiceHint)
     )
-    expect(renderCreatePanel(createSettingsView())).not.toContain(renderedHelpLine(createSettingsHint))
+    expect(renderCreatePanel(createSettingsView())).not.toContain(renderedHelpLine(settingsHint))
     expect(renderCreatePanel(createSettingsView())).toContain(renderedHelpLine(webCreateSettingsNavigationHint))
     expect(renderCreatePanel(createSettingsView())).toContain(renderedHelpLine(webCreateSettingsChoiceHint))
   })
@@ -226,7 +226,7 @@ describe("Create flow rendering", () => {
 
     expect(repoHtml).not.toContain("Enter = next, Esc = cancel.")
     expect(repoHtml).not.toContain("Shift+Enter")
-    expect(settingsHtml).toContain(renderedHelpLine(createSettingsHint))
+    expect(settingsHtml).toContain(renderedHelpLine(settingsHint))
     expect(settingsHtml).not.toContain(renderedHelpLine(webCreateSettingsNavigationHint))
     expect(settingsHtml).not.toContain(renderedHelpLine(webCreateSettingsChoiceHint))
   })
@@ -242,8 +242,8 @@ describe("Create flow rendering", () => {
         const panelHtml = renderCreatePanel(view)
         const compactPanelHtml = renderCreatePanel(view, { compact: true })
 
-        expect(panelHtml).not.toContain(renderedHelpLine(createSettingsHint))
-        expect(compactPanelHtml).not.toContain(renderedHelpLine(createSettingsHint))
+        expect(panelHtml).not.toContain(renderedHelpLine(settingsHint))
+        expect(compactPanelHtml).not.toContain(renderedHelpLine(settingsHint))
         expect(panelHtml.includes(renderedHelpLine(webCreateSettingsNavigationHint))).toBe(isSettings)
         expect(compactPanelHtml.includes(renderedHelpLine(webCreateSettingsNavigationHint))).toBe(isSettings)
         expect(panelHtml.includes(renderedHelpLine(webCreateSettingsChoiceHint))).toBe(isSettings)
@@ -263,7 +263,7 @@ describe("Create flow rendering", () => {
         const view = step === 0 ? createInitialFlowView(featureCreateRepoUrl) : { ...terminalSettingsView, step }
         const terminalHtml = renderTerminalCreate(view)
 
-        expect(terminalHtml.includes(renderedHelpLine(createSettingsHint))).toBe(step > 0)
+        expect(terminalHtml.includes(renderedHelpLine(settingsHint))).toBe(step > 0)
         expect(terminalHtml).not.toContain(renderedHelpLine(webCreateSettingsNavigationHint))
         expect(terminalHtml).not.toContain(renderedHelpLine(webCreateSettingsChoiceHint))
         expect(terminalHtml).not.toContain("Enter = next, Esc = cancel.")

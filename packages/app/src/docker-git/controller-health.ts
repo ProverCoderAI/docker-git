@@ -81,7 +81,7 @@ const findReachableHealthProbe = (
       if (Either.isLeft(healthy)) {
         continue
       }
-      if (matchesExpectedRevision(healthy.right, expectedRevision)) {
+      if (hasExpectedRevision(healthy.right, expectedRevision)) {
         return healthy.right
       }
       mismatches.push(describeRevisionMismatch(healthy.right))
@@ -101,7 +101,7 @@ const findReachableHealthProbeOrNull = (
     })
   )
 
-const matchesExpectedRevision = (
+const hasExpectedRevision = (
   probe: HealthProbeResult,
   expectedRevision: string | undefined
 ): boolean => expectedRevision === undefined || probe.revision === expectedRevision
@@ -113,12 +113,12 @@ const noMatchingHealthProbeError = (
   expectedRevision: string | undefined,
   mismatches: ReadonlyArray<string>
 ): ControllerBootstrapError =>
-  expectedRevision !== undefined && mismatches.length > 0
-    ? controllerBootstrapError(
-      `No docker-git controller endpoint with revision ${expectedRevision} responded. ` +
+  controllerBootstrapError(
+    expectedRevision !== undefined && mismatches.length > 0
+      ? `No docker-git controller endpoint with revision ${expectedRevision} responded. ` +
         `Reachable mismatched controllers: ${mismatches.join(", ")}.`
-    )
-    : controllerBootstrapError("No docker-git controller endpoint responded to /health.")
+      : "No docker-git controller endpoint responded to /health."
+  )
 
 export const findReachableApiBaseUrlWithHttpClient = (
   candidateUrls: ReadonlyArray<string>,

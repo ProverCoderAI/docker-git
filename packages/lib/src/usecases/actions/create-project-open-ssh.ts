@@ -68,14 +68,12 @@ const openSshBestEffort = (
     const remoteCommandLabel = remoteCommand === undefined ? "" : ` (${remoteCommand})`
 
     yield* _(Effect.log(`Opening SSH: ${sshCommand}${remoteCommandLabel}`))
+    const sshArgs = buildSshArgs(template, sshKey, remoteCommand, ipAddress)
+    const sshCommandSpec = { cwd: process.cwd(), command: "ssh", args: sshArgs }
     yield* _(
       withPreservedTerminalState(
         runCommandWithExitCodes(
-          {
-            cwd: process.cwd(),
-            command: "ssh",
-            args: buildSshArgs(template, sshKey, remoteCommand, ipAddress)
-          },
+          sshCommandSpec,
           [0, 130],
           (exitCode) => new CommandFailedError({ command: "ssh", exitCode })
         )
@@ -91,21 +89,21 @@ const openSshBestEffort = (
 
 const resolveInteractiveRemoteCommand = (
   projectConfig: CreateCommand["config"],
-  interactiveAgent: boolean
+  isInteractiveAgent: boolean
 ): string | undefined =>
-  interactiveAgent && projectConfig.agentMode !== undefined
+  isInteractiveAgent && projectConfig.agentMode !== undefined
     ? `cd '${projectConfig.targetDir}' && ${projectConfig.agentMode}`
     : undefined
 
 export const maybeOpenSsh = (
   command: CreateCommand,
   hasAgent: boolean,
-  waitForAgent: boolean,
+  shouldWaitForAgent: boolean,
   projectConfig: CreateCommand["config"]
 ): Effect.Effect<void, never, CreateProjectOpenSshRuntime> =>
   Effect.gen(function*(_) {
-    const interactiveAgent = hasAgent && !waitForAgent
-    if (!command.openSsh || (hasAgent && !interactiveAgent)) {
+    const isInteractiveAgent = hasAgent && !shouldWaitForAgent
+    if (!command.openSsh || (hasAgent && !isInteractiveAgent)) {
       return
     }
 
@@ -119,6 +117,6 @@ export const maybeOpenSsh = (
       return
     }
 
-    const remoteCommand = resolveInteractiveRemoteCommand(projectConfig, interactiveAgent)
+    const remoteCommand = resolveInteractiveRemoteCommand(projectConfig, isInteractiveAgent)
     yield* _(openSshBestEffort(projectConfig, remoteCommand))
   }).pipe(Effect.asVoid)

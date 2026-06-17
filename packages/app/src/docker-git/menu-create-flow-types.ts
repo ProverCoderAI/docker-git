@@ -44,7 +44,7 @@ export type AdvanceCreateFlowOptions = {
 export type CreateSettingsNavigationDirection = "up" | "down"
 export type CreateSettingsChoiceDirection = "left" | "right"
 
-export const createSettingsHint = "↑ - up, ↓ - down, Enter - apply"
+export const settingsHint = "↑ - up, ↓ - down, Enter - apply"
 export const firstCreateSettingsStepIndex = 1
 
 /**

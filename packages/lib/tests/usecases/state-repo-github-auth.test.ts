@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest"
 import {
   isGithubHttpsRemote,
   normalizeGithubHttpsRemote,
-  requiresGithubAuthHint,
+  shouldHintGithubAuth,
   tryBuildGithubCompareUrl
 } from "../../src/usecases/state-repo/github-auth.js"
 
@@ -25,9 +25,9 @@ describe("state-repo github auth helpers", () => {
   })
 
   it("requires an auth hint only for GitHub https remotes without a usable token", () => {
-    expect(requiresGithubAuthHint("https://github.com/acme/demo.git", null)).toBe(true)
-    expect(requiresGithubAuthHint("https://github.com/acme/demo.git", "   ")).toBe(true)
-    expect(requiresGithubAuthHint("https://github.com/acme/demo.git", "ghp_valid")).toBe(false)
-    expect(requiresGithubAuthHint("git@github.com:acme/demo.git", null)).toBe(false)
+    expect(shouldHintGithubAuth("https://github.com/acme/demo.git", null)).toBe(true)
+    expect(shouldHintGithubAuth("https://github.com/acme/demo.git", "   ")).toBe(true)
+    expect(shouldHintGithubAuth("https://github.com/acme/demo.git", "ghp_valid")).toBe(false)
+    expect(shouldHintGithubAuth("git@github.com:acme/demo.git", null)).toBe(false)
   })
 })

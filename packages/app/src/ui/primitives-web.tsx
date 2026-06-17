@@ -95,7 +95,7 @@ export const webPrimitives = {
       onClick,
       style: {
         ...baseStyle(props),
-        ...(onClick === undefined ? {} : interactiveStyle(props.width))
+        ...(onClick !== undefined && interactiveStyle(props.width))
       },
       type: onClick === undefined ? undefined : "button"
     }),
@@ -130,7 +130,7 @@ const horizontalArrowAction = (
 type TextInputKeyboardHandlers = {
   readonly onArrowLeft: (() => void) | undefined
   readonly onArrowRight: (() => void) | undefined
-  readonly onEnter: ((shift: boolean) => void) | undefined
+  readonly onEnter: ((isShift: boolean) => void) | undefined
   readonly onEscape: (() => void) | undefined
 }
 

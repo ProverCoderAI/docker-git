@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { submitCreateInputs } from "../../src/web/actions-projects.js"
-import { handleCreateKey, submitCreateView } from "../../src/web/app-ready-create.js"
+import { didHandleCreateKey, submitCreateView } from "../../src/web/app-ready-create.js"
 import {
   type CreateFlowView,
   createInitialFlowView,
@@ -36,11 +36,11 @@ describe("app-ready-create settings", () => {
   })
 
   it("moves between settings with arrows and clears the uncommitted buffer", () => {
-    expectCreateArrowHandling(handleCreateKey, "ArrowDown", (view) => view.step + 1)
+    expectCreateArrowHandling(didHandleCreateKey, "ArrowDown", (view) => view.step + 1)
   })
 
   it("wraps settings selection upward with ArrowUp and clears the uncommitted buffer", () => {
-    expectCreateArrowHandling(handleCreateKey, "ArrowUp", () => resolveCreateDisplaySteps().length - 1)
+    expectCreateArrowHandling(didHandleCreateKey, "ArrowUp", () => resolveCreateDisplaySteps().length - 1)
   })
 
   it("fills discrete settings buffers with side arrows without applying values", () => {
@@ -61,14 +61,14 @@ describe("app-ready-create settings", () => {
 
     for (const { expectedBuffer, key, stepName } of cases) {
       submitCreateInputsMock.mockReset()
-      expectCreateSideArrowBufferHandling(handleCreateKey, submitCreateInputsMock, key, stepName, expectedBuffer)
+      expectCreateSideArrowBufferHandling(didHandleCreateKey, submitCreateInputsMock, key, stepName, expectedBuffer)
     }
   })
 
   it("applies a side-arrow choice only after Enter", () => {
-    const arrowResult = runCreateKey(handleCreateKey, createSettingsFlowViewAtStep("gpu", "typed"), "ArrowRight")
+    const arrowResult = runCreateKey(didHandleCreateKey, createSettingsFlowViewAtStep("gpu", "typed"), "ArrowRight")
     const arrowView = requireCreateViewValue(arrowResult.setCreateViewSpy.mock.calls[0]?.[0])
-    const enterResult = runCreateKey(handleCreateKey, arrowView, "Enter")
+    const enterResult = runCreateKey(didHandleCreateKey, arrowView, "Enter")
     const enteredView = requireCreateViewValue(enterResult.setCreateViewSpy.mock.calls[0]?.[0])
 
     expect(arrowResult.handled).toBe(true)
@@ -81,7 +81,7 @@ describe("app-ready-create settings", () => {
   })
 
   it("wraps to the first settings row after applying the last settings row", () => {
-    const createView: CreateFlowView = {
+    const creationView: CreateFlowView = {
       ...createSettingsFlowViewAtStep("force", "y"),
       values: {
         ...createSettingsFlowView().values,
@@ -92,10 +92,10 @@ describe("app-ready-create settings", () => {
         runUp: false
       }
     }
-    const { handled, setCreateViewSpy } = runCreateKey(handleCreateKey, createView, "Enter")
+    const { handled: isHandled, setCreateViewSpy } = runCreateKey(didHandleCreateKey, creationView, "Enter")
     const enteredView = requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])
 
-    expect(handled).toBe(true)
+    expect(isHandled).toBe(true)
     expect(enteredView.values.force).toBe(true)
     expect(enteredView.step).toBe(resolveCreateDisplaySteps().indexOf("cpuLimit"))
     expect(enteredView.buffer).toBe("")
@@ -103,14 +103,14 @@ describe("app-ready-create settings", () => {
   })
 
   it("keeps the previous setting value when Enter applies an empty buffer", () => {
-    const createView: CreateFlowView = {
+    const creationView: CreateFlowView = {
       ...createSettingsFlowViewAtStep("runUp", ""),
       values: {
         ...createSettingsFlowView().values,
         runUp: false
       }
     }
-    const emptyResult = runCreateKey(handleCreateKey, createView, "Enter")
+    const emptyResult = runCreateKey(didHandleCreateKey, creationView, "Enter")
     const emptyView = requireCreateViewValue(emptyResult.setCreateViewSpy.mock.calls[0]?.[0])
 
     expect(emptyResult.handled).toBe(true)
@@ -120,7 +120,7 @@ describe("app-ready-create settings", () => {
   })
 
   it("navigates to the next visible row after applying a settings row", () => {
-    const enterResult = runCreateKey(handleCreateKey, createSettingsFlowViewAtStep("mcpPlaywright", "y"), "Enter")
+    const enterResult = runCreateKey(didHandleCreateKey, createSettingsFlowViewAtStep("mcpPlaywright", "y"), "Enter")
     const enteredView = requireCreateViewValue(enterResult.setCreateViewSpy.mock.calls[0]?.[0])
 
     expect(enterResult.handled).toBe(true)
@@ -130,11 +130,11 @@ describe("app-ready-create settings", () => {
   })
 
   it("clears an unconfirmed preview when navigating away from a settings row", () => {
-    const createView = createSettingsFlowViewAtStep("mcpPlaywright", "y")
-    const { handled, setCreateViewSpy } = runCreateKey(handleCreateKey, createView, "ArrowDown")
+    const creationView = createSettingsFlowViewAtStep("mcpPlaywright", "y")
+    const { handled: isHandled, setCreateViewSpy } = runCreateKey(didHandleCreateKey, creationView, "ArrowDown")
     const nextView = requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])
 
-    expect(handled).toBe(true)
+    expect(isHandled).toBe(true)
     expect(nextView.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
     expect(nextView.values.enableMcpPlaywright).toBeUndefined()
     expect(nextView.buffer).toBe("")
@@ -166,7 +166,7 @@ describe("app-ready-create settings", () => {
 
   it("ignores settings arrows before the Settings flow starts", () => {
     expectIgnoredCreateKey(
-      handleCreateKey,
+      didHandleCreateKey,
       createInitialFlowView("https://github.com/org/repo"),
       "ArrowDown"
     )
@@ -181,8 +181,8 @@ describe("app-ready-create settings", () => {
     ]
 
     for (const key of keys) {
-      for (const createView of views) {
-        expectIgnoredCreateKey(handleCreateKey, createView, key)
+      for (const creationView of views) {
+        expectIgnoredCreateKey(didHandleCreateKey, creationView, key)
       }
     }
   })

@@ -38,7 +38,7 @@ export const expectProjectDirRunUpCommand = (
   args: ReadonlyArray<string>,
   expectedTag: ProjectDirRunUpCommand["_tag"],
   expectedProjectDir: string,
-  expectedRunUp: boolean
+  isExpectedRunUp: boolean
 ) =>
   Effect.sync(() => {
     const command = parseOrThrow(args)
@@ -49,7 +49,7 @@ export const expectProjectDirRunUpCommand = (
       throw new Error("expected command with projectDir and runUp")
     }
     expect(command.projectDir).toBe(expectedProjectDir)
-    expect(command.runUp).toBe(expectedRunUp)
+    expect(command.runUp).toBe(isExpectedRunUp)
   })
 
 export const expectAttachProjectDirCommand = (

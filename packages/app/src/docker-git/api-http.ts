@@ -53,11 +53,11 @@ const readErrorPayload = (body: JsonValue): ApiErrorPayload | undefined => {
   const details = error["details"]
 
   return {
-    ...(type === null ? {} : { type }),
-    ...(message === null ? {} : { message }),
-    ...(provider === null ? {} : { provider }),
-    ...(command === null ? {} : { command }),
-    ...(details === undefined ? {} : { details })
+    ...(type !== null && { type }),
+    ...(message !== null && { message }),
+    ...(provider !== null && { provider }),
+    ...(command !== null && { command }),
+    ...(details !== undefined && { details })
   }
 }
 

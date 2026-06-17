@@ -19,7 +19,7 @@ const applyControllerResourceLimitEnv = (
 ): Effect.Effect<ReadonlyArray<string>> =>
   Effect.sync(() => {
     const assignments = controllerResourceLimitEnvAssignments(parsed.controllerResourceLimits)
-    const forceRecreate = shouldForceRecreateForControllerResourceLimitIntent(parsed.controllerResourceLimits, {
+    const isForceRecreate = shouldForceRecreateForControllerResourceLimitIntent(parsed.controllerResourceLimits, {
       cpuLimit: process.env[controllerCpuLimitEnvKey],
       ramLimit: process.env[controllerMemoryLimitEnvKey],
       pidsLimit: process.env[controllerPidsLimitEnvKey]
@@ -29,7 +29,7 @@ const applyControllerResourceLimitEnv = (
       process.env[assignment.key] = assignment.value
     }
 
-    process.env[controllerResourceLimitsForceRecreateEnvKey] = forceRecreate ? "1" : "0"
+    process.env[controllerResourceLimitsForceRecreateEnvKey] = isForceRecreate ? "1" : "0"
 
     return parsed.args
   })

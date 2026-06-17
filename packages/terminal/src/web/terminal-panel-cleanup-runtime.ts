@@ -12,10 +12,12 @@ const closeSocket = (socket: WebSocket | null): void => {
 }
 
 const clearReconnectTimer = (args: TerminalCleanupArgs): void => {
-  if (args.lifecycle.reconnectTimer !== null) {
-    clearTimeout(args.lifecycle.reconnectTimer)
-    args.lifecycle.reconnectTimer = null
+  if (args.lifecycle.reconnectTimer === null) {
+    return
   }
+
+  clearTimeout(args.lifecycle.reconnectTimer)
+  args.lifecycle.reconnectTimer = null
 }
 
 export const cleanupTerminalResources = (

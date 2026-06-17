@@ -54,8 +54,8 @@ export const resolveControllerRuntimeOverlayPath = (
         path.dirname(composePath),
         overlayFileName
       )
-      const exists = yield* _(fs.exists(runtimeOverlayPath).pipe(Effect.mapError(mapComposePathError)))
-      return exists
+      const isExists = yield* _(fs.exists(runtimeOverlayPath).pipe(Effect.mapError(mapComposePathError)))
+      return isExists
         ? runtimeOverlayPath
         : yield* _(
           Effect.fail(

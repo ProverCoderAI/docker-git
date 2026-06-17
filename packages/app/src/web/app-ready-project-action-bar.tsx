@@ -41,14 +41,14 @@ const ProjectSelectionSummary = (
   props: Pick<ProjectActionBarProps, "currentMenu" | "project" | "selectedProjectSummary">
 ): JSX.Element => {
   const selectedGpu = selectedProjectGpu(props)
-  const showGpu = props.currentMenu === "Select" && props.selectedProjectSummary !== undefined
+  const isShowGpu = props.currentMenu === "Select" && props.selectedProjectSummary !== undefined
 
   return (
     <Box flexDirection="column" width="auto">
       <Text fg="#aab7c4" wrap="truncate">
         {props.selectedProjectSummary === undefined ? "No project selected." : props.selectedProjectSummary.displayName}
       </Text>
-      {showGpu ? <Text fg="#8fa6c4">GPU: {selectedGpu ?? "unknown"}</Text> : null}
+      {isShowGpu ? <Text fg="#8fa6c4">GPU: {selectedGpu ?? "unknown"}</Text> : null}
     </Box>
   )
 }
@@ -116,10 +116,10 @@ const PrimaryMenuAction = (
   >
 ): JSX.Element => {
   const label = actionLabel(props.currentMenu)
-  const browserUnavailable = props.currentMenu === "Browser" &&
+  const isBrowserUnavailable = props.currentMenu === "Browser" &&
     !canOpenProjectBrowser(props.projectBrowser, props.selectedProjectSummary?.id ?? null)
 
-  return browserUnavailable
+  return isBrowserUnavailable
     ? <Text bold={true} fg="#8fa6c4">{label}</Text>
     : <ActionButton label={label} onClick={props.onRunCurrentMenuAction} />
 }

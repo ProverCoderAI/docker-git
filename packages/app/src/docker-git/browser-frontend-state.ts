@@ -112,11 +112,11 @@ export const readBrowserFrontendState = (
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const exists = yield* _(Effect.either(fs.exists(statePath)))
-    const fileExists = Either.match(exists, {
+    const isFileExists = Either.match(exists, {
       onLeft: () => false,
       onRight: (value) => value
     })
-    if (!fileExists) {
+    if (!isFileExists) {
       return null
     }
 

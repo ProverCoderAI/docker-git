@@ -56,9 +56,10 @@ describe("terminal output replay buffer", () => {
 
   it.effect("preserves replay budget and newest suffix for arbitrary chunks", () =>
     Effect.sync(() => {
+      const chunkArbitrary = fc.array(fc.string({ maxLength: 32 }), { maxLength: 24 })
       fc.assert(
         fc.property(
-          fc.array(fc.string({ maxLength: 32 }), { maxLength: 24 }),
+          chunkArbitrary,
           fc.integer({ min: 0, max: 256 }),
           (chunks, budget) => {
             const buffer = appendChunks(chunks, budget)

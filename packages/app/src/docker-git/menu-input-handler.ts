@@ -16,7 +16,7 @@ export type MenuInputContext = MenuViewContext & {
   readonly setSelected: (update: (value: number) => number) => void
   readonly setSkipInputs: (update: (value: number) => number) => void
   readonly sshActive: boolean
-  readonly setSshActive: (active: boolean) => void
+  readonly setSshActive: (isActive: boolean) => void
   readonly state: MenuState
   readonly runner: MenuRunner
   readonly exit: () => void

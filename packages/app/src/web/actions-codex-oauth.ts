@@ -32,13 +32,14 @@ export const runCodexLogoutMutation = (
   context: BrowserActionContext
 ) => {
   const label = defaultLabel(values["label"])
+  const loadAuthState = Effect.all({
+    githubStatus: loadGithubStatus(),
+    snapshot: loadAuthSnapshot()
+  })
   withBusy({
     context,
     effect: logoutCodex(nullableValue(values["label"])).pipe(
-      Effect.zipRight(Effect.all({
-        githubStatus: loadGithubStatus(),
-        snapshot: loadAuthSnapshot()
-      }))
+      Effect.zipRight(loadAuthState)
     ),
     label: "CodexLogout",
     onSuccess: ({ githubStatus, snapshot }) => {

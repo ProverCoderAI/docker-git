@@ -11,15 +11,15 @@ vi.mock("../../src/docker-git/frontend-lib/shell/terminal-cursor.js", () => ({
   repairInteractiveTerminal: repairInteractiveTerminalMock
 }))
 
-const primaryScreenEscape = "\u001B[?1049l\r\u001B[2K"
-const alternateScreenEscape = "\u001B[?1049h\u001B[2J\u001B[H"
-const inputModesEscape = "\u001B[0m" +
-  "\u001B[?25h" +
-  "\u001B[?1l" +
-  "\u001B>" +
-  "\u001B[?1000l\u001B[?1002l\u001B[?1003l\u001B[?1005l\u001B[?1006l\u001B[?1015l\u001B[?1007l" +
-  "\u001B[?1004l\u001B[?2004l" +
-  "\u001B[>4;0m\u001B[>4m\u001B[<u"
+const primaryScreenEscape = "\u{1B}[?1049l\r\u{1B}[2K"
+const alternateScreenEscape = "\u{1B}[?1049h\u{1B}[2J\u{1B}[H"
+const inputModesEscape = "\u{1B}[0m" +
+  "\u{1B}[?25h" +
+  "\u{1B}[?1l" +
+  "\u{1B}>" +
+  "\u{1B}[?1000l\u{1B}[?1002l\u{1B}[?1003l\u{1B}[?1005l\u{1B}[?1006l\u{1B}[?1015l\u{1B}[?1007l" +
+  "\u{1B}[?1004l\u{1B}[?2004l" +
+  "\u{1B}[>4;0m\u{1B}[>4m\u{1B}[<u"
 const primaryScreenRepairEvents = ["repair", "write:<repair>", `write:${primaryScreenEscape}`]
 const alternateScreenResumeEvents = [
   "repair",
@@ -31,8 +31,8 @@ const alternateScreenResumeEvents = [
 
 const originalStdoutWrite: typeof process.stdout.write = process.stdout.write.bind(process.stdout)
 const originalStderrWrite: typeof process.stderr.write = process.stderr.write.bind(process.stderr)
-const originalStdinTty = process.stdin.isTTY
-const originalStdoutTty = process.stdout.isTTY
+const isOriginalStdinTty = process.stdin.isTTY
+const isOriginalStdoutTty = process.stdout.isTTY
 const originalSetRawMode = Reflect.get(process.stdin, "setRawMode")
 
 const loadMenuShared = Effect.tryPromise({
@@ -43,13 +43,15 @@ const loadMenuShared = Effect.tryPromise({
 const restoreTerminalBindings = (): void => {
   process.stdout.write = originalStdoutWrite
   process.stderr.write = originalStderrWrite
-  Object.defineProperty(process.stdin, "setRawMode", { configurable: true, value: originalSetRawMode })
-  Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: originalStdinTty })
-  Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: originalStdoutTty })
+  Object.defineProperties(process.stdin, {
+    setRawMode: { configurable: true, value: originalSetRawMode },
+    isTTY: { configurable: true, value: isOriginalStdinTty }
+  })
+  Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: isOriginalStdoutTty })
 }
 
-const createRawModeStub = (events: Array<string>): typeof process.stdin.setRawMode => (enabled: boolean) => {
-  events.push(`raw:${String(enabled)}`)
+const createRawModeStub = (events: Array<string>): typeof process.stdin.setRawMode => (isEnabled: boolean) => {
+  events.push(`raw:${String(isEnabled)}`)
   return process.stdin
 }
 

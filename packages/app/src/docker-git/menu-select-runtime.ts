@@ -13,10 +13,7 @@ const stoppedRuntime = (): SelectProjectRuntime => ({
 const toRuntimeMap = (
   entries: ReadonlyArray<readonly [string, SelectProjectRuntime]>
 ): Readonly<Record<string, SelectProjectRuntime>> => {
-  const runtimeByProject: Record<string, SelectProjectRuntime> = {}
-  for (const [projectDir, runtime] of entries) {
-    runtimeByProject[projectDir] = runtime
-  }
+  const runtimeByProject: Record<string, SelectProjectRuntime> = Object.fromEntries(entries)
   return runtimeByProject
 }
 

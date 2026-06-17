@@ -40,9 +40,9 @@ const compactMenuLabels: Readonly<Record<BrowserMenuTag, string>> = {
   Tasks: "Tasks"
 }
 
-const menuPanelMaxHeight = (compact: boolean): string => compact ? "154px" : "100%"
-const menuListDirection = (compact: boolean): "column" | "row" => compact ? "row" : "column"
-const menuListTopMargin = (compact: boolean): number | string => compact ? "6px" : 1
+const menuPanelMaxHeight = (isCompact: boolean): string => isCompact ? "154px" : "100%"
+const menuListDirection = (isCompact: boolean): "column" | "row" => isCompact ? "row" : "column"
+const menuListTopMargin = (isCompact: boolean): number | string => isCompact ? "6px" : 1
 
 const MenuHeader = ({ compact }: Pick<MenuSidebarProps, "compact">): JSX.Element => (
   <Box flexWrap="wrap" gap={1} justifyContent="space-between">

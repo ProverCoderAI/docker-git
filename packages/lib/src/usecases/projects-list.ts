@@ -38,10 +38,11 @@ export const listProjects: Effect.Effect<
       const available: Array<ProjectSummary> = []
 
       for (const configPath of index.configPaths) {
+        const onFailure = skipWithWarning<ProjectSummary>(configPath)
         const summary = yield* _(
           loadProjectSummary(configPath, sshKey).pipe(
             Effect.matchEffect({
-              onFailure: skipWithWarning<ProjectSummary>(configPath),
+              onFailure,
               onSuccess: (value) => Effect.succeed(value)
             })
           )
@@ -155,11 +156,13 @@ export const listProjectItems: Effect.Effect<
 // EFFECT: Effect<ReadonlyArray<ProjectItem>, PlatformError | CommandFailedError, FileSystem | Path | CommandExecutor>
 // INVARIANT: result order follows listProjectItems order
 // COMPLEXITY: O(n + command)
+const runningProjectNames = runDockerPsNames(process.cwd())
+
 export const listRunningProjectItems: Effect.Effect<
   ReadonlyArray<ProjectItem>,
   PlatformError | CommandFailedError,
   ListProjectsContext
 > = pipe(
-  Effect.all([listProjectItems, runDockerPsNames(process.cwd())]),
+  Effect.all([listProjectItems, runningProjectNames]),
   Effect.map(([items, runningNames]) => items.filter((item) => runningNames.includes(item.containerName)))
 )

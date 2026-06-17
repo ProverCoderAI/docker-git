@@ -25,12 +25,12 @@ const statusColor = (status: PanelCloudflareTunnelSession["status"] | "none"): s
 }
 
 const openUrl = (url: string): void => {
-  if (typeof globalThis.open !== "function" || !URL.canParse(url)) {
+  if (typeof open !== "function" || !URL.canParse(url)) {
     return
   }
   const parsed = new URL(url)
   if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-    globalThis.open(parsed.toString(), "_blank", "noopener")
+    open(parsed.href, "_blank", "noopener")
   }
 }
 

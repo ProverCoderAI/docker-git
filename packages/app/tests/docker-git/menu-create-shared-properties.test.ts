@@ -8,7 +8,7 @@ import { featureCreateRepoUrl } from "./create-flow-test-helpers.js"
 
 type CreateSettingStep = Exclude<CreateStep, "outDir" | "repoRef" | "repoUrl">
 
-const createSettingsStepArbitrary: fc.Arbitrary<CreateSettingStep> = fc.constantFrom(
+const settingsStepArbitrary: fc.Arbitrary<CreateSettingStep> = fc.constantFrom(
   "cpuLimit",
   "ramLimit",
   "gpu",
@@ -17,7 +17,7 @@ const createSettingsStepArbitrary: fc.Arbitrary<CreateSettingStep> = fc.constant
   "force"
 )
 
-const createStepBufferByStep: Readonly<Record<CreateSettingStep, string>> = {
+const stepBufferByStep: Readonly<Record<CreateSettingStep, string>> = {
   cpuLimit: "25%",
   force: "y",
   gpu: "all",
@@ -26,7 +26,7 @@ const createStepBufferByStep: Readonly<Record<CreateSettingStep, string>> = {
   runUp: "y"
 }
 
-const satisfiedCreateSettingsArbitrary = fc.uniqueArray(createSettingsStepArbitrary, {
+const satisfiedCreateSettingsArbitrary = fc.uniqueArray(settingsStepArbitrary, {
   maxLength: 6
 })
 
@@ -112,7 +112,7 @@ describe("menu-create-shared property invariants", () => {
 
   it("preserves the next remaining settings index after applying generated current settings", () => {
     fc.assert(
-      fc.property(createSettingsStepArbitrary, satisfiedCreateSettingsArbitrary, (currentStep, satisfiedSteps) => {
+      fc.property(settingsStepArbitrary, satisfiedCreateSettingsArbitrary, (currentStep, satisfiedSteps) => {
         const values = createValuesWithSatisfiedSettings(
           satisfiedSteps.filter((satisfiedStep) => satisfiedStep !== currentStep),
           defaultRoot
@@ -124,7 +124,7 @@ describe("menu-create-shared property invariants", () => {
         const next = advanceCreateFlow(
           cwd,
           {
-            buffer: createStepBufferByStep[currentStep],
+            buffer: stepBufferByStep[currentStep],
             inputError: null,
             mode: "create",
             step: currentStepIndex,

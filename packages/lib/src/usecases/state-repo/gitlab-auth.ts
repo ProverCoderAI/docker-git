@@ -128,8 +128,8 @@ export const resolveGitlabToken = (
     ]
 
     for (const envPath of candidates) {
-      const exists = yield* _(fs.exists(envPath))
-      if (!exists) {
+      const isExists = yield* _(fs.exists(envPath))
+      if (!isExists) {
         continue
       }
       const text = yield* _(fs.readFileString(envPath))

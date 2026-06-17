@@ -57,18 +57,15 @@ const runDockerInfoCommand = (
   Effect.scoped(
     Effect.gen(function*(_) {
       const executor = yield* _(CommandExecutor.CommandExecutor)
-      const process = yield* _(
-        executor.start(
-          pipe(
-            Command.make("docker", "info"),
-            Command.workingDirectory(cwd),
-            env ? Command.env(env) : (value) => value,
-            Command.stdin("pipe"),
-            Command.stdout("pipe"),
-            Command.stderr("pipe")
-          )
-        )
+      const dockerInfoCommand = pipe(
+        Command.make("docker", "info"),
+        Command.workingDirectory(cwd),
+        env ? Command.env(env) : (value) => value,
+        Command.stdin("pipe"),
+        Command.stdout("pipe"),
+        Command.stderr("pipe")
       )
+      const process = yield* _(executor.start(dockerInfoCommand))
 
       const stderrBytes = yield* _(
         pipe(process.stderr, Stream.runCollect, Effect.map((chunks) => collectUint8Array(chunks)))
@@ -142,7 +139,7 @@ export const ensureDockerDaemonAccess = (
           return
         }
 
-        failureDetails = `${failureDetails}\n${formatDockerFallbackFailure(fallbackHost, fallbackResult.details)}`
+        failureDetails += `\n${formatDockerFallbackFailure(fallbackHost, fallbackResult.details)}`
       }
 
       return yield* _(

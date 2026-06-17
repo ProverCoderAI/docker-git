@@ -78,7 +78,7 @@ const renderDockerAccessActionPlan = (issue: DockerAccessError["issue"]): string
     "3) Retry command in a new shell."
   ]
 
-  return issue === "PermissionDenied" ? permissionDeniedPlan.join("\n") : daemonUnavailablePlan.join("\n")
+  return (issue === "PermissionDenied" ? permissionDeniedPlan : daemonUnavailablePlan).join("\n")
 }
 
 // CHANGE: classify Docker build apt signature noise that is commonly caused by storage exhaustion.

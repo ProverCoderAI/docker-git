@@ -62,7 +62,7 @@ export const parsePositiveInt = (
   option: string,
   raw: string
 ): Either.Either<number, ParseError> => {
-  const value = Number.parseInt(raw, 10)
+  const value = Math.trunc(Number(raw))
   if (!Number.isFinite(value) || value <= 0) {
     const error: ParseError = {
       _tag: "InvalidOption",
