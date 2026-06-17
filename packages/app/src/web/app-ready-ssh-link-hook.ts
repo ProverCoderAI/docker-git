@@ -59,7 +59,7 @@ const clearConnectTimer = (connectTimerRef: ConnectTimerRef): void => {
     return
   }
 
-  globalThis.clearTimeout(connectTimerRef.current)
+  clearTimeout(connectTimerRef.current)
   connectTimerRef.current = null
 }
 
@@ -124,7 +124,7 @@ const scheduleTerminalSessionAttach = (
   sessionId: string
 ): void => {
   clearConnectTimer(args.connectTimerRef)
-  args.connectTimerRef.current = globalThis.setTimeout(() => {
+  args.connectTimerRef.current = setTimeout(() => {
     args.connectTimerRef.current = null
     void Effect.runPromise(
       loadTerminalSessionById(sessionId).pipe(
@@ -141,7 +141,7 @@ const scheduleTerminalSessionAttach = (
   }, 0)
 }
 
-const attachExistingProjectLink = (
+const didAttachExistingProjectLink = (
   args: SshLinkEffectArgs,
   project: DashboardProject,
   request: { readonly terminalId?: string | undefined }
@@ -170,7 +170,7 @@ const scheduleProjectTerminalAttach = (
 ): void => {
   clearConnectTimer(args.connectTimerRef)
   showProjectTerminalScreen(args.actionContext, project.id)
-  args.connectTimerRef.current = globalThis.setTimeout(() => {
+  args.connectTimerRef.current = setTimeout(() => {
     args.connectTimerRef.current = null
     void Effect.runPromise(
       loadProjectTerminalWorkspace(project.projectKey).pipe(
@@ -220,7 +220,7 @@ const handleProjectSshLink = (args: SshLinkEffectArgs, requestKey: string, reque
     args.actionContext.setMessage(`Project link was not found: ${request.token}.`)
     return
   }
-  if (attachExistingProjectLink(args, project, request)) {
+  if (didAttachExistingProjectLink(args, project, request)) {
     markSshLinkHandled(args, requestKey)
     return
   }

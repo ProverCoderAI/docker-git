@@ -231,20 +231,23 @@ export const renderEntrypointDockerGitBootstrap = (
   config: TemplateConfig
 ): string =>
   entrypointDockerGitBootstrapTemplate
-    .replaceAll("__SSH_USER__", config.sshUser)
+    .replaceAll("__SSH_USER__", () => config.sshUser)
     .replaceAll(
       "__AUTHORIZED_KEYS_BASENAME__",
-      config.authorizedKeysPath.replaceAll("\\", "/").split("/").at(-1) ??
-        "authorized_keys"
+      () =>
+        config.authorizedKeysPath.replaceAll("\\", "/").split("/").at(-1) ??
+          "authorized_keys"
     )
     .replaceAll(
       "__ENV_GLOBAL_BASENAME__",
-      config.envGlobalPath.replaceAll("\\", "/").split("/").at(-1) ??
-        "global.env"
+      () =>
+        config.envGlobalPath.replaceAll("\\", "/").split("/").at(-1) ??
+          "global.env"
     )
     .replaceAll(
       "__ENV_PROJECT_BASENAME__",
-      config.envProjectPath.replaceAll("\\", "/").split("/").at(-1) ??
-        "project.env"
+      () =>
+        config.envProjectPath.replaceAll("\\", "/").split("/").at(-1) ??
+          "project.env"
     )
-    .replaceAll("__CODEX_HOME__", config.codexHome)
+    .replaceAll("__CODEX_HOME__", () => config.codexHome)

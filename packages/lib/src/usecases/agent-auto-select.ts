@@ -164,12 +164,11 @@ export const resolveAutoAgentMode = (
   >
 ): Effect.Effect<AgentMode | undefined, ParseError | PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-
     if (config.agentAuto !== true) {
       return config.agentMode
     }
 
+    const fs = yield* _(FileSystem.FileSystem)
     const available = yield* _(resolveAvailableAgentAuth(fs, config))
     const explicitMode = yield* _(resolveExplicitAutoAgentMode(available, config.agentMode))
     if (explicitMode !== undefined) {

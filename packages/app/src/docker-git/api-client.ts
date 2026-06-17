@@ -60,9 +60,7 @@ const projectPath = (projectId: string, suffix = ""): string => `/projects/${enc
 
 const decodeProjectResponse = (payload: JsonValue) => {
   const object = asObject(payload)
-  return object === null
-    ? decodeProjectDetails(payload)
-    : decodeProjectDetails(object["project"] ?? payload)
+  return decodeProjectDetails(object === null ? payload : object["project"] ?? payload)
 }
 
 const decodeProjectsResponse = <A>(
@@ -70,7 +68,7 @@ const decodeProjectsResponse = <A>(
   decode: (value: JsonValue) => A | null
 ): ReadonlyArray<A> => {
   const object = asObject(payload)
-  const items = object === null ? asArray(payload) : asArray(object["projects"])
+  const items = asArray(object === null ? payload : object["projects"])
   return items
     .map((item) => decode(item))
     .filter((value): value is A => value !== null)
@@ -93,8 +91,8 @@ const createProjectAsync = (
   resolvedPaths: ResolvedCreateRequestPaths
 ) =>
   Effect.gen(function*(_) {
-    const createRequest = buildCreateProjectRequest(command, resolvedPaths, { async: true })
-    const payload = yield* _(request("POST", "/projects", createRequest))
+    const requestBody = buildCreateProjectRequest(command, resolvedPaths, { async: true })
+    const payload = yield* _(request("POST", "/projects", requestBody))
     const accepted = decodeCreateProjectAccepted(payload)
     if (accepted === null) {
       return yield* _(Effect.fail(invalidCreateAcceptedResponse()))
@@ -141,8 +139,8 @@ const createProjectWithResolvedPaths = (
       return yield* _(createProjectAsync(command, resolvedPaths))
     }
 
-    const createRequest = buildCreateProjectRequest(command, resolvedPaths)
-    const projectId = asString(createRequest.outDir)
+    const requestBody = buildCreateProjectRequest(command, resolvedPaths)
+    const projectId = asString(requestBody.outDir)
     const initialCursor = projectId === null
       ? null
       : yield* _(
@@ -153,13 +151,12 @@ const createProjectWithResolvedPaths = (
     const eventPolling = projectId === null || initialCursor === null
       ? null
       : yield* _(startProjectEventPolling(projectId, initialCursor))
+    const ensureStopped = eventPolling === null
+      ? Effect.void
+      : stopProjectEventPolling(eventPolling)
     const payload = yield* _(
-      request("POST", "/projects", createRequest).pipe(
-        Effect.ensuring(
-          eventPolling === null
-            ? Effect.void
-            : stopProjectEventPolling(eventPolling)
-        )
+      request("POST", "/projects", requestBody).pipe(
+        Effect.ensuring(ensureStopped)
       )
     )
     return decodeProjectResponse(payload)
@@ -176,10 +173,9 @@ const withProjectEventPolling = <A, E, R>(
       )
     )
     const eventPolling = yield* _(startProjectEventPolling(projectId, initialCursor))
+    const ensureStopped = stopProjectEventPolling(eventPolling)
     return yield* _(
-      effect.pipe(
-        Effect.ensuring(stopProjectEventPolling(eventPolling))
-      )
+      effect.pipe(Effect.ensuring(ensureStopped))
     )
   })
 
@@ -236,8 +232,8 @@ export const readProjectLogs = (projectId: string) =>
     Effect.map((payload) => readProjectOutput(payload))
   )
 
-export const readContainerTaskSnapshot = (projectId: string, includeDefault: boolean) =>
-  request("GET", projectPath(projectId, `/tasks${includeDefault ? "?includeDefault=true" : ""}`)).pipe(
+export const readContainerTaskSnapshot = (projectId: string, shouldIncludeDefault: boolean) =>
+  request("GET", projectPath(projectId, `/tasks${shouldIncludeDefault ? "?includeDefault=true" : ""}`)).pipe(
     Effect.map((payload) => decodeContainerTaskSnapshot(payload))
   )
 
@@ -275,7 +271,8 @@ export const createAuthTerminalSession = (
 
 export const deleteTerminalSessionByPath = (path: string) => requestVoid("DELETE", path)
 
-export const applyAllProjects = (activeOnly: boolean) => requestVoid("POST", "/projects/apply-all", { activeOnly })
+export const applyAllProjects = (isActiveOnly: boolean) =>
+  requestVoid("POST", "/projects/apply-all", { activeOnly: isActiveOnly })
 
 export const downAllProjects = () => requestVoid("POST", "/projects/down-all")
 

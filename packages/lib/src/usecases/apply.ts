@@ -125,7 +125,7 @@ const runApplyForProjectDir = (
   projectDir: string,
   command: ApplyCommand
 ): Effect.Effect<TemplateConfig, ApplyProjectConfigError, ApplyProjectConfigEnv> =>
-  command.runUp ? applyProjectWithUp(projectDir, command) : applyProjectFiles(projectDir, command)
+  (command.runUp ? applyProjectWithUp : applyProjectFiles)(projectDir, command)
 
 const applyProjectWithUp = (
   projectDir: string,

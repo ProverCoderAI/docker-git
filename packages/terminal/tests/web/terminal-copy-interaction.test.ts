@@ -4,14 +4,14 @@ import * as fc from "fast-check"
 
 import {
   attachTerminalCopyInteraction,
-  forceTerminalSelectionModifier,
+  didForceTerminalSelectionModifier,
+  didWriteTerminalSelectionToClipboardData,
   shouldForceBrowserTerminalSelection,
   shouldForceTerminalSelectionContext,
   shouldLetBrowserHandleTerminalCopyShortcut,
   type TerminalCopyInteractionTerminal,
   type TerminalCopyKeyboardEvent,
-  type TerminalMouseTrackingMode,
-  writeTerminalSelectionToClipboardData
+  type TerminalMouseTrackingMode
 } from "../../src/web/terminal-copy-interaction.js"
 import {
   expectNoDragListeners,
@@ -114,14 +114,14 @@ describe("terminal copy interaction", () => {
   it("uses Shift as the forced selection modifier on non-Mac platforms", () => {
     const event = { altKey: false, shiftKey: false }
 
-    expect(forceTerminalSelectionModifier(event, "Win32")).toBe(true)
+    expect(didForceTerminalSelectionModifier(event, "Win32")).toBe(true)
     expect(event).toEqual({ altKey: false, shiftKey: true })
   })
 
   it("uses Alt as the forced selection modifier on Mac platforms", () => {
     const event = { altKey: false, shiftKey: false }
 
-    expect(forceTerminalSelectionModifier(event, "MacIntel")).toBe(true)
+    expect(didForceTerminalSelectionModifier(event, "MacIntel")).toBe(true)
     expect(event).toEqual({ altKey: true, shiftKey: false })
   })
 
@@ -133,7 +133,7 @@ describe("terminal copy interaction", () => {
       }
     }
 
-    expect(writeTerminalSelectionToClipboardData(terminalWithSelection("any", "line one\nline two"), clipboardData))
+    expect(didWriteTerminalSelectionToClipboardData(terminalWithSelection("any", "line one\nline two"), clipboardData))
       .toBe(
         true
       )
@@ -147,8 +147,8 @@ describe("terminal copy interaction", () => {
       }
     }
 
-    expect(writeTerminalSelectionToClipboardData(terminalWithSelection("any", ""), clipboardData)).toBe(false)
-    expect(writeTerminalSelectionToClipboardData(terminalWithSelection("any", "selected"), null)).toBe(false)
+    expect(didWriteTerminalSelectionToClipboardData(terminalWithSelection("any", ""), clipboardData)).toBe(false)
+    expect(didWriteTerminalSelectionToClipboardData(terminalWithSelection("any", "selected"), null)).toBe(false)
   })
 
   it("forces the selection modifier through the full primary-button drag", () => {

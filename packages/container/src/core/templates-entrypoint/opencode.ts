@@ -207,5 +207,5 @@ export const renderEntrypointOpenCodeConfig = (
   config: TemplateConfig
 ): string =>
   entrypointOpenCodeTemplate
-    .replaceAll("__SSH_USER__", config.sshUser)
-    .replaceAll("__CODEX_HOME__", config.codexHome)
+    .replaceAll("__SSH_USER__", () => config.sshUser)
+    .replaceAll("__CODEX_HOME__", () => config.codexHome)

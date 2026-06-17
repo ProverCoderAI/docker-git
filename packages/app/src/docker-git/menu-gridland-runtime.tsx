@@ -169,7 +169,7 @@ const consumeSkippedInput = (context: GridlandMenuRuntimeContext): void => {
   context.setSkipInputs((value) => (value > 0 ? value - 1 : 0))
 }
 
-const handleCtrlC = (event: GridlandKeyEvent, context: GridlandMenuRuntimeContext): boolean => {
+const didHandleCtrlC = (event: GridlandKeyEvent, context: GridlandMenuRuntimeContext): boolean => {
   if (!(event.ctrl && event.name === "c")) {
     return false
   }
@@ -181,7 +181,7 @@ const handleCtrlC = (event: GridlandKeyEvent, context: GridlandMenuRuntimeContex
 
 export const useGridlandMenuInput = (gridland: GridlandModule, context: GridlandMenuRuntimeContext): void => {
   gridland.useKeyboard((event) => {
-    if (handleCtrlC(event, context) || shouldIgnoreKeyEvent(context)) {
+    if (didHandleCtrlC(event, context) || shouldIgnoreKeyEvent(context)) {
       return
     }
     if (shouldConsumeSkippedInput(context)) {

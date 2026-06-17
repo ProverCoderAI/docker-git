@@ -2,7 +2,7 @@ import { Effect } from "effect"
 
 import {
   type BrowserActionContext,
-  confirmAction,
+  isActionConfirmed,
   nullableValue,
   requireSelectedProjectId,
   withBusy,
@@ -24,7 +24,7 @@ import {
   restartProjectDatabaseEditor,
   saveProjectDatabaseProfile
 } from "./api.js"
-import { openUrl } from "./open-url.js"
+import { didOpenUrl } from "./open-url.js"
 
 const requireSelectedProjectIdForDatabases = (context: BrowserActionContext): string | null => {
   const projectId = requireSelectedProjectId(context)
@@ -105,7 +105,7 @@ export const deleteSelectedDatabaseProfile = (
   profile: ProjectDatabaseProfile
 ) => {
   const projectId = requireSelectedProjectId(context)
-  if (projectId === null || !confirmAction(`Delete database profile ${profile.label}?`)) {
+  if (projectId === null || !isActionConfirmed(`Delete database profile ${profile.label}?`)) {
     return
   }
   withBusy({
@@ -149,7 +149,7 @@ export const closeSelectedDatabaseForward = (
   profile: ProjectDatabaseProfile
 ) => {
   const projectId = requireSelectedProjectId(context)
-  if (projectId === null || !confirmAction(`Close external access for ${profile.label}?`)) {
+  if (projectId === null || !isActionConfirmed(`Close external access for ${profile.label}?`)) {
     return
   }
   withBusy({
@@ -173,7 +173,7 @@ export const openSelectedProjectDatabaseEditor = (context: BrowserActionContext)
       context.setDatabaseSession(session)
       const editorUrl = projectDatabaseEditorUrl(session)
       context.setMessage(
-        openUrl(editorUrl)
+        didOpenUrl(editorUrl)
           ? `SQL editor opened: ${editorUrl}.`
           : `Popup was blocked. Open ${editorUrl} manually.`
       )

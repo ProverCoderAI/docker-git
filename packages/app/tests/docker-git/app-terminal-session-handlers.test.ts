@@ -81,8 +81,8 @@ type ExpectedProjectHandlers = {
   readonly terminal: boolean
 }
 
-const expectOptionalHandler = (handler: (() => void) | undefined, enabled: boolean): void => {
-  if (enabled) {
+const expectOptionalHandler = (handler: (() => void) | undefined, isEnabled: boolean): void => {
+  if (isEnabled) {
     expect(typeof handler).toBe("function")
     return
   }

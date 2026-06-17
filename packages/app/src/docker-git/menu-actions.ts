@@ -28,11 +28,11 @@ import { type MenuAction, type MenuEnv, type MenuRunner, type MenuState, type Me
 // INVARIANT: menu selection runs exactly one action
 // COMPLEXITY: O(1) per keypress
 
-export type MenuContext = {
+export type MenuContext = MenuViewContext & {
   readonly state: MenuState
   readonly runner: MenuRunner
   readonly exit: () => void
-} & MenuViewContext
+}
 
 export type MenuSelectionContext = MenuContext & {
   readonly selected: number
@@ -57,21 +57,20 @@ const runWithSuspendedTui = (
   context: MenuContext,
   label: string
 ) => {
+  const announceStart = Effect.sync(() => {
+    context.setMessage(`${label}...`)
+  })
+  const suspendedEffect = withSuspendedTui(effect, {
+    onError: (error) => writeErrorAndPause(renderMenuError(error))
+  })
+  const announceFinish = Effect.sync(() => {
+    context.setMessage(`${label} finished.`)
+  })
   context.runner.runEffect(
     pipe(
-      Effect.sync(() => {
-        context.setMessage(`${label}...`)
-      }),
-      Effect.zipRight(
-        withSuspendedTui(effect, {
-          onError: (error) => writeErrorAndPause(renderMenuError(error))
-        })
-      ),
-      Effect.tap(() =>
-        Effect.sync(() => {
-          context.setMessage(`${label} finished.`)
-        })
-      ),
+      announceStart,
+      Effect.zipRight(suspendedEffect),
+      Effect.tap(() => announceFinish),
       Effect.asVoid
     )
   )

@@ -170,7 +170,7 @@ const closeStream = (runtime: ConnectProjectRuntime): void => {
   runtime.stream = null
 }
 
-const showPendingTerminalError = (
+const didShowPendingTerminalError = (
   context: BrowserActionContext,
   runtime: ConnectProjectRuntime,
   error: string
@@ -200,7 +200,7 @@ const attachCreatedSession = (
     effect: loadProjectTerminalSession(runtime.projectKey, sessionId),
     label: "Attaching SSH terminal",
     onFailure: (error) => {
-      showPendingTerminalError(context, runtime, error)
+      didShowPendingTerminalError(context, runtime, error)
       closeStream(runtime)
     },
     onSuccess: (session) => {
@@ -226,7 +226,7 @@ const handleProjectEvent = (
 ): void => {
   const failure = readTerminalStartupFailure(event, requestId)
   if (failure !== null) {
-    if (showPendingTerminalError(context, runtime, failure)) {
+    if (didShowPendingTerminalError(context, runtime, failure)) {
       context.setMessage(failure)
     }
     closeStream(runtime)
@@ -268,7 +268,7 @@ const startTerminalSession = (context: BrowserActionContext, runtime: ConnectPro
     effect: startProjectTerminalSession(runtime.projectKey, runtime.pendingSessionId),
     label: "Opening SSH terminal",
     onFailure: (error) => {
-      showPendingTerminalError(context, runtime, error)
+      didShowPendingTerminalError(context, runtime, error)
     },
     onSuccess: (accepted) => {
       appendOutputLine(context, `[ssh.prepare] SSH terminal request accepted (${accepted.requestId})`)

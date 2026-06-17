@@ -111,9 +111,9 @@ const renderGeminiAuthConfig = (config: TemplateConfig): string =>
   geminiAuthConfigTemplate
     .replaceAll(
       "__GEMINI_AUTH_ROOT__",
-      geminiAuthRootContainerPath(config.sshUser)
+      () => geminiAuthRootContainerPath(config.sshUser)
     )
-    .replaceAll("__GEMINI_HOME_DIR__", config.geminiHome)
+    .replaceAll("__GEMINI_HOME_DIR__", () => config.geminiHome)
 
 const geminiSettingsJsonTemplate = `{
   "model": {
@@ -339,6 +339,6 @@ export const renderEntrypointGeminiConfig = (config: TemplateConfig): string =>
     renderGeminiSudoConfig(config),
     renderGeminiProfileSetup(config),
     entrypointGeminiNoticeTemplate
-      .replaceAll("__GEMINI_HOME__", config.geminiHome)
-      .replaceAll("__TARGET_DIR__", config.targetDir)
+      .replaceAll("__GEMINI_HOME__", () => config.geminiHome)
+      .replaceAll("__TARGET_DIR__", () => config.targetDir)
   ].join("\n\n")

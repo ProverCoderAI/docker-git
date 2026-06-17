@@ -9,7 +9,7 @@ import {
   type ProjectDetails,
   type ProjectSummary
 } from "./api.js"
-import { openUrl } from "./open-url.js"
+import { didOpenUrl } from "./open-url.js"
 import { DatabaseProfilesList } from "./panel-database-profiles.js"
 
 type DatabasePanelProps = {
@@ -77,7 +77,7 @@ const SessionStatus = (
               ? (
                 <Box
                   onClick={() => {
-                    openUrl(editorUrl)
+                    didOpenUrl(editorUrl)
                   }}
                 >
                   <Text fg="#7fdfff" wrap="truncate">{editorUrl}</Text>

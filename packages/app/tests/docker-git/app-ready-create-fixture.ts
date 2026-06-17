@@ -22,7 +22,7 @@ export {
 export type { CreateFlowView } from "../../src/docker-git/menu-create-shared.js"
 export type { CreateStep } from "../../src/docker-git/menu-types.js"
 
-type HandleCreateKey = typeof AppReadyCreate.handleCreateKey
+type HandleCreateKey = typeof AppReadyCreate.didHandleCreateKey
 type SubmitCreateView = typeof AppReadyCreate.submitCreateView
 type CreateSubmitMode = AppReadyCreate.CreateSubmitMode
 type BrowserActionContextOverrides = Parameters<typeof makeBrowserActionContext>[0]
@@ -50,8 +50,8 @@ const defaultQuickCreateInputs = {
 /** @pure false @effect allocates a Vitest spy @invariant setter and spy observe the same calls @precondition n/a @postcondition returned setter is React-compatible @complexity O(1) */
 export const createSetCreateViewSpy = () => {
   const spy = vi.fn<(value: SetStateAction<CreateFlowView>) => void>()
-  const setCreateView: Dispatch<SetStateAction<CreateFlowView>> = spy
-  return { setCreateView, spy }
+  const setCreationView: Dispatch<SetStateAction<CreateFlowView>> = spy
+  return { setCreationView, spy }
 }
 
 type SetCreateViewSpy = ReturnType<typeof createSetCreateViewSpy>["spy"]
@@ -66,7 +66,7 @@ export const requireCreateViewValue = (
   return value
 }
 
-/** @pure false @effect Vitest assertion @invariant selected call equals expected view @precondition callIndex targets a setCreateView call @postcondition assertion records no mutation @complexity O(1) */
+/** @pure false @effect Vitest assertion @invariant selected call equals expected view @precondition callIndex targets a setCreationView call @postcondition assertion records no mutation @complexity O(1) */
 export const expectCreateViewUpdate = (
   setCreateViewSpy: SetCreateViewSpy,
   expected: CreateFlowView,
@@ -78,10 +78,10 @@ export const expectCreateViewUpdate = (
 /** @pure false @effect Vitest assertion @invariant inline error text is exact @precondition submit path attempted empty repo URL @postcondition expected error view was written @complexity O(1) */
 export const expectCreateViewInputError = (
   setCreateViewSpy: SetCreateViewSpy,
-  createView: CreateFlowView
+  view: CreateFlowView
 ) => {
   expectCreateViewUpdate(setCreateViewSpy, {
-    ...createView,
+    ...view,
     inputError: EMPTY_REPO_URL_ERROR
   })
 }
@@ -139,14 +139,14 @@ export const createSubmitCreateBuffer = (submitCreateView: SubmitCreateView) =>
   options: SubmitCreateOptions = {}
 ) => submitCreateBuffer(submitCreateView, buffer, options)
 
-/** @pure false @effect allocates a Vitest preventDefault spy @invariant shiftKey is preserved @precondition key is a browser keyboard key @postcondition event matches handleCreateKey input shape @complexity O(1) */
+/** @pure false @effect allocates a Vitest preventDefault spy @invariant shiftKey is preserved @precondition key is a browser keyboard key @postcondition event matches didHandleCreateKey input shape @complexity O(1) */
 export const createKeyEvent = (
   key: string,
-  shiftKey = false
+  hasShiftKey = false
 ): Parameters<HandleCreateKey>[0] => {
   const event = {
     key,
-    shiftKey,
+    shiftKey: hasShiftKey,
     preventDefault: vi.fn()
   }
   return event
@@ -179,14 +179,14 @@ const createActionFrame = (
   contextOverrides?: BrowserActionContextOverrides
 ) => {
   const { context } = makeBrowserActionContext(contextOverrides ?? { githubStatus: validGithubStatus })
-  const { setCreateView, spy: setCreateViewSpy } = createSetCreateViewSpy()
-  return { context, setCreateView, setCreateViewSpy }
+  const { setCreationView, spy: setCreateViewSpy } = createSetCreateViewSpy()
+  return { context, setCreationView, setCreateViewSpy }
 }
 
-/** @pure false @effect invokes handleCreateKey test subject @invariant controller cwd and projectsRoot are stable @precondition createView is a test snapshot @postcondition returns event, context, and setter spy @complexity O(1) */
+/** @pure false @effect invokes didHandleCreateKey test subject @invariant controller cwd and projectsRoot are stable @precondition creationView is a test snapshot @postcondition returns event, context, and setter spy @complexity O(1) */
 export const runCreateKey = (
-  handleCreateKey: HandleCreateKey,
-  createView: CreateFlowView,
+  didHandleCreateKey: HandleCreateKey,
+  view: CreateFlowView,
   key: string,
   options: {
     readonly contextOverrides?: BrowserActionContextOverrides
@@ -195,12 +195,12 @@ export const runCreateKey = (
 ) => {
   const frame = createActionFrame(options.contextOverrides)
   const event = createKeyEvent(key, options.shiftKey ?? false)
-  const isHandled = handleCreateKey(event, {
+  const isHandled = didHandleCreateKey(event, {
     context: frame.context,
     controllerCwd: "/workspace",
-    createView,
+    creationView: view,
     projectsRoot: "/home/dev/.docker-git",
-    setCreateView: frame.setCreateView
+    setCreationView: frame.setCreationView
   })
   return { ...frame, event, handled: isHandled }
 }
@@ -212,13 +212,13 @@ const expectHandledCreateKey = (
   expect(result.event.preventDefault).toHaveBeenCalledTimes(1)
 }
 
-/** @pure false @effect Vitest assertion @invariant ignored keys do not update view or message @precondition key has no action for createView @postcondition no preventDefault call is made @complexity O(1) */
+/** @pure false @effect Vitest assertion @invariant ignored keys do not update view or message @precondition key has no action for creationView @postcondition no preventDefault call is made @complexity O(1) */
 export const expectIgnoredCreateKey = (
-  handleCreateKey: HandleCreateKey,
-  createView: CreateFlowView,
+  didHandleCreateKey: HandleCreateKey,
+  view: CreateFlowView,
   key: "ArrowDown" | "ArrowLeft" | "ArrowRight"
 ) => {
-  const result = runCreateKey(handleCreateKey, createView, key)
+  const result = runCreateKey(didHandleCreateKey, view, key)
 
   expect(result.handled).toBe(false)
   expect(result.event.preventDefault).not.toHaveBeenCalled()
@@ -226,10 +226,10 @@ export const expectIgnoredCreateKey = (
   expect(result.context.setMessage).not.toHaveBeenCalled()
 }
 
-/** @pure false @effect invokes submitCreateView test subject @invariant mode defaults to advance @precondition createView is a test snapshot @postcondition returns action context and setter spy @complexity O(1) */
+/** @pure false @effect invokes submitCreateView test subject @invariant mode defaults to advance @precondition creationView is a test snapshot @postcondition returns action context and setter spy @complexity O(1) */
 export const runSubmitCreateView = (
   submitCreateView: SubmitCreateView,
-  createView: CreateFlowView,
+  creationView: CreateFlowView,
   options: {
     readonly contextOverrides?: BrowserActionContextOverrides
     readonly mode?: CreateSubmitMode
@@ -239,49 +239,49 @@ export const runSubmitCreateView = (
   submitCreateView({
     context: frame.context,
     controllerCwd: "/workspace",
-    createView,
+    creationView,
     projectsRoot: "/home/dev/.docker-git",
     mode: options.mode ?? "advance",
-    setCreateView: frame.setCreateView
+    setCreationView: frame.setCreationView
   })
   return frame
 }
 
 /** @pure false @effect Vitest assertion @invariant vertical arrows clear preview buffers @precondition create settings flow is active @postcondition selected step equals expectedStep(view) @complexity O(1) */
 export const expectCreateArrowHandling = (
-  handleCreateKey: HandleCreateKey,
+  didHandleCreateKey: HandleCreateKey,
   key: "ArrowDown" | "ArrowUp",
   expectedStep: (view: CreateFlowView) => number
 ) => {
-  const createView = createSettingsFlowView()
-  const result = runCreateKey(handleCreateKey, createView, key)
+  const creationView = createSettingsFlowView()
+  const result = runCreateKey(didHandleCreateKey, creationView, key)
   const nextView = requireCreateViewValue(result.setCreateViewSpy.mock.calls[0]?.[0])
 
   expectHandledCreateKey(result)
-  expect(nextView.step).toBe(expectedStep(createView))
+  expect(nextView.step).toBe(expectedStep(creationView))
   expect(nextView.buffer).toBe("")
-  expect(nextView.values).toEqual(createView.values)
+  expect(nextView.values).toEqual(creationView.values)
   expect(result.context.setMessage).toHaveBeenCalledWith(null)
 }
 
 /** @pure false @effect Vitest assertion @invariant side arrows only update buffer @precondition stepName supports or rejects discrete choice as expected @postcondition committed values and submit mock are unchanged @complexity O(1) */
 export const expectCreateSideArrowBufferHandling = (
-  handleCreateKey: HandleCreateKey,
+  didHandleCreateKey: HandleCreateKey,
   submitCreateInputsMock: SubmitCreateInputsMock,
   key: "ArrowLeft" | "ArrowRight",
   stepName: CreateStep,
   expectedBuffer: string
 ) => {
-  const createView = createSettingsFlowViewAtStep(stepName, "typed")
-  const result = runCreateKey(handleCreateKey, createView, key)
+  const creationView = createSettingsFlowViewAtStep(stepName, "typed")
+  const result = runCreateKey(didHandleCreateKey, creationView, key)
   const { context, setCreateViewSpy } = result
 
   expectHandledCreateKey(result)
   expectCreateViewUpdate(setCreateViewSpy, {
-    ...createView,
+    ...creationView,
     buffer: expectedBuffer
   })
-  expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0]).values).toEqual(createView.values)
+  expect(requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0]).values).toEqual(creationView.values)
   expect(submitCreateInputsMock).not.toHaveBeenCalled()
   expect(context.setMessage).toHaveBeenCalledWith(null)
 }
@@ -292,27 +292,27 @@ export const expectEmptyRepoInlineError = (
   submitCreateInputsMock: SubmitCreateInputsMock,
   mode: CreateSubmitMode = "advance"
 ) => {
-  const createView = createInitialFlowView(" ".repeat(3))
-  const { context, setCreateViewSpy } = runSubmitCreateView(submitCreateView, createView, { mode })
+  const creationView = createInitialFlowView(" ".repeat(3))
+  const { context, setCreateViewSpy } = runSubmitCreateView(submitCreateView, creationView, { mode })
 
   expect(submitCreateInputsMock).not.toHaveBeenCalled()
   expect(setCreateViewSpy).toHaveBeenCalledTimes(1)
-  expectCreateViewInputError(setCreateViewSpy, createView)
+  expectCreateViewInputError(setCreateViewSpy, creationView)
   expect(context.setMessage).not.toHaveBeenCalled()
 }
 
-/** @pure false @effect Vitest assertion @invariant Enter and Shift+Enter share empty repo validation @precondition handleCreateKey is the test subject @postcondition inline error is set and submit is skipped @complexity O(1) */
+/** @pure false @effect Vitest assertion @invariant Enter and Shift+Enter share empty repo validation @precondition didHandleCreateKey is the test subject @postcondition inline error is set and submit is skipped @complexity O(1) */
 export const expectEmptyRepoKeyboardInlineError = (
-  handleCreateKey: HandleCreateKey,
+  didHandleCreateKey: HandleCreateKey,
   submitCreateInputsMock: SubmitCreateInputsMock,
-  shiftKey: boolean
+  hasShiftKey: boolean
 ) => {
-  const createView = createInitialFlowView("")
-  const result = runCreateKey(handleCreateKey, createView, "Enter", { shiftKey })
+  const creationView = createInitialFlowView("")
+  const result = runCreateKey(didHandleCreateKey, creationView, "Enter", { shiftKey: hasShiftKey })
   const { context, setCreateViewSpy } = result
 
   expectHandledCreateKey(result)
   expect(submitCreateInputsMock).not.toHaveBeenCalled()
-  expectCreateViewInputError(setCreateViewSpy, createView)
+  expectCreateViewInputError(setCreateViewSpy, creationView)
   expect(context.setMessage).not.toHaveBeenCalled()
 }

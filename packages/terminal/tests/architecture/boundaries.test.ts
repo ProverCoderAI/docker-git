@@ -90,7 +90,7 @@ const importsFrom = (
     return importsFromSourceFile(sourceFile)
   })
 
-const bannedCoreImport = (source: string): boolean =>
+const isBannedCoreImport = (source: string): boolean =>
   source.includes("/shell") ||
   source.includes("/server") ||
   source.includes("/web") ||
@@ -105,25 +105,27 @@ const boundaryViolationsForFile = (
 ): Effect.Effect<ReadonlyArray<string>, PlatformError, FileSystem.FileSystem> =>
   Effect.map(importsFrom(file), (sources) =>
     sources
-      .filter((source) => bannedCoreImport(source))
+      .filter((source) => isBannedCoreImport(source))
       .map((source) => `${path.relative(sourceRootPath, file)} -> ${source}`))
 
 describe("terminal package boundaries", () => {
   it.effect("keeps contracts and core free of runtime adapter imports", () =>
     Effect.gen(function*(_) {
       const path = yield* _(Path.Path)
+      const contractsFiles = sourceFiles(`${sourceRootPath}/contracts`)
+      const coreFiles = sourceFiles(`${sourceRootPath}/core`)
+      const groupedFiles = Effect.all([contractsFiles, coreFiles])
       const files = yield* _(
         Effect.map(
-          Effect.all([
-            sourceFiles(`${sourceRootPath}/contracts`),
-            sourceFiles(`${sourceRootPath}/core`)
-          ]),
-          ([contractFiles, coreFiles]) => [...contractFiles, ...coreFiles]
+          groupedFiles,
+          ([contractFileList, coreFileList]) => [...contractFileList, ...coreFileList]
         )
       )
+      const fileViolationEffects = files.map((file) => boundaryViolationsForFile(path, file))
+      const allViolations = Effect.all(fileViolationEffects)
       const violations = yield* _(
         Effect.map(
-          Effect.all(files.map((file) => boundaryViolationsForFile(path, file))),
+          allViolations,
           (fileViolations) => flattenReadonly(fileViolations)
         )
       )

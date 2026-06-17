@@ -271,8 +271,8 @@ export const deleteProject = (projectId: string) =>
 
 export const downAllProjects = () => requestText("POST", "/projects/down-all").pipe(Effect.asVoid)
 
-export const applyAllProjects = (activeOnly: boolean) =>
-  requestText("POST", "/projects/apply-all", { activeOnly }).pipe(Effect.asVoid)
+export const applyAllProjects = (shouldApplyActiveOnly: boolean) =>
+  requestText("POST", "/projects/apply-all", { activeOnly: shouldApplyActiveOnly }).pipe(Effect.asVoid)
 
 export const loadGithubStatus = () =>
   requestJson("GET", "/auth/github/status", GithubStatusResponseSchema).pipe(

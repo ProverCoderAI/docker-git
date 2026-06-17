@@ -50,8 +50,8 @@ const restoreTerminalBindings = (): void => {
   Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: isOriginalStdoutTty })
 }
 
-const createRawModeStub = (events: Array<string>): typeof process.stdin.setRawMode => (enabled: boolean) => {
-  events.push(`raw:${String(enabled)}`)
+const createRawModeStub = (events: Array<string>): typeof process.stdin.setRawMode => (isEnabled: boolean) => {
+  events.push(`raw:${String(isEnabled)}`)
   return process.stdin
 }
 

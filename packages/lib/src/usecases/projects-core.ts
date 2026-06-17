@@ -238,10 +238,11 @@ export const forEachProjectStatus = <E, R>(
 ): Effect.Effect<void, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     for (const configPath of configPaths) {
+      const onFailure = skipWithWarning<ProjectStatus>(configPath)
       const status = yield* _(
         loadProjectStatus(configPath).pipe(
           Effect.matchEffect({
-            onFailure: skipWithWarning<ProjectStatus>(configPath),
+            onFailure,
             onSuccess: (value) => Effect.succeed(value)
           })
         )

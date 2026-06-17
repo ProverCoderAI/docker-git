@@ -208,13 +208,13 @@ const handleBrowserMenuAction = (
   action: "Back" | "Refresh",
   context: BrowserActionContext,
   refresh: (context: BrowserActionContext) => void,
-  returnToProjectPicker: boolean
+  shouldReturnToProjectPicker: boolean
 ): void => {
   if (action === "Refresh") {
     refresh(context)
     return
   }
-  if (returnToProjectPicker) {
+  if (shouldReturnToProjectPicker) {
     context.setActionPrompt(null)
     context.setActiveScreen(projectPickerScreen())
     context.setMessage("Returned to project selection.")

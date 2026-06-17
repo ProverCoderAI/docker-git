@@ -108,15 +108,12 @@ const waitForCloneCompletion = (
         Effect.fork
       )
     )
+    const clonePollSchedule = Schedule.addDelay(
+      Schedule.recurUntil<CloneState>((state) => state !== "pending"),
+      () => clonePollInterval
+    )
     const result = yield* _(
-      checkCloneState(cwd, config.containerName).pipe(
-        Effect.repeat(
-          Schedule.addDelay(
-            Schedule.recurUntil<CloneState>((state) => state !== "pending"),
-            () => clonePollInterval
-          )
-        )
-      )
+      checkCloneState(cwd, config.containerName).pipe(Effect.repeat(clonePollSchedule))
     )
     yield* _(Fiber.interrupt(logsFiber))
     if (result === "failed") {
@@ -161,15 +158,12 @@ const waitForAgentCompletion = (
         Effect.fork
       )
     )
+    const agentPollSchedule = Schedule.addDelay(
+      Schedule.recurUntil<AgentState>((state) => state !== "pending"),
+      () => agentPollInterval
+    )
     const result = yield* _(
-      checkAgentState(cwd, config.containerName).pipe(
-        Effect.repeat(
-          Schedule.addDelay(
-            Schedule.recurUntil<AgentState>((state) => state !== "pending"),
-            () => agentPollInterval
-          )
-        )
-      )
+      checkAgentState(cwd, config.containerName).pipe(Effect.repeat(agentPollSchedule))
     )
     yield* _(Fiber.interrupt(logsFiber))
     if (result === "failed") {
@@ -187,13 +181,13 @@ const waitForAgentCompletion = (
 const runDockerComposeUpByMode = (
   resolvedOutDir: string,
   projectConfig: CreateCommand["config"],
-  force: boolean,
-  forceEnv: boolean
+  shouldForce: boolean,
+  shouldForceEnv: boolean
 ): Effect.Effect<void, DockerCommandError | PlatformError, DockerUpEnvironment> =>
   Effect.gen(function*(_) {
     yield* _(ensureComposeNetworkReady(resolvedOutDir, projectConfig))
 
-    if (force) {
+    if (shouldForce) {
       yield* _(Effect.log("Force enabled: removing stale containers and wiping docker compose volumes..."))
       yield* _(runDockerComposeDownVolumes(resolvedOutDir))
       yield* _(ensureSharedCodexVolumeReady(resolvedOutDir, projectConfig))
@@ -206,7 +200,7 @@ const runDockerComposeUpByMode = (
       return
     }
     yield* _(ensureSharedCodexVolumeReady(resolvedOutDir, projectConfig))
-    if (forceEnv) {
+    if (shouldForceEnv) {
       yield* _(Effect.log("Force env enabled: resetting env defaults and recreating containers (volumes preserved)..."))
       yield* _(runDockerComposeUpRecreate(resolvedOutDir))
       return

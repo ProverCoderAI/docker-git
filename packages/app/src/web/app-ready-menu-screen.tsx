@@ -15,11 +15,11 @@ type MainMenuScreenProps = {
   readonly viewportLayout: ViewportLayout
 }
 
-const menuGap = (compact: boolean): number | string => compact ? "4px" : 1
+const menuGap = (isCompact: boolean): number | string => isCompact ? "4px" : 1
 
-const menuPadding = (compact: boolean): number | string => compact ? "8px" : 2
+const menuPadding = (isCompact: boolean): number | string => isCompact ? "8px" : 2
 
-const menuMaxWidth = (compact: boolean): string => compact ? "100%" : "720px"
+const menuMaxWidth = (isCompact: boolean): string => isCompact ? "100%" : "720px"
 
 const MenuStatusLines = (
   {

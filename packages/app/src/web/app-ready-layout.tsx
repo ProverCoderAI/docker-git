@@ -39,7 +39,7 @@ export type ReadyLayoutProps = {
   readonly controllerCwd: string
   readonly dashboardRefreshTick: number
   readonly projectsRoot: string
-  readonly createView: CreateFlowView
+  readonly creationView: CreateFlowView
   readonly currentMenu: BrowserMenuTag
   readonly dashboard: DashboardData
   readonly databaseConnectionInput: string
@@ -94,7 +94,7 @@ export type ReadyLayoutProps = {
   readonly onRefreshProjectSkills: () => void
   readonly onRefreshProjectTasks: () => void
   readonly onRefreshPanelShareTunnel: () => void
-  readonly onProjectTasksIncludeDefaultChange: (includeDefault: boolean) => void
+  readonly onProjectTasksIncludeDefaultChange: (shouldIncludeDefault: boolean) => void
   readonly onRestartProjectDatabaseEditor: () => void
   readonly onSaveDatabaseProfile: () => void
   readonly onSaveProjectPrompt: (kind: ProjectPromptKind, content: string) => void

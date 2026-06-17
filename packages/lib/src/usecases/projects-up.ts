@@ -311,9 +311,9 @@ export const runDockerComposeUpWithPortCheck = (
     yield* _(ensureComposeNetworkReady(projectDir, resolvedTemplate))
     yield* _(ensureSharedCodexVolumeReady(projectDir, resolvedTemplate))
     const startedTemplate = yield* _(runProjectComposeUp(projectDir, resolvedTemplate, options.buildMode ?? "build"))
-    yield* (options.waitForPostStart === false
-      ? _(startProjectPostStartSelfHealInBackground(projectDir, startedTemplate))
-      : _(runProjectPostStartSelfHeal(projectDir, startedTemplate)))
+    yield* _((options.waitForPostStart === false
+      ? startProjectPostStartSelfHealInBackground
+      : runProjectPostStartSelfHeal)(projectDir, startedTemplate))
 
     return startedTemplate
   })

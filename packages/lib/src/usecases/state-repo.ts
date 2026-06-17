@@ -296,8 +296,8 @@ const ensureOriginRemote = (
   env: GitAuthEnv
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function*(_) {
-    const setUrlExit = yield* _(gitExitCode(root, ["remote", "set-url", "origin", repoUrl], env))
-    if (setUrlExit === successExitCode) {
+    const urlExitCode = yield* _(gitExitCode(root, ["remote", "set-url", "origin", repoUrl], env))
+    if (urlExitCode === successExitCode) {
       return
     }
     yield* _(git(root, ["remote", "add", "origin", repoUrl], env))

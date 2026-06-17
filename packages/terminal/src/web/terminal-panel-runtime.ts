@@ -66,7 +66,7 @@ const createTerminalCleanup = (
       wheelScrollDisposable.dispose()
     },
     removeResize: () => {
-      globalThis.removeEventListener("resize", sendResize)
+      removeEventListener("resize", sendResize)
       globalThis.visualViewport?.removeEventListener("resize", sendResize)
       globalThis.visualViewport?.removeEventListener("scroll", sendResize)
     }
@@ -83,7 +83,7 @@ const createConnectSocket = (
 }
 
 const attachGlobalResizeListeners = (sendResize: () => void): void => {
-  globalThis.addEventListener("resize", sendResize)
+  addEventListener("resize", sendResize)
   globalThis.visualViewport?.addEventListener("resize", sendResize)
   globalThis.visualViewport?.addEventListener("scroll", sendResize)
 }

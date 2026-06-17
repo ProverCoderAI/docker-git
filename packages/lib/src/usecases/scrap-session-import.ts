@@ -138,10 +138,10 @@ const restoreHostEnvFiles = (ctx: SessionImportContext): Effect.Effect<void, Scr
 
 const prepareRepoForImport = (
   ctx: SessionImportContext,
-  wipe: boolean
+  shouldWipe: boolean
 ): Effect.Effect<void, ScrapError, ScrapRequirements> => {
   const targetDir = shellEscape(ctx.template.targetDir)
-  const wipeLine = wipe ? `rm -rf ${targetDir}` : ":"
+  const wipeLine = shouldWipe ? `rm -rf ${targetDir}` : ":"
   const gitDir = `${ctx.template.targetDir}/.git`
   const prepScript = [
     "set -e",

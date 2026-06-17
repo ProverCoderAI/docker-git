@@ -31,7 +31,7 @@ const schedulePoll = (
   runPoll: () => void,
   delayMs: number
 ): void => {
-  state.timeout = globalThis.setTimeout(runPoll, delayMs)
+  state.timeout = setTimeout(runPoll, delayMs)
 }
 
 const handlePollFailure = (
@@ -116,7 +116,7 @@ export const openProjectEventStream = (
     close: () => {
       state.closed = true
       if (state.timeout !== null) {
-        globalThis.clearTimeout(state.timeout)
+        clearTimeout(state.timeout)
       }
     }
   }

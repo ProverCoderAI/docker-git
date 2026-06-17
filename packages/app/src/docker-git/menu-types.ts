@@ -15,7 +15,7 @@ import type { ProjectItem } from "./project-item.js"
 // FORMAT THEOREM: forall s: state(s) -> wellTyped(s)
 // PURITY: CORE
 // EFFECT: n/a
-// INVARIANT: createSteps is ordered and total over CreateStep
+// INVARIANT: orderedCreateSteps is ordered and total over CreateStep
 // COMPLEXITY: O(1)
 
 export type MenuState = {
@@ -70,7 +70,7 @@ export type CreateStep =
   | "mcpPlaywright"
   | "force"
 
-export const createSteps: ReadonlyArray<CreateStep> = [
+export const orderedCreateSteps: ReadonlyArray<CreateStep> = [
   "repoUrl",
   "cpuLimit",
   "ramLimit",

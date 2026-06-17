@@ -16,10 +16,10 @@ const parseEnvEntries = (input: string): ReadonlyArray<EnvEntry> => {
       continue
     }
     const key = normalized.slice(0, equalsIndex).trim()
-    const value = normalized.slice(equalsIndex + 1).trim()
     if (key.length === 0) {
       continue
     }
+    const value = normalized.slice(equalsIndex + 1).trim()
     entries.push({ key, value })
   }
   return entries

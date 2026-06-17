@@ -6,7 +6,15 @@ import { Effect, pipe } from "effect"
 
 import type { ApplyAllCommand } from "../core/domain.js"
 import { ensureDockerDaemonAccess, runDockerPsNames } from "../shell/docker.js"
-import type { CommandFailedError, DockerAccessError, DockerCommandError } from "../shell/errors.js"
+import type {
+  CommandFailedError,
+  ConfigDecodeError,
+  ConfigNotFoundError,
+  DockerAccessError,
+  DockerCommandError,
+  FileExistsError,
+  PortProbeError
+} from "../shell/errors.js"
 import { renderError } from "./errors.js"
 import {
   forEachProjectStatus,
@@ -36,39 +44,32 @@ const applyToProjects = (
 ) =>
   forEachProjectStatus(
     index.configPaths,
-    (status) =>
-      runningNames !== null && !runningNames.includes(status.config.template.containerName)
-        ? Effect.log(`Skipping ${status.projectDir}: container is not running`)
-        : pipe(
-          Effect.log(renderProjectStatusHeader(status)),
-          Effect.zipRight(
-            runDockerComposeUpWithPortCheck(status.projectDir).pipe(
-              Effect.catchTag("DockerCommandError", (error: DockerCommandError) =>
-                Effect.logWarning(
-                  `apply failed for ${status.projectDir}: ${
-                    renderError(error)
-                  }. Check the project docker-compose config (e.g. env files for merge conflicts, port conflicts in docker-compose.yml config) and retry.`
-                )),
-              Effect.catchTag("ConfigNotFoundError", (error) =>
-                Effect.logWarning(
-                  `Skipping ${status.projectDir}: ${renderError(error)}`
-                )),
-              Effect.catchTag("ConfigDecodeError", (error) =>
-                Effect.logWarning(
-                  `Skipping ${status.projectDir}: ${renderError(error)}`
-                )),
-              Effect.catchTag("PortProbeError", (error) =>
-                Effect.logWarning(
-                  `Skipping ${status.projectDir}: ${renderError(error)}`
-                )),
-              Effect.catchTag("FileExistsError", (error) =>
-                Effect.logWarning(
-                  `Skipping ${status.projectDir}: ${renderError(error)}`
-                )),
-              Effect.asVoid
-            )
-          )
+    (status) => {
+      if (runningNames !== null && !runningNames.includes(status.config.template.containerName)) {
+        return Effect.log(`Skipping ${status.projectDir}: container is not running`)
+      }
+      const applyFailedWarning = (error: DockerCommandError) =>
+        Effect.logWarning(
+          `apply failed for ${status.projectDir}: ${
+            renderError(error)
+          }. Check the project docker-compose config (e.g. env files for merge conflicts, port conflicts in docker-compose.yml config) and retry.`
         )
+      const skipWarning = (
+        error: ConfigNotFoundError | ConfigDecodeError | PortProbeError | FileExistsError
+      ) => Effect.logWarning(`Skipping ${status.projectDir}: ${renderError(error)}`)
+      const applyWithRecovery = runDockerComposeUpWithPortCheck(status.projectDir).pipe(
+        Effect.catchTag("DockerCommandError", applyFailedWarning),
+        Effect.catchTag("ConfigNotFoundError", skipWarning),
+        Effect.catchTag("ConfigDecodeError", skipWarning),
+        Effect.catchTag("PortProbeError", skipWarning),
+        Effect.catchTag("FileExistsError", skipWarning),
+        Effect.asVoid
+      )
+      return pipe(
+        Effect.log(renderProjectStatusHeader(status)),
+        Effect.zipRight(applyWithRecovery)
+      )
+    }
   )
 
 export const applyAllDockerGitProjects = (

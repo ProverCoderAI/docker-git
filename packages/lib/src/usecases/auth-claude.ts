@@ -131,10 +131,10 @@ const resolveClaudeAuthMethod = (
   })
 
 const buildClaudeAuthEnv = (
-  interactive: boolean,
+  isInteractive: boolean,
   oauthToken: string | null = null
 ): ReadonlyArray<string> => [
-  ...(interactive
+  ...(isInteractive
     ? [`HOME=${claudeContainerHomeDir}`, `CLAUDE_CONFIG_DIR=${claudeContainerHomeDir}`, "BROWSER=echo"]
     : [`HOME=${claudeContainerHomeDir}`, `CLAUDE_CONFIG_DIR=${claudeContainerHomeDir}`]),
   ...(oauthToken === null ? [] : [`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`])
@@ -204,7 +204,7 @@ const runClaudeAuthCommand = (
   accountPath: string,
   args: ReadonlyArray<string>,
   commandLabel: string,
-  interactive: boolean
+  isInteractive: boolean
 ): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
   runDockerAuth(
     buildDockerAuthSpec({
@@ -212,9 +212,9 @@ const runClaudeAuthCommand = (
       image: claudeImageName,
       hostPath: accountPath,
       containerPath: claudeContainerHomeDir,
-      env: buildClaudeAuthEnv(interactive),
+      env: buildClaudeAuthEnv(isInteractive),
       args,
-      interactive
+      interactive: isInteractive
     }),
     [0],
     (exitCode) => new CommandFailedError({ command: commandLabel, exitCode })

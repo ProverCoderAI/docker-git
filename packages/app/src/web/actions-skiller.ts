@@ -16,7 +16,7 @@ export type SkillerLaunch = {
   readonly trpcBasePath: string
 }
 
-export const skillerLaunchMessage = (launch: SkillerLaunch, openedPath: string, opened: boolean): string => {
+export const skillerLaunchMessage = (launch: SkillerLaunch, openedPath: string, wasOpened: boolean): string => {
   const pid = launch.pid === null ? "unknown pid" : `pid ${launch.pid}`
   const state = launch.alreadyRunning
     ? `Skiller is already running (${pid}). Log: ${launch.logPath}`
@@ -24,7 +24,7 @@ export const skillerLaunchMessage = (launch: SkillerLaunch, openedPath: string, 
   const scope = launch.scope === null
     ? ""
     : ` Container FS: ${launch.scope.containerName}:${launch.scope.containerProjectPath}.`
-  return opened
+  return wasOpened
     ? `${state}.${scope} Opened ${openedPath}.`
     : `${state}.${scope} Popup was blocked. Open ${openedPath} manually.`
 }

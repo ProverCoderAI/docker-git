@@ -4,12 +4,12 @@ import { createInitialFlowView } from "../../src/docker-git/menu-create-shared.j
 import type { DashboardData } from "../../src/web/api.js"
 import { type BrowserShortcutArgs, dispatchBrowserShortcut } from "../../src/web/app-ready-shortcut-runtime.js"
 import {
-  handleMenuNavigationKey,
-  handleProjectNavigationKey,
+  didHandleMenuNavigationKey,
+  didHandleProjectNavigationKey,
+  isProjectPrimaryNavigationMenu,
   shortcutHintText,
   type ShortcutKeyboardEvent,
-  shouldRefreshProjectDetails,
-  usesProjectPrimaryNavigation
+  shouldRefreshProjectDetails
 } from "../../src/web/app-ready-shortcuts.js"
 import { makeBrowserActionContext } from "./browser-action-context-fixture.js"
 
@@ -29,13 +29,13 @@ const makeEvent = (key: string): ShortcutKeyboardEvent => {
   return event
 }
 
-const runProjectNavigation = (projectNavigationArmed: boolean) => {
+const runProjectNavigation = (isProjectNavigationArmed: boolean) => {
   const event = makeEvent("ArrowDown")
   const setSelectedProjectId = vi.fn()
-  const isHandled = handleProjectNavigationKey(event, {
+  const isHandled = didHandleProjectNavigationKey(event, {
     currentMenu: "Select",
     dashboard,
-    projectNavigationArmed,
+    isProjectNavigationArmed,
     selectedProjectId: "project-a",
     setSelectedProjectId
   })
@@ -71,14 +71,14 @@ const makeShortcutArgs = (
     actionPrompt: null,
     context,
     controllerCwd: "/repo",
-    createView: createInitialFlowView(""),
+    creationView: createInitialFlowView(""),
     currentMenu: "Tasks",
     dashboard,
     projectBrowser: null,
     projectsRoot: "/home/dev/.docker-git",
     selectedProjectId: "project-a",
     setActiveScreen: vi.fn(),
-    setCreateView: vi.fn(),
+    setCreationView: vi.fn(),
     setProjectNavigationArmed: vi.fn(),
     setSelectedMenuIndex: vi.fn(),
     setSelectedProjectId,
@@ -126,16 +126,16 @@ const dashboard: DashboardData = {
 
 describe("app-ready-shortcuts", () => {
   it("uses project-first arrows in Select-like screens", () => {
-    expect(usesProjectPrimaryNavigation("Select")).toBe(true)
-    expect(usesProjectPrimaryNavigation("Info")).toBe(true)
-    expect(usesProjectPrimaryNavigation("Ports")).toBe(true)
-    expect(usesProjectPrimaryNavigation("Databases")).toBe(true)
-    expect(usesProjectPrimaryNavigation("Browser")).toBe(true)
-    expect(usesProjectPrimaryNavigation("Tasks")).toBe(true)
-    expect(usesProjectPrimaryNavigation("ProjectAuth")).toBe(true)
-    expect(usesProjectPrimaryNavigation("Logs")).toBe(true)
-    expect(usesProjectPrimaryNavigation("Create")).toBe(false)
-    expect(usesProjectPrimaryNavigation("Share")).toBe(false)
+    expect(isProjectPrimaryNavigationMenu("Select")).toBe(true)
+    expect(isProjectPrimaryNavigationMenu("Info")).toBe(true)
+    expect(isProjectPrimaryNavigationMenu("Ports")).toBe(true)
+    expect(isProjectPrimaryNavigationMenu("Databases")).toBe(true)
+    expect(isProjectPrimaryNavigationMenu("Browser")).toBe(true)
+    expect(isProjectPrimaryNavigationMenu("Tasks")).toBe(true)
+    expect(isProjectPrimaryNavigationMenu("ProjectAuth")).toBe(true)
+    expect(isProjectPrimaryNavigationMenu("Logs")).toBe(true)
+    expect(isProjectPrimaryNavigationMenu("Create")).toBe(false)
+    expect(isProjectPrimaryNavigationMenu("Share")).toBe(false)
   })
 
   it("does not move projects in Select until project mode is armed", () => {
@@ -156,7 +156,7 @@ describe("app-ready-shortcuts", () => {
     const event = makeEvent("ArrowDown")
     const setSelectedMenuIndex = vi.fn()
 
-    const isHandled = handleMenuNavigationKey(event, "Select", false, setSelectedMenuIndex)
+    const isHandled = didHandleMenuNavigationKey(event, "Select", false, setSelectedMenuIndex)
 
     expect(isHandled).toBe(true)
     expect(setSelectedMenuIndex).toHaveBeenCalledTimes(1)
@@ -166,7 +166,7 @@ describe("app-ready-shortcuts", () => {
     const event = makeEvent("ArrowDown")
     const setSelectedMenuIndex = vi.fn()
 
-    const isHandled = handleMenuNavigationKey(event, "Select", true, setSelectedMenuIndex)
+    const isHandled = didHandleMenuNavigationKey(event, "Select", true, setSelectedMenuIndex)
 
     expect(isHandled).toBe(false)
     expect(setSelectedMenuIndex).not.toHaveBeenCalled()
@@ -178,11 +178,11 @@ describe("app-ready-shortcuts", () => {
     const setSelectedMenuIndex = vi.fn()
     const setSelectedProjectId = vi.fn()
 
-    expect(handleMenuNavigationKey(menuEvent, "Create", false, setSelectedMenuIndex)).toBe(true)
-    expect(handleProjectNavigationKey(projectEvent, {
+    expect(didHandleMenuNavigationKey(menuEvent, "Create", false, setSelectedMenuIndex)).toBe(true)
+    expect(didHandleProjectNavigationKey(projectEvent, {
       currentMenu: "Create",
       dashboard,
-      projectNavigationArmed: false,
+      isProjectNavigationArmed: false,
       selectedProjectId: "project-a",
       setSelectedProjectId
     })).toBe(false)

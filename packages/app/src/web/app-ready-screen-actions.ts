@@ -36,13 +36,14 @@ export const bindScreenActions = (
 ) => ({
   onBackScreen: () => {
     if (state.activeScreen.tag === "Create") {
-      cancelCreate(actionContext, state.setCreateView)
+      cancelCreate(actionContext, state.setCreationView)
       return
     }
     if (state.activeScreen.tag === "ProjectAuth" || state.activeScreen.tag === "Output") {
-      state.setActiveScreen(
-        isProjectMenu(resolveCurrentMenu(state.selectedMenuIndex)) ? projectPickerScreen() : menuScreen()
-      )
+      const backScreen = isProjectMenu(resolveCurrentMenu(state.selectedMenuIndex))
+        ? projectPickerScreen
+        : menuScreen
+      state.setActiveScreen(backScreen())
       return
     }
     state.setProjectNavigationArmed(false)

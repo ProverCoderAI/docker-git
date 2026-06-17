@@ -8,8 +8,8 @@ import { git, gitBaseEnv, gitCapture } from "./git-commands.js"
 import {
   isGithubHttpsRemote,
   normalizeGithubHttpsRemote,
-  requiresGithubAuthHint,
-  resolveGithubToken
+  resolveGithubToken,
+  shouldHintGithubAuth
 } from "./github-auth.js"
 
 export const githubAuthLoginHint =
@@ -46,7 +46,7 @@ export const resolveStateGithubContext = (
     return {
       originUrl,
       token,
-      authHintNeeded: requiresGithubAuthHint(originUrl, token)
+      authHintNeeded: shouldHintGithubAuth(originUrl, token)
     }
   })
 
@@ -55,15 +55,15 @@ export const shouldLogGithubAuthHintForStateSyncFailure = (
   token: string | null,
   error: CommandFailedError | PlatformError
 ): boolean =>
-  requiresGithubAuthHint(originUrl, token) ||
+  shouldHintGithubAuth(originUrl, token) ||
   (isGithubHttpsRemote(originUrl) &&
     error._tag === "CommandFailedError" &&
     error.command === "git fetch origin --prune")
 
 export const withGithubAuthHintOnFailure = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
-  enabled: boolean
+  isEnabled: boolean
 ): Effect.Effect<A, E, R> =>
   effect.pipe(
-    Effect.tapError(() => enabled ? Effect.logWarning(githubAuthLoginHint) : Effect.void)
+    Effect.tapError(() => isEnabled ? Effect.logWarning(githubAuthLoginHint) : Effect.void)
   )

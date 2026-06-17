@@ -130,7 +130,7 @@ const horizontalArrowAction = (
 type TextInputKeyboardHandlers = {
   readonly onArrowLeft: (() => void) | undefined
   readonly onArrowRight: (() => void) | undefined
-  readonly onEnter: ((shift: boolean) => void) | undefined
+  readonly onEnter: ((isShift: boolean) => void) | undefined
   readonly onEscape: (() => void) | undefined
 }
 

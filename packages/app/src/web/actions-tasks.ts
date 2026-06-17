@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 
-import { type BrowserActionContext, confirmAction, requireSelectedProjectId, withBusy } from "./actions-shared.js"
+import { type BrowserActionContext, isActionConfirmed, requireSelectedProjectId, withBusy } from "./actions-shared.js"
 import { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api.js"
 import type { ContainerTaskSnapshot } from "./api.js"
 
@@ -128,15 +128,15 @@ export const loadSelectedProjectTasks = (
 
 export const setSelectedProjectTasksIncludeDefault = (
   context: BrowserActionContext,
-  includeDefault: boolean
+  shouldIncludeDefault: boolean
 ) => {
-  context.setProjectTasksIncludeDefault(includeDefault)
+  context.setProjectTasksIncludeDefault(shouldIncludeDefault)
   context.setProjectTaskLogs("")
   const projectId = requireProjectIdForTasks(context)
   if (projectId === null) {
     return
   }
-  loadProjectTasksById(context, projectId, { includeDefault })
+  loadProjectTasksById(context, projectId, { includeDefault: shouldIncludeDefault })
 }
 
 export const stopSelectedProjectTask = (
@@ -144,7 +144,7 @@ export const stopSelectedProjectTask = (
   pid: number
 ) => {
   withSelectedProjectTask(context, pid, (selected) => {
-    if (!confirmAction(`Stop PID ${selected.pid}?`)) {
+    if (!isActionConfirmed(`Stop PID ${selected.pid}?`)) {
       return
     }
     withBusy({

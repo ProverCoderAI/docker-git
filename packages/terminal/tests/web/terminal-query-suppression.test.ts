@@ -40,15 +40,15 @@ type MockTerminal = {
     readonly parser: {
       readonly registerCsiHandler: (
         id: FunctionIdentifier,
-        cb: (params: CsiParams) => boolean
+        shouldHandle: (params: CsiParams) => boolean
       ) => { dispose: () => void }
       readonly registerDcsHandler: (
         id: FunctionIdentifier,
-        cb: (data: string, params: CsiParams) => boolean
+        shouldHandle: (data: string, params: CsiParams) => boolean
       ) => { dispose: () => void }
       readonly registerOscHandler: (
         id: number,
-        cb: (data: string) => boolean
+        shouldHandle: (data: string) => boolean
       ) => { dispose: () => void }
     }
   }
@@ -143,12 +143,12 @@ const privateModeHandlers = (
 const expectPrivateModesHandled = (
   handlers: readonly [RegisteredCsiHandler, RegisteredCsiHandler],
   modes: ReadonlyArray<number>,
-  handled: boolean
+  isHandled: boolean
 ): void => {
-  const [setHandler, resetHandler] = handlers
+  const [decSetHandler, resetHandler] = handlers
   for (const mode of modes) {
-    expect(setHandler.callback([mode])).toBe(handled)
-    expect(resetHandler.callback([mode])).toBe(handled)
+    expect(decSetHandler.callback([mode])).toBe(isHandled)
+    expect(resetHandler.callback([mode])).toBe(isHandled)
   }
 }
 
@@ -228,9 +228,9 @@ describe("terminal query suppression", () => {
   it("blocks DEC private mode SET for focus reporting and mouse tracking", () => {
     const mock = createMockTerminal()
     installTerminalQuerySuppression(mock.terminal)
-    const setHandler = findCsi(mock, { final: "h", prefix: "?" })
+    const decSetHandler = findCsi(mock, { final: "h", prefix: "?" })
     for (const mode of SUPPRESSED_MODES) {
-      expect(setHandler.callback([mode])).toBe(true)
+      expect(decSetHandler.callback([mode])).toBe(true)
     }
   })
 
@@ -274,9 +274,9 @@ describe("terminal query suppression", () => {
   it("treats sub-parameters (nested arrays) as the parameter head", () => {
     const mock = createMockTerminal()
     installTerminalQuerySuppression(mock.terminal)
-    const setHandler = findCsi(mock, { final: "h", prefix: "?" })
-    expect(setHandler.callback([[1004, 0]])).toBe(true)
-    expect(setHandler.callback([[25, 0]])).toBe(false)
+    const decSetHandler = findCsi(mock, { final: "h", prefix: "?" })
+    expect(decSetHandler.callback([[1004, 0]])).toBe(true)
+    expect(decSetHandler.callback([[25, 0]])).toBe(false)
   })
 
   it("exposes the suppressed private mode set", () => {

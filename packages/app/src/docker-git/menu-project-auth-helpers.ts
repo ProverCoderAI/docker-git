@@ -12,6 +12,22 @@ type AccountCredentialSpec = {
   readonly envKeys: ReadonlyArray<string>
 }
 
+// PURITY: CORE
+// INVARIANT: true iff `trimmed` assigns a non-empty value to one of `keys`
+const hasNonEmptyKeyValueInLine = (trimmed: string, keys: ReadonlyArray<string>): boolean => {
+  for (const key of keys) {
+    const prefix = `${key}=`
+    if (!trimmed.startsWith(prefix)) {
+      continue
+    }
+    const value = trimmed.slice(prefix.length).replaceAll(/^['"]|['"]$/g, "").trim()
+    if (value.length > 0) {
+      return true
+    }
+  }
+  return false
+}
+
 export const hasNonEmptyEnvValue = (
   fs: FileSystem.FileSystem,
   envFilePath: string,
@@ -25,15 +41,8 @@ export const hasNonEmptyEnvValue = (
     const envContent = yield* _(fs.readFileString(envFilePath), Effect.orElseSucceed(() => ""))
     for (const line of envContent.split("\n")) {
       const trimmed = line.trim()
-      for (const key of keys) {
-        const prefix = `${key}=`
-        if (!trimmed.startsWith(prefix)) {
-          continue
-        }
-        const value = trimmed.slice(prefix.length).replaceAll(/^['"]|['"]$/g, "").trim()
-        if (value.length > 0) {
-          return true
-        }
+      if (hasNonEmptyKeyValueInLine(trimmed, keys)) {
+        return true
       }
     }
     return false

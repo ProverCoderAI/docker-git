@@ -5,9 +5,9 @@ import { Effect } from "effect"
 import {
   authStreamMarkerExitCode,
   type AuthStreamMarkers,
-  authStreamSucceeded,
   codexLoginFailureMessage,
   codexLoginStreamMarkers,
+  didAuthStreamSucceed,
   githubLoginFailureMessage,
   githubLoginStreamMarkers,
   gitlabLoginFailureMessage,
@@ -62,14 +62,14 @@ const requestMarkedAuthStream = (
     const output = yield* _(requestTextStream("POST", path, body, writer.writeChunk))
     writer.flushVisiblePending()
 
-    if (authStreamSucceeded(output, markers)) {
+    if (didAuthStreamSucceed(output, markers)) {
       return output
     }
 
+    const exitCode = authStreamMarkerExitCode(output, markers)
+    const message = failureMessage(output, exitCode)
     return yield* _(
-      Effect.fail<ApiRequestError>(
-        streamFailure("POST", path, failureMessage(output, authStreamMarkerExitCode(output, markers)))
-      )
+      Effect.fail<ApiRequestError>(streamFailure("POST", path, message))
     )
   })
 

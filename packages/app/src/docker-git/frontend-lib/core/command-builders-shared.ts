@@ -13,7 +13,7 @@ import {
 
 const parsePort = (value: string): Either.Either<number, ParseError> => {
   const parsed = Number(value)
-  if (!Number.isInteger(parsed)) {
+  if (!Number.isSafeInteger(parsed)) {
     return Either.left({
       _tag: "InvalidOption",
       option: "--ssh-port",

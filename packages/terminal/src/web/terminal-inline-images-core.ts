@@ -22,7 +22,7 @@ export type TerminalOutputSegmentWriteArgs = {
 
 const lineBreakPattern = /\r\n|\r|\n/gu
 
-const endsWithLineBreak = (text: string): boolean => /\r\n$|\r$|\n$/u.test(text)
+const hasTrailingLineBreak = (text: string): boolean => /\r\n$|\r$|\n$/u.test(text)
 
 export const splitTerminalInlineImageOutput = (
   data: string
@@ -45,7 +45,7 @@ export const splitTerminalInlineImageOutput = (
   if (startIndex < data.length) {
     const text = data.slice(startIndex)
     segments.push({
-      endedWithLineBreak: endsWithLineBreak(text),
+      endedWithLineBreak: hasTrailingLineBreak(text),
       imagePaths: detectTerminalImagePaths(text),
       text
     })

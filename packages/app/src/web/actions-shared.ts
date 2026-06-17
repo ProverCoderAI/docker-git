@@ -77,7 +77,7 @@ export type BrowserActionContext = {
   readonly setSelectedProjectId: Setter<string | null>
 }
 
-export const confirmAction = (label: string): boolean => {
+export const isActionConfirmed = (label: string): boolean => {
   const dialog = confirm
   return typeof dialog === "function" && dialog(label)
 }
@@ -94,20 +94,21 @@ export const nullableValue = (value: string | undefined): string | null => {
 
 export const withBusy = <A>({ context, effect, label, onFailure, onFinally, onSuccess }: BusyAction<A>) => {
   context.setBusyLabel(label)
-  void Effect.runPromise(
-    effect.pipe(
-      Effect.match({
-        onFailure: (error) => {
-          context.setMessage(error)
-          onFailure?.(error)
-        },
-        onSuccess
-      })
-    )
-  ).finally(() => {
+  const finalizeBusy = Effect.sync(() => {
     context.setBusyLabel(null)
     onFinally?.()
   })
+  const busyEffect = effect.pipe(
+    Effect.match({
+      onFailure: (error) => {
+        context.setMessage(error)
+        onFailure?.(error)
+      },
+      onSuccess
+    }),
+    Effect.ensuring(finalizeBusy)
+  )
+  void Effect.runPromise(busyEffect)
 }
 
 export const appendOutputChunk = (context: BrowserActionContext, chunk: string) => {
@@ -164,7 +165,7 @@ export const withSelectedProjectBusy = <A>(
   })
 }
 
-export const requireGithubAuthConfigured = (context: BrowserActionContext): boolean => {
+export const isGithubAuthConfigured = (context: BrowserActionContext): boolean => {
   if (context.githubStatus === null) {
     context.setSelectedMenuIndex(browserMenuIndex("Auth"))
     context.setActiveScreen({ tag: "Auth" })

@@ -201,16 +201,18 @@ const runGithubLogin = (
 
 const retryGithubLogin = (
   effect: Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor>
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  effect.pipe(
+): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const recurTwice = Schedule.recurs(2)
+  return effect.pipe(
     Effect.tapError(() => Effect.logWarning("GH auth login failed; retrying...")),
     Effect.retry(
       Schedule.addDelay(
-        Schedule.recurs(2),
+        recurTwice,
         () => Duration.seconds(2)
       )
     )
   )
+}
 
 const persistGithubToken = (
   fs: FileSystem.FileSystem,

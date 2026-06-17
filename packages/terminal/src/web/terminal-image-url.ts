@@ -9,5 +9,5 @@ export const resolveTerminalImageFetchUrl = (websocketPath: string, imagePath: s
   const apiUrl = resolveTerminalApiOriginUrl()
   apiUrl.pathname = `${apiUrl.pathname.replace(/\/$/u, "")}${resolveTerminalImageBasePath(websocketPath)}`
   apiUrl.searchParams.set("path", imagePath)
-  return apiUrl.toString()
+  return apiUrl.href
 }

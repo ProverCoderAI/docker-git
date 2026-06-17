@@ -48,7 +48,7 @@ const resolveRepoBasics = (raw: RawOptions): Either.Either<RepoBasics, ParseErro
     const repoPathParts = deriveRepoPathParts(repoUrl).pathParts
     const workspaceSuffix = resolvedRepo.workspaceSuffix
     const projectSlug = workspaceSuffix ? `${repoSlug}-${workspaceSuffix}` : repoSlug
-    const repoPath = workspaceSuffix ? [...repoPathParts, workspaceSuffix].join("/") : repoPathParts.join("/")
+    const repoPath = (workspaceSuffix ? [...repoPathParts, workspaceSuffix] : repoPathParts).join("/")
     const repoRef = yield* _(
       nonEmpty("--repo-ref", raw.repoRef ?? resolvedRepo.repoRef, defaultTemplateConfig.repoRef)
     )

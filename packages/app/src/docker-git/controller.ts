@@ -26,7 +26,7 @@ import type { ControllerBootstrapError } from "./host-errors.js"
 export type { ControllerRuntime } from "./controller-docker.js"
 export { buildApiBaseUrlCandidates, isRemoteDockerHost } from "./controller-reachability.js"
 
-let selectedApiBaseUrl: string | undefined
+const apiBaseUrlCache: { selected: string | undefined } = { selected: undefined }
 
 const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
   _tag: "ControllerBootstrapError",
@@ -36,44 +36,39 @@ const controllerBootstrapError = (message: string): ControllerBootstrapError => 
 type ControllerEffect<A> = Effect.Effect<A, ControllerBootstrapError, ControllerDocker.ControllerRuntime>
 
 const rememberSelectedApiBaseUrl = (value: string): void => {
-  selectedApiBaseUrl = trimTrailingSlashes(value)
+  apiBaseUrlCache.selected = trimTrailingSlashes(value)
 }
 
 export const resolveApiBaseUrl = (): string =>
-  resolveExplicitApiBaseUrl() ?? selectedApiBaseUrl ?? resolveConfiguredApiBaseUrl()
+  resolveExplicitApiBaseUrl() ?? apiBaseUrlCache.selected ?? resolveConfiguredApiBaseUrl()
 
 const waitForReachableApiBaseUrl = (
   candidateUrls: ReadonlyArray<string>,
   currentContainerNetworks: DockerNetworkIps,
   controllerNetworks: DockerNetworkIps,
   expectedRevision: string | undefined
-): ControllerEffect<string> =>
-  pipe(
+): ControllerEffect<string> => {
+  const retrySchedule = Schedule.addDelay(Schedule.recurs(30), () => Duration.seconds(2))
+  return pipe(
     findReachableApiBaseUrl(candidateUrls, expectedRevision),
-    Effect.retry(
-      Schedule.addDelay(Schedule.recurs(30), () => Duration.seconds(2))
-    ),
+    Effect.retry(retrySchedule),
     Effect.matchEffect({
       onFailure: (error) =>
         Effect.gen(function*(_) {
           const diagnostics = yield* _(
             collectReachabilityDiagnostics(candidateUrls, currentContainerNetworks, controllerNetworks)
           )
-          return yield* _(
-            Effect.fail(
-              controllerBootstrapError(
-                [
-                  "docker-git controller did not become reachable.",
-                  error.message,
-                  diagnostics
-                ].join("\n")
-              )
-            )
-          )
+          const message = [
+            "docker-git controller did not become reachable.",
+            error.message,
+            diagnostics
+          ].join("\n")
+          return yield* _(Effect.fail(controllerBootstrapError(message)))
         }),
       onSuccess: (apiBaseUrl) => Effect.succeed(apiBaseUrl)
     })
   )
+}
 
 const failIfRemoteDockerWithoutApiUrl = (
   currentContainerNetworks: DockerNetworkIps
@@ -179,7 +174,7 @@ const buildBootstrapCandidateUrls = (
   buildApiBaseUrlCandidates({
     explicitApiBaseUrl,
     defaultLocalApiBaseUrl: resolveDefaultLocalApiBaseUrl(),
-    cachedApiBaseUrl: selectedApiBaseUrl,
+    cachedApiBaseUrl: apiBaseUrlCache.selected,
     defaultApiBaseUrl: resolveConfiguredApiBaseUrl(),
     currentContainerNetworks,
     controllerNetworks,
@@ -265,7 +260,7 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
     if (explicitApiBaseUrl !== undefined) {
       const reachableBeforeDocker = yield* _(
         findReachableDirectHealthProbe({
-          cachedApiBaseUrl: selectedApiBaseUrl,
+          cachedApiBaseUrl: apiBaseUrlCache.selected,
           defaultLocalApiBaseUrl,
           explicitApiBaseUrl
         })
@@ -281,7 +276,7 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
     const isForceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
     const reachableBeforeDocker = yield* _(
       findReachableDirectHealthProbe({
-        cachedApiBaseUrl: selectedApiBaseUrl,
+        cachedApiBaseUrl: apiBaseUrlCache.selected,
         defaultLocalApiBaseUrl,
         explicitApiBaseUrl,
         expectedRevision: localControllerRevision

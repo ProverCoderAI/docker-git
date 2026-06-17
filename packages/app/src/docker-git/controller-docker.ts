@@ -107,17 +107,14 @@ export const resolveDockerCommand = (): Effect.Effect<
     }
 
     const dockerHostRaw = process.env["DOCKER_HOST"]?.trim() ?? ""
+    const accessDeniedMessage = renderDockerAccessDeniedMessage({
+      directProbe,
+      sudoProbe,
+      apiBaseUrl: resolveConfiguredApiBaseUrl(),
+      dockerHost: dockerHostRaw.length > 0 ? dockerHostRaw : null
+    })
     return yield* _(
-      Effect.fail(
-        controllerBootstrapError(
-          renderDockerAccessDeniedMessage({
-            directProbe,
-            sudoProbe,
-            apiBaseUrl: resolveConfiguredApiBaseUrl(),
-            dockerHost: dockerHostRaw.length > 0 ? dockerHostRaw : null
-          })
-        )
-      )
+      Effect.fail(controllerBootstrapError(accessDeniedMessage))
     )
   })
 
@@ -256,7 +253,7 @@ const mapDockerCaptureError =
 // QUOTE(ТЗ): "комментарии ребита надо было тоже поддержать"
 // REF: CodeRabbit PR #344 review 4349265315
 // SOURCE: n/a
-// FORMAT THEOREM: includeOutput -> failure_with_output; !includeOutput -> base_failure
+// FORMAT THEOREM: shouldIncludeOutput -> failure_with_output; !shouldIncludeOutput -> base_failure
 // PURITY: CORE
 // EFFECT: n/a
 // INVARIANT: both modes preserve headline, command and exit code
@@ -268,14 +265,14 @@ const mapDockerCaptureError =
  * @param invocation - Resolved Docker invocation.
  * @param exitCode - Process exit code.
  * @param output - Combined stdout/stderr from the process.
- * @param includeOutput - Whether the message should include captured process output.
+ * @param shouldIncludeOutput - Whether the message should include captured process output.
  * @returns Stable Docker failure message.
  *
  * @pure true
  * @effect n/a
  * @invariant Base diagnostics always include command and exit code.
  * @precondition `exitCode` is the observed process exit code.
- * @postcondition Captured output appears only when `includeOutput` is true and output is non-empty.
+ * @postcondition Captured output appears only when `shouldIncludeOutput` is true and output is non-empty.
  * @complexity O(n) where n = |output|.
  * @throws Never
  */
@@ -284,9 +281,9 @@ const formatDockerCaptureFailure = (
   invocation: DockerInvocation,
   exitCode: number,
   output: string,
-  includeOutput: boolean
+  shouldIncludeOutput: boolean
 ): string =>
-  includeOutput
+  shouldIncludeOutput
     ? formatDockerInvocationFailureWithOutput(`${label} failed.`, invocation, exitCode, output)
     : formatDockerInvocationFailure(`${label} failed.`, invocation, exitCode)
 
@@ -305,7 +302,7 @@ const formatDockerCaptureFailure = (
  *
  * @param args - Docker CLI arguments after the executable.
  * @param label - Operation label used in diagnostics.
- * @param includeOutput - Whether non-zero exit diagnostics include captured stdout/stderr.
+ * @param shouldIncludeOutput - Whether non-zero exit diagnostics include captured stdout/stderr.
  * @returns Effect containing stdout on success.
  *
  * @pure false
@@ -319,7 +316,7 @@ const formatDockerCaptureFailure = (
 const runDockerCaptureWithOutputMode = (
   args: ReadonlyArray<string>,
   label: string,
-  includeOutput: boolean
+  shouldIncludeOutput: boolean
 ): Effect.Effect<string, ControllerBootstrapError, ControllerRuntime> =>
   resolveDockerInvocation(args).pipe(
     Effect.flatMap((invocation) =>
@@ -331,7 +328,7 @@ const runDockerCaptureWithOutputMode = (
         },
         [0],
         (exitCode, output) =>
-          controllerBootstrapError(formatDockerCaptureFailure(label, invocation, exitCode, output, includeOutput))
+          controllerBootstrapError(formatDockerCaptureFailure(label, invocation, exitCode, output, shouldIncludeOutput))
       )
     ),
     Effect.mapError(mapDockerCaptureError(label))
@@ -379,10 +376,11 @@ export const runCompose = (
 ): Effect.Effect<void, ControllerBootstrapError, ControllerRuntime> =>
   Effect.gen(function*(_) {
     const dockerCommand = yield* _(resolveDockerCommand())
+    const composeFiles = yield* _(ControllerCompose.resolveControllerComposeFiles())
     const invocation = buildDockerInvocation(dockerCommand, [
       "compose",
       ...ControllerCompose.controllerComposeProjectArgs,
-      ...ControllerCompose.composeFilesToArgs(yield* _(ControllerCompose.resolveControllerComposeFiles())),
+      ...ControllerCompose.composeFilesToArgs(composeFiles),
       ...args
     ])
     const exitCode = yield* _(
@@ -402,12 +400,13 @@ export const runCompose = (
       return
     }
 
+    const failureMessage = formatDockerInvocationFailure(
+      "Failed to start docker-git controller.",
+      invocation,
+      exitCode
+    )
     return yield* _(
-      Effect.fail(
-        controllerBootstrapError(
-          formatDockerInvocationFailure("Failed to start docker-git controller.", invocation, exitCode)
-        )
-      )
+      Effect.fail(controllerBootstrapError(failureMessage))
     )
   })
 

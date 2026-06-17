@@ -200,6 +200,7 @@ export const withPreservedTerminalState = <A, E, R>(
   Effect.gen(function*(_) {
     const snapshot = yield* _(snapshotTerminalState())
     yield* _(ensureTerminalCursorVisible())
-    return yield* _(use.pipe(Effect.ensuring(restoreTerminalState(snapshot))))
+    const restore = restoreTerminalState(snapshot)
+    return yield* _(use.pipe(Effect.ensuring(restore)))
   })
 /* jscpd:ignore-end */

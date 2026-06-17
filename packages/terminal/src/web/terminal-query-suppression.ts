@@ -21,15 +21,15 @@ export type TerminalQuerySuppressionTarget = {
   readonly parser: {
     readonly registerCsiHandler: (
       id: FunctionIdentifier,
-      callback: (params: CsiParams) => boolean
+      shouldHandle: (params: CsiParams) => boolean
     ) => Disposable
     readonly registerDcsHandler: (
       id: FunctionIdentifier,
-      callback: (data: string, params: CsiParams) => boolean
+      shouldHandle: (data: string, params: CsiParams) => boolean
     ) => Disposable
     readonly registerOscHandler: (
       ident: number,
-      callback: (data: string) => boolean
+      shouldHandle: (data: string) => boolean
     ) => Disposable
   }
 }
@@ -81,7 +81,7 @@ const shouldSuppressPrivateMode = (
   (options.allowMouseTracking !== true && MOUSE_TRACKING_PRIVATE_MODES.has(mode)) ||
   (options.suppressAlternateScreen === true && ALTERNATE_SCREEN_PRIVATE_MODES.has(mode))
 
-const containsSuppressedPrivateMode = (
+const hasSuppressedPrivateMode = (
   params: CsiParams,
   options: TerminalQuerySuppressionOptions
 ): boolean => {
@@ -116,7 +116,7 @@ const registerSelectivePrivateModeSuppressor = (
 ): Disposable =>
   terminal.parser.registerCsiHandler(
     { final, prefix: "?" },
-    (params) => containsSuppressedPrivateMode(params, options)
+    (params) => hasSuppressedPrivateMode(params, options)
   )
 
 export const installTerminalQuerySuppression = (

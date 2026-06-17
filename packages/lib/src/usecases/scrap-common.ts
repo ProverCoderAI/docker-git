@@ -87,11 +87,11 @@ export const runDockerExec = (
   )
 
 export const ensureSafeScrapImportWipe = (
-  wipe: boolean,
+  shouldWipe: boolean,
   template: ScrapTemplate,
   relative: string
 ): Effect.Effect<void, ScrapWipeRefusedError> =>
-  wipe && relative.length === 0
+  shouldWipe && relative.length === 0
     ? Effect.fail(
       new ScrapWipeRefusedErrorClass({
         sshUser: template.sshUser,

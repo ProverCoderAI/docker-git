@@ -145,8 +145,8 @@ docker_git_refresh_grok_env`
 
 const renderGrokAuthConfig = (config: TemplateConfig): string =>
   grokAuthConfigTemplate
-    .replaceAll("__GROK_AUTH_ROOT__", grokAuthRootContainerPath(config.sshUser))
-    .replaceAll("__GROK_HOME_DIR__", config.grokHome)
+    .replaceAll("__GROK_AUTH_ROOT__", () => grokAuthRootContainerPath(config.sshUser))
+    .replaceAll("__GROK_HOME_DIR__", () => config.grokHome)
 
 const grokSettingsJsonTemplate = `{
   "sandboxMode": "off",
@@ -323,9 +323,9 @@ chown "$GROK_NOTICE_OWNER_UID:$GROK_NOTICE_OWNER_GID" "$GROK_MD_PATH" || true`
 
 const renderEntrypointGrokNotice = (config: TemplateConfig): string =>
   entrypointGrokNoticeTemplate
-    .replaceAll("__GROK_HOME__", config.grokHome)
-    .replaceAll("__SSH_USER__", config.sshUser)
-    .replaceAll("__TARGET_DIR__", config.targetDir)
+    .replaceAll("__GROK_HOME__", () => config.grokHome)
+    .replaceAll("__SSH_USER__", () => config.sshUser)
+    .replaceAll("__TARGET_DIR__", () => config.targetDir)
 
 /**
  * Renders the Grok CLI entrypoint bootstrap for a generated project container.

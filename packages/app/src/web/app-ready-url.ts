@@ -122,8 +122,8 @@ const resolveProjectId = (
   return project?.id ?? null
 }
 
-export const activeScreenFromMenu = (menu: BrowserMenuTag, outputRequested: boolean): BrowserScreen => {
-  if (outputRequested && (menu === "Logs" || menu === "Status")) {
+export const activeScreenFromMenu = (menu: BrowserMenuTag, isOutputRequested: boolean): BrowserScreen => {
+  if (isOutputRequested && (menu === "Logs" || menu === "Status")) {
     return outputScreen()
   }
   if (menu === "ProjectAuth") {
@@ -274,9 +274,9 @@ export const useReadyUrlSync = (args: ReadyUrlSyncArgs) => {
 
     applyCurrentLocation()
     const onPopState = applyCurrentLocation
-    globalThis.addEventListener("popstate", onPopState)
+    addEventListener("popstate", onPopState)
     return () => {
-      globalThis.removeEventListener("popstate", onPopState)
+      removeEventListener("popstate", onPopState)
     }
   }, [])
 

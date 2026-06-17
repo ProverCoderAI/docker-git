@@ -212,7 +212,7 @@ export const prepareGeminiCredentialsDir = (
 ) =>
   Effect.gen(function*(_) {
     const credentialsDir = geminiCredentialsPath(accountPath)
-    const removeFallback = pipe(
+    const fallbackRemoval = pipe(
       runCommandExitCode({
         cwd,
         command: "docker",
@@ -233,7 +233,7 @@ export const prepareGeminiCredentialsDir = (
 
     yield* _(
       fs.remove(credentialsDir, { recursive: true, force: true }).pipe(
-        Effect.orElse(() => removeFallback)
+        Effect.orElse(() => fallbackRemoval)
       )
     )
     yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))

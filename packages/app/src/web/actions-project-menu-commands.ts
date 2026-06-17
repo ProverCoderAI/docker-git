@@ -1,6 +1,6 @@
 import {
   type BrowserActionContext,
-  confirmAction,
+  isActionConfirmed,
   projectActionLabel,
   requireSelectedProjectId,
   withBusy
@@ -33,7 +33,7 @@ const runProjectOutputAction = (
 
 const runDownProject = (context: BrowserActionContext) => {
   const projectId = requireSelectedProjectId(context)
-  if (projectId === null || !confirmAction(`Stop ${projectActionLabel(context)}?`)) {
+  if (projectId === null || !isActionConfirmed(`Stop ${projectActionLabel(context)}?`)) {
     return
   }
   withBusy({
@@ -49,7 +49,7 @@ const runDownProject = (context: BrowserActionContext) => {
 
 const runDeleteProject = (context: BrowserActionContext) => {
   const projectId = requireSelectedProjectId(context)
-  if (projectId === null || !confirmAction(`Delete ${projectActionLabel(context)}?`)) {
+  if (projectId === null || !isActionConfirmed(`Delete ${projectActionLabel(context)}?`)) {
     return
   }
   withBusy({
@@ -68,7 +68,7 @@ const runDeleteProject = (context: BrowserActionContext) => {
 }
 
 const runDownAllProjects = (context: BrowserActionContext) => {
-  if (!confirmAction("Stop all docker-git projects?")) {
+  if (!isActionConfirmed("Stop all docker-git projects?")) {
     return
   }
   withBusy({
@@ -83,7 +83,7 @@ const runDownAllProjects = (context: BrowserActionContext) => {
 }
 
 export const runApplyAllProjects = (context: BrowserActionContext) => {
-  if (!confirmAction("Apply docker-git config to all projects?")) {
+  if (!isActionConfirmed("Apply docker-git config to all projects?")) {
     return
   }
   withBusy({
@@ -135,6 +135,6 @@ export const runProjectMenuCommand = (
     runDeleteProject(context)
     return
   }
-  globalThis.close()
+  close()
   context.setMessage("Quit requested. If the browser blocked window.close(), close the tab manually.")
 }

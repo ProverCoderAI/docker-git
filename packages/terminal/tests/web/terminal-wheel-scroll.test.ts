@@ -73,11 +73,11 @@ const createWheelHost = () => {
       removeEventListener: (
         type: "wheel",
         next: TestWheelListener,
-        options: boolean
+        isCapture: boolean
       ) => {
         expect(type).toBe("wheel")
         expect(next).toBe(listener)
-        expect(options).toBe(true)
+        expect(isCapture).toBe(true)
         state.removed += 1
       }
     },

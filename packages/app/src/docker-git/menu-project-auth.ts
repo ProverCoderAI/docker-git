@@ -80,16 +80,17 @@ const runProjectAuthEffect = (
   label: string,
   context: ProjectAuthContext
 ) => {
+  const snapshotEffect = readProjectAuthSnapshot(project)
+  const presentSnapshot = (snapshot: Effect.Effect.Success<typeof snapshotEffect>) =>
+    Effect.sync(() => {
+      startProjectAuthMenu(project, snapshot, context)
+      context.setMessage(projectAuthSuccessMessage(flow, label))
+    })
   context.runner.runEffect(
     pipe(
       writeProjectAuthFlow(project, flow, values),
-      Effect.zipRight(readProjectAuthSnapshot(project)),
-      Effect.tap((snapshot) =>
-        Effect.sync(() => {
-          startProjectAuthMenu(project, snapshot, context)
-          context.setMessage(projectAuthSuccessMessage(flow, label))
-        })
-      ),
+      Effect.zipRight(snapshotEffect),
+      Effect.tap(presentSnapshot),
       Effect.asVoid
     )
   )

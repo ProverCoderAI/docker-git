@@ -59,9 +59,9 @@ export const stoppedRuntime = (): SelectProjectRuntime => ({
 
 const pad2 = (value: number): string => value.toString().padStart(2, "0")
 
-const formatUtcTimestamp = (epochMs: number, withSeconds: boolean): string => {
+const formatUtcTimestamp = (epochMs: number, shouldIncludeSeconds: boolean): string => {
   const date = new Date(epochMs)
-  const seconds = withSeconds ? `:${pad2(date.getUTCSeconds())}` : ""
+  const seconds = shouldIncludeSeconds ? `:${pad2(date.getUTCSeconds())}` : ""
   return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())} ${
     pad2(
       date.getUTCHours()
@@ -94,7 +94,7 @@ export const selectTitle = (purpose: SelectPurpose): string =>
 
 export const selectHint = (
   purpose: SelectPurpose,
-  _connectEnableMcpPlaywright: boolean
+  _shouldEnableMcpPlaywright: boolean
 ): string =>
   Match.value(purpose).pipe(
     Match.when("Connect", () => "Enter = start if needed + SSH, Esc = back"),
@@ -222,7 +222,7 @@ export const buildSelectDetailsModel = (
   purpose: SelectPurpose,
   item: SelectDetailProject | undefined,
   runtime: SelectProjectRuntime,
-  connectEnableMcpPlaywright: boolean
+  shouldEnableMcpPlaywright: boolean
 ): SelectDetailsModel => {
   if (item === undefined) {
     return { title: "No project selected", lines: ["No project selected."] }
@@ -231,7 +231,7 @@ export const buildSelectDetailsModel = (
   const context: SelectDetailsContext = {
     authSuffix: item.authorizedKeysExists ? "" : " (missing)",
     common: commonLines(item, runtime),
-    connectEnableMcpPlaywright,
+    connectEnableMcpPlaywright: shouldEnableMcpPlaywright,
     item,
     refLabel: formatRepoRef(item.repoRef),
     runtime

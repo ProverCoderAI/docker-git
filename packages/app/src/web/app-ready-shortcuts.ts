@@ -35,7 +35,7 @@ export type ShortcutKeyboardEvent = {
 type ProjectNavigationArgs = {
   readonly currentMenu: BrowserMenuTag
   readonly dashboard: DashboardData
-  readonly projectNavigationArmed: boolean
+  readonly isProjectNavigationArmed: boolean
   readonly selectedProjectId: string | null
   readonly setSelectedProjectId: Setter<string | null>
 }
@@ -165,33 +165,33 @@ export const shouldLoadProjectDetails = (currentMenu: BrowserMenuTag): boolean =
     Match.orElse(() => false)
   )
 
-export const usesProjectPrimaryNavigation = (currentMenu: BrowserMenuTag): boolean =>
+export const isProjectPrimaryNavigationMenu = (currentMenu: BrowserMenuTag): boolean =>
   projectPrimaryNavigationMenus.has(currentMenu)
 
 const menuNavigationDelta = (
   currentMenu: BrowserMenuTag,
-  projectNavigationArmed: boolean,
+  isProjectNavigationArmed: boolean,
   key: string
 ): number | null => {
-  if (usesProjectPrimaryNavigation(currentMenu) && projectNavigationArmed) {
+  if (isProjectPrimaryNavigationMenu(currentMenu) && isProjectNavigationArmed) {
     return null
   }
   return resolveVerticalArrowDelta(key)
 }
 
-export const handleMenuNavigationKey = (
+export const didHandleMenuNavigationKey = (
   event: ShortcutKeyboardEvent,
   currentMenu: BrowserMenuTag,
-  projectNavigationArmed: boolean,
+  isProjectNavigationArmed: boolean,
   setSelectedMenuIndex: Setter<number>
 ): boolean => {
-  const delta = menuNavigationDelta(currentMenu, projectNavigationArmed, event.key)
+  const delta = menuNavigationDelta(currentMenu, isProjectNavigationArmed, event.key)
   if (delta === null) {
     return false
   }
   event.preventDefault()
   if (delta < 0) {
-    setSelectedMenuIndex((index) => (index > 0 ? index - 1 : browserMenuItems.length - 1))
+    setSelectedMenuIndex((index) => (index > 0 ? index : browserMenuItems.length) - 1)
     return true
   }
   setSelectedMenuIndex((index) => (index + 1) % browserMenuItems.length)
@@ -200,26 +200,26 @@ export const handleMenuNavigationKey = (
 
 const projectNavigationDelta = (
   currentMenu: BrowserMenuTag,
-  projectNavigationArmed: boolean,
+  isProjectNavigationArmed: boolean,
   key: string
 ): number | null => {
-  if (!usesProjectPrimaryNavigation(currentMenu) || !projectNavigationArmed) {
+  if (!isProjectPrimaryNavigationMenu(currentMenu) || !isProjectNavigationArmed) {
     return null
   }
   return resolveVerticalArrowDelta(key)
 }
 
-export const handleProjectNavigationKey = (
+export const didHandleProjectNavigationKey = (
   event: ShortcutKeyboardEvent,
   {
     currentMenu,
     dashboard,
-    projectNavigationArmed,
+    isProjectNavigationArmed,
     selectedProjectId,
     setSelectedProjectId
   }: ProjectNavigationArgs
 ): boolean => {
-  const delta = projectNavigationDelta(currentMenu, projectNavigationArmed, event.key)
+  const delta = projectNavigationDelta(currentMenu, isProjectNavigationArmed, event.key)
   if (delta === null) {
     return false
   }
@@ -228,16 +228,16 @@ export const handleProjectNavigationKey = (
   return true
 }
 
-export const handleActionKey = (
+export const didHandleActionKey = (
   event: ShortcutKeyboardEvent,
   currentMenu: BrowserMenuTag,
-  projectNavigationArmed: boolean,
+  isProjectNavigationArmed: boolean,
   context: BrowserActionContext
 ): boolean => {
   if (event.key === "Enter") {
     if (
       isNativeActionTarget(event.target) &&
-      !(usesProjectPrimaryNavigation(currentMenu) && projectNavigationArmed)
+      !(isProjectPrimaryNavigationMenu(currentMenu) && isProjectNavigationArmed)
     ) {
       return false
     }
@@ -265,7 +265,7 @@ export const shouldRefreshProjectAuthPanel = (
 
 export const shouldRefreshProjectDetails = (
   currentMenu: BrowserMenuTag,
-  _projectNavigationArmed: boolean,
+  _isProjectNavigationArmed: boolean,
   selectedProjectId: string | null,
   loadedProject: LoadedProjectDetails
 ): boolean =>
@@ -275,10 +275,10 @@ export const shouldRefreshProjectDetails = (
 
 export const shortcutHintText = (
   currentMenu: BrowserMenuTag,
-  projectNavigationArmed: boolean
+  isProjectNavigationArmed: boolean
 ): string => {
-  if (usesProjectPrimaryNavigation(currentMenu)) {
-    return projectNavigationArmed
+  if (isProjectPrimaryNavigationMenu(currentMenu)) {
+    return isProjectNavigationArmed
       ? "↑/↓ project, Enter run, Esc/← back"
       : "↑/↓ menu, Enter/→ choose project"
   }

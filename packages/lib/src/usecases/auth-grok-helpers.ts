@@ -123,6 +123,22 @@ export const withGrokAuth = <A, E>(
     })
   )
 
+// PURITY: CORE
+// INVARIANT: returns the first non-empty api-key value matching any grok env key prefix on the line, else null
+const extractApiKeyFromEnvLine = (trimmed: string): string | null => {
+  for (const key of grokEnvApiKeyNames) {
+    const prefix = `${key}=`
+    if (!trimmed.startsWith(prefix)) {
+      continue
+    }
+    const value = trimmed.slice(prefix.length).replaceAll(/^['"]|['"]$/g, "").trim()
+    if (value.length > 0) {
+      return value
+    }
+  }
+  return null
+}
+
 const readApiKeyFromEnvFile = (
   fs: FileSystem.FileSystem,
   envFilePath: string
@@ -134,16 +150,9 @@ const readApiKeyFromEnvFile = (
     }
     const envContent = yield* _(fs.readFileString(envFilePath), Effect.orElseSucceed(() => ""))
     for (const line of envContent.split("\n")) {
-      const trimmed = line.trim()
-      for (const key of grokEnvApiKeyNames) {
-        const prefix = `${key}=`
-        if (!trimmed.startsWith(prefix)) {
-          continue
-        }
-        const value = trimmed.slice(prefix.length).replaceAll(/^['"]|['"]$/g, "").trim()
-        if (value.length > 0) {
-          return value
-        }
+      const value = extractApiKeyFromEnvLine(line.trim())
+      if (value !== null) {
+        return value
       }
     }
     return null
@@ -211,7 +220,7 @@ export const prepareGrokCredentialsDir = (
 ) =>
   Effect.gen(function*(_) {
     const credentialsDir = grokCredentialsPath(accountPath)
-    const removeFallback = pipe(
+    const fallbackRemoval = pipe(
       runCommandExitCode({
         cwd,
         command: "docker",
@@ -226,7 +235,7 @@ export const prepareGrokCredentialsDir = (
 
     yield* _(
       fs.remove(credentialsDir, { recursive: true, force: true }).pipe(
-        Effect.orElse(() => removeFallback)
+        Effect.orElse(() => fallbackRemoval)
       )
     )
     yield* _(fs.makeDirectory(credentialsDir, { recursive: true }))
@@ -271,10 +280,11 @@ export const writeInitialGrokSettings = (
       ? !(yield* _(isRegularFile(fs, userSettingsPath)))
       : true
     if (shouldWriteUserSettings) {
+      const userSettings = defaultGrokUserSettings(apiKey)
       yield* _(
         fs.writeFileString(
           userSettingsPath,
-          JSON.stringify(defaultGrokUserSettings(apiKey), null, 2) + "\n"
+          JSON.stringify(userSettings, null, 2) + "\n"
         )
       )
       yield* _(fs.chmod(userSettingsPath, 0o600))

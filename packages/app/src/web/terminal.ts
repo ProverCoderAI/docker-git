@@ -13,6 +13,8 @@ const resolveConfiguredTerminalApiBaseUrl = (): string | null => {
   return null
 }
 
-setTerminalApiBaseUrlResolver(() => resolveConfiguredTerminalApiBaseUrl() ?? resolveApiBaseUrl())
+export const configureTerminalApiBaseUrlResolver = (): void => {
+  setTerminalApiBaseUrlResolver(() => resolveConfiguredTerminalApiBaseUrl() ?? resolveApiBaseUrl())
+}
 
 export * from "@prover-coder-ai/docker-git-terminal/web/terminal"

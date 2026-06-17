@@ -43,8 +43,10 @@ describe("github-auth-gate", () => {
   })
 
   it("accepts valid or unknown tokens as configured", () => {
-    expect(isGithubAuthConfigured(makeStatus([makeToken("valid")]))).toBe(true)
-    expect(isGithubAuthConfigured(makeStatus([makeToken("unknown")]))).toBe(true)
+    const validStatus = makeStatus([makeToken("valid")])
+    const unknownStatus = makeStatus([makeToken("unknown")])
+    expect(isGithubAuthConfigured(validStatus)).toBe(true)
+    expect(isGithubAuthConfigured(unknownStatus)).toBe(true)
   })
 
   it("blocks non-auth browser actions while GitHub auth is required", () => {

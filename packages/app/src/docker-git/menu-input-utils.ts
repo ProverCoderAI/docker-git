@@ -4,7 +4,7 @@ export const parseMenuIndex = (input: string): number | null => {
     return null
   }
   const parsed = Number(trimmed)
-  if (!Number.isInteger(parsed)) {
+  if (!Number.isSafeInteger(parsed)) {
     return null
   }
   const index = parsed - 1

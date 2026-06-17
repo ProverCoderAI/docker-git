@@ -3,7 +3,7 @@ import { Either } from "effect"
 import { type GpuMode, isGpuMode, type ParseError } from "./frontend-lib/core/domain.js"
 import { createParseError } from "./menu-create-errors.js"
 
-export const renderExplicitBooleanChoice = (value: boolean): string => value ? "Y" : "N"
+export const renderExplicitBooleanChoice = (isAffirmative: boolean): string => isAffirmative ? "Y" : "N"
 
 export const parseBooleanChoice = (input: string): boolean | null => {
   const normalized = input.trim().toLowerCase()
@@ -54,4 +54,4 @@ export const parseGpuInput = (
   return Either.left(createParseError("gpu must be one of: none, all, yes, no"))
 }
 
-export const parseYesDefault = (input: string, fallback: boolean): boolean => parseBooleanChoice(input) ?? fallback
+export const isYesDefault = (input: string, isFallback: boolean): boolean => parseBooleanChoice(input) ?? isFallback

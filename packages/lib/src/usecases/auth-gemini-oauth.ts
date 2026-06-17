@@ -169,16 +169,18 @@ const cleanupExistingContainers = (
 const startDockerProcess = (
   executor: CommandExecutor.CommandExecutor,
   spec: DockerGeminiAuthSpec
-): Effect.Effect<CommandExecutor.Process, PlatformError, Scope.Scope> =>
-  executor.start(
+): Effect.Effect<CommandExecutor.Process, PlatformError, Scope.Scope> => {
+  const dockerArgs = buildDockerGeminiAuthArgs(spec)
+  return executor.start(
     pipe(
-      Command.make("docker", ...buildDockerGeminiAuthArgs(spec)),
+      Command.make("docker", ...dockerArgs),
       Command.workingDirectory(spec.cwd),
       Command.stdin("inherit"),
       Command.stdout("pipe"),
       Command.stderr("pipe")
     )
   )
+}
 
 const pumpDockerOutput = (
   source: Stream.Stream<Uint8Array, PlatformError>,
@@ -326,17 +328,14 @@ export const runGeminiOauthLoginWithPrompt = (
       const stdoutFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stdout, 1, resultBox, authDeferred)))
       const stderrFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stderr, 2, resultBox, authDeferred)))
 
-      const exitCode = yield* _(
-        Effect.race(
-          proc.exitCode.pipe(Effect.map(Number)),
-          pipe(
-            Deferred.await(authDeferred),
-            Effect.delay("500 millis"),
-            Effect.flatMap(() => proc.kill()),
-            Effect.map(() => 0)
-          )
-        )
+      const waitForExit = proc.exitCode.pipe(Effect.map(Number))
+      const killAfterAuth = pipe(
+        Deferred.await(authDeferred),
+        Effect.delay("500 millis"),
+        Effect.flatMap(() => proc.kill()),
+        Effect.map(() => 0)
       )
+      const exitCode = yield* _(Effect.race(waitForExit, killAfterAuth))
 
       yield* _(Fiber.interrupt(stdoutFiber))
       yield* _(Fiber.interrupt(stderrFiber))

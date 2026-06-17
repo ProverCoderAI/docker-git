@@ -3,9 +3,9 @@ export type PreparedOpenUrl = {
   readonly navigate: (url: string) => boolean
 }
 
-export const openUrl = (url: string): boolean => {
+export const didOpenUrl = (url: string): boolean => {
   if (typeof open === "function") {
-    const openedWindow = globalThis.open(url, "_blank", "noopener")
+    const openedWindow = open(url, "_blank", "noopener")
     return openedWindow !== null
   }
   return false
@@ -13,14 +13,14 @@ export const openUrl = (url: string): boolean => {
 
 const blockedPreparedOpenUrl = (): PreparedOpenUrl => ({
   close: () => {},
-  navigate: openUrl
+  navigate: didOpenUrl
 })
 
 export const prepareOpenUrl = (): PreparedOpenUrl => {
   if (typeof open !== "function") {
     return blockedPreparedOpenUrl()
   }
-  const openedWindow = globalThis.open("about:blank", "_blank")
+  const openedWindow = open("about:blank", "_blank")
   if (openedWindow === null) {
     return blockedPreparedOpenUrl()
   }

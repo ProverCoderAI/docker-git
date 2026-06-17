@@ -239,8 +239,9 @@ describe("controller revisions", () => {
         revisionFileContentsArbitrary,
         ignoredControllerRevisionEntrySubsetArbitrary,
         revisionFileContentsArbitrary,
-        (trackedContents, ignoredEntries, generatedContents) =>
-          Effect.runPromise(
+        (trackedContents, ignoredEntries, generatedContents) => {
+          const memoryFileSystemLayer = createMemoryFileSystemLayer()
+          return Effect.runPromise(
             Effect.gen(function*(_) {
               const fs = yield* _(FileSystem.FileSystem)
               const path = yield* _(Path.Path)
@@ -256,10 +257,11 @@ describe("controller revisions", () => {
               const after = yield* _(computeRevisionFromInputs(rootDir, [memoryRevisionInput]))
               expect(after).toBe(before)
             }).pipe(
-              Effect.provide(createMemoryFileSystemLayer()),
+              Effect.provide(memoryFileSystemLayer),
               Effect.provide(Path.layer)
             )
           )
+        }
       )
     ))
 

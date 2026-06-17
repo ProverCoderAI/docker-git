@@ -74,8 +74,8 @@ const makeContext = () => {
       messages.push(message)
     },
     setSkipInputs: vi.fn(),
-    setSshActive: (active: boolean) => {
-      sshActiveStates.push(active)
+    setSshActive: (isActive: boolean) => {
+      sshActiveStates.push(isActive)
     },
     setView: vi.fn(),
     sshActiveStates

@@ -66,7 +66,7 @@ const resolveRepoSelector = (value: string) => {
   }
 }
 
-const matchesProjectPath = (selector: string, project: ApiProjectDetails): boolean => {
+const isProjectPathMatch = (selector: string, project: ApiProjectDetails): boolean => {
   const normalizedSelector = normalizePath(selector)
   if (normalizedSelector.length === 0) {
     return false
@@ -81,7 +81,7 @@ const matchesProjectPath = (selector: string, project: ApiProjectDetails): boole
     normalizedProjectDir.endsWith(`/${normalizedSelector}`)
 }
 
-const matchesProjectText = (selector: string, project: ApiProjectDetails): boolean => {
+const isProjectTextMatch = (selector: string, project: ApiProjectDetails): boolean => {
   const normalizedSelector = normalizeText(selector)
   if (normalizedSelector.length === 0) {
     return false
@@ -92,7 +92,7 @@ const matchesProjectText = (selector: string, project: ApiProjectDetails): boole
     normalizedSelector === normalizeText(project.displayName)
 }
 
-const matchesProjectRepo = (selector: string, project: ApiProjectDetails): boolean => {
+const isProjectRepoMatch = (selector: string, project: ApiProjectDetails): boolean => {
   if (!hasGithubSelector(selector)) {
     return false
   }
@@ -204,7 +204,7 @@ export const selectOpenProject = (
   }
 
   const directMatches = projects.filter((project) =>
-    matchesProjectPath(trimmed, project) || matchesProjectText(trimmed, project)
+    isProjectPathMatch(trimmed, project) || isProjectTextMatch(trimmed, project)
   )
 
   if (directMatches.length > 0) {
@@ -220,7 +220,7 @@ export const selectOpenProject = (
     )
   }
 
-  const repoMatches = projects.filter((project) => matchesProjectRepo(trimmed, project))
+  const repoMatches = projects.filter((project) => isProjectRepoMatch(trimmed, project))
   return resolveUniqueProject(
     repoMatches,
     `No docker-git project matched '${trimmed}'.`,

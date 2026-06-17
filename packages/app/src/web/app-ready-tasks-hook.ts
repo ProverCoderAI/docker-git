@@ -32,7 +32,7 @@ export const useProjectTasksReset = (
   selectedProjectId: string | null,
   setProjectTaskLogs: (value: string) => void,
   setProjectTasks: (value: ContainerTaskSnapshot | null) => void,
-  setProjectTasksIncludeDefault: (value: boolean) => void
+  setProjectTasksIncludeDefault: (shouldIncludeDefault: boolean) => void
 ) => {
   useEffect(() => {
     setProjectTaskLogs("")

@@ -70,8 +70,8 @@ const renderGitTokenLabelEnv = (gitTokenLabel: string): string =>
     ? `      GITHUB_AUTH_LABEL: "${gitTokenLabel}"\n      GIT_AUTH_LABEL: "${gitTokenLabel}"\n`
     : ""
 
-const renderGithubAuthSkipEnv = (skipGithubAuth: boolean): string =>
-  skipGithubAuth ? `      GITHUB_AUTH_SKIP: "1"\n` : ""
+const renderGithubAuthSkipEnv = (shouldSkipGithubAuth: boolean): string =>
+  shouldSkipGithubAuth ? `      GITHUB_AUTH_SKIP: "1"\n` : ""
 
 const renderCodexAuthLabelEnv = (codexAuthLabel: string): string =>
   codexAuthLabel.length > 0
@@ -113,9 +113,9 @@ const renderBootstrapMounts = (): string => `      - ${bootstrapVolumeKey}:/opt/
 const renderYamlSingleQuoted = (value: string): string => `'${value.replaceAll("'", "''")}'`
 
 const renderOptionalDockerSocketMount = (
-  enableLocalDockerSocket: boolean
+  shouldEnableLocalDockerSocket: boolean
 ): string =>
-  enableLocalDockerSocket
+  shouldEnableLocalDockerSocket
     ? `      - /var/run/docker.sock:/var/run/docker.sock`
     : ""
 

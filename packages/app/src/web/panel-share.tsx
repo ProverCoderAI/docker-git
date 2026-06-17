@@ -30,7 +30,7 @@ const openUrl = (url: string): void => {
   }
   const parsed = new URL(url)
   if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-    globalThis.open(parsed.toString(), "_blank", "noopener")
+    open(parsed.href, "_blank", "noopener")
   }
 }
 

@@ -173,7 +173,7 @@ const ensureAuthorizedKeys = (
   baseDir: string,
   authorizedKeysPath: string,
   preferredSource: string,
-  overwriteExisting: boolean
+  shouldOverwriteExisting: boolean
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
@@ -188,7 +188,7 @@ const ensureAuthorizedKeys = (
         )
       )
 
-      if (state === "exists" && resolved !== managedDefaultAuthorizedKeys && !overwriteExisting) {
+      if (state === "exists" && resolved !== managedDefaultAuthorizedKeys && !shouldOverwriteExisting) {
         return
       }
 
@@ -214,7 +214,7 @@ const ensureAuthorizedKeys = (
           managedDefaultAuthorizedKeys,
           source,
           desiredContents,
-          overwriteExisting
+          overwriteExisting: shouldOverwriteExisting
         })
       )
     })
@@ -237,7 +237,7 @@ const ensureEnvFile = (
   baseDir: string,
   envPath: string,
   defaultContents: string,
-  overwrite: boolean = false
+  shouldOverwrite: boolean = false
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   withFsPathContext(({ fs, path }) =>
     Effect.gen(function*(_) {
@@ -249,7 +249,7 @@ const ensureEnvFile = (
           (_resolvedPath, backupPath) => `Env file was a directory, moved to ${backupPath}.`
         )
       )
-      if (state === "exists" && !overwrite) {
+      if (state === "exists" && !shouldOverwrite) {
         return
       }
 

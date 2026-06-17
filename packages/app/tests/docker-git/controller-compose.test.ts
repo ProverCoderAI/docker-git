@@ -219,9 +219,10 @@ describe("controller compose preparation", () => {
             [controllerGpuModeEnvKey, undefined]
           ])
         )
+        const recordedExecutorLayer = recordedCommandExecutorLayer(startedCommands, emptyCommandResult)
         yield* _(
           runCompose(["up", "-d"]).pipe(
-            Effect.provide(recordedCommandExecutorLayer(startedCommands, emptyCommandResult))
+            Effect.provide(recordedExecutorLayer)
           )
         )
 
@@ -260,14 +261,13 @@ describe("controller compose preparation", () => {
         const rootDir = yield* _(temporaryControllerRoot)
         const startedCommands: Array<string> = []
 
+        const submoduleFailureExecutorLayer = recordedCommandExecutorLayer(
+          startedCommands,
+          { exitCode: 128, stderr: "fatal: no submodule mapping found", stdout: "" }
+        )
         const error = yield* _(
           ensureSkillerSubmoduleInitialized(rootDir).pipe(
-            Effect.provide(
-              recordedCommandExecutorLayer(
-                startedCommands,
-                { exitCode: 128, stderr: "fatal: no submodule mapping found", stdout: "" }
-              )
-            ),
+            Effect.provide(submoduleFailureExecutorLayer),
             Effect.provide(NodeContext.layer),
             Effect.flip
           )

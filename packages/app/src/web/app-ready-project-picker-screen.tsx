@@ -108,7 +108,7 @@ const ProjectContentDetails = (props: MainPanelsProps): JSX.Element => (
     authSnapshot={props.authSnapshot}
     compact={props.viewportLayout.compact}
     controllerCwd={props.controllerCwd}
-    createView={props.createView}
+    creationView={props.creationView}
     currentMenu={props.currentMenu}
     dashboardRefreshTick={props.dashboardRefreshTick}
     githubStatus={props.githubStatus}

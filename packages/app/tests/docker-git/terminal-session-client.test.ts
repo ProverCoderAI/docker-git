@@ -43,10 +43,10 @@ class FakeWebSocket {
   static readonly CLOSED = 3
   static readonly instances: Array<FakeWebSocket> = []
 
+  private readonly listeners: Array<FakeSocketListener> = []
   readonly sent: Array<string> = []
   readonly url: string
   readyState = FakeWebSocket.CONNECTING
-  private readonly listeners: Array<FakeSocketListener> = []
 
   constructor(url: string) {
     this.url = url
@@ -63,16 +63,8 @@ class FakeWebSocket {
       this.listeners.push({ listener, type: "message" })
       return
     }
-    if (isVoidSocketListener(type, listener)) {
-      if (type === "close") {
-        this.listeners.push({ listener, type: "close" })
-      }
-      if (type === "error") {
-        this.listeners.push({ listener, type: "error" })
-      }
-      if (type === "open") {
-        this.listeners.push({ listener, type: "open" })
-      }
+    if (type !== "message" && isVoidSocketListener(type, listener)) {
+      this.listeners.push({ listener, type })
     }
   }
 
@@ -128,7 +120,7 @@ const originalSetRawMode = typeof process.stdin.setRawMode === "function"
   ? process.stdin.setRawMode.bind(process.stdin)
   : undefined
 
-const setRawModeMock = vi.fn((_enabled: boolean) => process.stdin)
+const setRawModeMock = vi.fn((_isEnabled: boolean) => process.stdin)
 const stdinOnMock = vi.fn((_event: string, _listener: StdinListener) => process.stdin)
 const stdinOffMock = vi.fn((_event: string, _listener: StdinListener) => process.stdin)
 const stdoutOnMock = vi.fn((_event: string, _listener: StdoutListener) => process.stdout)
@@ -249,10 +241,9 @@ describe("terminal-session-client", () => {
   it("fails fast when the websocket never opens", () =>
     Effect.gen(function*(_) {
       const { attachTerminalSession } = yield* _(loadTerminalSessionClient)
-      const result = yield* _(Effect.promise(() => {
-        const promise = Effect.runPromise(attachTerminalSession(makeAttachment()).pipe(Effect.either))
-        return vi.advanceTimersByTimeAsync(3001).then(() => promise)
-      }))
+      const attachPromise = Effect.runPromise(attachTerminalSession(makeAttachment()).pipe(Effect.either))
+      yield* _(Effect.promise(() => vi.advanceTimersByTimeAsync(3001)))
+      const result = yield* _(Effect.promise(() => attachPromise))
 
       expect(Either.isLeft(result)).toBe(true)
       if (Either.isLeft(result)) {
@@ -273,7 +264,8 @@ describe("terminal-session-client", () => {
       const { attachTerminalSession } = yield* _(loadTerminalSessionClient)
       const { promise, socket } = startOpenedAttachment(attachTerminalSession)
 
-      const result = yield* _(Effect.promise(() => vi.advanceTimersByTimeAsync(5001).then(() => promise)))
+      yield* _(Effect.promise(() => vi.advanceTimersByTimeAsync(5001)))
+      const result = yield* _(Effect.promise(() => promise))
 
       expect(Either.isLeft(result)).toBe(true)
       if (Either.isLeft(result)) {

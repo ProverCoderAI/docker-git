@@ -3,13 +3,13 @@ import { Effect } from "effect"
 import { requestJson, requestText } from "./api-http.js"
 import { ContainerTaskSnapshotResponseSchema, OutputResponseSchema } from "./api-schema.js"
 
-const projectTasksPath = (projectId: string, includeDefault: boolean): string =>
-  `/projects/${encodeURIComponent(projectId)}/tasks${includeDefault ? "?includeDefault=true" : ""}`
+const projectTasksPath = (projectId: string, shouldIncludeDefault: boolean): string =>
+  `/projects/${encodeURIComponent(projectId)}/tasks${shouldIncludeDefault ? "?includeDefault=true" : ""}`
 
-export const loadProjectTasks = (projectId: string, includeDefault = false) =>
+export const loadProjectTasks = (projectId: string, shouldIncludeDefault = false) =>
   requestJson(
     "GET",
-    projectTasksPath(projectId, includeDefault),
+    projectTasksPath(projectId, shouldIncludeDefault),
     ContainerTaskSnapshotResponseSchema
   ).pipe(
     Effect.map((response) => response.snapshot)

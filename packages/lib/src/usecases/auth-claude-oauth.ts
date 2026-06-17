@@ -105,16 +105,18 @@ const buildDockerSetupTokenArgs = (spec: DockerSetupTokenSpec): ReadonlyArray<st
 const startDockerProcess = (
   executor: CommandExecutor.CommandExecutor,
   spec: DockerSetupTokenSpec
-): Effect.Effect<CommandExecutor.Process, PlatformError, Scope.Scope> =>
-  executor.start(
+): Effect.Effect<CommandExecutor.Process, PlatformError, Scope.Scope> => {
+  const dockerArgs = buildDockerSetupTokenArgs(spec)
+  return executor.start(
     pipe(
-      Command.make("docker", ...buildDockerSetupTokenArgs(spec)),
+      Command.make("docker", ...dockerArgs),
       Command.workingDirectory(spec.cwd),
       Command.stdin("inherit"),
       Command.stdout("pipe"),
       Command.stderr("pipe")
     )
   )
+}
 
 const pumpDockerOutput = (
   source: Stream.Stream<Uint8Array, PlatformError>,

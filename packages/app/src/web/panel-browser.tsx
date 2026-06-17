@@ -26,7 +26,7 @@ const statusColor = (status: ProjectBrowserSession["status"]): string => {
 
 const openUrl = (url: string): void => {
   if (typeof open === "function") {
-    globalThis.open(url, "_blank", "noopener")
+    open(url, "_blank", "noopener")
   }
 }
 

@@ -1,5 +1,14 @@
 import { Effect, Match } from "effect"
-import { type JSX, startTransition, useEffect, useEffectEvent, useRef, useState } from "react"
+import {
+  type Dispatch,
+  type JSX,
+  type SetStateAction,
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState
+} from "react"
 
 import { webPrimitives } from "../ui/primitives-web.js"
 import { UiProvider } from "../ui/primitives.js"
@@ -66,6 +75,15 @@ const loadDashboardState = () =>
     })
   )
 
+const applyDashboardRefresh = (
+  setState: Dispatch<SetStateAction<DashboardState>>,
+  nextState: DashboardState
+): void => {
+  startTransition(() => {
+    setState(createDashboardRefreshReducer(nextState))
+  })
+}
+
 const isDocumentVisible = (): boolean => document.visibilityState === "visible"
 
 const useDashboardRefreshTriggers = (refresh: () => void) => {
@@ -79,14 +97,14 @@ const useDashboardRefreshTriggers = (refresh: () => void) => {
     const onRefreshTrigger = () => {
       refreshWhenVisible()
     }
-    globalThis.addEventListener("focus", onRefreshTrigger)
-    globalThis.addEventListener("online", onRefreshTrigger)
-    globalThis.addEventListener("pageshow", onRefreshTrigger)
+    addEventListener("focus", onRefreshTrigger)
+    addEventListener("online", onRefreshTrigger)
+    addEventListener("pageshow", onRefreshTrigger)
     document.addEventListener("visibilitychange", onRefreshTrigger)
     return () => {
-      globalThis.removeEventListener("focus", onRefreshTrigger)
-      globalThis.removeEventListener("online", onRefreshTrigger)
-      globalThis.removeEventListener("pageshow", onRefreshTrigger)
+      removeEventListener("focus", onRefreshTrigger)
+      removeEventListener("online", onRefreshTrigger)
+      removeEventListener("pageshow", onRefreshTrigger)
       document.removeEventListener("visibilitychange", onRefreshTrigger)
     }
   }, [refreshWhenVisible])
@@ -101,15 +119,18 @@ const useDashboardController = () => {
       return
     }
     refreshInFlightRef.current = true
-    void Effect.runPromise(loadDashboardState())
-      .then((nextState) => {
-        startTransition(() => {
-          setState(createDashboardRefreshReducer(nextState))
-        })
+    const applyRefreshedState = (nextState: DashboardState) =>
+      Effect.sync(() => {
+        applyDashboardRefresh(setState, nextState)
       })
-      .finally(() => {
-        refreshInFlightRef.current = false
-      })
+    const clearRefreshFlag = Effect.sync(() => {
+      refreshInFlightRef.current = false
+    })
+    const refreshEffect = loadDashboardState().pipe(
+      Effect.tap(applyRefreshedState),
+      Effect.ensuring(clearRefreshFlag)
+    )
+    void Effect.runPromise(refreshEffect)
   })
 
   useEffect(() => {
@@ -133,11 +154,11 @@ const useViewportMode = () => {
       setViewportSize(resolveViewportSize())
     }
 
-    globalThis.addEventListener("resize", onResize)
+    addEventListener("resize", onResize)
     globalThis.visualViewport?.addEventListener("resize", onResize)
     globalThis.visualViewport?.addEventListener("scroll", onResize)
     return () => {
-      globalThis.removeEventListener("resize", onResize)
+      removeEventListener("resize", onResize)
       globalThis.visualViewport?.removeEventListener("resize", onResize)
       globalThis.visualViewport?.removeEventListener("scroll", onResize)
     }

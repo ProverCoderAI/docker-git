@@ -9,7 +9,7 @@ type ScreenFrameProps = {
   readonly title: string
 }
 
-export const screenPadding = (compact: boolean): number | string => compact ? "8px" : 2
+export const screenPadding = (isCompact: boolean): number | string => isCompact ? "8px" : 2
 
 const ScreenHeader = ({ hint, onBack, title }: Omit<ScreenFrameProps, "children">): JSX.Element => (
   <Box

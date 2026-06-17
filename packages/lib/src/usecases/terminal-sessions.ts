@@ -117,13 +117,13 @@ const listSessionsScriptAll = [
 // QUOTE(ТЗ): "Можно ли запомнить какие процессы изначально запущены и просто их не отображать как терминалы?"
 // REF: user-request-2026-02-05-sessions-baseline
 // SOURCE: n/a
-// FORMAT THEOREM: ∀p: default(p) ∧ ¬includeDefault → hidden(p)
+// FORMAT THEOREM: ∀p: default(p) ∧ ¬shouldIncludeDefault → hidden(p)
 // PURITY: SHELL
 // EFFECT: Effect<void, SessionsError, CommandExecutor>
-// INVARIANT: includeDefault=true preserves full list
+// INVARIANT: shouldIncludeDefault=true preserves full list
 // COMPLEXITY: O(n) where n = number of processes
-const buildListSessionsScript = (includeDefault: boolean): string => {
-  if (includeDefault) {
+const buildListSessionsScript = (shouldIncludeDefault: boolean): string => {
+  if (shouldIncludeDefault) {
     return listSessionsScriptAll
   }
 

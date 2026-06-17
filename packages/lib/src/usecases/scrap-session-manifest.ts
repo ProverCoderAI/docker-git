@@ -28,6 +28,10 @@ export type SessionManifest = {
   }
 }
 
+const NullableString = Schema.Union(Schema.String, Schema.Null)
+
+const StringArray = Schema.Array(Schema.String)
+
 const SessionManifestSchema = Schema.Struct({
   schemaVersion: Schema.Literal(1),
   mode: Schema.Literal("session"),
@@ -42,12 +46,12 @@ const SessionManifestSchema = Schema.Struct({
     worktreePatchChunks: Schema.String,
     codexChunks: Schema.String,
     codexSharedChunks: Schema.String,
-    envGlobalFile: Schema.optionalWith(Schema.Union(Schema.String, Schema.Null), { default: () => null }),
-    envProjectFile: Schema.optionalWith(Schema.Union(Schema.String, Schema.Null), { default: () => null })
+    envGlobalFile: Schema.optionalWith(NullableString, { default: () => null }),
+    envProjectFile: Schema.optionalWith(NullableString, { default: () => null })
   }),
   rebuild: Schema.optionalWith(
     Schema.Struct({
-      commands: Schema.Array(Schema.String)
+      commands: StringArray
     }),
     { default: () => ({ commands: [] }) }
   )

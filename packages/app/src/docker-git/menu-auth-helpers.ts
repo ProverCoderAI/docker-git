@@ -19,7 +19,7 @@ type CredentialDirectoryCounterInput = {
 
 const ignoredAuthAccountEntries: ReadonlySet<string> = new Set([".image"])
 
-const credentialCount = (connected: boolean): number => connected ? 1 : 0
+const credentialCount = (isConnected: boolean): number => isConnected ? 1 : 0
 
 export const hasCodexAccountCredentials = (
   fs: FileSystem.FileSystem,

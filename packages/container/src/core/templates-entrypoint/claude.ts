@@ -96,10 +96,13 @@ const renderClaudeAuthConfig = (config: TemplateConfig): string =>
   claudeAuthConfigTemplate
     .replaceAll(
       "__CLAUDE_AUTH_ROOT__",
-      claudeAuthRootContainerPath(config.sshUser)
+      () => claudeAuthRootContainerPath(config.sshUser)
     )
-    .replaceAll("__CLAUDE_HOME_DIR__", `/home/${config.sshUser}/.claude`)
-    .replaceAll("__CLAUDE_HOME_JSON__", `/home/${config.sshUser}/.claude.json`)
+    .replaceAll("__CLAUDE_HOME_DIR__", () => `/home/${config.sshUser}/.claude`)
+    .replaceAll(
+      "__CLAUDE_HOME_JSON__",
+      () => `/home/${config.sshUser}/.claude.json`
+    )
 
 const renderClaudeCliInstall = (): string =>
   `# Claude Code: ensure CLI command exists (non-blocking startup self-heal)

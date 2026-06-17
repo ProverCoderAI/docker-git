@@ -43,10 +43,11 @@ export const asString = (value: JsonValue | undefined): string | null => typeof 
 const renderGithubStatusLine = (entry: JsonObject): string | null => {
   const label = asString(entry["label"])
   const status = asString(entry["status"])
-  const login = asString(entry["login"])
   if (label === null || status === null) {
     return null
   }
+
+  const login = asString(entry["login"])
 
   if (status === "valid") {
     return login === null

@@ -17,10 +17,10 @@ export const isConnectMcpToggleInput = (input: string): boolean => normalizedInp
 
 export const buildConnectEffect = <E, R>(
   selected: ProjectItem,
-  enableMcpPlaywright: boolean,
+  shouldEnableMcpPlaywright: boolean,
   deps: ConnectDeps<E, R>
 ): Effect.Effect<void, E, R> =>
-  enableMcpPlaywright
+  shouldEnableMcpPlaywright
     ? deps.enableMcpPlaywright(selected.projectDir).pipe(
       Effect.zipRight(deps.connectWithUp(selected))
     )

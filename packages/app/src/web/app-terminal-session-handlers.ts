@@ -15,7 +15,7 @@ import {
   startProjectBrowser,
   stopProjectTask
 } from "./api.js"
-import { openUrl, prepareOpenUrl } from "./open-url.js"
+import { didOpenUrl, prepareOpenUrl } from "./open-url.js"
 import { projectSshRoutePath } from "./terminal.js"
 
 export type StateMessageUpdater = (message: string | null) => void
@@ -30,16 +30,16 @@ export type ProjectHandlers = {
 
 export type TaskHandlers = {
   readonly logs: string
-  readonly onIncludeDefaultChange: (include: boolean) => void
+  readonly onIncludeDefaultChange: (shouldIncludeDefault: boolean) => void
   readonly onLoadLogs: (pid: number) => void
   readonly onRefresh: () => void
   readonly onStopTask: (pid: number) => void
-  readonly refreshTasks: (include: boolean) => void
+  readonly refreshTasks: (shouldIncludeDefault: boolean) => void
   readonly snapshot: ContainerTaskSnapshot | null
   readonly taskIncludeDefault: boolean
 }
 
-const confirmApplyProject = (label: string): boolean => {
+const didConfirmApplyProject = (label: string): boolean => {
   const dialog = confirm
   return typeof dialog === "function"
     && dialog(
@@ -47,12 +47,12 @@ const confirmApplyProject = (label: string): boolean => {
     )
 }
 
-const browserStatusMessage = (browser: ProjectBrowserSession, opened: boolean): string => {
+const browserStatusMessage = (browser: ProjectBrowserSession, isOpened: boolean): string => {
   if (browser.status !== "running") {
     return `Browser runtime is ${browser.status}. Enable Playwright MCP and start the project first.`
   }
   const noVncUrl = projectBrowserNoVncUrl(browser)
-  return opened
+  return isOpened
     ? `Browser opened. CDP endpoint: ${projectBrowserCdpUrl(browser)}.`
     : `Browser popup was blocked. Open ${noVncUrl} manually. CDP endpoint: ${projectBrowserCdpUrl(browser)}.`
 }
@@ -72,7 +72,8 @@ const runOpenBrowser = (projectId: string, setMessage: StateMessageUpdater): voi
             setMessage(browserStatusMessage(browser, false))
             return
           }
-          setMessage(browserStatusMessage(browser, preparedUrl.navigate(projectBrowserNoVncUrl(browser))))
+          const noVncUrl = projectBrowserNoVncUrl(browser)
+          setMessage(browserStatusMessage(browser, preparedUrl.navigate(noVncUrl)))
         }
       })
     )
@@ -84,7 +85,7 @@ const runApplyProject = (
   projectLabel: string,
   setMessage: StateMessageUpdater
 ): void => {
-  if (!confirmApplyProject(projectLabel)) {
+  if (!didConfirmApplyProject(projectLabel)) {
     return
   }
   void Effect.runPromise(
@@ -106,7 +107,7 @@ export const newProjectTerminalUrl = (origin: string, projectKey: string, sessio
 
 const handleTerminalCreated = (projectKey: string, sessionId: string, setMessage: StateMessageUpdater): void => {
   const targetUrl = newProjectTerminalUrl(location.origin, projectKey, sessionId)
-  if (!openUrl(targetUrl)) {
+  if (!didOpenUrl(targetUrl)) {
     setMessage(`New terminal popup was blocked. Open ${targetUrl} manually.`)
   }
 }
@@ -215,12 +216,12 @@ export const useProjectActionHandlers = (
 
 const runRefreshTasks = (
   projectId: string,
-  include: boolean,
+  shouldIncludeDefault: boolean,
   setSnapshot: Dispatch<SetStateAction<ContainerTaskSnapshot | null>>,
   setMessage: StateMessageUpdater
 ): void => {
   void Effect.runPromise(
-    loadProjectTasks(projectId, include).pipe(
+    loadProjectTasks(projectId, shouldIncludeDefault).pipe(
       Effect.match({
         onFailure: (error) => {
           setMessage(`Failed to load tasks: ${error}`)
@@ -285,9 +286,9 @@ export const useTaskManagerHandlers = (
   const [logs, setLogs] = useState<string>("")
   const [isTaskIncludeDefault, setTaskIncludeDefault] = useState(false)
 
-  const refreshTasks = useCallback((include: boolean) => {
+  const refreshTasks = useCallback((shouldIncludeDefault: boolean) => {
     if (projectId !== undefined) {
-      runRefreshTasks(projectId, include, setSnapshot, setMessage)
+      runRefreshTasks(projectId, shouldIncludeDefault, setSnapshot, setMessage)
     }
   }, [projectId, setMessage])
 
@@ -305,9 +306,9 @@ export const useTaskManagerHandlers = (
     }
   }, [projectId, setMessage])
 
-  const onIncludeDefaultChange = useCallback((include: boolean) => {
-    setTaskIncludeDefault(include)
-    refreshTasks(include)
+  const onIncludeDefaultChange = useCallback((shouldIncludeDefault: boolean) => {
+    setTaskIncludeDefault(shouldIncludeDefault)
+    refreshTasks(shouldIncludeDefault)
   }, [refreshTasks])
 
   const onRefresh = useCallback(() => {

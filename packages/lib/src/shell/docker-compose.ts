@@ -101,11 +101,13 @@ export const runDockerComposeUp = (
   options: {
     readonly buildMode?: DockerComposeUpBuildMode
   } = {}
-): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
-  retryDockerComposeUp(
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const successExitCode = Number(ExitCode(0))
+  return retryDockerComposeUp(
     cwd,
-    runCompose(cwd, dockerComposeUpArgs(options.buildMode ?? "build"), [Number(ExitCode(0))])
+    runCompose(cwd, dockerComposeUpArgs(options.buildMode ?? "build"), [successExitCode])
   )
+}
 
 export const dockerComposeUpRecreateArgs: ReadonlyArray<string> = [
   "up",
@@ -116,8 +118,10 @@ export const dockerComposeUpRecreateArgs: ReadonlyArray<string> = [
 
 export const runDockerComposeUpRecreate = (
   cwd: string
-): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
-  retryDockerComposeUp(cwd, runCompose(cwd, dockerComposeUpRecreateArgs, [Number(ExitCode(0))]))
+): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> => {
+  const successExitCode = Number(ExitCode(0))
+  return retryDockerComposeUp(cwd, runCompose(cwd, dockerComposeUpRecreateArgs, [successExitCode]))
+}
 
 export const runDockerComposeDown = (
   cwd: string

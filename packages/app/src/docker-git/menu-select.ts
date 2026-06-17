@@ -55,7 +55,7 @@ const selectSearchMessage = (
     ? null
     : `Search "${view.query}": ${view.items.length}/${view.allItems.length} project(s).`
 
-const handleSelectSearchInput = (
+const didHandleSelectSearchInput = (
   input: string,
   key: MenuKeyInput,
   view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
@@ -81,17 +81,17 @@ export const handleSelectInput = (
     resetToMenu(context)
     return
   }
-  if (handleConnectOptionToggle(input, view, context)) {
+  if (didHandleConnectOptionToggle(input, view, context)) {
     return
   }
-  if (handleSelectNavigation(key, view, context)) {
+  if (didHandleSelectNavigation(key, view, context)) {
     return
   }
   if (key.return) {
     handleSelectReturn(view, context)
     return
   }
-  if (handleSelectSearchInput(input, key, view, context)) {
+  if (didHandleSelectSearchInput(input, key, view, context)) {
     return
   }
   if (input.trim().length > 0) {
@@ -99,7 +99,7 @@ export const handleSelectInput = (
   }
 }
 
-const handleConnectOptionToggle = (
+const didHandleConnectOptionToggle = (
   input: string,
   view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
   context: Pick<SelectContext, "setView" | "setMessage">
@@ -113,7 +113,7 @@ const handleConnectOptionToggle = (
   return true
 }
 
-const handleSelectNavigation = (
+const didHandleSelectNavigation = (
   key: MenuKeyInput,
   view: Extract<ViewState, { readonly _tag: "SelectProject" }>,
   context: SelectContext

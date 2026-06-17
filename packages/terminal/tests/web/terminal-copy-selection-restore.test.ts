@@ -78,7 +78,8 @@ const removeSelectionHandler = (
 ): void => {
   const handlerIndex = handlers.indexOf(handler)
   if (handlerIndex !== -1) {
-    handlers.splice(handlerIndex, 1)
+    handlers.copyWithin(handlerIndex, handlerIndex + 1)
+    handlers.length -= 1
   }
 }
 
@@ -161,17 +162,19 @@ const requireKeyHandler = (
 ): (event: TerminalCopyKeyboardEvent) => boolean =>
   keyHandlers[0] ?? expect.fail("Expected terminal copy key handler to be registered.")
 
+const acquireSelectionRestoreHarness = Effect.acquireRelease(
+  Effect.sync(createSelectionRestoreHarness),
+  (harness) =>
+    Effect.sync(() => {
+      harness.disposable.dispose()
+    })
+)
+
 const withSelectionRestoreHarness = (assertion: (harness: SelectionRestoreHarness) => void): void => {
   Effect.runSync(
     Effect.scoped(
       Effect.flatMap(
-        Effect.acquireRelease(
-          Effect.sync(createSelectionRestoreHarness),
-          (harness) =>
-            Effect.sync(() => {
-              harness.disposable.dispose()
-            })
-        ),
+        acquireSelectionRestoreHarness,
         (harness) =>
           Effect.sync(() => {
             assertion(harness)

@@ -31,13 +31,13 @@ const loadHostResources = (): Effect.Effect<
   { readonly cpuCount: number; readonly totalMemoryBytes: number }
 > =>
   Effect.tryPromise({
-    try: () =>
-      import("node:os").then((os) => ({
-        cpuCount: os.availableParallelism(),
-        totalMemoryBytes: os.totalmem()
-      })),
+    try: () => import("node:os"),
     catch: (error) => new Error(String(error))
   }).pipe(
+    Effect.map((os) => ({
+      cpuCount: os.availableParallelism(),
+      totalMemoryBytes: os.totalmem()
+    })),
     Effect.match({
       onFailure: () => fallbackHostResources,
       onSuccess: (value) => value
@@ -102,9 +102,9 @@ const collectExistingFilePaths = (
 
 const failOnExistingFiles = (
   existingFilePaths: ReadonlyArray<string>,
-  skipExistingFiles: boolean
+  shouldSkipExistingFiles: boolean
 ): Effect.Effect<void, FileExistsError> => {
-  if (skipExistingFiles || existingFilePaths.length === 0) {
+  if (shouldSkipExistingFiles || existingFilePaths.length === 0) {
     return Effect.void
   }
   const firstPath = existingFilePaths[0]
@@ -227,8 +227,8 @@ const provisionDockerGitSessionSyncTool = (
 export const writeProjectFiles = (
   outDir: string,
   config: TemplateConfig,
-  force: boolean,
-  skipExistingFiles: boolean = false
+  shouldForce: boolean,
+  shouldSkipExistingFiles: boolean = false
 ): Effect.Effect<
   ReadonlyArray<string>,
   FileExistsError | PlatformError,
@@ -249,13 +249,13 @@ export const writeProjectFiles = (
       compose: { enableLocalDockerSocket: shouldMountLocalDockerSocket() }
     })
     const created: Array<string> = []
-    const existingFilePaths = force ? [] : yield* _(collectExistingFilePaths(fs, path, baseDir, specs))
+    const existingFilePaths = shouldForce ? [] : yield* _(collectExistingFilePaths(fs, path, baseDir, specs))
     const existingSet = new Set(existingFilePaths)
 
-    yield* _(failOnExistingFiles(existingFilePaths, skipExistingFiles))
+    yield* _(failOnExistingFiles(existingFilePaths, shouldSkipExistingFiles))
 
     for (const spec of specs) {
-      if (!force && skipExistingFiles && isFileSpec(spec)) {
+      if (!shouldForce && shouldSkipExistingFiles && isFileSpec(spec)) {
         const filePath = resolveSpecPath(path, baseDir, spec)
         if (existingSet.has(filePath)) {
           continue

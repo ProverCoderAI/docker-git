@@ -141,8 +141,6 @@ export const SelectPanel = (
     selectedProjectSummary
   }: SelectPanelProps
 ): JSX.Element | null => {
-  const selectedProjectKey = selectedProjectKeyForLiveSessions(project, selectedProjectSummary)
-
   if (currentMenu !== "Select") {
     return null
   }
@@ -152,6 +150,7 @@ export const SelectPanel = (
   if (project === null || (selectedProjectSummary !== undefined && project.id !== selectedProjectSummary.id)) {
     return renderPendingSelection("Connect", selectedProjectSummary)
   }
+  const selectedProjectKey = selectedProjectKeyForLiveSessions(project, selectedProjectSummary)
   return (
     <Box flexDirection="column">
       {renderDetailsPanel("Connect", project, selectedProjectSummary)}

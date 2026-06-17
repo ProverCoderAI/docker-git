@@ -1,7 +1,7 @@
 import React from "react"
 
 import { Box, Text } from "../ui/primitives.js"
-import { createSettingsHint, renderCreateStepLabel } from "./menu-create-shared.js"
+import { renderCreateStepLabel, settingsHint } from "./menu-create-shared.js"
 import { renderLayout } from "./menu-render-layout.js"
 import {
   buildSelectLabels,
@@ -120,7 +120,7 @@ export const renderMenu = (input: MenuRenderInput): React.ReactElement => {
 export const renderCreate = (input: CreateRenderInput): React.ReactElement => {
   const { buffer, defaults, label, message, stepIndex, steps } = input
   const el = React.createElement
-  const hint = stepIndex > 0 ? createSettingsHint : null
+  const hint = stepIndex > 0 ? settingsHint : null
   const stepViews = steps.map((step, index) =>
     el(
       Text,
@@ -128,19 +128,15 @@ export const renderCreate = (input: CreateRenderInput): React.ReactElement => {
       `${index === stepIndex ? ">" : " "} ${renderCreateStepLabel(step, defaults)}`
     )
   )
+  const labelText = el(Text, null, `${label}: `)
+  const bufferText = el(Text, { fg: "green" }, buffer)
+  const hintText = hint === null ? null : el(Text, { fg: "gray" }, hint)
   return renderLayout(
     "docker-git / Create",
     compactElements([
       el(Box, { flexDirection: "column", marginTop: 1 }, ...stepViews),
-      el(
-        Box,
-        { marginTop: 1 },
-        el(Text, null, `${label}: `),
-        el(Text, { fg: "green" }, buffer)
-      ),
-      hint === null
-        ? null
-        : el(Box, { marginTop: 1 }, el(Text, { fg: "gray" }, hint))
+      el(Box, { marginTop: 1 }, labelText, bufferText),
+      hintText === null ? null : el(Box, { marginTop: 1 }, hintText)
     ]),
     message
   )
@@ -238,16 +234,16 @@ type RenderSelectInput = {
 
 const selectConfirmHint = (
   purpose: SelectPurpose,
-  confirmDelete: boolean,
-  connectEnableMcpPlaywright: boolean
+  isConfirmDelete: boolean,
+  shouldEnableMcpPlaywright: boolean
 ): string => {
-  if (purpose === "Delete" && confirmDelete) {
+  if (purpose === "Delete" && isConfirmDelete) {
     return "Confirm mode: Enter = delete now, Esc = cancel"
   }
-  if (purpose === "Down" && confirmDelete) {
+  if (purpose === "Down" && isConfirmDelete) {
     return "Confirm mode: Enter = stop now, Esc = cancel"
   }
-  return selectHint(purpose, connectEnableMcpPlaywright)
+  return selectHint(purpose, shouldEnableMcpPlaywright)
 }
 
 const renderSelectSearch = (

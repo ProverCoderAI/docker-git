@@ -15,8 +15,8 @@ export const bindTaskActions = (
   onRefreshProjectTasks: () => {
     loadSelectedProjectTasks(actionContext)
   },
-  onProjectTasksIncludeDefaultChange: (includeDefault: boolean) => {
-    setSelectedProjectTasksIncludeDefault(actionContext, includeDefault)
+  onProjectTasksIncludeDefaultChange: (shouldIncludeDefault: boolean) => {
+    setSelectedProjectTasksIncludeDefault(actionContext, shouldIncludeDefault)
   },
   onStopProjectTask: (pid: number) => {
     stopSelectedProjectTask(actionContext, pid)

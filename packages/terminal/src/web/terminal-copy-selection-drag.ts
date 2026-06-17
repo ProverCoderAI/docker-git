@@ -27,7 +27,7 @@ export type TerminalCopyMouseEventType = "contextmenu" | "mousedown" | TerminalS
 type TerminalSelectionDragListenerRegistration = (
   type: TerminalSelectionDragEventType,
   listener: (event: TerminalCopyMouseEvent) => void,
-  options: true
+  isCapture: true | { readonly capture: true }
 ) => void
 
 export type TerminalSelectionDragTarget = {
@@ -57,7 +57,7 @@ const currentNavigatorPlatform = (): string => {
 const terminalSelectionModifier = (platform: string): keyof TerminalSelectionModifierEvent =>
   macPlatformNames.has(platform) ? "altKey" : "shiftKey"
 
-export const forceTerminalSelectionModifier = (
+export const didForceTerminalSelectionModifier = (
   event: TerminalSelectionModifierEvent,
   platform: string = currentNavigatorPlatform()
 ): boolean =>
@@ -67,8 +67,6 @@ export const forceTerminalSelectionModifier = (
   })
 
 const optionalNumber = (value: number | undefined): number => value ?? 0
-
-const optionalBoolean = (value: boolean | undefined): boolean => value ?? false
 
 const forcedTerminalMouseUpInit = (event: TerminalCopyMouseEvent): MouseEventInit => {
   const selectionModifier = terminalSelectionModifier(currentNavigatorPlatform())
@@ -80,9 +78,9 @@ const forcedTerminalMouseUpInit = (event: TerminalCopyMouseEvent): MouseEventIni
     cancelable: true,
     clientX: optionalNumber(event.clientX),
     clientY: optionalNumber(event.clientY),
-    ctrlKey: optionalBoolean(event.ctrlKey),
+    ctrlKey: event.ctrlKey ?? false,
     detail: optionalNumber(event.detail),
-    metaKey: optionalBoolean(event.metaKey),
+    metaKey: event.metaKey ?? false,
     screenX: optionalNumber(event.screenX),
     screenY: optionalNumber(event.screenY),
     shiftKey: selectionModifier === "shiftKey" ? true : event.shiftKey
@@ -104,17 +102,17 @@ const copyMouseEventInitProperties = (
   event: Event,
   init: MouseEventInit
 ): void => {
-  defineMouseEventProperty(event, "altKey", optionalBoolean(init.altKey))
+  defineMouseEventProperty(event, "altKey", init.altKey ?? false)
   defineMouseEventProperty(event, "button", optionalNumber(init.button))
   defineMouseEventProperty(event, "buttons", optionalNumber(init.buttons))
   defineMouseEventProperty(event, "clientX", optionalNumber(init.clientX))
   defineMouseEventProperty(event, "clientY", optionalNumber(init.clientY))
-  defineMouseEventProperty(event, "ctrlKey", optionalBoolean(init.ctrlKey))
+  defineMouseEventProperty(event, "ctrlKey", init.ctrlKey ?? false)
   defineMouseEventProperty(event, "detail", optionalNumber(init.detail))
-  defineMouseEventProperty(event, "metaKey", optionalBoolean(init.metaKey))
+  defineMouseEventProperty(event, "metaKey", init.metaKey ?? false)
   defineMouseEventProperty(event, "screenX", optionalNumber(init.screenX))
   defineMouseEventProperty(event, "screenY", optionalNumber(init.screenY))
-  defineMouseEventProperty(event, "shiftKey", optionalBoolean(init.shiftKey))
+  defineMouseEventProperty(event, "shiftKey", init.shiftKey ?? false)
 }
 
 const createForcedTerminalMouseUpEvent = (
@@ -154,7 +152,26 @@ class TerminalSelectionDragControllerImpl implements TerminalSelectionDragContro
   private forcedSelectionDrag = false
   private selectionDragTarget: TerminalSelectionDragTarget | null = null
 
-  constructor(private readonly host: TerminalSelectionDragHost) {}
+  private readonly onMouseMove = (event: TerminalCopyMouseEvent): void => {
+    if (this.forcedSelectionDrag) {
+      didForceTerminalSelectionModifier(event)
+    }
+  }
+
+  private readonly onMouseUp = (event: TerminalCopyMouseEvent): void => {
+    if (!this.forcedSelectionDrag) {
+      return
+    }
+    const target = this.selectionDragTarget
+    didForceTerminalSelectionModifier(event)
+    if (target?.dispatchEvent === undefined) {
+      this.dispose()
+      return
+    }
+    suppressOriginalTerminalMouseUp(event)
+    this.dispose()
+    replayForcedTerminalMouseUp(target, event)
+  }
 
   readonly dispose = (): void => {
     if (this.selectionDragTarget === null) {
@@ -175,26 +192,7 @@ class TerminalSelectionDragControllerImpl implements TerminalSelectionDragContro
     this.selectionDragTarget.addEventListener("mouseup", this.onMouseUp, { capture: true })
   }
 
-  private readonly onMouseMove = (event: TerminalCopyMouseEvent): void => {
-    if (this.forcedSelectionDrag) {
-      forceTerminalSelectionModifier(event)
-    }
-  }
-
-  private readonly onMouseUp = (event: TerminalCopyMouseEvent): void => {
-    if (!this.forcedSelectionDrag) {
-      return
-    }
-    const target = this.selectionDragTarget
-    forceTerminalSelectionModifier(event)
-    if (target?.dispatchEvent === undefined) {
-      this.dispose()
-      return
-    }
-    suppressOriginalTerminalMouseUp(event)
-    this.dispose()
-    replayForcedTerminalMouseUp(target, event)
-  }
+  constructor(private readonly host: TerminalSelectionDragHost) {}
 }
 
 export const createTerminalSelectionDragController = (

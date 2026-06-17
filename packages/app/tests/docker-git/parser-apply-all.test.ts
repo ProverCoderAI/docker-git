@@ -3,11 +3,11 @@ import { Effect } from "effect"
 
 import { parseOrThrow } from "./parser-helpers.js"
 
-const assertApplyAllActiveOnly = (args: ReadonlyArray<string>, expectedActiveOnly: boolean) => {
+const assertApplyAllActiveOnly = (args: ReadonlyArray<string>, isExpectedActiveOnly: boolean) => {
   const command = parseOrThrow(args)
   expect(command._tag).toBe("ApplyAll")
   if (command._tag === "ApplyAll") {
-    expect(command.activeOnly).toBe(expectedActiveOnly)
+    expect(command.activeOnly).toBe(isExpectedActiveOnly)
   }
 }
 

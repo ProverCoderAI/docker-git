@@ -37,7 +37,7 @@ type TerminalWheelScrollTarget = {
   readonly removeEventListener: (
     type: "wheel",
     listener: (event: TerminalWheelScrollEvent) => void,
-    options: boolean
+    isCapture: boolean
   ) => void
 }
 

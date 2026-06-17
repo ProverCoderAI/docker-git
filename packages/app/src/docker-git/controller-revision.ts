@@ -148,10 +148,10 @@ export const parseControllerRevisionLabelOutput = (output: string): string | nul
 }
 
 export const shouldForceRecreateController = (
-  controllerExists: boolean,
+  hasController: boolean,
   localRevision: string,
   currentRevision: string | null
-): boolean => controllerExists && currentRevision !== localRevision
+): boolean => hasController && currentRevision !== localRevision
 
 // CHANGE: compute a deterministic revision fingerprint for the local controller source
 // WHY: host CLI must rebuild the controller when local API/lib sources changed, even if /health still responds

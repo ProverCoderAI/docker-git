@@ -390,7 +390,7 @@ export const runBrowserFrontendCommandWithOptions = (
       if (!decision.shouldStartWeb) {
         return Effect.log(`docker-git browser frontend is already running at http://${decision.host}:${decision.port}/`)
       }
-      return options.daemon ? runBrowserFrontendDaemon(decision) : runBrowserFrontend(decision)
+      return (options.daemon ? runBrowserFrontendDaemon : runBrowserFrontend)(decision)
     })
   )
 

@@ -116,17 +116,13 @@ export const waitForProjectSshReady = (
     }
   })
 
+  const retrySchedule = pipe(
+    Schedule.spaced(Duration.seconds(2)),
+    Schedule.intersect(Schedule.recurs(30))
+  )
   return pipe(
     Effect.log(`Waiting for SSH on ${host}:${port} ...`),
-    Effect.zipRight(
-      Effect.retry(
-        probe,
-        pipe(
-          Schedule.spaced(Duration.seconds(2)),
-          Schedule.intersect(Schedule.recurs(30))
-        )
-      )
-    ),
+    Effect.zipRight(Effect.retry(probe, retrySchedule)),
     Effect.tap(() => Effect.log("SSH is ready."))
   )
 }

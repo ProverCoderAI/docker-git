@@ -129,8 +129,8 @@ fi`
 
 export const renderEntrypointMcpPlaywright = (config: TemplateConfig): string =>
   entrypointMcpPlaywrightTemplate
-    .replaceAll("__CODEX_HOME__", config.codexHome)
-    .replaceAll("__SERVICE_NAME__", config.serviceName)
+    .replaceAll("__CODEX_HOME__", () => config.codexHome)
+    .replaceAll("__SERVICE_NAME__", () => config.serviceName)
 
 const entrypointProjectCodexSkillsSyncTemplate = String
   .raw`# Mirror project-owned Codex skill trees into CODEX_HOME without overwriting global skills.
@@ -196,5 +196,5 @@ export const renderEntrypointProjectCodexSkillsSync = (
 ): string =>
   entrypointProjectCodexSkillsSyncTemplate.replaceAll(
     "__CODEX_HOME__",
-    config.codexHome
+    () => config.codexHome
   )

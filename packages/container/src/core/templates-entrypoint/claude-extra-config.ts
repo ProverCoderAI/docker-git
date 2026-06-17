@@ -92,16 +92,16 @@ const escapeForDoubleQuotes = (value: string): string => {
   const escapedBackslash = `${backslash}${backslash}`
   const escapedQuote = `${backslash}${quote}`
   return value
-    .replaceAll(backslash, escapedBackslash)
-    .replaceAll(quote, escapedQuote)
+    .replaceAll(backslash, () => escapedBackslash)
+    .replaceAll(quote, () => escapedQuote)
 }
 
 export const renderClaudeGlobalPromptSetup = (config: TemplateConfig): string =>
   entrypointClaudeGlobalPromptTemplate
-    .replaceAll("__TARGET_DIR__", config.targetDir)
-    .replaceAll("__SSH_USER__", config.sshUser)
-    .replaceAll("__REPO_REF_DEFAULT__", escapeForDoubleQuotes(config.repoRef))
-    .replaceAll("__REPO_URL_DEFAULT__", escapeForDoubleQuotes(config.repoUrl))
+    .replaceAll("__TARGET_DIR__", () => config.targetDir)
+    .replaceAll("__SSH_USER__", () => config.sshUser)
+    .replaceAll("__REPO_REF_DEFAULT__", () => escapeForDoubleQuotes(config.repoRef))
+    .replaceAll("__REPO_URL_DEFAULT__", () => escapeForDoubleQuotes(config.repoUrl))
 
 export const renderClaudeWrapperSetup = (): string =>
   String.raw`CLAUDE_WRAPPER_BIN="/usr/local/bin/claude"

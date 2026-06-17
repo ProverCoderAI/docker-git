@@ -61,7 +61,7 @@ export type ReadyState = ReadyStateSetters & TerminalWorkspaceReadyState & {
   readonly activeScreen: BrowserScreen
   readonly authSnapshot: AuthSnapshot | null
   readonly busyLabel: string | null
-  readonly createView: CreateFlowView
+  readonly creationView: CreateFlowView
   readonly databaseConnectionInput: string
   readonly databaseForwards: ReadonlyArray<ProjectDatabaseForward>
   readonly databaseLabelInput: string
@@ -84,7 +84,7 @@ export type ReadyState = ReadyStateSetters & TerminalWorkspaceReadyState & {
   readonly projectTasksIncludeDefault: boolean
   readonly setActionPrompt: Setter<ActionPromptState | null>
   readonly setActiveScreen: Setter<BrowserScreen>
-  readonly setCreateView: Setter<CreateFlowView>
+  readonly setCreationView: Setter<CreateFlowView>
   readonly setProjectNavigationArmed: Setter<boolean>
   readonly setProjectSearchQuery: Setter<string>
   readonly selectedMenuIndex: number
@@ -115,14 +115,14 @@ const useReadyPanelState = () => {
   const [authSnapshot, setAuthSnapshot] = useState<AuthSnapshot | null>(null)
   const [githubStatus, setGithubStatus] = useState<GithubAuthStatus | null>(null)
   const [panelCloudflareTunnel, setPanelCloudflareTunnel] = useState<PanelCloudflareTunnelSession | null>(null)
-  const [createView, setCreateView] = useState<CreateFlowView>(resetCreateView())
+  const [creationView, setCreationView] = useState<CreateFlowView>(resetCreateView())
   const terminalWorkspaceState = useTerminalWorkspaceState()
 
   return {
     actionPrompt,
     authSnapshot,
     busyLabel,
-    createView,
+    creationView,
     githubStatus,
     message,
     output,
@@ -130,7 +130,7 @@ const useReadyPanelState = () => {
     setActionPrompt,
     setAuthSnapshot,
     setBusyLabel,
-    setCreateView,
+    setCreationView,
     setGithubStatus,
     setMessage,
     setOutput,

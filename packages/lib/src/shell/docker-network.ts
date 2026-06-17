@@ -74,7 +74,7 @@ export const runDockerNetworkContainerCount = (
 ): Effect.Effect<number, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> =>
   runDockerNetworkCapture(cwd, ["network", "inspect", "-f", "{{len .Containers}}", networkName]).pipe(
     Effect.map((output) => {
-      const parsed = Number.parseInt(output.trim(), 10)
+      const parsed = Number(output.trim())
       return Number.isNaN(parsed) ? 0 : parsed
     })
   )

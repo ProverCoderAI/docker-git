@@ -11,7 +11,7 @@ type AuthPromptView = Extract<ViewState, { readonly _tag: "AuthPrompt" }>
 
 type AuthEffectContext = MenuViewContext & {
   readonly runner: MenuRunner
-  readonly setSshActive: (active: boolean) => void
+  readonly setSshActive: (isActive: boolean) => void
   readonly setSkipInputs: (update: (value: number) => number) => void
   readonly cwd: string
 }

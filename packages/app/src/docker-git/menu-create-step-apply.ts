@@ -1,7 +1,7 @@
 import { Either, Match } from "effect"
 
 import type { ParseError } from "./frontend-lib/core/domain.js"
-import { parseGpuInput, parseYesDefault } from "./menu-create-choices.js"
+import { isYesDefault, parseGpuInput } from "./menu-create-choices.js"
 import { parseRepoStepInput } from "./menu-create-command-parse.js"
 import type { CreateFlowContext, CreateFlowView, Mutable } from "./menu-create-flow-types.js"
 import { resolveCreateInputs } from "./menu-create-inputs.js"
@@ -43,7 +43,7 @@ const applyBooleanStep = (
   input: ApplyCreateStepInput,
   key: "runUp" | "enableMcpPlaywright" | "force"
 ): Either.Either<Partial<Mutable<CreateInputs>>, ParseError> => {
-  const isValue = parseYesDefault(input.buffer, input.currentDefaults[key])
+  const isValue = isYesDefault(input.buffer, input.currentDefaults[key])
   return Match.value(key).pipe(
     Match.when("runUp", () => Either.right({ runUp: isValue })),
     Match.when("enableMcpPlaywright", () => Either.right({ enableMcpPlaywright: isValue })),

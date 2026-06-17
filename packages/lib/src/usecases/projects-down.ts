@@ -29,19 +29,21 @@ export const downAllDockerGitProjects: Effect.Effect<
   Effect.flatMap((index) =>
     index === null
       ? Effect.void
-      : forEachProjectStatus(index.configPaths, (status) =>
-        pipe(
-          Effect.log(renderProjectStatusHeader(status)),
-          Effect.zipRight(
-            runDockerComposeDown(status.projectDir).pipe(
-              Effect.catchTag("DockerCommandError", (error: DockerCommandError) =>
-                Effect.logWarning(
-                  `docker compose down failed for ${status.projectDir}: ${renderError(error)}`
-                )),
-              Effect.zipRight(gcProjectNetworkByTemplate(status.projectDir, status.config.template))
-            )
+      : forEachProjectStatus(index.configPaths, (status) => {
+        const downFailedWarning = (error: DockerCommandError) =>
+          Effect.logWarning(
+            `docker compose down failed for ${status.projectDir}: ${renderError(error)}`
           )
-        ))
+        const gcNetwork = gcProjectNetworkByTemplate(status.projectDir, status.config.template)
+        const downWithRecovery = runDockerComposeDown(status.projectDir).pipe(
+          Effect.catchTag("DockerCommandError", downFailedWarning),
+          Effect.zipRight(gcNetwork)
+        )
+        return pipe(
+          Effect.log(renderProjectStatusHeader(status)),
+          Effect.zipRight(downWithRecovery)
+        )
+      })
   ),
   Effect.asVoid
 )

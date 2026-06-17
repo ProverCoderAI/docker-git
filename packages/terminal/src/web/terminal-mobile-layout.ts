@@ -1,7 +1,7 @@
-export const shouldShowTerminalTabs = (mobileMode: boolean, sessionCount: number): boolean =>
-  !mobileMode || sessionCount > 1
+export const shouldShowTerminalTabs = (isMobileMode: boolean, sessionCount: number): boolean =>
+  !isMobileMode || sessionCount > 1
 
-export const resolveTerminalCompactHeaderMode = (mobileMode: boolean): boolean => mobileMode
+export const isTerminalCompactHeaderMode = (isMobileMode: boolean): boolean => isMobileMode
 
-export const resolveTerminalTypingMode = (mobileMode: boolean, keyboardOpen: boolean): boolean =>
-  mobileMode && keyboardOpen
+export const isTerminalTypingMode = (isMobileMode: boolean, isKeyboardOpen: boolean): boolean =>
+  isMobileMode && isKeyboardOpen

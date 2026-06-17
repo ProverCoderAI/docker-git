@@ -26,15 +26,15 @@ export const ensureDockerDnsHost = (
   DockerCommandError | PlatformError,
   FileSystem.FileSystem | CommandExecutor.CommandExecutor
 > => {
-  const addHost = Effect.gen(function*(_) {
+  const hostEntry = Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const hostName = deriveDockerDnsName(repoUrl)
-    const hostsPath = "/etc/hosts"
     const ipAddress = yield* _(runDockerInspectContainerIp(cwd, containerName))
     if (ipAddress.length === 0) {
       yield* _(Effect.logWarning(`Docker IP not available for ${containerName}; skipping DNS entry.`))
       return
     }
+    const hostsPath = "/etc/hosts"
     const current = yield* _(fs.readFileString(hostsPath))
     if (current.includes(` ${hostName}`) || current.includes(`\t${hostName}`)) {
       return
@@ -44,7 +44,7 @@ export const ensureDockerDnsHost = (
     yield* _(Effect.log(`DNS alias added: ${hostName} -> ${ipAddress}`))
   })
 
-  return Effect.match(addHost, {
+  return Effect.match(hostEntry, {
     onFailure: (error) =>
       Effect.logWarning(
         `Failed to update /etc/hosts for docker DNS: ${error instanceof Error ? error.message : String(error)}`

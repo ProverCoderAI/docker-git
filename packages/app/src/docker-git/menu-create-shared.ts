@@ -13,12 +13,12 @@ export {
   type CreateFlowView,
   type CreateModeFlowView,
   type CreateSettingsChoiceDirection,
-  createSettingsHint,
   type CreateSettingsNavigationDirection,
   type DisplayModeFlowView,
   isCreateFlowRepoStep,
   isCreateModeFlowView,
-  isDisplayModeFlowView
+  isDisplayModeFlowView,
+  settingsHint
 } from "./menu-create-flow-types.js"
 export { resolveCreateInputs } from "./menu-create-inputs.js"
 export { renderCreateStepLabel, renderCreateStepLabelWithBufferPreview } from "./menu-create-labels.js"

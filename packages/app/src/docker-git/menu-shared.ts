@@ -18,10 +18,19 @@ type MenuResetContext = Pick<MenuViewContext, "setView" | "setMessage">
 
 type OutputWrite = typeof process.stdout.write
 
-let isStdoutPatched = false
-let isStdoutMuted = false
-let baseStdoutWrite: OutputWrite | null = null
-let baseStderrWrite: OutputWrite | null = null
+type StdoutPatchState = {
+  isStdoutPatched: boolean
+  isStdoutMuted: boolean
+  baseStdoutWrite: OutputWrite | null
+  baseStderrWrite: OutputWrite | null
+}
+
+const stdoutPatchState: StdoutPatchState = {
+  isStdoutPatched: false,
+  isStdoutMuted: false,
+  baseStdoutWrite: null,
+  baseStderrWrite: null
+}
 const primaryScreenEscape = "\u{1B}[?1049l\r\u{1B}[2K"
 
 const wrapWrite = (baseWrite: OutputWrite): OutputWrite =>
@@ -30,7 +39,7 @@ const wrapWrite = (baseWrite: OutputWrite): OutputWrite =>
   encoding?: BufferEncoding | ((err?: Error | null) => void),
   cb?: (err?: Error | null) => void
 ) => {
-  if (isStdoutMuted) {
+  if (stdoutPatchState.isStdoutMuted) {
     const callback = typeof encoding === "function" ? encoding : cb
     if (typeof callback === "function") {
       callback()
@@ -45,7 +54,7 @@ const wrapWrite = (baseWrite: OutputWrite): OutputWrite =>
 
 const writeTerminalControl = (text: string): void => {
   ensureStdoutPatched()
-  const write = baseStdoutWrite ?? process.stdout.write.bind(process.stdout)
+  const write = stdoutPatchState.baseStdoutWrite ?? process.stdout.write.bind(process.stdout)
   write(text)
 }
 
@@ -73,15 +82,17 @@ const disableTerminalInputModes = (): void => {
 // INVARIANT: wrapper preserves original stdout write when not muted
 // COMPLEXITY: O(1)
 const ensureStdoutPatched = (): void => {
-  if (isStdoutPatched) {
+  if (stdoutPatchState.isStdoutPatched) {
     return
   }
-  baseStdoutWrite = process.stdout.write.bind(process.stdout)
-  baseStderrWrite = process.stderr.write.bind(process.stderr)
+  const baseStdoutWrite = process.stdout.write.bind(process.stdout)
+  const baseStderrWrite = process.stderr.write.bind(process.stderr)
+  stdoutPatchState.baseStdoutWrite = baseStdoutWrite
+  stdoutPatchState.baseStderrWrite = baseStderrWrite
 
   process.stdout.write = wrapWrite(baseStdoutWrite)
   process.stderr.write = wrapWrite(baseStderrWrite)
-  isStdoutPatched = true
+  stdoutPatchState.isStdoutPatched = true
 }
 
 // CHANGE: allow writing to the terminal even while stdout is muted
@@ -151,19 +162,15 @@ export const withSuspendedTui = <A, E, R>(
     ? pipe(effect, Effect.tapError((error) => Effect.ignore(options.onError?.(error) ?? Effect.void)))
     : effect
 
+  const notifyResume = Effect.sync(() => {
+    options?.onResume?.()
+  })
+  const resumeAndNotify = pipe(resumeTui(), Effect.zipRight(notifyResume))
+
   return pipe(
     suspendTui(),
     Effect.zipRight(withError),
-    Effect.ensuring(
-      pipe(
-        resumeTui(),
-        Effect.zipRight(
-          Effect.sync(() => {
-            options?.onResume?.()
-          })
-        )
-      )
-    )
+    Effect.ensuring(resumeAndNotify)
   )
 }
 
@@ -172,7 +179,7 @@ export type SkipInputsContext = {
 }
 
 export type SshActiveContext = {
-  readonly setSshActive: (active: boolean) => void
+  readonly setSshActive: (isActive: boolean) => void
 }
 
 export const resumeWithSkipInputs = (context: SkipInputsContext, extra?: () => void) => () => {
@@ -198,14 +205,14 @@ export const pauseOnError = <E>(render: (error: E) => string) => (error: E): Eff
 // EFFECT: n/a
 // INVARIANT: stdout wrapper is installed at most once
 // COMPLEXITY: O(1)
-const setStdoutMuted = (muted: boolean): void => {
+const setStdoutMuted = (isMuted: boolean): void => {
   ensureStdoutPatched()
-  isStdoutMuted = muted
+  stdoutPatchState.isStdoutMuted = isMuted
 }
 
-const setStdoutMutedEffect = (muted: boolean): Effect.Effect<void> =>
+const setStdoutMutedEffect = (isMuted: boolean): Effect.Effect<void> =>
   Effect.sync(() => {
-    setStdoutMuted(muted)
+    setStdoutMuted(isMuted)
   })
 
 const writeTerminalControlEffect = (text: string): Effect.Effect<void> =>
@@ -213,11 +220,11 @@ const writeTerminalControlEffect = (text: string): Effect.Effect<void> =>
     writeTerminalControl(text)
   })
 
-const setRawModeEffect = (enabled: boolean): Effect.Effect<void> =>
+const setRawModeEffect = (isEnabled: boolean): Effect.Effect<void> =>
   process.stdin.isTTY && typeof process.stdin.setRawMode === "function"
     ? pipe(
       Effect.try(() => {
-        process.stdin.setRawMode(enabled)
+        process.stdin.setRawMode(isEnabled)
       }),
       Effect.ignore
     )
