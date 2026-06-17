@@ -1,8 +1,48 @@
+import { renderGitHubRemoteHelpers } from "./github-remotes.js"
+
 const planToGitHookPathsTemplate = `PLAN_TO_GIT_SYNC_HELPER="$HOOKS_DIR/plan-to-git-sync"
 PLAN_TO_GIT_CODEX_HOOK="$HOOKS_DIR/plan-to-git-codex-hook"
 PLAN_TO_GIT_CLAUDE_HOOK="$HOOKS_DIR/plan-to-git-claude-hook"
 CODEX_REQUIREMENTS_FILE="/etc/codex/requirements.toml"
 CLAUDE_PLAN_TO_GIT_SETTINGS_FILE="$CLAUDE_CONFIG_DIR/settings.json"`
+
+const planToGitRunnerTemplate = String.raw`${renderGitHubRemoteHelpers()}
+
+docker_git_plan_to_git_run() {
+  local base_repo=""
+  local origin_repo=""
+  local origin_url=""
+  local base_url=""
+  local config_index="0"
+
+  if ! base_repo="$(docker_git_github_repo_from_remote upstream)"; then
+    base_repo="$(docker_git_github_repo_from_remote origin || true)"
+  fi
+  origin_repo="$(docker_git_github_repo_from_remote origin || true)"
+  origin_url="$(git remote get-url origin 2>/dev/null || true)"
+
+  if [[ -z "$base_repo" || -z "$origin_repo" || -z "$origin_url" ]]; then
+    plan-to-git "$@"
+    return $?
+  fi
+
+  if [[ "$origin_repo" == "$base_repo" ]]; then
+    plan-to-git "$@"
+    return $?
+  fi
+
+  base_url="https://github.com/${"${"}base_repo}.git"
+  config_index="${"${"}GIT_CONFIG_COUNT:-0}"
+  if ! [[ "$config_index" =~ ^[0-9]+$ ]]; then
+    config_index="0"
+  fi
+
+  env \
+    GIT_CONFIG_COUNT="$((config_index + 1))" \
+    "GIT_CONFIG_KEY_${"${"}config_index}=url.${"${"}base_url}.insteadOf" \
+    "GIT_CONFIG_VALUE_${"${"}config_index}=${"${"}origin_url}" \
+    plan-to-git "$@"
+}`
 
 const planToGitSyncHelperInstallTemplate = String.raw`cat <<'EOF' > "$PLAN_TO_GIT_SYNC_HELPER"
 #!/usr/bin/env bash
@@ -19,8 +59,10 @@ fi
 
 export PLAN_TO_GIT_STATE_DIR="${"${"}PLAN_TO_GIT_STATE_DIR:-/tmp/plan-to-git}"
 
+${planToGitRunnerTemplate}
+
 docker_git_plan_to_git_explicit_pr_supported() {
-  plan-to-git sync --help 2>/dev/null | grep -q -- "--pr <PR>"
+  docker_git_plan_to_git_run sync --help 2>/dev/null | grep -q -- "--pr <PR>"
 }
 
 docker_git_plan_to_git_resolve_pr_number() {
@@ -61,12 +103,12 @@ docker_git_plan_to_git_sync() {
 
   if [[ -n "$pr_number" ]] && docker_git_plan_to_git_explicit_pr_supported; then
     echo "[plan-to-git] Syncing queued agent plans to PR #$pr_number"
-    plan-to-git sync --pr "$pr_number"
+    docker_git_plan_to_git_run sync --pr "$pr_number"
     return 0
   fi
 
   echo "[plan-to-git] Syncing queued agent plans via current branch discovery"
-  plan-to-git sync
+  docker_git_plan_to_git_run sync
 }
 
 docker_git_plan_to_git_sync
@@ -83,14 +125,15 @@ if [ "\${DOCKER_GIT_SKIP_PLAN_TO_GIT:-}" != "1" ]; then
     echo "[plan-to-git] Error: plan-to-git not found" >&2
     exit 1
   fi
-  plan-to-git import-codex --no-sync
-  plan-to-git import-claude --no-sync
+  ${planToGitRunnerTemplate}
+  docker_git_plan_to_git_run import-codex --no-sync
+  docker_git_plan_to_git_run import-claude --no-sync
   PLAN_TO_GIT_SYNC_HELPER="\${DOCKER_GIT_PLAN_TO_GIT_SYNC_HELPER:-/opt/docker-git/hooks/plan-to-git-sync}"
   if [[ -x "$PLAN_TO_GIT_SYNC_HELPER" ]]; then
     "$PLAN_TO_GIT_SYNC_HELPER"
   else
     echo "[plan-to-git] Sync helper not found; falling back to current branch discovery" >&2
-    plan-to-git sync
+    docker_git_plan_to_git_run sync
   fi
 fi`
 
@@ -108,7 +151,8 @@ if ! command -v plan-to-git >/dev/null 2>&1; then
 fi
 
 export PLAN_TO_GIT_STATE_DIR="${"${"}PLAN_TO_GIT_STATE_DIR:-/tmp/plan-to-git}"
-plan-to-git hook --source codex
+${planToGitRunnerTemplate}
+docker_git_plan_to_git_run hook --source codex
 PLAN_TO_GIT_SYNC_HELPER="${"${"}DOCKER_GIT_PLAN_TO_GIT_SYNC_HELPER:-/opt/docker-git/hooks/plan-to-git-sync}"
 "$PLAN_TO_GIT_SYNC_HELPER" >&2 || true
 EOF
@@ -128,7 +172,8 @@ if ! command -v plan-to-git >/dev/null 2>&1; then
 fi
 
 export PLAN_TO_GIT_STATE_DIR="${"${"}PLAN_TO_GIT_STATE_DIR:-/tmp/plan-to-git}"
-plan-to-git hook --source claude
+${planToGitRunnerTemplate}
+docker_git_plan_to_git_run hook --source claude
 PLAN_TO_GIT_SYNC_HELPER="${"${"}DOCKER_GIT_PLAN_TO_GIT_SYNC_HELPER:-/opt/docker-git/hooks/plan-to-git-sync}"
 "$PLAN_TO_GIT_SYNC_HELPER" >&2 || true
 EOF
