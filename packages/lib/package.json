@@ -13,7 +13,6 @@
     "dev": "tsc -p tsconfig.json --watch",
     "prelint": "bun run --cwd ../container build",
     "lint": "NODE_OPTIONS=--max-old-space-size=4096 PATH=../../scripts:$PATH vibecode-linter src/",
-    "prelint:effect": "bun run --cwd ../container build",
     "lint:effect": "NODE_OPTIONS=--max-old-space-size=4096 PATH=../../scripts:$PATH eslint --config eslint.effect-ts-check.config.mjs .",
     "pretypecheck": "bun run --cwd ../container build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
