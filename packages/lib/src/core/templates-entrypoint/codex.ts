@@ -93,6 +93,10 @@ multi_agent = true
 apps = true
 shell_tool = true
 
+[apps.github]
+# docker-git: disable the unused codex_app.github connector (issue #410)
+enabled = false
+
 [profiles.longcontx]
 model = "gpt-5.5"
 model_context_window = 1050000

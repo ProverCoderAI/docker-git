@@ -102,6 +102,9 @@ describe("syncGithubAuthKeys", () => {
         expect(configText).toContain("model_auto_compact_token_limit = 945000")
         expect(configText).toContain("model_reasoning_effort = \"xhigh\"")
         expect(configText).toContain("plan_mode_reasoning_effort = \"xhigh\"")
+        // issue #410: the unused codex_app.github connector must be disabled
+        expect(configText).toContain("[apps.github]")
+        expect(configText).toContain("enabled = false")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
