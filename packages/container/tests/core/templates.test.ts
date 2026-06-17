@@ -465,6 +465,38 @@ describe("renderEntrypoint clone cache", () => {
   })
 })
 
+describe("renderEntrypoint tilde target dir expansion", () => {
+  // CHANGE: assert runtime `~`/`~/...` TARGET_DIR overrides resolve to the dev-owned home
+  // WHY: the entrypoint runs as root (sshd), so `$HOME` is /root; expanding a tilde TARGET_DIR
+  //      against `$HOME` resolved the clone target to /root/app, which `su - dev` cannot write,
+  //      so `git clone` failed and the workspace `app` folder stayed EMPTY (issue #413)
+  // QUOTE(ТЗ): "Почему-то при docker-git clone не делается git clone в папку app"
+  // REF: issue-413
+  // FORMAT THEOREM: expand("~") = /home/<sshUser> ∧ expand("~/p") = /home/<sshUser>/p
+  it("expands a bare `~` against the dev home, not root's $HOME", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig({ sshUser: "dev" }))
+
+    expect(entrypoint).toContain('if [[ "$TARGET_DIR" == "~" ]]; then')
+    expect(entrypoint).toContain('TARGET_DIR="/home/dev"')
+    expect(entrypoint).toContain('TARGET_DIR="/home/dev${TARGET_DIR:1}"')
+    expect(entrypoint).not.toContain('TARGET_DIR="$HOME"')
+    expect(entrypoint).not.toContain('TARGET_DIR="$HOME${TARGET_DIR:1}"')
+  })
+
+  it("expands the tilde against the configured ssh user for generated configs", () => {
+    fc.assert(
+      fc.property(generatedTemplateConfigArbitrary, (config) => {
+        const entrypoint = renderEntrypoint(config)
+
+        expect(entrypoint).toContain(`TARGET_DIR="/home/${config.sshUser}"`)
+        expect(entrypoint).toContain(`TARGET_DIR="/home/${config.sshUser}\${TARGET_DIR:1}"`)
+        expect(entrypoint).not.toContain('TARGET_DIR="$HOME"')
+        expect(entrypoint).not.toContain('TARGET_DIR="$HOME${TARGET_DIR:1}"')
+      })
+    )
+  })
+})
+
 describe("renderEntrypointGitHooks", () => {
   it("installs pre-push protection checks, plan sync, and a global git post-push runtime", () => {
     const hooks = renderEntrypointGitHooks()
