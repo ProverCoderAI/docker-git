@@ -28,7 +28,7 @@ const decodePathTail = (value: string): string | null => {
 }
 
 const readSessionPathRequest = (tail: string): SshLinkRequest | null => {
-  const decoded = safeDecodeURIComponent(tail.slice("session/".length).split("/")[0] ?? "")
+  const decoded = safeDecodeURIComponent(tail.slice("session/".length).split("/", 1)[0] ?? "")
   const sessionId = decoded?.trim() ?? ""
   return sessionId.length === 0 ? null : { kind: "session", sessionId }
 }

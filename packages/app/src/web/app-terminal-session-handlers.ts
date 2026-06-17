@@ -187,7 +187,9 @@ const projectTerminalAction = (
   if (projectId === undefined) return undefined
   if (projectKey === undefined) return undefined
   if (terminalSessionId === undefined) return undefined
-  return () => { action(projectKey, terminalSessionId) }
+  return () => {
+    action(projectKey, terminalSessionId)
+  }
 }
 
 export const useProjectActionHandlers = (

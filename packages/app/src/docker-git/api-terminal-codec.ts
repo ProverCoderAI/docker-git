@@ -17,8 +17,7 @@ type RawTerminalSession = {
 
 const isTerminalSessionStatus = (
   value: string
-): value is ApiTerminalSession["status"] =>
-  ["ready", "attached", "exited", "failed"].includes(value)
+): value is ApiTerminalSession["status"] => ["ready", "attached", "exited", "failed"].includes(value)
 
 const readOptionalNumber = (value: JsonValue | undefined): number | undefined =>
   typeof value === "number" ? value : undefined

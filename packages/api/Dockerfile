@@ -76,9 +76,10 @@ RUN set -eu; \
 FROM controller-base AS workspace-deps
 
 COPY package.json bun.lock bunfig.toml tsconfig.base.json tsconfig.json ./
-RUN mkdir -p packages/api packages/app packages/docker-git-session-sync packages/lib packages/terminal
+RUN mkdir -p packages/api packages/app packages/container packages/docker-git-session-sync packages/lib packages/terminal
 COPY packages/api/package.json ./packages/api/package.json
 COPY packages/app/package.json ./packages/app/package.json
+COPY packages/container/package.json ./packages/container/package.json
 COPY packages/docker-git-session-sync/package.json ./packages/docker-git-session-sync/package.json
 COPY packages/lib/package.json ./packages/lib/package.json
 COPY packages/terminal/package.json ./packages/terminal/package.json
@@ -90,6 +91,7 @@ RUN set -eu; \
         --silent \
         --filter @effect-template/api \
         --filter @effect-template/lib \
+        --filter @prover-coder-ai/docker-git-container \
         --filter @prover-coder-ai/docker-git-terminal \
         --filter @prover-coder-ai/docker-git-session-sync; then \
         exit 0; \
@@ -105,12 +107,14 @@ FROM workspace-deps AS workspace-static
 
 COPY patches ./patches
 COPY scripts ./scripts
+COPY packages/container ./packages/container
 COPY packages/docker-git-session-sync ./packages/docker-git-session-sync
 COPY packages/lib ./packages/lib
 COPY packages/terminal ./packages/terminal
 
 RUN bun run --cwd packages/docker-git-session-sync build
 RUN bun run --cwd packages/terminal build
+RUN bun run --cwd packages/container build
 RUN bun run --cwd packages/lib build
 
 FROM controller-base AS skiller-build

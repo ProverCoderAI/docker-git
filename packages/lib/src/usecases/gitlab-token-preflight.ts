@@ -66,7 +66,7 @@ const resolvePreferredGitlabTokenLabel = (
     return undefined
   }
 
-  return normalizeGitTokenLabel(repo.namespace.split("/")[0])
+  return normalizeGitTokenLabel(repo.namespace.split("/", 1)[0])
 }
 
 export const resolveGitlabCloneAuthToken = (
