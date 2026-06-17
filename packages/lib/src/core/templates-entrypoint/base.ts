@@ -17,9 +17,9 @@ REPO_REF="\${REPO_REF:-}"
 FORK_REPO_URL="\${FORK_REPO_URL:-}"
 ${renderTargetDirDefault(config)}
 if [[ "$TARGET_DIR" == "~" ]]; then
-  TARGET_DIR="$HOME"
+  TARGET_DIR="/home/${config.sshUser}"
 elif [[ "$TARGET_DIR" == "~/"* ]]; then
-  TARGET_DIR="$HOME\${TARGET_DIR:1}"
+  TARGET_DIR="/home/${config.sshUser}\${TARGET_DIR:1}"
 fi
 CLAUDE_AUTH_LABEL="\${CLAUDE_AUTH_LABEL:-}"
 CODEX_AUTH_LABEL="\${CODEX_AUTH_LABEL:-}"
