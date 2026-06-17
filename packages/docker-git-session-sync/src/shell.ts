@@ -15,7 +15,14 @@ import {
   githubEnvKeys,
   maxRepoFileSize
 } from "./core.js"
-import { arrayField, errorMessage, isRecord, numberField, recordField, stringField } from "./json.js"
+import { errorMessage, recordField, stringField } from "./json.js"
+import {
+  decodeGitHubContentResponse,
+  decodeGitHubPrComment,
+  decodeGitHubRepoInfo,
+  decodeGitHubSha,
+  decodeGitHubTreeEntries
+} from "./schemas.js"
 import type {
   BackupRepo,
   GhEnv,
@@ -166,12 +173,16 @@ export const ensureBackupRepo = (ghEnv: GhEnv, log: Log, createIfMissing: boolea
   if (!repoResult.success || repoResult.json === null) {
     return null
   }
+  const repoInfo = decodeGitHubRepoInfo(repoResult.json)
+  if (repoInfo === null) {
+    return null
+  }
   return {
     owner: login,
     repo: backupRepoName,
     fullName: repoFullName,
-    defaultBranch: stringField(repoResult.json, "default_branch") ?? backupDefaultBranch,
-    htmlUrl: stringField(repoResult.json, "html_url") ?? `https://github.com/${repoFullName}`
+    defaultBranch: repoInfo.defaultBranch ?? backupDefaultBranch,
+    htmlUrl: repoInfo.htmlUrl ?? `https://github.com/${repoFullName}`
   }
 }
 
@@ -187,18 +198,6 @@ const getCommitTreeSha = (repoFullName: string, commitSha: string, ghEnv: GhEnv)
     `failed to resolve tree for commit ${commitSha}`
   ).stdout
 
-const isTreeEntry = (value: unknown): value is TreeEntry => {
-  if (!isRecord(value)) {
-    return false
-  }
-  return (
-    typeof value["path"] === "string" &&
-    typeof value["mode"] === "string" &&
-    typeof value["type"] === "string" &&
-    typeof value["sha"] === "string"
-  )
-}
-
 export const getTreeEntries = (repoFullName: string, branch: string, ghEnv: GhEnv): TreeSnapshot => {
   const headSha = getBranchHeadSha(repoFullName, branch, ghEnv)
   const treeSha = getCommitTreeSha(repoFullName, headSha, ghEnv)
@@ -209,7 +208,7 @@ export const getTreeEntries = (repoFullName: string, branch: string, ghEnv: GhEn
   return {
     headSha,
     treeSha,
-    entries: arrayField(result.json, "tree").filter(isTreeEntry)
+    entries: decodeGitHubTreeEntries(result.json)
   }
 }
 
@@ -223,18 +222,12 @@ export const getFileContent = (
     ghApiJson(`/repos/${repoFullName}/contents/${repoPath}?ref=${encodeURIComponent(ref)}`, ghEnv),
     `failed to fetch ${repoFullName}:${repoPath}`
   )
-  const encoding = stringField(result.json, "encoding")
-  const content = stringField(result.json, "content")?.replace(/\n/gu, "") ?? ""
-  if (encoding !== "base64" || content.length === 0) {
+  const contentResponse = decodeGitHubContentResponse(result.json)
+  const content = contentResponse?.content.replace(/\n/gu, "") ?? ""
+  if (contentResponse?.encoding !== "base64" || content.length === 0) {
     throw new Error(`unexpected content payload for ${repoFullName}:${repoPath}`)
   }
   return Buffer.from(content, "base64")
-}
-
-const parsePrComment = (value: unknown): PrComment | null => {
-  const id = numberField(value, "id")
-  const url = stringField(value, "html_url")
-  return id === null || url === null ? null : { id, url }
 }
 
 export const createPrComment = (
@@ -247,7 +240,7 @@ export const createPrComment = (
     method: "POST",
     body: { body }
   })
-  return result.success ? parsePrComment(result.json) : null
+  return result.success ? decodeGitHubPrComment(result.json) : null
 }
 
 export const updatePrComment = (
@@ -545,7 +538,7 @@ const createGitBlob = (repoFullName: string, entry: UploadEntry, ghEnv: GhEnv): 
     }),
     `failed to create blob for ${repoFullName}:${entry.repoPath}`
   )
-  const sha = stringField(result.json, "sha")
+  const sha = decodeGitHubSha(result.json)
   if (sha === null) {
     throw new Error(`GitHub blob response missing sha for ${entry.repoPath}`)
   }
@@ -571,7 +564,7 @@ const createGitTree = (
     }),
     `failed to create tree in ${repoFullName}`
   )
-  const sha = stringField(result.json, "sha")
+  const sha = decodeGitHubSha(result.json)
   if (sha === null) {
     throw new Error(`GitHub tree response missing sha for ${repoFullName}`)
   }
@@ -603,7 +596,7 @@ const createGitCommit = (
     }),
     `failed to create commit in ${backupRepo.fullName}`
   )
-  const sha = stringField(result.json, "sha")
+  const sha = decodeGitHubSha(result.json)
   if (sha === null) {
     throw new Error(`GitHub commit response missing sha for ${backupRepo.fullName}`)
   }

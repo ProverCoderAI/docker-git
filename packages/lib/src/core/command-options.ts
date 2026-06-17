@@ -59,6 +59,7 @@ export interface RawOptions {
   readonly force?: boolean
   readonly forceEnv?: boolean
   readonly agentAutoMode?: string
+  readonly clonedOnHostname?: string
   // Session gist options (issue-143)
   readonly prNumber?: string
   readonly repo?: string

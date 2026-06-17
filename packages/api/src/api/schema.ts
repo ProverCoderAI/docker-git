@@ -51,7 +51,8 @@ export const CreateProjectRequestSchema = Schema.Struct({
   force: OptionalBoolean,
   forceEnv: OptionalBoolean,
   waitForClone: OptionalBoolean,
-  async: OptionalBoolean
+  async: OptionalBoolean,
+  clonedOnHostname: OptionalString
 })
 
 export const GithubAuthLoginRequestSchema = Schema.Struct({

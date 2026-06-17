@@ -1,9 +1,8 @@
 import { Either } from "effect"
-import { hostname } from "node:os"
 
-import { expandContainerHome } from "../usecases/scrap-path.js"
 import { resolveAutoAgentFlags } from "./auto-agent-flags.js"
 import {
+  expandContainerHome,
   nonEmpty,
   parseDockerNetworkMode,
   parseGpuMode,
@@ -270,7 +269,7 @@ export const buildCreateCommand = (
         enableMcpPlaywright: behavior.enableMcpPlaywright,
         agentMode,
         agentAuto: isAgentAuto,
-        clonedOnHostname: hostname()
+        clonedOnHostname: raw.clonedOnHostname
       })
     }
   })

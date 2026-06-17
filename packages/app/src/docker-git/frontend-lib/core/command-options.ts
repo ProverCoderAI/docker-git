@@ -60,6 +60,7 @@ export interface RawOptions {
   readonly force?: boolean
   readonly forceEnv?: boolean
   readonly agentAutoMode?: string
+  readonly clonedOnHostname?: string
 }
 
 // CHANGE: helper type alias for builder signatures that produce parse errors

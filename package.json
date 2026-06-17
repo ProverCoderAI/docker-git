@@ -46,7 +46,7 @@
     "web:serve": "bun run --cwd packages/app serve:web",
     "lint": "bun run --filter @prover-coder-ai/docker-git-terminal lint && bun run --filter @prover-coder-ai/docker-git lint && bun run --filter @effect-template/lib lint",
     "lint:tests": "bun run --filter @prover-coder-ai/docker-git lint:tests",
-    "lint:effect": "bun run --filter @prover-coder-ai/docker-git-terminal lint:effect && bun run --filter @prover-coder-ai/docker-git lint:effect && bun run --filter @effect-template/lib lint:effect",
+    "lint:effect": "bun run --filter @prover-coder-ai/docker-git-session-sync lint:effect && bun run --filter @prover-coder-ai/docker-git-terminal lint:effect && bun run --filter @prover-coder-ai/docker-git lint:effect && bun run --filter @prover-coder-ai/docker-git-container lint:effect && bun run --filter @effect-template/lib lint:effect && bun run --filter @effect-template/api lint:effect",
     "test": "bun run --filter @prover-coder-ai/docker-git-session-sync test && bun run --filter @prover-coder-ai/docker-git-terminal test && bun run --filter @prover-coder-ai/docker-git test && bun run --filter @effect-template/lib test",
     "typecheck": "bun run --filter @prover-coder-ai/docker-git-session-sync typecheck && bun run --filter @prover-coder-ai/docker-git-terminal typecheck && bun run --filter @prover-coder-ai/docker-git typecheck && bun run --filter @effect-template/lib typecheck",
     "start": "bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js"

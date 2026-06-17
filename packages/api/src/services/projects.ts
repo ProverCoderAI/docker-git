@@ -482,7 +482,8 @@ const toCreateRawOptions = (request: CreateProjectRequest): RawOptions => ({
   ...(request.up === undefined ? {} : { up: request.up }),
   ...(request.openSsh === undefined ? {} : { openSsh: request.openSsh }),
   ...(request.force === undefined ? {} : { force: request.force }),
-  ...(request.forceEnv === undefined ? {} : { forceEnv: request.forceEnv })
+  ...(request.forceEnv === undefined ? {} : { forceEnv: request.forceEnv }),
+  ...(request.clonedOnHostname === undefined ? {} : { clonedOnHostname: request.clonedOnHostname })
 })
 
 const parseCreateCommandRequest = (

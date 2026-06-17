@@ -480,6 +480,7 @@ export type CreateProjectRequest = {
   readonly forceEnv?: boolean | undefined
   readonly waitForClone?: boolean | undefined
   readonly async?: boolean | undefined
+  readonly clonedOnHostname?: string | undefined
 }
 
 export type AgentEnvVar = {

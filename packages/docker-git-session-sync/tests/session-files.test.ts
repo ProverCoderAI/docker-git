@@ -330,6 +330,31 @@ describe("CLI parser", () => {
     expect(parsed?.prComment?.comment.id).toBe(1001)
   })
 
+  it("rejects malformed background upload context metadata", () => {
+    expect(parseUploadContext({
+      version: 1,
+      cwd: "/workspace",
+      sessionDir: null,
+      source: {
+        repo: "org/repo",
+        branch: "issue-230",
+        prNumber: 230,
+        commitSha: "0123456789abcdef",
+        createdAt: "2026-04-27T00:00:00.000Z"
+      },
+      snapshotRef: "org/repo/pr-230/current",
+      gitStatus: "dirty",
+      prComment: {
+        repo: "org/repo",
+        comment: {
+          id: "1001",
+          url: "https://example.test/comment"
+        }
+      },
+      verbose: true
+    })).toBeNull()
+  })
+
   it("rejects missing snapshot refs", () => {
     expect(parseArgs(["view"])).toEqual({ _tag: "Error", message: "view requires <snapshot-ref>" })
     expect(parseArgs(["download"])).toEqual({ _tag: "Error", message: "download requires <snapshot-ref>" })

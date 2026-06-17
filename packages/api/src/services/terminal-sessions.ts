@@ -82,6 +82,13 @@ type TerminalSessionStateRuntime =
   | FileSystem.FileSystem
   | PlatformPath.Path
 
+type TerminalSessionPersistenceEffect = Effect.Effect<void, ApiInternalError, FileSystem.FileSystem>
+
+type TerminalSessionPersistenceQueue = {
+  readonly items: ReadonlyArray<TerminalSessionPersistenceEffect>
+  readonly running: boolean
+}
+
 type DurableTerminalSession = {
   readonly id: string
   readonly projectId: string
@@ -103,7 +110,7 @@ type DurableTerminalSessionFile = {
 }
 
 const records = new Map<string, TerminalRecord>()
-const terminalSessionPersistenceQueues = new Map<string, Promise<void>>()
+const terminalSessionPersistenceQueues = new Map<string, TerminalSessionPersistenceQueue>()
 const terminalActivityWrites = new Map<string, number>()
 const terminalWsPathPattern = /^(?:\/api)?\/projects\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
 const terminalWsByKeyPathPattern = /^(?:\/api)?\/projects\/by-key\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
@@ -382,35 +389,67 @@ const findDurableSession = (
     Effect.map((state) => state.sessions.find((session) => session.id === sessionId) ?? null)
   )
 
+const drainTerminalSessionPersistenceQueue = (projectId: string): void => {
+  const queue = terminalSessionPersistenceQueues.get(projectId)
+  if (queue === undefined || queue.running || queue.items.length === 0) {
+    return
+  }
+
+  const [nextEffect, ...remainingItems] = queue.items
+  if (nextEffect === undefined) {
+    return
+  }
+
+  terminalSessionPersistenceQueues.set(projectId, {
+    items: remainingItems,
+    running: true
+  })
+
+  Effect.runFork(
+    nextEffect.pipe(
+      Effect.provide(NodeContext.layer),
+      Effect.catchAll((error) =>
+        Effect.logWarning(
+          `[terminal-sessions] Failed to persist state for project ${projectId}: ${describeUnknown(error)}`
+        )
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          const current = terminalSessionPersistenceQueues.get(projectId)
+          if (current === undefined) {
+            return
+          }
+          if (current.items.length === 0) {
+            terminalSessionPersistenceQueues.delete(projectId)
+            return
+          }
+          terminalSessionPersistenceQueues.set(projectId, {
+            items: current.items,
+            running: false
+          })
+          drainTerminalSessionPersistenceQueue(projectId)
+        })
+      )
+    )
+  )
+}
+
 const isAppError = (value: unknown): value is AppError =>
   typeof value === "object" && value !== null && "_tag" in value
 
 const runTerminalSessionPersistence = (
   projectId: string,
-  effect: Effect.Effect<void, ApiInternalError, FileSystem.FileSystem>
+  effect: TerminalSessionPersistenceEffect
 ): void => {
-  const previous = terminalSessionPersistenceQueues.get(projectId) ?? Promise.resolve()
-  const next = previous
-    .catch(() => undefined)
-    .then(() =>
-      Effect.runPromise(
-        effect.pipe(
-          Effect.provide(NodeContext.layer),
-          Effect.catchAll((error) =>
-            Effect.logWarning(
-              `[terminal-sessions] Failed to persist state for project ${projectId}: ${describeUnknown(error)}`
-            )
-          )
-        )
-      )
-    )
-    .catch(() => undefined)
-    .finally(() => {
-      if (terminalSessionPersistenceQueues.get(projectId) === next) {
-        terminalSessionPersistenceQueues.delete(projectId)
-      }
-    })
-  terminalSessionPersistenceQueues.set(projectId, next)
+  const current = terminalSessionPersistenceQueues.get(projectId) ?? {
+    items: [],
+    running: false
+  }
+  terminalSessionPersistenceQueues.set(projectId, {
+    items: [...current.items, effect],
+    running: current.running
+  })
+  drainTerminalSessionPersistenceQueue(projectId)
 }
 
 const updateSession = (

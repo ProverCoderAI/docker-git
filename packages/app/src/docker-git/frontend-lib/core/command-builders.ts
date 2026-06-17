@@ -1,9 +1,9 @@
 /* jscpd:ignore-start */
 import { Either } from "effect"
 
-import { expandContainerHome } from "../usecases/scrap-path.js"
 import { resolveAutoAgentFlags } from "./auto-agent-flags.js"
 import {
+  expandContainerHome,
   nonEmpty,
   parseDockerNetworkMode,
   parseGpuMode,
@@ -269,7 +269,8 @@ export const buildCreateCommand = (
         skipGithubAuth: behavior.skipGithubAuth,
         enableMcpPlaywright: behavior.enableMcpPlaywright,
         agentMode,
-        agentAuto: isAgentAuto
+        agentAuto: isAgentAuto,
+        clonedOnHostname: raw.clonedOnHostname
       })
     }
   })
