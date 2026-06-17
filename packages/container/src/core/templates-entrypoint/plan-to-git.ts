@@ -6,42 +6,21 @@ PLAN_TO_GIT_CLAUDE_HOOK="$HOOKS_DIR/plan-to-git-claude-hook"
 CODEX_REQUIREMENTS_FILE="/etc/codex/requirements.toml"
 CLAUDE_PLAN_TO_GIT_SETTINGS_FILE="$CLAUDE_CONFIG_DIR/settings.json"`
 
-const planToGitRunnerTemplate = String.raw`${renderGitHubRemoteHelpers()}
+const planToGitRunnerTemplate = `${renderGitHubRemoteHelpers()}
 
 docker_git_plan_to_git_run() {
   local base_repo=""
-  local origin_repo=""
-  local origin_url=""
-  local base_url=""
-  local config_index="0"
 
   if ! base_repo="$(docker_git_github_repo_from_remote upstream)"; then
     base_repo="$(docker_git_github_repo_from_remote origin || true)"
   fi
-  origin_repo="$(docker_git_github_repo_from_remote origin || true)"
-  origin_url="$(git remote get-url origin 2>/dev/null || true)"
 
-  if [[ -z "$base_repo" || -z "$origin_repo" || -z "$origin_url" ]]; then
+  if [[ -z "$base_repo" ]]; then
     plan-to-git "$@"
     return $?
   fi
 
-  if [[ "$origin_repo" == "$base_repo" ]]; then
-    plan-to-git "$@"
-    return $?
-  fi
-
-  base_url="https://github.com/${"${"}base_repo}.git"
-  config_index="${"${"}GIT_CONFIG_COUNT:-0}"
-  if ! [[ "$config_index" =~ ^[0-9]+$ ]]; then
-    config_index="0"
-  fi
-
-  env \
-    GIT_CONFIG_COUNT="$((config_index + 1))" \
-    "GIT_CONFIG_KEY_${"${"}config_index}=url.${"${"}base_url}.insteadOf" \
-    "GIT_CONFIG_VALUE_${"${"}config_index}=${"${"}origin_url}" \
-    plan-to-git "$@"
+  PLAN_TO_GIT_REPO="$base_repo" plan-to-git "$@"
 }`
 
 const planToGitSyncHelperInstallTemplate = String.raw`cat <<'EOF' > "$PLAN_TO_GIT_SYNC_HELPER"

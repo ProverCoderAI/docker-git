@@ -208,8 +208,9 @@ describe("renderDockerfile", () => {
       "rtk --version",
       "rtk gain >/dev/null 2>&1 || true",
       "# Install plan-to-git for multi-agent plan capture and explicit PR sync (issue #397)",
-      "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev f60fbe71131854be4c6c1d9fb79abafd2dd6949b --locked --bins --root /usr/local",
+      "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev 3286a253381798f679145ca95be4e309e7bd8d63 --locked --bins --root /usr/local",
       "/usr/local/bin/plan-to-git --help >/dev/null",
+      '/usr/local/bin/plan-to-git --help | grep -q -- "--repo"',
       '/usr/local/bin/plan-to-git hook --help | grep -q -- "claude"',
       '/usr/local/bin/plan-to-git sync --help | grep -q -- "--pr <PR>"',
       'ARG DOCKER_GIT_SESSION_SYNC_PACKAGE="@prover-coder-ai/docker-git-session-sync@latest"',
@@ -527,12 +528,8 @@ describe("renderEntrypointGitHooks", () => {
     expect(hooks).toContain("[post-push-pr] Error: failed to list open PRs")
     expect(hooks).toContain("DOCKER_GIT_SKIP_PLAN_TO_GIT")
     expect(hooks).toContain("docker_git_plan_to_git_run")
-    expect(hooks).toContain('origin_repo="$(docker_git_github_repo_from_remote origin || true)"')
-    expect(hooks).toContain('[[ "$origin_repo" == "$base_repo" ]]')
-    expect(hooks).toContain("base_url=\"https://github.com/${base_repo}.git\"")
-    expect(hooks).toContain("GIT_CONFIG_COUNT=\"$((config_index + 1))\"")
-    expect(hooks).toContain('"GIT_CONFIG_KEY_${config_index}=url.${base_url}.insteadOf"')
-    expect(hooks).toContain('"GIT_CONFIG_VALUE_${config_index}=${origin_url}"')
+    expect(hooks).toContain('base_repo="$(docker_git_github_repo_from_remote origin || true)"')
+    expect(hooks).toContain('PLAN_TO_GIT_REPO="$base_repo" plan-to-git "$@"')
     expect(hooks).toContain("docker_git_plan_to_git_run import-codex --no-sync")
     expect(hooks).toContain("docker_git_plan_to_git_run import-claude --no-sync")
     expect(hooks).toContain("docker_git_plan_to_git_explicit_pr_supported")
