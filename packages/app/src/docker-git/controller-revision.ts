@@ -77,8 +77,8 @@ const hashTree = (
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
     const absolutePath = path.join(rootDir, relativePath)
-    const exists = yield* _(fs.exists(absolutePath))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(absolutePath))
+    if (!isExists) {
       hashMissingPath(chunks, relativePath)
       return
     }

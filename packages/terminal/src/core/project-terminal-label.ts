@@ -17,14 +17,14 @@ const readPathPart = (value: string | undefined): string | null => {
 const splitGitHubRemotePath = (repoUrl: string): ReadonlyArray<string> | null => {
   const trimmed = repoUrl.trim()
   const httpsPrefix = "https://github.com/"
-  const sshUrlPrefix = "ssh://git@github.com/"
-  const sshScpPrefix = "git@github.com:"
   if (trimmed.startsWith(httpsPrefix)) {
     return trimmed.slice(httpsPrefix.length).split("/").filter((part) => part.length > 0)
   }
+  const sshUrlPrefix = "ssh://git@github.com/"
   if (trimmed.startsWith(sshUrlPrefix)) {
     return trimmed.slice(sshUrlPrefix.length).split("/").filter((part) => part.length > 0)
   }
+  const sshScpPrefix = "git@github.com:"
   if (trimmed.startsWith(sshScpPrefix)) {
     return trimmed.slice(sshScpPrefix.length).split("/").filter((part) => part.length > 0)
   }

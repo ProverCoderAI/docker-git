@@ -136,8 +136,8 @@ export const normalizeSelectedProjectId = (
   if (selectedProjectId === null) {
     return null
   }
-  const exists = dashboard.projects.some((project) => project.id === selectedProjectId)
-  return exists ? selectedProjectId : dashboard.projects[0]?.id ?? null
+  const isExists = dashboard.projects.some((project) => project.id === selectedProjectId)
+  return isExists ? selectedProjectId : dashboard.projects[0]?.id ?? null
 }
 
 export const refreshCurrentMenu = (

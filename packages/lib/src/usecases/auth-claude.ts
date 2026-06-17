@@ -53,8 +53,8 @@ const syncClaudeCredentialsFile = (
   Effect.gen(function*(_) {
     const nestedPath = claudeNestedCredentialsPath(accountPath)
     const rootPath = claudeCredentialsPath(accountPath)
-    const nestedExists = yield* _(isRegularFile(fs, nestedPath))
-    if (nestedExists) {
+    const isNestedExists = yield* _(isRegularFile(fs, nestedPath))
+    if (isNestedExists) {
       const nestedText = yield* _(readFileStringIfPresent(fs, nestedPath))
       if (nestedText !== null) {
         yield* _(writeFileStringEnsuringParent(fs, path, rootPath, nestedText))
@@ -63,8 +63,8 @@ const syncClaudeCredentialsFile = (
       return
     }
 
-    const rootExists = yield* _(isRegularFile(fs, rootPath))
-    if (rootExists) {
+    const isRootExists = yield* _(isRegularFile(fs, rootPath))
+    if (isRootExists) {
       const rootText = yield* _(readFileStringIfPresent(fs, rootPath))
       if (rootText === null) {
         return

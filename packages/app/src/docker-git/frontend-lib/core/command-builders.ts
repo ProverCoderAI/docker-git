@@ -244,7 +244,7 @@ export const buildCreateCommand = (
     const dockerSharedNetworkName = yield* _(
       nonEmpty("--shared-network", raw.dockerSharedNetworkName, defaultTemplateConfig.dockerSharedNetworkName)
     )
-    const { agentAuto, agentMode } = yield* _(resolveAutoAgentFlags(raw))
+    const { agentAuto: isAgentAuto, agentMode } = yield* _(resolveAutoAgentFlags(raw))
 
     return {
       _tag: "Create",
@@ -269,7 +269,7 @@ export const buildCreateCommand = (
         skipGithubAuth: behavior.skipGithubAuth,
         enableMcpPlaywright: behavior.enableMcpPlaywright,
         agentMode,
-        agentAuto
+        agentAuto: isAgentAuto
       })
     }
   })

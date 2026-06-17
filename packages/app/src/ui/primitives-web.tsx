@@ -95,7 +95,7 @@ export const webPrimitives = {
       onClick,
       style: {
         ...baseStyle(props),
-        ...(onClick === undefined ? {} : interactiveStyle(props.width))
+        ...(onClick !== undefined && interactiveStyle(props.width))
       },
       type: onClick === undefined ? undefined : "button"
     }),

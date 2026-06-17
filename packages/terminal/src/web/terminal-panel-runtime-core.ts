@@ -41,10 +41,12 @@ export const createLifecycleState = (): TerminalLifecycleState => ({
 })
 
 const clearReconnectTimer = (lifecycle: TerminalLifecycleState): void => {
-  if (lifecycle.reconnectTimer !== null) {
-    clearTimeout(lifecycle.reconnectTimer)
-    lifecycle.reconnectTimer = null
+  if (lifecycle.reconnectTimer === null) {
+    return
   }
+
+  clearTimeout(lifecycle.reconnectTimer)
+  lifecycle.reconnectTimer = null
 }
 
 export const createTerminalRuntime = (

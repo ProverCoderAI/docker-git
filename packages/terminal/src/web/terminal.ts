@@ -165,8 +165,8 @@ export const buildProjectActiveTerminalSession = (
   return {
     ...base,
     exitMessage: "SSH session ended.",
-    ...(onExit === undefined ? {} : { onExit }),
-    ...(onReady === undefined ? {} : { onReady }),
+    ...(onExit !== undefined && { onExit }),
+    ...(onReady !== undefined && { onReady }),
     pendingDeleteMessage: `Terminal session was closed before attach: ${projectDisplayName}.`,
     session,
     sessionPath: projectSshRoutePath(projectKey, session.id),
@@ -209,7 +209,7 @@ export const buildPendingProjectActiveTerminalSession = (
   return {
     ...base,
     exitMessage: "Pending SSH session closed.",
-    ...(onExit === undefined ? {} : { onExit }),
+    ...(onExit !== undefined && { onExit }),
     pendingConnection: {
       message: resolvedMessage,
       phase
@@ -239,7 +239,7 @@ export const resolveTerminalApiOriginUrl = (): URL => {
   if (configured.startsWith("http://") || configured.startsWith("https://")) {
     return new URL(configured)
   }
-  return new URL(configured, globalThis.location.origin)
+  return new URL(configured, location.origin)
 }
 
 export const resolveTerminalWebSocketUrl = (websocketPath: string, cols: number, rows: number): string => {

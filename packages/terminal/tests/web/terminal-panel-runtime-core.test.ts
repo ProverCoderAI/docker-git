@@ -71,11 +71,11 @@ describe("terminal panel runtime core", () => {
   })
 
   it("detects xterm mouse report input encodings", () => {
-    expect(isTerminalMouseReportInput("\u001B[M !!")).toBe(true)
-    expect(isTerminalMouseReportInput("\u001B[<64;10;5M")).toBe(true)
-    expect(isTerminalMouseReportInput("\u001B[<0;10;5m")).toBe(true)
-    expect(isTerminalMouseReportInput("\u001B[64;10;5M")).toBe(true)
-    expect(isTerminalMouseReportInput("\u001B[2M")).toBe(false)
+    expect(isTerminalMouseReportInput("\u{1B}[M !!")).toBe(true)
+    expect(isTerminalMouseReportInput("\u{1B}[<64;10;5M")).toBe(true)
+    expect(isTerminalMouseReportInput("\u{1B}[<0;10;5m")).toBe(true)
+    expect(isTerminalMouseReportInput("\u{1B}[64;10;5M")).toBe(true)
+    expect(isTerminalMouseReportInput("\u{1B}[2M")).toBe(false)
     expect(isTerminalMouseReportInput("a")).toBe(false)
   })
 
@@ -91,22 +91,22 @@ describe("terminal panel runtime core", () => {
 
   it("forwards arrow escape sequences as regular terminal input", () => {
     const { input, sent } = attachOpenTerminalInput()
-    input.emit("\u001B[C")
-    input.emit("\u001B[A")
+    input.emit("\u{1B}[C")
+    input.emit("\u{1B}[A")
 
     expect(input.state.scrolls).toBe(2)
     expect(sent).toEqual([
-      JSON.stringify({ data: "\u001B[C", type: "input" }),
-      JSON.stringify({ data: "\u001B[A", type: "input" })
+      JSON.stringify({ data: "\u{1B}[C", type: "input" }),
+      JSON.stringify({ data: "\u{1B}[A", type: "input" })
     ])
   })
 
   it("keeps the viewport stable for terminal mouse click reports", () => {
     const { input, sent } = attachOpenTerminalInput()
-    input.emit("\u001B[<0;10;5M")
+    input.emit("\u{1B}[<0;10;5M")
 
     expect(input.state.scrolls).toBe(0)
-    expect(sent).toEqual([JSON.stringify({ data: "\u001B[<0;10;5M", type: "input" })])
+    expect(sent).toEqual([JSON.stringify({ data: "\u{1B}[<0;10;5M", type: "input" })])
   })
 
   it("does not scroll or send input suppressed by the paste guard", () => {
@@ -116,7 +116,7 @@ describe("terminal panel runtime core", () => {
     }
     const { input, sent } = attachOpenTerminalInput(pasteGuard)
 
-    input.emit("\u0016")
+    input.emit("\u{16}")
 
     expect(input.state.scrolls).toBe(0)
     expect(sent).toEqual([])

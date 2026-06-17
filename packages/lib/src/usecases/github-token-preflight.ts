@@ -132,7 +132,7 @@ export const probeGithubRepoAccess = (
     const response = yield* _(
       client.get(`https://api.github.com/repos/${repo.owner}/${repo.repo}`, {
         headers: {
-          ...(token === null ? {} : { Authorization: `Bearer ${token}` }),
+          ...(token !== null && { Authorization: `Bearer ${token}` }),
           Accept: "application/vnd.github+json"
         }
       })

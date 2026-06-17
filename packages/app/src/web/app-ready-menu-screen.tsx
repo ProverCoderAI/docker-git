@@ -46,7 +46,7 @@ const MainMenuItem = (
   }
 ): JSX.Element => {
   const item = browserMenuItems[index]
-  const selected = index === selectedMenuIndex
+  const isSelected = index === selectedMenuIndex
   return (
     <Box
       onClick={() => {
@@ -54,8 +54,8 @@ const MainMenuItem = (
         onOpenMenuScreen(index)
       }}
     >
-      <Text bold={selected} fg={selected ? "#78f0a3" : "#f4f7fb"}>
-        {selected ? "> " : "  "}
+      <Text bold={isSelected} fg={isSelected ? "#78f0a3" : "#f4f7fb"}>
+        {isSelected ? "> " : "  "}
         {index + 1}. {item?.label ?? index + 1}
       </Text>
     </Box>

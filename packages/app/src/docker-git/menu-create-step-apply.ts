@@ -43,11 +43,11 @@ const applyBooleanStep = (
   input: ApplyCreateStepInput,
   key: "runUp" | "enableMcpPlaywright" | "force"
 ): Either.Either<Partial<Mutable<CreateInputs>>, ParseError> => {
-  const value = parseYesDefault(input.buffer, input.currentDefaults[key])
+  const isValue = parseYesDefault(input.buffer, input.currentDefaults[key])
   return Match.value(key).pipe(
-    Match.when("runUp", () => Either.right({ runUp: value })),
-    Match.when("enableMcpPlaywright", () => Either.right({ enableMcpPlaywright: value })),
-    Match.when("force", () => Either.right({ force: value })),
+    Match.when("runUp", () => Either.right({ runUp: isValue })),
+    Match.when("enableMcpPlaywright", () => Either.right({ enableMcpPlaywright: isValue })),
+    Match.when("force", () => Either.right({ force: isValue })),
     Match.exhaustive
   )
 }

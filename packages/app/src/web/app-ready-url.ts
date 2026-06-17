@@ -154,11 +154,11 @@ const parseMenuActionUrl = (
     return null
   }
 
-  const outputRequested = rest.at(-1) === "output"
-  const projectSegments = outputRequested ? rest.slice(0, -1) : rest
+  const isOutputRequested = rest.at(-1) === "output"
+  const projectSegments = isOutputRequested ? rest.slice(0, -1) : rest
   const selectedProjectId = isProjectMenu(menu) ? resolveProjectId(projects, decodePathTail(projectSegments)) : null
   return {
-    activeScreen: activeScreenFromMenu(menu, outputRequested),
+    activeScreen: activeScreenFromMenu(menu, isOutputRequested),
     menu,
     projectNavigationArmed: false,
     selectedProjectId
@@ -215,7 +215,7 @@ const applyReadyUrlNavigation = (
   args: ReadyUrlSyncArgs,
   skipNextWriteRef: { current: boolean }
 ): void => {
-  const next = parseReadyUrlNavigation(globalThis.location.href, args.dashboard.projects)
+  const next = parseReadyUrlNavigation(location.href, args.dashboard.projects)
   if (next === null) {
     return
   }
@@ -240,7 +240,7 @@ const writeReadyUrl = (
     return
   }
 
-  const currentUrl = new URL(globalThis.location.href)
+  const currentUrl = new URL(location.href)
   if (isSshLinkUrl(currentUrl) && args.state.activeTerminalSession === null) {
     return
   }
@@ -255,7 +255,7 @@ const writeReadyUrl = (
   if (path === null || `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}` === path) {
     return
   }
-  globalThis.history.replaceState(globalThis.history.state, "", path)
+  history.replaceState(history.state, "", path)
 }
 
 export const useReadyUrlSync = (args: ReadyUrlSyncArgs) => {

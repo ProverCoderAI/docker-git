@@ -114,10 +114,12 @@ export const runAuthPromptEffect = (
     ),
     Effect.ensuring(
       Effect.sync(() => {
-        if (options.suspendTui) {
-          context.setSshActive(false)
-          context.setSkipInputs(() => 2)
+        if (!options.suspendTui) {
+          return
         }
+
+        context.setSshActive(false)
+        context.setSkipInputs(() => 2)
       })
     ),
     Effect.asVoid

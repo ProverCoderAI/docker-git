@@ -115,8 +115,8 @@ const loadTerminalSessionClient = Effect.tryPromise({
   catch: (error) => (error instanceof Error ? error : new Error(String(error)))
 })
 
-const originalStdinIsTty = process.stdin.isTTY
-const originalStdoutIsTty = process.stdout.isTTY
+const isOriginalStdinIsTty = process.stdin.isTTY
+const isOriginalStdoutIsTty = process.stdout.isTTY
 const originalStdoutColumns = process.stdout.columns
 const originalStdoutRows = process.stdout.rows
 const originalStdinOff = process.stdin.off.bind(process.stdin)
@@ -206,29 +206,43 @@ describe("terminal-session-client", () => {
 
     vi.stubGlobal("WebSocket", FakeWebSocket)
     Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true })
-    Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true })
-    Object.defineProperty(process.stdout, "columns", { configurable: true, value: 132 })
-    Object.defineProperty(process.stdout, "rows", { configurable: true, value: 40 })
-    Object.defineProperty(process.stdin, "setRawMode", { configurable: true, value: setRawModeMock })
-    Object.defineProperty(process.stdin, "on", { configurable: true, value: stdinOnMock })
-    Object.defineProperty(process.stdin, "off", { configurable: true, value: stdinOffMock })
-    Object.defineProperty(process.stdout, "on", { configurable: true, value: stdoutOnMock })
-    Object.defineProperty(process.stdout, "off", { configurable: true, value: stdoutOffMock })
+    Object.defineProperties(process.stdout, {
+      isTTY: { configurable: true, value: true },
+      columns: { configurable: true, value: 132 },
+      rows: { configurable: true, value: 40 }
+    })
+    Object.defineProperties(process.stdin, {
+      setRawMode: { configurable: true, value: setRawModeMock },
+      on: { configurable: true, value: stdinOnMock },
+      off: { configurable: true, value: stdinOffMock }
+    })
+    Object.defineProperties(process.stdout, {
+      on: { configurable: true, value: stdoutOnMock },
+      off: { configurable: true, value: stdoutOffMock }
+    })
     Object.defineProperty(process.stdin, "resume", { configurable: true, value: stdinResumeMock })
   })
 
   afterEach(() => {
     vi.useRealTimers()
-    Object.defineProperty(process.stdin, "setRawMode", { configurable: true, value: originalSetRawMode })
-    Object.defineProperty(process.stdin, "on", { configurable: true, value: originalStdinOn })
-    Object.defineProperty(process.stdin, "off", { configurable: true, value: originalStdinOff })
-    Object.defineProperty(process.stdout, "on", { configurable: true, value: originalStdoutOn })
-    Object.defineProperty(process.stdout, "off", { configurable: true, value: originalStdoutOff })
-    Object.defineProperty(process.stdin, "resume", { configurable: true, value: originalStdinResume })
-    Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: originalStdinIsTty })
-    Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: originalStdoutIsTty })
-    Object.defineProperty(process.stdout, "columns", { configurable: true, value: originalStdoutColumns })
-    Object.defineProperty(process.stdout, "rows", { configurable: true, value: originalStdoutRows })
+    Object.defineProperties(process.stdin, {
+      setRawMode: { configurable: true, value: originalSetRawMode },
+      on: { configurable: true, value: originalStdinOn },
+      off: { configurable: true, value: originalStdinOff }
+    })
+    Object.defineProperties(process.stdout, {
+      on: { configurable: true, value: originalStdoutOn },
+      off: { configurable: true, value: originalStdoutOff }
+    })
+    Object.defineProperties(process.stdin, {
+      resume: { configurable: true, value: originalStdinResume },
+      isTTY: { configurable: true, value: isOriginalStdinIsTty }
+    })
+    Object.defineProperties(process.stdout, {
+      isTTY: { configurable: true, value: isOriginalStdoutIsTty },
+      columns: { configurable: true, value: originalStdoutColumns },
+      rows: { configurable: true, value: originalStdoutRows }
+    })
     vi.unstubAllGlobals()
   })
 

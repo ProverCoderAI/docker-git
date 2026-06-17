@@ -32,7 +32,7 @@ const makeEvent = (key: string): ShortcutKeyboardEvent => {
 const runProjectNavigation = (projectNavigationArmed: boolean) => {
   const event = makeEvent("ArrowDown")
   const setSelectedProjectId = vi.fn()
-  const handled = handleProjectNavigationKey(event, {
+  const isHandled = handleProjectNavigationKey(event, {
     currentMenu: "Select",
     dashboard,
     projectNavigationArmed,
@@ -40,7 +40,7 @@ const runProjectNavigation = (projectNavigationArmed: boolean) => {
     setSelectedProjectId
   })
 
-  return { handled, setSelectedProjectId }
+  return { handled: isHandled, setSelectedProjectId }
 }
 
 const storedTerminalSession: BrowserShortcutArgs["terminalSessions"][number] = {
@@ -139,16 +139,16 @@ describe("app-ready-shortcuts", () => {
   })
 
   it("does not move projects in Select until project mode is armed", () => {
-    const { handled, setSelectedProjectId } = runProjectNavigation(false)
+    const { handled: isHandled, setSelectedProjectId } = runProjectNavigation(false)
 
-    expect(handled).toBe(false)
+    expect(isHandled).toBe(false)
     expect(setSelectedProjectId).not.toHaveBeenCalled()
   })
 
   it("moves projects with up/down in armed Select", () => {
-    const { handled, setSelectedProjectId } = runProjectNavigation(true)
+    const { handled: isHandled, setSelectedProjectId } = runProjectNavigation(true)
 
-    expect(handled).toBe(true)
+    expect(isHandled).toBe(true)
     expect(setSelectedProjectId).toHaveBeenCalledWith("project-b")
   })
 
@@ -156,9 +156,9 @@ describe("app-ready-shortcuts", () => {
     const event = makeEvent("ArrowDown")
     const setSelectedMenuIndex = vi.fn()
 
-    const handled = handleMenuNavigationKey(event, "Select", false, setSelectedMenuIndex)
+    const isHandled = handleMenuNavigationKey(event, "Select", false, setSelectedMenuIndex)
 
-    expect(handled).toBe(true)
+    expect(isHandled).toBe(true)
     expect(setSelectedMenuIndex).toHaveBeenCalledTimes(1)
   })
 
@@ -166,9 +166,9 @@ describe("app-ready-shortcuts", () => {
     const event = makeEvent("ArrowDown")
     const setSelectedMenuIndex = vi.fn()
 
-    const handled = handleMenuNavigationKey(event, "Select", true, setSelectedMenuIndex)
+    const isHandled = handleMenuNavigationKey(event, "Select", true, setSelectedMenuIndex)
 
-    expect(handled).toBe(false)
+    expect(isHandled).toBe(false)
     expect(setSelectedMenuIndex).not.toHaveBeenCalled()
   })
 

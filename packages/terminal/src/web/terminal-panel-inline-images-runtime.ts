@@ -192,12 +192,12 @@ const writeInlineImagePreviewEntry = (
   entry: TerminalInlineImageEntry,
   onComplete: () => void
 ): void => {
-  const appended = appendTerminalInlineImagePreview(
+  const isAppended = appendTerminalInlineImagePreview(
     handlers.terminal,
     handlers.lifecycle,
     entry
   )
-  if (!appended) {
+  if (!isAppended) {
     onComplete()
     return
   }

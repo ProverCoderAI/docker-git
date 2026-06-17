@@ -256,7 +256,7 @@ export const createTerminalImagePastePlan = (
   if (fileName === null) {
     return invalidTerminalImagePaste(`Unsupported image type: ${payload.mediaType || "unknown"}.`)
   }
-  if (!Number.isFinite(payload.size) || payload.size <= 0) {
+  if (!Number.isFinite(payload.size) || payload.size === 0) {
     return invalidTerminalImagePaste("Image payload is empty.")
   }
   if (payload.size > terminalImagePasteMaxBytes) {

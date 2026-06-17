@@ -43,8 +43,8 @@ export const parseClone = (args: ReadonlyArray<string>): Either.Either<Command, 
     const withRef = resolvedRepo.repoRef !== undefined && raw.repoRef === undefined
       ? { ...withDefaults, repoRef: resolvedRepo.repoRef }
       : withDefaults
-    const openSsh = raw.openSsh ?? true
+    const isOpenSsh = raw.openSsh ?? true
     const create = yield* _(buildCreateCommand(withRef))
-    return { ...create, waitForClone: true, openSsh }
+    return { ...create, waitForClone: true, openSsh: isOpenSsh }
   })
 }

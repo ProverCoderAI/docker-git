@@ -56,8 +56,8 @@ export const findDockerGitConfigPaths = (
   rootDir: string
 ): Effect.Effect<ReadonlyArray<string>, PlatformError> =>
   Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(rootDir))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(rootDir))
+    if (!isExists) {
       return []
     }
 

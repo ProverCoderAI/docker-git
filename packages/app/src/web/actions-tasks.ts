@@ -101,11 +101,11 @@ export const loadProjectTasksById = (
   projectId: string,
   options?: LoadSelectedProjectTasksOptions
 ) => {
-  const includeDefault = options?.includeDefault ?? context.projectTasksIncludeDefault
+  const isIncludeDefault = options?.includeDefault ?? context.projectTasksIncludeDefault
   withBusy({
     context,
-    effect: loadProjectTasks(projectId, includeDefault),
-    label: includeDefault ? "Loading all container tasks" : "Loading container tasks",
+    effect: loadProjectTasks(projectId, isIncludeDefault),
+    label: isIncludeDefault ? "Loading all container tasks" : "Loading container tasks",
     onSuccess: (snapshot) => {
       context.setProjectTasks(snapshot)
       if (options?.silent !== true) {

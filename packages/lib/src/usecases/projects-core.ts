@@ -129,7 +129,7 @@ export const loadProjectSummary = (
       projectDir,
       config.template.authorizedKeysPath
     )
-    const authExists = yield* _(fs.exists(resolvedAuthorizedKeys))
+    const isAuthExists = yield* _(fs.exists(resolvedAuthorizedKeys))
     const sshCommand = buildSshCommand(config.template, sshKey)
 
     return {
@@ -138,7 +138,7 @@ export const loadProjectSummary = (
       sshCommand,
       sshKeyPath: sshKey,
       authorizedKeysPath: resolvedAuthorizedKeys,
-      authorizedKeysExists: authExists
+      authorizedKeysExists: isAuthExists
     }
   })
 
@@ -192,7 +192,7 @@ export const loadProjectItem = (
     const template = config.template
 
     const resolvedAuthorizedKeys = resolveAuthorizedKeysPath(path, projectDir, template.authorizedKeysPath)
-    const authExists = yield* _(fs.exists(resolvedAuthorizedKeys))
+    const isAuthExists = yield* _(fs.exists(resolvedAuthorizedKeys))
     const sshCommand = buildSshCommand(template, sshKey)
     const displayName = formatDisplayName(template.repoUrl)
     const runtimeState = yield* _(readProjectRuntimeState(projectDir))
@@ -211,7 +211,7 @@ export const loadProjectItem = (
       sshCommand,
       sshKeyPath: sshKey,
       authorizedKeysPath: resolvedAuthorizedKeys,
-      authorizedKeysExists: authExists,
+      authorizedKeysExists: isAuthExists,
       envGlobalPath: resolvePathFromCwd(path, projectDir, template.envGlobalPath),
       envProjectPath: resolvePathFromCwd(path, projectDir, template.envProjectPath),
       codexAuthPath: resolvePathFromCwd(path, projectDir, template.codexAuthPath),

@@ -16,7 +16,7 @@ type TerminalInputTarget = {
   readonly scrollToBottom: () => void
 }
 
-const csiPrefix = "\u001B["
+const csiPrefix = "\u{1B}["
 const x10MouseReportPrefix = `${csiPrefix}M`
 const x10MouseReportLength = 6
 const sgrMouseReportBodyPattern = /^<\d+;\d+;\d+[Mm]$/u

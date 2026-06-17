@@ -47,7 +47,7 @@ const detectAuthResult = (output: string): GeminiAuthResult => {
   const normalized = stripAnsi(output).toLowerCase()
 
   // Markers that indicate we are in the middle of or after an auth flow
-  const authInitiated = [
+  const isAuthInitiated = [
     "please visit the following url",
     "enter the authorization code",
     "authorized the application"
@@ -56,7 +56,7 @@ const detectAuthResult = (output: string): GeminiAuthResult => {
   const isSuccess = authSuccessPatterns.some(
     (pattern) =>
       normalized.includes(pattern.toLowerCase()) &&
-      (authInitiated || normalized.includes("logged in with google"))
+      (isAuthInitiated || normalized.includes("logged in with google"))
   )
 
   if (isSuccess) return "success"

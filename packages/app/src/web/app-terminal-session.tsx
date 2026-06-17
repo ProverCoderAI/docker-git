@@ -82,12 +82,12 @@ const useLoadedProjectDetails = (projectId: string | undefined): ProjectDetails 
     if (projectId === undefined) {
       return
     }
-    let cancelled = false
+    let isCancelled = false
     void Effect.runPromise(
       loadProjectDetails(projectId).pipe(
         Effect.tap((details) =>
           Effect.sync(() => {
-            if (!cancelled) {
+            if (!isCancelled) {
               setProject(details)
             }
           })
@@ -97,7 +97,7 @@ const useLoadedProjectDetails = (projectId: string | undefined): ProjectDetails 
       )
     )
     return () => {
-      cancelled = true
+      isCancelled = true
     }
   }, [projectId])
   return project
@@ -125,7 +125,7 @@ const useTerminalOnlyReadyState = (
   const projectKey = session.browserProjectKey
   const projectLabel = session.browserProjectName ?? projectId ?? "this project"
   const project = useLoadedProjectDetails(projectId)
-  const [taskManagerOpen, setTaskManagerOpen] = useState(false)
+  const [isTaskManagerOpen, setTaskManagerOpen] = useState(false)
   const setMessage = useCallback(
     (message: string | null) => {
       updateReadyMessage(setState, message)
@@ -144,23 +144,24 @@ const useTerminalOnlyReadyState = (
     setMessage,
     terminalSessionId: session.session.id
   })
-  return { handlers, project, setMessage, setTaskManagerOpen, taskManagerOpen, tasks }
+  return { handlers, project, setMessage, setTaskManagerOpen, taskManagerOpen: isTaskManagerOpen, tasks }
 }
 
 const TerminalOnlyReady = (
   { session, setState, state, viewportLayout }: TerminalOnlyReadyArgs
 ): JSX.Element => {
-  const { handlers, project, setMessage, setTaskManagerOpen, taskManagerOpen, tasks } = useTerminalOnlyReadyState(
-    session,
-    setState
-  )
+  const { handlers, project, setMessage, setTaskManagerOpen, taskManagerOpen: isTaskManagerOpen, tasks } =
+    useTerminalOnlyReadyState(
+      session,
+      setState
+    )
   const bodyContent = renderTaskManagerBody({
     onCloseTaskManager: () => {
       setTaskManagerOpen(false)
     },
     project,
     projectId: session.browserProjectId,
-    taskManagerOpen,
+    taskManagerOpen: isTaskManagerOpen,
     tasks
   })
   return (
@@ -216,13 +217,13 @@ export const AppTerminalSession = ({ sessionId, viewportLayout }: AppTerminalSes
   const [state, setState] = useState<TerminalOnlyState>(() => terminalOnlyLoadingState(sessionId))
 
   useEffect(() => {
-    let cancelled = false
+    let isCancelled = false
     setState(terminalOnlyLoadingState(sessionId))
     void Effect.runPromise(
       loadTerminalOnlyState(sessionId).pipe(
         Effect.tap((nextState) =>
           Effect.sync(() => {
-            if (!cancelled) {
+            if (!isCancelled) {
               setState(nextState)
             }
           })
@@ -231,7 +232,7 @@ export const AppTerminalSession = ({ sessionId, viewportLayout }: AppTerminalSes
       )
     )
     return () => {
-      cancelled = true
+      isCancelled = true
     }
   }, [sessionId])
 

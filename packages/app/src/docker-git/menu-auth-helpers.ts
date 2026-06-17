@@ -44,8 +44,8 @@ const countCredentialDirectories = ({
       if (info === null || info.type !== "Directory") {
         continue
       }
-      const connected = yield* _(hasCredentials(fs, accountPath), Effect.orElseSucceed(() => false))
-      if (connected) {
+      const isConnected = yield* _(hasCredentials(fs, accountPath), Effect.orElseSucceed(() => false))
+      if (isConnected) {
         count += 1
       }
     }

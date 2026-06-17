@@ -195,14 +195,14 @@ export const runCreateKey = (
 ) => {
   const frame = createActionFrame(options.contextOverrides)
   const event = createKeyEvent(key, options.shiftKey ?? false)
-  const handled = handleCreateKey(event, {
+  const isHandled = handleCreateKey(event, {
     context: frame.context,
     controllerCwd: "/workspace",
     createView,
     projectsRoot: "/home/dev/.docker-git",
     setCreateView: frame.setCreateView
   })
-  return { ...frame, event, handled }
+  return { ...frame, event, handled: isHandled }
 }
 
 const expectHandledCreateKey = (

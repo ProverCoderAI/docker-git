@@ -45,8 +45,8 @@ vi.mock("../../src/docker-git/frontend-lib/shell/command-runner.js", () => ({
   runCommandExitCodeStreaming: runCommandExitCodeStreamingMock
 }))
 
-const originalStdinTty = process.stdin.isTTY
-const originalStdoutTty = process.stdout.isTTY
+const isOriginalStdinTty = process.stdin.isTTY
+const isOriginalStdoutTty = process.stdout.isTTY
 
 const makeNonInteractive = (): void => {
   Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: false })
@@ -54,8 +54,8 @@ const makeNonInteractive = (): void => {
 }
 
 const restoreTty = (): void => {
-  Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: originalStdinTty })
-  Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: originalStdoutTty })
+  Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: isOriginalStdinTty })
+  Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: isOriginalStdoutTty })
 }
 
 const runBrowserCommandUnderTest = Effect.gen(function*(_) {

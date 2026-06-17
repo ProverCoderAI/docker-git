@@ -223,8 +223,8 @@ export const parseRepoStepInput = (
     const repoUrl = raw.repoUrl ?? positionalRepoUrl ?? ""
     const command = yield* _(buildCreateCommand({
       ...raw,
-      ...(repoUrl.length > 0 ? { repoUrl } : {}),
-      ...(raw.outDir === undefined ? { outDir: resolveDefaultOutDir(context, repoUrl) } : {})
+      ...((repoUrl.length > 0) && { repoUrl }),
+      ...((raw.outDir === undefined) && { outDir: resolveDefaultOutDir(context, repoUrl) })
     }))
 
     return createInputsFromCommand(repoUrl, raw, command)

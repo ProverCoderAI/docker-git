@@ -29,8 +29,8 @@ const isRegularFile = (
   filePath: string
 ): Effect.Effect<boolean, PlatformError> =>
   Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(filePath))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(filePath))
+    if (!isExists) {
       return false
     }
     const info = yield* _(fs.stat(filePath))
@@ -73,18 +73,18 @@ const hasClaudeAuth = (
 ): Effect.Effect<boolean, PlatformError> =>
   Effect.gen(function*(_) {
     for (const accountPath of resolveClaudeAccountPath(rootPath, label)) {
-      const oauthToken = yield* _(hasNonEmptyFile(fs, `${accountPath}/.oauth-token`))
-      if (oauthToken) {
+      const isOauthToken = yield* _(hasNonEmptyFile(fs, `${accountPath}/.oauth-token`))
+      if (isOauthToken) {
         return true
       }
 
-      const credentials = yield* _(isRegularFile(fs, `${accountPath}/.credentials.json`))
-      if (credentials) {
+      const isCredentials = yield* _(isRegularFile(fs, `${accountPath}/.credentials.json`))
+      if (isCredentials) {
         return true
       }
 
-      const nestedCredentials = yield* _(isRegularFile(fs, `${accountPath}/.claude/.credentials.json`))
-      if (nestedCredentials) {
+      const isNestedCredentials = yield* _(isRegularFile(fs, `${accountPath}/.claude/.credentials.json`))
+      if (isNestedCredentials) {
         return true
       }
     }
@@ -103,12 +103,12 @@ const resolveAvailableAgentAuth = (
   >
 ): Effect.Effect<AvailableAgentAuth, PlatformError> =>
   Effect.gen(function*(_) {
-    const claudeAvailable = yield* _(
+    const isClaudeAvailable = yield* _(
       hasClaudeAuth(fs, resolveClaudeRoot(config.codexSharedAuthPath), config.claudeAuthLabel)
     )
-    const codexAvailable = yield* _(hasCodexAuth(fs, config.codexSharedAuthPath, config.codexAuthLabel))
-    const grokAvailable = yield* _(hasGrokAuth(fs, config.grokAuthPath, config.grokAuthLabel))
-    return { claudeAvailable, codexAvailable, grokAvailable }
+    const isCodexAvailable = yield* _(hasCodexAuth(fs, config.codexSharedAuthPath, config.codexAuthLabel))
+    const isGrokAvailable = yield* _(hasGrokAuth(fs, config.grokAuthPath, config.grokAuthLabel))
+    return { claudeAvailable: isClaudeAvailable, codexAvailable: isCodexAvailable, grokAvailable: isGrokAvailable }
   })
 
 const resolveExplicitAutoAgentMode = (

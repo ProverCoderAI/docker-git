@@ -201,11 +201,11 @@ export const readProjectRuntimeState = (
     const path = yield* _(Path.Path)
     const statePath = resolveProjectRuntimeStatePath(path, projectDir)
     const exists = yield* _(Effect.either(fs.exists(statePath)))
-    const fileExists = Either.match(exists, {
+    const isFileExists = Either.match(exists, {
       onLeft: () => false,
       onRight: (value) => value
     })
-    if (!fileExists) {
+    if (!isFileExists) {
       return emptyProjectRuntimeState()
     }
 

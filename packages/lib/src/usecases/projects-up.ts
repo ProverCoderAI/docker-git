@@ -294,7 +294,7 @@ export const runDockerComposeUpWithPortCheck = (
 > =>
   Effect.gen(function*(_) {
     const config = yield* _(readProjectConfig(projectDir))
-    const alreadyRunning = yield* _(
+    const isAlreadyRunning = yield* _(
       runDockerComposePsFormatted(projectDir).pipe(
         Effect.map((raw) => parseComposePsOutput(raw)),
         Effect.map((rows) => rows.length > 0)
@@ -302,7 +302,7 @@ export const runDockerComposeUpWithPortCheck = (
     )
 
     // Avoid port churn when the project's compose environment is already running.
-    const updated = alreadyRunning
+    const updated = isAlreadyRunning
       ? config.template
       : yield* _(ensureAvailableSshPort(projectDir, config))
     const resolvedTemplate = yield* _(resolveTemplateResourceLimits(updated))

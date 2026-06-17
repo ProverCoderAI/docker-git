@@ -143,16 +143,16 @@ const loadControllerBootstrapContext = (): ControllerEffect<ControllerBootstrapC
     yield* _(prepareControllerResourceLimitEnv())
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
     const localControllerRevision = yield* _(ControllerDocker.prepareLocalControllerRevision())
-    const currentControllerExists = yield* _(ControllerDocker.controllerExists())
+    const isCurrentControllerExists = yield* _(ControllerDocker.controllerExists())
     const currentControllerRevision = yield* _(ControllerDocker.inspectControllerRevision())
     const currentImageRevision = yield* _(inspectControllerImageRevision())
     const currentContainerNetworks = yield* _(ControllerDocker.resolveCurrentContainerNetworks())
     const initialControllerNetworks = yield* _(
       ControllerDocker.inspectContainerNetworks(ControllerDocker.controllerContainerName)
     )
-    const forceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
-    const forceRecreateController = forceRecreateForResourceLimits ||
-      shouldForceRecreateController(currentControllerExists, localControllerRevision, currentControllerRevision)
+    const isForceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
+    const isForceRecreateController = isForceRecreateForResourceLimits ||
+      shouldForceRecreateController(isCurrentControllerExists, localControllerRevision, currentControllerRevision)
 
     return {
       explicitApiBaseUrl,
@@ -162,10 +162,10 @@ const loadControllerBootstrapContext = (): ControllerEffect<ControllerBootstrapC
       buildController: shouldBuildControllerImage({
         currentControllerRevision,
         currentImageRevision,
-        forceRecreateController,
+        forceRecreateController: isForceRecreateController,
         localControllerRevision
       }),
-      forceRecreateController,
+      forceRecreateController: isForceRecreateController,
       currentContainerNetworks,
       initialControllerNetworks
     }
@@ -278,7 +278,7 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
     }
 
     const localControllerRevision = yield* _(ControllerDocker.prepareLocalControllerRevision())
-    const forceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
+    const isForceRecreateForResourceLimits = shouldForceRecreateForControllerResourceLimits()
     const reachableBeforeDocker = yield* _(
       findReachableDirectHealthProbe({
         cachedApiBaseUrl: selectedApiBaseUrl,
@@ -290,7 +290,7 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
     if (
       reachableBeforeDocker !== null &&
       reachableBeforeDocker.revision === localControllerRevision &&
-      !forceRecreateForResourceLimits
+      !isForceRecreateForResourceLimits
     ) {
       rememberSelectedApiBaseUrl(reachableBeforeDocker.apiBaseUrl)
       return
@@ -298,8 +298,8 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
 
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
     yield* _(failIfRemoteDockerWithoutApiUrl(bootstrapContext.currentContainerNetworks))
-    const reusedExistingController = yield* _(reuseReachableControllerIfPossible(bootstrapContext))
-    if (reusedExistingController) {
+    const isReusedExistingController = yield* _(reuseReachableControllerIfPossible(bootstrapContext))
+    if (isReusedExistingController) {
       return
     }
     yield* _(startAndRememberController(bootstrapContext))
@@ -315,12 +315,18 @@ export const restartController = (): ControllerEffect<void> =>
 
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
     yield* _(failIfRemoteDockerWithoutApiUrl(bootstrapContext.currentContainerNetworks))
-    const forceRecreateController = true
-    const buildController = shouldBuildControllerImage({
+    const isForceRecreateController = true
+    const isBuildController = shouldBuildControllerImage({
       currentControllerRevision: bootstrapContext.currentControllerRevision,
       currentImageRevision: bootstrapContext.currentImageRevision,
-      forceRecreateController,
+      forceRecreateController: isForceRecreateController,
       localControllerRevision: bootstrapContext.localControllerRevision
     })
-    yield* _(startAndRememberController({ ...bootstrapContext, buildController, forceRecreateController }))
+    yield* _(
+      startAndRememberController({
+        ...bootstrapContext,
+        buildController: isBuildController,
+        forceRecreateController: isForceRecreateController
+      })
+    )
   })

@@ -20,8 +20,8 @@ const readVisualViewport = (global: OptionalVisualViewportGlobal): VisualViewpor
   global.visualViewport ?? null
 
 const resolveViewportSize = (): ViewportSize => {
-  const layoutHeight = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 900
-  const layoutWidth = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1280
+  const layoutHeight = typeof innerHeight === "number" ? innerHeight : 900
+  const layoutWidth = typeof innerWidth === "number" ? innerWidth : 1280
   const visualViewport = readVisualViewport(globalThis)
 
   if (visualViewport === null) {
@@ -200,7 +200,7 @@ const AppDashboard = ({ viewport }: { readonly viewport: ViewportLayout }): JSX.
 
 export const App = (): JSX.Element => {
   const viewport = useViewportMode()
-  const [route] = useState(() => resolveWebAppRoute(globalThis.location.pathname))
+  const [route] = useState(() => resolveWebAppRoute(location.pathname))
 
   return (
     <AppFrame viewport={viewport}>

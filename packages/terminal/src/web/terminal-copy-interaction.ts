@@ -95,10 +95,10 @@ class TerminalCopyInteractionController {
   readonly attach = (): { readonly dispose: () => void } => {
     this.args.terminal.attachCustomKeyEventHandler?.(this.onTerminalKeyEvent)
     this.selectionChangeDisposable = this.args.terminal.onSelectionChange?.(this.onTerminalSelectionChange) ?? null
-    this.args.host.addEventListener("mousedown", this.onMouseDown, true)
-    this.args.host.addEventListener("mouseup", this.onMouseUp, true)
-    this.args.host.addEventListener("contextmenu", this.onContextMenu, true)
-    this.args.host.addEventListener("copy", this.onCopy, true)
+    this.args.host.addEventListener("mousedown", this.onMouseDown, { capture: true })
+    this.args.host.addEventListener("mouseup", this.onMouseUp, { capture: true })
+    this.args.host.addEventListener("contextmenu", this.onContextMenu, { capture: true })
+    this.args.host.addEventListener("copy", this.onCopy, { capture: true })
     return { dispose: this.dispose }
   }
 
@@ -167,9 +167,9 @@ class TerminalCopyInteractionController {
       this.selectionContext.clear()
       this.clearNativeBrowserCopyMenu()
     }
-    const forceBrowserSelection = shouldForceBrowserTerminalSelection(event, this.args.terminal)
-    const forceSelectionContext = this.shouldProtectSelectionContext(event)
-    if (!forceBrowserSelection && !forceSelectionContext) {
+    const isForceBrowserSelection = shouldForceBrowserTerminalSelection(event, this.args.terminal)
+    const isForceSelectionContext = this.shouldProtectSelectionContext(event)
+    if (!isForceBrowserSelection && !isForceSelectionContext) {
       if (isSecondaryMouseButton(event)) {
         this.selectionContext.clear()
         this.clearNativeBrowserCopyMenu()
@@ -177,7 +177,7 @@ class TerminalCopyInteractionController {
       return
     }
     forceTerminalSelectionModifier(event)
-    if (forceSelectionContext) {
+    if (isForceSelectionContext) {
       if (this.args.terminal.hasSelection()) {
         this.selectionContext.refresh()
       }
@@ -185,7 +185,7 @@ class TerminalCopyInteractionController {
       suppressTerminalMouseReport(event)
       return
     }
-    if (forceBrowserSelection) {
+    if (isForceBrowserSelection) {
       this.selectionDrag.start()
     }
   }
@@ -219,9 +219,9 @@ class TerminalCopyInteractionController {
   }
 
   private readonly onCopy = (event: TerminalCopyClipboardEvent): void => {
-    const wroteSelection = writeTerminalSelectionToClipboardData(this.args.terminal, event.clipboardData)
-    const wroteSnapshot = wroteSelection ? false : this.selectionContext.writeToClipboardData(event.clipboardData)
-    if (!wroteSelection && !wroteSnapshot) {
+    const isWroteSelection = writeTerminalSelectionToClipboardData(this.args.terminal, event.clipboardData)
+    const isWroteSnapshot = isWroteSelection ? false : this.selectionContext.writeToClipboardData(event.clipboardData)
+    if (!isWroteSelection && !isWroteSnapshot) {
       return
     }
     this.selectionContext.clear()

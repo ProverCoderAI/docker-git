@@ -173,13 +173,13 @@ describe("controller reachability", () => {
           explicitApiBaseUrlArbitrary,
           dockerNetworkIpsArbitrary,
           (dockerHost, explicitApiBaseUrl, currentContainerNetworks) => {
-            const expected = isRemoteDockerHost(dockerHost) &&
+            const isExpected = isRemoteDockerHost(dockerHost) &&
               explicitApiBaseUrl === undefined &&
               Object.keys(currentContainerNetworks).length === 0
 
             expect(
               shouldRequireExplicitApiUrlForRemoteDocker(dockerHost, explicitApiBaseUrl, currentContainerNetworks)
-            ).toBe(expected)
+            ).toBe(isExpected)
           }
         )
       )

@@ -14,7 +14,7 @@ const buildComposeCommand = (
   env: Readonly<Record<string, string>>
 ) => ({
   ...composeSpec(cwd, args),
-  ...(Object.keys(env).length > 0 ? { env } : {})
+  ...((Object.keys(env).length > 0) && { env })
 })
 
 const runCompose = (
@@ -28,7 +28,7 @@ const runCompose = (
       runCommandWithStreamingOutput(
         buildComposeCommand(cwd, args, env),
         okExitCodes,
-        (exitCode, output) => new DockerCommandError({ exitCode, ...(output.length > 0 ? { details: output } : {}) })
+        (exitCode, output) => new DockerCommandError({ exitCode, ...((output.length > 0) && { details: output }) })
       )
     )
   })

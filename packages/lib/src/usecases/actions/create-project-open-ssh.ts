@@ -104,8 +104,8 @@ export const maybeOpenSsh = (
   projectConfig: CreateCommand["config"]
 ): Effect.Effect<void, never, CreateProjectOpenSshRuntime> =>
   Effect.gen(function*(_) {
-    const interactiveAgent = hasAgent && !waitForAgent
-    if (!command.openSsh || (hasAgent && !interactiveAgent)) {
+    const isInteractiveAgent = hasAgent && !waitForAgent
+    if (!command.openSsh || (hasAgent && !isInteractiveAgent)) {
       return
     }
 
@@ -119,6 +119,6 @@ export const maybeOpenSsh = (
       return
     }
 
-    const remoteCommand = resolveInteractiveRemoteCommand(projectConfig, interactiveAgent)
+    const remoteCommand = resolveInteractiveRemoteCommand(projectConfig, isInteractiveAgent)
     yield* _(openSshBestEffort(projectConfig, remoteCommand))
   }).pipe(Effect.asVoid)

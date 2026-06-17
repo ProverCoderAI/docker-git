@@ -78,7 +78,7 @@ export type BrowserActionContext = {
 }
 
 export const confirmAction = (label: string): boolean => {
-  const dialog = globalThis.confirm
+  const dialog = confirm
   return typeof dialog === "function" && dialog(label)
 }
 

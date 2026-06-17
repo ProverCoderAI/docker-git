@@ -68,18 +68,18 @@ const useProjectTerminalSessions = (
       setSessionsState(emptyProjectTerminalSessionsState)
       return
     }
-    let cancelled = false
+    let isCancelled = false
     setSessionsState({ error: null, loading: true, sessions: [] })
     void Effect.runPromise(
       loadProjectTerminalSessions(args.selectedProjectKey).pipe(
         Effect.match({
           onFailure: (error) => {
-            if (!cancelled) {
+            if (!isCancelled) {
               setSessionsState({ error, loading: false, sessions: [] })
             }
           },
           onSuccess: (sessions) => {
-            if (!cancelled) {
+            if (!isCancelled) {
               setSessionsState({ error: null, loading: false, sessions })
             }
           }
@@ -87,7 +87,7 @@ const useProjectTerminalSessions = (
       )
     )
     return () => {
-      cancelled = true
+      isCancelled = true
     }
   }, [args.currentMenu, args.dashboardRefreshTick, args.projectNavigationArmed, refreshNonce, args.selectedProjectKey])
 

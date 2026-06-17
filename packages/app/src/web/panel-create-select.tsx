@@ -178,7 +178,7 @@ const CreateSubmitButtons = (
 export const CreatePanel = (
   props: CreatePanelProps
 ): JSX.Element => {
-  const { compact, controllerCwd, createView, onBufferChange, onCancel, onSubmit } = props
+  const { compact: isCompact, controllerCwd, createView, onBufferChange, onCancel, onSubmit } = props
   const model = resolveCreatePanelModel(props)
   const leftChoiceAction = model.leftChoiceBuffer === null
     ? undefined
@@ -210,7 +210,7 @@ export const CreatePanel = (
         />
       </Box>
       <CreateSubmitButtons isRepoStep={model.isRepoStep} onSubmit={onSubmit} />
-      <CreateHintBlock compact={compact} controllerCwd={controllerCwd} isRepoStep={model.isRepoStep} />
+      <CreateHintBlock compact={isCompact} controllerCwd={controllerCwd} isRepoStep={model.isRepoStep} />
     </Box>
   )
 }
@@ -230,11 +230,11 @@ const CreateStepsList = (
 ): JSX.Element => (
   <Box flexDirection="column" marginTop={1}>
     {visibleSteps.map((step) => {
-      const active = step === activeStep
+      const isActive = step === activeStep
       return (
-        <Text key={step} fg={renderStepColor(active)}>
-          {active ? "> " : "  "}
-          {active
+        <Text key={step} fg={renderStepColor(isActive)}>
+          {isActive ? "> " : "  "}
+          {isActive
             ? renderCreateStepLabelWithBufferPreview(step, defaults, activeBuffer)
             : renderCreateStepLabel(step, defaults)}
         </Text>

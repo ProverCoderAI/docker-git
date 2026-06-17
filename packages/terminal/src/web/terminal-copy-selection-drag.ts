@@ -171,8 +171,8 @@ class TerminalSelectionDragControllerImpl implements TerminalSelectionDragContro
     this.dispose()
     this.forcedSelectionDrag = true
     this.selectionDragTarget = resolveTerminalSelectionDragTarget(this.host)
-    this.selectionDragTarget.addEventListener("mousemove", this.onMouseMove, true)
-    this.selectionDragTarget.addEventListener("mouseup", this.onMouseUp, true)
+    this.selectionDragTarget.addEventListener("mousemove", this.onMouseMove, { capture: true })
+    this.selectionDragTarget.addEventListener("mouseup", this.onMouseUp, { capture: true })
   }
 
   private readonly onMouseMove = (event: TerminalCopyMouseEvent): void => {

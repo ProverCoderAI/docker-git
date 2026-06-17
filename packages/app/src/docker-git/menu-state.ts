@@ -228,7 +228,7 @@ export const useStartupSnapshot = (
     if (store.current.startupLoaded) {
       return
     }
-    let cancelled = false
+    let isCancelled = false
     const startup = pipe(
       listMenuProjectItems,
       Effect.map((items) => resolveMenuStartupSnapshot(items)),
@@ -239,7 +239,7 @@ export const useStartupSnapshot = (
       Effect.provide(NodeContext.layer)
     )
     void Effect.runPromise(startup).then((snapshot) => {
-      if (cancelled) {
+      if (isCancelled) {
         return
       }
       store.current = { ...store.current, startupLoaded: true }
@@ -250,7 +250,7 @@ export const useStartupSnapshot = (
       }
     })
     return () => {
-      cancelled = true
+      isCancelled = true
     }
   }, [setActiveDir, setMessage, setRunningDockerGitContainers, store])
 }

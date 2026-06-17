@@ -25,7 +25,7 @@ type TerminalPasteTrapState = {
 
 const terminalImagePasteMaxBytes = 10 * 1024 * 1024
 const dataUrlBase64Marker = ";base64,"
-const nativeImagePasteControlInput = "\u0016"
+const nativeImagePasteControlInput = "\u{16}"
 const nativeImagePasteSuppressWindowMs = 800
 const pasteTrapRestoreDelayMs = 800
 const supportedImageMediaTypes = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"])
@@ -116,7 +116,7 @@ const readAndSendImageFile = (
     args.notifyMessage(`Unsupported image type: ${file.type || "unknown"}.`)
     return
   }
-  if (file.size <= 0) {
+  if (file.size === 0) {
     args.notifyMessage("Image clipboard item is empty.")
     return
   }
@@ -197,17 +197,17 @@ export const createTerminalPasteGuard = (
   currentTimeMillis: () => number = () => Date.now()
 ): TerminalPasteGuard => {
   let expiresAtMs = 0
-  let pending = false
+  let isPending = false
   return {
     shouldSuppressTerminalInput: (data) => {
-      if (!pending || data !== nativeImagePasteControlInput || currentTimeMillis() > expiresAtMs) {
+      if (!isPending || data !== nativeImagePasteControlInput || currentTimeMillis() > expiresAtMs) {
         return false
       }
-      pending = false
+      isPending = false
       return true
     },
     suppressNextNativeImagePaste: () => {
-      pending = true
+      isPending = true
       expiresAtMs = currentTimeMillis() + nativeImagePasteSuppressWindowMs
     }
   }
@@ -237,10 +237,12 @@ const createTerminalPasteTrap = (host: HTMLDivElement): HTMLTextAreaElement => {
 }
 
 const clearPasteTrapTimer = (state: TerminalPasteTrapState): void => {
-  if (state.restoreTimer !== null) {
-    clearTimeout(state.restoreTimer)
-    state.restoreTimer = null
+  if (state.restoreTimer === null) {
+    return
   }
+
+  clearTimeout(state.restoreTimer)
+  state.restoreTimer = null
 }
 
 const deactivatePasteTrap = (
@@ -273,8 +275,8 @@ export const attachTerminalImagePaste = (
   const pasteTrap = createTerminalPasteTrap(args.host)
   const trapState: TerminalPasteTrapState = { active: false, restoreTimer: null }
   const onPaste = (event: ClipboardEvent): void => {
-    const handled = handleTerminalClipboardTransfer(args, event.clipboardData, trapState.active)
-    if (!handled) {
+    const isHandled = handleTerminalClipboardTransfer(args, event.clipboardData, trapState.active)
+    if (!isHandled) {
       return
     }
     event.preventDefault()
@@ -299,10 +301,10 @@ export const attachTerminalImagePaste = (
     handleImageFiles(args, files)
   }
 
-  args.host.addEventListener("paste", onPaste, true)
-  globalThis.addEventListener("keydown", onKeyDown, true)
-  args.host.addEventListener("dragover", handleTerminalImageDragOver, true)
-  args.host.addEventListener("drop", onDrop, true)
+  args.host.addEventListener("paste", onPaste, { capture: true })
+  globalThis.addEventListener("keydown", onKeyDown, { capture: true })
+  args.host.addEventListener("dragover", handleTerminalImageDragOver, { capture: true })
+  args.host.addEventListener("drop", onDrop, { capture: true })
 
   return {
     dispose: () => {

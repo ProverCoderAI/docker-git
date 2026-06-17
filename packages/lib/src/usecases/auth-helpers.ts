@@ -49,8 +49,8 @@ export const buildDockerAuthSpec = (input: DockerAuthSpecInput): DockerAuthSpec 
   cwd: input.cwd,
   image: input.image,
   volume: { hostPath: input.hostPath, containerPath: input.containerPath },
-  ...(typeof input.entrypoint === "string" ? { entrypoint: input.entrypoint } : {}),
-  ...(input.env === undefined ? {} : { env: input.env }),
+  ...((typeof input.entrypoint === "string") && { entrypoint: input.entrypoint }),
+  ...(input.env !== undefined && { env: input.env }),
   args: input.args,
   interactive: input.interactive
 })
@@ -70,8 +70,8 @@ export const isRegularFile = (
   filePath: string
 ): Effect.Effect<boolean, PlatformError> =>
   Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(filePath))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(filePath))
+    if (!isExists) {
       return false
     }
     const info = yield* _(fs.stat(filePath))

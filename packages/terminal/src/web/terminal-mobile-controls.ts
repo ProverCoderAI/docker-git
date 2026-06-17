@@ -1,13 +1,13 @@
 export type MobileTerminalKey = "escape" | "left" | "right" | "tab" | "up" | "down" | "ctrl-c"
 
 const mobileTerminalKeyInputs: Record<MobileTerminalKey, string> = {
-  escape: "\u001B",
-  left: "\u001B[D",
-  right: "\u001B[C",
+  escape: "\u{1B}",
+  left: "\u{1B}[D",
+  right: "\u{1B}[C",
   tab: "\t",
-  up: "\u001B[A",
-  down: "\u001B[B",
-  "ctrl-c": "\u0003"
+  up: "\u{1B}[A",
+  down: "\u{1B}[B",
+  "ctrl-c": "\u{3}"
 }
 
 const modifierOnlyKeys = new Set([
@@ -22,12 +22,12 @@ const modifierOnlyKeys = new Set([
 ])
 
 const terminalControlSymbolInputs: Readonly<Record<string, string>> = {
-  "@": "\u0000",
-  "[": "\u001B",
-  "\\": "\u001C",
-  "]": "\u001D",
-  "^": "\u001E",
-  _: "\u001F"
+  "@": "\u{0}",
+  "[": "\u{1B}",
+  "\\": "\u{1C}",
+  "]": "\u{1D}",
+  "^": "\u{1E}",
+  _: "\u{1F}"
 }
 
 export const mobileTerminalKeyInput = (key: MobileTerminalKey): string => mobileTerminalKeyInputs[key]

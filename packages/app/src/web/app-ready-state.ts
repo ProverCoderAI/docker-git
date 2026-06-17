@@ -141,14 +141,14 @@ const useReadyPanelState = () => {
 
 const useReadyProjectState = () => {
   const [project, setSelectedProject] = useState<ProjectDetails | null>(null)
-  const [projectNavigationArmed, setProjectNavigationArmed] = useState(false)
+  const [isProjectNavigationArmed, setProjectNavigationArmed] = useState(false)
   const [projectSearchQuery, setProjectSearchQuery] = useState("")
   const [projectAuthSnapshot, setProjectAuthSnapshot] = useState<ProjectAuthSnapshot | null>(null)
   const [projectBrowser, setProjectBrowser] = useState<ProjectBrowserSession | null>(null)
 
   return {
     project,
-    projectNavigationArmed,
+    projectNavigationArmed: isProjectNavigationArmed,
     projectSearchQuery,
     projectAuthSnapshot,
     projectBrowser,

@@ -200,7 +200,7 @@ describe("terminal wheel scroll", () => {
     })).toEqual({ lines: -2, nextPixelDeltaY: 0 })
     expect(resolveTerminalWheelScrollDelta({
       deltaMode: 0,
-      deltaY: Number.NaN,
+      deltaY: NaN,
       previousPixelDeltaY: 0,
       rows: 24
     })).toEqual({ lines: 0, nextPixelDeltaY: 0 })

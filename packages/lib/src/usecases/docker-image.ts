@@ -66,9 +66,9 @@ export const ensureDockerImage = (
         Effect.map(Number)
       )
     )
-    const dockerfileExists = yield* _(fs.exists(dockerfilePath))
-    const dockerfileMatches = yield* _(
-      dockerfileExists
+    const isDockerfileExists = yield* _(fs.exists(dockerfilePath))
+    const isDockerfileMatches = yield* _(
+      isDockerfileExists
         ? Effect.gen(function*(__) {
           const info = yield* __(fs.stat(dockerfilePath))
           if (info.type !== "File") {
@@ -79,7 +79,7 @@ export const ensureDockerImage = (
         })
         : Effect.succeed(false)
     )
-    if (imageCheck === 0 && dockerfileMatches) {
+    if (imageCheck === 0 && isDockerfileMatches) {
       return
     }
 

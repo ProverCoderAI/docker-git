@@ -92,8 +92,8 @@ const collectExistingFilePaths = (
         continue
       }
       const filePath = resolveSpecPath(path, baseDir, spec)
-      const exists = yield* _(fs.exists(filePath))
-      if (exists) {
+      const isExists = yield* _(fs.exists(filePath))
+      if (isExists) {
         existingPaths.push(filePath)
       }
     }
@@ -131,8 +131,8 @@ const provisionDockerGitScripts = (
     const sourceScriptsDir = path.join(workspaceRoot, "scripts")
     const targetScriptsDir = path.join(baseDir, "scripts")
 
-    const sourceExists = yield* _(fs.exists(sourceScriptsDir))
-    if (!sourceExists) {
+    const isSourceExists = yield* _(fs.exists(sourceScriptsDir))
+    if (!isSourceExists) {
       return
     }
 
@@ -141,8 +141,8 @@ const provisionDockerGitScripts = (
     for (const scriptName of dockerGitScriptNames) {
       const sourcePath = path.join(sourceScriptsDir, scriptName)
       const targetPath = path.join(targetScriptsDir, scriptName)
-      const exists = yield* _(fs.exists(sourcePath))
-      if (exists) {
+      const isExists = yield* _(fs.exists(sourcePath))
+      if (isExists) {
         const contents = yield* _(fs.readFileString(sourcePath))
         yield* _(fs.writeFileString(targetPath, contents))
       }
@@ -199,8 +199,8 @@ const provisionDockerGitSessionSyncTool = (
     const targetPath = path.join(baseDir, sessionSyncToolRelativePath)
     const candidates = yield* _(sessionSyncToolCandidates(path, workspaceRoot))
     for (const sourcePath of candidates) {
-      const exists = yield* _(fs.exists(sourcePath))
-      if (exists) {
+      const isExists = yield* _(fs.exists(sourcePath))
+      if (isExists) {
         const contents = yield* _(fs.readFileString(sourcePath))
         yield* _(ensureParentDir(path, fs, targetPath))
         yield* _(fs.writeFileString(targetPath, contents, { mode: 0o755 }))

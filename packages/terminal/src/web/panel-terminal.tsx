@@ -110,21 +110,25 @@ const useInlineImagePreviewState = (
   terminalSessionId: string
 ): InlineImagePreviewState => {
   const inlineImagePreviewsEnabledRef = useRef(true)
-  const [inlineImagePreviewsEnabled, setInlineImagePreviewsEnabled] = useState(true)
+  const [isInlineImagePreviewsEnabled, setInlineImagePreviewsEnabled] = useState(true)
   useEffect(() => {
     inlineImagePreviewsEnabledRef.current = true
     setInlineImagePreviewsEnabled(true)
   }, [terminalSessionId])
   const toggleInlineImagePreviews = useCallback(() => {
     setInlineImagePreviewsEnabled((current) => {
-      const next = !current
-      inlineImagePreviewsEnabledRef.current = next
-      return next
+      const isNext = !current
+      inlineImagePreviewsEnabledRef.current = isNext
+      return isNext
     })
     retainTerminalFocus(runtimeRef.current)
   }, [runtimeRef])
 
-  return { inlineImagePreviewsEnabled, inlineImagePreviewsEnabledRef, toggleInlineImagePreviews }
+  return {
+    inlineImagePreviewsEnabled: isInlineImagePreviewsEnabled,
+    inlineImagePreviewsEnabledRef,
+    toggleInlineImagePreviews
+  }
 }
 
 const useMobileCtrlKeyboard = (
@@ -158,7 +162,7 @@ const useMobileCtrlKeyboard = (
       sendMobileCtrlEventInput(runtimeRef.current, event)
     }
     const host = hostRef.current
-    host.addEventListener("keydown", handleKeyDown, true)
+    host.addEventListener("keydown", handleKeyDown, { capture: true })
     return () => {
       host.removeEventListener("keydown", handleKeyDown, true)
     }
@@ -170,15 +174,17 @@ const useMobileTerminalControlState = (
   hostRef: RefState<HTMLDivElement | null>,
   runtimeRef: RefState<TerminalInputController | null>
 ): MobileTerminalControlState => {
-  const [mobileControlsCollapsed, setMobileControlsCollapsed] = useState(false)
-  const [mobileCtrlArmed, setMobileCtrlArmed] = useState(false)
+  const [isMobileControlsCollapsed, setMobileControlsCollapsed] = useState(false)
+  const [isMobileCtrlArmed, setMobileCtrlArmed] = useState(false)
   useEffect(() => {
-    if (!mobileMode) {
-      setMobileControlsCollapsed(false)
-      setMobileCtrlArmed(false)
+    if (mobileMode) {
+      return
     }
+
+    setMobileControlsCollapsed(false)
+    setMobileCtrlArmed(false)
   }, [mobileMode])
-  useMobileCtrlKeyboard({ hostRef, mobileCtrlArmed, mobileMode, runtimeRef, setMobileCtrlArmed })
+  useMobileCtrlKeyboard({ hostRef, mobileCtrlArmed: isMobileCtrlArmed, mobileMode, runtimeRef, setMobileCtrlArmed })
   const handleMobileKeyPress = useCallback((key: MobileTerminalKey) => {
     if (key === "ctrl-c") {
       setMobileCtrlArmed(false)
@@ -195,7 +201,13 @@ const useMobileTerminalControlState = (
     retainTerminalFocus(runtimeRef.current)
   }, [runtimeRef])
 
-  return { handleMobileKeyPress, mobileControlsCollapsed, mobileCtrlArmed, toggleMobileControls, toggleMobileCtrl }
+  return {
+    handleMobileKeyPress,
+    mobileControlsCollapsed: isMobileControlsCollapsed,
+    mobileCtrlArmed: isMobileCtrlArmed,
+    toggleMobileControls,
+    toggleMobileCtrl
+  }
 }
 
 const useTerminalCloseActions = (
@@ -272,8 +284,8 @@ export const TerminalPanel = (props: TerminalPanelProps): JSX.Element => {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const runtimeRef = useRef<TerminalInputController | null>(null)
   const [status, setStatus] = useState<TerminalStatus>(() => resolveInitialTerminalStatus(props.session))
-  const compactHeaderMode = resolveTerminalCompactHeaderMode(props.mobileMode)
-  const compactTypingMode = resolveTerminalTypingMode(props.mobileMode, props.keyboardOpen)
+  const isCompactHeaderMode = resolveTerminalCompactHeaderMode(props.mobileMode)
+  const isCompactTypingMode = resolveTerminalTypingMode(props.mobileMode, props.keyboardOpen)
   const terminalSessionId = props.session.session.id
   const notifications = useTerminalNotificationHandlers(props)
   const inlineImageState = useInlineImagePreviewState(runtimeRef, terminalSessionId)
@@ -301,8 +313,8 @@ export const TerminalPanel = (props: TerminalPanelProps): JSX.Element => {
       {...closeActions}
       {...inlineImageState}
       {...mobileControlState}
-      compactHeaderMode={compactHeaderMode}
-      compactTypingMode={compactTypingMode}
+      compactHeaderMode={isCompactHeaderMode}
+      compactTypingMode={isCompactTypingMode}
       hostRef={hostRef}
       status={status}
     />

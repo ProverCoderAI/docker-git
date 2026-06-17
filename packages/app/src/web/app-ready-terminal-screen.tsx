@@ -113,7 +113,7 @@ const TerminalScreenLayout = (
 
 export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null => {
   const [terminalView, setTerminalView] = useState<TerminalWorkspaceView>("terminal")
-  const mobileMode = props.viewportLayout.mode === "mobile"
+  const isMobileMode = props.viewportLayout.mode === "mobile"
   const activeSessionId = resolveActiveTerminalSessionId(props.terminalSessions, props.activeTerminalSessionId)
   const activeSession = props.terminalSessions.find((session) => terminalSessionId(session) === activeSessionId)
   useEffect(() => {
@@ -126,7 +126,7 @@ export const TerminalScreen = (props: TerminalScreenProps): JSX.Element | null =
         {...props}
         activeSession={activeSession}
         activeSessionId={activeSessionId}
-        mobileMode={mobileMode}
+        mobileMode={isMobileMode}
         setTerminalView={setTerminalView}
         terminalView={terminalView}
       />

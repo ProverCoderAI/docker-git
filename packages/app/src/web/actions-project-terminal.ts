@@ -46,7 +46,7 @@ const resolveProjectTerminalKey = (
 }
 
 const randomHex = (bytes: number): string => {
-  const webCrypto = "crypto" in globalThis ? globalThis.crypto : null
+  const webCrypto = "crypto" in globalThis ? crypto : null
   if (webCrypto !== null && typeof webCrypto.getRandomValues === "function") {
     const values = new Uint8Array(bytes)
     webCrypto.getRandomValues(values)
@@ -72,7 +72,7 @@ const formatUuidV4 = (hex: string): string => {
 }
 
 const createPendingTerminalSessionId = (): string => {
-  const webCrypto = "crypto" in globalThis ? globalThis.crypto : null
+  const webCrypto = "crypto" in globalThis ? crypto : null
   if (webCrypto !== null && typeof webCrypto.randomUUID === "function") {
     return webCrypto.randomUUID()
   }
@@ -162,7 +162,7 @@ const renderPendingTerminalSession = (
     projectDisplayName: runtime.projectDisplayName,
     projectId: runtime.projectId,
     projectKey: runtime.projectKey,
-    ...(message === undefined ? {} : { message })
+    ...(message !== undefined && { message })
   })
 
 const closeStream = (runtime: ConnectProjectRuntime): void => {

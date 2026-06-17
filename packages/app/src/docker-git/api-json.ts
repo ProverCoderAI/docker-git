@@ -6,13 +6,9 @@ import { type JsonObject, type JsonValue, JsonValueSchema } from "../shared/json
 
 export type { JsonObject, JsonValue } from "../shared/json-schema.js"
 
-export type JsonRequest =
-  | boolean
-  | number
-  | string
-  | null
-  | { readonly [key: string]: JsonRequest | undefined }
-  | ReadonlyArray<JsonRequest>
+export type JsonRequest = boolean | number | string | ReadonlyArray<JsonRequest> | {
+  readonly [key: string]: JsonRequest | undefined
+} | null
 
 const JsonValueFromStringSchema: Schema.Schema<JsonValue, string> = Schema.parseJson(JsonValueSchema)
 

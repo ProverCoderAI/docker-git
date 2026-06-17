@@ -31,16 +31,16 @@ export const skillerLaunchMessage = (launch: SkillerLaunch, openedPath: string, 
 
 export const openPreparedSkillerLaunch = (launch: SkillerLaunch, preparedUrl: PreparedOpenUrl): string => {
   const openedPath = launch.appPath
-  const opened = preparedUrl.navigate(openedPath)
+  const isOpened = preparedUrl.navigate(openedPath)
   if (launch.mode === "external") {
     const scope = launch.scope === null
       ? ""
       : ` Container FS: ${launch.scope.containerName}:${launch.scope.containerProjectPath}.`
-    return opened
+    return isOpened
       ? `Skiller Web opened.${scope} Opened ${openedPath}.`
       : `Skiller Web popup was blocked.${scope} Open ${openedPath} manually.`
   }
-  return skillerLaunchMessage(launch, openedPath, opened)
+  return skillerLaunchMessage(launch, openedPath, isOpened)
 }
 
 export const openSkillerApp = (

@@ -142,8 +142,8 @@ export const hasNonEmptyFile = (
   filePath: string
 ): Effect.Effect<boolean, PlatformError> =>
   Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(filePath))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(filePath))
+    if (!isExists) {
       return false
     }
 

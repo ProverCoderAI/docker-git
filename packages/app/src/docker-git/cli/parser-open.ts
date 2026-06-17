@@ -23,8 +23,8 @@ const splitOpenArgs = (
 
 const buildOpenCommand = (parts: OpenParts): OpenCommand => ({
   _tag: "Open",
-  ...(parts.projectRef === undefined ? {} : { projectRef: parts.projectRef }),
-  ...(parts.projectDir === undefined ? {} : { projectDir: parts.projectDir })
+  ...(parts.projectRef !== undefined && { projectRef: parts.projectRef }),
+  ...(parts.projectDir !== undefined && { projectDir: parts.projectDir })
 })
 
 // CHANGE: parse open as a distinct selector-based command
@@ -42,12 +42,9 @@ export const parseOpen = (args: ReadonlyArray<string>): Either.Either<OpenComman
   return Either.flatMap(parseRawOptions(rest), (raw) =>
     Either.right(
       buildOpenCommand({
-        ...(trimToUndefined(raw.projectDir) === undefined
-          ? {}
-          : { projectDir: trimToUndefined(raw.projectDir) }),
-        ...(trimToUndefined(raw.containerName ?? raw.repoUrl ?? positionalRef) === undefined
-          ? {}
-          : { projectRef: trimToUndefined(raw.containerName ?? raw.repoUrl ?? positionalRef) })
+        ...(trimToUndefined(raw.projectDir) !== undefined && { projectDir: trimToUndefined(raw.projectDir) }),
+        ...(trimToUndefined(raw.containerName ?? raw.repoUrl ?? positionalRef) !== undefined &&
+          { projectRef: trimToUndefined(raw.containerName ?? raw.repoUrl ?? positionalRef) })
       })
     ))
 }

@@ -80,7 +80,7 @@ type CreateRenderInput = {
 }
 
 export const renderMenu = (input: MenuRenderInput): React.ReactElement => {
-  const { activeDir, busy, cwd, message, runningDockerGitContainers, selected } = input
+  const { activeDir, busy: isBusy, cwd, message, runningDockerGitContainers, selected } = input
   const el = React.createElement
   const activeLabel = `Active: ${activeDir ?? "(none)"}`
   const runningLabel = `Running docker-git containers: ${runningDockerGitContainers}`
@@ -95,7 +95,7 @@ export const renderMenu = (input: MenuRenderInput): React.ReactElement => {
     )
   })
 
-  const busyView = busy
+  const busyView = isBusy
     ? el(Box, { marginTop: 1 }, el(Text, { fg: "yellow" }, "Running..."))
     : null
 
@@ -265,8 +265,16 @@ const renderSelectSearch = (
   )
 
 export const renderSelect = (input: RenderSelectInput): React.ReactElement => {
-  const { confirmDelete, connectEnableMcpPlaywright, items, message, purpose, query, runtimeByProject, selected } =
-    input
+  const {
+    confirmDelete: isConfirmDelete,
+    connectEnableMcpPlaywright: isConnectEnableMcpPlaywright,
+    items,
+    message,
+    purpose,
+    query,
+    runtimeByProject,
+    selected
+  } = input
   const el = React.createElement
   const listLabels = buildSelectLabels(items, selected, purpose, runtimeByProject)
   const { detailsWidth, listWidth } = computeSelectColumnWidths(listLabels)
@@ -277,9 +285,9 @@ export const renderSelect = (input: RenderSelectInput): React.ReactElement => {
     items,
     selected,
     runtimeByProject,
-    connectEnableMcpPlaywright
+    connectEnableMcpPlaywright: isConnectEnableMcpPlaywright
   })
-  const confirmHint = selectConfirmHint(purpose, confirmDelete, connectEnableMcpPlaywright)
+  const confirmHint = selectConfirmHint(purpose, isConfirmDelete, isConnectEnableMcpPlaywright)
   const hints = el(Box, { marginTop: 1 }, el(Text, { fg: "gray" }, confirmHint))
   const search = renderSelectSearch(el, query)
 

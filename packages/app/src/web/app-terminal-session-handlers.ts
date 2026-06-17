@@ -40,7 +40,7 @@ export type TaskHandlers = {
 }
 
 const confirmApplyProject = (label: string): boolean => {
-  const dialog = globalThis.confirm
+  const dialog = confirm
   return typeof dialog === "function"
     && dialog(
       `Apply docker-git config to ${label}? This restarts the container and ends active SSH sessions and in-container browsers.`
@@ -105,7 +105,7 @@ export const newProjectTerminalUrl = (origin: string, projectKey: string, sessio
   `${origin}${projectSshRoutePath(projectKey, sessionId)}`
 
 const handleTerminalCreated = (projectKey: string, sessionId: string, setMessage: StateMessageUpdater): void => {
-  const targetUrl = newProjectTerminalUrl(globalThis.location.origin, projectKey, sessionId)
+  const targetUrl = newProjectTerminalUrl(location.origin, projectKey, sessionId)
   if (!openUrl(targetUrl)) {
     setMessage(`New terminal popup was blocked. Open ${targetUrl} manually.`)
   }
@@ -283,7 +283,7 @@ export const useTaskManagerHandlers = (
 ): TaskHandlers => {
   const [snapshot, setSnapshot] = useState<ContainerTaskSnapshot | null>(null)
   const [logs, setLogs] = useState<string>("")
-  const [taskIncludeDefault, setTaskIncludeDefault] = useState(false)
+  const [isTaskIncludeDefault, setTaskIncludeDefault] = useState(false)
 
   const refreshTasks = useCallback((include: boolean) => {
     if (projectId !== undefined) {
@@ -294,10 +294,10 @@ export const useTaskManagerHandlers = (
   const onStopTask = useCallback((pid: number) => {
     if (projectId !== undefined) {
       runStopTask(projectId, pid, setMessage, () => {
-        refreshTasks(taskIncludeDefault)
+        refreshTasks(isTaskIncludeDefault)
       })
     }
-  }, [projectId, refreshTasks, setMessage, taskIncludeDefault])
+  }, [projectId, refreshTasks, setMessage, isTaskIncludeDefault])
 
   const onLoadLogs = useCallback((pid: number) => {
     if (projectId !== undefined) {
@@ -311,8 +311,8 @@ export const useTaskManagerHandlers = (
   }, [refreshTasks])
 
   const onRefresh = useCallback(() => {
-    refreshTasks(taskIncludeDefault)
-  }, [refreshTasks, taskIncludeDefault])
+    refreshTasks(isTaskIncludeDefault)
+  }, [refreshTasks, isTaskIncludeDefault])
 
   return {
     logs,
@@ -322,6 +322,6 @@ export const useTaskManagerHandlers = (
     onStopTask,
     refreshTasks,
     snapshot,
-    taskIncludeDefault
+    taskIncludeDefault: isTaskIncludeDefault
   }
 }

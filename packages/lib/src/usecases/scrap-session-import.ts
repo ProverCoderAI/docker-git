@@ -39,8 +39,8 @@ const resolveSessionSnapshotDir = (
 ): Effect.Effect<string, ScrapArchiveNotFoundError | PlatformError> =>
   Effect.gen(function*(_) {
     const baseAbs = resolvePathFromCwd(path, projectDir, archivePath)
-    const exists = yield* _(fs.exists(baseAbs))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(baseAbs))
+    if (!isExists) {
       return yield* _(Effect.fail(new ScrapArchiveNotFoundError({ path: baseAbs })))
     }
 
@@ -49,8 +49,8 @@ const resolveSessionSnapshotDir = (
       return yield* _(Effect.fail(new ScrapArchiveNotFoundError({ path: baseAbs })))
     }
 
-    const direct = yield* _(fs.exists(path.join(baseAbs, "manifest.json")))
-    if (direct) {
+    const isDirect = yield* _(fs.exists(path.join(baseAbs, "manifest.json")))
+    if (isDirect) {
       return baseAbs
     }
 
@@ -100,8 +100,8 @@ const resolveSnapshotPartsAbs = (
     const chunks = yield* _(decodeChunkManifest(chunksAbs, chunksText))
     const partsAbs = chunks.parts.map((part) => ctx.path.join(ctx.snapshotDir, part))
     for (const partAbs of partsAbs) {
-      const partExists = yield* _(ctx.fs.exists(partAbs))
-      if (!partExists) {
+      const isPartExists = yield* _(ctx.fs.exists(partAbs))
+      if (!isPartExists) {
         return yield* _(Effect.fail(new ScrapArchiveNotFoundError({ path: partAbs })))
       }
     }
@@ -118,8 +118,8 @@ const restoreHostEnvFiles = (ctx: SessionImportContext): Effect.Effect<void, Scr
         }
 
         const srcAbs = ctx.path.join(ctx.snapshotDir, name)
-        const exists = yield* __(ctx.fs.exists(srcAbs))
-        if (!exists) {
+        const isExists = yield* __(ctx.fs.exists(srcAbs))
+        if (!isExists) {
           return
         }
 

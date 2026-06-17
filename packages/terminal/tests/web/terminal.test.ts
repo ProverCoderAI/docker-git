@@ -104,7 +104,7 @@ describe("browser terminal helpers", () => {
         ...terminalTitleById([
           { createdAt: "2026-04-08T10:02:00.000Z", id: "session-b" },
           { createdAt: "2026-04-08T10:01:00.000Z", id: "session-a" }
-        ]).entries()
+        ])
       ]
     ).toEqual([
       ["session-a", "Terminal 1"],
@@ -144,15 +144,15 @@ describe("browser terminal helpers", () => {
     let currentTimeMillis = 1000
     const pasteGuard = createTerminalPasteGuard(() => currentTimeMillis)
 
-    expect(pasteGuard.shouldSuppressTerminalInput("\u0016")).toBe(false)
+    expect(pasteGuard.shouldSuppressTerminalInput("\u{16}")).toBe(false)
     pasteGuard.suppressNextNativeImagePaste()
     expect(pasteGuard.shouldSuppressTerminalInput("text")).toBe(false)
-    expect(pasteGuard.shouldSuppressTerminalInput("\u0016")).toBe(true)
-    expect(pasteGuard.shouldSuppressTerminalInput("\u0016")).toBe(false)
+    expect(pasteGuard.shouldSuppressTerminalInput("\u{16}")).toBe(true)
+    expect(pasteGuard.shouldSuppressTerminalInput("\u{16}")).toBe(false)
 
     pasteGuard.suppressNextNativeImagePaste()
     currentTimeMillis = 2000
-    expect(pasteGuard.shouldSuppressTerminalInput("\u0016")).toBe(false)
+    expect(pasteGuard.shouldSuppressTerminalInput("\u{16}")).toBe(false)
   })
 
   it("uses compact terminal chrome on mobile and only enables typing mode with the keyboard open", () => {

@@ -55,7 +55,7 @@ const isEnvKey = (value: string): boolean => {
   if (value.length === 0) {
     return false
   }
-  const first = value[0] ?? ""
+  const first = value.at(0) ?? ""
   if (!isValidFirstChar(first)) {
     return false
   }
@@ -223,8 +223,8 @@ export const sanitizeComposeEnvFile = (
   envPath: string
 ): Effect.Effect<ReadonlyArray<InvalidComposeEnvLine>, PlatformError> =>
   Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(envPath))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(envPath))
+    if (!isExists) {
       return []
     }
 
@@ -259,8 +259,8 @@ export const ensureEnvFile = (
   envPath: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(envPath))
-    if (exists) {
+    const isExists = yield* _(fs.exists(envPath))
+    if (isExists) {
       return
     }
     yield* _(fs.makeDirectory(path.dirname(envPath), { recursive: true }))
@@ -282,8 +282,8 @@ export const readEnvText = (
   envPath: string
 ): Effect.Effect<string, PlatformError> =>
   Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(envPath))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(envPath))
+    if (!isExists) {
       return defaultEnvContents
     }
     const info = yield* _(fs.stat(envPath))

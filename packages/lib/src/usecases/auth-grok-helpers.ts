@@ -246,7 +246,7 @@ export const defaultGrokProjectSettings = {
 }
 
 export const defaultGrokUserSettings = (apiKey: string | null) => ({
-  ...(apiKey === null ? {} : { apiKey }),
+  ...(apiKey !== null && { apiKey }),
   sandboxMode: "off",
   confirmBeforeToolUse: false
 })

@@ -55,13 +55,15 @@ type SshLinkEffectArgs = Omit<SshLinkArgs, "dashboard"> & {
 }
 
 const clearConnectTimer = (connectTimerRef: ConnectTimerRef): void => {
-  if (connectTimerRef.current !== null) {
-    globalThis.clearTimeout(connectTimerRef.current)
-    connectTimerRef.current = null
+  if (connectTimerRef.current === null) {
+    return
   }
+
+  globalThis.clearTimeout(connectTimerRef.current)
+  connectTimerRef.current = null
 }
 
-const readSshLinkRequest = (): SshLinkRequest | null => readSshLinkRequestFromHref(globalThis.location.href)
+const readSshLinkRequest = (): SshLinkRequest | null => readSshLinkRequestFromHref(location.href)
 
 const clearPendingSshLink = (args: SshLinkEffectArgs, requestKey: string): void => {
   if (args.pendingTokenRef.current === requestKey) {
@@ -89,14 +91,14 @@ const handleTerminalSessionAttachFailure = (
   if (!isPendingSshLink(args, requestKey)) {
     return
   }
-  const fallbackPath = resolveMissingSshSessionFallbackPath(globalThis.location.href, sessionId, error)
+  const fallbackPath = resolveMissingSshSessionFallbackPath(location.href, sessionId, error)
   if (fallbackPath !== null) {
     clearPendingSshLink(args, requestKey)
     args.handledTokenRef.current = null
     args.deactivateTerminalWorkspace()
     args.actionContext.setSelectedMenuIndex(browserMenuIndex("Select"))
     args.actionContext.setActiveScreen(projectPickerScreen())
-    globalThis.history.replaceState(globalThis.history.state, "", fallbackPath)
+    history.replaceState(history.state, "", fallbackPath)
     args.actionContext.setMessage(`SSH terminal is no longer available: ${sessionId}.`)
     return
   }
@@ -303,7 +305,7 @@ export const useSshLink = ({
   const connectTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
   const handledTokenRef = useRef<string | null>(null)
   const pendingTokenRef = useRef<string | null>(null)
-  const locationSignature = `${globalThis.location.pathname}${globalThis.location.search}`
+  const locationSignature = `${location.pathname}${location.search}`
 
   useEffect(() => () => {
     clearConnectTimer(connectTimerRef)

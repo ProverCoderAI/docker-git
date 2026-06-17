@@ -189,9 +189,9 @@ const runInteractiveMenu = (): Effect.Effect<void, MenuError, MenuEnv> =>
   Effect.gen(function*(_) {
     const store: MenuSnapshotStore = { current: defaultMenuSnapshot() }
     const queuedInteractiveEffect: { current: InteractiveMenuEffect | null } = { current: null }
-    let keepRunning = true
+    let isKeepRunning = true
 
-    while (keepRunning) {
+    while (isKeepRunning) {
       yield* _(
         runGridlandMenuOnce(store, (effect) => {
           queuedInteractiveEffect.current = effect
@@ -200,7 +200,7 @@ const runInteractiveMenu = (): Effect.Effect<void, MenuError, MenuEnv> =>
 
       const nextInteractiveEffect = queuedInteractiveEffect.current
       if (nextInteractiveEffect === null) {
-        keepRunning = false
+        isKeepRunning = false
         continue
       }
 

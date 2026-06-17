@@ -242,14 +242,14 @@ const handleCreateShortcut = (
     "context" | "controllerCwd" | "createView" | "projectsRoot" | "setActiveScreen" | "setCreateView"
   >
 ): void => {
-  const handled = handleCreateKey(event, {
+  const isHandled = handleCreateKey(event, {
     context: args.context,
     controllerCwd: args.controllerCwd,
     projectsRoot: args.projectsRoot,
     createView: args.createView,
     setCreateView: args.setCreateView
   })
-  if (handled && event.key === "Escape") {
+  if (isHandled && event.key === "Escape") {
     args.setActiveScreen(menuScreen())
   }
 }

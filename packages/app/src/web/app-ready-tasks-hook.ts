@@ -16,12 +16,12 @@ type TasksPanelAutoloadArgs = {
 export const useProjectTasksState = () => {
   const [projectTasks, setProjectTasks] = useState<ContainerTaskSnapshot | null>(null)
   const [projectTaskLogs, setProjectTaskLogs] = useState("")
-  const [projectTasksIncludeDefault, setProjectTasksIncludeDefault] = useState(false)
+  const [isProjectTasksIncludeDefault, setProjectTasksIncludeDefault] = useState(false)
 
   return {
     projectTaskLogs,
     projectTasks,
-    projectTasksIncludeDefault,
+    projectTasksIncludeDefault: isProjectTasksIncludeDefault,
     setProjectTaskLogs,
     setProjectTasks,
     setProjectTasksIncludeDefault

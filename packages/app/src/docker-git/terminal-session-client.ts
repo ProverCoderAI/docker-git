@@ -313,10 +313,12 @@ const registerTerminalSocketHandlers = (socket: WebSocket, handlers: TerminalHan
 
 const createTerminalCancel = (lifecycle: TerminalLifecycle, cleanup: () => void): Effect.Effect<void> =>
   Effect.sync(() => {
-    if (!lifecycle.settled) {
-      lifecycle.settled = true
-      cleanup()
+    if (lifecycle.settled) {
+      return
     }
+
+    lifecycle.settled = true
+    cleanup()
   })
 
 export const attachTerminalSession = (

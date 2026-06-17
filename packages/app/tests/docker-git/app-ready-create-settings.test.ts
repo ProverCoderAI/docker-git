@@ -92,10 +92,10 @@ describe("app-ready-create settings", () => {
         runUp: false
       }
     }
-    const { handled, setCreateViewSpy } = runCreateKey(handleCreateKey, createView, "Enter")
+    const { handled: isHandled, setCreateViewSpy } = runCreateKey(handleCreateKey, createView, "Enter")
     const enteredView = requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])
 
-    expect(handled).toBe(true)
+    expect(isHandled).toBe(true)
     expect(enteredView.values.force).toBe(true)
     expect(enteredView.step).toBe(resolveCreateDisplaySteps().indexOf("cpuLimit"))
     expect(enteredView.buffer).toBe("")
@@ -131,10 +131,10 @@ describe("app-ready-create settings", () => {
 
   it("clears an unconfirmed preview when navigating away from a settings row", () => {
     const createView = createSettingsFlowViewAtStep("mcpPlaywright", "y")
-    const { handled, setCreateViewSpy } = runCreateKey(handleCreateKey, createView, "ArrowDown")
+    const { handled: isHandled, setCreateViewSpy } = runCreateKey(handleCreateKey, createView, "ArrowDown")
     const nextView = requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])
 
-    expect(handled).toBe(true)
+    expect(isHandled).toBe(true)
     expect(nextView.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
     expect(nextView.values.enableMcpPlaywright).toBeUndefined()
     expect(nextView.buffer).toBe("")

@@ -10,7 +10,7 @@ import {
 
 const tryCloudflareSuffix = ".trycloudflare.com"
 
-const currentPanelUrl = (): string => `${globalThis.location.origin}/`
+const currentPanelUrl = (): string => `${location.origin}/`
 
 const isTryCloudflareOrigin = (panelUrl: string): boolean => {
   const url = new URL(panelUrl)
@@ -82,7 +82,7 @@ export const copyPanelShareTunnelUrl = (
   withBusy({
     context,
     effect: Effect.tryPromise({
-      try: () => globalThis.navigator.clipboard.writeText(publicUrl),
+      try: () => navigator.clipboard.writeText(publicUrl),
       catch: () => "Failed to copy tunnel URL."
     }),
     label: "Copying tunnel URL",

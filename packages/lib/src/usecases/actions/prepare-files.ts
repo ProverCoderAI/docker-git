@@ -31,8 +31,8 @@ const ensureFileReady = (
   onDirectoryMessage: (resolvedPath: string, backupPath: string) => string
 ): Effect.Effect<ExistingFileState, PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
-    const exists = yield* _(fs.exists(resolved))
-    if (!exists) {
+    const isExists = yield* _(fs.exists(resolved))
+    if (!isExists) {
       return "missing"
     }
 
@@ -96,8 +96,8 @@ const resolveManagedAuthorizedKeysSource = (
 ): Effect.Effect<string | null, PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     const preferred = resolvePathFromBase(path, baseDir, preferredSource)
-    const preferredExists = yield* _(fs.exists(preferred))
-    if (preferredExists && preferred !== resolved) {
+    const isPreferredExists = yield* _(fs.exists(preferred))
+    if (isPreferredExists && preferred !== resolved) {
       return preferred
     }
 
@@ -272,9 +272,9 @@ export const prepareProjectFiles = (
 ): Effect.Effect<ReadonlyArray<string>, PrepareProjectFilesError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     const path = yield* _(Path.Path)
-    const rewriteManagedFiles = options.force || options.forceEnv
-    const envOnlyRefresh = options.forceEnv && !options.force
-    const createdFiles = yield* _(writeProjectFiles(resolvedOutDir, projectConfig, rewriteManagedFiles))
+    const isRewriteManagedFiles = options.force || options.forceEnv
+    const isEnvOnlyRefresh = options.forceEnv && !options.force
+    const createdFiles = yield* _(writeProjectFiles(resolvedOutDir, projectConfig, isRewriteManagedFiles))
     yield* _(
       ensureAuthorizedKeys(
         resolvedOutDir,
@@ -284,7 +284,7 @@ export const prepareProjectFiles = (
       )
     )
     yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envGlobalPath, defaultGlobalEnvContents))
-    yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envProjectPath, defaultProjectEnvContents, envOnlyRefresh))
+    yield* _(ensureEnvFile(resolvedOutDir, projectConfig.envProjectPath, defaultProjectEnvContents, isEnvOnlyRefresh))
     yield* _(ensureCodexConfigFile(baseDir, globalConfig.codexAuthPath))
     const globalClaudeAuthPath = path.join(path.dirname(globalConfig.codexAuthPath), "claude")
     yield* _(ensureClaudeAuthSeedFromHome(baseDir, globalClaudeAuthPath))

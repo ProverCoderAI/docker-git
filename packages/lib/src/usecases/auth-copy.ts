@@ -91,8 +91,8 @@ const sourceDirReady = (
     if (sourceDir === targetDir) {
       return false
     }
-    const sourceExists = yield* _(fs.exists(sourceDir))
-    if (!sourceExists) {
+    const isSourceExists = yield* _(fs.exists(sourceDir))
+    if (!isSourceExists) {
       return false
     }
     const sourceInfo = yield* _(statIfPresent(fs, sourceDir))
@@ -135,8 +135,8 @@ export const copyDirIfEmpty = (
   label: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
-    const ready = yield* _(sourceDirReady(fs, sourceDir, targetDir))
-    if (!ready) {
+    const isReady = yield* _(sourceDirReady(fs, sourceDir, targetDir))
+    if (!isReady) {
       return
     }
     yield* _(fs.makeDirectory(targetDir, { recursive: true }))
@@ -192,8 +192,8 @@ export const copyDirMissingEntries = (
   label: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
-    const ready = yield* _(sourceDirReady(fs, sourceDir, targetDir))
-    if (!ready) {
+    const isReady = yield* _(sourceDirReady(fs, sourceDir, targetDir))
+    if (!isReady) {
       return
     }
 

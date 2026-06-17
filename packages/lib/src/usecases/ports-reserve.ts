@@ -90,9 +90,9 @@ export const loadReservedPorts = (
       if (!filter(item)) {
         continue
       }
-      const occupiedByDocker = publishedByDocker.has(item.sshPort)
-      const occupiedBySocket = occupiedByDocker ? false : !(yield* _(isPortAvailable(item.sshPort)))
-      if (occupiedByDocker || occupiedBySocket) {
+      const isOccupiedByDocker = publishedByDocker.has(item.sshPort)
+      const isOccupiedBySocket = isOccupiedByDocker ? false : !(yield* _(isPortAvailable(item.sshPort)))
+      if (isOccupiedByDocker || isOccupiedBySocket) {
         reservePort(reserved, seen, item.sshPort, item.projectDir)
       }
     }

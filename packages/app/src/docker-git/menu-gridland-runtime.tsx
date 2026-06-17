@@ -101,13 +101,13 @@ const runEmbeddedGridlandMenu = (renderApp: GridlandAppFactory): Effect.Effect<v
     const gridland = yield* loadGridlandModule()
     const renderer = yield* createGridlandRenderer(gridland)
     const root = gridland.createRoot(renderer)
-    let exiting = false
+    let isExiting = false
 
     const exit = () => {
-      if (exiting) {
+      if (isExiting) {
         return
       }
-      exiting = true
+      isExiting = true
       root.unmount()
       renderer.destroy()
     }
@@ -124,7 +124,7 @@ const runEmbeddedGridlandMenu = (renderApp: GridlandAppFactory): Effect.Effect<v
       waitForRendererDestroy(renderer),
       Effect.ensuring(
         Effect.sync(() => {
-          if (!exiting) {
+          if (!isExiting) {
             root.unmount()
           }
         })

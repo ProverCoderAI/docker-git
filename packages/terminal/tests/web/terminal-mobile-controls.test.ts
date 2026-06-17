@@ -8,23 +8,23 @@ import {
 
 describe("terminal-mobile-controls", () => {
   it("maps mobile terminal buttons to terminal input sequences", () => {
-    expect(mobileTerminalKeyInput("escape")).toBe("\u001B")
+    expect(mobileTerminalKeyInput("escape")).toBe("\u{1B}")
     expect(mobileTerminalKeyInput("tab")).toBe("\t")
-    expect(mobileTerminalKeyInput("ctrl-c")).toBe("\u0003")
-    expect(mobileTerminalKeyInput("up")).toBe("\u001B[A")
-    expect(mobileTerminalKeyInput("down")).toBe("\u001B[B")
-    expect(mobileTerminalKeyInput("right")).toBe("\u001B[C")
-    expect(mobileTerminalKeyInput("left")).toBe("\u001B[D")
+    expect(mobileTerminalKeyInput("ctrl-c")).toBe("\u{3}")
+    expect(mobileTerminalKeyInput("up")).toBe("\u{1B}[A")
+    expect(mobileTerminalKeyInput("down")).toBe("\u{1B}[B")
+    expect(mobileTerminalKeyInput("right")).toBe("\u{1B}[C")
+    expect(mobileTerminalKeyInput("left")).toBe("\u{1B}[D")
   })
 
   it("derives control characters from keyboard keys for one-shot ctrl", () => {
-    expect(terminalControlCharacterForKey("c")).toBe("\u0003")
-    expect(terminalControlCharacterForKey("C")).toBe("\u0003")
-    expect(terminalControlCharacterForKey("[")).toBe("\u001B")
-    expect(terminalControlCharacterForKey("\\")).toBe("\u001C")
-    expect(terminalControlCharacterForKey("]")).toBe("\u001D")
-    expect(terminalControlCharacterForKey("^")).toBe("\u001E")
-    expect(terminalControlCharacterForKey("_")).toBe("\u001F")
+    expect(terminalControlCharacterForKey("c")).toBe("\u{3}")
+    expect(terminalControlCharacterForKey("C")).toBe("\u{3}")
+    expect(terminalControlCharacterForKey("[")).toBe("\u{1B}")
+    expect(terminalControlCharacterForKey("\\")).toBe("\u{1C}")
+    expect(terminalControlCharacterForKey("]")).toBe("\u{1D}")
+    expect(terminalControlCharacterForKey("^")).toBe("\u{1E}")
+    expect(terminalControlCharacterForKey("_")).toBe("\u{1F}")
     expect(terminalControlCharacterForKey("?")).toBeNull()
   })
 

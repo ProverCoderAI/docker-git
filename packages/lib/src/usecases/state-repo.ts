@@ -109,19 +109,19 @@ const autoSyncStateRaw = (message: string): Effect.Effect<void, never, StateRepo
   Effect.gen(function*(_) {
     const path = yield* _(Path.Path)
     const root = resolveStateRoot(path, process.cwd())
-    const repoOk = yield* _(isGitRepo(root))
-    if (!repoOk) {
+    const isRepoOk = yield* _(isGitRepo(root))
+    if (!isRepoOk) {
       return
     }
-    const originOk = yield* _(hasOriginRemote(root))
-    const enabled = isAutoSyncEnabled(process.env[autoSyncEnvKey], originOk)
-    if (!enabled) {
+    const isOriginOk = yield* _(hasOriginRemote(root))
+    const isEnabled = isAutoSyncEnabled(process.env[autoSyncEnvKey], isOriginOk)
+    if (!isEnabled) {
       return
     }
     const strictValue = process.env[autoSyncStrictEnvKey]
-    const strict = strictValue !== undefined && strictValue.trim().length > 0 ? isTruthyEnv(strictValue) : false
+    const isStrict = strictValue !== undefined && strictValue.trim().length > 0 ? isTruthyEnv(strictValue) : false
     const effect = stateSyncRaw(message)
-    if (strict) {
+    if (isStrict) {
       yield* _(effect)
       return
     }
@@ -160,17 +160,17 @@ const autoPullStateRaw: Effect.Effect<void, never, StateRepoEnv> = Effect.gen(fu
   const fs = yield* _(FileSystem.FileSystem)
   const path = yield* _(Path.Path)
   const root = resolveStateRoot(path, process.cwd())
-  const rootExists = yield* _(fs.exists(root))
-  if (!rootExists) {
+  const isRootExists = yield* _(fs.exists(root))
+  if (!isRootExists) {
     return
   }
-  const repoOk = yield* _(isGitRepo(root))
-  if (!repoOk) {
+  const isRepoOk = yield* _(isGitRepo(root))
+  if (!isRepoOk) {
     return
   }
-  const originOk = yield* _(hasOriginRemote(root))
-  const enabled = isAutoPullEnabled(process.env[autoPullEnvKey], originOk)
-  if (!enabled) {
+  const isOriginOk = yield* _(hasOriginRemote(root))
+  const isEnabled = isAutoPullEnabled(process.env[autoPullEnvKey], isOriginOk)
+  if (!isEnabled) {
     return
   }
   // CHANGE: abort any in-progress rebase if pull fails to prevent conflict markers
