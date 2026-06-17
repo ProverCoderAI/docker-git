@@ -208,7 +208,7 @@ describe("renderDockerfile", () => {
       "rtk --version",
       "rtk gain >/dev/null 2>&1 || true",
       "# Install plan-to-git for multi-agent plan capture and explicit PR sync (issue #397)",
-      "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev debc5f5b08a02f9038d7df8938cf72a6ec24a22a --locked --bins --root /usr/local",
+      "cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev 4e58e315d3a06db3f9e75682455be315cd29d7c8 --locked --bins --root /usr/local",
       "/usr/local/bin/plan-to-git --help >/dev/null",
       '/usr/local/bin/plan-to-git --help | grep -q -- "--repo"',
       '/usr/local/bin/plan-to-git hook --help | grep -q -- "claude"',
