@@ -380,6 +380,23 @@ describe("terminal sessions service", () => {
     })
   })
 
+  it("serializes foreground terminal state writes without resurrecting deleted sessions", async () => {
+    probeProjectSshReadyMock.mockImplementation(() => Effect.succeed(true))
+    getProjectMock.mockImplementation(() => Effect.succeed(projectDetails))
+
+    const first = await runTestEffect(createTerminalSession(projectId))
+    const second = await runTestEffect(createTerminalSession(projectId))
+    clearTerminalSessionRuntimeForTest()
+
+    await runTestEffect(Effect.all([
+      setProjectActiveTerminalSession(projectId, first.session.id),
+      deleteTerminalSession(projectId, second.session.id)
+    ], { concurrency: "unbounded", discard: true }))
+
+    expect(readPersistedSessionIds()).toEqual([first.session.id])
+    expect(readPersistedActiveSessionId()).toBe(first.session.id)
+  })
+
   it("rejects active terminal selection for a missing project session", async () => {
     probeProjectSshReadyMock.mockImplementation(() => Effect.succeed(true))
     getProjectMock.mockImplementation(() => Effect.succeed(projectDetails))

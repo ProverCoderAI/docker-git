@@ -12,32 +12,7 @@ import eslintComments from "@eslint-community/eslint-plugin-eslint-comments"
 import globals from "globals"
 import tseslint from "typescript-eslint"
 
-const effectMigrationWarnings = [
-  {
-    selector: "TryStatement",
-    message: "Effect migration blocker: replace try/catch with Effect.try / Effect.catch* at shell boundaries."
-  },
-  {
-    selector: "SwitchStatement",
-    message: "Effect migration blocker: use Match.exhaustive instead of switch."
-  },
-  {
-    selector: "AwaitExpression",
-    message: "Effect migration blocker: use Effect.gen / Effect.flatMap instead of await."
-  },
-  {
-    selector: "FunctionDeclaration[async=true], FunctionExpression[async=true], ArrowFunctionExpression[async=true]",
-    message: "Effect migration blocker: use Effect.gen / Effect.tryPromise instead of async functions."
-  },
-  {
-    selector: "NewExpression[callee.name='Promise']",
-    message: "Effect migration blocker: use Effect.async / Effect.tryPromise instead of new Promise."
-  },
-  {
-    selector: "CallExpression[callee.object.name='Promise']",
-    message: "Effect migration blocker: use Effect combinators instead of Promise.*."
-  }
-]
+import { effectMigrationWarnings, effectPromiseRestrictedTypes } from "../../eslint.effect-ts-shared.mjs"
 
 export default tseslint.config({
   name: "docker-git-session-sync-effect-ts-compliance",
@@ -58,16 +33,7 @@ export default tseslint.config({
       "ts-nocheck": true
     }],
     "@typescript-eslint/no-explicit-any": "error",
-    "@typescript-eslint/no-restricted-types": ["error", {
-      types: {
-        Promise: {
-          message: "Avoid Promise in public types. Use Effect.Effect<A, E, R>."
-        },
-        "Promise<*>": {
-          message: "Avoid Promise<T>. Use Effect.Effect<A, E, R>."
-        }
-      }
-    }],
+    "@typescript-eslint/no-restricted-types": ["warn", effectPromiseRestrictedTypes],
     "eslint-comments/disable-enable-pair": "error",
     "eslint-comments/no-unlimited-disable": "error",
     "eslint-comments/no-unused-disable": "error",

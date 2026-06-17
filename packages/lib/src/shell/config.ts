@@ -15,6 +15,14 @@ import {
 import { ConfigDecodeError, ConfigNotFoundError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
 
+const HostnameSchema = Schema.String.pipe(
+  Schema.minLength(1),
+  Schema.maxLength(253),
+  Schema.pattern(
+    /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/u
+  )
+)
+
 const TemplateConfigInputSchema = Schema.Struct({
   containerName: Schema.String,
   serviceName: Schema.String,
@@ -79,7 +87,7 @@ const TemplateConfigInputSchema = Schema.Struct({
   }),
   bunVersion: Schema.optional(Schema.String),
   pnpmVersion: Schema.optional(Schema.String),
-  clonedOnHostname: Schema.optional(Schema.String)
+  clonedOnHostname: Schema.optional(HostnameSchema)
 })
 
 type DecodedProjectConfigInput = Schema.Schema.Type<typeof ProjectConfigInputSchema>

@@ -1426,7 +1426,11 @@ export const makeRouter = () => {
       "/projects",
       Effect.gen(function*(_) {
         const request = yield* _(readCreateProjectRequest())
-        const result = yield* _(createProjectFromRequest(request))
+        const { clonedOnHostname, ...requestWithoutCloneHost } = request
+        const result = yield* _(createProjectFromRequest({
+          ...requestWithoutCloneHost,
+          ...(clonedOnHostname === undefined ? {} : { clonedOnHostname })
+        }))
         return yield* _(
           "accepted" in result && result.accepted === true
             ? jsonResponse(result, 202)

@@ -26,17 +26,20 @@ beforeEach(() => {
   previousProjectsRoot = process.env["DOCKER_GIT_PROJECTS_ROOT"]
   projectsRoot = mkdtempSync(path.join(os.tmpdir(), "docker-git-agents-"))
   process.env["DOCKER_GIT_PROJECTS_ROOT"] = projectsRoot
-  clearAgentRuntimeForTest()
+  return Effect.runPromise(clearAgentRuntimeForTest())
 })
 
 afterEach(() => {
-  clearAgentRuntimeForTest()
-  if (previousProjectsRoot === undefined) {
-    delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
-  } else {
-    process.env["DOCKER_GIT_PROJECTS_ROOT"] = previousProjectsRoot
-  }
-  rmSync(projectsRoot, { recursive: true, force: true })
+  return Effect.runPromise(clearAgentRuntimeForTest().pipe(
+    Effect.ensuring(Effect.sync(() => {
+      if (previousProjectsRoot === undefined) {
+        delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
+      } else {
+        process.env["DOCKER_GIT_PROJECTS_ROOT"] = previousProjectsRoot
+      }
+      rmSync(projectsRoot, { recursive: true, force: true })
+    }))
+  ))
 })
 
 describe("agent service", () => {

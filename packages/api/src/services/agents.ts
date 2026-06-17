@@ -35,7 +35,7 @@ type SnapshotFile = {
   readonly sessions: ReadonlyArray<AgentSession>
 }
 
-const SnapshotFileSchema = Schema.Struct({
+const SnapshotFileSchema: Schema.Schema<SnapshotFile> = Schema.Struct({
   sessions: Schema.Array(AgentSessionSchema)
 })
 
@@ -46,16 +46,43 @@ const projectIndex: Map<string, Set<string>> = new Map()
 const maxLogLines = 5000
 let initialized = false
 
-export const clearAgentRuntimeForTest = (): void => {
-  for (const record of records.values()) {
-    if (record.process !== null && !record.process.killed) {
-      record.process.kill("SIGTERM")
+const waitForProcessExit = (child: ChildProcess): Effect.Effect<void> =>
+  Effect.async((resume) => {
+    const finish = (): void => {
+      clearTimeout(timeout)
+      child.off("exit", finish)
+      child.off("close", finish)
+      resume(Effect.void)
     }
-  }
-  records.clear()
-  projectIndex.clear()
-  initialized = false
-}
+    const timeout = setTimeout(finish, 1_000)
+    if (child.exitCode !== null || child.signalCode !== null) {
+      finish()
+      return
+    }
+    child.once("exit", finish)
+    child.once("close", finish)
+  })
+
+export const clearAgentRuntimeForTest = (): Effect.Effect<void> =>
+  Effect.gen(function*(_) {
+    const children = [...records.values()]
+      .map((record) => record.process)
+      .filter((process): process is ChildProcess => process !== null)
+
+    for (const child of children) {
+      if (!child.killed) {
+        child.kill("SIGTERM")
+      }
+    }
+
+    yield* _(Effect.forEach(children, waitForProcessExit, {
+      concurrency: "unbounded",
+      discard: true
+    }))
+    records.clear()
+    projectIndex.clear()
+    initialized = false
+  })
 
 const nowIso = (): string => new Date().toISOString()
 
@@ -229,7 +256,9 @@ const persistSnapshot = (): Effect.Effect<void, PlatformError, FileSystem.FileSy
 const persistSnapshotBestEffort = (): void => {
   Effect.runFork(persistSnapshot().pipe(
     Effect.provide(NodeContext.layer),
-    Effect.catchAll(() => Effect.void)
+    Effect.catchAll((error) =>
+      Effect.logWarning(`[agents] Failed to persist snapshot: ${String(error)}`)
+    )
   ))
 }
 
@@ -359,19 +388,16 @@ const readSnapshotFile = (): Effect.Effect<SnapshotFile, never, FileSystem.FileS
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const filePath = stateFilePath()
-    const exists = yield* _(Effect.either(fs.exists(filePath)))
-    const fileExists = Either.match(exists, {
-      onLeft: () => false,
-      onRight: (value) => value
-    })
+    const fileExists = yield* _(fs.exists(filePath).pipe(
+      Effect.orElse(() => Effect.succeed(false))
+    ))
     if (!fileExists) {
       return emptySnapshotFile()
     }
-    const contents = yield* _(Effect.either(fs.readFileString(filePath)))
-    return Either.match(contents, {
-      onLeft: () => emptySnapshotFile(),
-      onRight: (value) => decodeSnapshotFile(value) ?? emptySnapshotFile()
-    })
+    const contents = yield* _(fs.readFileString(filePath).pipe(
+      Effect.orElse(() => Effect.succeed(""))
+    ))
+    return decodeSnapshotFile(contents) ?? emptySnapshotFile()
   }).pipe(Effect.catchAll(() => Effect.succeed(emptySnapshotFile())))
 
 const hydrateFromSnapshot = (): Effect.Effect<void, never, FileSystem.FileSystem> =>
@@ -386,6 +412,8 @@ const hydrateFromSnapshot = (): Effect.Effect<void, never, FileSystem.FileSystem
         updatedAt: nowIso()
       }
 
+      // Hydrated sessions are restart metadata only; projectDir is available
+      // only when new operations receive a live ProjectDetails argument.
       const record: AgentRecord = {
         session: restored,
         projectDir: "",

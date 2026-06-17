@@ -12,32 +12,7 @@ import eslintComments from "@eslint-community/eslint-plugin-eslint-comments"
 import globals from "globals"
 import tseslint from "typescript-eslint"
 
-const migrationBlockers = [
-  {
-    selector: "SwitchStatement",
-    message: "Effect migration blocker: use Match.exhaustive instead of switch."
-  },
-  {
-    selector: "TryStatement",
-    message: "Effect migration blocker: use Effect.try / Effect.catch* instead of try/catch."
-  },
-  {
-    selector: "AwaitExpression",
-    message: "Effect migration blocker: use Effect.gen / Effect.flatMap instead of await."
-  },
-  {
-    selector: "FunctionDeclaration[async=true], FunctionExpression[async=true], ArrowFunctionExpression[async=true]",
-    message: "Effect migration blocker: use Effect.gen / Effect.tryPromise instead of async functions."
-  },
-  {
-    selector: "NewExpression[callee.name='Promise']",
-    message: "Effect migration blocker: use Effect.async / Effect.tryPromise instead of new Promise."
-  },
-  {
-    selector: "CallExpression[callee.object.name='Promise']",
-    message: "Effect migration blocker: use Effect combinators instead of Promise.*."
-  }
-]
+import { effectMigrationWarnings, effectPromiseRestrictedTypes } from "../../eslint.effect-ts-shared.mjs"
 
 export default tseslint.config({
   name: "api-effect-ts-compliance",
@@ -58,21 +33,12 @@ export default tseslint.config({
       "ts-nocheck": true
     }],
     "@typescript-eslint/no-explicit-any": "error",
-    "@typescript-eslint/no-restricted-types": ["warn", {
-      types: {
-        Promise: {
-          message: "Avoid Promise in public types. Use Effect.Effect<A, E, R>."
-        },
-        "Promise<*>": {
-          message: "Avoid Promise<T>. Use Effect.Effect<T, E, R>."
-        }
-      }
-    }],
+    "@typescript-eslint/no-restricted-types": ["warn", effectPromiseRestrictedTypes],
     "eslint-comments/disable-enable-pair": "error",
     "eslint-comments/no-unlimited-disable": "error",
     "eslint-comments/no-unused-disable": "error",
     "eslint-comments/no-use": "error",
     "no-console": "error",
-    "no-restricted-syntax": ["warn", ...migrationBlockers]
+    "no-restricted-syntax": ["warn", ...effectMigrationWarnings]
   }
 })

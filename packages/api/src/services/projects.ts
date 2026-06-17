@@ -160,7 +160,7 @@ const withProjectRuntime = (
       sshSessions: runtime.sshSessions,
       startedAtIso: runtime.startedAtIso,
       startedAtEpochMs: runtime.startedAtEpochMs,
-      clonedOnHostname: project.clonedOnHostname
+      ...(project.clonedOnHostname === undefined ? {} : { clonedOnHostname: project.clonedOnHostname })
     }))
   )
 
@@ -191,7 +191,7 @@ const dbProjectSummary = (
   sshSessions: 0,
   startedAtIso: project.lastStartedAtIso,
   startedAtEpochMs: project.lastStartedAtEpochMs,
-  clonedOnHostname: project.clonedOnHostname
+  ...(project.clonedOnHostname === undefined ? {} : { clonedOnHostname: project.clonedOnHostname })
 })
 
 const toProjectDetails = (

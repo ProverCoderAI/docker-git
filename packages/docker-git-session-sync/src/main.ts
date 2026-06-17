@@ -11,7 +11,7 @@ import { errorMessage } from "./json.js"
 // SOURCE: n/a
 // FORMAT THEOREM: runCli(args,cwd)=0 -> exitCode unchanged; runCli(args,cwd)=n>0 -> process.exitCode=n; throws(e) -> stderr=e ∧ exitCode=1
 // PURITY: SHELL
-// EFFECT: Effect<void, never, NodeContext>
+// EFFECT: Effect<void, never, never>
 // INVARIANT: CLI observable exit code and stderr semantics are preserved.
 // COMPLEXITY: O(n)/O(1), where n is delegated CLI work.
 const main = pipe(

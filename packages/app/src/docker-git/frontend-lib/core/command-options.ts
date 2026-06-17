@@ -60,6 +60,7 @@ export interface RawOptions {
   readonly force?: boolean
   readonly forceEnv?: boolean
   readonly agentAutoMode?: string
+  // Hostname where the project was cloned; passed explicitly to keep command builders pure.
   readonly clonedOnHostname?: string
 }
 

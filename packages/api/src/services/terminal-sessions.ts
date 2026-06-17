@@ -84,11 +84,6 @@ type TerminalSessionStateRuntime =
 
 type TerminalSessionPersistenceEffect = Effect.Effect<void, ApiInternalError, FileSystem.FileSystem>
 
-type TerminalSessionPersistenceQueue = {
-  readonly items: ReadonlyArray<TerminalSessionPersistenceEffect>
-  readonly running: boolean
-}
-
 type DurableTerminalSession = {
   readonly id: string
   readonly projectId: string
@@ -110,7 +105,7 @@ type DurableTerminalSessionFile = {
 }
 
 const records = new Map<string, TerminalRecord>()
-const terminalSessionPersistenceQueues = new Map<string, TerminalSessionPersistenceQueue>()
+const terminalSessionStateLocks = new Map<string, Effect.Semaphore>()
 const terminalActivityWrites = new Map<string, number>()
 const terminalWsPathPattern = /^(?:\/api)?\/projects\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
 const terminalWsByKeyPathPattern = /^(?:\/api)?\/projects\/by-key\/([^/]+)\/terminal-sessions\/([^/]+)\/ws$/u
@@ -155,7 +150,7 @@ export const clearTerminalSessionRuntimeForTest = (): void => {
     closeRecordSockets(record)
   }
   records.clear()
-  terminalSessionPersistenceQueues.clear()
+  terminalSessionStateLocks.clear()
   terminalActivityWrites.clear()
 }
 
@@ -298,6 +293,22 @@ const durableFromSession = (
   ...(args.session.closedAt === undefined ? {} : { closedAt: args.session.closedAt })
 })
 
+const terminalSessionStateLock = (projectId: string): Effect.Semaphore => {
+  const existing = terminalSessionStateLocks.get(projectId)
+  if (existing !== undefined) {
+    return existing
+  }
+  const lock = Effect.unsafeMakeSemaphore(1)
+  terminalSessionStateLocks.set(projectId, lock)
+  return lock
+}
+
+const serializeTerminalSessionState = <A, E, R>(
+  projectId: string,
+  effect: Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R> =>
+  terminalSessionStateLock(projectId).withPermits(1)(effect)
+
 const upsertDurableSession = (
   projectId: string,
   durable: DurableTerminalSession,
@@ -305,7 +316,7 @@ const upsertDurableSession = (
     readonly activate?: boolean
   } = {}
 ): Effect.Effect<void, ApiInternalError, FileSystem.FileSystem> =>
-  Effect.gen(function*(_) {
+  serializeTerminalSessionState(projectId, Effect.gen(function*(_) {
     const state = yield* _(readTerminalSessionFile(projectId))
     const sessions = state.sessions.filter((session) => session.id !== durable.id)
     yield* _(writeTerminalSessionFile(projectId, {
@@ -313,13 +324,13 @@ const upsertDurableSession = (
       schemaVersion: 1,
       sessions: [...sessions, durable]
     }))
-  })
+  }))
 
 const patchDurableSession = (
   record: TerminalRecord,
   patch: Partial<TerminalSession>
 ): Effect.Effect<void, ApiInternalError, FileSystem.FileSystem> =>
-  Effect.gen(function*(_) {
+  serializeTerminalSessionState(record.projectId, Effect.gen(function*(_) {
     const state = yield* _(readTerminalSessionFile(record.projectId))
     const updatedAt = nowIso()
     const sessions = state.sessions.map((session) =>
@@ -341,13 +352,13 @@ const patchDurableSession = (
       schemaVersion: 1,
       sessions
     }))
-  })
+  }))
 
 const deleteDurableSession = (
   projectId: string,
   sessionId: string
 ): Effect.Effect<boolean, ApiInternalError, FileSystem.FileSystem> =>
-  Effect.gen(function*(_) {
+  serializeTerminalSessionState(projectId, Effect.gen(function*(_) {
     const state = yield* _(readTerminalSessionFile(projectId))
     const sessions = state.sessions.filter((session) => session.id !== sessionId)
     if (sessions.length === state.sessions.length) {
@@ -361,13 +372,13 @@ const deleteDurableSession = (
       sessions
     }))
     return true
-  })
+  }))
 
 const setActiveDurableSession = (
   projectId: string,
   sessionId: string
 ): Effect.Effect<DurableTerminalSession, ApiInternalError | ApiNotFoundError, FileSystem.FileSystem> =>
-  Effect.gen(function*(_) {
+  serializeTerminalSessionState(projectId, Effect.gen(function*(_) {
     const state = yield* _(readTerminalSessionFile(projectId))
     const durable = state.sessions.find((session) => session.id === sessionId)
     if (durable === undefined) {
@@ -379,7 +390,7 @@ const setActiveDurableSession = (
       sessions: state.sessions
     }))
     return durable
-  })
+  }))
 
 const findDurableSession = (
   projectId: string,
@@ -389,51 +400,6 @@ const findDurableSession = (
     Effect.map((state) => state.sessions.find((session) => session.id === sessionId) ?? null)
   )
 
-const drainTerminalSessionPersistenceQueue = (projectId: string): void => {
-  const queue = terminalSessionPersistenceQueues.get(projectId)
-  if (queue === undefined || queue.running || queue.items.length === 0) {
-    return
-  }
-
-  const [nextEffect, ...remainingItems] = queue.items
-  if (nextEffect === undefined) {
-    return
-  }
-
-  terminalSessionPersistenceQueues.set(projectId, {
-    items: remainingItems,
-    running: true
-  })
-
-  Effect.runFork(
-    nextEffect.pipe(
-      Effect.provide(NodeContext.layer),
-      Effect.catchAll((error) =>
-        Effect.logWarning(
-          `[terminal-sessions] Failed to persist state for project ${projectId}: ${describeUnknown(error)}`
-        )
-      ),
-      Effect.ensuring(
-        Effect.sync(() => {
-          const current = terminalSessionPersistenceQueues.get(projectId)
-          if (current === undefined) {
-            return
-          }
-          if (current.items.length === 0) {
-            terminalSessionPersistenceQueues.delete(projectId)
-            return
-          }
-          terminalSessionPersistenceQueues.set(projectId, {
-            items: current.items,
-            running: false
-          })
-          drainTerminalSessionPersistenceQueue(projectId)
-        })
-      )
-    )
-  )
-}
-
 const isAppError = (value: unknown): value is AppError =>
   typeof value === "object" && value !== null && "_tag" in value
 
@@ -441,15 +407,16 @@ const runTerminalSessionPersistence = (
   projectId: string,
   effect: TerminalSessionPersistenceEffect
 ): void => {
-  const current = terminalSessionPersistenceQueues.get(projectId) ?? {
-    items: [],
-    running: false
-  }
-  terminalSessionPersistenceQueues.set(projectId, {
-    items: [...current.items, effect],
-    running: current.running
-  })
-  drainTerminalSessionPersistenceQueue(projectId)
+  Effect.runFork(
+    effect.pipe(
+      Effect.provide(NodeContext.layer),
+      Effect.catchAll((error) =>
+        Effect.logWarning(
+          `[terminal-sessions] Failed to persist state for project ${projectId}: ${describeUnknown(error)}`
+        )
+      )
+    )
+  )
 }
 
 const updateSession = (

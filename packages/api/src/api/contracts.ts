@@ -26,7 +26,7 @@ export type ProjectSummary = {
   readonly sshSessions: number
   readonly startedAtIso: string | null
   readonly startedAtEpochMs: number | null
-  readonly clonedOnHostname?: string | undefined
+  readonly clonedOnHostname?: string
 }
 
 export type ProjectDetails = ProjectSummary & {
@@ -480,7 +480,20 @@ export type CreateProjectRequest = {
   readonly forceEnv?: boolean | undefined
   readonly waitForClone?: boolean | undefined
   readonly async?: boolean | undefined
-  readonly clonedOnHostname?: string | undefined
+  /**
+   * Hostname of the machine where the project was cloned.
+   *
+   * CHANGE: add explicit clone-origin hostname to the create-project contract.
+   * WHY: keeps command builders pure by passing host identity as immutable input instead of reading OS state.
+   * QUOTE(ТЗ): "CORE: Исключительно чистые функции, неизменяемые данные, математические операции"
+   * REF: pr-420-coderabbit-review-4518791377
+   * SOURCE: n/a
+   * FORMAT THEOREM: ∀h ∈ Hostname: request(h) -> build(request).config.clonedOnHostname = h
+   * PURITY: CORE - immutable request data.
+   * INVARIANT: if present, value satisfies API HostnameSchema.
+   * COMPLEXITY: O(1)/O(1)
+   */
+  readonly clonedOnHostname?: string
 }
 
 export type AgentEnvVar = {

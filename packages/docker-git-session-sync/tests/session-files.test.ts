@@ -1,6 +1,7 @@
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import fc from "fast-check"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import {
@@ -15,6 +16,11 @@ import {
 import { collectSessionFiles, parseUploadContext, uploadFromContext, type Output } from "../src/backup.js"
 import { parseArgs } from "../src/cli.js"
 import {
+  decodeGitHubContentResponse,
+  decodeGitHubSha,
+  decodeGitHubTreeEntries
+} from "../src/schemas.js"
+import {
   buildUploadTreeChanges,
   gitBlobShaForBuffer,
   hasChangedUploadEntries,
@@ -26,6 +32,50 @@ const output: Output = {
   out: () => undefined,
   err: () => undefined
 }
+
+const hexShaArbitrary = fc.array(
+  fc.constantFrom("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"),
+  { minLength: 40, maxLength: 40 }
+).map((chars) => chars.join(""))
+
+const pathPartArbitrary = fc.array(
+  fc.constantFrom("a", "b", "c", "d", "e", "f", "0", "1", "2", "3", "x", "y", "z", "-", "_"),
+  { minLength: 1, maxLength: 10 }
+).map((chars) => chars.join(""))
+
+const staleSessionPathArbitrary = fc.tuple(pathPartArbitrary, pathPartArbitrary).map(
+  ([scope, name]) => `org/repo/pr-230/current/.codex/sessions/stale-${scope}/${name}.jsonl`
+)
+
+const sourceInfoArbitrary = fc.record({
+  repo: fc.constantFrom("org/repo", "prover/docker-git", "backup-owner/docker-git"),
+  branch: pathPartArbitrary,
+  prNumber: fc.option(fc.integer({ min: 1, max: 999_999 }), { nil: null }),
+  commitSha: hexShaArbitrary,
+  createdAt: fc.integer({
+    min: Date.parse("2026-01-01T00:00:00.000Z"),
+    max: Date.parse("2026-12-31T23:59:59.999Z")
+  }).map((time) => new Date(time).toISOString())
+})
+
+const prCommentContextArbitrary = fc.record({
+  repo: fc.constantFrom("org/repo", "prover/docker-git"),
+  comment: fc.record({
+    id: fc.integer({ min: 1, max: 2_147_483_647 }),
+    url: pathPartArbitrary.map((part) => `https://example.test/comments/${part}`)
+  })
+})
+
+const sessionUploadContextArbitrary = fc.record({
+  version: fc.constant(1),
+  cwd: pathPartArbitrary.map((part) => `/workspace/${part}`),
+  sessionDir: fc.option(pathPartArbitrary.map((part) => `/home/dev/${part}`), { nil: null }),
+  source: sourceInfoArbitrary,
+  snapshotRef: pathPartArbitrary.map((part) => `org/repo/pr-230/current/${part}`),
+  gitStatus: fc.option(fc.string({ maxLength: 120 }), { nil: null }),
+  prComment: fc.option(prCommentContextArbitrary, { nil: null }),
+  verbose: fc.boolean()
+})
 
 let tmpDir = ""
 
@@ -124,6 +174,42 @@ describe("upload artifacts", () => {
 })
 
 describe("snapshot tree updates", () => {
+  it("rejects invalid GitHub tree responses instead of silently dropping entries", () => {
+    expect(decodeGitHubTreeEntries({ tree: [{ path: "file.txt", mode: "100644", type: "blob" }] })).toBeNull()
+  })
+
+  it("decodes valid GitHub tree responses as readonly entries", () => {
+    expect(decodeGitHubTreeEntries({
+      tree: [
+        {
+          path: "file.txt",
+          mode: "100644",
+          type: "blob",
+          sha: "0123456789abcdef0123456789abcdef01234567"
+        }
+      ]
+    })).toEqual([
+      {
+        path: "file.txt",
+        mode: "100644",
+        type: "blob",
+        sha: "0123456789abcdef0123456789abcdef01234567"
+      }
+    ])
+  })
+
+  it("validates GitHub content encoding and SHA contracts at the schema boundary", () => {
+    expect(decodeGitHubContentResponse({ encoding: "utf-8", content: "" })).toBeNull()
+    expect(decodeGitHubContentResponse({ encoding: "base64", content: "" })).toEqual({
+      encoding: "base64",
+      content: ""
+    })
+    expect(decodeGitHubSha({ sha: "0123456789abcdef0123456789abcdef01234567" })).toBe(
+      "0123456789abcdef0123456789abcdef01234567"
+    )
+    expect(() => decodeGitHubSha({ sha: "not-a-sha" })).toThrow("GitHub response missing valid sha")
+  })
+
   it("keeps stale remote session files untouched", () => {
     const entries: ReadonlyArray<TreeEntry> = [
       {
@@ -169,6 +255,44 @@ describe("snapshot tree updates", () => {
 
     expect(hasChangedUploadEntries(entries, desiredEntries)).toBe(false)
     expect(buildUploadTreeChanges("backup-owner/docker-git-sessions", entries, desiredEntries, {})).toEqual([])
+  })
+
+  it("preserves every stale remote session entry when desired content is already current", () => {
+    const desiredRepoPath = "org/repo/pr-230/current/.codex/sessions/live/current.jsonl"
+    fc.assert(
+      fc.property(
+        hexShaArbitrary,
+        fc.uniqueArray(staleSessionPathArbitrary, { minLength: 1, maxLength: 20 }),
+        (desiredSha, stalePaths) => {
+          const entries: ReadonlyArray<TreeEntry> = [
+            {
+              path: desiredRepoPath,
+              mode: "100644",
+              type: "blob",
+              sha: desiredSha
+            },
+            ...stalePaths.map((stalePath, index) => ({
+              path: stalePath,
+              mode: "100644",
+              type: "blob",
+              sha: `${index}`.padStart(40, "0")
+            }))
+          ]
+          const desiredEntries: ReadonlyArray<UploadEntry> = [
+            {
+              repoPath: desiredRepoPath,
+              sourcePath: path.join(tmpDir, "unused.jsonl"),
+              type: "file",
+              size: 4,
+              blobSha: desiredSha
+            }
+          ]
+          const changes = buildUploadTreeChanges("backup-owner/docker-git-sessions", entries, desiredEntries, {})
+          return !hasChangedUploadEntries(entries, desiredEntries)
+            && changes.every((change) => !stalePaths.includes(change.path))
+        }
+      )
+    )
   })
 })
 
@@ -328,6 +452,18 @@ describe("CLI parser", () => {
     })
 
     expect(parsed?.prComment?.comment.id).toBe(1001)
+  })
+
+  it("decodes every schema-valid background upload context with version one", () => {
+    fc.assert(
+      fc.property(sessionUploadContextArbitrary, (context) => {
+        const parsed = parseUploadContext(context)
+        return parsed !== null
+          && parsed.version === 1
+          && parsed.source.repo === context.source.repo
+          && parsed.snapshotRef === context.snapshotRef
+      })
+    )
   })
 
   it("rejects malformed background upload context metadata", () => {
