@@ -1,5 +1,21 @@
 # @prover-coder-ai/docker-git
 
+## 1.3.6
+
+### Patch Changes
+
+- [#414](https://github.com/ProverCoderAI/docker-git/pull/414) [`2e66e2e`](https://github.com/ProverCoderAI/docker-git/commit/2e66e2e12e568f6dd9184b6a15e4ce619d56540a) Thanks [@konard](https://github.com/konard)! - Fix `docker-git clone` leaving the workspace `app` folder empty when `TARGET_DIR`
+  is a tilde path.
+
+  The generated entrypoint runs as `root` (sshd), so `$HOME` resolves to `/root`.
+  When a `~`/`~/...` `TARGET_DIR` reached the entrypoint (e.g. via the `TARGET_DIR`
+  env override), it was expanded against `$HOME`, resolving to `/root/app`. Because
+  the auto-clone runs as `su - <sshUser>`, cloning into the root-owned `/root/app`
+  failed with "permission denied", so the repository never landed in the prepared
+  home and the workspace `app` folder stayed empty. The tilde is now expanded
+  against the unprivileged user's home `/home/<sshUser>`, so the clone always lands
+  in the dev-owned workspace.
+
 ## 1.3.5
 
 ### Patch Changes
