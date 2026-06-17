@@ -1,64 +1,10 @@
-const postPushPrEnsureTemplate = String
-  .raw`# CHANGE: ensure an open GitHub PR exists for the pushed branch before PR-bound post-push tools run.
+import { renderGitHubRemoteHelpers } from "./github-remotes.js"
+
+const postPushPrEnsureTemplate =
+  `# CHANGE: ensure an open GitHub PR exists for the pushed branch before PR-bound post-push tools run.
 # WHY: issue #375 requires every successful git push to leave the branch with an open PR; plan sync and session backup both target PR discussion.
 # REF: issue-375
-docker_git_github_repo_from_remote_url() {
-  local remote_url="$1"
-  local repo_path=""
-  local owner=""
-  local repo=""
-
-  case "$remote_url" in
-    https://github.com/*)
-      repo_path="${"${"}remote_url#https://github.com/}"
-      ;;
-    https://github.com/*)
-      repo_path="${"${"}remote_url#https://github.com/}"
-      ;;
-    https://*@github.com/*)
-      repo_path="${"${"}remote_url#https://*@github.com/}"
-      ;;
-    https://*@github.com/*)
-      repo_path="${"${"}remote_url#https://*@github.com/}"
-      ;;
-    ssh://git@github.com/*)
-      repo_path="${"${"}remote_url#ssh://git@github.com/}"
-      ;;
-    git@github.com:*)
-      repo_path="${"${"}remote_url#git@github.com:}"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-
-  repo_path="${"${"}repo_path%%\?*}"
-  repo_path="${"${"}repo_path%%#*}"
-  repo_path="${"${"}repo_path%/}"
-  repo_path="${"${"}repo_path%.git}"
-  owner="${"${"}repo_path%%/*}"
-  repo="${"${"}repo_path#*/}"
-  repo="${"${"}repo%%/*}"
-  repo="${"${"}repo%.git}"
-
-  if [[ -z "$owner" || -z "$repo" || "$owner" == "$repo_path" ]]; then
-    return 1
-  fi
-
-  printf "%s/%s\n" "$owner" "$repo"
-}
-
-docker_git_github_repo_from_remote() {
-  local remote="$1"
-  local remote_url=""
-
-  remote_url="$(git remote get-url "$remote" 2>/dev/null || true)"
-  if [[ -z "$remote_url" ]]; then
-    return 1
-  fi
-
-  docker_git_github_repo_from_remote_url "$remote_url"
-}
+${renderGitHubRemoteHelpers()}
 
 docker_git_ensure_open_pr() {
   local branch=""
@@ -100,8 +46,8 @@ docker_git_ensure_open_pr() {
   if [[ "$head_repo" == "$base_repo" ]]; then
     head_arg="$branch"
   else
-    head_owner="${"${"}head_repo%%/*}"
-    head_arg="${"${"}head_owner}:${"${"}branch}"
+    head_owner="\${head_repo%%/*}"
+    head_arg="\${head_owner}:\${branch}"
   fi
 
   if ! pr_url="$(gh pr list --repo "$base_repo" --state open --head "$head_arg" --json url --jq '.[0].url // ""' 2>/dev/null)"; then

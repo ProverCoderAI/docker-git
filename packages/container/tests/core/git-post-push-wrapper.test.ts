@@ -21,6 +21,7 @@ type WrapperHarness = {
   readonly externalDir: string
   readonly binDir: string
   readonly wrapperPath: string
+  readonly planToGitSyncHelperPath: string
   readonly gitLogPath: string
   readonly nodeCwdLogPath: string
   readonly nodeRepoRootLogPath: string
@@ -28,6 +29,13 @@ type WrapperHarness = {
   readonly planToGitLogPath: string
   readonly ghLogPath: string
 }
+
+const expectedPlanToGitRuns = (
+  repoDir: string,
+  commands: ReadonlyArray<string>,
+  targetRepo = "org/repo"
+): ReadonlyArray<string> =>
+  commands.flatMap((command) => [`${repoDir}\ttarget-repo:${targetRepo}`, `${repoDir}\t${command}`])
 
 const fakeGitScript = `#!/usr/bin/env bash
 set -euo pipefail
@@ -167,16 +175,31 @@ exit 0
 const fakePlanToGitScript = `#!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "\${1:-}" == "sync" && "\${2:-}" == "--help" ]]; then
+  printf '%s\\n' "--pr <PR>"
+  exit 0
+fi
+
 if [[ -n "\${FAKE_PLAN_TO_GIT_LOG_PATH:-}" ]]; then
+  if [[ -n "\${PLAN_TO_GIT_REPO:-}" ]]; then
+    printf '%s\\ttarget-repo:%s\\n' "$PWD" "$PLAN_TO_GIT_REPO" >> "$FAKE_PLAN_TO_GIT_LOG_PATH"
+  fi
   printf '%s\\t%s\\n' "$PWD" "$*" >> "$FAKE_PLAN_TO_GIT_LOG_PATH"
 fi
 
-if [[ "\${1:-}" != "import-codex" && "\${1:-}" != "import-claude" && "\${1:-}" != "sync" ]]; then
+if [[ "\${1:-}" != "import-codex" && "\${1:-}" != "import-claude" && "\${1:-}" != "sync" && "\${1:-}" != "hook" ]]; then
   if [[ -n "\${FAKE_PLAN_TO_GIT_LOG_PATH:-}" ]]; then
     printf '%s\\tunexpected-command:%s\\n' "$PWD" "\${1:-<empty>}" >> "$FAKE_PLAN_TO_GIT_LOG_PATH"
   fi
-  echo "fakePlanToGit: expected import-codex, import-claude, or sync command, got: \${1:-<empty>}" >&2
+  echo "fakePlanToGit: expected import-codex, import-claude, hook, or sync command, got: \${1:-<empty>}" >&2
   exit 127
+fi
+
+if [[ "\${1:-}" == "sync" && "\${2:-}" == "--pr" && -n "\${FAKE_PLAN_TO_GIT_EXPECT_TARGET_REPO:-}" ]]; then
+  if [[ "\${PLAN_TO_GIT_REPO:-}" != "$FAKE_PLAN_TO_GIT_EXPECT_TARGET_REPO" ]]; then
+    echo "fakePlanToGit: expected target repo $FAKE_PLAN_TO_GIT_EXPECT_TARGET_REPO, got \${PLAN_TO_GIT_REPO:-<unset>}" >&2
+    exit 44
+  fi
 fi
 
 if [[ -n "\${FAKE_PLAN_TO_GIT_EXIT_CODE:-}" ]]; then
@@ -282,6 +305,7 @@ const makeHarnessEnv = (
   FAKE_NODE_SCRIPT_LOG_PATH: harness.nodeScriptLogPath,
   FAKE_PLAN_TO_GIT_LOG_PATH: harness.planToGitLogPath,
   FAKE_GH_LOG_PATH: harness.ghLogPath,
+  DOCKER_GIT_PLAN_TO_GIT_SYNC_HELPER: harness.planToGitSyncHelperPath,
   ...overrides
 })
 
@@ -341,6 +365,10 @@ const withHarness = <A, E, R>(
       const postPushPath = path.join(hooksDir, "post-push")
       yield* _(writeExecutable(postPushPath, postPushScript))
 
+      const planToGitSyncHelperScript = extractEmbeddedScript(renderEntrypointGitHooks(), "$PLAN_TO_GIT_SYNC_HELPER")
+      const planToGitSyncHelperPath = path.join(hooksDir, "plan-to-git-sync")
+      yield* _(writeExecutable(planToGitSyncHelperPath, planToGitSyncHelperScript))
+
       const wrapperTemplate = extractEmbeddedScript(
         renderEntrypointGitPostPushWrapperInstall(),
         "$GIT_WRAPPER_BIN"
@@ -357,6 +385,7 @@ const withHarness = <A, E, R>(
           externalDir,
           binDir,
           wrapperPath,
+          planToGitSyncHelperPath,
           gitLogPath,
           nodeCwdLogPath,
           nodeRepoRootLogPath,
@@ -383,11 +412,9 @@ describe("git post-push wrapper", () => {
         expect(nodeCwd).toEqual([harness.repoDir])
         expect(nodeRepoRoot).toEqual([harness.repoDir])
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
-        expect(planToGit).toEqual([
-          `${harness.repoDir}\timport-codex --no-sync`,
-          `${harness.repoDir}\timport-claude --no-sync`,
-          `${harness.repoDir}\tsync`
-        ])
+        expect(planToGit).toEqual(
+          expectedPlanToGitRuns(harness.repoDir, ["import-codex --no-sync", "import-claude --no-sync", "sync"])
+        )
         expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head issue-375 --fill`)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
@@ -407,11 +434,9 @@ describe("git post-push wrapper", () => {
         expect(nodeCwd).toEqual([harness.repoDir])
         expect(nodeRepoRoot).toEqual([harness.repoDir])
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
-        expect(planToGit).toEqual([
-          `${harness.repoDir}\timport-codex --no-sync`,
-          `${harness.repoDir}\timport-claude --no-sync`,
-          `${harness.repoDir}\tsync`
-        ])
+        expect(planToGit).toEqual(
+          expectedPlanToGitRuns(harness.repoDir, ["import-codex --no-sync", "import-claude --no-sync", "sync"])
+        )
         expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head issue-375 --fill`)
         expect(gitLog.some((line) => line.startsWith(`${harness.externalDir}\t-C ${harness.repoDir} push`))).toBe(true)
       })
@@ -500,7 +525,7 @@ describe("git post-push wrapper", () => {
         const gh = yield* _(readLogLines(harness.ghLogPath))
 
         expect(nodeScript).toEqual([])
-        expect(planToGit).toEqual([`${harness.repoDir}\timport-codex --no-sync`])
+        expect(planToGit).toEqual(expectedPlanToGitRuns(harness.repoDir, ["import-codex --no-sync"]))
         expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head issue-375 --fill`)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
@@ -519,11 +544,9 @@ describe("git post-push wrapper", () => {
         const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
 
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
-        expect(planToGit).toEqual([
-          `${harness.repoDir}\timport-codex --no-sync`,
-          `${harness.repoDir}\timport-claude --no-sync`,
-          `${harness.repoDir}\tsync`
-        ])
+        expect(planToGit).toEqual(
+          expectedPlanToGitRuns(harness.repoDir, ["import-codex --no-sync", "import-claude --no-sync", "sync"])
+        )
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -541,11 +564,9 @@ describe("git post-push wrapper", () => {
         const gh = yield* _(readLogLines(harness.ghLogPath))
 
         expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
-        expect(planToGit).toEqual([
-          `${harness.repoDir}\timport-codex --no-sync`,
-          `${harness.repoDir}\timport-claude --no-sync`,
-          `${harness.repoDir}\tsync`
-        ])
+        expect(planToGit).toEqual(
+          expectedPlanToGitRuns(harness.repoDir, ["import-codex --no-sync", "import-claude --no-sync", "sync"])
+        )
         expect(gh).toContain(`${harness.repoDir}\tpr list --repo org/repo --state open --head issue-375 --json url --jq .[0].url // ""`)
         expect(gh.some((line) => line.includes("pr create"))).toBe(false)
       })
@@ -569,6 +590,34 @@ describe("git post-push wrapper", () => {
         expect(gh).toContain(`${harness.repoDir}\tpr list --repo org/repo --state open --head me:issue-375 --json url --jq .[0].url // ""`)
         expect(gh).toContain(`${harness.repoDir}\tpr list --repo org/repo --state open --head issue-375 --json url --jq .[0].url // ""`)
         expect(gh).toContain(`${harness.repoDir}\tpr create --repo org/repo --base main --head me:issue-375 --fill`)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("syncs explicit PR plans against upstream target repo when origin is a fork", () =>
+    withHarness((harness) =>
+      Effect.gen(function*(_) {
+        yield* _(
+          runWrapper(harness, harness.repoDir, ["push", "origin", "HEAD"], {
+            env: {
+              DOCKER_GIT_PR_NUMBER: "375",
+              FAKE_GH_OPEN_PR_URL: "https://github.com/org/repo/pull/375",
+              FAKE_GIT_ORIGIN_URL: "https://github.com/me/repo.git",
+              FAKE_GIT_UPSTREAM_URL: "https://github.com/org/repo.git",
+              FAKE_PLAN_TO_GIT_EXPECT_TARGET_REPO: "org/repo"
+            }
+          })
+        )
+
+        const nodeScript = yield* _(readLogLines(harness.nodeScriptLogPath))
+        const planToGit = yield* _(readLogLines(harness.planToGitLogPath))
+        const gh = yield* _(readLogLines(harness.ghLogPath))
+
+        expect(nodeScript).toEqual(["backup --verbose --background --require-comment"])
+        expect(planToGit).toEqual(
+          expectedPlanToGitRuns(harness.repoDir, ["import-codex --no-sync", "import-claude --no-sync", "sync --pr 375"])
+        )
+        expect(gh).toContain(`${harness.repoDir}\tpr list --repo org/repo --state open --head me:issue-375 --json url --jq .[0].url // ""`)
+        expect(gh.some((line) => line.includes("pr create"))).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
