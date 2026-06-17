@@ -16,7 +16,51 @@ export const backupDefaultBranch = "main"
 export const chunkManifestSuffix = ".chunks.json"
 export const maxRepoFileSize = 20 * 1000 * 1000
 export const maxPushBatchBytes = 50 * 1000 * 1000
-export const sessionDirNames: ReadonlyArray<string> = [".codex/sessions", ".claude/projects"]
+// CHANGE: Resolve session roots from agent env overrides (CLAUDE_CONFIG_DIR / CODEX_HOME).
+// WHY: docker-git points Claude Code at a custom CLAUDE_CONFIG_DIR, so chat transcripts land in
+//      "$CLAUDE_CONFIG_DIR/projects" rather than "~/.claude/projects". The backup only scanned the
+//      home-relative paths, so the Claude folder in the backup repo stayed empty (issue #422).
+// QUOTE(ТЗ): "Почему сессии от claude code не созраняются ... Папка claude вообще пустая"
+// REF: issue-422
+// SOURCE: n/a
+// FORMAT THEOREM: ∀spec,home,env: candidatePaths(spec) prefers env override base then home base.
+// PURITY: CORE
+// EFFECT: none
+// INVARIANT: logical session name is stable regardless of which physical base is used.
+// COMPLEXITY: O(1)
+export interface SessionRootSpec {
+  // Logical name used inside the backup repo (e.g. ".claude/projects").
+  readonly name: string
+  // Environment variable that overrides the base directory, when set and non-empty.
+  readonly envVar: string | null
+  // Sub-directory holding chat transcripts within the base directory.
+  readonly subDir: string
+  // Base directory relative to the user home when the env override is absent.
+  readonly homeBase: string
+}
+
+export const sessionRootSpecs: ReadonlyArray<SessionRootSpec> = [
+  { name: ".codex/sessions", envVar: "CODEX_HOME", subDir: "sessions", homeBase: ".codex" },
+  { name: ".claude/projects", envVar: "CLAUDE_CONFIG_DIR", subDir: "projects", homeBase: ".claude" }
+]
+
+export const sessionDirNames: ReadonlyArray<string> = sessionRootSpecs.map((spec) => spec.name)
+
+export const sessionRootCandidatePaths = (
+  spec: SessionRootSpec,
+  homeDir: string,
+  env: Readonly<Record<string, string | undefined>>
+): ReadonlyArray<string> => {
+  const homePath = path.join(homeDir, spec.homeBase, spec.subDir)
+  const override = spec.envVar === null ? undefined : env[spec.envVar]
+  const trimmed = typeof override === "string" ? override.trim() : ""
+  if (trimmed.length === 0) {
+    return [homePath]
+  }
+  const overridePath = path.join(trimmed, spec.subDir)
+  return overridePath === homePath ? [homePath] : [overridePath, homePath]
+}
+
 export const sessionWalkIgnoreDirNames: ReadonlySet<string> = new Set([".git", "node_modules", "tmp"])
 export const githubEnvKeys: ReadonlyArray<string> = ["GITHUB_TOKEN", "GH_TOKEN"]
 

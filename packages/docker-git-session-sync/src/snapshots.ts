@@ -183,7 +183,7 @@ export const downloadSnapshot = (options: DownloadOptions, cwd: string, output: 
 
   output.out(`Downloaded snapshot to: ${outputPath}`)
   output.out("\nTo restore session files, copy them to the appropriate location:")
-  output.out("  - .codex/sessions/... -> ~/.codex/sessions/")
-  output.out("  - .claude/projects/... -> ~/.claude/projects/")
+  output.out("  - .codex/sessions/... -> ${CODEX_HOME:-~/.codex}/sessions/")
+  output.out("  - .claude/projects/... -> ${CLAUDE_CONFIG_DIR:-~/.claude}/projects/")
   return 0
 }
