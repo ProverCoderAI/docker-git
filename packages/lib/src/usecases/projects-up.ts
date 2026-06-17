@@ -50,7 +50,7 @@ const syncManagedProjectFiles = (
     yield* _(ensureCodexConfigFile(projectDir, template.codexAuthPath))
   })
 
-const claudeCliSelfHealScript = String.raw`set -eu
+const claudeCliSelfHealScript = `set -eu
 if command -v claude >/dev/null 2>&1; then
   exit 0
 fi

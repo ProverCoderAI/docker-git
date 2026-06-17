@@ -7,6 +7,7 @@
   "workspaces": [
     "packages/api",
     "packages/app",
+    "packages/container",
     "packages/docker-git-session-sync",
     "packages/lib",
     "packages/terminal"

@@ -130,7 +130,13 @@ const runProjectAuthAction = (
   }
 
   if (
-    ["ProjectGithubDisconnect", "ProjectGitDisconnect", "ProjectClaudeDisconnect", "ProjectGeminiDisconnect", "ProjectGrokDisconnect"].includes(action)
+    [
+      "ProjectGithubDisconnect",
+      "ProjectGitDisconnect",
+      "ProjectClaudeDisconnect",
+      "ProjectGeminiDisconnect",
+      "ProjectGrokDisconnect"
+    ].includes(action)
   ) {
     runProjectAuthEffect(view.project, action, {}, "default", context)
     return

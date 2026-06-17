@@ -37,7 +37,7 @@ export const controllerContainerName = process.env["DOCKER_GIT_API_CONTAINER_NAM
 
 const inspectNetworksTemplate = String
   .raw`{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s=%s\n" $k $v.IPAddress}}{{end}}`
-const inspectEnvTemplate = String.raw`{{range .Config.Env}}{{println .}}{{end}}`
+const inspectEnvTemplate = "{{range .Config.Env}}{{println .}}{{end}}"
 
 const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
   _tag: "ControllerBootstrapError",

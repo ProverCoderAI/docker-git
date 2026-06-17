@@ -10,7 +10,7 @@ export const readTerminalSessionRoute = (pathname: string): string | null => {
     return null
   }
 
-  const rawSessionId = pathname.slice(terminalSessionRoutePrefix.length).split("/")[0] ?? ""
+  const rawSessionId = pathname.slice(terminalSessionRoutePrefix.length).split("/", 1)[0] ?? ""
   const sessionId = decodeURIComponent(rawSessionId).trim()
   return sessionId.length === 0 ? null : sessionId
 }

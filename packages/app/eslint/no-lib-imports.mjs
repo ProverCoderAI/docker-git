@@ -1,6 +1,10 @@
 // @ts-check
 
-const bannedPackageName = "@effect-template/lib"
+// CHANGE: forbid the panel from importing BOTH the backend and the container-definition packages (issue #412)
+// WHY: packages/app is the panel; container orchestration lives in @effect-template/lib (backend) and
+//      container definition in @prover-coder-ai/docker-git-container. The panel must reach them only via the API client.
+// REF: issue-412
+const bannedPackageNames = ["@effect-template/lib", "@prover-coder-ai/docker-git-container"]
 const bannedLocalAlias = "@lib"
 
 /** @param {string} value */
@@ -38,7 +42,7 @@ const isFrontendSurfaceFile = (filePath) => {
 
 /** @param {string} value */
 const isDirectLibImport = (value) =>
-  value === bannedPackageName || value.startsWith(`${bannedPackageName}/`)
+  bannedPackageNames.some((name) => value === name || value.startsWith(`${name}/`))
 
 /**
  * @param {unknown} value
@@ -198,12 +202,12 @@ export const noLibImportsRule = {
     type: "problem",
     docs: {
       description:
-        "forbid direct imports, re-exports, and require calls from legacy lib surfaces inside package/app frontend surfaces and tests"
+        "forbid direct imports, re-exports, and require calls from the backend (@effect-template/lib) or container-definition (@prover-coder-ai/docker-git-container) packages inside package/app frontend surfaces and tests"
     },
     schema: [],
     messages: {
       noLibImport:
-        "Direct import or require '{{source}}' from legacy lib surfaces is forbidden in package/app frontend surfaces and tests. Use the API client or a local app adapter instead."
+        "Direct import or require '{{source}}' from the backend (@effect-template/lib) or container-definition (@prover-coder-ai/docker-git-container) packages is forbidden in package/app frontend surfaces and tests. Use the API client or a local app adapter instead."
     }
   },
   create: createRuleListener

@@ -64,6 +64,16 @@ describe("noLibImportsRule", () => {
       "@effect-template/lib"
     ]]],
     [
+      "rejects import declarations from the container-definition package",
+      line("import { planFiles } from \"@prover-coder-ai/docker-git-container\""),
+      [["Direct import", "@prover-coder-ai/docker-git-container"]]
+    ],
+    [
+      "rejects deep imports from the container-definition package",
+      line("import type { TemplateConfig } from \"@prover-coder-ai/docker-git-container/core/domain\""),
+      [["@prover-coder-ai/docker-git-container/core/domain"]]
+    ],
+    [
       "rejects type-only import declarations from lib",
       line("import type { TemplateConfig } from \"@effect-template/lib/core/domain\""),
       [["@effect-template/lib/core/domain"]]
