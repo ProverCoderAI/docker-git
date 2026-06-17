@@ -9,8 +9,8 @@ import { type ControllerRuntime, runDockerCapture, runDockerCaptureWithFailureOu
 import { parseControllerRevisionLabelOutput } from "./controller-revision.js"
 import type { ControllerBootstrapError } from "./host-errors.js"
 
-const inspectControllerRevisionLabelTemplate = String
-  .raw`{{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}`
+const inspectControllerRevisionLabelTemplate =
+  "{{ index .Config.Labels \"io.prover-coder-ai.docker-git.controller-rev\" }}"
 const missingImageInspectionPatterns: ReadonlyArray<RegExp> = [/No such image/iu, /No such object/iu]
 
 /**

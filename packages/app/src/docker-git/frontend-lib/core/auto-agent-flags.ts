@@ -14,7 +14,7 @@ export const resolveAutoAgentFlags = (
   if (requested === "auto") {
     return Either.right({ agentMode: undefined, agentAuto: true })
   }
-  const agentModes: readonly AgentMode[] = ["claude", "codex", "gemini", "grok"]
+  const agentModes: ReadonlyArray<AgentMode> = ["claude", "codex", "gemini", "grok"]
   const matchedMode = agentModes.find((mode) => mode === requested)
   if (matchedMode !== undefined) {
     return Either.right({ agentMode: matchedMode, agentAuto: true })

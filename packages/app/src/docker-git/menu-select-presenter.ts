@@ -44,7 +44,7 @@ const formatRepoRef = (repoRef: string): string => {
   const prPrefix = "refs/pull/"
   if (trimmed.startsWith(prPrefix)) {
     const rest = trimmed.slice(prPrefix.length)
-    const number = rest.split("/")[0] ?? rest
+    const number = rest.split("/", 1)[0] ?? rest
     return `PR#${number}`
   }
   return trimmed.length > 0 ? trimmed : "main"

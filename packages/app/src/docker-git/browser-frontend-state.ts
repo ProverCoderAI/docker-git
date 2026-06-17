@@ -57,7 +57,6 @@ const browserFrontendRevisionInputs: ReadonlyArray<string> = [
   "packages/app/vite.web.config.ts",
   "packages/app/scripts/serve-dist-web.mjs",
   "packages/app/src/docker-git",
-  "packages/app/src/lib",
   "packages/app/src/shared",
   "packages/app/src/ui",
   "packages/app/src/web"

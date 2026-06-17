@@ -10,14 +10,6 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@lib\/(.*)$/u,
-        replacement: path.resolve(__dirname, "src/lib") + "/$1.ts"
-      },
-      {
-        find: "@lib",
-        replacement: path.resolve(__dirname, "src/lib/index.ts")
-      },
-      {
         find: /^@\/(.*)$/u,
         replacement: path.resolve(__dirname, "src") + "/$1"
       },

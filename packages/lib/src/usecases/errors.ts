@@ -47,7 +47,14 @@ export type AppError =
 type NonParseError = Exclude<AppError, ParseError>
 
 const isParseError = (error: AppError): error is ParseError =>
-  ["UnknownCommand", "UnknownOption", "MissingOptionValue", "MissingRequiredOption", "InvalidOption", "UnexpectedArgument"].includes(error._tag)
+  [
+    "UnknownCommand",
+    "UnknownOption",
+    "MissingOptionValue",
+    "MissingRequiredOption",
+    "InvalidOption",
+    "UnexpectedArgument"
+  ].includes(error._tag)
 
 const renderDockerAccessHeadline = (issue: DockerAccessError["issue"]): string =>
   issue === "PermissionDenied"

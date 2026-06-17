@@ -1,5 +1,7 @@
 import { Either } from "effect"
 
+import type { ResolvedComposeResourceLimits } from "@prover-coder-ai/docker-git-container"
+
 import { type RawOptions } from "./command-options.js"
 import {
   defaultCpuLimit,
@@ -21,11 +23,10 @@ type HostResources = {
   readonly totalMemoryBytes: number
 }
 
-export type ResolvedComposeResourceLimits = {
-  readonly cpuLimit: number
-  readonly ramLimit: string
-  readonly swapLimit: string
-}
+// CHANGE: source the resolved compose limit shape from the container package (issue #412)
+// WHY: docker-compose rendering owns this contract in @prover-coder-ai/docker-git-container; the backend
+//      re-exports it so existing "./resource-limits.js" consumers keep a single source of truth.
+// REF: issue-412
 
 const cpuAbsolutePattern = /^\d+(?:\.\d+)?$/u
 const ramLimitPattern = /^(\d+(?:\.\d+)?)(b|k|kb|m|mb|g|gb|t|tb)$/iu
@@ -231,3 +232,5 @@ export const resolveResourceLimitsIntent = (
     )
     return { cpuLimit, ramLimit, playwrightCpuLimit, playwrightRamLimit }
   })
+
+export { type ResolvedComposeResourceLimits } from "@prover-coder-ai/docker-git-container"
