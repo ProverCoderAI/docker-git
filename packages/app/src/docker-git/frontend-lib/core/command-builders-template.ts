@@ -22,6 +22,16 @@ export type BuildTemplateConfigInput = {
   readonly enableMcpPlaywright: boolean
   readonly agentMode: AgentMode | undefined
   readonly agentAuto: boolean
+  /**
+   * Hostname where the source project was cloned.
+   *
+   * @pure true - immutable template-builder input.
+   * @effect none
+   * @invariant if present, template config preserves this value without reading OS hostname.
+   * @precondition boundary validation rejects malformed hostnames before constructing this input.
+   * @postcondition buildTemplateConfig propagates the value into docker-git.json.
+   * @complexity O(1)/O(1)
+   */
   readonly clonedOnHostname?: string | undefined
 }
 

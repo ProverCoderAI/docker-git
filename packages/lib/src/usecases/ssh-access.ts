@@ -129,6 +129,19 @@ export const buildEditorSshAccess = (
   }
 }
 
+/**
+ * Formats a compact editor SSH access summary.
+ *
+ * @param access - Validated SSH access details for the project container.
+ * @param clonedOnHostname - Optional clone-origin hostname used for first-hop guidance.
+ * @returns Human-readable SSH access summary.
+ * @pure true - deterministic formatting only.
+ * @effect none
+ * @invariant clonedOnHostname is rendered only when present.
+ * @precondition access fields are already resolved by SSH access discovery.
+ * @postcondition output contains no OS-derived hostname reads.
+ * @complexity O(n)/O(n), where n is the rendered access text length.
+ */
 export const formatEditorSshAccessSummary = (
   access: EditorSshAccess,
   clonedOnHostname?: string
@@ -141,6 +154,19 @@ Terminal shortcut: ${access.terminalShortcut}
 Remote workspace: ${access.workspacePath}${firstHopLine}`
 }
 
+/**
+ * Formats detailed editor SSH access instructions.
+ *
+ * @param access - Validated SSH access details for the project container.
+ * @param clonedOnHostname - Optional clone-origin hostname used for first-hop guidance.
+ * @returns Human-readable SSH access details.
+ * @pure true - deterministic formatting only.
+ * @effect none
+ * @invariant clonedOnHostname is rendered only when present.
+ * @precondition access fields are already resolved by SSH access discovery.
+ * @postcondition output contains no OS-derived hostname reads.
+ * @complexity O(n)/O(n), where n is the rendered access text length.
+ */
 export const formatEditorSshAccessDetails = (
   access: EditorSshAccess,
   clonedOnHostname?: string

@@ -2,7 +2,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { spawn, spawnSync } from "node:child_process"
-import { Effect } from "effect"
+import { Effect, Either } from "effect"
 
 import {
   buildBlobUrl,
@@ -365,7 +365,10 @@ export type SessionUploadContext = {
 // INVARIANT: invalid upload context returns null; valid context preserves all decoded fields.
 // COMPLEXITY: O(n)/O(n), where n is the encoded context field count.
 export const parseUploadContext = (value: unknown): SessionUploadContext | null =>
-  decodeSessionUploadContext(value)
+  Either.match(Effect.runSync(Effect.either(decodeSessionUploadContext(value))), {
+    onLeft: () => null,
+    onRight: (context) => context
+  })
 
 const resolveBackupContext = (
   options: BackupOptions,
@@ -603,9 +606,12 @@ const readBackgroundReadyState = (
   readyFilePath: string
 ): Effect.Effect<BackgroundReadyState | null, never> =>
   Effect.try({
-    try: () => decodeBackgroundReadyState(JSON.parse(fs.readFileSync(readyFilePath, "utf8"))),
+    try: (): unknown => JSON.parse(fs.readFileSync(readyFilePath, "utf8")),
     catch: errorMessage
-  }).pipe(Effect.catchAll(() => Effect.succeed(null)))
+  }).pipe(
+    Effect.flatMap(decodeBackgroundReadyState),
+    Effect.catchAll(() => Effect.succeed(null))
+  )
 
 const waitForBackgroundReady = (readyFilePath: string): Effect.Effect<BackgroundReadyState | null, never> => {
   const continuePolling = (deadline: number): Effect.Effect<BackgroundReadyState | null, never> =>

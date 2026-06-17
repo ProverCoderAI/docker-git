@@ -2,6 +2,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import fc from "fast-check"
+import { Effect, Either } from "effect"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import {
@@ -32,6 +33,14 @@ const output: Output = {
   out: () => undefined,
   err: () => undefined
 }
+
+const decodeSync = <A, E>(effect: Effect.Effect<A, E>): A => Effect.runSync(effect)
+
+const decodeFailureTag = <A, E extends { readonly _tag: string }>(effect: Effect.Effect<A, E>): string =>
+  Either.match(Effect.runSync(Effect.either(effect)), {
+    onLeft: (error) => error._tag,
+    onRight: () => "Right"
+  })
 
 const hexShaArbitrary = fc.array(
   fc.constantFrom("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"),
@@ -175,11 +184,12 @@ describe("upload artifacts", () => {
 
 describe("snapshot tree updates", () => {
   it("rejects invalid GitHub tree responses instead of silently dropping entries", () => {
-    expect(decodeGitHubTreeEntries({ tree: [{ path: "file.txt", mode: "100644", type: "blob" }] })).toBeNull()
+    expect(decodeFailureTag(decodeGitHubTreeEntries({ tree: [{ path: "file.txt", mode: "100644", type: "blob" }] })))
+      .toBe("DecodeError")
   })
 
   it("decodes valid GitHub tree responses as readonly entries", () => {
-    expect(decodeGitHubTreeEntries({
+    expect(decodeSync(decodeGitHubTreeEntries({
       tree: [
         {
           path: "file.txt",
@@ -188,7 +198,7 @@ describe("snapshot tree updates", () => {
           sha: "0123456789abcdef0123456789abcdef01234567"
         }
       ]
-    })).toEqual([
+    }))).toEqual([
       {
         path: "file.txt",
         mode: "100644",
@@ -199,15 +209,15 @@ describe("snapshot tree updates", () => {
   })
 
   it("validates GitHub content encoding and SHA contracts at the schema boundary", () => {
-    expect(decodeGitHubContentResponse({ encoding: "utf-8", content: "" })).toBeNull()
-    expect(decodeGitHubContentResponse({ encoding: "base64", content: "" })).toEqual({
+    expect(decodeFailureTag(decodeGitHubContentResponse({ encoding: "utf-8", content: "" }))).toBe("DecodeError")
+    expect(decodeSync(decodeGitHubContentResponse({ encoding: "base64", content: "" }))).toEqual({
       encoding: "base64",
       content: ""
     })
-    expect(decodeGitHubSha({ sha: "0123456789abcdef0123456789abcdef01234567" })).toBe(
+    expect(decodeSync(decodeGitHubSha({ sha: "0123456789abcdef0123456789abcdef01234567" }))).toBe(
       "0123456789abcdef0123456789abcdef01234567"
     )
-    expect(() => decodeGitHubSha({ sha: "not-a-sha" })).toThrow("GitHub response missing valid sha")
+    expect(decodeFailureTag(decodeGitHubSha({ sha: "not-a-sha" }))).toBe("DecodeError")
   })
 
   it("keeps stale remote session files untouched", () => {

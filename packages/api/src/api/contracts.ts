@@ -26,6 +26,16 @@ export type ProjectSummary = {
   readonly sshSessions: number
   readonly startedAtIso: string | null
   readonly startedAtEpochMs: number | null
+  /**
+   * Hostname of the machine where the project was originally cloned, when known.
+   *
+   * @pure true - immutable API DTO field.
+   * @effect none
+   * @invariant if present, the value was decoded by the API/config hostname schema.
+   * @precondition producers omit the field when clone host identity is unknown.
+   * @postcondition consumers can group projects by clone-origin host without reading OS state.
+   * @complexity O(1)/O(1)
+   */
   readonly clonedOnHostname?: string
 }
 
@@ -490,7 +500,11 @@ export type CreateProjectRequest = {
    * SOURCE: n/a
    * FORMAT THEOREM: ∀h ∈ Hostname: request(h) -> build(request).config.clonedOnHostname = h
    * PURITY: CORE - immutable request data.
+   * @pure true - immutable API request DTO field.
+   * @effect none
    * INVARIANT: if present, value satisfies API HostnameSchema.
+   * @precondition callers omit the field when clone host identity is unknown.
+   * @postcondition command builders receive host identity as data, not by reading OS state.
    * COMPLEXITY: O(1)/O(1)
    */
   readonly clonedOnHostname?: string

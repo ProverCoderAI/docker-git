@@ -380,7 +380,7 @@ describe("terminal sessions service", () => {
     })
   })
 
-  it("serializes foreground terminal state writes without resurrecting deleted sessions", async () => {
+  it("regression: serializes terminal persistence race between active selection and delete", async () => {
     probeProjectSshReadyMock.mockImplementation(() => Effect.succeed(true))
     getProjectMock.mockImplementation(() => Effect.succeed(projectDetails))
 

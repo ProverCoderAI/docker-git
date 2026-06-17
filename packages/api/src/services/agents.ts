@@ -35,8 +35,11 @@ type SnapshotFile = {
   readonly sessions: ReadonlyArray<AgentSession>
 }
 
+// Schema.Array already decodes to ReadonlyArray in effect@3.21.x; Schema.ReadonlyArray is not exported.
+const SnapshotSessionsSchema: Schema.Schema<ReadonlyArray<AgentSession>> = Schema.Array(AgentSessionSchema)
+
 const SnapshotFileSchema: Schema.Schema<SnapshotFile> = Schema.Struct({
-  sessions: Schema.Array(AgentSessionSchema)
+  sessions: SnapshotSessionsSchema
 })
 
 const SnapshotFileJsonSchema = Schema.parseJson(SnapshotFileSchema)
@@ -253,12 +256,13 @@ const persistSnapshot = (): Effect.Effect<void, PlatformError, FileSystem.FileSy
     yield* _(fs.writeFileString(filePath, `${JSON.stringify(payload, null, 2)}\n`))
   })
 
+const logSnapshotPersistenceFailure = (error: PlatformError): Effect.Effect<void> =>
+  Effect.logWarning(`[agents] persistSnapshotBestEffort failed: ${String(error)}`)
+
 const persistSnapshotBestEffort = (): void => {
   Effect.runFork(persistSnapshot().pipe(
     Effect.provide(NodeContext.layer),
-    Effect.catchAll((error) =>
-      Effect.logWarning(`[agents] Failed to persist snapshot: ${String(error)}`)
-    )
+    Effect.catchAll(logSnapshotPersistenceFailure)
   ))
 }
 
