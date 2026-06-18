@@ -51,11 +51,12 @@ export const loadPanelCloudflareTunnel = () =>
 // INVARIANT: Returned state is decoded by PanelCloudflareTunnelResponseSchema.
 // COMPLEXITY: O(1) local work plus network IO and controller-side startup.
 export const startPanelCloudflareTunnel = (panelUrl: string) =>
-  openApiJsonSchema(PanelCloudflareTunnelResponseSchema, (client) => client.POST("/cloudflare-tunnels/panel", {
-    body: { panelUrl }
-  })).pipe(
-    Effect.map((response) => response.tunnel)
-  )
+  openApiJsonSchema(PanelCloudflareTunnelResponseSchema, (client) =>
+    client.POST("/cloudflare-tunnels/panel", {
+      body: { panelUrl }
+    })).pipe(
+      Effect.map((response) => response.tunnel)
+    )
 
 /**
  * Stops the controller-owned panel Cloudflare tunnel.

@@ -21,6 +21,7 @@ const createProjectAcceptedBody = (draft: CreateProjectDraft) => ({
 })
 
 export const startCreateProject = (draft: CreateProjectDraft): Effect.Effect<CreateProjectAcceptedResponse, string> =>
-  openApiJsonSchema(CreateProjectAcceptedResponseSchema, (client) => client.POST("/projects", {
-    body: createProjectAcceptedBody(draft)
-  }))
+  openApiJsonSchema(CreateProjectAcceptedResponseSchema, (client) =>
+    client.POST("/projects", {
+      body: createProjectAcceptedBody(draft)
+    }))

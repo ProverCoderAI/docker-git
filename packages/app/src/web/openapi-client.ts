@@ -1,27 +1,30 @@
 import * as ParseResult from "@effect/schema/ParseResult"
-import * as Schema from "@effect/schema/Schema"
+import type * as Schema from "@effect/schema/Schema"
 import * as TreeFormatter from "@effect/schema/TreeFormatter"
-import createClient, { type Client, type Middleware } from "openapi-fetch"
 import { Effect, Either } from "effect"
+import createClient, { type Client, type Middleware } from "openapi-fetch"
 
-import type { paths } from "./generated/openapi-paths.js"
 import { resolveApiBaseUrl } from "./api-http.js"
+import type { paths } from "./generated/openapi-paths.js"
 
 type DockerGitOpenApiClient = Client<paths>
 
+type ApiTransportValue =
+  | undefined
+  | null
+  | boolean
+  | number
+  | string
+  | ReadonlyArray<ApiTransportValue>
+  | { readonly [key: string]: ApiTransportValue }
+
 type OpenApiResponse<A> = {
   readonly data?: A
-  readonly error?: unknown
+  readonly error?: ApiTransportValue
   readonly response: Response
 }
 
-type OpenApiClientMethod =
-  | DockerGitOpenApiClient["DELETE"]
-  | DockerGitOpenApiClient["GET"]
-  | DockerGitOpenApiClient["POST"]
-  | DockerGitOpenApiClient["PUT"]
-
-type OpenApiRequestResult = ReturnType<OpenApiClientMethod>
+type OpenApiRequestResult = PromiseLike<OpenApiResponse<ApiTransportValue>>
 
 type OpenApiRequest = (client: DockerGitOpenApiClient) => OpenApiRequestResult
 
@@ -31,28 +34,23 @@ const noCacheHeaders: Readonly<Record<string, string>> = {
   pragma: "no-cache"
 }
 
-const safeJson = (value: unknown): string | null =>
-  Either.match(
-    Effect.runSync(
-      Effect.either(
-        Effect.try({
-          try: () => JSON.stringify(value, null, 2),
-          catch: () => null
-        }).pipe(Effect.map((json) => json ?? null))
-      )
-    ),
-    {
-      onLeft: (fallback) => fallback,
-      onRight: (json) => json
-    }
-  )
+const stringifyJson = (value: ApiTransportValue): Effect.Effect<string, null> =>
+  Effect.try({
+    try: () => JSON.stringify(value, null, 2),
+    catch: () => null
+  })
 
-const renderUnknown = (value: unknown): string => {
+const safeJson = (value: ApiTransportValue): string | null => {
+  const result = Effect.runSync(Effect.either(stringifyJson(value)))
+  return Either.match(result, {
+    onLeft: (fallback) => fallback,
+    onRight: (json) => json
+  })
+}
+
+const renderTransportValue = (value: ApiTransportValue): string => {
   if (typeof value === "string") {
     return value
-  }
-  if (value instanceof Error) {
-    return value.message
   }
   if (typeof value === "object" && value !== null && "message" in value) {
     const message = value["message"]
@@ -60,20 +58,20 @@ const renderUnknown = (value: unknown): string => {
       return message
     }
   }
-  return safeJson(value) ?? String(value)
+  return safeJson(value) ?? "unrenderable response payload"
 }
 
-const renderOpenApiError = (response: Response, error: unknown): string => {
+const renderOpenApiError = (response: Response, error: ApiTransportValue): string => {
   if (response.status === 429) {
     return "HTTP 429: tunnel or proxy rate limited the request. Retry or request a fresh tunnel URL."
   }
-  return error === undefined ? `HTTP ${response.status}` : renderUnknown(error)
+  return error === undefined ? `HTTP ${response.status}` : renderTransportValue(error)
 }
 
 const noCacheGetMiddleware: Middleware = {
   onRequest: ({ request }) => {
     if (request.method !== "GET") {
-      return undefined
+      return
     }
     const url = new URL(request.url)
     url.searchParams.set("_", String(Date.now()))
@@ -109,10 +107,10 @@ const getOpenApiClient = (): DockerGitOpenApiClient => {
 
 const runOpenApi = (
   request: OpenApiRequest
-): Effect.Effect<OpenApiResponse<unknown>, string> =>
+): Effect.Effect<OpenApiResponse<ApiTransportValue>, string> =>
   Effect.tryPromise({
     try: () => request(getOpenApiClient()),
-    catch: (cause) => renderUnknown(cause)
+    catch: String
   })
 
 /**
@@ -125,7 +123,7 @@ const runOpenApi = (
  * @effect Network request via openapi-fetch wrapped by Effect.tryPromise.
  * @invariant Promise interop is isolated inside this boundary.
  * @precondition request uses a static path from generated OpenAPI paths.
- * @postcondition successful Effect contains only the 2xx data branch as unknown.
+ * @postcondition successful Effect contains only the 2xx data branch as a transport value.
  * @complexity O(n) local response rendering where n is the error payload size.
  * @throws Never; failures are returned in the Effect error channel.
  */
@@ -134,14 +132,14 @@ const runOpenApi = (
 // QUOTE(ТЗ): "использовать openapi-fetch на фронте для удобства"
 // REF: user-message-2026-06-18-openapi-fetch
 // SOURCE: https://openapi-ts.dev/openapi-fetch/
-// FORMAT THEOREM: response.ok ∧ data defined -> success(unknown data); otherwise -> failure(message).
+// FORMAT THEOREM: response.ok ∧ data defined -> success(transport data); otherwise -> failure(message).
 // PURITY: SHELL
-// EFFECT: Effect<unknown, string, never>
+// EFFECT: Effect<ApiTransportValue, string, never>
 // INVARIANT: no Promise escapes this module.
 // COMPLEXITY: O(n)/O(n) for error rendering, O(1)/O(1) on successful local processing.
 export const openApiJson = (
   request: OpenApiRequest
-): Effect.Effect<unknown, string> =>
+): Effect.Effect<ApiTransportValue, string> =>
   runOpenApi(request).pipe(
     Effect.flatMap(({ data, error, response }) => {
       if (error !== undefined || !response.ok) {
@@ -151,7 +149,7 @@ export const openApiJson = (
     })
   )
 
-const decodeSchema = <A, I>(schema: Schema.Schema<A, I>, value: unknown): Effect.Effect<A, string> =>
+const decodeSchema = <A, I>(schema: Schema.Schema<A, I>, value: ApiTransportValue): Effect.Effect<A, string> =>
   Either.match(ParseResult.decodeUnknownEither(schema)(value), {
     onLeft: (error) => Effect.fail(TreeFormatter.formatIssueSync(error)),
     onRight: (decoded) => Effect.succeed(decoded)
