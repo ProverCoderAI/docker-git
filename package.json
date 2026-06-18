@@ -42,6 +42,7 @@
     "dev": "bun run --cwd packages/app dev",
     "web:dev": "bun run --cwd packages/app dev:web",
     "web:build": "bun run --cwd packages/app build:web",
+    "web:generate-api": "bun run --cwd packages/app generate:api",
     "web:preview": "bun run --cwd packages/app preview:web",
     "web:serve": "bun run --cwd packages/app serve:web",
     "lint": "bun run --filter @prover-coder-ai/docker-git-terminal lint && bun run --filter @prover-coder-ai/docker-git lint && bun run --filter @effect-template/lib lint",

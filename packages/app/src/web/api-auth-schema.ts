@@ -23,6 +23,19 @@ export const GithubStatusResponseSchema = Schema.Struct({
   status: GithubAuthStatusSchema
 })
 
+export const CodexAuthStatusSchema = Schema.Struct({
+  account: NullableString,
+  authPath: Schema.String,
+  label: Schema.String,
+  message: Schema.String,
+  present: Schema.Boolean
+})
+
+export const CodexStatusResponseSchema = Schema.Struct({
+  ok: Schema.optional(Schema.Boolean),
+  status: CodexAuthStatusSchema
+})
+
 const AuthProviderSnapshotFields = {
   claudeAuthEntries: Schema.Number,
   claudeAuthPath: Schema.String,

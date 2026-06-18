@@ -7,6 +7,7 @@ import { requestJson, requestText, requestTextStream, resolveApiBaseUrl } from "
 import {
   AuthSnapshotResponseSchema,
   AuthTerminalSessionResponseSchema,
+  CodexStatusResponseSchema,
   GithubStatusResponseSchema,
   HealthResponseSchema,
   ProjectAuthSnapshotResponseSchema,
@@ -30,6 +31,7 @@ import type {
   ProjectPortForward,
   ProjectSummary
 } from "./api-schema.js"
+import { openApiJsonSchema, openApiVoid } from "./openapi-client.js"
 
 export { startCreateProject } from "./api-create-project.js"
 export {
@@ -105,8 +107,8 @@ export const sortDashboardProjects = (
 
 export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
   Effect.all({
-    health: requestJson("GET", "/health", HealthResponseSchema),
-    projectsResponse: requestJson("GET", "/projects", ProjectsResponseSchema)
+    health: openApiJsonSchema(HealthResponseSchema, (client) => client.GET("/health")),
+    projectsResponse: openApiJsonSchema(ProjectsResponseSchema, (client) => client.GET("/projects"))
   }).pipe(
     Effect.map(({ health, projectsResponse }) => ({
       apiBaseUrl: resolveApiBaseUrl(),
@@ -134,16 +136,22 @@ export const openSkiller = (projectKey?: string, sessionId?: string) =>
   )
 
 export const loadProjectPortForwards = (projectId: string) =>
-  requestJson("GET", `/projects/${encodeURIComponent(projectId)}/ports`, ProjectPortForwardsResponseSchema).pipe(
+  openApiJsonSchema(ProjectPortForwardsResponseSchema, (client) => client.GET("/projects/{projectId}/ports", {
+    params: { path: { projectId } }
+  })).pipe(
     Effect.map((response) => response.forwards)
   )
 
 export const loadProjectBrowser = (projectId: string) =>
-  requestJson("GET", `/projects/${encodeURIComponent(projectId)}/browser`, ProjectBrowserResponseSchema)
+  openApiJsonSchema(ProjectBrowserResponseSchema, (client) => client.GET("/projects/{projectId}/browser", {
+    params: { path: { projectId } }
+  }))
     .pipe(Effect.map((response) => response.browser))
 
 export const startProjectBrowser = (projectId: string) =>
-  requestJson("POST", `/projects/${encodeURIComponent(projectId)}/browser/start`, ProjectBrowserResponseSchema)
+  openApiJsonSchema(ProjectBrowserResponseSchema, (client) => client.POST("/projects/{projectId}/browser/start", {
+    params: { path: { projectId } }
+  }))
     .pipe(Effect.map((response) => response.browser))
 
 export const createProjectPortForward = (
@@ -151,26 +159,25 @@ export const createProjectPortForward = (
   targetPort: number,
   hostPort?: number
 ) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/ports`,
-    ProjectPortForwardResponseSchema,
-    hostPort === undefined ? { targetPort } : { hostPort, targetPort }
-  ).pipe(
+  openApiJsonSchema(ProjectPortForwardResponseSchema, (client) => client.POST("/projects/{projectId}/ports", {
+    body: hostPort === undefined ? { targetPort } : { hostPort, targetPort },
+    params: { path: { projectId } }
+  })).pipe(
     Effect.map((response) => response.forward)
   )
 
 export const deleteProjectPortForward = (
   projectId: string,
   targetPort: number
-) => requestText("DELETE", `/projects/${encodeURIComponent(projectId)}/ports/${targetPort}`).pipe(Effect.asVoid)
+) => openApiVoid((client) => client.DELETE("/projects/{projectId}/ports/{targetPort}", {
+  params: { path: { projectId, targetPort: String(targetPort) } }
+}))
 
 export const createProjectTerminalSession = (projectKey: string) =>
-  requestJson(
-    "POST",
-    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions`,
-    TerminalSessionResponseSchema
-  ).pipe(
+  openApiJsonSchema(TerminalSessionResponseSchema, (client) =>
+    client.POST("/projects/by-key/{projectKey}/terminal-sessions", {
+      params: { path: { projectKey } }
+    })).pipe(
     Effect.map((response) => ({
       project: response.project,
       session: response.session
@@ -181,23 +188,19 @@ export const startProjectTerminalSession = (
   projectKey: string,
   requestId: string
 ) =>
-  requestJson(
-    "POST",
-    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/start`,
-    StartProjectTerminalSessionAcceptedResponseSchema,
-    { requestId }
-  )
+  openApiJsonSchema(StartProjectTerminalSessionAcceptedResponseSchema, (client) =>
+    client.POST("/projects/by-key/{projectKey}/terminal-sessions/start", {
+      body: { requestId },
+      params: { path: { projectKey } }
+    }))
 
 export const createAuthTerminalSession = (
   flow: "ClaudeOauth" | "GeminiOauth" | "GrokOauth",
   label: string | null
 ) =>
-  requestJson(
-    "POST",
-    "/auth/terminal-sessions",
-    AuthTerminalSessionResponseSchema,
-    { flow, label }
-  ).pipe(
+  openApiJsonSchema(AuthTerminalSessionResponseSchema, (client) => client.POST("/auth/terminal-sessions", {
+    body: { flow, label }
+  })).pipe(
     Effect.map((response) => response.session)
   )
 
@@ -205,40 +208,33 @@ export const deleteProjectTerminalSession = (
   projectKey: string,
   sessionId: string
 ) =>
-  requestText(
-    "DELETE",
-    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/${encodeURIComponent(sessionId)}`
-  )
-    .pipe(
-      Effect.asVoid
-    )
+  openApiVoid((client) => client.DELETE("/projects/by-key/{projectKey}/terminal-sessions/{sessionId}", {
+    params: { path: { projectKey, sessionId } }
+  }))
 
 export const loadProjectTerminalSessions = (projectKey: string) =>
-  requestJson(
-    "GET",
-    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions`,
-    ProjectTerminalSessionsResponseSchema
-  ).pipe(
+  openApiJsonSchema(ProjectTerminalSessionsResponseSchema, (client) =>
+    client.GET("/projects/by-key/{projectKey}/terminal-sessions", {
+      params: { path: { projectKey } }
+    })).pipe(
     Effect.map((response) => response.sessions)
   )
 
 export const loadProjectTerminalWorkspace = (projectKey: string) =>
-  requestJson(
-    "GET",
-    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions`,
-    ProjectTerminalSessionsResponseSchema
-  )
+  openApiJsonSchema(ProjectTerminalSessionsResponseSchema, (client) =>
+    client.GET("/projects/by-key/{projectKey}/terminal-sessions", {
+      params: { path: { projectKey } }
+    }))
 
 export const setProjectActiveTerminalSession = (
   projectKey: string,
   sessionId: string
 ) =>
-  requestJson(
-    "PUT",
-    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/active`,
-    ProjectTerminalSessionResponseSchema,
-    { sessionId }
-  ).pipe(
+  openApiJsonSchema(ProjectTerminalSessionResponseSchema, (client) =>
+    client.PUT("/projects/by-key/{projectKey}/terminal-sessions/active", {
+      body: { sessionId },
+      params: { path: { projectKey } }
+    })).pipe(
     Effect.map((response) => response.session)
   )
 
@@ -246,41 +242,46 @@ export const loadProjectTerminalSession = (
   projectKey: string,
   sessionId: string
 ) =>
-  requestJson(
-    "GET",
-    `/projects/by-key/${encodeURIComponent(projectKey)}/terminal-sessions/${encodeURIComponent(sessionId)}`,
-    ProjectTerminalSessionResponseSchema
-  ).pipe(
+  openApiJsonSchema(ProjectTerminalSessionResponseSchema, (client) =>
+    client.GET("/projects/by-key/{projectKey}/terminal-sessions/{sessionId}", {
+      params: { path: { projectKey, sessionId } }
+    })).pipe(
     Effect.map((response) => response.session)
   )
 
 export const loadTerminalSessionById = (sessionId: string) =>
-  requestJson(
-    "GET",
-    `/terminal-sessions/${encodeURIComponent(sessionId)}`,
-    TerminalSessionLookupResponseSchema
-  )
+  openApiJsonSchema(TerminalSessionLookupResponseSchema, (client) => client.GET("/terminal-sessions/{sessionId}", {
+    params: { path: { sessionId } }
+  }))
 
 export const deleteTerminalSessionByPath = (path: string) => requestText("DELETE", path).pipe(Effect.asVoid)
 
 export const downProject = (projectId: string) =>
-  requestText("POST", `/projects/${encodeURIComponent(projectId)}/down`).pipe(Effect.asVoid)
+  openApiVoid((client) => client.POST("/projects/{projectId}/down", {
+    params: { path: { projectId } }
+  }))
 
 export const deleteProject = (projectId: string) =>
-  requestText("DELETE", `/projects/${encodeURIComponent(projectId)}`).pipe(Effect.asVoid)
+  openApiVoid((client) => client.DELETE("/projects/{projectId}", {
+    params: { path: { projectId } }
+  }))
 
-export const downAllProjects = () => requestText("POST", "/projects/down-all").pipe(Effect.asVoid)
+export const downAllProjects = () => openApiVoid((client) => client.POST("/projects/down-all"))
 
 export const applyAllProjects = (shouldApplyActiveOnly: boolean) =>
-  requestText("POST", "/projects/apply-all", { activeOnly: shouldApplyActiveOnly }).pipe(Effect.asVoid)
+  openApiVoid((client) => client.POST("/projects/apply-all", {
+    body: { activeOnly: shouldApplyActiveOnly }
+  }))
 
 export const loadGithubStatus = () =>
-  requestJson("GET", "/auth/github/status", GithubStatusResponseSchema).pipe(
+  openApiJsonSchema(GithubStatusResponseSchema, (client) => client.GET("/auth/github/status")).pipe(
     Effect.map((response) => response.status)
   )
 
 export const loginGithub = (label: string | null) =>
-  requestJson("POST", "/auth/github/login", GithubStatusResponseSchema, { label }).pipe(
+  openApiJsonSchema(GithubStatusResponseSchema, (client) => client.POST("/auth/github/login", {
+    body: { label }
+  })).pipe(
     Effect.map((response) => response.status)
   )
 
@@ -301,7 +302,9 @@ export const loginCodexStream = (label: string | null, onChunk: (chunk: string) 
   })
 
 export const logoutCodex = (label: string | null) =>
-  requestText("POST", "/auth/codex/logout", { label }).pipe(Effect.asVoid)
+  openApiJsonSchema(CodexStatusResponseSchema, (client) => client.POST("/auth/codex/logout", {
+    body: { label }
+  })).pipe(Effect.asVoid)
 
 export const loadProjectEvents = (
   projectId: string,
@@ -316,21 +319,19 @@ export const loadProjectEvents = (
   )
 
 export const loadAuthSnapshot = () =>
-  requestJson("GET", "/auth/menu", AuthSnapshotResponseSchema).pipe(
+  openApiJsonSchema(AuthSnapshotResponseSchema, (client) => client.GET("/auth/menu")).pipe(
     Effect.map((response) => response.snapshot)
   )
 
 export const runAuthMenuFlow = (request: AuthMenuRequestBody & { readonly flow: AuthMenuFlow }) =>
-  requestJson("POST", "/auth/menu", AuthSnapshotResponseSchema, request).pipe(
+  openApiJsonSchema(AuthSnapshotResponseSchema, (client) => client.POST("/auth/menu", { body: request })).pipe(
     Effect.map((response) => response.snapshot)
   )
 
 export const loadProjectAuthSnapshot = (projectId: string) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/auth/menu`,
-    ProjectAuthSnapshotResponseSchema
-  ).pipe(
+  openApiJsonSchema(ProjectAuthSnapshotResponseSchema, (client) => client.GET("/projects/{projectId}/auth/menu", {
+    params: { path: { projectId } }
+  })).pipe(
     Effect.map((response) => response.snapshot)
   )
 
@@ -338,12 +339,10 @@ export const runProjectAuthFlow = (
   projectId: string,
   request: ProjectAuthMenuRequestBody & { readonly flow: ProjectAuthFlow }
 ) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/auth/menu`,
-    ProjectAuthSnapshotResponseSchema,
-    request
-  ).pipe(
+  openApiJsonSchema(ProjectAuthSnapshotResponseSchema, (client) => client.POST("/projects/{projectId}/auth/menu", {
+    body: request,
+    params: { path: { projectId } }
+  })).pipe(
     Effect.map((response) => response.snapshot)
   )
 

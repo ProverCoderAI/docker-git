@@ -1,6 +1,5 @@
 import { Effect } from "effect"
 
-import { requestJson, requestText } from "./api-http.js"
 import {
   ProjectDatabaseForwardResponseSchema,
   ProjectDatabaseForwardsResponseSchema,
@@ -9,33 +8,24 @@ import {
   ProjectDatabaseSessionResponseSchema
 } from "./api-schema.js"
 import type { ProjectDatabaseForward, ProjectDatabaseSession } from "./api-schema.js"
+import { openApiJsonSchema, openApiVoid } from "./openapi-client.js"
 
 export const projectDatabaseEditorUrl = (session: ProjectDatabaseSession): string => session.editorPath
 
 export const projectDatabaseExternalUrl = (forward: ProjectDatabaseForward): string =>
   `${forward.publicHost}:${forward.hostPort}`
 
-const projectDatabaseProfilePath = (projectId: string, profileId: string): string =>
-  `/projects/${encodeURIComponent(projectId)}/databases/profiles/${encodeURIComponent(profileId)}`
-
-const projectDatabaseForwardPath = (projectId: string, profileId: string): string =>
-  `${projectDatabaseProfilePath(projectId, profileId)}/expose`
-
 export const loadProjectDatabaseProfiles = (projectId: string) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/databases/profiles`,
-    ProjectDatabaseProfilesResponseSchema
-  ).pipe(
+  openApiJsonSchema(ProjectDatabaseProfilesResponseSchema, (client) => client.GET("/projects/{projectId}/databases/profiles", {
+    params: { path: { projectId } }
+  })).pipe(
     Effect.map((response) => response.profiles)
   )
 
 export const loadProjectDatabaseForwards = (projectId: string) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/databases/forwards`,
-    ProjectDatabaseForwardsResponseSchema
-  ).pipe(
+  openApiJsonSchema(ProjectDatabaseForwardsResponseSchema, (client) => client.GET("/projects/{projectId}/databases/forwards", {
+    params: { path: { projectId } }
+  })).pipe(
     Effect.map((response) => response.forwards)
   )
 
@@ -44,60 +34,55 @@ export const saveProjectDatabaseProfile = (
   connectionString: string,
   label: string | null
 ) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/databases/profiles`,
-    ProjectDatabaseProfileResponseSchema,
-    { connectionString, label }
-  ).pipe(
+  openApiJsonSchema(ProjectDatabaseProfileResponseSchema, (client) => client.POST("/projects/{projectId}/databases/profiles", {
+    body: { connectionString, label },
+    params: { path: { projectId } }
+  })).pipe(
     Effect.map((response) => response.profile)
   )
 
 export const deleteProjectDatabaseProfile = (
   projectId: string,
   profileId: string
-) => requestText("DELETE", projectDatabaseProfilePath(projectId, profileId)).pipe(Effect.asVoid)
+) => openApiVoid((client) => client.DELETE("/projects/{projectId}/databases/profiles/{profileId}", {
+  params: { path: { profileId, projectId } }
+}))
 
 export const exposeProjectDatabaseProfile = (
   projectId: string,
   profileId: string
 ) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/databases/profiles/${encodeURIComponent(profileId)}/expose`,
-    ProjectDatabaseForwardResponseSchema
-  ).pipe(
+  openApiJsonSchema(ProjectDatabaseForwardResponseSchema, (client) =>
+    client.POST("/projects/{projectId}/databases/profiles/{profileId}/expose", {
+      params: { path: { profileId, projectId } }
+    })).pipe(
     Effect.map((response) => response.forward)
   )
 
 export const deleteProjectDatabaseForward = (
   projectId: string,
   profileId: string
-) => requestText("DELETE", projectDatabaseForwardPath(projectId, profileId)).pipe(Effect.asVoid)
+) => openApiVoid((client) => client.DELETE("/projects/{projectId}/databases/profiles/{profileId}/expose", {
+  params: { path: { profileId, projectId } }
+}))
 
 export const loadProjectDatabaseSession = (projectId: string) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/databases/session`,
-    ProjectDatabaseSessionResponseSchema
-  ).pipe(
+  openApiJsonSchema(ProjectDatabaseSessionResponseSchema, (client) => client.GET("/projects/{projectId}/databases/session", {
+    params: { path: { projectId } }
+  })).pipe(
     Effect.map((response) => response.session)
   )
 
 export const openProjectDatabaseEditor = (projectId: string) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/databases/open`,
-    ProjectDatabaseSessionResponseSchema
-  ).pipe(
+  openApiJsonSchema(ProjectDatabaseSessionResponseSchema, (client) => client.POST("/projects/{projectId}/databases/open", {
+    params: { path: { projectId } }
+  })).pipe(
     Effect.map((response) => response.session)
   )
 
 export const restartProjectDatabaseEditor = (projectId: string) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/databases/restart`,
-    ProjectDatabaseSessionResponseSchema
-  ).pipe(
+  openApiJsonSchema(ProjectDatabaseSessionResponseSchema, (client) => client.POST("/projects/{projectId}/databases/restart", {
+    params: { path: { projectId } }
+  })).pipe(
     Effect.map((response) => response.session)
   )
