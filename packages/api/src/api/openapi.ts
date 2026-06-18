@@ -465,9 +465,16 @@ const QueryLinesSchema = Schema.Struct({
   lines: Schema.optional(Schema.String)
 })
 
+const ApiErrorEnvelopeSchema = Schema.Struct({
+  command: Schema.optional(Schema.String),
+  details: Schema.optional(Schema.Unknown),
+  message: Schema.String,
+  provider: Schema.optional(Schema.String),
+  type: Schema.String
+})
+
 const ApiErrorResponseSchema = Schema.Struct({
-  error: Schema.String,
-  message: Schema.String
+  error: ApiErrorEnvelopeSchema
 })
 
 const endpoint = {
@@ -486,7 +493,7 @@ const ProjectsGroup = HttpApiGroup.make("projects")
   .add(
     endpoint.post("createProject", "/projects")
       .setPayload(CreateProjectRequestSchema)
-      .addSuccess(ProjectResponseSchema)
+      .addSuccess(ProjectResponseSchema, { status: 201 })
       .addSuccess(CreateProjectAcceptedResponseSchema, { status: 202 })
   )
   .add(
@@ -518,7 +525,7 @@ const ProjectPortsGroup = HttpApiGroup.make("projectPorts")
   .add(
     endpoint.post("createProjectPort")`/projects/${ProjectIdParam}/ports`
       .setPayload(ProjectPortForwardRequestSchema)
-      .addSuccess(ProjectPortForwardResponseSchema)
+      .addSuccess(ProjectPortForwardResponseSchema, { status: 201 })
   )
   .add(
     endpoint.del("deleteProjectPort")`/projects/${ProjectIdParam}/ports/${TargetPortParam}`
@@ -540,7 +547,7 @@ const ProjectDatabasesGroup = HttpApiGroup.make("projectDatabases")
   .add(
     endpoint.post("saveDatabaseProfile")`/projects/${ProjectIdParam}/databases/profiles`
       .setPayload(ProjectDatabaseProfileRequestSchema)
-      .addSuccess(ProjectDatabaseProfileResponseSchema)
+      .addSuccess(ProjectDatabaseProfileResponseSchema, { status: 201 })
   )
   .add(
     endpoint.del("deleteDatabaseProfile")`/projects/${ProjectIdParam}/databases/profiles/${ProfileIdParam}`
@@ -548,7 +555,7 @@ const ProjectDatabasesGroup = HttpApiGroup.make("projectDatabases")
   )
   .add(
     endpoint.post("exposeDatabaseProfile")`/projects/${ProjectIdParam}/databases/profiles/${ProfileIdParam}/expose`
-      .addSuccess(ProjectDatabaseForwardResponseSchema)
+      .addSuccess(ProjectDatabaseForwardResponseSchema, { status: 201 })
   )
   .add(
     endpoint.del("deleteDatabaseForward")`/projects/${ProjectIdParam}/databases/profiles/${ProfileIdParam}/expose`
@@ -624,7 +631,7 @@ const AuthGroup = HttpApiGroup.make("auth")
   .add(
     endpoint.post("authTerminalSession", "/auth/terminal-sessions")
       .setPayload(AuthTerminalSessionRequestSchema)
-      .addSuccess(AuthTerminalSessionResponseSchema)
+      .addSuccess(AuthTerminalSessionResponseSchema, { status: 201 })
   )
   .add(
     endpoint.post("codexImport", "/auth/codex/import")
@@ -653,7 +660,7 @@ const ProjectAuthGroup = HttpApiGroup.make("projectAuth")
 const TerminalGroup = HttpApiGroup.make("terminal")
   .add(
     endpoint.post("createTerminalByKey")`/projects/by-key/${ProjectKeyParam}/terminal-sessions`
-      .addSuccess(TerminalSessionResponseSchema)
+      .addSuccess(TerminalSessionResponseSchema, { status: 201 })
   )
   .add(
     endpoint.post("startTerminalByKey")`/projects/by-key/${ProjectKeyParam}/terminal-sessions/start`

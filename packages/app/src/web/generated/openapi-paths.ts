@@ -942,8 +942,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -990,8 +996,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1056,7 +1068,7 @@ export interface operations {
         };
         responses: {
             /** @description Success */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1116,8 +1128,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1152,8 +1170,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1182,8 +1206,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1247,8 +1277,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1279,8 +1315,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1311,8 +1353,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1387,8 +1435,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1459,8 +1513,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1524,8 +1584,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1589,8 +1655,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1625,8 +1697,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1661,8 +1739,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1712,8 +1796,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1738,7 +1828,7 @@ export interface operations {
         };
         responses: {
             /** @description Success */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1770,8 +1860,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1803,8 +1899,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1849,8 +1951,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1895,8 +2003,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1943,8 +2057,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -1969,7 +2089,7 @@ export interface operations {
         };
         responses: {
             /** @description Success */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1998,8 +2118,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2031,8 +2157,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2051,7 +2183,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2088,8 +2220,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2121,8 +2259,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2177,8 +2321,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2222,8 +2372,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2267,8 +2423,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2312,8 +2474,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2356,8 +2524,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2400,8 +2574,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2441,8 +2621,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2485,8 +2671,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2528,8 +2720,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2580,8 +2778,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2630,8 +2834,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2681,8 +2891,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2731,8 +2947,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2780,8 +3002,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2827,8 +3055,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2876,8 +3110,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2936,8 +3176,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -2961,7 +3207,7 @@ export interface operations {
         };
         responses: {
             /** @description Success */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2991,8 +3237,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3039,8 +3291,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3086,8 +3344,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3134,8 +3398,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3192,8 +3462,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3258,8 +3534,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3307,8 +3589,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3326,7 +3614,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3385,8 +3673,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3431,8 +3725,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3480,8 +3780,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3513,8 +3819,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3567,8 +3879,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3617,8 +3935,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3649,8 +3973,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3700,8 +4030,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3768,8 +4104,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3820,8 +4162,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3878,8 +4226,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -3956,8 +4310,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -4016,8 +4376,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -4073,8 +4439,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -4106,8 +4478,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -4145,8 +4523,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -4189,8 +4573,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -4239,8 +4629,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };
@@ -4283,8 +4679,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
-                        error: string;
-                        message: string;
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
                     };
                 };
             };

@@ -1,18 +1,16 @@
 import { Effect } from "effect"
 
-import type { ApplyProjectRequest, ProjectResourceLimitRequest } from "../shared/project-resource-request.js"
-import type { CreateProjectDraft } from "./api-schema.js"
+import type { ApplyProjectRequest } from "../shared/project-resource-request.js"
+import {
+  baseCreateProjectBody,
+  type CreateProjectRequestDraft,
+  optionalProjectResourceFields
+} from "./api-project-create-body.js"
 import { OutputResponseSchema, ProjectResponseSchema } from "./api-schema.js"
 import { openApiJsonSchema } from "./openapi-client.js"
 
 export type { ApplyProjectRequest, ProjectResourceLimitRequest } from "../shared/project-resource-request.js"
-
-type CreateProjectRequestDraft = CreateProjectDraft & ProjectResourceLimitRequest
-
-const optionalProjectResourceFields = (request: ProjectResourceLimitRequest) => ({
-  ...(request.playwrightCpuLimit !== undefined && { playwrightCpuLimit: request.playwrightCpuLimit }),
-  ...(request.playwrightRamLimit !== undefined && { playwrightRamLimit: request.playwrightRamLimit })
-})
+export type { CreateProjectRequestDraft } from "./api-project-create-body.js"
 
 const applyProjectBody = (request: ApplyProjectRequest | undefined) => ({
   ...(request?.cpuLimit !== undefined && { cpuLimit: request.cpuLimit }),
@@ -22,18 +20,7 @@ const applyProjectBody = (request: ApplyProjectRequest | undefined) => ({
 })
 
 const createProjectBody = (draft: CreateProjectRequestDraft) => ({
-  cpuLimit: draft.cpuLimit,
-  enableMcpPlaywright: draft.enableMcpPlaywright,
-  force: draft.force,
-  forceEnv: draft.forceEnv,
-  gpu: draft.gpu,
-  openSsh: false,
-  outDir: draft.outDir,
-  ramLimit: draft.ramLimit,
-  repoRef: draft.repoRef,
-  repoUrl: draft.repoUrl,
-  up: draft.up,
-  useManagedAuthorizedKeys: true,
+  ...baseCreateProjectBody(draft),
   ...optionalProjectResourceFields(draft)
 })
 

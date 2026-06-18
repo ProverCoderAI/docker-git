@@ -1,7 +1,7 @@
 import * as ParseResult from "@effect/schema/ParseResult"
 import type * as Schema from "@effect/schema/Schema"
 import * as TreeFormatter from "@effect/schema/TreeFormatter"
-import { Effect, Either } from "effect"
+import { Effect, Either, Option } from "effect"
 import createClient, { type Client, type Middleware } from "openapi-fetch"
 
 import { resolveApiBaseUrl } from "./api-http.js"
@@ -18,9 +18,11 @@ type ApiTransportValue =
   | ReadonlyArray<ApiTransportValue>
   | { readonly [key: string]: ApiTransportValue }
 
+type ApiTransportError = ApiTransportValue | object
+
 type OpenApiResponse<A> = {
   readonly data?: A
-  readonly error?: ApiTransportValue
+  readonly error?: ApiTransportError
   readonly response: Response
 }
 
@@ -34,38 +36,38 @@ const noCacheHeaders: Readonly<Record<string, string>> = {
   pragma: "no-cache"
 }
 
-const stringifyJson = (value: ApiTransportValue): Effect.Effect<string, null> =>
+const stringifyJson = (value: ApiTransportError): Effect.Effect<string, null> =>
   Effect.try({
     try: () => JSON.stringify(value, null, 2),
     catch: () => null
   })
 
-const safeJson = (value: ApiTransportValue): string | null => {
-  const result = Effect.runSync(Effect.either(stringifyJson(value)))
-  return Either.match(result, {
-    onLeft: (fallback) => fallback,
-    onRight: (json) => json
-  })
-}
+const safeJson = (value: ApiTransportError): Effect.Effect<string> =>
+  stringifyJson(value).pipe(
+    Effect.orElseSucceed(() => "unrenderable response payload")
+  )
 
-const renderTransportValue = (value: ApiTransportValue): string => {
+const renderTransportValue = (value: ApiTransportError): Effect.Effect<string> => {
   if (typeof value === "string") {
-    return value
+    return Effect.succeed(value)
   }
   if (typeof value === "object" && value !== null && "message" in value) {
     const message = value["message"]
     if (typeof message === "string") {
-      return message
+      return Effect.succeed(message)
     }
   }
-  return safeJson(value) ?? "unrenderable response payload"
+  return safeJson(value)
 }
 
-const renderOpenApiError = (response: Response, error: ApiTransportValue): string => {
+const renderOpenApiError = (
+  response: Response,
+  error: ApiTransportError | undefined
+): Effect.Effect<string> => {
   if (response.status === 429) {
-    return "HTTP 429: tunnel or proxy rate limited the request. Retry or request a fresh tunnel URL."
+    return Effect.succeed("HTTP 429: tunnel or proxy rate limited the request. Retry or request a fresh tunnel URL.")
   }
-  return error === undefined ? `HTTP ${response.status}` : renderTransportValue(error)
+  return error === undefined ? Effect.succeed(`HTTP ${response.status}`) : renderTransportValue(error)
 }
 
 const noCacheGetMiddleware: Middleware = {
@@ -88,6 +90,11 @@ const makeClient = (baseUrl: string): DockerGitOpenApiClient => {
   return client
 }
 
+// PURITY: SHELL
+// LIMITATION: mutable cache for client reuse until frontend API helpers are migrated to an Effect Layer.
+// MIGRATION: replace this cache with Context.Tag + Layer once UI call sites provide shared dependencies.
+// INVARIANT: cache is keyed only by resolved baseUrl and is invalidated on baseUrl change.
+// TESTABILITY: tests that exercise client creation must isolate module state or reset the module between cases.
 const clientCache: {
   baseUrl: string | null
   client: DockerGitOpenApiClient | null
@@ -112,6 +119,14 @@ const runOpenApi = (
     try: () => request(getOpenApiClient()),
     catch: String
   })
+
+const failRenderedOpenApiError = (
+  response: Response,
+  error: ApiTransportError | undefined
+): Effect.Effect<never, string> =>
+  renderOpenApiError(response, error).pipe(
+    Effect.flatMap((message) => Effect.fail(message))
+  )
 
 /**
  * Executes a typed OpenAPI JSON request through openapi-fetch.
@@ -141,12 +156,18 @@ export const openApiJson = (
   request: OpenApiRequest
 ): Effect.Effect<ApiTransportValue, string> =>
   runOpenApi(request).pipe(
-    Effect.flatMap(({ data, error, response }) => {
-      if (error !== undefined || !response.ok) {
-        return Effect.fail(renderOpenApiError(response, error))
-      }
-      return data === undefined ? Effect.fail(`HTTP ${response.status}: empty response`) : Effect.succeed(data)
-    })
+    Effect.flatMap(({ data, error, response }) =>
+      Option.match(Option.fromNullable(error), {
+        onNone: () =>
+          response.ok
+            ? Option.match(Option.fromNullable(data), {
+              onNone: () => Effect.fail(`HTTP ${response.status}: empty response`),
+              onSome: (value) => Effect.succeed(value)
+            })
+            : failRenderedOpenApiError(response, error),
+        onSome: (apiError) => failRenderedOpenApiError(response, apiError)
+      })
+    )
   )
 
 const decodeSchema = <A, I>(schema: Schema.Schema<A, I>, value: ApiTransportValue): Effect.Effect<A, string> =>
@@ -217,8 +238,11 @@ export const openApiVoid = (
 ): Effect.Effect<void, string> =>
   runOpenApi(request).pipe(
     Effect.flatMap(({ error, response }) =>
-      error !== undefined || !response.ok
-        ? Effect.fail(renderOpenApiError(response, error))
-        : Effect.void
+      response.ok
+        ? Option.match(Option.fromNullable(error), {
+          onNone: () => Effect.void,
+          onSome: (apiError) => failRenderedOpenApiError(response, apiError)
+        })
+        : failRenderedOpenApiError(response, error)
     )
   )

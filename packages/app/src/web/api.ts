@@ -59,6 +59,7 @@ export { loadProjectTaskLogs, loadProjectTasks, stopProjectTask } from "./api-ta
 export {
   createAuthTerminalSession,
   createProjectTerminalSession,
+  deleteAuthTerminalSession,
   deleteProjectTerminalSession,
   deleteTerminalSessionByPath,
   loadProjectTerminalSession,

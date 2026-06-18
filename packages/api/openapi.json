@@ -65,15 +65,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -199,15 +218,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -227,7 +265,7 @@
         "parameters": [],
         "security": [],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -418,15 +456,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -603,15 +660,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -665,15 +741,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -865,15 +960,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -917,15 +1031,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -971,15 +1104,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -1171,15 +1323,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -1404,15 +1575,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -1624,15 +1814,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -1824,15 +2033,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -1894,15 +2122,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -1964,15 +2211,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -2106,15 +2372,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -2143,7 +2428,7 @@
         ],
         "security": [],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -2243,15 +2528,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -2327,15 +2631,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -2440,15 +2763,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -2553,15 +2895,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -2676,15 +3037,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -2713,7 +3093,7 @@
         ],
         "security": [],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -2794,15 +3174,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -2885,15 +3284,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -2932,7 +3350,7 @@
         ],
         "security": [],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -3053,15 +3471,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -3113,15 +3550,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -3276,15 +3732,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -3385,15 +3860,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -3494,15 +3988,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -3603,15 +4116,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -3716,15 +4248,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -3829,15 +4380,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -3922,15 +4492,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -4025,15 +4614,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -4130,15 +4738,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -4243,15 +4870,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -4400,15 +5046,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -4537,15 +5202,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -4684,15 +5368,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -4801,15 +5504,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -4933,15 +5655,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -5069,15 +5810,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -5184,15 +5944,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -5283,7 +6062,7 @@
         "parameters": [],
         "security": [],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -5363,15 +6142,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -5493,15 +6291,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -5618,15 +6435,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -5736,15 +6572,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -5949,15 +6804,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -6136,15 +7010,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -6216,7 +7109,7 @@
         ],
         "security": [],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -6427,15 +7320,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -6555,15 +7467,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -6640,15 +7571,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -6783,15 +7733,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -6843,15 +7812,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -6959,15 +7947,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -7102,15 +8109,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -7156,15 +8182,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -7292,15 +8337,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -7479,15 +8543,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -7640,15 +8723,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -7823,15 +8925,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -8061,15 +9182,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -8296,15 +9436,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -8456,15 +9615,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -8518,15 +9696,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -8604,15 +9801,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -8739,15 +9955,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -8872,15 +10107,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false
@@ -9024,15 +10278,34 @@
                     {
                       "type": "object",
                       "required": [
-                        "error",
-                        "message"
+                        "error"
                       ],
                       "properties": {
                         "error": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "type"
+                          ],
+                          "properties": {
+                            "command": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "$id": "/schemas/unknown",
+                              "title": "unknown"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "additionalProperties": false

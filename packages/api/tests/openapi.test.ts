@@ -22,4 +22,45 @@ describe("openapi contract", () => {
       expect(paths["/projects/{projectId}/auth"]).toBeUndefined()
       expect(Object.keys(paths)).toHaveLength(54)
     }))
+
+  it.effect("documents real HTTP success status codes for create and async endpoints", () =>
+    Effect.sync(() => {
+      const spec = buildDockerGitOpenApi()
+      const paths = spec.paths ?? {}
+
+      const postResponseStatuses = (path: string): ReadonlyArray<string> =>
+        Object.keys(paths[path]?.post?.responses ?? {})
+
+      expect(postResponseStatuses("/projects")).toEqual(expect.arrayContaining(["201", "202", "400"]))
+      expect(postResponseStatuses("/projects/{projectId}/ports")).toEqual(expect.arrayContaining(["201", "400"]))
+      expect(postResponseStatuses("/projects/{projectId}/databases/profiles")).toEqual(
+        expect.arrayContaining(["201", "400"])
+      )
+      expect(postResponseStatuses("/projects/{projectId}/databases/profiles/{profileId}/expose")).toEqual(
+        expect.arrayContaining(["201", "400"])
+      )
+      expect(postResponseStatuses("/auth/terminal-sessions")).toEqual(expect.arrayContaining(["201", "400"]))
+      expect(postResponseStatuses("/projects/by-key/{projectKey}/terminal-sessions")).toEqual(
+        expect.arrayContaining(["201", "400"])
+      )
+      expect(postResponseStatuses("/projects/by-key/{projectKey}/terminal-sessions/start")).toEqual(
+        expect.arrayContaining(["202", "400"])
+      )
+    }))
+
+  it.effect("documents the nested API error envelope used by HTTP handlers", () =>
+    Effect.sync(() => {
+      const spec = buildDockerGitOpenApi()
+      const serializedBadRequestSchema = JSON.stringify(
+        spec.paths?.["/projects"]?.post?.responses?.["400"] ?? {}
+      )
+
+      expect(serializedBadRequestSchema).toContain("\"required\":[\"error\"]")
+      expect(serializedBadRequestSchema).toContain("\"error\":{\"type\":\"object\"")
+      expect(serializedBadRequestSchema).toContain("\"type\":{\"type\":\"string\"")
+      expect(serializedBadRequestSchema).toContain("\"message\":{\"type\":\"string\"")
+      expect(serializedBadRequestSchema).toContain("\"provider\":{\"type\":\"string\"")
+      expect(serializedBadRequestSchema).toContain("\"command\":{\"type\":\"string\"")
+      expect(serializedBadRequestSchema).not.toContain("\"required\":[\"error\",\"message\"]")
+    }))
 })
