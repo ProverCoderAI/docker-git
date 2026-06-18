@@ -79,6 +79,9 @@ describe("api terminal helpers", () => {
       const result = yield* _(Effect.either(deleteTerminalSessionByPath("/terminal-sessions/session-1")))
 
       expect(result._tag).toBe("Left")
+      if (result._tag === "Left") {
+        expect(result.left).toBe("Invalid terminal close path: /terminal-sessions/session-1")
+      }
       expect(capturedDeleteRequests).toEqual([])
     }))
 })

@@ -15,6 +15,48 @@ import type { CreateProjectDraft } from "./api-schema.js"
 export type CreateProjectRequestDraft = CreateProjectDraft & ProjectResourceLimitRequest
 
 /**
+ * Optional resource-limit fragment serialized into POST /projects request bodies.
+ *
+ * @pure true - structural type contract only.
+ * @effect none
+ * @invariant present fields are defined strings; undefined inputs are omitted by optionalProjectResourceFields.
+ * @precondition callers construct this value through optionalProjectResourceFields.
+ * @postcondition spreading this fragment cannot add undefined Playwright limit fields.
+ * @complexity O(1).
+ * @throws Never.
+ */
+export type OptionalProjectResourceFieldsBody = Readonly<{
+  readonly playwrightCpuLimit?: Exclude<ProjectResourceLimitRequest["playwrightCpuLimit"], undefined>
+  readonly playwrightRamLimit?: Exclude<ProjectResourceLimitRequest["playwrightRamLimit"], undefined>
+}>
+
+/**
+ * Common POST /projects request body shared by synchronous and asynchronous create flows.
+ *
+ * @pure true - structural type contract only.
+ * @effect none
+ * @invariant sync and async create flows share identical non-async fields.
+ * @precondition callers construct this value through baseCreateProjectBody.
+ * @postcondition openSsh is false and managed authorized keys are enabled for web-created projects.
+ * @complexity O(1).
+ * @throws Never.
+ */
+export type BaseCreateProjectBody = Readonly<{
+  readonly cpuLimit: CreateProjectDraft["cpuLimit"]
+  readonly enableMcpPlaywright: CreateProjectDraft["enableMcpPlaywright"]
+  readonly force: CreateProjectDraft["force"]
+  readonly forceEnv: CreateProjectDraft["forceEnv"]
+  readonly gpu: CreateProjectDraft["gpu"]
+  readonly openSsh: false
+  readonly outDir: CreateProjectDraft["outDir"]
+  readonly ramLimit: CreateProjectDraft["ramLimit"]
+  readonly repoRef: CreateProjectDraft["repoRef"]
+  readonly repoUrl: CreateProjectDraft["repoUrl"]
+  readonly up: CreateProjectDraft["up"]
+  readonly useManagedAuthorizedKeys: true
+}>
+
+/**
  * Serializes optional Playwright resource limits for project creation requests.
  *
  * @param request - Shared resource limit fields from the validated create draft.
@@ -28,7 +70,9 @@ export type CreateProjectRequestDraft = CreateProjectDraft & ProjectResourceLimi
  * @complexity O(1).
  * @throws Never.
  */
-export const optionalProjectResourceFields = (request: ProjectResourceLimitRequest) => ({
+export const optionalProjectResourceFields = (
+  request: ProjectResourceLimitRequest
+): OptionalProjectResourceFieldsBody => ({
   ...(request.playwrightCpuLimit !== undefined && { playwrightCpuLimit: request.playwrightCpuLimit }),
   ...(request.playwrightRamLimit !== undefined && { playwrightRamLimit: request.playwrightRamLimit })
 })
@@ -47,7 +91,7 @@ export const optionalProjectResourceFields = (request: ProjectResourceLimitReque
  * @complexity O(1).
  * @throws Never.
  */
-export const baseCreateProjectBody = (draft: CreateProjectDraft) => ({
+export const baseCreateProjectBody = (draft: CreateProjectDraft): BaseCreateProjectBody => ({
   cpuLimit: draft.cpuLimit,
   enableMcpPlaywright: draft.enableMcpPlaywright,
   force: draft.force,

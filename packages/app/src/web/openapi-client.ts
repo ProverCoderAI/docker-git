@@ -17,7 +17,7 @@ const openApiRuntime = makeDockerGitOpenApiRuntime({
  * @complexity O(n)/O(n) for error rendering, O(1)/O(1) on local success handling.
  * @throws Never; failures are returned in the Effect error channel.
  */
-export const openApiJson = openApiRuntime.openApiJson
+export const openApiJson: typeof openApiRuntime.openApiJson = openApiRuntime.openApiJson
 
 /**
  * Executes a docker-git OpenAPI request and decodes the response with an Effect Schema.
@@ -30,7 +30,7 @@ export const openApiJson = openApiRuntime.openApiJson
  * @complexity O(n)/O(n) where n is the decoded response size.
  * @throws Never; failures are returned in the Effect error channel.
  */
-export const openApiJsonSchema = openApiRuntime.openApiJsonSchema
+export const openApiJsonSchema: typeof openApiRuntime.openApiJsonSchema = openApiRuntime.openApiJsonSchema
 
 /**
  * Executes a docker-git OpenAPI request whose success response has no body.
@@ -43,4 +43,4 @@ export const openApiJsonSchema = openApiRuntime.openApiJsonSchema
  * @complexity O(n)/O(n) for error rendering, O(1)/O(1) on local success handling.
  * @throws Never; failures are returned in the Effect error channel.
  */
-export const openApiVoid = openApiRuntime.openApiVoid
+export const openApiVoid: typeof openApiRuntime.openApiVoid = openApiRuntime.openApiVoid

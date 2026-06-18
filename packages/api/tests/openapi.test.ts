@@ -1,10 +1,23 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import * as fc from "fast-check"
 
 import { buildDockerGitOpenApi } from "../src/api/openapi.js"
 
 const documentedMethods = ["delete", "get", "post", "put"] as const
 const commonErrorStatuses = ["400", "401", "404", "409", "500"]
+const okOnlyOperations = [
+  { method: "post", path: "/projects/apply-all" },
+  { method: "post", path: "/projects/down-all" },
+  { method: "delete", path: "/projects/{projectId}" },
+  { method: "post", path: "/projects/{projectId}/down" },
+  { method: "delete", path: "/projects/{projectId}/ports/{targetPort}" },
+  { method: "delete", path: "/projects/{projectId}/databases/profiles/{profileId}" },
+  { method: "delete", path: "/projects/{projectId}/databases/profiles/{profileId}/expose" },
+  { method: "delete", path: "/projects/by-key/{projectKey}/terminal-sessions/{sessionId}" },
+  { method: "delete", path: "/auth/terminal-sessions/{sessionId}" },
+  { method: "post", path: "/projects/{projectId}/tasks/{pid}/stop" }
+] as const
 
 describe("openapi contract", () => {
   it.effect("documents generated REST paths from the Effect HttpApi contract", () =>
@@ -86,22 +99,38 @@ describe("openapi contract", () => {
       }
     }))
 
+  it.effect("preserves common error status invariant for arbitrary documented operations", () =>
+    Effect.sync(() => {
+      const spec = buildDockerGitOpenApi()
+      const paths = spec.paths ?? {}
+      const operations = Object.entries(paths).flatMap(([path, item]) =>
+        documentedMethods.flatMap((method) => {
+          const responses = item[method]?.responses
+          return responses === undefined ? [] : [{ method, path, responses }]
+        })
+      )
+
+      expect(operations.length).toBeGreaterThan(0)
+
+      fc.assert(
+        fc.property(fc.integer({ min: 0, max: operations.length - 1 }), (index) => {
+          const operation = operations[index]
+          if (operation === undefined) {
+            return false
+          }
+          expect(Object.keys(operation.responses), `${operation.method.toUpperCase()} ${operation.path}`).toEqual(
+            expect.arrayContaining(commonErrorStatuses)
+          )
+          return true
+        }),
+        { numRuns: Math.max(operations.length * 2, 50) }
+      )
+    }))
+
   it.effect("documents ok-only HTTP handlers as 200 JSON responses", () =>
     Effect.sync(() => {
       const spec = buildDockerGitOpenApi()
       const paths = spec.paths ?? {}
-      const okOnlyOperations = [
-        { method: "post", path: "/projects/apply-all" },
-        { method: "post", path: "/projects/down-all" },
-        { method: "delete", path: "/projects/{projectId}" },
-        { method: "post", path: "/projects/{projectId}/down" },
-        { method: "delete", path: "/projects/{projectId}/ports/{targetPort}" },
-        { method: "delete", path: "/projects/{projectId}/databases/profiles/{profileId}" },
-        { method: "delete", path: "/projects/{projectId}/databases/profiles/{profileId}/expose" },
-        { method: "delete", path: "/projects/by-key/{projectKey}/terminal-sessions/{sessionId}" },
-        { method: "delete", path: "/auth/terminal-sessions/{sessionId}" },
-        { method: "post", path: "/projects/{projectId}/tasks/{pid}/stop" }
-      ] as const
 
       for (const operation of okOnlyOperations) {
         const responses = paths[operation.path]?.[operation.method]?.responses ?? {}
@@ -112,6 +141,25 @@ describe("openapi contract", () => {
         expect(serializedSuccessSchema).toContain("\"required\":[\"ok\"]")
         expect(serializedSuccessSchema).toContain("\"ok\":{\"type\":\"boolean\",\"enum\":[true]}")
       }
+    }))
+
+  it.effect("preserves ok-only handler response invariant for arbitrary ok-only operations", () =>
+    Effect.sync(() => {
+      const spec = buildDockerGitOpenApi()
+      const paths = spec.paths ?? {}
+
+      fc.assert(
+        fc.property(fc.constantFrom(...okOnlyOperations), (operation) => {
+          const responses = paths[operation.path]?.[operation.method]?.responses ?? {}
+          const serializedSuccessSchema = JSON.stringify(responses["200"] ?? {})
+
+          expect(responses["200"], `${operation.method.toUpperCase()} ${operation.path}`).toBeDefined()
+          expect(responses["204"], `${operation.method.toUpperCase()} ${operation.path}`).toBeUndefined()
+          expect(serializedSuccessSchema).toContain("\"required\":[\"ok\"]")
+          expect(serializedSuccessSchema).toContain("\"ok\":{\"type\":\"boolean\",\"enum\":[true]}")
+        }),
+        { numRuns: okOnlyOperations.length * 2 }
+      )
     }))
 
   it.effect("documents project auth snapshots without nonexistent totalEntries", () =>

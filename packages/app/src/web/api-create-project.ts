@@ -1,13 +1,23 @@
 import type { Effect } from "effect"
 
 import {
+  type BaseCreateProjectBody,
   baseCreateProjectBody,
   type CreateProjectRequestDraft,
-  optionalProjectResourceFields
+  optionalProjectResourceFields,
+  type OptionalProjectResourceFieldsBody
 } from "./api-project-create-body.js"
 import { CreateProjectAcceptedResponseSchema } from "./api-schema.js"
 import type { CreateProjectAcceptedResponse } from "./api-schema.js"
 import { openApiJsonSchema } from "./openapi-client.js"
+
+type CreateProjectAcceptedBody = Readonly<
+  & BaseCreateProjectBody
+  & OptionalProjectResourceFieldsBody
+  & {
+    readonly async: true
+  }
+>
 
 /**
  * Builds the async POST /projects request body.
@@ -23,7 +33,7 @@ import { openApiJsonSchema } from "./openapi-client.js"
  * @complexity O(1).
  * @throws Never.
  */
-export const createProjectAcceptedBody = (draft: CreateProjectRequestDraft) => ({
+export const createProjectAcceptedBody = (draft: CreateProjectRequestDraft): CreateProjectAcceptedBody => ({
   ...baseCreateProjectBody(draft),
   async: true,
   ...optionalProjectResourceFields(draft)
