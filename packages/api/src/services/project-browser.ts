@@ -275,6 +275,98 @@ const waitForBrowserRuntimeReady = (
     )
   )
 
+const renderBrowserWindowManagerRepairScript = (): string => [
+  "set -eu",
+  "changed=0",
+  "chromium_launcher=/usr/local/bin/docker-git-chromium-launch",
+  "tmp_launcher=\"$(mktemp)\"",
+  "cat > \"$tmp_launcher\" <<'DOCKER_GIT_CHROMIUM_LAUNCH'",
+  "#!/bin/sh",
+  "set -eu",
+  "rm -rf /data/Default/Sessions",
+  "if [ -f /data/Default/Preferences ]; then",
+  "  tmp_preferences=\"$(mktemp)\"",
+  "  sed -e 's#\"exit_type\":\"Crashed\"#\"exit_type\":\"Normal\"#g' \\",
+  "    -e 's#\"exited_cleanly\":false#\"exited_cleanly\":true#g' \\",
+  "    /data/Default/Preferences > \"$tmp_preferences\" \\",
+  "    && cat \"$tmp_preferences\" > /data/Default/Preferences",
+  "  rm -f \"$tmp_preferences\"",
+  "fi",
+  "exec /usr/bin/chromium-browser \\",
+  "  --no-sandbox \\",
+  "  --disable-dev-shm-usage \\",
+  "  --disable-gpu \\",
+  "  --disable-background-networking \\",
+  "  --disable-component-update \\",
+  "  --disable-default-apps \\",
+  "  --disable-extensions \\",
+  "  --disable-sync \\",
+  "  --no-first-run \\",
+  "  --no-default-browser-check \\",
+  "  --disable-session-crashed-bubble \\",
+  "  --hide-crash-restore-bubble \\",
+  "  --start-maximized \\",
+  "  --remote-debugging-port=9222 \\",
+  "  --user-data-dir=/data \\",
+  "  --display=:99 \\",
+  "  about:blank",
+  "DOCKER_GIT_CHROMIUM_LAUNCH",
+  "if [ ! -f \"$chromium_launcher\" ] || ! cmp -s \"$tmp_launcher\" \"$chromium_launcher\"; then",
+  "  mv \"$tmp_launcher\" \"$chromium_launcher\"",
+  "  chmod +x \"$chromium_launcher\"",
+  "  changed=1",
+  "else",
+  "  rm -f \"$tmp_launcher\"",
+  "fi",
+  "for supervisor_file in /etc/supervisor.d/*.ini /etc/supervisor/conf.d/*.conf; do",
+  "  [ -f \"$supervisor_file\" ] || continue",
+  "  before=\"$(cat \"$supervisor_file\")\"",
+  "  sed -i -E \\",
+  "    -e 's#Xvfb :99 -screen 0 1024x768x16#Xvfb :99 -screen 0 1024x768x24#g' \\",
+  "    -e 's#^command=/usr/bin/fluxbox$#command=/usr/bin/env DISPLAY=:99 /usr/bin/fluxbox#g' \\",
+  "    -e 's#^command=/usr/bin/chromium-browser .*$#command=/usr/local/bin/docker-git-chromium-launch#g' \\",
+  "    \"$supervisor_file\"",
+  "  after=\"$(cat \"$supervisor_file\")\"",
+  "  if [ \"$before\" != \"$after\" ]; then changed=1; fi",
+  "done",
+  "if [ \"$changed\" = \"1\" ]; then echo changed; exit 0; fi",
+  "if ! pgrep -x fluxbox >/dev/null 2>&1; then echo restart; exit 0; fi",
+  "echo unchanged"
+].join("\n")
+
+const restartBrowserContainer = (
+  cwd: string,
+  containerName: string
+) =>
+  dockerCapture(
+    cwd,
+    ["restart", containerName],
+    "docker restart repaired browser"
+  ).pipe(Effect.asVoid)
+
+const repairBrowserWindowManager = (
+  cwd: string,
+  containerName: string
+) =>
+  dockerCapture(
+    cwd,
+    ["exec", containerName, "bash", "-lc", renderBrowserWindowManagerRepairScript()],
+    "docker exec browser window manager repair"
+  ).pipe(
+    Effect.flatMap((output) =>
+      output.includes("changed") || output.includes("restart")
+        ? restartBrowserContainer(cwd, containerName)
+        : Effect.void
+    ),
+    Effect.mapError((error) =>
+      new ApiConflictError({
+        message: `Failed to prepare browser window manager for ${containerName}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      })
+    )
+  )
+
 const parseContainerNetworkEntries = (output: string): ReadonlyArray<ContainerNetworkEntry> =>
   output
     .trim()
@@ -466,6 +558,7 @@ export const startProjectBrowserSession = (
     const project = yield* _(getProjectItemById(projectId))
     const containerName = browserContainerName(project.containerName)
     yield* _(startBrowserContainer(project.projectDir, project.containerName))
+    yield* _(repairBrowserWindowManager(project.projectDir, containerName))
     yield* _(waitForBrowserRuntimeReady(project.projectDir, project.containerName))
     const state = yield* _(inspectBrowserContainerState(project.projectDir, containerName))
     return browserSessionFromState(projectId, containerName, state, externalOrigin)

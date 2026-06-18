@@ -1,7 +1,11 @@
 import { Effect } from "effect"
+import { Buffer } from "node:buffer"
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { IncomingMessage } from "node:http"
+import { Socket } from "node:net"
 import path from "node:path"
 import os from "node:os"
+import { Duplex } from "node:stream"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { ProjectItem } from "@effect-template/lib"
@@ -20,9 +24,11 @@ import {
   readProjectTerminalSessions,
   readProjectTerminalImage,
   renderTmuxAttachCommand,
+  safeHandleTerminalWebSocketUpgrade,
   setProjectActiveTerminalSession,
   startTerminalSession
 } from "../src/services/terminal-sessions.js"
+import type { TerminalWebSocketUpgradeServer } from "../src/services/terminal-sessions.js"
 
 const listProjectItemsMock = vi.hoisted(() => vi.fn())
 const prepareProjectSshMock = vi.hoisted(() => vi.fn())
@@ -172,6 +178,21 @@ const readPersistedActiveSessionId = (): string | null => {
   return typeof value === "string" ? value : null
 }
 
+class MemoryDuplexSocket extends Duplex {
+  readonly chunks: Array<string> = []
+
+  override _read(): void {}
+
+  override _write(
+    chunk: Buffer | string,
+    _encoding: string,
+    callback: (error?: Error | null) => void
+  ): void {
+    this.chunks.push(typeof chunk === "string" ? chunk : chunk.toString("utf8"))
+    callback()
+  }
+}
+
 describe("terminal sessions service", () => {
   let projectRoot = ""
 
@@ -214,6 +235,31 @@ describe("terminal sessions service", () => {
     clearTerminalSessionRuntimeForTest()
     clearProjectEvents(projectId)
     rmSync(projectRoot, { force: true, recursive: true })
+  })
+
+  it("denies terminal websocket upgrades when ws throws before attaching", () => {
+    const throwingServer: TerminalWebSocketUpgradeServer = {
+      handleUpgrade: () => {
+        throw new TypeError("upgrade requires a Request object")
+      }
+    }
+    const socket = new MemoryDuplexSocket()
+    const request = new IncomingMessage(new Socket())
+
+    expect(() => {
+      safeHandleTerminalWebSocketUpgrade(
+        throwingServer,
+        request,
+        socket,
+        Buffer.alloc(0),
+        () => {
+          throw new Error("Unexpected websocket attachment.")
+        }
+      )
+    }).not.toThrow()
+
+    expect(socket.chunks.join("")).toContain("HTTP/1.1 404 Not Found")
+    expect(socket.destroyed).toBe(true)
   })
 
   it("creates a terminal session immediately when SSH is already ready", async () => {

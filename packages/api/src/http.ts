@@ -6,6 +6,7 @@ import * as HttpRouter from "@effect/platform/HttpRouter"
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest"
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse"
 import * as HttpServerError from "@effect/platform/HttpServerError"
+import { networkInterfaces } from "node:os"
 import * as ParseResult from "effect/ParseResult"
 import * as Schema from "effect/Schema"
 import { renderError, type AppError } from "@effect-template/lib/usecases/errors"
@@ -168,13 +169,16 @@ import {
   openSkiller,
   openSkillerForTerminalSession,
   parseSkillerRoute,
+  inspectableSkillerConnectProjects,
   proxySkillerTrpc,
+  readExternalSkillerLaunchHtml,
   readSkillerProjectContext,
   serveSkillerApp
 } from "./services/skiller.js"
 import {
   isSkillerWebCorsOriginAllowed,
-  resolveDockerGitSkillerBackendUrl
+  joinSkillerBackendUrl,
+  resolveDockerGitSkillerBackendUrlDecision
 } from "./services/skiller-core.js"
 import {
   commitStateFromRequest,
@@ -242,6 +246,10 @@ const AuthTerminalSessionParamsSchema = Schema.Struct({
 const SkillerConnectRequestSchema = Schema.Struct({
   projectKey: Schema.String,
   sessionId: Schema.optional(Schema.String)
+})
+
+const SkillerExternalLaunchParamsSchema = Schema.Struct({
+  launchId: Schema.String
 })
 
 type ApiError =
@@ -448,6 +456,7 @@ const terminalSessionParams = HttpRouter.schemaParams(TerminalSessionParamsSchem
 const terminalSessionByProjectKeyParams = HttpRouter.schemaParams(TerminalSessionByProjectKeyParamsSchema)
 const containerTaskParams = HttpRouter.schemaParams(ContainerTaskParamsSchema)
 const authTerminalSessionParams = HttpRouter.schemaParams(AuthTerminalSessionParamsSchema)
+const skillerExternalLaunchParams = HttpRouter.schemaParams(SkillerExternalLaunchParamsSchema)
 
 const readCreateProjectRequest = () => HttpServerRequest.schemaBodyJson(CreateProjectRequestSchema)
 const readCreateFollowRequest = () => HttpServerRequest.schemaBodyJson(CreateFollowRequestSchema)
@@ -615,8 +624,74 @@ const resolveRequestOrigin = (request: HttpServerRequest.HttpServerRequest): str
   return `${proto}://${host}`
 }
 
-const resolveSkillerBackendUrl = (request: HttpServerRequest.HttpServerRequest): string =>
-  resolveDockerGitSkillerBackendUrl(process.env, resolveRequestOrigin(request))
+// CHANGE: Preserve the docker-git web `/api` proxy prefix in Skiller Web callbacks.
+// WHY: External Skiller Web runs on another origin and must call the browser-reachable API URL.
+// QUOTE(ТЗ): "у нас всё равно юзается http://192.168.0.206:4174/api/ssh/session/.../skiller/app/"
+// REF: user-message-2026-06-18-skiller-external-module
+// SOURCE: n/a
+// FORMAT THEOREM: forwardedPrefix = p_safe -> backendUrl = origin + normalize(p_safe)
+// PURITY: SHELL
+// EFFECT: Reads trusted reverse-proxy request headers.
+// INVARIANT: Unsafe or root prefixes do not change the request origin.
+// COMPLEXITY: O(n) where n = |x-forwarded-prefix|.
+const normalizeForwardedPrefix = (value: string | undefined): string => {
+  const prefix = firstCommaValue(value)
+  if (prefix === undefined || prefix.length === 0 || prefix === "/") {
+    return ""
+  }
+  if (!prefix.startsWith("/") || prefix.includes("://")) {
+    return ""
+  }
+  return prefix.replace(/\/+$/u, "")
+}
+
+// CHANGE: Give hosted Skiller Web an HTTPS-reachable docker-git backend URL.
+// WHY: Chrome blocks an HTTPS Vercel app from fetching a plain HTTP LAN API, even when CORS/PNA preflight succeeds.
+// QUOTE(ТЗ): "сделать что бы оно начало работать"
+// REF: user-message-2026-06-18-skiller-vercel-failed-fetch
+// SOURCE: n/a
+const dockerGitApiPort = (env: Record<string, string | undefined>): string => {
+  const configured = env["DOCKER_GIT_API_PORT"]?.trim()
+  return configured !== undefined && /^\d{1,5}$/u.test(configured) ? configured : "3334"
+}
+
+const firstControllerIpv4 = (): string =>
+  Object.values(networkInterfaces())
+    .flatMap((entries) => entries ?? [])
+    .find((entry) => entry.family === "IPv4" && !entry.internal)?.address ?? "127.0.0.1"
+
+const internalSkillerTunnelPanelUrl = (
+  env: Record<string, string | undefined>
+): string =>
+  `http://${firstControllerIpv4()}:${dockerGitApiPort(env)}`
+
+// FORMAT THEOREM: externalWebEnabled ∧ requestBackendUrl.protocol != https ∧ noConfiguredBackend -> backendUrl = cloudflare(internalApiUrl) + prefix
+// PURITY: SHELL
+// EFFECT: Reads controller network interfaces and may start or reuse the panel Cloudflare Quick Tunnel.
+// INVARIANT: Explicit backend env values and already-HTTPS request URLs do not start a tunnel.
+// COMPLEXITY: O(t) where t is the bounded tunnel startup wait.
+const resolveSkillerBackendUrl = (
+  request: HttpServerRequest.HttpServerRequest
+): Effect.Effect<string, ApiBadRequestError | ApiInternalError> => {
+  const requestOrigin = resolveRequestOrigin(request)
+  const forwardedPrefix = normalizeForwardedPrefix(readHeader(request, "x-forwarded-prefix"))
+  const decision = resolveDockerGitSkillerBackendUrlDecision(process.env, requestOrigin, forwardedPrefix)
+  return Match.value(decision).pipe(
+    Match.when({ _tag: "Configured" }, ({ backendUrl }) => Effect.succeed(backendUrl)),
+    Match.when({ _tag: "Request" }, ({ backendUrl }) => Effect.succeed(backendUrl)),
+    Match.when({ _tag: "Tunnel" }, ({ forwardedPrefix: tunnelPrefix }) =>
+      startPanelCloudflareTunnel({ panelUrl: internalSkillerTunnelPanelUrl(process.env) }).pipe(
+        Effect.flatMap((tunnel) =>
+          tunnel.publicUrl === null
+            ? Effect.fail(new ApiInternalError({
+              message: "Cloudflare tunnel did not return a public URL for Skiller backend."
+            }))
+            : Effect.succeed(joinSkillerBackendUrl(tunnel.publicUrl, tunnelPrefix))
+        )
+      )),
+    Match.exhaustive
+  )
+}
 
 const isPrivateNetworkCorsRequest = (
   request: HttpServerRequest.HttpServerRequest
@@ -916,6 +991,7 @@ const skillerConnectInfoResponse = (
   request: HttpServerRequest.HttpServerRequest
 ) =>
   listProjects().pipe(
+    Effect.flatMap(inspectableSkillerConnectProjects),
     Effect.flatMap((projects) => skillerJsonResponse(request, { ok: true, projects }, 200)),
     Effect.catchAll((error) => skillerErrorResponse(request, error))
   )
@@ -929,10 +1005,11 @@ const skillerConnectResponse = (
     if (projectKey.length === 0) {
       return yield* _(Effect.fail(new ApiBadRequestError({ message: "projectKey is required." })))
     }
+    const backendUrl = yield* _(resolveSkillerBackendUrl(request))
     const connection = yield* _(connectSkillerWeb(
       projectKey,
       normalizedOptionalString(body.sessionId),
-      resolveSkillerBackendUrl(request)
+      backendUrl
     ))
     return yield* _(skillerJsonResponse(request, { ok: true, ...connection }, 202))
   }).pipe(
@@ -977,11 +1054,28 @@ export const makeRouter = () => {
         return yield* _(skillerConnectResponse(request))
       })
     ),
+    HttpRouter.get(
+      "/skiller/external-launch/:launchId",
+      Effect.gen(function*(_) {
+        const { launchId } = yield* _(skillerExternalLaunchParams)
+        const html = yield* _(readExternalSkillerLaunchHtml(launchId))
+        return yield* _(textResponse(html, "text/html; charset=utf-8", 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/api/skiller/external-launch/:launchId",
+      Effect.gen(function*(_) {
+        const { launchId } = yield* _(skillerExternalLaunchParams)
+        const html = yield* _(readExternalSkillerLaunchHtml(launchId))
+        return yield* _(textResponse(html, "text/html; charset=utf-8", 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
     HttpRouter.post(
       "/skiller/open",
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
-        const launch = yield* _(openSkiller(undefined, undefined, resolveSkillerBackendUrl(request)))
+        const backendUrl = yield* _(resolveSkillerBackendUrl(request))
+        const launch = yield* _(openSkiller(undefined, undefined, backendUrl))
         return yield* _(jsonResponse({ ok: true, ...launch }, 202))
       }).pipe(Effect.catchAll(errorResponse))
     ),
@@ -990,7 +1084,8 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const { projectKey } = yield* _(projectKeyParams)
-        const launch = yield* _(openSkiller(projectKey, undefined, resolveSkillerBackendUrl(request)))
+        const backendUrl = yield* _(resolveSkillerBackendUrl(request))
+        const launch = yield* _(openSkiller(projectKey, undefined, backendUrl))
         return yield* _(jsonResponse({ ok: true, ...launch }, 202))
       }).pipe(Effect.catchAll(errorResponse))
     ),
@@ -999,7 +1094,8 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const { projectKey, sessionId } = yield* _(terminalSessionByProjectKeyParams)
-        const launch = yield* _(openSkillerForTerminalSession(projectKey, sessionId, resolveSkillerBackendUrl(request)))
+        const backendUrl = yield* _(resolveSkillerBackendUrl(request))
+        const launch = yield* _(openSkillerForTerminalSession(projectKey, sessionId, backendUrl))
         return yield* _(jsonResponse({ ok: true, ...launch }, 202))
       }).pipe(Effect.catchAll(errorResponse))
     ),

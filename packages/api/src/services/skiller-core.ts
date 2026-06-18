@@ -47,8 +47,40 @@ export type ExternalSkillerLaunchUrlInput = {
   readonly skillerWebUrl: string
 }
 
+export type ExternalSkillerLaunchWrapperInput = {
+  readonly targetUrl: string
+}
+
+export type DockerGitSkillerBackendUrlDecision =
+  | { readonly _tag: "Configured"; readonly backendUrl: string }
+  | { readonly _tag: "Request"; readonly backendUrl: string }
+  | { readonly _tag: "Tunnel"; readonly forwardedPrefix: string; readonly panelUrl: string }
+
+export type SkillerConnectProject = {
+  readonly status: "running" | "stopped" | "unknown"
+}
+
 const trimTrailingSlashes = (value: string): string =>
   value.replace(/\/+$/u, "")
+
+const firstNonEmptySkillerBackendUrl = (
+  env: Record<string, string | undefined>
+): string | undefined =>
+  [
+    env["DOCKER_GIT_SKILLER_BACKEND_URL"],
+    env["DOCKER_GIT_API_PUBLIC_URL"]
+  ]
+    .map((value) => value?.trim())
+    .find((value) => value !== undefined && value.length > 0)
+
+const isHttpsUrl = (value: string): boolean =>
+  URL.canParse(value) && new URL(value).protocol === "https:"
+
+export const joinSkillerBackendUrl = (
+  baseUrl: string,
+  forwardedPrefix: string
+): string =>
+  `${trimTrailingSlashes(baseUrl)}${forwardedPrefix}`
 
 const configuredOrigin = (raw: string): string | null => {
   const value = raw.trim()
@@ -94,13 +126,44 @@ export const resolveDockerGitSkillerBackendUrl = (
   env: Record<string, string | undefined>,
   requestOrigin: string
 ): string => {
-  const configured = [
-    env["DOCKER_GIT_SKILLER_BACKEND_URL"],
-    env["DOCKER_GIT_API_PUBLIC_URL"]
-  ]
-    .map((value) => value?.trim())
-    .find((value) => value !== undefined && value.length > 0)
+  const configured = firstNonEmptySkillerBackendUrl(env)
   return configured ?? requestOrigin
+}
+
+/**
+ * Resolves how the docker-git API URL should be exposed to external Skiller Web.
+ *
+ * @param env - Environment map containing optional Skiller web/backend overrides.
+ * @param requestOrigin - Browser-visible request origin from trusted forwarding headers.
+ * @param forwardedPrefix - Normalized API proxy prefix, such as `/api` or an empty string.
+ * @returns A pure strategy: use configured URL, use HTTPS request URL, or start a panel tunnel.
+ *
+ * @pure true
+ * @effect none
+ * @invariant If an explicit backend URL exists, it is returned before derived URLs.
+ * @precondition forwardedPrefix is empty or starts with `/` and has no trailing slash.
+ * @postcondition Tunnel is selected only for enabled external Skiller Web over non-HTTPS request URLs.
+ * @complexity O(n) where n is the total configured URL length.
+ * @throws Never
+ */
+export const resolveDockerGitSkillerBackendUrlDecision = (
+  env: Record<string, string | undefined>,
+  requestOrigin: string,
+  forwardedPrefix: string
+): DockerGitSkillerBackendUrlDecision => {
+  const configured = firstNonEmptySkillerBackendUrl(env)
+  if (configured !== undefined) {
+    return { _tag: "Configured", backendUrl: configured }
+  }
+
+  const requestBackendUrl = joinSkillerBackendUrl(requestOrigin, forwardedPrefix)
+  if (isHttpsUrl(requestBackendUrl)) {
+    return { _tag: "Request", backendUrl: requestBackendUrl }
+  }
+
+  return resolveConfiguredSkillerWebUrl(env)._tag === "Enabled"
+    ? { _tag: "Tunnel", forwardedPrefix, panelUrl: requestOrigin }
+    : { _tag: "Request", backendUrl: requestBackendUrl }
 }
 
 export const configuredSkillerWebCorsOrigins = (
@@ -127,6 +190,25 @@ export const isSkillerWebCorsOriginAllowed = (
 ): boolean =>
   origin !== undefined && configuredSkillerWebCorsOrigins(env).includes(origin)
 
+/**
+ * Keeps the Skiller external project picker scoped to currently usable projects.
+ *
+ * @param projects - Docker-git project summaries with conservative runtime status.
+ * @returns Projects whose known status is `running`.
+ *
+ * @pure true
+ * @effect none
+ * @invariant every returned project has status = running.
+ * @precondition status belongs to the ProjectStatus finite domain.
+ * @postcondition stopped and unknown projects are not visible in Skiller connect.
+ * @complexity O(n) time where n is project count; O(n) space for the filtered result.
+ * @throws Never
+ */
+export const activeSkillerConnectProjects = <Project extends SkillerConnectProject>(
+  projects: ReadonlyArray<Project>
+): ReadonlyArray<Project> =>
+  projects.filter((project) => project.status === "running")
+
 export const externalSkillerLaunchUrl = (input: ExternalSkillerLaunchUrlInput): string => {
   const url = new URL(`${trimTrailingSlashes(input.skillerWebUrl)}/launch`)
   url.searchParams.set("backendUrl", input.backendUrl)
@@ -137,6 +219,54 @@ export const externalSkillerLaunchUrl = (input: ExternalSkillerLaunchUrlInput): 
     url.searchParams.set("sessionId", input.sessionId)
   }
   return url.toString()
+}
+
+export const externalSkillerLaunchWrapperPath = (launchId: string): string =>
+  `/api/skiller/external-launch/${encodeURIComponent(launchId)}`
+
+const htmlAttributeReplacements: Readonly<Record<string, string>> = {
+  "\"": "&quot;",
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;"
+}
+
+export const escapeHtmlAttribute = (value: string): string =>
+  value.replace(/[&"<>]/gu, (character) => htmlAttributeReplacements[character] ?? character)
+
+export const externalSkillerLaunchWrapperHtml = (input: ExternalSkillerLaunchWrapperInput): string => {
+  const targetUrl = escapeHtmlAttribute(input.targetUrl)
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skiller Web</title>
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #fff;
+    }
+    iframe {
+      position: fixed;
+      inset: 0;
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      border: 0;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <iframe title="Skiller Web" src="${targetUrl}" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer" credentialless></iframe>
+  <noscript><a href="${targetUrl}">Open Skiller Web</a></noscript>
+</body>
+</html>`
 }
 
 export const parseDockerMountLines = (output: string): ReadonlyArray<DockerContainerMount> =>

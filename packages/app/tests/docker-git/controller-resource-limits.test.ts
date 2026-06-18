@@ -20,6 +20,12 @@ const composeFiles: ReadonlyArray<string> = ["docker-compose.yml", "docker-compo
 const isolatedComposeFiles: ReadonlyArray<string> = ["docker-compose.isolated.yml", "docker-compose.api.isolated.yml"]
 const hostDockerDataBind = "/var/lib/docker:/var/lib/docker"
 const isolatedDockerDataVolume = "docker_git_docker_data:/var/lib/docker"
+const skillerWebEnvLines: ReadonlyArray<string> = [
+  "DOCKER_GIT_SKILLER_WEB_URL: ${DOCKER_GIT_SKILLER_WEB_URL-https://skiller-web-henna.vercel.app}",
+  "DOCKER_GIT_SKILLER_BACKEND_URL: ${DOCKER_GIT_SKILLER_BACKEND_URL:-}",
+  "DOCKER_GIT_API_PUBLIC_URL: ${DOCKER_GIT_API_PUBLIC_URL:-}",
+  "DOCKER_GIT_SKILLER_ALLOWED_ORIGINS: ${DOCKER_GIT_SKILLER_ALLOWED_ORIGINS:-}"
+]
 
 const readComposeFile = (relativePath: string): Effect.Effect<string> =>
   Effect.gen(function*(_) {
@@ -58,6 +64,14 @@ describe("controller compose resource limits", () => {
           const contents = yield* _(readComposeFile(composeFile))
           expect(contents).toContain(`- ${hostDockerDataBind}`)
           expect(contents).not.toContain(`- ${isolatedDockerDataVolume}`)
+        }))
+
+      it.effect("passes external Skiller Web environment with empty-env opt-out", () =>
+        Effect.gen(function*(_) {
+          const contents = yield* _(readComposeFile(composeFile))
+          for (const line of skillerWebEnvLines) {
+            expect(contents).toContain(line)
+          }
         }))
     })
   }

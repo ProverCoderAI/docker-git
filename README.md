@@ -61,6 +61,19 @@ bun run docker-git -- browser
 DOCKER_GIT_WEB_HOST=127.0.0.1 bun run docker-git -- browser
 ```
 
+Кнопка `Skiller` в web-терминале по умолчанию открывает внешний Skiller Web:
+`https://skiller-web-henna.vercel.app`. Контроллер сохраняет `backendUrl`,
+`projectKey` и `sessionId` в коротком launch-wrapper URL вида
+`/api/skiller/external-launch/<id>`, чтобы длинный callback URL не оставался в
+адресной строке. Если web-версия открыта по локальному HTTP/LAN адресу,
+docker-git автоматически запускает или переиспользует Cloudflare Quick Tunnel
+и передает в Skiller Web HTTPS `backendUrl` вида `https://*.trycloudflare.com/api`.
+Для legacy bundled-режима:
+
+```bash
+DOCKER_GIT_SKILLER_WEB_URL= bun run docker-git -- browser
+```
+
 ## CLI пример
 
 Можно передавать ссылку на репозиторий, ветку (`/tree/...`), issue или PR.

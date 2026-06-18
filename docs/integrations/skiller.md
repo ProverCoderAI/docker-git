@@ -40,15 +40,26 @@ bun run skiller:check
 
 ## docker-git Web Launch
 
-The docker-git web terminal header includes a `Skiller` button next to `Open browser`. In a project terminal the button calls `POST /projects/by-key/:projectKey/terminal-sessions/:sessionId/skiller/open` first, which launches the pinned submodule Electron app as a separate process, registers the terminal session filesystem scope, and writes launcher output to `~/.docker-git/logs/skiller.log`. After that response succeeds, the browser opens the returned `/api/ssh/session/:sessionId/skiller/app/` URL using the same terminal session id that is present in `/ssh/session/:sessionId`.
+The docker-git web terminal header includes a `Skiller` button next to `Open browser`. In a project terminal the button calls `POST /projects/by-key/:projectKey/terminal-sessions/:sessionId/skiller/open` first. By default the controller stores the external Skiller Web launch URL for `https://skiller-web-henna.vercel.app/launch` and returns a short docker-git wrapper path such as `/api/skiller/external-launch/<id>`. The saved target carries `backendUrl`, `projectKey`, and `sessionId` parameters, while the browser address bar keeps the short wrapper URL. When docker-git web is served through the `/api` proxy, `backendUrl` includes that forwarded prefix so Skiller Web can call back to the same browser-reachable docker-git endpoint.
 
-docker-git serves Skiller's built renderer from the submodule and proxies `/api/ssh/session/:sessionId/skiller/trpc/*` to the running Skiller tRPC backend, so the user sees the actual Skiller UI instead of an invisible background desktop process. The session id is part of the URL so a Skiller tab can be tied back to the terminal container that opened it.
+Hosted Skiller Web is served over HTTPS, so browser fetches to a plain `http://192.168.x.x:4174/api` backend can be blocked before they reach docker-git. If external Skiller Web is enabled and no explicit backend override is configured, docker-git automatically starts or reuses the panel Cloudflare Quick Tunnel for local/private HTTP origins and sends Skiller Web an HTTPS callback URL such as `https://<name>.trycloudflare.com/api`. Follow-up API calls through that tunnel preserve the HTTPS forwarded protocol so the controller does not try to create a nested tunnel.
 
-For project terminals, docker-git scopes Skiller to the active project container filesystem. The API inspects the selected project container mounts, maps `/home/<sshUser>` and the project `targetDir` to the controller-visible Docker volume path, launches Skiller with `HOME` set to that mapped home directory, and registers the mapped project directory in Skiller. This makes global skill operations target the selected container home and project skill operations target the selected container project directory. If the controller cannot access the Docker volume path, the endpoint fails instead of opening Skiller against the wrong filesystem.
+External Skiller Web is controlled by these API/controller environment variables:
+
+- `DOCKER_GIT_SKILLER_WEB_URL` sets the Skiller Web base URL. The compose default is `https://skiller-web-henna.vercel.app`.
+- `DOCKER_GIT_SKILLER_BACKEND_URL` overrides the callback base URL sent to Skiller Web and disables automatic tunnel URL selection.
+- `DOCKER_GIT_API_PUBLIC_URL` is the secondary callback override when `DOCKER_GIT_SKILLER_BACKEND_URL` is unset and also disables automatic tunnel URL selection.
+- `DOCKER_GIT_SKILLER_ALLOWED_ORIGINS` adds comma-separated trusted Skiller Web origins for CORS.
+
+Set `DOCKER_GIT_SKILLER_WEB_URL=` to force the legacy bundled renderer flow. `DOCKER_GIT_CONTROLLER_BUILD_SKILLER=0` only controls whether the controller image bundles the Skiller submodule; it does not enable external Web mode by itself.
+
+In the legacy bundled mode, docker-git launches the pinned submodule Electron app as a separate process, registers the terminal session filesystem scope, writes launcher output to `~/.docker-git/logs/skiller.log`, serves Skiller's built renderer from the submodule, and proxies `/api/ssh/session/:sessionId/skiller/trpc/*` to the running Skiller tRPC backend. The session id is part of the URL so a Skiller tab can be tied back to the terminal container that opened it.
+
+For project terminals, docker-git scopes Skiller to the active project container filesystem. The API inspects the selected project container mounts, maps `/home/<sshUser>` and the project `targetDir` to the controller-visible Docker volume path, launches or reuses the local Skiller runtime with `HOME` set to that mapped home directory, and registers the mapped project directory in Skiller. This makes global skill operations target the selected container home and project skill operations target the selected container project directory. If the controller cannot access the Docker volume path, the endpoint fails instead of opening Skiller against the wrong filesystem.
 
 For Codex, Skiller resolves `~/.codex/skills` against the selected container home volume. For example, `/home/dev/.codex/skills` inside the selected container is exposed to the controller as the mapped Docker volume path and is the only Codex global skill tree used for that session. docker-git does not fall back to the controller's own `~/.codex/skills`.
 
-When the API process has no `$DISPLAY`, the launcher uses `xvfb-run` if it is available so Skiller can still start in a headless controller environment.
+When the API process has no `$DISPLAY`, the legacy bundled launcher uses `xvfb-run` if it is available so Skiller can still start in a headless controller environment.
 
 ## PR #238 Proof
 
@@ -87,4 +98,4 @@ bun run skiller:check
 
 ## Integration Boundary
 
-This integration makes Skiller part of the docker-git checkout and developer workflow. docker-git keeps Skiller as an isolated submodule and does not import Skiller source into the docker-git web bundle. The visible browser view is served from Skiller's own built renderer and backed by Skiller's own tRPC process.
+This integration keeps the Skiller runtime and filesystem scope owned by docker-git while the default browser UI is served by external Skiller Web. The pinned submodule remains available for legacy bundled rendering and local development, but docker-git does not import Skiller source into the docker-git web bundle.

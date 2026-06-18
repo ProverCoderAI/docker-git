@@ -1782,6 +1782,29 @@ const denyUpgrade = (socket: Duplex): void => {
   socket.destroy()
 }
 
+export type TerminalWebSocketUpgradeServer = {
+  readonly handleUpgrade: (
+    request: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+    callback: (webSocket: WebSocket) => void
+  ) => void
+}
+
+export const safeHandleTerminalWebSocketUpgrade = (
+  webSocketServer: TerminalWebSocketUpgradeServer,
+  request: IncomingMessage,
+  socket: Duplex,
+  head: Buffer,
+  onWebSocket: (webSocket: WebSocket) => void
+): void => {
+  try {
+    webSocketServer.handleUpgrade(request, socket, head, onWebSocket)
+  } catch {
+    denyUpgrade(socket)
+  }
+}
+
 const resolveParsedTerminalRecord = (
   parsed: ParsedTerminalPath
 ): Effect.Effect<TerminalRecord, ApiConflictError | ApiInternalError | ApiNotFoundError, TerminalSessionRuntime> =>
@@ -1804,7 +1827,7 @@ export const attachTerminalWebSocketServer = (server: HttpServer): void => {
             denyUpgrade(socket)
           },
           onSuccess: (record) => {
-            webSocketServer.handleUpgrade(request, socket, head, (webSocket: WebSocket) => {
+            safeHandleTerminalWebSocketUpgrade(webSocketServer, request, socket, head, (webSocket: WebSocket) => {
               try {
                 attachSocketToRecord(record, webSocket, parsed.cols, parsed.rows)
               } catch (error) {

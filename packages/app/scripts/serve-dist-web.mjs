@@ -7,6 +7,11 @@ import { fileURLToPath } from "node:url"
 
 import { WebSocket, WebSocketServer } from "ws"
 
+import {
+  firstHeader,
+  resolveForwardedHost,
+  resolveForwardedProto
+} from "./serve-dist-web-forwarding.mjs"
 import { shouldProxyHttpPath } from "./serve-dist-web-routing.mjs"
 
 const appRoot = normalize(join(fileURLToPath(new URL(".", import.meta.url)), ".."))
@@ -96,11 +101,9 @@ const resolveUpstreamPath = (url) => {
   return `${pathname}${parsed.search}`
 }
 
-const firstHeader = (value) => Array.isArray(value) ? value[0] : value
-
 const proxyForwardHeaders = (request, forwardedPrefix) => {
-  const forwardedHost = firstHeader(request.headers["x-forwarded-host"]) ?? request.headers.host
-  const forwardedProto = firstHeader(request.headers["x-forwarded-proto"]) ?? "http"
+  const forwardedHost = resolveForwardedHost(request.headers)
+  const forwardedProto = resolveForwardedProto(request.headers, forwardedHost)
   return {
     ...request.headers,
     host: apiUrl.host,
@@ -122,8 +125,8 @@ const parseWebSocketProtocols = (value) => {
 }
 
 const proxyWebSocketForwardHeaders = (request, forwardedPrefix) => {
-  const forwardedHost = firstHeader(request.headers["x-forwarded-host"]) ?? request.headers.host
-  const forwardedProto = firstHeader(request.headers["x-forwarded-proto"]) ?? "http"
+  const forwardedHost = resolveForwardedHost(request.headers)
+  const forwardedProto = resolveForwardedProto(request.headers, forwardedHost)
   return {
     ...(forwardedHost === undefined ? {} : { "x-forwarded-host": forwardedHost }),
     "x-forwarded-prefix": forwardedPrefix,
