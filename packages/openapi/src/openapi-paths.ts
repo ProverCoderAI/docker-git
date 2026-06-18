@@ -953,6 +953,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projects.listProjects": {
@@ -996,6 +1068,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -1139,6 +1283,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projects.applyAllProjects": {
@@ -1157,11 +1373,16 @@ export interface operations {
         };
         responses: {
             /** @description Success */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                    };
+                };
             };
             /** @description The request did not match the expected schema */
             400: {
@@ -1170,6 +1391,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -1193,11 +1486,16 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                    };
+                };
             };
             /** @description The request did not match the expected schema */
             400: {
@@ -1206,6 +1504,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -1288,6 +1658,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projects.deleteProject": {
@@ -1302,11 +1744,16 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                    };
+                };
             };
             /** @description The request did not match the expected schema */
             400: {
@@ -1315,6 +1762,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -1340,11 +1859,16 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                    };
+                };
             };
             /** @description The request did not match the expected schema */
             400: {
@@ -1353,6 +1877,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -1446,6 +2042,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projects.upProject": {
@@ -1513,6 +2181,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -1595,6 +2335,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projects.suspendProject": {
@@ -1666,6 +2478,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projects.projectPs": {
@@ -1708,6 +2592,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projects.projectLogs": {
@@ -1739,6 +2695,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -1796,6 +2824,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -1871,6 +2971,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projectPorts.deleteProjectPort": {
@@ -1886,11 +3058,16 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                    };
+                };
             };
             /** @description The request did not match the expected schema */
             400: {
@@ -1899,6 +3076,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -1962,6 +3211,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projectBrowser.startProjectBrowser": {
@@ -2003,6 +3324,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -2057,6 +3450,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -2129,6 +3594,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projectDatabases.deleteDatabaseProfile": {
@@ -2144,11 +3681,16 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                    };
+                };
             };
             /** @description The request did not match the expected schema */
             400: {
@@ -2157,6 +3699,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -2231,6 +3845,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projectDatabases.deleteDatabaseForward": {
@@ -2246,11 +3932,16 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                    };
+                };
             };
             /** @description The request did not match the expected schema */
             400: {
@@ -2259,6 +3950,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -2332,6 +4095,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projectDatabases.readDatabaseSession": {
@@ -2372,6 +4207,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -2434,6 +4341,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projectDatabases.restartDatabaseEditor": {
@@ -2474,6 +4453,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -2535,6 +4586,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "auth.gitlabStatus": {
@@ -2585,6 +4708,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "auth.gitStatus": {
@@ -2621,6 +4816,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -2682,6 +4949,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "auth.codexStatus": {
@@ -2720,6 +5059,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -2789,6 +5200,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "auth.githubLogout": {
@@ -2834,6 +5317,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -2902,6 +5457,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "auth.gitlabLogout": {
@@ -2947,6 +5574,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3013,6 +5712,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "auth.gitLogout": {
@@ -3055,6 +5826,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3110,6 +5953,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3187,6 +6102,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "auth.authTerminalSession": {
@@ -3237,6 +6224,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3302,6 +6361,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "auth.codexLogout": {
@@ -3344,6 +6475,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3409,6 +6612,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "projectAuth.projectAuth": {
@@ -3450,7 +6725,6 @@ export interface operations {
                             grokAuthPath?: string;
                             projectDir: string;
                             projectName: string;
-                            totalEntries: number;
                         };
                     };
                 };
@@ -3462,6 +6736,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3522,7 +6868,6 @@ export interface operations {
                             grokAuthPath?: string;
                             projectDir: string;
                             projectName: string;
-                            totalEntries: number;
                         };
                     };
                 };
@@ -3534,6 +6879,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3589,6 +7006,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3684,6 +7173,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "terminal.startTerminalByKey": {
@@ -3725,6 +7286,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3791,6 +7424,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "terminal.deleteTerminalByKey": {
@@ -3806,11 +7511,16 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                    };
+                };
             };
             /** @description The request did not match the expected schema */
             400: {
@@ -3819,6 +7529,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3856,6 +7638,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        ok?: boolean;
                         session: {
                             attachedClients?: number;
                             closedAt?: string;
@@ -3879,6 +7662,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -3946,6 +7801,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "terminal.deleteAuthTerminal": {
@@ -3960,11 +7887,16 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                    };
+                };
             };
             /** @description The request did not match the expected schema */
             400: {
@@ -3973,6 +7905,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -4030,6 +8034,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -4115,6 +8191,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "prompts.deletePrompt": {
@@ -4162,6 +8310,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -4226,6 +8446,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -4321,6 +8613,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "skills.deleteSkill": {
@@ -4387,6 +8751,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "tasks.listTasks": {
@@ -4410,6 +8846,25 @@ export interface operations {
                 content: {
                     "application/json": {
                         snapshot: {
+                            agents: {
+                                id: string;
+                                projectId: string;
+                                /** @enum {string} */
+                                provider: "codex" | "opencode" | "claude" | "grok" | "custom";
+                                label: string;
+                                command: string;
+                                containerName: string;
+                                /** @enum {string} */
+                                status: "starting" | "running" | "stopping" | "stopped" | "exited" | "failed";
+                                source: string;
+                                pidFile: string;
+                                hostPid: number | null;
+                                startedAt: string;
+                                updatedAt: string;
+                                stoppedAt?: string;
+                                exitCode?: number;
+                                signal?: string;
+                            }[];
                             containerName: string;
                             generatedAt: string;
                             projectId: string;
@@ -4428,6 +8883,19 @@ export interface operations {
                                 tty: string;
                                 user: string;
                             }[];
+                            terminalSessions: {
+                                attachedClients?: number;
+                                closedAt?: string;
+                                createdAt: string;
+                                exitCode?: number;
+                                id: string;
+                                projectId: string;
+                                signal?: number;
+                                sshCommand: string;
+                                startedAt?: string;
+                                /** @enum {string} */
+                                status: "ready" | "attached" | "exited" | "failed";
+                            }[];
                         };
                     };
                 };
@@ -4439,6 +8907,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -4465,11 +9005,16 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Success */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        ok: true;
+                    };
+                };
             };
             /** @description The request did not match the expected schema */
             400: {
@@ -4478,6 +9023,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -4534,6 +9151,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "sharing.readPanelCloudflareTunnel": {
@@ -4573,6 +9262,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */
@@ -4640,6 +9401,78 @@ export interface operations {
                     };
                 };
             };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
         };
     };
     "sharing.stopPanelCloudflareTunnel": {
@@ -4679,6 +9512,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
                         error: {
                             command?: string;
                             /** unknown */

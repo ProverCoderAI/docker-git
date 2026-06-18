@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "lint:effect": "eslint --config eslint.effect-ts-check.config.mjs .",
+    "lint:openapi-contract": "vitest run tests/openapi.test.ts",
     "pretest": "bun run --cwd ../terminal build && bun run --cwd ../container build && bun run --cwd ../lib build",
     "test": "vitest run"
   },

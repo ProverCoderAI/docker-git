@@ -7,6 +7,7 @@ import * as Schema from "effect/Schema"
 
 import {
   ActiveProjectTerminalSessionRequestSchema,
+  AgentSessionSchema,
   ApplyAllRequestSchema,
   ApplyProjectRequestSchema,
   AuthMenuRequestSchema,
@@ -47,7 +48,9 @@ const ScopeIdParam = HttpApiSchema.param("scopeId", Schema.String)
 const SkillNameParam = HttpApiSchema.param("name", Schema.String)
 const PidParam = HttpApiSchema.param("pid", Schema.NumberFromString)
 
-export const EmptyResponseSchema = Schema.Void
+export const OkResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true)
+})
 
 export const HealthResponseSchema = Schema.Struct({
   cwd: Schema.String,
@@ -301,8 +304,7 @@ export const ProjectAuthSnapshotSchema = Schema.Struct({
   grokAuthEntries: Schema.optionalWith(Schema.Number, { default: () => 0 }),
   grokAuthPath: Schema.optionalWith(Schema.String, { default: () => "" }),
   projectDir: Schema.String,
-  projectName: Schema.String,
-  totalEntries: Schema.Number
+  projectName: Schema.String
 })
 
 export const ProjectAuthSnapshotResponseSchema = Schema.Struct({
@@ -335,6 +337,11 @@ export const ProjectTerminalSessionsResponseSchema = Schema.Struct({
 })
 
 export const ProjectTerminalSessionResponseSchema = Schema.Struct({
+  session: TerminalSessionSchema
+})
+
+export const ActiveProjectTerminalSessionResponseSchema = Schema.Struct({
+  ok: OptionalOkSchema,
   session: TerminalSessionSchema
 })
 
@@ -442,11 +449,13 @@ export const ContainerTaskSchema = Schema.Struct({
 })
 
 export const ContainerTaskSnapshotSchema = Schema.Struct({
+  agents: Schema.Array(AgentSessionSchema),
   containerName: Schema.String,
   generatedAt: Schema.String,
   projectId: Schema.String,
   sshConnections: Schema.Number,
-  tasks: Schema.Array(ContainerTaskSchema)
+  tasks: Schema.Array(ContainerTaskSchema),
+  terminalSessions: Schema.Array(TerminalSessionSchema)
 })
 
 export const ContainerTaskSnapshotResponseSchema = Schema.Struct({
@@ -499,12 +508,12 @@ const ProjectsGroup = HttpApiGroup.make("projects")
   .add(
     endpoint.post("applyAllProjects", "/projects/apply-all")
       .setPayload(ApplyAllRequestSchema)
-      .addSuccess(EmptyResponseSchema)
+      .addSuccess(OkResponseSchema)
   )
-  .add(endpoint.post("downAllProjects", "/projects/down-all").addSuccess(EmptyResponseSchema))
+  .add(endpoint.post("downAllProjects", "/projects/down-all").addSuccess(OkResponseSchema))
   .add(endpoint.get("getProject")`/projects/${ProjectIdParam}`.addSuccess(ProjectResponseSchema))
-  .add(endpoint.del("deleteProject")`/projects/${ProjectIdParam}`.addSuccess(EmptyResponseSchema))
-  .add(endpoint.post("downProject")`/projects/${ProjectIdParam}/down`.addSuccess(EmptyResponseSchema))
+  .add(endpoint.del("deleteProject")`/projects/${ProjectIdParam}`.addSuccess(OkResponseSchema))
+  .add(endpoint.post("downProject")`/projects/${ProjectIdParam}/down`.addSuccess(OkResponseSchema))
   .add(
     endpoint.post("applyProject")`/projects/${ProjectIdParam}/apply`
       .setPayload(ApplyProjectRequestSchema)
@@ -529,7 +538,7 @@ const ProjectPortsGroup = HttpApiGroup.make("projectPorts")
   )
   .add(
     endpoint.del("deleteProjectPort")`/projects/${ProjectIdParam}/ports/${TargetPortParam}`
-      .addSuccess(EmptyResponseSchema)
+      .addSuccess(OkResponseSchema)
   )
 
 const ProjectBrowserGroup = HttpApiGroup.make("projectBrowser")
@@ -551,7 +560,7 @@ const ProjectDatabasesGroup = HttpApiGroup.make("projectDatabases")
   )
   .add(
     endpoint.del("deleteDatabaseProfile")`/projects/${ProjectIdParam}/databases/profiles/${ProfileIdParam}`
-      .addSuccess(EmptyResponseSchema)
+      .addSuccess(OkResponseSchema)
   )
   .add(
     endpoint.post("exposeDatabaseProfile")`/projects/${ProjectIdParam}/databases/profiles/${ProfileIdParam}/expose`
@@ -559,7 +568,7 @@ const ProjectDatabasesGroup = HttpApiGroup.make("projectDatabases")
   )
   .add(
     endpoint.del("deleteDatabaseForward")`/projects/${ProjectIdParam}/databases/profiles/${ProfileIdParam}/expose`
-      .addSuccess(EmptyResponseSchema)
+      .addSuccess(OkResponseSchema)
   )
   .add(
     endpoint.get("listDatabaseForwards")`/projects/${ProjectIdParam}/databases/forwards`
@@ -677,16 +686,16 @@ const TerminalGroup = HttpApiGroup.make("terminal")
   )
   .add(
     endpoint.del("deleteTerminalByKey")`/projects/by-key/${ProjectKeyParam}/terminal-sessions/${SessionIdParam}`
-      .addSuccess(EmptyResponseSchema)
+      .addSuccess(OkResponseSchema)
   )
   .add(
     endpoint.put("setActiveTerminalByKey")`/projects/by-key/${ProjectKeyParam}/terminal-sessions/active`
       .setPayload(ActiveProjectTerminalSessionRequestSchema)
-      .addSuccess(ProjectTerminalSessionResponseSchema)
+      .addSuccess(ActiveProjectTerminalSessionResponseSchema)
   )
   .add(endpoint.get("lookupTerminal")`/terminal-sessions/${SessionIdParam}`.addSuccess(TerminalSessionLookupResponseSchema))
   .add(
-    endpoint.del("deleteAuthTerminal")`/auth/terminal-sessions/${SessionIdParam}`.addSuccess(EmptyResponseSchema)
+    endpoint.del("deleteAuthTerminal")`/auth/terminal-sessions/${SessionIdParam}`.addSuccess(OkResponseSchema)
   )
 
 const PromptsGroup = HttpApiGroup.make("prompts")
@@ -719,7 +728,7 @@ const TasksGroup = HttpApiGroup.make("tasks")
       .setUrlParams(QueryIncludeDefaultSchema)
       .addSuccess(ContainerTaskSnapshotResponseSchema)
   )
-  .add(endpoint.post("stopTask")`/projects/${ProjectIdParam}/tasks/${PidParam}/stop`.addSuccess(EmptyResponseSchema))
+  .add(endpoint.post("stopTask")`/projects/${ProjectIdParam}/tasks/${PidParam}/stop`.addSuccess(OkResponseSchema))
   .add(
     endpoint.get("taskLogs")`/projects/${ProjectIdParam}/tasks/${PidParam}/logs`
       .setUrlParams(QueryLinesSchema)
@@ -740,6 +749,10 @@ export const DockerGitApi = HttpApi.make("docker-git")
   .annotate(OpenApi.Version, "1.0.0")
   .annotate(OpenApi.Description, "Effect contract for docker-git JSON REST endpoints.")
   .addError(ApiErrorResponseSchema, { status: 400 })
+  .addError(ApiErrorResponseSchema, { status: 401 })
+  .addError(ApiErrorResponseSchema, { status: 404 })
+  .addError(ApiErrorResponseSchema, { status: 409 })
+  .addError(ApiErrorResponseSchema, { status: 500 })
   .add(CoreGroup)
   .add(ProjectsGroup)
   .add(ProjectPortsGroup)
