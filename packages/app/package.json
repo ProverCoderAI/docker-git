@@ -117,7 +117,7 @@
     "eslint-plugin-unicorn": "^67.0.0",
     "fast-check": "4.8.0",
     "globals": "^17.6.0",
-    "jscpd": "^5.0.9",
+    "jscpd": "^5.0.10",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1",
     "vite": "^8.0.16",
