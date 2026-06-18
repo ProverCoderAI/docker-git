@@ -6,7 +6,7 @@ import { buildDockerGitOpenApi } from "../packages/api/src/api/openapi.js"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const repositoryRoot = resolve(__dirname, "..")
-const outputPath = resolve(repositoryRoot, "packages/api/openapi.json")
+const outputPath = resolve(repositoryRoot, "packages/openapi/openapi.json")
 
 const describeWriteError = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)

@@ -304,5 +304,5 @@ export default defineConfig(
   },
 
   // 4) Глобальные игноры
-  { ignores: ['dist/**', 'build/**', 'coverage/**', '**/dist/**', 'src/web/generated/**'] },
+  { ignores: ['dist/**', 'build/**', 'coverage/**', '**/dist/**'] },
 );

@@ -1,11 +1,11 @@
 import * as ParseResult from "@effect/schema/ParseResult"
 import type * as Schema from "@effect/schema/Schema"
 import * as TreeFormatter from "@effect/schema/TreeFormatter"
+import type { paths } from "@prover-coder-ai/docker-git-openapi"
 import { Effect, Either, Option } from "effect"
 import createClient, { type Client, type Middleware } from "openapi-fetch"
 
 import { resolveApiBaseUrl } from "./api-http.js"
-import type { paths } from "./generated/openapi-paths.js"
 
 type DockerGitOpenApiClient = Client<paths>
 

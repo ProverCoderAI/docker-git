@@ -79,6 +79,7 @@
         "@eslint/compat": "2.1.0",
         "@eslint/eslintrc": "3.3.5",
         "@eslint/js": "10.0.1",
+        "@prover-coder-ai/docker-git-openapi": "workspace:*",
         "@prover-coder-ai/docker-git-terminal": "workspace:*",
         "@prover-coder-ai/eslint-plugin-suggest-members": "^0.0.26",
         "@ton-ai-core/vibecode-linter": "^1.0.11",
@@ -103,7 +104,6 @@
         "fast-check": "4.8.0",
         "globals": "^17.6.0",
         "jscpd": "^5.0.10",
-        "openapi-typescript": "^7.13.0",
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.61.1",
         "vite": "^8.0.16",
@@ -231,6 +231,14 @@
         "typescript-eslint": "^8.61.1",
         "vite": "^8.0.16",
         "vitest": "^4.1.9",
+      },
+    },
+    "packages/openapi": {
+      "name": "@prover-coder-ai/docker-git-openapi",
+      "version": "0.1.0",
+      "devDependencies": {
+        "openapi-typescript": "^7.13.0",
+        "typescript": "^6.0.3",
       },
     },
     "packages/terminal": {
@@ -655,6 +663,8 @@
     "@prover-coder-ai/docker-git": ["@prover-coder-ai/docker-git@workspace:packages/app"],
 
     "@prover-coder-ai/docker-git-container": ["@prover-coder-ai/docker-git-container@workspace:packages/container"],
+
+    "@prover-coder-ai/docker-git-openapi": ["@prover-coder-ai/docker-git-openapi@workspace:packages/openapi"],
 
     "@prover-coder-ai/docker-git-session-sync": ["@prover-coder-ai/docker-git-session-sync@workspace:packages/docker-git-session-sync"],
 
