@@ -81,7 +81,6 @@
     "@gridland/web": "0.4.3",
     "@prover-coder-ai/docker-git-session-sync": "workspace:*",
     "effect": "^3.21.3",
-    "openapi-fetch": "^0.17.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-reconciler": "^0.33.0",

@@ -1,14 +1,27 @@
-/**
- * Generated OpenAPI path map for the docker-git JSON REST API.
- *
- * @returns Type-only exports consumed by typed OpenAPI clients.
- *
- * @pure true
- * @effect none
- * @invariant all exported types are derived from packages/openapi/openapi.json.
- * @precondition run `bun run --cwd packages/openapi generate` after changing the source HttpApi contract.
- * @postcondition consumers depend on this package instead of importing generated files from app internals.
- * @complexity O(1)/O(1)
- * @throws Never - type-only module.
- */
-export type { components, operations, paths, webhooks } from "./openapi-paths.js"
+import type { components, operations, paths, webhooks } from "./openapi-paths.js"
+
+export {
+  createDockerGitOpenApiClient,
+  makeDockerGitOpenApiRuntime,
+  openApiJson,
+  openApiJsonSchema,
+  openApiVoid,
+  runOpenApi
+} from "./client.js"
+export type {
+  ApiTransportError,
+  ApiTransportValue,
+  DockerGitOpenApiClient,
+  DockerGitOpenApiRuntime,
+  DockerGitOpenApiRuntimeOptions,
+  OpenApiRequest,
+  OpenApiRequestResult,
+  OpenApiResponse
+} from "./client.js"
+
+export type { components, operations, paths, webhooks }
+
+export type DockerGitOpenApiComponents = components
+export type DockerGitOpenApiOperations = operations
+export type DockerGitOpenApiPaths = paths
+export type DockerGitOpenApiWebhooks = webhooks
