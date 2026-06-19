@@ -1,9 +1,9 @@
 import { Effect } from "effect"
 
 import { dockerGitOpenApi, renderDockerGitOpenApiFailure } from "./api-http.js"
-import type { ProjectPromptKind } from "./api-schema.js"
+import type { ProjectPromptKind, ProjectPromptsSnapshot } from "./api-schema.js"
 
-export const loadProjectPrompts = (projectId: string) =>
+export const loadProjectPrompts = (projectId: string): Effect.Effect<ProjectPromptsSnapshot, string> =>
   dockerGitOpenApi.GET("/projects/{projectId}/prompts", {
     params: { path: { projectId } }
   }).pipe(
@@ -15,7 +15,7 @@ export const writeProjectPrompt = (
   projectId: string,
   kind: ProjectPromptKind,
   content: string
-) =>
+): Effect.Effect<ProjectPromptsSnapshot, string> =>
   dockerGitOpenApi.PUT("/projects/{projectId}/prompts/{kind}", {
     body: { content },
     params: { path: { kind, projectId } }
@@ -27,7 +27,7 @@ export const writeProjectPrompt = (
 export const deleteProjectPrompt = (
   projectId: string,
   kind: ProjectPromptKind
-) =>
+): Effect.Effect<ProjectPromptsSnapshot, string> =>
   dockerGitOpenApi.DELETE("/projects/{projectId}/prompts/{kind}", {
     params: { path: { kind, projectId } }
   }).pipe(

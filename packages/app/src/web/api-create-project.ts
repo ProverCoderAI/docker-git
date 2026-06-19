@@ -38,6 +38,30 @@ export const createProjectAcceptedBody = (draft: CreateProjectRequestDraft): Cre
   ...optionalProjectResourceFields(draft)
 })
 
+// CHANGE: Publish the async project creation boundary with an explicit Effect signature.
+// WHY: exported web API helpers must expose typed success, error, and requirement channels.
+// QUOTE(ТЗ): "исправь"
+// REF: PR#431 CodeRabbit review 4535473023
+// SOURCE: n/a
+// FORMAT THEOREM: forall draft d: accepted(d) -> Effect<CreateProjectAcceptedResponse, string, never>.
+// PURITY: SHELL
+// EFFECT: Effect<CreateProjectAcceptedResponse, string, never>
+// INVARIANT: only HTTP 202 is accepted as the asynchronous creation success branch.
+// COMPLEXITY: O(1)/O(1), excluding HTTP transport.
+/**
+ * Starts asynchronous project creation through the typed OpenAPI client.
+ *
+ * @param draft - Validated project creation draft plus optional resource limits.
+ * @returns Effect that resolves to the accepted async creation response.
+ *
+ * @pure false - performs HTTP IO when the returned Effect is executed.
+ * @effect Effect<CreateProjectAcceptedResponse, string, never>
+ * @invariant HTTP 202 returns the accepted response; HTTP 201 is rejected as a sync branch mismatch.
+ * @precondition draft fields were validated by the UI create flow.
+ * @postcondition downstream callers observe only accepted async responses or string-rendered failures.
+ * @complexity O(1)/O(1), excluding HTTP transport and response body size.
+ * @throws Never - failures are represented in the Effect error channel.
+ */
 export const startCreateProject = (
   draft: CreateProjectRequestDraft
 ): Effect.Effect<CreateProjectAcceptedResponse, string> =>

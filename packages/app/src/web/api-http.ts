@@ -138,7 +138,7 @@ export const renderDockerGitOpenApiFailure = (failure: RenderableOpenApiFailure)
         ? "HTTP 429: tunnel or proxy rate limited the request. Retry or request a fresh tunnel URL."
         : renderOpenApiBody(error.body)),
     Match.when({ _tag: "TransportError" }, (error) => error.error.message),
-    Match.when({ _tag: "UnexpectedStatus" }, (error) => `HTTP ${error.status}: ${error.body}`),
+    Match.when({ _tag: "UnexpectedStatus" }, (error) => `HTTP ${error.status}: ${renderOpenApiBody(error.body)}`),
     Match.when({ _tag: "UnexpectedContentType" }, (error) =>
       `HTTP ${error.status}: unexpected content type ${error.actual ?? "none"}: ${error.body}`),
     Match.when({ _tag: "ParseError" }, (error) =>

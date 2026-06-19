@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 
 import { dockerGitOpenApi, renderDockerGitOpenApiFailure } from "./api-http.js"
-import type { ProjectSkillScope } from "./api-schema.js"
+import type { ProjectSkillScope, ProjectSkillsSnapshot } from "./api-schema.js"
 
 const skillScopeIdByScope: Readonly<Record<ProjectSkillScope, string>> = {
   "skills": "skills",
@@ -15,7 +15,7 @@ const skillScopeIdByScope: Readonly<Record<ProjectSkillScope, string>> = {
 
 export const projectSkillScopeToId = (scope: ProjectSkillScope): string => skillScopeIdByScope[scope]
 
-export const loadProjectSkills = (projectId: string) =>
+export const loadProjectSkills = (projectId: string): Effect.Effect<ProjectSkillsSnapshot, string> =>
   dockerGitOpenApi.GET("/projects/{projectId}/skills", {
     params: { path: { projectId } }
   }).pipe(
@@ -28,7 +28,7 @@ export const writeProjectSkill = (
   scope: ProjectSkillScope,
   name: string,
   content: string
-) =>
+): Effect.Effect<ProjectSkillsSnapshot, string> =>
   dockerGitOpenApi.POST("/projects/{projectId}/skills", {
     body: { content, name, scope },
     params: { path: { projectId } }
@@ -41,7 +41,7 @@ export const deleteProjectSkill = (
   projectId: string,
   scope: ProjectSkillScope,
   name: string
-) =>
+): Effect.Effect<ProjectSkillsSnapshot, string> =>
   dockerGitOpenApi.DELETE("/projects/{projectId}/skills/{scopeId}/{name}", {
     params: { path: { name, projectId, scopeId: projectSkillScopeToId(scope) } }
   }).pipe(

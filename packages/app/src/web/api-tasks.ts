@@ -1,8 +1,12 @@
 import { Effect } from "effect"
 
 import { dockerGitOpenApi, renderDockerGitOpenApiFailure } from "./api-http.js"
+import type { ContainerTaskSnapshot } from "./api-schema.js"
 
-export const loadProjectTasks = (projectId: string, shouldIncludeDefault = false) =>
+export const loadProjectTasks = (
+  projectId: string,
+  shouldIncludeDefault = false
+): Effect.Effect<ContainerTaskSnapshot, string> =>
   dockerGitOpenApi.GET("/projects/{projectId}/tasks", {
     params: {
       path: { projectId },
@@ -16,7 +20,7 @@ export const loadProjectTasks = (projectId: string, shouldIncludeDefault = false
 export const stopProjectTask = (
   projectId: string,
   pid: number
-) =>
+): Effect.Effect<void, string> =>
   dockerGitOpenApi.POST("/projects/{projectId}/tasks/{pid}/stop", {
     params: { path: { pid: String(pid), projectId } }
   }).pipe(
@@ -28,7 +32,7 @@ export const loadProjectTaskLogs = (
   projectId: string,
   pid: number,
   lines = 200
-) =>
+): Effect.Effect<string, string> =>
   dockerGitOpenApi.GET("/projects/{projectId}/tasks/{pid}/logs", {
     params: {
       path: { pid: String(pid), projectId },
