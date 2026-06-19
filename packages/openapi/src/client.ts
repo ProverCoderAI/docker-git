@@ -2,8 +2,8 @@ import * as ParseResult from "@effect/schema/ParseResult"
 import type * as Schema from "@effect/schema/Schema"
 import * as TreeFormatter from "@effect/schema/TreeFormatter"
 import { createClientEffect } from "@prover-coder-ai/openapi-effect"
-import type { ClientOptions, Middleware } from "@prover-coder-ai/openapi-effect"
-import { Effect, Either, Option } from "effect"
+import type { BoundaryError, ClientOptions, Middleware } from "@prover-coder-ai/openapi-effect"
+import { Effect, Either, Match } from "effect"
 
 import type { paths } from "./openapi-paths.js"
 
@@ -20,13 +20,19 @@ export type ApiTransportValue =
   | ReadonlyArray<ApiTransportValue>
   | { readonly [key: string]: ApiTransportValue }
 
-export type OpenApiResponse<A> = {
-  readonly data?: A
-  readonly error?: unknown
-  readonly response: Response
+export type OpenApiSuccess = {
+  readonly status: number | string
+  readonly contentType: string
+  readonly body: unknown
 }
 
-export type OpenApiRequestResult = Effect.Effect<OpenApiResponse<unknown>, Error>
+export type OpenApiHttpError = OpenApiSuccess & {
+  readonly _tag: "HttpError"
+}
+
+export type OpenApiFailure = OpenApiHttpError | BoundaryError
+
+export type OpenApiRequestResult = Effect.Effect<OpenApiSuccess, OpenApiFailure>
 
 export type OpenApiRequest = (client: DockerGitOpenApiTransportClient) => OpenApiRequestResult
 
@@ -44,7 +50,7 @@ export type DockerGitOpenApiClient = {
   readonly openApiVoid: (request: OpenApiRequest) => Effect.Effect<void, string>
 }
 
-type RunOpenApi = (request: OpenApiRequest) => Effect.Effect<OpenApiResponse<unknown>, string>
+type RunOpenApi = (request: OpenApiRequest) => Effect.Effect<OpenApiSuccess, OpenApiFailure>
 
 const noCacheHeaders: Readonly<Record<string, string>> = {
   accept: "application/json",
@@ -102,14 +108,13 @@ const decodeTransportValue = (value: unknown): Effect.Effect<ApiTransportValue, 
       Effect.flatMap((rendered) => Effect.fail(`Invalid JSON response payload: ${rendered}`))
     )
 
-const renderOpenApiError = (
-  response: Response,
-  error: unknown
+const renderOpenApiHttpError = (
+  error: OpenApiHttpError
 ): Effect.Effect<string> => {
-  if (response.status === 429) {
+  if (String(error.status) === "429") {
     return Effect.succeed("HTTP 429: tunnel or proxy rate limited the request. Retry or request a fresh tunnel URL.")
   }
-  return error === undefined ? Effect.succeed(`HTTP ${response.status}`) : renderTransportValue(error)
+  return error.body === undefined ? Effect.succeed(`HTTP ${error.status}`) : renderTransportValue(error.body)
 }
 
 const noCacheGetMiddleware: DockerGitOpenApiMiddleware = {
@@ -175,16 +180,27 @@ export const createTransportClient = (
 export const runOpenApi = (
   client: DockerGitOpenApiTransportClient,
   request: OpenApiRequest
-): Effect.Effect<OpenApiResponse<unknown>, string> =>
-  request(client).pipe(
-    Effect.mapError(String)
+): Effect.Effect<OpenApiSuccess, OpenApiFailure> => request(client)
+
+const renderOpenApiFailure = (failure: OpenApiFailure): Effect.Effect<string> =>
+  Match.value(failure).pipe(
+    Match.when({ _tag: "HttpError" }, renderOpenApiHttpError),
+    Match.when({ _tag: "TransportError" }, (error) => Effect.succeed(error.error.message)),
+    Match.when({ _tag: "UnexpectedStatus" }, (error) => Effect.succeed(`HTTP ${error.status}: ${error.body}`)),
+    Match.when({ _tag: "UnexpectedContentType" }, (error) =>
+      Effect.succeed(`HTTP ${error.status}: unexpected content type ${error.actual ?? "none"}: ${error.body}`)
+    ),
+    Match.when({ _tag: "ParseError" }, (error) =>
+      Effect.succeed(`HTTP ${error.status}: invalid ${error.contentType} response: ${error.error.message}`)
+    ),
+    Match.when({ _tag: "DecodeError" }, (error) =>
+      Effect.succeed(`HTTP ${error.status}: invalid decoded response: ${error.error.message}`)
+    ),
+    Match.exhaustive
   )
 
-const failRenderedOpenApiError = (
-  response: Response,
-  error: unknown
-): Effect.Effect<never, string> =>
-  renderOpenApiError(response, error).pipe(
+const failRenderedOpenApiFailure = (failure: OpenApiFailure): Effect.Effect<never, string> =>
+  renderOpenApiFailure(failure).pipe(
     Effect.flatMap((message) => Effect.fail(message))
   )
 
@@ -193,16 +209,11 @@ const openApiJsonWithRunner = (
   request: OpenApiRequest
 ): Effect.Effect<ApiTransportValue, string> =>
   runner(request).pipe(
-    Effect.flatMap(({ data, error, response }) =>
-      Option.match(Option.fromNullable(error), {
-        onNone: () =>
-          response.ok
-            ? data === undefined
-              ? Effect.fail(`HTTP ${response.status}: empty response`)
-              : decodeTransportValue(data)
-            : failRenderedOpenApiError(response, error),
-        onSome: (apiError) => failRenderedOpenApiError(response, apiError)
-      })
+    Effect.catchAll(failRenderedOpenApiFailure),
+    Effect.flatMap((success) =>
+      success.body === undefined
+        ? Effect.fail(`HTTP ${success.status}: empty response`)
+        : decodeTransportValue(success.body)
     )
   )
 
@@ -226,14 +237,8 @@ const openApiVoidWithRunner = (
   request: OpenApiRequest
 ): Effect.Effect<void, string> =>
   runner(request).pipe(
-    Effect.flatMap(({ error, response }) =>
-      response.ok
-        ? Option.match(Option.fromNullable(error), {
-          onNone: () => Effect.void,
-          onSome: (apiError) => failRenderedOpenApiError(response, apiError)
-        })
-        : failRenderedOpenApiError(response, error)
-    )
+    Effect.asVoid,
+    Effect.catchAll(failRenderedOpenApiFailure)
   )
 
 /**
@@ -335,10 +340,8 @@ export const createClient = (
     return clientCache.client
   }
 
-  const runRuntimeOpenApi = (request: OpenApiRequest): Effect.Effect<OpenApiResponse<unknown>, string> =>
-    request(getOpenApiClient()).pipe(
-      Effect.mapError(String)
-    )
+  const runRuntimeOpenApi = (request: OpenApiRequest): Effect.Effect<OpenApiSuccess, OpenApiFailure> =>
+    request(getOpenApiClient())
 
   return {
     openApiJson: (request) => openApiJsonWithRunner(runRuntimeOpenApi, request),

@@ -8,7 +8,6 @@
 		"lib": ["ES2023", "DOM", "DOM.Iterable"],
 		"jsx": "react-jsx",
 		"paths": {
-			"@prover-coder-ai/openapi-effect": ["../openapi/src/types/openapi-effect.d.ts"],
 			"@/*": ["./src/*"]
 		}
 	},
