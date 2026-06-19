@@ -126,6 +126,7 @@ type ControllerBootstrapContext = {
   readonly localControllerRevision: string
   readonly currentControllerRevision: string | null
   readonly currentImageRevision: string | null
+  readonly isControllerRunning: boolean
   readonly buildController: boolean
   readonly forceRecreateController: boolean
   readonly currentContainerNetworks: DockerNetworkIps
@@ -139,6 +140,9 @@ const loadControllerBootstrapContext = (): ControllerEffect<ControllerBootstrapC
     const explicitApiBaseUrl = resolveExplicitApiBaseUrl()
     const localControllerRevision = yield* _(ControllerDocker.prepareLocalControllerRevision())
     const isCurrentControllerExists = yield* _(ControllerDocker.controllerExists())
+    const isControllerRunning = isCurrentControllerExists
+      ? yield* _(ControllerDocker.inspectControllerRunning())
+      : false
     const currentControllerRevision = yield* _(ControllerDocker.inspectControllerRevision())
     const currentImageRevision = yield* _(inspectControllerImageRevision())
     const currentContainerNetworks = yield* _(ControllerDocker.resolveCurrentContainerNetworks())
@@ -154,6 +158,7 @@ const loadControllerBootstrapContext = (): ControllerEffect<ControllerBootstrapC
       localControllerRevision,
       currentControllerRevision,
       currentImageRevision,
+      isControllerRunning,
       buildController: shouldBuildControllerImage({
         currentControllerRevision,
         currentImageRevision,
@@ -163,6 +168,58 @@ const loadControllerBootstrapContext = (): ControllerEffect<ControllerBootstrapC
       forceRecreateController: isForceRecreateController,
       currentContainerNetworks,
       initialControllerNetworks
+    }
+  })
+
+const upgradeContextForRuntimeDrift = (
+  context: ControllerBootstrapContext
+): ControllerEffect<ControllerBootstrapContext> =>
+  Effect.gen(function*(_) {
+    if (
+      context.explicitApiBaseUrl !== undefined ||
+      context.forceRecreateController ||
+      !context.isControllerRunning ||
+      context.currentControllerRevision !== context.localControllerRevision
+    ) {
+      return context
+    }
+
+    const reachableApiBaseUrl = yield* _(
+      findReachableApiBaseUrlOrNull(
+        buildBootstrapCandidateUrls(
+          context.explicitApiBaseUrl,
+          context.currentContainerNetworks,
+          context.initialControllerNetworks
+        ),
+        context.localControllerRevision
+      )
+    )
+
+    if (reachableApiBaseUrl !== null) {
+      return context
+    }
+
+    yield* _(
+      Effect.logWarning(
+        [
+          "Detected docker-git controller runtime drift.",
+          `Running container ${ControllerDocker.controllerContainerName} exposes inspect revision ${context.currentControllerRevision ?? "unknown"}`,
+          `but no reachable endpoint answered revision ${context.localControllerRevision}.`,
+          "Forcing container recreation to discard stale writable-layer startup state."
+        ].join(" ")
+      )
+    )
+
+    const forceRecreateController = true
+    return {
+      ...context,
+      buildController: shouldBuildControllerImage({
+        currentControllerRevision: context.currentControllerRevision,
+        currentImageRevision: context.currentImageRevision,
+        forceRecreateController,
+        localControllerRevision: context.localControllerRevision
+      }),
+      forceRecreateController
     }
   })
 
@@ -293,11 +350,12 @@ export const ensureControllerReady = (): ControllerEffect<void> =>
 
     const bootstrapContext = yield* _(loadControllerBootstrapContext())
     yield* _(failIfRemoteDockerWithoutApiUrl(bootstrapContext.currentContainerNetworks))
-    const isReusedExistingController = yield* _(reuseReachableControllerIfPossible(bootstrapContext))
+    const correctedBootstrapContext = yield* _(upgradeContextForRuntimeDrift(bootstrapContext))
+    const isReusedExistingController = yield* _(reuseReachableControllerIfPossible(correctedBootstrapContext))
     if (isReusedExistingController) {
       return
     }
-    yield* _(startAndRememberController(bootstrapContext))
+    yield* _(startAndRememberController(correctedBootstrapContext))
   })
 
 export const restartController = (): ControllerEffect<void> =>

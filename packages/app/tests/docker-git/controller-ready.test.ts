@@ -5,6 +5,10 @@ import { Effect } from "effect"
 import { beforeEach, vi } from "vitest"
 
 const prepareLocalControllerRevisionMock = vi.hoisted(() => vi.fn<() => Effect.Effect<string>>())
+const controllerExistsMock = vi.hoisted(() => vi.fn<() => Effect.Effect<boolean>>())
+const inspectControllerRevisionMock = vi.hoisted(() => vi.fn<() => Effect.Effect<string | null>>())
+const inspectControllerRunningMock = vi.hoisted(() => vi.fn<() => Effect.Effect<boolean>>())
+const inspectControllerImageRevisionMock = vi.hoisted(() => vi.fn<() => Effect.Effect<string | null>>())
 const findReachableDirectHealthProbeMock = vi.hoisted(
   () =>
     vi.fn<
@@ -15,33 +19,39 @@ const findReachableDirectHealthProbeMock = vi.hoisted(
       }) => Effect.Effect<{ readonly apiBaseUrl: string; readonly revision: string | null } | null>
     >()
 )
+const findReachableApiBaseUrlMock = vi.hoisted(
+  () => vi.fn<(candidateUrls: ReadonlyArray<string>, expectedRevision?: string) => Effect.Effect<string>>()
+)
 const prepareControllerResourceLimitEnvMock = vi.hoisted(() => vi.fn<() => Effect.Effect<void>>())
 const prepareControllerRuntimeEnvMock = vi.hoisted(() => vi.fn<() => Effect.Effect<void>>())
+const runComposeMock = vi.hoisted(() => vi.fn<(args: ReadonlyArray<string>) => Effect.Effect<void>>())
 
 vi.mock("../../src/docker-git/controller-bootstrap-plan.js", () => ({
-  resolveControllerComposeUpArgs: () => ["up", "-d"],
+  resolveControllerComposeUpArgs: ({ forceRecreateController }: { readonly forceRecreateController: boolean }) =>
+    forceRecreateController ? ["up", "-d", "--force-recreate"] : ["up", "-d"],
   shouldBuildControllerImage: () => false
 }))
 
 vi.mock("../../src/docker-git/controller-docker.js", () => ({
   controllerContainerName: "docker-git-api",
-  controllerExists: () => Effect.succeed(false),
+  controllerExists: controllerExistsMock,
   ensureControllerReachabilityNetworks: () => Effect.void,
   inspectContainerNetworks: () => Effect.succeed({}),
   inspectControllerPublishedPorts: () => Effect.succeed("unavailable"),
-  inspectControllerRevision: () => Effect.succeed(null),
+  inspectControllerRevision: inspectControllerRevisionMock,
+  inspectControllerRunning: inspectControllerRunningMock,
   prepareLocalControllerRevision: prepareLocalControllerRevisionMock,
   resolveCurrentContainerNetworks: () => Effect.succeed({}),
-  runCompose: () => Effect.void
+  runCompose: runComposeMock
 }))
 
 vi.mock("../../src/docker-git/controller-health.js", () => ({
-  findReachableApiBaseUrl: () => Effect.succeed("http://127.0.0.1:3334"),
+  findReachableApiBaseUrl: findReachableApiBaseUrlMock,
   findReachableDirectHealthProbe: findReachableDirectHealthProbeMock
 }))
 
 vi.mock("../../src/docker-git/controller-image-revision.js", () => ({
-  inspectControllerImageRevision: () => Effect.succeed(null)
+  inspectControllerImageRevision: inspectControllerImageRevisionMock
 }))
 
 vi.mock("../../src/docker-git/controller-reachability.js", () => ({
@@ -88,12 +98,24 @@ describe("controller readiness bootstrap", () => {
     vi.resetModules()
     Reflect.deleteProperty(process.env, "DOCKER_GIT_API_URL")
     prepareLocalControllerRevisionMock.mockReset()
+    controllerExistsMock.mockReset()
+    inspectControllerRevisionMock.mockReset()
+    inspectControllerRunningMock.mockReset()
+    inspectControllerImageRevisionMock.mockReset()
     findReachableDirectHealthProbeMock.mockReset()
+    findReachableApiBaseUrlMock.mockReset()
     prepareControllerResourceLimitEnvMock.mockReset()
     prepareControllerRuntimeEnvMock.mockReset()
+    runComposeMock.mockReset()
     prepareLocalControllerRevisionMock.mockImplementation(() => Effect.succeed("local-revision"))
+    controllerExistsMock.mockImplementation(() => Effect.succeed(false))
+    inspectControllerRevisionMock.mockImplementation(() => Effect.succeed(null))
+    inspectControllerRunningMock.mockImplementation(() => Effect.succeed(false))
+    inspectControllerImageRevisionMock.mockImplementation(() => Effect.succeed(null))
+    findReachableApiBaseUrlMock.mockImplementation(() => Effect.succeed("http://127.0.0.1:3334"))
     prepareControllerResourceLimitEnvMock.mockImplementation(() => Effect.void)
     prepareControllerRuntimeEnvMock.mockImplementation(() => Effect.void)
+    runComposeMock.mockImplementation(() => Effect.void)
   })
 
   it.effect("probes explicit API URL before preparing a local controller revision", () =>
@@ -117,6 +139,28 @@ describe("controller readiness bootstrap", () => {
       expect(prepareControllerResourceLimitEnvMock).not.toHaveBeenCalled()
       expect(prepareControllerRuntimeEnvMock).not.toHaveBeenCalled()
       expect(resolveApiBaseUrl()).toBe("https://api.example.test")
+    }))
+
+  it.effect("reuses a reachable local controller that already answers the expected revision", () =>
+    Effect.gen(function*(_) {
+      findReachableDirectHealthProbeMock.mockImplementation(() =>
+        Effect.succeed({
+          apiBaseUrl: "http://127.0.0.1:3334",
+          revision: "local-revision"
+        })
+      )
+
+      const { ensureControllerReady, resolveApiBaseUrl } = yield* _(
+        Effect.promise(() => import("../../src/docker-git/controller.js"))
+      )
+
+      yield* _(ensureControllerReady().pipe(Effect.provide(NodeContext.layer)))
+
+      expect(runComposeMock).not.toHaveBeenCalled()
+      expect(prepareLocalControllerRevisionMock).toHaveBeenCalledTimes(1)
+      expect(prepareControllerResourceLimitEnvMock).not.toHaveBeenCalled()
+      expect(prepareControllerRuntimeEnvMock).not.toHaveBeenCalled()
+      expect(resolveApiBaseUrl()).toBe("http://127.0.0.1:3334")
     }))
 
   it.effect("falls back to local bootstrap when the default local API URL is not reachable", () =>
@@ -157,6 +201,54 @@ describe("controller readiness bootstrap", () => {
       expect(prepareLocalControllerRevisionMock).not.toHaveBeenCalled()
       expect(prepareControllerResourceLimitEnvMock).not.toHaveBeenCalled()
       expect(prepareControllerRuntimeEnvMock).not.toHaveBeenCalled()
+    }))
+
+  it.effect("forces controller recreation when a running container has matching inspect revision but no reachable endpoint answers it", () =>
+    Effect.gen(function*(_) {
+      findReachableDirectHealthProbeMock.mockReturnValue(Effect.succeed(null))
+      controllerExistsMock.mockImplementation(() => Effect.succeed(true))
+      inspectControllerRunningMock.mockImplementation(() => Effect.succeed(true))
+      inspectControllerRevisionMock.mockImplementation(() => Effect.succeed("local-revision"))
+      inspectControllerImageRevisionMock.mockImplementation(() => Effect.succeed("local-revision"))
+      let reachabilityAttempt = 0
+      findReachableApiBaseUrlMock.mockImplementation(() => {
+        reachabilityAttempt += 1
+        return reachabilityAttempt === 1
+          ? Effect.fail({ _tag: "ControllerBootstrapError", message: "mismatch" })
+          : Effect.succeed("http://127.0.0.1:3334")
+      })
+
+      const { ensureControllerReady } = yield* _(
+        Effect.promise(() => import("../../src/docker-git/controller.js"))
+      )
+
+      yield* _(ensureControllerReady().pipe(Effect.provide(NodeContext.layer)))
+
+      expect(runComposeMock).toHaveBeenCalledWith(["up", "-d", "--force-recreate"])
+    }))
+
+  it.effect("does not force controller recreation when the matching controller is stopped", () =>
+    Effect.gen(function*(_) {
+      findReachableDirectHealthProbeMock.mockReturnValue(Effect.succeed(null))
+      controllerExistsMock.mockImplementation(() => Effect.succeed(true))
+      inspectControllerRunningMock.mockImplementation(() => Effect.succeed(false))
+      inspectControllerRevisionMock.mockImplementation(() => Effect.succeed("local-revision"))
+      inspectControllerImageRevisionMock.mockImplementation(() => Effect.succeed("local-revision"))
+      let reachabilityAttempt = 0
+      findReachableApiBaseUrlMock.mockImplementation(() => {
+        reachabilityAttempt += 1
+        return reachabilityAttempt === 1
+          ? Effect.fail({ _tag: "ControllerBootstrapError", message: "not reachable" })
+          : Effect.succeed("http://127.0.0.1:3334")
+      })
+
+      const { ensureControllerReady } = yield* _(
+        Effect.promise(() => import("../../src/docker-git/controller.js"))
+      )
+
+      yield* _(ensureControllerReady().pipe(Effect.provide(NodeContext.layer)))
+
+      expect(runComposeMock).toHaveBeenCalledWith(["up", "-d"])
     }))
 })
 /* jscpd:ignore-end */

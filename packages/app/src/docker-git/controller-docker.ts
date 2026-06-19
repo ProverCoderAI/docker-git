@@ -38,6 +38,7 @@ export const controllerContainerName = process.env["DOCKER_GIT_API_CONTAINER_NAM
 const inspectNetworksTemplate = String
   .raw`{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s=%s\n" $k $v.IPAddress}}{{end}}`
 const inspectEnvTemplate = "{{range .Config.Env}}{{println .}}{{end}}"
+const inspectStateRunningTemplate = "{{.State.Running}}"
 
 const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
   _tag: "ControllerBootstrapError",
@@ -48,6 +49,8 @@ const currentProcessEnv = (): Readonly<Record<string, string>> =>
   Object.fromEntries(
     Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )
+
+const parseDockerInspectBooleanOutput = (output: string): boolean => output.trim().toLowerCase() === "true"
 
 const runExitCode = (
   command: string,
@@ -432,6 +435,25 @@ export const inspectControllerRevision = (): Effect.Effect<
         )
         : Effect.succeed<string | null>(null)
     )
+  )
+
+// CHANGE: detect running controller state from Docker inspect before deciding whether reuse is trustworthy
+// WHY: a stale running container can report the correct configured env while the live process serves an old revision
+// QUOTE(ТЗ): n/a
+// REF: user-message-2026-06-19-controller-runtime-drift
+// SOURCE: n/a
+// FORMAT THEOREM: inspect(State.Running)=true -> running(container)
+// PURITY: SHELL
+// EFFECT: Effect<boolean, never, ControllerRuntime>
+// INVARIANT: missing or unreadable state is treated as not running
+// COMPLEXITY: O(1)
+export const inspectControllerRunning = (): Effect.Effect<boolean, never, ControllerRuntime> =>
+  runDockerCapture(
+    ["inspect", "-f", inspectStateRunningTemplate, controllerContainerName],
+    `Failed to inspect running state for ${controllerContainerName}`
+  ).pipe(
+    Effect.map(parseDockerInspectBooleanOutput),
+    Effect.orElseSucceed((): boolean => false)
   )
 
 export const prepareLocalControllerRevision = (): Effect.Effect<string, ControllerBootstrapError, ControllerRuntime> =>
