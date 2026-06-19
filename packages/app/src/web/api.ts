@@ -3,7 +3,7 @@ import { Effect } from "effect"
 import { sortSelectItemsByLaunchTime } from "../docker-git/menu-select-order.js"
 import type { SelectProjectRuntime } from "../docker-git/menu-types.js"
 import type { AuthMenuRequestBody, ProjectAuthMenuRequestBody } from "../shared/auth-menu-request.js"
-import { requestJson, requestTextStream, resolveApiBaseUrl } from "./api-http.js"
+import { dockerGitOpenApi, requestJson, requestTextStream, resolveApiBaseUrl } from "./api-http.js"
 import {
   AuthSnapshotResponseSchema,
   CodexStatusResponseSchema,
@@ -25,7 +25,6 @@ import type {
   ProjectPortForward,
   ProjectSummary
 } from "./api-schema.js"
-import { openApiJsonSchema, openApiVoid } from "./openapi-client.js"
 
 export { startCreateProject } from "./api-create-project.js"
 export {
@@ -114,8 +113,8 @@ export const sortDashboardProjects = (
 
 export const loadDashboard = (): Effect.Effect<DashboardData, string> =>
   Effect.all({
-    health: openApiJsonSchema(HealthResponseSchema, (client) => client.GET("/health")),
-    projectsResponse: openApiJsonSchema(ProjectsResponseSchema, (client) => client.GET("/projects"))
+    health: dockerGitOpenApi.openApiJsonSchema(HealthResponseSchema, (client) => client.GET("/health")),
+    projectsResponse: dockerGitOpenApi.openApiJsonSchema(ProjectsResponseSchema, (client) => client.GET("/projects"))
   }).pipe(
     Effect.map(({ health, projectsResponse }) => ({
       apiBaseUrl: resolveApiBaseUrl(),
@@ -143,25 +142,34 @@ export const openSkiller = (projectKey?: string, sessionId?: string) =>
   )
 
 export const loadProjectPortForwards = (projectId: string) =>
-  openApiJsonSchema(ProjectPortForwardsResponseSchema, (client) =>
-    client.GET("/projects/{projectId}/ports", {
-      params: { path: { projectId } }
-    })).pipe(
-      Effect.map((response) => response.forwards)
-    )
+  dockerGitOpenApi.openApiJsonSchema(
+    ProjectPortForwardsResponseSchema,
+    (client) =>
+      client.GET("/projects/{projectId}/ports", {
+        params: { path: { projectId } }
+      })
+  ).pipe(
+    Effect.map((response) => response.forwards)
+  )
 
 export const loadProjectBrowser = (projectId: string) =>
-  openApiJsonSchema(ProjectBrowserResponseSchema, (client) =>
-    client.GET("/projects/{projectId}/browser", {
-      params: { path: { projectId } }
-    }))
+  dockerGitOpenApi.openApiJsonSchema(
+    ProjectBrowserResponseSchema,
+    (client) =>
+      client.GET("/projects/{projectId}/browser", {
+        params: { path: { projectId } }
+      })
+  )
     .pipe(Effect.map((response) => response.browser))
 
 export const startProjectBrowser = (projectId: string) =>
-  openApiJsonSchema(ProjectBrowserResponseSchema, (client) =>
-    client.POST("/projects/{projectId}/browser/start", {
-      params: { path: { projectId } }
-    }))
+  dockerGitOpenApi.openApiJsonSchema(
+    ProjectBrowserResponseSchema,
+    (client) =>
+      client.POST("/projects/{projectId}/browser/start", {
+        params: { path: { projectId } }
+      })
+  )
     .pipe(Effect.map((response) => response.browser))
 
 export const createProjectPortForward = (
@@ -169,54 +177,57 @@ export const createProjectPortForward = (
   targetPort: number,
   hostPort?: number
 ) =>
-  openApiJsonSchema(ProjectPortForwardResponseSchema, (client) =>
-    client.POST("/projects/{projectId}/ports", {
-      body: hostPort === undefined ? { targetPort } : { hostPort, targetPort },
-      params: { path: { projectId } }
-    })).pipe(
-      Effect.map((response) => response.forward)
-    )
+  dockerGitOpenApi.openApiJsonSchema(
+    ProjectPortForwardResponseSchema,
+    (client) =>
+      client.POST("/projects/{projectId}/ports", {
+        body: hostPort === undefined ? { targetPort } : { hostPort, targetPort },
+        params: { path: { projectId } }
+      })
+  ).pipe(
+    Effect.map((response) => response.forward)
+  )
 
 export const deleteProjectPortForward = (
   projectId: string,
   targetPort: number
 ) =>
-  openApiVoid((client) =>
+  dockerGitOpenApi.openApiVoid((client) =>
     client.DELETE("/projects/{projectId}/ports/{targetPort}", {
       params: { path: { projectId, targetPort: String(targetPort) } }
     })
   )
 
 export const downProject = (projectId: string) =>
-  openApiVoid((client) =>
+  dockerGitOpenApi.openApiVoid((client) =>
     client.POST("/projects/{projectId}/down", {
       params: { path: { projectId } }
     })
   )
 
 export const deleteProject = (projectId: string) =>
-  openApiVoid((client) =>
+  dockerGitOpenApi.openApiVoid((client) =>
     client.DELETE("/projects/{projectId}", {
       params: { path: { projectId } }
     })
   )
 
-export const downAllProjects = () => openApiVoid((client) => client.POST("/projects/down-all"))
+export const downAllProjects = () => dockerGitOpenApi.openApiVoid((client) => client.POST("/projects/down-all"))
 
 export const applyAllProjects = (shouldApplyActiveOnly: boolean) =>
-  openApiVoid((client) =>
+  dockerGitOpenApi.openApiVoid((client) =>
     client.POST("/projects/apply-all", {
       body: { activeOnly: shouldApplyActiveOnly }
     })
   )
 
 export const loadGithubStatus = () =>
-  openApiJsonSchema(GithubStatusResponseSchema, (client) => client.GET("/auth/github/status")).pipe(
+  dockerGitOpenApi.openApiJsonSchema(GithubStatusResponseSchema, (client) => client.GET("/auth/github/status")).pipe(
     Effect.map((response) => response.status)
   )
 
 export const loginGithub = (label: string | null) =>
-  openApiJsonSchema(GithubStatusResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(GithubStatusResponseSchema, (client) =>
     client.POST("/auth/github/login", {
       body: { label }
     })).pipe(
@@ -240,7 +251,7 @@ export const loginCodexStream = (label: string | null, onChunk: (chunk: string) 
   })
 
 export const logoutCodex = (label: string | null) =>
-  openApiJsonSchema(CodexStatusResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(CodexStatusResponseSchema, (client) =>
     client.POST("/auth/codex/logout", {
       body: { label }
     })).pipe(Effect.asVoid)
@@ -258,34 +269,43 @@ export const loadProjectEvents = (
   )
 
 export const loadAuthSnapshot = () =>
-  openApiJsonSchema(AuthSnapshotResponseSchema, (client) => client.GET("/auth/menu")).pipe(
+  dockerGitOpenApi.openApiJsonSchema(AuthSnapshotResponseSchema, (client) => client.GET("/auth/menu")).pipe(
     Effect.map((response) => response.snapshot)
   )
 
 export const runAuthMenuFlow = (request: AuthMenuRequestBody & { readonly flow: AuthMenuFlow }) =>
-  openApiJsonSchema(AuthSnapshotResponseSchema, (client) => client.POST("/auth/menu", { body: request })).pipe(
+  dockerGitOpenApi.openApiJsonSchema(
+    AuthSnapshotResponseSchema,
+    (client) => client.POST("/auth/menu", { body: request })
+  ).pipe(
     Effect.map((response) => response.snapshot)
   )
 
 export const loadProjectAuthSnapshot = (projectId: string) =>
-  openApiJsonSchema(ProjectAuthSnapshotResponseSchema, (client) =>
-    client.GET("/projects/{projectId}/auth/menu", {
-      params: { path: { projectId } }
-    })).pipe(
-      Effect.map((response) => response.snapshot)
-    )
+  dockerGitOpenApi.openApiJsonSchema(
+    ProjectAuthSnapshotResponseSchema,
+    (client) =>
+      client.GET("/projects/{projectId}/auth/menu", {
+        params: { path: { projectId } }
+      })
+  ).pipe(
+    Effect.map((response) => response.snapshot)
+  )
 
 export const runProjectAuthFlow = (
   projectId: string,
   request: ProjectAuthMenuRequestBody & { readonly flow: ProjectAuthFlow }
 ) =>
-  openApiJsonSchema(ProjectAuthSnapshotResponseSchema, (client) =>
-    client.POST("/projects/{projectId}/auth/menu", {
-      body: request,
-      params: { path: { projectId } }
-    })).pipe(
-      Effect.map((response) => response.snapshot)
-    )
+  dockerGitOpenApi.openApiJsonSchema(
+    ProjectAuthSnapshotResponseSchema,
+    (client) =>
+      client.POST("/projects/{projectId}/auth/menu", {
+        body: request,
+        params: { path: { projectId } }
+      })
+  ).pipe(
+    Effect.map((response) => response.snapshot)
+  )
 
 export { resolveApiBaseUrl } from "./api-http.js"
 

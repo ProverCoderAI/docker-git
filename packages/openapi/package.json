@@ -28,8 +28,9 @@
   },
   "dependencies": {
     "@effect/schema": "^0.75.5",
+    "@prover-coder-ai/openapi-effect": "^1.0.22",
     "effect": "^3.21.3",
-    "openapi-fetch": "^0.17.0"
+    "openapi-typescript-helpers": "^0.1.0"
   },
   "devDependencies": {
     "openapi-typescript": "^7.13.0",

@@ -1,5 +1,6 @@
 import type { Effect } from "effect"
 
+import { dockerGitOpenApi } from "./api-http.js"
 import {
   type BaseCreateProjectBody,
   baseCreateProjectBody,
@@ -9,7 +10,6 @@ import {
 } from "./api-project-create-body.js"
 import { CreateProjectAcceptedResponseSchema } from "./api-schema.js"
 import type { CreateProjectAcceptedResponse } from "./api-schema.js"
-import { openApiJsonSchema } from "./openapi-client.js"
 
 type CreateProjectAcceptedBody = Readonly<
   & BaseCreateProjectBody
@@ -42,7 +42,7 @@ export const createProjectAcceptedBody = (draft: CreateProjectRequestDraft): Cre
 export const startCreateProject = (
   draft: CreateProjectRequestDraft
 ): Effect.Effect<CreateProjectAcceptedResponse, string> =>
-  openApiJsonSchema(CreateProjectAcceptedResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(CreateProjectAcceptedResponseSchema, (client) =>
     client.POST("/projects", {
       body: createProjectAcceptedBody(draft)
     }))

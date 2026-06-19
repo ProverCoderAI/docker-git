@@ -32,9 +32,11 @@ const openApiVoidMock = vi.hoisted(() =>
   })
 )
 
-vi.mock("../../src/web/openapi-client.js", () => ({
-  openApiJsonSchema: vi.fn(),
-  openApiVoid: openApiVoidMock
+vi.mock("../../src/web/api-http.js", () => ({
+  dockerGitOpenApi: {
+    openApiJsonSchema: vi.fn(),
+    openApiVoid: openApiVoidMock
+  }
 }))
 
 describe("api terminal helpers", () => {

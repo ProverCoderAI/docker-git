@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 
+import { dockerGitOpenApi } from "./api-http.js"
 import {
   ProjectDatabaseForwardResponseSchema,
   ProjectDatabaseForwardsResponseSchema,
@@ -8,7 +9,6 @@ import {
   ProjectDatabaseSessionResponseSchema
 } from "./api-schema.js"
 import type { ProjectDatabaseForward, ProjectDatabaseSession } from "./api-schema.js"
-import { openApiJsonSchema, openApiVoid } from "./openapi-client.js"
 
 export const projectDatabaseEditorUrl = (session: ProjectDatabaseSession): string => session.editorPath
 
@@ -16,7 +16,7 @@ export const projectDatabaseExternalUrl = (forward: ProjectDatabaseForward): str
   `${forward.publicHost}:${forward.hostPort}`
 
 export const loadProjectDatabaseProfiles = (projectId: string) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectDatabaseProfilesResponseSchema,
     (client) =>
       client.GET("/projects/{projectId}/databases/profiles", {
@@ -27,7 +27,7 @@ export const loadProjectDatabaseProfiles = (projectId: string) =>
   )
 
 export const loadProjectDatabaseForwards = (projectId: string) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectDatabaseForwardsResponseSchema,
     (client) =>
       client.GET("/projects/{projectId}/databases/forwards", {
@@ -42,7 +42,7 @@ export const saveProjectDatabaseProfile = (
   connectionString: string,
   label: string | null
 ) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectDatabaseProfileResponseSchema,
     (client) =>
       client.POST("/projects/{projectId}/databases/profiles", {
@@ -57,7 +57,7 @@ export const deleteProjectDatabaseProfile = (
   projectId: string,
   profileId: string
 ) =>
-  openApiVoid((client) =>
+  dockerGitOpenApi.openApiVoid((client) =>
     client.DELETE("/projects/{projectId}/databases/profiles/{profileId}", {
       params: { path: { profileId, projectId } }
     })
@@ -67,7 +67,7 @@ export const exposeProjectDatabaseProfile = (
   projectId: string,
   profileId: string
 ) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectDatabaseForwardResponseSchema,
     (client) =>
       client.POST("/projects/{projectId}/databases/profiles/{profileId}/expose", {
@@ -81,14 +81,14 @@ export const deleteProjectDatabaseForward = (
   projectId: string,
   profileId: string
 ) =>
-  openApiVoid((client) =>
+  dockerGitOpenApi.openApiVoid((client) =>
     client.DELETE("/projects/{projectId}/databases/profiles/{profileId}/expose", {
       params: { path: { profileId, projectId } }
     })
   )
 
 export const loadProjectDatabaseSession = (projectId: string) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectDatabaseSessionResponseSchema,
     (client) =>
       client.GET("/projects/{projectId}/databases/session", {
@@ -99,7 +99,7 @@ export const loadProjectDatabaseSession = (projectId: string) =>
   )
 
 export const openProjectDatabaseEditor = (projectId: string) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectDatabaseSessionResponseSchema,
     (client) =>
       client.POST("/projects/{projectId}/databases/open", {
@@ -110,7 +110,7 @@ export const openProjectDatabaseEditor = (projectId: string) =>
   )
 
 export const restartProjectDatabaseEditor = (projectId: string) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectDatabaseSessionResponseSchema,
     (client) =>
       client.POST("/projects/{projectId}/databases/restart", {

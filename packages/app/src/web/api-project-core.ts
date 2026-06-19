@@ -1,13 +1,13 @@
 import { Effect } from "effect"
 
 import type { ApplyProjectRequest } from "../shared/project-resource-request.js"
+import { dockerGitOpenApi } from "./api-http.js"
 import {
   baseCreateProjectBody,
   type CreateProjectRequestDraft,
   optionalProjectResourceFields
 } from "./api-project-create-body.js"
 import { OutputResponseSchema, ProjectResponseSchema } from "./api-schema.js"
-import { openApiJsonSchema } from "./openapi-client.js"
 
 export type { ApplyProjectRequest, ProjectResourceLimitRequest } from "../shared/project-resource-request.js"
 export type { CreateProjectRequestDraft } from "./api-project-create-body.js"
@@ -25,7 +25,7 @@ const createProjectBody = (draft: CreateProjectRequestDraft) => ({
 })
 
 export const loadProjectDetails = (projectId: string) =>
-  openApiJsonSchema(ProjectResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(ProjectResponseSchema, (client) =>
     client.GET("/projects/{projectId}", {
       params: { path: { projectId } }
     })).pipe(
@@ -33,7 +33,7 @@ export const loadProjectDetails = (projectId: string) =>
     )
 
 export const loadProjectPs = (projectId: string) =>
-  openApiJsonSchema(OutputResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(OutputResponseSchema, (client) =>
     client.GET("/projects/{projectId}/ps", {
       params: { path: { projectId } }
     })).pipe(
@@ -41,7 +41,7 @@ export const loadProjectPs = (projectId: string) =>
     )
 
 export const loadProjectLogs = (projectId: string) =>
-  openApiJsonSchema(OutputResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(OutputResponseSchema, (client) =>
     client.GET("/projects/{projectId}/logs", {
       params: { path: { projectId } }
     })).pipe(
@@ -52,7 +52,7 @@ export const applyProject = (
   projectId: string,
   request?: ApplyProjectRequest
 ) =>
-  openApiJsonSchema(ProjectResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(ProjectResponseSchema, (client) =>
     client.POST("/projects/{projectId}/apply", {
       body: applyProjectBody(request),
       params: { path: { projectId } }
@@ -61,7 +61,7 @@ export const applyProject = (
     )
 
 export const createProject = (draft: CreateProjectRequestDraft) =>
-  openApiJsonSchema(ProjectResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(ProjectResponseSchema, (client) =>
     client.POST("/projects", {
       body: createProjectBody(draft)
     })).pipe(
@@ -69,7 +69,7 @@ export const createProject = (draft: CreateProjectRequestDraft) =>
     )
 
 export const upProject = (projectId: string) =>
-  openApiJsonSchema(ProjectResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(ProjectResponseSchema, (client) =>
     client.POST("/projects/{projectId}/up", {
       body: { useManagedAuthorizedKeys: true },
       params: { path: { projectId } }
@@ -78,7 +78,7 @@ export const upProject = (projectId: string) =>
     )
 
 export const resumeProject = (projectId: string) =>
-  openApiJsonSchema(ProjectResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(ProjectResponseSchema, (client) =>
     client.POST("/projects/{projectId}/resume", {
       params: { path: { projectId } }
     })).pipe(
@@ -86,7 +86,7 @@ export const resumeProject = (projectId: string) =>
     )
 
 export const suspendProject = (projectId: string) =>
-  openApiJsonSchema(ProjectResponseSchema, (client) =>
+  dockerGitOpenApi.openApiJsonSchema(ProjectResponseSchema, (client) =>
     client.POST("/projects/{projectId}/suspend", {
       params: { path: { projectId } }
     })).pipe(

@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 
+import { dockerGitOpenApi } from "./api-http.js"
 import {
   AuthTerminalSessionResponseSchema,
   ProjectTerminalSessionResponseSchema,
@@ -8,10 +9,9 @@ import {
   TerminalSessionLookupResponseSchema,
   TerminalSessionResponseSchema
 } from "./api-schema.js"
-import { openApiJsonSchema, openApiVoid } from "./openapi-client.js"
 
 export const createProjectTerminalSession = (projectKey: string) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     TerminalSessionResponseSchema,
     (client) =>
       client.POST("/projects/by-key/{projectKey}/terminal-sessions", {
@@ -28,7 +28,7 @@ export const startProjectTerminalSession = (
   projectKey: string,
   requestId: string
 ) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     StartProjectTerminalSessionAcceptedResponseSchema,
     (client) =>
       client.POST("/projects/by-key/{projectKey}/terminal-sessions/start", {
@@ -41,25 +41,28 @@ export const createAuthTerminalSession = (
   flow: "ClaudeOauth" | "GeminiOauth" | "GrokOauth",
   label: string | null
 ) =>
-  openApiJsonSchema(AuthTerminalSessionResponseSchema, (client) =>
-    client.POST("/auth/terminal-sessions", {
-      body: { flow, label }
-    })).pipe(
-      Effect.map((response) => response.session)
-    )
+  dockerGitOpenApi.openApiJsonSchema(
+    AuthTerminalSessionResponseSchema,
+    (client) =>
+      client.POST("/auth/terminal-sessions", {
+        body: { flow, label }
+      })
+  ).pipe(
+    Effect.map((response) => response.session)
+  )
 
 export const deleteProjectTerminalSession = (
   projectKey: string,
   sessionId: string
 ) =>
-  openApiVoid((client) =>
+  dockerGitOpenApi.openApiVoid((client) =>
     client.DELETE("/projects/by-key/{projectKey}/terminal-sessions/{sessionId}", {
       params: { path: { projectKey, sessionId } }
     })
   )
 
 export const deleteAuthTerminalSession = (sessionId: string) =>
-  openApiVoid((client) =>
+  dockerGitOpenApi.openApiVoid((client) =>
     client.DELETE("/auth/terminal-sessions/{sessionId}", {
       params: { path: { sessionId } }
     })
@@ -68,7 +71,7 @@ export const deleteAuthTerminalSession = (sessionId: string) =>
 // WHY: panel UI needs only the sessions array for list rendering.
 // INVARIANT: this helper intentionally projects the full terminal workspace response to sessions.
 export const loadProjectTerminalSessions = (projectKey: string) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectTerminalSessionsResponseSchema,
     (client) =>
       client.GET("/projects/by-key/{projectKey}/terminal-sessions", {
@@ -81,7 +84,7 @@ export const loadProjectTerminalSessions = (projectKey: string) =>
 // WHY: SSH-link initialization needs the full terminal workspace, including activeSessionId.
 // INVARIANT: this helper intentionally preserves the complete response shape.
 export const loadProjectTerminalWorkspace = (projectKey: string) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectTerminalSessionsResponseSchema,
     (client) =>
       client.GET("/projects/by-key/{projectKey}/terminal-sessions", {
@@ -93,7 +96,7 @@ export const setProjectActiveTerminalSession = (
   projectKey: string,
   sessionId: string
 ) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectTerminalSessionResponseSchema,
     (client) =>
       client.PUT("/projects/by-key/{projectKey}/terminal-sessions/active", {
@@ -108,7 +111,7 @@ export const loadProjectTerminalSession = (
   projectKey: string,
   sessionId: string
 ) =>
-  openApiJsonSchema(
+  dockerGitOpenApi.openApiJsonSchema(
     ProjectTerminalSessionResponseSchema,
     (client) =>
       client.GET("/projects/by-key/{projectKey}/terminal-sessions/{sessionId}", {
@@ -119,10 +122,13 @@ export const loadProjectTerminalSession = (
   )
 
 export const loadTerminalSessionById = (sessionId: string) =>
-  openApiJsonSchema(TerminalSessionLookupResponseSchema, (client) =>
-    client.GET("/terminal-sessions/{sessionId}", {
-      params: { path: { sessionId } }
-    }))
+  dockerGitOpenApi.openApiJsonSchema(
+    TerminalSessionLookupResponseSchema,
+    (client) =>
+      client.GET("/terminal-sessions/{sessionId}", {
+        params: { path: { sessionId } }
+      })
+  )
 
 const invalidTerminalClosePath = (path: string): string => `Invalid terminal close path: ${path}`
 

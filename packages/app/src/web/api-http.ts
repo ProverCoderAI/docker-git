@@ -2,6 +2,7 @@ import { FetchHttpClient, HttpBody, HttpClient } from "@effect/platform"
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
 import * as TreeFormatter from "@effect/schema/TreeFormatter"
+import { createClient } from "@prover-coder-ai/docker-git-openapi"
 import { Effect, Either } from "effect"
 
 import { type JsonRequest, parseResponseBody, renderJsonPayload } from "../docker-git/api-json.js"
@@ -83,6 +84,21 @@ export const resolveApiBaseUrl = (): string => {
     ? defaultApiBaseUrl
     : trimTrailingSlash(configured.trim())
 }
+
+/**
+ * Configured docker-git OpenAPI client for the web HTTP boundary.
+ *
+ * @pure false - binds the shared OpenAPI client to the app-specific base URL resolver.
+ * @effect none during construction; returned client methods perform HTTP IO when their Effects run.
+ * @invariant transport, error rendering, and schema decoding stay owned by the openapi package.
+ * @precondition resolveApiBaseUrl returns a valid docker-git API base URL for the current runtime.
+ * @postcondition app modules depend on one configured OpenAPI client instance.
+ * @complexity O(1)/O(1) for construction, excluding request execution.
+ * @throws Never.
+ */
+export const dockerGitOpenApi = createClient({
+  resolveBaseUrl: resolveApiBaseUrl
+})
 
 export const requestText = (
   method: ApiHttpMethod,
