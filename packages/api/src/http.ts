@@ -318,7 +318,7 @@ const textResponse = (data: string, contentType: string, status = 200) =>
 // WHY: generated clients and humans must inspect the same OpenAPI document.
 // QUOTE(ТЗ): "использовать Swagger"
 // REF: user-message-2026-06-19-openapi-effect
-// SOURCE: n/a
+// SOURCE: https://github.com/ProverCoderAI/openapi-effect
 // FORMAT THEOREM: docsPath(d) = p -> openApiPath(d) = sibling(p, "openapi.json")
 // PURITY: CORE
 // EFFECT: none

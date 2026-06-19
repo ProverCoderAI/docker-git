@@ -7,7 +7,7 @@ import { Effect, Either, Match } from "effect"
 
 import type { paths } from "./openapi-paths.js"
 
-export type DockerGitOpenApiTransportClient = ReturnType<typeof createClientEffect<paths>>
+type DockerGitOpenApiTransportClient = ReturnType<typeof createClientEffect<paths>>
 
 type DockerGitOpenApiMiddleware = Middleware
 
@@ -20,21 +20,21 @@ export type ApiTransportValue =
   | ReadonlyArray<ApiTransportValue>
   | { readonly [key: string]: ApiTransportValue }
 
-export type OpenApiSuccess = {
+type OpenApiSuccess = {
   readonly status: number | string
   readonly contentType: string
   readonly body: unknown
 }
 
-export type OpenApiHttpError = OpenApiSuccess & {
+type OpenApiHttpError = OpenApiSuccess & {
   readonly _tag: "HttpError"
 }
 
-export type OpenApiFailure = OpenApiHttpError | BoundaryError
+type OpenApiFailure = OpenApiHttpError | BoundaryError
 
-export type OpenApiRequestResult = Effect.Effect<OpenApiSuccess, OpenApiFailure>
+type OpenApiRequestResult = Effect.Effect<OpenApiSuccess, OpenApiFailure>
 
-export type OpenApiRequest = (client: DockerGitOpenApiTransportClient) => OpenApiRequestResult
+type OpenApiRequest = (client: DockerGitOpenApiTransportClient) => OpenApiRequestResult
 
 export type DockerGitOpenApiClientOptions = {
   readonly fetch?: ClientOptions["fetch"]
@@ -42,7 +42,6 @@ export type DockerGitOpenApiClientOptions = {
 }
 
 export type DockerGitOpenApiClient = {
-  readonly openApiJson: (request: OpenApiRequest) => Effect.Effect<ApiTransportValue, string>
   readonly openApiJsonSchema: <A, I>(
     schema: Schema.Schema<A, I>,
     request: OpenApiRequest
@@ -143,7 +142,7 @@ const noCacheGetMiddleware: DockerGitOpenApiMiddleware = {
  * @complexity O(1)/O(1)
  * @throws Never.
  */
-export const createTransportClient = (
+const createTransportClient = (
   baseUrl: string,
   fetch?: ClientOptions["fetch"]
 ): DockerGitOpenApiTransportClient => {
@@ -161,26 +160,6 @@ export const createTransportClient = (
   client.use(noCacheGetMiddleware)
   return client
 }
-
-/**
- * Runs a typed OpenAPI request with a provided client through Effect.
- *
- * @param client - Typed docker-git OpenAPI transport client.
- * @param request - Deferred openapi-effect request.
- * @returns Effect containing raw transport response data or a string failure.
- *
- * @pure false - executes an Effect-producing openapi-effect request when the Effect is run.
- * @effect Network request represented directly as Effect.
- * @invariant no Promise interop is required at this boundary.
- * @precondition request was built against the same generated OpenAPI path map as client.
- * @postcondition transport failures are represented in the Effect error channel.
- * @complexity O(1)/O(1) excluding network and response body costs.
- * @throws Never.
- */
-export const runOpenApi = (
-  client: DockerGitOpenApiTransportClient,
-  request: OpenApiRequest
-): Effect.Effect<OpenApiSuccess, OpenApiFailure> => request(client)
 
 const renderOpenApiFailure = (failure: OpenApiFailure): Effect.Effect<string> =>
   Match.value(failure).pipe(
@@ -242,71 +221,6 @@ const openApiVoidWithRunner = (
   )
 
 /**
- * Executes a typed OpenAPI JSON request through a provided client.
- *
- * @param client - Typed docker-git OpenAPI transport client.
- * @param request - Deferred typed openapi-effect request.
- * @returns Effect containing raw 2xx response data or a rendered API error.
- *
- * @pure false - performs browser HTTP IO when the Effect is run.
- * @effect Network request via openapi-effect.
- * @invariant request execution remains Effect-native at this boundary.
- * @precondition request uses a static path from generated OpenAPI paths.
- * @postcondition successful Effect contains only the 2xx data branch as a transport value.
- * @complexity O(n) local response rendering where n is the error payload size.
- * @throws Never; failures are returned in the Effect error channel.
- */
-export const openApiJson = (
-  client: DockerGitOpenApiTransportClient,
-  request: OpenApiRequest
-): Effect.Effect<ApiTransportValue, string> =>
-  openApiJsonWithRunner((nextRequest) => runOpenApi(client, nextRequest), request)
-
-/**
- * Executes a typed OpenAPI request and decodes the data with an Effect Schema.
- *
- * @param client - Typed docker-git OpenAPI transport client.
- * @param schema - Boundary decoder preserving the consumer DTO type.
- * @param request - Deferred typed openapi-effect request.
- * @returns Effect containing schema-decoded response data.
- *
- * @pure false - performs browser HTTP IO and boundary decoding when the Effect is run.
- * @effect openapi-effect request plus synchronous Effect Schema decoding.
- * @invariant transport typing comes from OpenAPI; exported data typing comes from Schema.
- * @precondition schema matches the endpoint success response documented in DockerGitApi.
- * @postcondition no generated optional/default representation leaks into existing consumers.
- * @complexity O(n) where n is the decoded response size.
- * @throws Never; failures are returned in the Effect error channel.
- */
-export const openApiJsonSchema = <A, I>(
-  client: DockerGitOpenApiTransportClient,
-  schema: Schema.Schema<A, I>,
-  request: OpenApiRequest
-): Effect.Effect<A, string> =>
-  openApiJsonSchemaWithRunner((nextRequest) => runOpenApi(client, nextRequest), schema, request)
-
-/**
- * Executes a typed OpenAPI request whose successful response has no body.
- *
- * @param client - Typed docker-git OpenAPI transport client.
- * @param request - Deferred typed openapi-effect request.
- * @returns Effect that succeeds with void for successful empty responses.
- *
- * @pure false - performs browser HTTP IO when the Effect is run.
- * @effect Network request via openapi-effect.
- * @invariant only response status determines success for empty endpoints.
- * @precondition request targets an endpoint whose OpenAPI success response has no content.
- * @postcondition successful Effect returns void and never exposes transport details.
- * @complexity O(n) local response rendering where n is the error payload size.
- * @throws Never; failures are returned in the Effect error channel.
- */
-export const openApiVoid = (
-  client: DockerGitOpenApiTransportClient,
-  request: OpenApiRequest
-): Effect.Effect<void, string> =>
-  openApiVoidWithRunner((nextRequest) => runOpenApi(client, nextRequest), request)
-
-/**
  * Creates a reusable Effect OpenAPI client backed by a base URL resolver.
  *
  * @param options - Client configuration containing a base URL resolver.
@@ -344,7 +258,6 @@ export const createClient = (
     request(getOpenApiClient())
 
   return {
-    openApiJson: (request) => openApiJsonWithRunner(runRuntimeOpenApi, request),
     openApiJsonSchema: (schema, request) => openApiJsonSchemaWithRunner(runRuntimeOpenApi, schema, request),
     openApiVoid: (request) => openApiVoidWithRunner(runRuntimeOpenApi, request)
   }
