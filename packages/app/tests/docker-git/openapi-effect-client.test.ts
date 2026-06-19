@@ -1,8 +1,9 @@
+import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
 import { describe, expect, it } from "@effect/vitest"
 import { createClient } from "@prover-coder-ai/docker-git-openapi"
 import type { ApiTransportValue } from "@prover-coder-ai/docker-git-openapi"
-import { Effect } from "effect"
+import { Effect, Either } from "effect"
 import * as fc from "fast-check"
 
 type CapturedRequest = {
@@ -17,6 +18,8 @@ const HealthResponseSchema = Schema.Struct({
   projectsRoot: Schema.String,
   revision: Schema.NullOr(Schema.String)
 })
+
+const NullableStringTransportValue = fc.option(fc.string(), { nil: null })
 
 const createJsonResponse = (status: number, value: ApiTransportValue): Response =>
   Response.json(value, {
@@ -38,6 +41,25 @@ const createMockFetch = (
   })
   return Effect.runPromise(Effect.succeed(response))
 }
+
+/**
+ * Runs a fast-check synchronous property inside the Effect test runtime.
+ *
+ * @param property - Finite pure property over OpenAPI boundary values.
+ * @returns Effect that fails when fast-check finds a counterexample.
+ *
+ * @pure false - executes property samples.
+ * @effect Effect.sync, fc.assert.
+ * @invariant success proves every sampled case preserved the asserted pure invariant.
+ * @precondition property predicate is synchronous and total.
+ * @postcondition counterexamples are surfaced through the Effect error channel.
+ * @complexity O(r * c) where r is numRuns and c is one predicate cost.
+ * @throws Never.
+ */
+const assertOpenApiClientSyncProperty = <PropertyArgs>(property: fc.IProperty<PropertyArgs>) =>
+  Effect.sync(() => {
+    fc.assert(property, { numRuns: 25 })
+  })
 
 /**
  * Runs a fast-check async property inside the Effect test runtime.
@@ -90,6 +112,16 @@ describe("docker-git OpenAPI Effect client", () => {
       expect(requests[0]?.headers.get("cache-control")).toContain("no-cache")
       expect(new URL(requests[0]?.url ?? "").searchParams.has("_")).toBe(true)
     }))
+
+  it.effect("property: schema decoding preserves JSON null transport values", () =>
+    assertOpenApiClientSyncProperty(
+      fc.property(NullableStringTransportValue, (value) =>
+        Either.match(ParseResult.decodeUnknownEither(Schema.Null)(value), {
+          onLeft: () =>
+            value !== null,
+          onRight: (decoded) => decoded === value
+        }))
+    ))
 
   it.effect("property: GET requests always include no-cache transport invariants", () =>
     assertOpenApiClientProperty(
