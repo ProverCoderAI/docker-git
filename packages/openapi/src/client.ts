@@ -196,7 +196,7 @@ const openApiJsonWithRunner = (
     )
   )
 
-const decodeSchema = <A, I>(schema: Schema.Schema<A, I>, value: unknown): Effect.Effect<A, string> =>
+const decodeSchema = <A, I>(schema: Schema.Schema<A, I>, value: ApiTransportValue): Effect.Effect<A, string> =>
   Either.match(ParseResult.decodeUnknownEither(schema)(value), {
     onLeft: (error) => Effect.fail(TreeFormatter.formatIssueSync(error)),
     onRight: (decoded) => Effect.succeed(decoded)
