@@ -91,7 +91,7 @@ const assertOpenApiClientSyncProperty = <PropertyArgs>(property: fc.IProperty<Pr
  */
 const assertOpenApiClientProperty = <PropertyArgs>(property: fc.IAsyncProperty<PropertyArgs>) =>
   Effect.tryPromise({
-    catch: (cause) => cause,
+    catch: (error) => (error instanceof Error ? error : new Error(String(error))),
     try: () => fc.assert(property, { numRuns: 25 })
   })
 
