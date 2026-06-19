@@ -46,6 +46,7 @@ import {
   UpProjectRequestSchema
 } from "./api/schema.js"
 import type { UpProjectRequestInput } from "./api/schema.js"
+import { buildDockerGitOpenApi } from "./api/openapi.js"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/menu-helpers"
 import { resolveWorkspaceRoot } from "@effect-template/lib/shell/workspace-root"
 import {
@@ -299,6 +300,51 @@ const textResponse = (data: string, contentType: string, status = 200) =>
       status
     )
   )
+
+/**
+ * Renders a Swagger UI document that loads the generated OpenAPI contract.
+ *
+ * @returns HTML document for interactive API documentation.
+ *
+ * @pure true - deterministic string construction.
+ * @effect none
+ * @invariant the document references the relative openapi.json path.
+ * @precondition Swagger UI CDN assets are reachable by the browser.
+ * @postcondition direct /docs and proxied /api/docs both resolve their adjacent OpenAPI document.
+ * @complexity O(1) time / O(1) space.
+ * @throws Never.
+ */
+// CHANGE: expose browser-readable Swagger UI for the Effect REST contract.
+// WHY: generated clients and humans must inspect the same OpenAPI document.
+// QUOTE(ТЗ): "использовать Swagger"
+// REF: user-message-2026-06-18-openapi-fetch
+// SOURCE: n/a
+// FORMAT THEOREM: docsPath(d) = p -> openApiPath(d) = sibling(p, "openapi.json")
+// PURITY: CORE
+// EFFECT: none
+// INVARIANT: Swagger UI reads the relative OpenAPI document.
+// COMPLEXITY: O(1)/O(1)
+const renderSwaggerDocsHtml = (): string => `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>docker-git API</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.addEventListener("load", () => {
+      window.ui = SwaggerUIBundle({
+        url: "openapi.json",
+        dom_id: "#swagger-ui"
+      });
+    });
+  </script>
+</body>
+</html>`
 
 const binaryResponse = (data: Uint8Array, contentType: string, status = 200) =>
   Effect.succeed(
@@ -941,6 +987,14 @@ const skillerConnectResponse = (
 
 export const makeRouter = () => {
   const withCoreRoutes = HttpRouter.empty.pipe(
+    HttpRouter.get(
+      "/openapi.json",
+      jsonResponse(buildDockerGitOpenApi(), 200).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/docs",
+      textResponse(renderSwaggerDocsHtml(), "text/html; charset=utf-8").pipe(Effect.catchAll(errorResponse))
+    ),
     HttpRouter.get(
       "/health",
       Effect.gen(function*(_) {

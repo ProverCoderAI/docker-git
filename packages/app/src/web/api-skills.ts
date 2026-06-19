@@ -1,8 +1,8 @@
 import { Effect } from "effect"
 
-import { requestJson } from "./api-http.js"
 import { ProjectSkillsResponseSchema, ProjectSkillUpdateResponseSchema } from "./api-schema.js"
 import type { ProjectSkillScope } from "./api-schema.js"
+import { openApiJsonSchema } from "./openapi-client.js"
 
 const skillScopeIdByScope: Readonly<Record<ProjectSkillScope, string>> = {
   "skills": "skills",
@@ -17,13 +17,12 @@ const skillScopeIdByScope: Readonly<Record<ProjectSkillScope, string>> = {
 export const projectSkillScopeToId = (scope: ProjectSkillScope): string => skillScopeIdByScope[scope]
 
 export const loadProjectSkills = (projectId: string) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/skills`,
-    ProjectSkillsResponseSchema
-  ).pipe(
-    Effect.map((response) => response.snapshot)
-  )
+  openApiJsonSchema(ProjectSkillsResponseSchema, (client) =>
+    client.GET("/projects/{projectId}/skills", {
+      params: { path: { projectId } }
+    })).pipe(
+      Effect.map((response) => response.snapshot)
+    )
 
 export const writeProjectSkill = (
   projectId: string,
@@ -31,26 +30,25 @@ export const writeProjectSkill = (
   name: string,
   content: string
 ) =>
-  requestJson(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/skills`,
-    ProjectSkillUpdateResponseSchema,
-    { scope, name, content }
-  ).pipe(
-    Effect.map((response) => response.snapshot)
-  )
+  openApiJsonSchema(ProjectSkillUpdateResponseSchema, (client) =>
+    client.POST("/projects/{projectId}/skills", {
+      body: { content, name, scope },
+      params: { path: { projectId } }
+    })).pipe(
+      Effect.map((response) => response.snapshot)
+    )
 
 export const deleteProjectSkill = (
   projectId: string,
   scope: ProjectSkillScope,
   name: string
 ) =>
-  requestJson(
-    "DELETE",
-    `/projects/${encodeURIComponent(projectId)}/skills/${encodeURIComponent(projectSkillScopeToId(scope))}/${
-      encodeURIComponent(name)
-    }`,
-    ProjectSkillsResponseSchema
+  openApiJsonSchema(
+    ProjectSkillsResponseSchema,
+    (client) =>
+      client.DELETE("/projects/{projectId}/skills/{scopeId}/{name}", {
+        params: { path: { name, projectId, scopeId: projectSkillScopeToId(scope) } }
+      })
   ).pipe(
     Effect.map((response) => response.snapshot)
   )

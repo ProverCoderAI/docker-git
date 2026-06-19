@@ -1,38 +1,40 @@
 import { Effect } from "effect"
 
-import { requestJson, requestText } from "./api-http.js"
 import { ContainerTaskSnapshotResponseSchema, OutputResponseSchema } from "./api-schema.js"
-
-const projectTasksPath = (projectId: string, shouldIncludeDefault: boolean): string =>
-  `/projects/${encodeURIComponent(projectId)}/tasks${shouldIncludeDefault ? "?includeDefault=true" : ""}`
+import { openApiJsonSchema, openApiVoid } from "./openapi-client.js"
 
 export const loadProjectTasks = (projectId: string, shouldIncludeDefault = false) =>
-  requestJson(
-    "GET",
-    projectTasksPath(projectId, shouldIncludeDefault),
-    ContainerTaskSnapshotResponseSchema
-  ).pipe(
-    Effect.map((response) => response.snapshot)
-  )
+  openApiJsonSchema(ContainerTaskSnapshotResponseSchema, (client) =>
+    client.GET("/projects/{projectId}/tasks", {
+      params: {
+        path: { projectId },
+        query: shouldIncludeDefault ? { includeDefault: "true" } : {}
+      }
+    })).pipe(
+      Effect.map((response) => response.snapshot)
+    )
 
 export const stopProjectTask = (
   projectId: string,
   pid: number
 ) =>
-  requestText(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/tasks/${pid}/stop`
-  ).pipe(Effect.asVoid)
+  openApiVoid((client) =>
+    client.POST("/projects/{projectId}/tasks/{pid}/stop", {
+      params: { path: { pid: String(pid), projectId } }
+    })
+  )
 
 export const loadProjectTaskLogs = (
   projectId: string,
   pid: number,
   lines = 200
 ) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/tasks/${pid}/logs?lines=${lines}`,
-    OutputResponseSchema
-  ).pipe(
-    Effect.map((response) => response.output)
-  )
+  openApiJsonSchema(OutputResponseSchema, (client) =>
+    client.GET("/projects/{projectId}/tasks/{pid}/logs", {
+      params: {
+        path: { pid: String(pid), projectId },
+        query: { lines: String(lines) }
+      }
+    })).pipe(
+      Effect.map((response) => response.output)
+    )

@@ -76,12 +76,13 @@ RUN set -eu; \
 FROM controller-base AS workspace-deps
 
 COPY package.json bun.lock bunfig.toml tsconfig.base.json tsconfig.json ./
-RUN mkdir -p packages/api packages/app packages/container packages/docker-git-session-sync packages/lib packages/terminal
+RUN mkdir -p packages/api packages/app packages/container packages/docker-git-session-sync packages/lib packages/openapi packages/terminal
 COPY packages/api/package.json ./packages/api/package.json
 COPY packages/app/package.json ./packages/app/package.json
 COPY packages/container/package.json ./packages/container/package.json
 COPY packages/docker-git-session-sync/package.json ./packages/docker-git-session-sync/package.json
 COPY packages/lib/package.json ./packages/lib/package.json
+COPY packages/openapi/package.json ./packages/openapi/package.json
 COPY packages/terminal/package.json ./packages/terminal/package.json
 
 RUN set -eu; \
