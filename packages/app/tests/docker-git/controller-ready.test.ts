@@ -4,6 +4,11 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { beforeEach, vi } from "vitest"
 
+type ControllerBootstrapError = {
+  readonly _tag: "ControllerBootstrapError"
+  readonly message: string
+}
+
 const prepareLocalControllerRevisionMock = vi.hoisted(() => vi.fn<() => Effect.Effect<string>>())
 const controllerExistsMock = vi.hoisted(() => vi.fn<() => Effect.Effect<boolean>>())
 const inspectControllerRevisionMock = vi.hoisted(() => vi.fn<() => Effect.Effect<string | null>>())
@@ -20,7 +25,13 @@ const findReachableDirectHealthProbeMock = vi.hoisted(
     >()
 )
 const findReachableApiBaseUrlMock = vi.hoisted(
-  () => vi.fn<(candidateUrls: ReadonlyArray<string>, expectedRevision?: string) => Effect.Effect<string>>()
+  () =>
+    vi.fn<
+      (
+        candidateUrls: ReadonlyArray<string>,
+        expectedRevision?: string
+      ) => Effect.Effect<string, ControllerBootstrapError>
+    >()
 )
 const prepareControllerResourceLimitEnvMock = vi.hoisted(() => vi.fn<() => Effect.Effect<void>>())
 const prepareControllerRuntimeEnvMock = vi.hoisted(() => vi.fn<() => Effect.Effect<void>>())
