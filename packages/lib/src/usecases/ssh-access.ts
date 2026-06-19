@@ -239,15 +239,23 @@ export const buildShareLinkSshAccess = (
     ]
 
   const encodedFolder = encodeURIComponent(targetDir)
+  // CHANGE: use hostName=user@host:port so VS Code Remote SSH connects directly
+  // WHY: alias-based URIs require the user to manually add SSH config — direct hostName format
+  //      works without ~/.ssh/config because VS Code accepts user@host:port in Connect to Host
+  // SOURCE: https://code.visualstudio.com/docs/remote/ssh#_connect-to-a-remote-host
+  //   "You can also enter a user@host or user@host:port connection string if you don't want
+  //    to use an SSH config file entry."
+  const directHostName = `${sshUser}@${clientHost}:${sshPort}`
+  const cfHostName = cfPublicHostname !== null ? `${sshUser}@${cfPublicHostname}` : null
   return {
     alias,
     configSnippet: directLines.join("\n"),
     cfConfigSnippet: cfLines === null ? null : cfLines.join("\n"),
     workspacePath: targetDir,
-    vscodeUri: `vscode://ms-vscode-remote.remote-ssh/open?ssh=${encodeURIComponent(alias)}&folder=${encodedFolder}`,
-    cfVscodeUri: cfLines === null
+    vscodeUri: `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(directHostName)}&folder=${encodedFolder}`,
+    cfVscodeUri: cfHostName === null
       ? null
-      : `vscode://ms-vscode-remote.remote-ssh/open?ssh=${encodeURIComponent(cfAlias)}&folder=${encodedFolder}`
+      : `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(cfHostName)}&folder=${encodedFolder}`
   }
 }
 

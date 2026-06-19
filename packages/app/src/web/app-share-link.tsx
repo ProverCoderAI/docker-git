@@ -84,8 +84,14 @@ const copyText = (text: string): void => {
   void navigator.clipboard.writeText(text).catch(() => {})
 }
 
-const openUri = (uri: string): void => {
-  window.location.href = uri
+const vscodeLinkStyle: CSSProperties = {
+  color: "#56f39a",
+  cursor: "pointer",
+  fontFamily: "inherit",
+  fontSize: "inherit",
+  fontWeight: "bold",
+  padding: "2px 6px",
+  textDecoration: "none"
 }
 
 const SshConfigBlock = (
@@ -119,21 +125,13 @@ const InfoHeader = (
     <div style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "space-between" }}>
       <div style={{ color: "#8be9fd", fontWeight: "bold" }}>{info.displayName}</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-        <button
-          onClick={() => openUri(info.vscodeUri)}
-          style={buttonStyle}
-          type="button"
-        >
+        <a href={info.vscodeUri} style={vscodeLinkStyle}>
           open in VS Code
-        </button>
+        </a>
         {info.cfVscodeUri !== null && (
-          <button
-            onClick={() => openUri(info.cfVscodeUri as string)}
-            style={{ ...buttonStyle, color: "#7fdfff" }}
-            type="button"
-          >
+          <a href={info.cfVscodeUri as string} style={{ ...vscodeLinkStyle, color: "#7fdfff" }}>
             VS Code (CF tunnel)
-          </button>
+          </a>
         )}
         <button
           disabled={isConnecting}
