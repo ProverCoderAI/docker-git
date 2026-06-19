@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 
-import { dockerGitOpenApi } from "./api-http.js"
-import { PanelCloudflareTunnelResponseSchema } from "./api-schema.js"
+import { dockerGitOpenApi, renderDockerGitOpenApiFailure } from "./api-http.js"
+import { normalizeNullablePanelCloudflareTunnelSession } from "./api-normalize.js"
 
 /**
  * Reads the controller-owned panel Cloudflare tunnel session.
@@ -25,11 +25,9 @@ import { PanelCloudflareTunnelResponseSchema } from "./api-schema.js"
 // INVARIANT: Only schema-decoded tunnel state crosses the API boundary.
 // COMPLEXITY: O(1) local work plus network IO.
 export const loadPanelCloudflareTunnel = () =>
-  dockerGitOpenApi.openApiJsonSchema(
-    PanelCloudflareTunnelResponseSchema,
-    (client) => client.GET("/cloudflare-tunnels/panel")
-  ).pipe(
-    Effect.map((response) => response.tunnel)
+  dockerGitOpenApi.GET("/cloudflare-tunnels/panel").pipe(
+    Effect.map(({ body }) => normalizeNullablePanelCloudflareTunnelSession(body.tunnel)),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 /**
@@ -54,14 +52,11 @@ export const loadPanelCloudflareTunnel = () =>
 // INVARIANT: Returned state is decoded by PanelCloudflareTunnelResponseSchema.
 // COMPLEXITY: O(1) local work plus network IO and controller-side startup.
 export const startPanelCloudflareTunnel = (panelUrl: string) =>
-  dockerGitOpenApi.openApiJsonSchema(
-    PanelCloudflareTunnelResponseSchema,
-    (client) =>
-      client.POST("/cloudflare-tunnels/panel", {
-        body: { panelUrl }
-      })
-  ).pipe(
-    Effect.map((response) => response.tunnel)
+  dockerGitOpenApi.POST("/cloudflare-tunnels/panel", {
+    body: { panelUrl }
+  }).pipe(
+    Effect.map(({ body }) => normalizeNullablePanelCloudflareTunnelSession(body.tunnel)),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 /**
@@ -86,9 +81,7 @@ export const startPanelCloudflareTunnel = (panelUrl: string) =>
 // INVARIANT: Returned state is decoded by PanelCloudflareTunnelResponseSchema.
 // COMPLEXITY: O(1) local work plus network IO and controller-side cleanup.
 export const stopPanelCloudflareTunnel = () =>
-  dockerGitOpenApi.openApiJsonSchema(
-    PanelCloudflareTunnelResponseSchema,
-    (client) => client.DELETE("/cloudflare-tunnels/panel")
-  ).pipe(
-    Effect.map((response) => response.tunnel)
+  dockerGitOpenApi.DELETE("/cloudflare-tunnels/panel").pipe(
+    Effect.map(({ body }) => normalizeNullablePanelCloudflareTunnelSession(body.tunnel)),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )

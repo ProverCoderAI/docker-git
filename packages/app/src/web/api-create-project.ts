@@ -1,6 +1,6 @@
-import type { Effect } from "effect"
+import { Effect, Match } from "effect"
 
-import { dockerGitOpenApi } from "./api-http.js"
+import { dockerGitOpenApi, renderDockerGitOpenApiFailure } from "./api-http.js"
 import {
   type BaseCreateProjectBody,
   baseCreateProjectBody,
@@ -8,7 +8,6 @@ import {
   optionalProjectResourceFields,
   type OptionalProjectResourceFieldsBody
 } from "./api-project-create-body.js"
-import { CreateProjectAcceptedResponseSchema } from "./api-schema.js"
 import type { CreateProjectAcceptedResponse } from "./api-schema.js"
 
 type CreateProjectAcceptedBody = Readonly<
@@ -42,7 +41,15 @@ export const createProjectAcceptedBody = (draft: CreateProjectRequestDraft): Cre
 export const startCreateProject = (
   draft: CreateProjectRequestDraft
 ): Effect.Effect<CreateProjectAcceptedResponse, string> =>
-  dockerGitOpenApi.openApiJsonSchema(CreateProjectAcceptedResponseSchema, (client) =>
-    client.POST("/projects", {
-      body: createProjectAcceptedBody(draft)
-    }))
+  dockerGitOpenApi.POST("/projects", {
+    body: createProjectAcceptedBody(draft)
+  }).pipe(
+    Effect.mapError(renderDockerGitOpenApiFailure),
+    Effect.flatMap((success) =>
+      Match.value(success).pipe(
+        Match.when({ status: 202 }, ({ body }) => Effect.succeed(body)),
+        Match.when({ status: 201 }, () => Effect.fail("HTTP 201: unexpected synchronous project creation response")),
+        Match.exhaustive
+      )
+    )
+  )

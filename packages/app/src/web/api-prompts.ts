@@ -1,18 +1,14 @@
 import { Effect } from "effect"
 
-import { dockerGitOpenApi } from "./api-http.js"
-import { ProjectPromptsResponseSchema, ProjectPromptUpdateResponseSchema } from "./api-schema.js"
+import { dockerGitOpenApi, renderDockerGitOpenApiFailure } from "./api-http.js"
 import type { ProjectPromptKind } from "./api-schema.js"
 
 export const loadProjectPrompts = (projectId: string) =>
-  dockerGitOpenApi.openApiJsonSchema(
-    ProjectPromptsResponseSchema,
-    (client) =>
-      client.GET("/projects/{projectId}/prompts", {
-        params: { path: { projectId } }
-      })
-  ).pipe(
-    Effect.map((response) => response.snapshot)
+  dockerGitOpenApi.GET("/projects/{projectId}/prompts", {
+    params: { path: { projectId } }
+  }).pipe(
+    Effect.map(({ body }) => body.snapshot),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const writeProjectPrompt = (
@@ -20,27 +16,21 @@ export const writeProjectPrompt = (
   kind: ProjectPromptKind,
   content: string
 ) =>
-  dockerGitOpenApi.openApiJsonSchema(
-    ProjectPromptUpdateResponseSchema,
-    (client) =>
-      client.PUT("/projects/{projectId}/prompts/{kind}", {
-        body: { content },
-        params: { path: { kind, projectId } }
-      })
-  ).pipe(
-    Effect.map((response) => response.snapshot)
+  dockerGitOpenApi.PUT("/projects/{projectId}/prompts/{kind}", {
+    body: { content },
+    params: { path: { kind, projectId } }
+  }).pipe(
+    Effect.map(({ body }) => body.snapshot),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const deleteProjectPrompt = (
   projectId: string,
   kind: ProjectPromptKind
 ) =>
-  dockerGitOpenApi.openApiJsonSchema(
-    ProjectPromptsResponseSchema,
-    (client) =>
-      client.DELETE("/projects/{projectId}/prompts/{kind}", {
-        params: { path: { kind, projectId } }
-      })
-  ).pipe(
-    Effect.map((response) => response.snapshot)
+  dockerGitOpenApi.DELETE("/projects/{projectId}/prompts/{kind}", {
+    params: { path: { kind, projectId } }
+  }).pipe(
+    Effect.map(({ body }) => body.snapshot),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )

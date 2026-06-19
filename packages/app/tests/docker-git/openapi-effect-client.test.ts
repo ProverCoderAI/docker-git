@@ -1,10 +1,11 @@
-import * as ParseResult from "@effect/schema/ParseResult"
-import * as Schema from "@effect/schema/Schema"
 import { describe, expect, it } from "@effect/vitest"
 import { createClient } from "@prover-coder-ai/docker-git-openapi"
-import type { ApiTransportValue } from "@prover-coder-ai/docker-git-openapi"
-import { Effect, Either } from "effect"
+import type { ApiFailure } from "@prover-coder-ai/docker-git-openapi"
+import { Effect } from "effect"
 import * as fc from "fast-check"
+
+import type { JsonValue } from "../../src/shared/json-schema.js"
+import { renderDockerGitOpenApiFailure } from "../../src/web/api-http.js"
 
 type CapturedRequest = {
   readonly headers: Headers
@@ -12,22 +13,35 @@ type CapturedRequest = {
   readonly url: string
 }
 
-const HealthResponseSchema = Schema.Struct({
-  cwd: Schema.String,
-  ok: Schema.Boolean,
-  projectsRoot: Schema.String,
-  revision: Schema.NullOr(Schema.String)
-})
+type ApiErrorEnvelope = {
+  readonly error: {
+    readonly details?: string
+    readonly message: string
+    readonly type: string
+  }
+}
 
-const NullableStringTransportValue = fc.option(fc.string(), { nil: null })
+type InternalErrorResponses = {
+  readonly 500: {
+    readonly content: {
+      readonly "application/json": ApiErrorEnvelope
+    }
+  }
+}
 
-const createJsonResponse = (status: number, value: ApiTransportValue): Response =>
+const createJsonResponse = (status: number, value: JsonValue): Response =>
   Response.json(value, {
     headers: {
       "content-type": "application/json"
     },
     status
   })
+
+const nullableErrorDetailsArbitrary = fc.option(fc.string(), { nil: null })
+
+const errorMessageArbitrary = fc.string({ minLength: 1 })
+
+const baseUrlOriginArbitrary = fc.webUrl().map((url) => new URL(url).origin)
 
 const createMockFetch = (
   requests: Array<CapturedRequest>,
@@ -82,10 +96,11 @@ const assertOpenApiClientProperty = <PropertyArgs>(property: fc.IAsyncProperty<P
   })
 
 describe("docker-git OpenAPI Effect client", () => {
-  it.effect("executes typed GET requests through openapi-effect and decodes JSON with Schema", () =>
+  it.effect("executes typed GET requests directly through openapi-effect", () =>
     Effect.gen(function*(_) {
       const requests: Array<CapturedRequest> = []
       const api = createClient({
+        baseUrl: "https://docker-git.example.test",
         fetch: createMockFetch(
           requests,
           createJsonResponse(200, {
@@ -94,13 +109,13 @@ describe("docker-git OpenAPI Effect client", () => {
             projectsRoot: "/workspace/projects",
             revision: null
           })
-        ),
-        resolveBaseUrl: () => "https://docker-git.example.test"
+        )
       })
 
-      const decoded = yield* _(api.openApiJsonSchema(HealthResponseSchema, (client) => client.GET("/health")))
+      const success = yield* _(api.GET("/health"))
 
-      expect(decoded).toEqual({
+      expect(success.status).toBe(200)
+      expect(success.body).toEqual({
         cwd: "/workspace",
         ok: true,
         projectsRoot: "/workspace/projects",
@@ -113,25 +128,36 @@ describe("docker-git OpenAPI Effect client", () => {
       expect(new URL(requests[0]?.url ?? "").searchParams.has("_")).toBe(true)
     }))
 
-  it.effect("property: schema decoding preserves JSON null transport values", () =>
+  it.effect("property: nested API error envelopes preserve their message through UI rendering", () =>
     assertOpenApiClientSyncProperty(
-      fc.property(NullableStringTransportValue, (value) =>
-        Either.match(ParseResult.decodeUnknownEither(Schema.Null)(value), {
-          onLeft: () =>
-            value !== null,
-          onRight: (decoded) => decoded === value
-        }))
+      fc.property(nullableErrorDetailsArbitrary, errorMessageArbitrary, (details, message) => {
+        const body: ApiErrorEnvelope = {
+          error: {
+            ...(details !== null && { details }),
+            message,
+            type: "Internal"
+          }
+        }
+        const failure: ApiFailure<InternalErrorResponses> = {
+          _tag: "HttpError",
+          body,
+          contentType: "application/json",
+          status: 500
+        }
+        return renderDockerGitOpenApiFailure(failure).includes(JSON.stringify(message))
+      })
     ))
 
   it.effect("property: GET requests always include no-cache transport invariants", () =>
     assertOpenApiClientProperty(
       fc.asyncProperty(
-        fc.webUrl().map((url) => new URL(url).origin),
+        baseUrlOriginArbitrary,
         (baseUrl) =>
           Effect.runPromise(
             Effect.gen(function*(_) {
               const requests: Array<CapturedRequest> = []
               const api = createClient({
+                baseUrl,
                 fetch: createMockFetch(
                   requests,
                   createJsonResponse(200, {
@@ -140,28 +166,27 @@ describe("docker-git OpenAPI Effect client", () => {
                     projectsRoot: "/workspace/projects",
                     revision: null
                   })
-                ),
-                resolveBaseUrl: () => baseUrl
+                )
               })
 
-              const result = yield* _(
-                Effect.either(api.openApiJsonSchema(HealthResponseSchema, (client) => client.GET("/health")))
-              )
+              const result = yield* _(Effect.either(api.GET("/health")))
 
               expect(result._tag).toBe("Right")
               expect(requests).toHaveLength(1)
               expect(requests[0]?.method).toBe("GET")
               expect(requests[0]?.headers.get("accept")).toBe("application/json")
               expect(requests[0]?.headers.get("cache-control")).toContain("no-cache")
+              expect(new URL(requests[0]?.url ?? "").origin).toBe(baseUrl)
               expect(new URL(requests[0]?.url ?? "").searchParams.has("_")).toBe(true)
             })
           )
       )
     ))
 
-  it.effect("renders nested API error envelopes from openapi-effect failures", () =>
+  it.effect("renders nested API error envelopes from direct openapi-effect failures", () =>
     Effect.gen(function*(_) {
       const api = createClient({
+        baseUrl: "https://docker-git.example.test",
         fetch: createMockFetch(
           [],
           createJsonResponse(500, {
@@ -170,13 +195,11 @@ describe("docker-git OpenAPI Effect client", () => {
               type: "Internal"
             }
           })
-        ),
-        resolveBaseUrl: () => "https://docker-git.example.test"
+        )
       })
 
-      const result = yield* _(
-        Effect.either(api.openApiJsonSchema(HealthResponseSchema, (client) => client.GET("/health")))
-      )
+      const healthResult = api.GET("/health").pipe(Effect.mapError(renderDockerGitOpenApiFailure))
+      const result = yield* _(Effect.either(healthResult))
 
       expect(result._tag).toBe("Left")
       if (result._tag === "Left") {
@@ -184,28 +207,18 @@ describe("docker-git OpenAPI Effect client", () => {
       }
     }))
 
-  it.effect("preserves JSON null as a valid schema-decoded transport value", () =>
-    Effect.gen(function*(_) {
-      const api = createClient({
-        fetch: createMockFetch([], createJsonResponse(200, null)),
-        resolveBaseUrl: () => "https://docker-git.example.test"
-      })
-
-      const value = yield* _(api.openApiJsonSchema(Schema.Null, (client) => client.GET("/health")))
-
-      expect(value).toBeNull()
-    }))
-
-  it.effect("treats 200 ok command responses as successful void effects", () =>
+  it.effect("treats 200 ok command responses as successful direct client effects", () =>
     Effect.gen(function*(_) {
       const requests: Array<CapturedRequest> = []
       const api = createClient({
-        fetch: createMockFetch(requests, createJsonResponse(200, { ok: true })),
-        resolveBaseUrl: () => "https://docker-git.example.test"
+        baseUrl: "https://docker-git.example.test",
+        fetch: createMockFetch(requests, createJsonResponse(200, { ok: true }))
       })
 
-      yield* _(api.openApiVoid((client) => client.POST("/projects/down-all")))
+      const success = yield* _(api.POST("/projects/down-all"))
 
+      expect(success.status).toBe(200)
+      expect(success.body).toEqual({ ok: true })
       expect(requests).toHaveLength(1)
       expect(requests[0]?.method).toBe("POST")
       expect(new URL(requests[0]?.url ?? "").pathname).toBe("/projects/down-all")

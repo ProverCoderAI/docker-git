@@ -1,30 +1,27 @@
 import { Effect } from "effect"
 
-import { dockerGitOpenApi } from "./api-http.js"
-import { ContainerTaskSnapshotResponseSchema, OutputResponseSchema } from "./api-schema.js"
+import { dockerGitOpenApi, renderDockerGitOpenApiFailure } from "./api-http.js"
 
 export const loadProjectTasks = (projectId: string, shouldIncludeDefault = false) =>
-  dockerGitOpenApi.openApiJsonSchema(
-    ContainerTaskSnapshotResponseSchema,
-    (client) =>
-      client.GET("/projects/{projectId}/tasks", {
-        params: {
-          path: { projectId },
-          query: shouldIncludeDefault ? { includeDefault: "true" } : {}
-        }
-      })
-  ).pipe(
-    Effect.map((response) => response.snapshot)
+  dockerGitOpenApi.GET("/projects/{projectId}/tasks", {
+    params: {
+      path: { projectId },
+      query: shouldIncludeDefault ? { includeDefault: "true" } : {}
+    }
+  }).pipe(
+    Effect.map(({ body }) => body.snapshot),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const stopProjectTask = (
   projectId: string,
   pid: number
 ) =>
-  dockerGitOpenApi.openApiVoid((client) =>
-    client.POST("/projects/{projectId}/tasks/{pid}/stop", {
-      params: { path: { pid: String(pid), projectId } }
-    })
+  dockerGitOpenApi.POST("/projects/{projectId}/tasks/{pid}/stop", {
+    params: { path: { pid: String(pid), projectId } }
+  }).pipe(
+    Effect.asVoid,
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const loadProjectTaskLogs = (
@@ -32,15 +29,12 @@ export const loadProjectTaskLogs = (
   pid: number,
   lines = 200
 ) =>
-  dockerGitOpenApi.openApiJsonSchema(
-    OutputResponseSchema,
-    (client) =>
-      client.GET("/projects/{projectId}/tasks/{pid}/logs", {
-        params: {
-          path: { pid: String(pid), projectId },
-          query: { lines: String(lines) }
-        }
-      })
-  ).pipe(
-    Effect.map((response) => response.output)
+  dockerGitOpenApi.GET("/projects/{projectId}/tasks/{pid}/logs", {
+    params: {
+      path: { pid: String(pid), projectId },
+      query: { lines: String(lines) }
+    }
+  }).pipe(
+    Effect.map(({ body }) => body.output),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
