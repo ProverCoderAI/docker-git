@@ -38,6 +38,7 @@ import {
   ProjectPortForwardRequestSchema,
   ProjectPromptUpdateRequestSchema,
   ProjectSkillUpdateRequestSchema,
+  CreateShareLinkRequestSchema,
   StartProjectTerminalSessionRequestSchema,
   StartPanelCloudflareTunnelRequestSchema,
   StateCommitRequestSchema,
@@ -130,6 +131,13 @@ import {
   startPanelCloudflareTunnel,
   stopPanelCloudflareTunnel
 } from "./services/panel-cloudflare-tunnel.js"
+import {
+  createShareLink,
+  deleteShareLink,
+  listShareLinks,
+  resolveShareLink
+} from "./services/project-share-links.js"
+import { buildShareLinkSshAccess } from "@effect-template/lib/usecases/ssh-access"
 import {
   deleteProjectDatabaseForward,
   deleteProjectDatabaseProfile,
@@ -556,6 +564,13 @@ const skillScopeFromBody = (scope: string): ProjectSkillScope | null =>
 const readProjectPortForwardRequest = () => HttpServerRequest.schemaBodyJson(ProjectPortForwardRequestSchema)
 const readStartPanelCloudflareTunnelRequest = () =>
   HttpServerRequest.schemaBodyJson(StartPanelCloudflareTunnelRequestSchema)
+const readCreateShareLinkRequest = () =>
+  HttpServerRequest.schemaBodyJson(CreateShareLinkRequestSchema)
+
+const ShareLinkTokenParamsSchema = Schema.Struct({ token: Schema.String })
+const ShareLinkByProjectKeyParamsSchema = Schema.Struct({ projectKey: Schema.String, token: Schema.String })
+const shareLinkTokenParams = HttpRouter.schemaParams(ShareLinkTokenParamsSchema)
+const shareLinkByProjectKeyParams = HttpRouter.schemaParams(ShareLinkByProjectKeyParamsSchema)
 const readProjectDatabaseProfileRequest = () => HttpServerRequest.schemaBodyJson(ProjectDatabaseProfileRequestSchema)
 const readStateInitRequest = () => HttpServerRequest.schemaBodyJson(StateInitRequestSchema)
 const readStateCommitRequest = () => HttpServerRequest.schemaBodyJson(StateCommitRequestSchema)
@@ -1102,6 +1117,124 @@ export const makeRouter = () => {
       "/cloudflare-tunnels/panel",
       stopPanelCloudflareTunnel().pipe(
         Effect.flatMap((tunnel) => jsonResponse({ tunnel }, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.get(
+      "/share-links/:token",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const { token } = yield* _(shareLinkTokenParams)
+        const projectsRoot = defaultProjectsRoot(process.cwd())
+        const link = yield* _(resolveShareLink(projectsRoot, token))
+        if (link === null) {
+          return yield* _(Effect.fail(new ApiNotFoundError({ message: `Share link not found or expired: ${token}` })))
+        }
+        const project = yield* _(getProjectItemByKey(link.projectKey))
+        const clientHost = new URL(request.url, "http://localhost").searchParams.get("host")
+          ?? resolvePortPublicHost(request)
+          ?? "localhost"
+        const cfTunnel = yield* _(readPanelCloudflareTunnel())
+        const cfPublicHostname = cfTunnel?.publicUrl !== null && cfTunnel?.publicUrl !== undefined
+          ? (() => {
+            try { return new URL(cfTunnel.publicUrl).hostname } catch { return null }
+          })()
+          : null
+        const sshAccess = buildShareLinkSshAccess(
+          project.containerName,
+          project.sshUser,
+          project.sshPort,
+          project.sshKeyPath,
+          project.targetDir,
+          clientHost,
+          cfPublicHostname
+        )
+        const shareLinkInfo = {
+          token: link.token,
+          projectKey: link.projectKey,
+          projectDir: link.projectDir,
+          displayName: project.displayName,
+          sshAlias: sshAccess.alias,
+          sshConfigSnippet: sshAccess.configSnippet,
+          cfSshConfigSnippet: sshAccess.cfConfigSnippet,
+          vscodeUri: sshAccess.vscodeUri,
+          cfVscodeUri: sshAccess.cfVscodeUri,
+          workspacePath: sshAccess.workspacePath,
+          createdAt: link.createdAt,
+          expiresAt: link.expiresAt
+        }
+        return yield* _(jsonResponse({ link: shareLinkInfo }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.post(
+      "/projects/by-key/:projectKey/share-links",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const { projectKey } = yield* _(projectKeyParams)
+        const body = yield* _(readCreateShareLinkRequest())
+        const project = yield* _(getProjectItemByKey(projectKey))
+        const projectsRoot = defaultProjectsRoot(process.cwd())
+        const link = yield* _(createShareLink(projectsRoot, project.projectDir, projectKey, body.ttlMs))
+        const clientHost = resolvePortPublicHost(request) ?? "localhost"
+        const cfTunnel = yield* _(readPanelCloudflareTunnel())
+        const cfPublicHostname = cfTunnel?.publicUrl !== null && cfTunnel?.publicUrl !== undefined
+          ? (() => {
+            try { return new URL(cfTunnel.publicUrl).hostname } catch { return null }
+          })()
+          : null
+        const sshAccess = buildShareLinkSshAccess(
+          project.containerName,
+          project.sshUser,
+          project.sshPort,
+          project.sshKeyPath,
+          project.targetDir,
+          clientHost,
+          cfPublicHostname
+        )
+        const shareLinkInfo = {
+          token: link.token,
+          projectKey: link.projectKey,
+          projectDir: link.projectDir,
+          displayName: project.displayName,
+          sshAlias: sshAccess.alias,
+          sshConfigSnippet: sshAccess.configSnippet,
+          cfSshConfigSnippet: sshAccess.cfConfigSnippet,
+          vscodeUri: sshAccess.vscodeUri,
+          cfVscodeUri: sshAccess.cfVscodeUri,
+          workspacePath: sshAccess.workspacePath,
+          createdAt: link.createdAt,
+          expiresAt: link.expiresAt
+        }
+        const url = `${resolveRequestOrigin(request)}/ssh/${encodeURIComponent(projectKey)}?t=${link.token}`
+        return yield* _(jsonResponse({ ok: true, link: shareLinkInfo, url }, 201))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/projects/by-key/:projectKey/share-links",
+      projectKeyParams.pipe(
+        Effect.flatMap(({ projectKey }) =>
+          Effect.gen(function*(_) {
+            const project = yield* _(getProjectItemByKey(projectKey))
+            const projectsRoot = defaultProjectsRoot(process.cwd())
+            const links = yield* _(listShareLinks(projectsRoot, project.projectDir))
+            return { links }
+          })
+        ),
+        Effect.flatMap((payload) => jsonResponse(payload, 200)),
+        Effect.catchAll(errorResponse)
+      )
+    ),
+    HttpRouter.del(
+      "/projects/by-key/:projectKey/share-links/:token",
+      shareLinkByProjectKeyParams.pipe(
+        Effect.flatMap(({ projectKey, token }) =>
+          Effect.gen(function*(_) {
+            const project = yield* _(getProjectItemByKey(projectKey))
+            const projectsRoot = defaultProjectsRoot(process.cwd())
+            yield* _(deleteShareLink(projectsRoot, project.projectDir, token))
+          })
+        ),
+        Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
         Effect.catchAll(errorResponse)
       )
     )

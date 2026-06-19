@@ -809,3 +809,28 @@ export type ApiEvent = {
   readonly at: string
   readonly payload: unknown
 }
+
+export type ShareLinkInfo = {
+  readonly token: string
+  readonly projectKey: string
+  readonly projectDir: string
+  readonly displayName: string
+  readonly sshAlias: string
+  readonly sshConfigSnippet: string
+  readonly cfSshConfigSnippet: string | null
+  readonly vscodeUri: string
+  readonly cfVscodeUri: string | null
+  readonly workspacePath: string
+  readonly createdAt: string
+  readonly expiresAt: string
+}
+
+export type CreateShareLinkRequest = {
+  readonly ttlMs?: number | undefined
+}
+
+export type CreateShareLinkResponse = {
+  readonly ok: true
+  readonly link: ShareLinkInfo
+  readonly url: string
+}

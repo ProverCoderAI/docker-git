@@ -30,6 +30,10 @@ import {
   ProjectDatabaseSessionSchema,
   ProjectPortForwardRequestSchema,
   ProjectSkillUpdateRequestSchema,
+  CreateShareLinkRequestSchema,
+  ShareLinkInfoResponseSchema,
+  CreateShareLinkResponseSchema,
+  ShareLinksListResponseSchema,
   StartPanelCloudflareTunnelRequestSchema,
   StartProjectTerminalSessionRequestSchema,
   UpProjectRequestSchema
@@ -735,6 +739,8 @@ const TasksGroup = HttpApiGroup.make("tasks")
       .addSuccess(OutputResponseSchema)
   )
 
+const ShareLinkTokenParam = HttpApiSchema.param("token", Schema.String)
+
 const SharingGroup = HttpApiGroup.make("sharing")
   .add(endpoint.get("readPanelCloudflareTunnel", "/cloudflare-tunnels/panel").addSuccess(PanelCloudflareTunnelResponseSchema))
   .add(
@@ -743,6 +749,14 @@ const SharingGroup = HttpApiGroup.make("sharing")
       .addSuccess(PanelCloudflareTunnelResponseSchema, { status: 202 })
   )
   .add(endpoint.del("stopPanelCloudflareTunnel", "/cloudflare-tunnels/panel").addSuccess(PanelCloudflareTunnelResponseSchema))
+  .add(endpoint.get("getShareLink")`/share-links/${ShareLinkTokenParam}`.addSuccess(ShareLinkInfoResponseSchema))
+  .add(
+    endpoint.post("createShareLink")`/projects/by-key/${ProjectKeyParam}/share-links`
+      .setPayload(CreateShareLinkRequestSchema)
+      .addSuccess(CreateShareLinkResponseSchema, { status: 201 })
+  )
+  .add(endpoint.get("listShareLinks")`/projects/by-key/${ProjectKeyParam}/share-links`.addSuccess(ShareLinksListResponseSchema))
+  .add(endpoint.del("deleteShareLink")`/projects/by-key/${ProjectKeyParam}/share-links/${ShareLinkTokenParam}`.addSuccess(OkResponseSchema))
 
 export const DockerGitApi = HttpApi.make("docker-git")
   .annotate(OpenApi.Title, "docker-git API")

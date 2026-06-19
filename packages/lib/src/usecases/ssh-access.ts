@@ -183,6 +183,74 @@ Add to ~/.ssh/config:
 ${access.configSnippet}${firstHopNote}`
 }
 
+// CHANGE: build SSH config for share links using external client host and mapped SSH port
+// WHY: share link SSH config must route through the host's external IP + mapped port, not container IP
+// QUOTE(ТЗ): "принимает ссылку на любой IP который стоит у пользователя в URL"
+// REF: issue-428
+// FORMAT THEOREM: ∀ item, host: buildShareLinkSshAccess(item, host) → configSnippet uses sshPort (not 22)
+// PURITY: CORE
+// INVARIANT: port is always item.sshPort (host-mapped), never 22 (container-direct)
+// COMPLEXITY: O(n)/O(n) where n = |containerName|
+export type ShareLinkSshAccess = {
+  readonly alias: string
+  readonly configSnippet: string
+  readonly cfConfigSnippet: string | null
+  readonly workspacePath: string
+  readonly vscodeUri: string
+  readonly cfVscodeUri: string | null
+}
+
+export const buildShareLinkSshAccess = (
+  containerName: string,
+  sshUser: string,
+  sshPort: number,
+  sshKeyPath: string | null,
+  targetDir: string,
+  clientHost: string,
+  cfPublicHostname: string | null
+): ShareLinkSshAccess => {
+  const alias = sanitizeSshHostAlias(containerName)
+  const directLines = [
+    `Host ${alias}`,
+    `  HostName ${clientHost}`,
+    `  User ${sshUser}`,
+    `  Port ${sshPort}`,
+    `  LogLevel ERROR`,
+    `  StrictHostKeyChecking no`,
+    `  UserKnownHostsFile /dev/null`
+  ]
+  if (sshKeyPath !== null) {
+    directLines.push(`  IdentityFile ${sshKeyPath}`, `  IdentitiesOnly yes`)
+  }
+
+  const cfAlias = `${alias}-cf`
+  const cfLines = cfPublicHostname === null
+    ? null
+    : [
+      `Host ${cfAlias}`,
+      `  HostName ${cfPublicHostname}`,
+      `  User ${sshUser}`,
+      `  Port 22`,
+      `  ProxyCommand cloudflared access ssh --hostname %h`,
+      `  LogLevel ERROR`,
+      `  StrictHostKeyChecking no`,
+      `  UserKnownHostsFile /dev/null`,
+      ...(sshKeyPath !== null ? [`  IdentityFile ${sshKeyPath}`, `  IdentitiesOnly yes`] : [])
+    ]
+
+  const encodedFolder = encodeURIComponent(targetDir)
+  return {
+    alias,
+    configSnippet: directLines.join("\n"),
+    cfConfigSnippet: cfLines === null ? null : cfLines.join("\n"),
+    workspacePath: targetDir,
+    vscodeUri: `vscode://ms-vscode-remote.remote-ssh/open?ssh=${encodeURIComponent(alias)}&folder=${encodedFolder}`,
+    cfVscodeUri: cfLines === null
+      ? null
+      : `vscode://ms-vscode-remote.remote-ssh/open?ssh=${encodeURIComponent(cfAlias)}&folder=${encodedFolder}`
+  }
+}
+
 // CHANGE: resolve terminal/editor SSH access from the current runtime context
 // WHY: create/clone and list flows need consistent access info without duplicating fs/docker probing
 // QUOTE(ТЗ): "как подключиться к SSH к Cursor, VS code"

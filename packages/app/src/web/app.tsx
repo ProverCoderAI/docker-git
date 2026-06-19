@@ -15,6 +15,7 @@ import { UiProvider } from "../ui/primitives.js"
 import { loadDashboard, resolveApiBaseUrl } from "./api.js"
 import { createDashboardRefreshReducer, type DashboardState } from "./app-dashboard-state.js"
 import { AppReady } from "./app-ready.js"
+import { AppShareLink } from "./app-share-link.js"
 import { resolveWebAppRoute } from "./app-terminal-session-core.js"
 import { ErrorScreen, LoadingScreen } from "./panels.js"
 import { resolveViewportLayout, type ViewportLayout, type ViewportSize } from "./viewport-layout.js"
@@ -221,12 +222,15 @@ const AppDashboard = ({ viewport }: { readonly viewport: ViewportLayout }): JSX.
 
 export const App = (): JSX.Element => {
   const viewport = useViewportMode()
-  const [route] = useState(() => resolveWebAppRoute(location.pathname))
+  const [route] = useState(() => resolveWebAppRoute(location.pathname, location.search))
 
   return (
     <AppFrame viewport={viewport}>
       {Match.value(route).pipe(
         Match.when({ tag: "Dashboard" }, () => <AppDashboard viewport={viewport} />),
+        Match.when({ tag: "ShareLink" }, ({ projectKey, shareToken }) => (
+          <AppShareLink projectKey={projectKey} shareToken={shareToken} viewport={viewport} />
+        )),
         Match.exhaustive
       )}
     </AppFrame>
