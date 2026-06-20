@@ -110,6 +110,33 @@ const SshConfigBlock = (
   </div>
 )
 
+const WILDCARD_SSH_CONFIG = `Host *.trycloudflare.com
+  ProxyCommand cloudflared access ssh --hostname %h
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null`
+
+const CfTunnelSetupBlock = (
+  { cfHostname }: { readonly cfHostname: string | null }
+): JSX.Element | null => {
+  if (cfHostname === null) return null
+  return (
+    <div style={{ background: "#0a1520", border: "1px solid #1a3a5a", borderRadius: "3px", marginTop: "8px", padding: "8px" }}>
+      <div style={{ alignItems: "baseline", display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "space-between" }}>
+        <div style={{ color: "#7fdfff", fontSize: "0.9em", fontWeight: "bold" }}>One-time setup</div>
+        <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>add once to ~/.ssh/config — works for all share links</div>
+      </div>
+      <code style={codeBlockStyle}>{WILDCARD_SSH_CONFIG}</code>
+      <button onClick={() => copyText(WILDCARD_SSH_CONFIG)} style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }} type="button">copy</button>
+      <div style={{ color: "#8fa6c4", fontSize: "0.85em", marginTop: "6px" }}>After setup, connect to any container:</div>
+      <code style={codeBlockStyle}>{`ssh dev@${cfHostname}`}</code>
+      <button onClick={() => copyText(`ssh dev@${cfHostname}`)} style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }} type="button">copy</button>
+      <div style={{ color: "#8fa6c4", fontSize: "0.78em", marginTop: "4px" }}>
+        Requires <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/" rel="noreferrer" style={{ color: "#7fdfff" }} target="_blank">cloudflared</a> installed on your machine
+      </div>
+    </div>
+  )
+}
+
 const SshPasswordBlock = (
   { info }: { readonly info: ShareLinkInfo }
 ): JSX.Element | null => {
@@ -118,34 +145,20 @@ const SshPasswordBlock = (
   const sshPort = info.sshConfigSnippet.match(/Port\s+(\d+)/)?.[1] ?? "22"
   const sshUser = info.sshConfigSnippet.match(/User\s+(\S+)/)?.[1] ?? "dev"
   const directCmd = `ssh ${sshUser}@${sshHostname} -p ${sshPort}`
-  const cfCmd = info.cfSshConfigSnippet !== null
-    ? `ssh -o ProxyCommand="cloudflared access ssh --hostname %h" ${sshUser}@${info.sshConfigSnippet.match(/HostName\s+(\S+)/)?.[1] ?? "host"}`
-    : null
-  const cfHostname = info.cfSshConfigSnippet?.match(/HostName\s+(\S+)/)?.[1]
-  const cfDirectCmd = cfHostname !== null && cfHostname !== undefined
-    ? `ssh -o ProxyCommand="cloudflared access ssh --hostname %h" ${sshUser}@${cfHostname}`
-    : null
   return (
     <div style={{ background: "#0d1a14", border: "1px solid #2a5a38", borderRadius: "3px", marginTop: "8px", padding: "8px" }}>
-      <div style={{ color: "#56f39a", fontSize: "0.9em", fontWeight: "bold", marginBottom: "4px" }}>SSH password access</div>
+      <div style={{ color: "#56f39a", fontSize: "0.9em", fontWeight: "bold", marginBottom: "4px" }}>SSH password</div>
       <div style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: "6px" }}>
-        <span style={{ color: "#8fa6c4", fontSize: "0.85em" }}>Password:</span>
         <code style={{ ...codeBlockStyle, display: "inline", marginBottom: 0, marginTop: 0 }}>{info.sshPassword as string}</code>
         <button onClick={() => copyText(info.sshPassword as string)} style={{ ...buttonStyle, color: "#56f39a", fontSize: "0.85em" }} type="button">copy</button>
       </div>
-      <div style={{ color: "#8fa6c4", fontSize: "0.85em", marginTop: "6px" }}>Direct SSH command:</div>
-      <code style={codeBlockStyle}>{directCmd}</code>
-      <button onClick={() => copyText(directCmd)} style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }} type="button">copy</button>
-      {cfDirectCmd !== null && (
+      {sshHostname !== "localhost" && (
         <>
-          <div style={{ color: "#8fa6c4", fontSize: "0.85em", marginTop: "6px" }}>Via Cloudflare tunnel:</div>
-          <code style={codeBlockStyle}>{cfDirectCmd}</code>
-          <button onClick={() => copyText(cfDirectCmd as string)} style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }} type="button">copy</button>
+          <div style={{ color: "#8fa6c4", fontSize: "0.85em", marginTop: "6px" }}>Direct (LAN):</div>
+          <code style={codeBlockStyle}>{directCmd}</code>
+          <button onClick={() => copyText(directCmd)} style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }} type="button">copy</button>
         </>
       )}
-      <div style={{ color: "#8fa6c4", fontSize: "0.78em", marginTop: "4px" }}>
-        No SSH key needed — use this password when prompted
-      </div>
     </div>
   )
 }
@@ -183,11 +196,9 @@ const InfoHeader = (
         </button>
       </div>
     </div>
-    <SshConfigBlock label="SSH config (direct)" snippet={info.sshConfigSnippet} />
-    {info.cfSshConfigSnippet !== null && (
-      <SshConfigBlock label="SSH config (Cloudflare tunnel)" snippet={info.cfSshConfigSnippet as string} />
-    )}
+    <CfTunnelSetupBlock cfHostname={info.cfSshConfigSnippet?.match(/HostName\s+(\S+)/)?.[1] ?? null} />
     <SshPasswordBlock info={info} />
+    <SshConfigBlock label="SSH config (direct, LAN)" snippet={info.sshConfigSnippet} />
     <div style={{ color: "#8fa6c4", fontSize: "0.8em", marginTop: "6px" }}>
       expires {new Date(info.expiresAt).toLocaleString()}
     </div>
@@ -341,9 +352,9 @@ const renderState = (
         />
         <PlaceholderArea>
           <div style={centeredBoxStyle}>
-            <div style={{ color: "#d6e5f7" }}>Add the SSH config above to ~/.ssh/config</div>
+            <div style={{ color: "#d6e5f7" }}>Add the one-time setup to ~/.ssh/config</div>
             <div style={{ color: "#8fa6c4", marginTop: "4px" }}>
-              then click <span style={{ color: "#56f39a" }}>open in VS Code</span> to connect
+              then click <span style={{ color: "#7fdfff" }}>VS Code (CF tunnel)</span> to connect from anywhere
             </div>
           </div>
         </PlaceholderArea>
