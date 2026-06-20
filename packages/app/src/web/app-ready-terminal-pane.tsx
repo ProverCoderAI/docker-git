@@ -1,7 +1,8 @@
 import { Effect } from "effect"
-import type { CSSProperties, JSX } from "react"
+import { type CSSProperties, type JSX, useEffect, useState } from "react"
 
 import { deleteTerminalSessionByPath } from "./api.js"
+import { startProjectSshTunnel } from "./api-share-links.js"
 import { canOpenProjectBrowser } from "./app-ready-browser-openable.js"
 import { TerminalTaskManagerBody } from "./app-ready-terminal-task-manager.js"
 import type { TerminalPaneProps } from "./app-ready-terminal-types.js"
@@ -150,6 +151,134 @@ const handleTerminalKill = (props: TerminalPaneProps, runtime: TerminalPaneRunti
   )
 }
 
+type VsCodeAccessInfo = {
+  readonly sshUser: string
+  readonly targetDir: string
+}
+
+const buildVsCodeAccessInfo = (project: TerminalPaneProps["project"]): VsCodeAccessInfo | null => {
+  if (project === null) return null
+  return { sshUser: project.sshUser, targetDir: project.targetDir }
+}
+
+type CfTunnelState =
+  | { readonly tag: "idle" }
+  | { readonly tag: "loading" }
+  | { readonly tag: "ready"; readonly hostname: string }
+  | { readonly tag: "failed" }
+
+const WILDCARD_SSH_CONFIG = `Host *.trycloudflare.com
+  ProxyCommand cloudflared access ssh --hostname %h
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null`
+
+const copyText = (text: string): void => { void navigator.clipboard.writeText(text).catch(() => {}) }
+
+const vsCodePanelCodeStyle: CSSProperties = {
+  background: "#0b1017",
+  border: "1px solid #2a3640",
+  borderRadius: "2px",
+  color: "#a8c8f0",
+  display: "block",
+  fontFamily: "inherit",
+  fontSize: "0.85em",
+  marginBottom: "4px",
+  marginTop: "4px",
+  overflowX: "auto",
+  padding: "6px 8px",
+  whiteSpace: "pre"
+}
+
+const vsCodePanelCopyBtnStyle: CSSProperties = {
+  background: "transparent",
+  border: "none",
+  color: "#7fdfff",
+  cursor: "pointer",
+  font: "inherit",
+  fontSize: "0.85em",
+  fontWeight: "bold",
+  padding: "2px 6px"
+}
+
+const VsCodeAccessPanel = (
+  {
+    cfState,
+    info,
+    onClose,
+    onRetry
+  }: {
+    readonly cfState: CfTunnelState
+    readonly info: VsCodeAccessInfo
+    readonly onClose: () => void
+    readonly onRetry: () => void
+  }
+): JSX.Element => {
+  const cfSshCommand = cfState.tag === "ready"
+    ? `ssh -o "ProxyCommand=cloudflared access ssh --hostname %h" ${info.sshUser}@${cfState.hostname}`
+    : null
+  const cfVscodeUri = cfState.tag === "ready"
+    ? `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(`${info.sshUser}@${cfState.hostname}`)}&folder=${encodeURIComponent(info.targetDir)}`
+    : null
+  return (
+    <div style={{
+      background: "#0d1520",
+      border: "1px solid #2a4060",
+      borderRadius: "4px",
+      boxSizing: "border-box",
+      height: "100%",
+      overflowY: "auto",
+      padding: "12px 16px"
+    }}>
+      <div style={{ alignItems: "center", display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+        <div style={{ color: "#8be9fd", fontWeight: "bold" }}>VS Code / SSH access</div>
+        <button
+          onClick={onClose}
+          style={{ ...vsCodePanelCopyBtnStyle, color: "#f87171" }}
+          type="button"
+        >
+          ✕ close
+        </button>
+      </div>
+
+      {cfState.tag === "loading" && (
+        <div style={{ color: "#8fa6c4", marginTop: "8px" }}>Starting Cloudflare tunnel…</div>
+      )}
+
+      {cfState.tag === "failed" && (
+        <div style={{ marginTop: "8px" }}>
+          <div style={{ color: "#f87171" }}>Tunnel failed to start.</div>
+          <button onClick={onRetry} style={{ ...vsCodePanelCopyBtnStyle, color: "#7fdfff", marginTop: "4px" }} type="button">Retry</button>
+        </div>
+      )}
+
+      {cfState.tag === "ready" && (
+        <>
+          <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold" }}>One-time setup</div>
+          <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>add once to ~/.ssh/config — works for all containers</div>
+          <code style={vsCodePanelCodeStyle}>{WILDCARD_SSH_CONFIG}</code>
+          <button onClick={() => { copyText(WILDCARD_SSH_CONFIG) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+
+          <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Connect via SSH</div>
+          <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>requires <code style={{ color: "#a8c8f0" }}>cloudflared</code> on your machine</div>
+          <code style={vsCodePanelCodeStyle}>{cfSshCommand}</code>
+          <button onClick={() => { copyText(cfSshCommand as string) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+
+          {cfVscodeUri !== null && (
+            <>
+              <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Open in VS Code</div>
+              <div style={{ marginTop: "4px" }}>
+                <a href={cfVscodeUri} style={{ color: "#56f39a", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit", fontWeight: "bold", textDecoration: "none" }}>
+                  open in VS Code (CF tunnel)
+                </a>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 const openBrowserAction = (props: TerminalPaneProps, runtime: TerminalPaneRuntime): (() => void) | undefined => {
   const projectId = runtime.browserProjectId
   return projectId === undefined || !runtime.canOpenBrowser
@@ -187,8 +316,14 @@ const openTerminalAction = (props: TerminalPaneProps, runtime: TerminalPaneRunti
 }
 
 const TerminalPanelForPane = (
-  { bodyContent, props, runtime }: {
+  {
+    bodyContent,
+    onOpenVsCode,
+    props,
+    runtime
+  }: {
     readonly bodyContent: JSX.Element | undefined
+    readonly onOpenVsCode: (() => void) | undefined
     readonly props: TerminalPaneProps
     readonly runtime: TerminalPaneRuntime
   }
@@ -222,16 +357,64 @@ const TerminalPanelForPane = (
     onOpenTaskManager={openTaskManagerAction(props, runtime)}
     onOpenTerminal={openTerminalAction(props, runtime)}
     onMessage={props.onTerminalMessage}
+    onOpenVsCode={onOpenVsCode}
     session={props.terminalSession}
   />
 )
 
+const startTunnel = (
+  projectKey: string,
+  setCfState: (s: CfTunnelState) => void
+): void => {
+  setCfState({ tag: "loading" })
+  void Effect.runPromise(
+    startProjectSshTunnel(projectKey).pipe(
+      Effect.match({
+        onFailure: () => { setCfState({ tag: "failed" }) },
+        onSuccess: ({ hostname }) => {
+          setCfState(
+            hostname !== null
+              ? { tag: "ready", hostname }
+              : { tag: "failed" }
+          )
+        }
+      })
+    )
+  )
+}
+
 export const TerminalPane = (props: TerminalPaneProps): JSX.Element => {
+  const [vsCodePanelOpen, setVsCodePanelOpen] = useState(false)
+  const [cfState, setCfState] = useState<CfTunnelState>({ tag: "idle" })
   const runtime = resolveTerminalPaneRuntime(props)
-  const bodyContent = terminalBodyContent(props, runtime)
+
+  useEffect(() => {
+    if (!vsCodePanelOpen || runtime.browserProjectKey === undefined) return
+    if (cfState.tag === "idle") {
+      startTunnel(runtime.browserProjectKey, setCfState)
+    }
+  }, [vsCodePanelOpen, runtime.browserProjectKey, cfState.tag])
+
+  const vsCodeInfo = buildVsCodeAccessInfo(props.project)
+  const onOpenVsCode = vsCodeInfo !== null ? () => { setVsCodePanelOpen(true) } : undefined
+  const vsCodeBodyContent = vsCodePanelOpen && vsCodeInfo !== null
+    ? (
+      <VsCodeAccessPanel
+        cfState={cfState}
+        info={vsCodeInfo}
+        onClose={() => { setVsCodePanelOpen(false) }}
+        onRetry={() => {
+          if (runtime.browserProjectKey !== undefined) {
+            startTunnel(runtime.browserProjectKey, setCfState)
+          }
+        }}
+      />
+    )
+    : undefined
+  const bodyContent = vsCodeBodyContent ?? terminalBodyContent(props, runtime)
   return (
     <div style={activeTerminalPaneStyle}>
-      <TerminalPanelForPane bodyContent={bodyContent} props={props} runtime={runtime} />
+      <TerminalPanelForPane bodyContent={bodyContent} onOpenVsCode={onOpenVsCode} props={props} runtime={runtime} />
     </div>
   )
 }

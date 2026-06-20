@@ -18,4 +18,5 @@ export type TerminalPanelProps = {
   readonly onOpenTerminal?: (() => void) | undefined
   readonly session: ActiveTerminalSession
   readonly bodyContent?: JSX.Element | undefined
+  readonly onOpenVsCode?: (() => void) | undefined
 }

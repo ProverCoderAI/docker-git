@@ -71,3 +71,14 @@ export const deleteProjectShareLink = (
     `/projects/by-key/${encodeURIComponent(projectKey)}/share-links/${encodeURIComponent(token)}`,
     OkResponseSchema
   ).pipe(Effect.asVoid)
+
+const SshTunnelResponseSchema = Schema.Struct({ hostname: Schema.NullOr(Schema.String) })
+
+export const startProjectSshTunnel = (
+  projectKey: string
+): Effect.Effect<{ readonly hostname: string | null }, string> =>
+  requestJson(
+    "POST",
+    `/projects/by-key/${encodeURIComponent(projectKey)}/ssh-tunnel`,
+    SshTunnelResponseSchema
+  )

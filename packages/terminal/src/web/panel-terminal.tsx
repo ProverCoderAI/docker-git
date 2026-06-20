@@ -61,6 +61,7 @@ type TerminalPanelLayoutProps =
     | "onOpenSkiller"
     | "onOpenTaskManager"
     | "onOpenTerminal"
+    | "onOpenVsCode"
     | "session"
   >
   & InlineImagePreviewState
@@ -265,6 +266,7 @@ const TerminalPanelLayout = (props: TerminalPanelLayoutProps): JSX.Element => (
       onOpenSkiller={props.onOpenSkiller}
       onOpenTaskManager={props.onOpenTaskManager}
       onOpenTerminal={props.onOpenTerminal}
+      onOpenVsCode={props.onOpenVsCode}
       onToggleInlineImagePreviews={props.toggleInlineImagePreviews}
       session={props.session}
       status={props.status}

@@ -207,13 +207,11 @@ const InfoHeader = (
 
 const TerminalView = (
   {
-    info,
     message,
     session,
     setState,
     viewport
   }: {
-    readonly info: ShareLinkInfo
     readonly message: string | null
     readonly session: ActiveTerminalSession
     readonly setState: Dispatch<SetStateAction<ShareLinkState>>
@@ -382,7 +380,6 @@ const renderState = (
           onConnect={() => {}}
         />
         <TerminalView
-          info={info}
           message={message}
           session={session}
           setState={setState}

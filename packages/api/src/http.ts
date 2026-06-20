@@ -142,6 +142,7 @@ import {
   startSshShareLinkTunnel,
   stopSshShareLinkTunnel
 } from "./services/ssh-share-link-tunnels.js"
+import { startSshProjectTunnel } from "./services/ssh-project-tunnels.js"
 import {
   disableContainerPasswordAuth,
   enableContainerPasswordAuth,
@@ -1254,6 +1255,19 @@ export const makeRouter = () => {
         Effect.flatMap(() => jsonResponse({ ok: true }, 200)),
         Effect.catchAll(errorResponse)
       )
+    ),
+    HttpRouter.post(
+      "/projects/by-key/:projectKey/ssh-tunnel",
+      Effect.gen(function*(_) {
+        const { projectKey } = yield* _(projectKeyParams)
+        const project = yield* _(getProjectItemByKey(projectKey))
+        const hostname = yield* _(
+          startSshProjectTunnel(projectKey, project.sshPort).pipe(
+            Effect.orElse(() => Effect.succeed(null))
+          )
+        )
+        return yield* _(jsonResponse({ hostname }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
     )
   )
 
