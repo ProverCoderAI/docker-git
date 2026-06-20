@@ -456,6 +456,20 @@ describe("renderEntrypoint clone cache", () => {
     expect(entrypoint).not.toContain('if [[ ! -s "$CODEX_HINT_PATH" ]]; then')
   })
 
+  it("publishes runtime project identity before Codex resume hints", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    const projectProfileIndex = entrypoint.indexOf('DOCKER_GIT_PROJECT_PROFILE="/etc/profile.d/docker-git-project.sh"')
+    const resumeHintIndex = entrypoint.indexOf('CODEX_HINT_PATH="/etc/profile.d/zz-codex-resume.sh"')
+
+    expect(projectProfileIndex).toBeGreaterThanOrEqual(0)
+    expect(resumeHintIndex).toBeGreaterThan(projectProfileIndex)
+    expect(entrypoint).toContain('printf "export REPO_REF=%q\\n" "$REPO_REF"')
+    expect(entrypoint).toContain('printf "export REPO_URL=%q\\n" "$REPO_URL"')
+    expect(entrypoint).toContain('docker_git_upsert_ssh_env "REPO_REF" "$REPO_REF"')
+    expect(entrypoint).toContain('docker_git_upsert_ssh_env "REPO_URL" "$REPO_URL"')
+  })
+
   it("preserves branch/tag-only clone-cache refspecs for generated configs", () => {
     fc.assert(
       fc.property(generatedTemplateConfigArbitrary, (config) => {
