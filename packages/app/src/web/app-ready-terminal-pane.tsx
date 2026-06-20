@@ -164,7 +164,7 @@ const buildVsCodeAccessInfo = (project: TerminalPaneProps["project"]): VsCodeAcc
 type CfTunnelState =
   | { readonly tag: "idle" }
   | { readonly tag: "loading" }
-  | { readonly tag: "ready"; readonly hostname: string }
+  | { readonly tag: "ready"; readonly hostname: string; readonly sshPassword: string }
   | { readonly tag: "failed" }
 
 const WILDCARD_SSH_CONFIG = `Host *.trycloudflare.com
@@ -262,6 +262,10 @@ const VsCodeAccessPanel = (
           <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>requires <code style={{ color: "#a8c8f0" }}>cloudflared</code> on your machine</div>
           <code style={vsCodePanelCodeStyle}>{cfSshCommand}</code>
           <button onClick={() => { copyText(cfSshCommand as string) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+
+          <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>SSH password</div>
+          <code style={vsCodePanelCodeStyle}>{cfState.sshPassword}</code>
+          <button onClick={() => { copyText(cfState.sshPassword) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
 
           {cfVscodeUri !== null && (
             <>
@@ -371,10 +375,10 @@ const startTunnel = (
     startProjectSshTunnel(projectKey).pipe(
       Effect.match({
         onFailure: () => { setCfState({ tag: "failed" }) },
-        onSuccess: ({ hostname }) => {
+        onSuccess: ({ hostname, sshPassword }) => {
           setCfState(
             hostname !== null
-              ? { tag: "ready", hostname }
+              ? { tag: "ready", hostname, sshPassword }
               : { tag: "failed" }
           )
         }
