@@ -16,7 +16,7 @@
     "lint:effect": "NODE_OPTIONS=--max-old-space-size=4096 eslint --config eslint.effect-ts-check.config.mjs . --cache --cache-location .eslintcache-effect --cache-strategy content",
     "pretypecheck": "bun run --cwd ../container build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "pretest": "bun run --cwd ../container build",
+    "pretest": "bun run --cwd ../container build && bun run --cwd ../docker-git-session-sync build",
     "test": "vitest run --passWithNoTests"
   },
   "repository": {

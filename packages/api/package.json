@@ -17,7 +17,7 @@
     "lint": "eslint . --cache --cache-location .eslintcache --cache-strategy content",
     "lint:effect": "eslint --config eslint.effect-ts-check.config.mjs . --cache --cache-location .eslintcache-effect --cache-strategy content",
     "lint:openapi-contract": "vitest run tests/openapi.test.ts",
-    "pretest": "bun run --cwd ../terminal build && bun run --cwd ../container build && bun run --cwd ../lib build",
+    "pretest": "bun run --cwd ../terminal build && bun run --cwd ../container build && bun run --cwd ../docker-git-session-sync build && bun run --cwd ../lib build",
     "test": "vitest run"
   },
   "dependencies": {

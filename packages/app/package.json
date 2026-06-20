@@ -25,6 +25,7 @@
     "serve:web": "bun scripts/serve-dist-web.mjs",
     "prelint": "bun run --cwd ../docker-git-session-sync build && bun run --cwd ../terminal build",
     "lint": "NODE_OPTIONS=--max-old-space-size=4096 eslint src --cache --cache-location .eslintcache --cache-strategy content",
+    "prelint:tests": "bun run --cwd ../docker-git-session-sync build && bun run --cwd ../terminal build",
     "lint:tests": "NODE_OPTIONS=--max-old-space-size=4096 eslint tests --cache --cache-location .eslintcache-tests --cache-strategy content",
     "lint:effect": "NODE_OPTIONS=--max-old-space-size=4096 eslint --config eslint.effect-ts-check.config.mjs . --cache --cache-location .eslintcache-effect --cache-strategy content",
     "prebuild:docker-git": "bun install --cwd ../.. && bun run --cwd ../docker-git-session-sync build && bun run --cwd ../terminal build",
