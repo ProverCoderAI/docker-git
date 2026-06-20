@@ -89,6 +89,7 @@ export interface CreateCommand {
   readonly forceEnv: boolean
   readonly waitForClone: boolean
   readonly openSsh: boolean
+  readonly dockerComposeUpBuildMode?: "build" | "reuse" | undefined
 }
 
 export interface MenuCommand {

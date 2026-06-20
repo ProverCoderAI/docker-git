@@ -78,6 +78,7 @@ export interface TemplateConfig {
   readonly agentMode?: AgentMode | undefined
   readonly agentAuto?: boolean | undefined
   readonly clonedOnHostname?: string | undefined
+  readonly imageName?: string | undefined
 }
 
 export interface ProjectConfig {

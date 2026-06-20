@@ -116,11 +116,24 @@ export const dockerComposeUpRecreateArgs: ReadonlyArray<string> = [
   "--force-recreate"
 ]
 
+const dockerComposeUpRecreateArgsByMode = (
+  buildMode: DockerComposeUpBuildMode
+): ReadonlyArray<string> =>
+  buildMode === "reuse"
+    ? ["up", "-d", "--force-recreate"]
+    : dockerComposeUpRecreateArgs
+
 export const runDockerComposeUpRecreate = (
-  cwd: string
+  cwd: string,
+  options: {
+    readonly buildMode?: DockerComposeUpBuildMode
+  } = {}
 ): Effect.Effect<void, DockerCommandError | PlatformError, CommandExecutor.CommandExecutor> => {
   const successExitCode = Number(ExitCode(0))
-  return retryDockerComposeUp(cwd, runCompose(cwd, dockerComposeUpRecreateArgs, [successExitCode]))
+  return retryDockerComposeUp(
+    cwd,
+    runCompose(cwd, dockerComposeUpRecreateArgsByMode(options.buildMode ?? "build"), [successExitCode])
+  )
 }
 
 export const runDockerComposeDown = (

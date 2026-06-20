@@ -49,18 +49,14 @@ type AgentEnvFragments = Pick<
   "maybeAgentModeEnv" | "maybeAgentAutoEnv"
 >
 
-export type DockerComposeRenderOptions = {
-  readonly enableLocalDockerSocket: boolean
-}
+export type DockerComposeRenderOptions = { readonly enableLocalDockerSocket: boolean }
 
 export type ComposeResourceLimits = {
   readonly main: ResolvedComposeResourceLimits | undefined
   readonly playwright: ResolvedComposeResourceLimits | undefined
 }
 
-const defaultDockerComposeRenderOptions: DockerComposeRenderOptions = {
-  enableLocalDockerSocket: false
-}
+const defaultDockerComposeRenderOptions: DockerComposeRenderOptions = { enableLocalDockerSocket: false }
 const sharedCodexVolumeKey = "docker_git_shared_codex"
 const sharedCacheVolumeKey = "docker_git_shared_cache"
 const bootstrapVolumeKey = "docker_git_bootstrap"
@@ -127,6 +123,11 @@ const renderEnvFiles = (config: TemplateConfig): string =>
   }\n`
 
 const optionalTrimmed = (value: string | undefined): string => value?.trim() ?? ""
+
+const renderProjectImageSource = (imageName: string | undefined): string =>
+  optionalTrimmed(imageName).length === 0
+    ? "    build: .\n"
+    : `    image: ${renderYamlSingleQuoted(optionalTrimmed(imageName))}\n    pull_policy: never\n`
 
 const buildAuthEnvFragments = (config: TemplateConfig): AuthEnvFragments => ({
   maybeGitTokenLabelEnv: renderGitTokenLabelEnv(
@@ -248,7 +249,7 @@ const renderComposeServices = (
 ): string =>
   `services:
   ${config.serviceName}:
-    build: .
+${renderProjectImageSource(config.imageName)}
     container_name: ${config.containerName}
 ${renderGpu(config.gpu)}${
     renderEnvFiles(

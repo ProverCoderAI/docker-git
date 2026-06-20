@@ -57,6 +57,7 @@ type DockerUpOptions = {
   readonly waitForAgent: boolean
   readonly force: boolean
   readonly forceEnv: boolean
+  readonly buildMode?: "build" | "reuse" | undefined
 }
 
 const removeConflictingContainer = (
@@ -182,10 +183,17 @@ const runDockerComposeUpByMode = (
   resolvedOutDir: string,
   projectConfig: CreateCommand["config"],
   shouldForce: boolean,
-  shouldForceEnv: boolean
+  shouldForceEnv: boolean,
+  buildMode: "build" | "reuse"
 ): Effect.Effect<void, DockerCommandError | PlatformError, DockerUpEnvironment> =>
   Effect.gen(function*(_) {
     yield* _(ensureComposeNetworkReady(resolvedOutDir, projectConfig))
+    const composeUpLabel = buildMode === "reuse"
+      ? "docker compose up -d"
+      : "docker compose up -d --build"
+    const runComposeUp = buildMode === "reuse"
+      ? runDockerComposeUp(resolvedOutDir, { buildMode: "reuse" })
+      : runDockerComposeUp(resolvedOutDir)
 
     if (shouldForce) {
       yield* _(Effect.log("Force enabled: removing stale containers and wiping docker compose volumes..."))
@@ -195,18 +203,18 @@ const runDockerComposeUpByMode = (
       if (projectConfig.enableMcpPlaywright) {
         yield* _(removeConflictingContainer(resolvedOutDir, `${projectConfig.containerName}-browser`))
       }
-      yield* _(Effect.log("Running: docker compose up -d --build"))
-      yield* _(runDockerComposeUp(resolvedOutDir))
+      yield* _(Effect.log(`Running: ${composeUpLabel}`))
+      yield* _(runComposeUp)
       return
     }
     yield* _(ensureSharedCodexVolumeReady(resolvedOutDir, projectConfig))
     if (shouldForceEnv) {
       yield* _(Effect.log("Force env enabled: resetting env defaults and recreating containers (volumes preserved)..."))
-      yield* _(runDockerComposeUpRecreate(resolvedOutDir))
+      yield* _(runDockerComposeUpRecreate(resolvedOutDir, { buildMode }))
       return
     }
-    yield* _(Effect.log("Running: docker compose up -d --build"))
-    yield* _(runDockerComposeUp(resolvedOutDir))
+    yield* _(Effect.log(`Running: ${composeUpLabel}`))
+    yield* _(runComposeUp)
   })
 
 const ensureContainerBridgeAccess = (
@@ -251,7 +259,13 @@ export const runDockerUpIfNeeded = (
     if (!options.runUp) {
       return
     }
-    yield* _(runDockerComposeUpByMode(resolvedOutDir, projectConfig, options.force, options.forceEnv))
+    yield* _(runDockerComposeUpByMode(
+      resolvedOutDir,
+      projectConfig,
+      options.force,
+      options.forceEnv,
+      options.buildMode ?? "build"
+    ))
     yield* _(ensureBridgeAccess(resolvedOutDir, projectConfig))
 
     if (options.waitForClone) {

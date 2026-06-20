@@ -944,6 +944,8 @@ describe("renderDockerCompose", () => {
     const compose = renderDockerCompose(makeTemplateConfig())
 
     expect(compose).toContain("name: dg-test")
+    expect(compose).toContain("    build: .\n")
+    expect(compose).not.toContain("    pull_policy: never\n")
     expect(compose).toContain("container_name: dg-test")
     expect(compose).toContain("    env_file:\n      - '/workspace/.orch/env/global.env'\n      - '/workspace/.orch/env/project.env'\n")
     expect(compose).not.toContain("restart:")
@@ -955,6 +957,18 @@ describe("renderDockerCompose", () => {
     expect(compose).not.toContain("dg-test-browser")
     expect(compose).not.toContain("/var/run/docker.sock:/var/run/docker.sock")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
+  })
+
+  it("renders an explicit prebuilt image without a build section", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        imageName: "docker-git-e2e-project:latest"
+      })
+    )
+
+    expect(compose).toContain("    image: 'docker-git-e2e-project:latest'\n")
+    expect(compose).toContain("    pull_policy: never\n")
+    expect(compose).not.toContain("    build: .\n")
   })
 
   it("quotes env_file paths so Windows paths and spaces remain YAML scalars", () => {

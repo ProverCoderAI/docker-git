@@ -181,7 +181,8 @@ export const runPreparedProject = (
         waitForClone: command.waitForClone,
         waitForAgent: shouldWaitForAgent,
         force: command.force,
-        forceEnv: command.forceEnv
+        forceEnv: command.forceEnv,
+        buildMode: command.dockerComposeUpBuildMode
       })
     )
     if (command.runUp) {

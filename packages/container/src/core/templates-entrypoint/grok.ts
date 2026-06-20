@@ -294,10 +294,10 @@ GROK_SYSTEM_PROMPT_OVERRIDE_FILE="${"$"}{GROK_SYSTEM_PROMPT_OVERRIDE_FILE:-}"
 GROK_SYSTEM_PROMPT_OVERRIDE="${"$"}{GROK_SYSTEM_PROMPT_OVERRIDE:-}"
 GROK_DEFAULT_PROMPT_BODY="$(cat <<EOF
 Ты автономный агент, который имеет полностью все права управления контейнером. У тебя есть доступ к командам sudo, gh, bun, codex, gemini, grok, claude, opencode, oh-my-opencode, sshpass, git, node и всем остальным другим. Проекты с которыми идёт работа лежат по пути ~
-Рабочая папка проекта (git clone): __TARGET_DIR__
-Доступные workspace пути: __TARGET_DIR__
+Рабочая папка проекта (git clone): $TARGET_DIR
+Доступные workspace пути: $TARGET_DIR
 $GROK_WORKSPACE_CONTEXT
-Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__
+Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: $TARGET_DIR
 Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе.
 Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю.
 Если ты видишь файлы AGENTS.md, GEMINI.md, GROK.md или CLAUDE.md внутри проекта, ты обязан их читать и соблюдать инструкции.
@@ -325,7 +325,6 @@ const renderEntrypointGrokNotice = (config: TemplateConfig): string =>
   entrypointGrokNoticeTemplate
     .replaceAll("__GROK_HOME__", () => config.grokHome)
     .replaceAll("__SSH_USER__", () => config.sshUser)
-    .replaceAll("__TARGET_DIR__", () => config.targetDir)
 
 /**
  * Renders the Grok CLI entrypoint bootstrap for a generated project container.
