@@ -154,11 +154,12 @@ const handleTerminalKill = (props: TerminalPaneProps, runtime: TerminalPaneRunti
 type VsCodeAccessInfo = {
   readonly sshUser: string
   readonly targetDir: string
+  readonly sshPort: number
 }
 
 const buildVsCodeAccessInfo = (project: TerminalPaneProps["project"]): VsCodeAccessInfo | null => {
   if (project === null) return null
-  return { sshUser: project.sshUser, targetDir: project.targetDir }
+  return { sshUser: project.sshUser, targetDir: project.targetDir, sshPort: project.sshPort }
 }
 
 type CfTunnelState =
@@ -169,6 +170,9 @@ type CfTunnelState =
 
 const hostSshConfig = (hostname: string, sshUser: string): string =>
   `Host ${hostname}\n  User ${sshUser}\n  ProxyCommand cloudflared access ssh --hostname %h\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null`
+
+const directSshConfig = (host: string, sshPort: number, sshUser: string): string =>
+  `Host ${host}-ssh\n  HostName ${host}\n  Port ${sshPort}\n  User ${sshUser}\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null`
 
 const copyText = (text: string): void => { void navigator.clipboard.writeText(text).catch(() => {}) }
 
@@ -220,6 +224,10 @@ const VsCodeAccessPanel = (
   const cfVscodeUri = cfState.tag === "ready"
     ? `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(`${info.sshUser}@${cfState.hostname}`)}&folder=${encodeURIComponent(info.targetDir)}`
     : null
+  const directHost = window.location.hostname
+  const directConfig = directSshConfig(directHost, info.sshPort, info.sshUser)
+  const directCommand = `ssh -p ${info.sshPort} ${info.sshUser}@${directHost}`
+  const directVscodeUri = `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(`${directHost}-ssh`)}&folder=${encodeURIComponent(info.targetDir)}`
   return (
     <div style={{
       background: "#0d1520",
@@ -278,6 +286,26 @@ const VsCodeAccessPanel = (
           )}
         </>
       )}
+
+      <div style={{ borderTop: "1px solid #2a4060", margin: "14px 0 10px" }} />
+      <div style={{ color: "#8be9fd", fontWeight: "bold", marginBottom: "8px" }}>Direct SSH (local network)</div>
+
+      <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold" }}>Add to ~/.ssh/config</div>
+      <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>no cloudflared needed — works on same LAN</div>
+      <code style={vsCodePanelCodeStyle}>{directConfig}</code>
+      <button onClick={() => { copyText(directConfig) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+
+      <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Connect via SSH</div>
+      <code style={vsCodePanelCodeStyle}>{directCommand}</code>
+      <button onClick={() => { copyText(directCommand) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+
+      <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Open in VS Code</div>
+      <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>requires config entry above in ~/.ssh/config</div>
+      <div style={{ marginTop: "4px" }}>
+        <a href={directVscodeUri} style={{ color: "#56f39a", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit", fontWeight: "bold", textDecoration: "none" }}>
+          open in VS Code (direct)
+        </a>
+      </div>
     </div>
   )
 }
