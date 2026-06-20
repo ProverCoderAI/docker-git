@@ -215,7 +215,7 @@ const VsCodeAccessPanel = (
 ): JSX.Element => {
   const cfSshConfig = cfState.tag === "ready" ? hostSshConfig(cfState.hostname, info.targetDir) : null
   const cfSshCommand = cfState.tag === "ready"
-    ? `ssh -o "ProxyCommand=cloudflared access ssh --hostname %h" -t ${info.sshUser}@${cfState.hostname} "cd ${info.targetDir} && exec \\$SHELL"`
+    ? `ssh -o "ProxyCommand=cloudflared access ssh --hostname %h" ${info.sshUser}@${cfState.hostname}`
     : null
   const cfVscodeUri = cfState.tag === "ready"
     ? `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(`${info.sshUser}@${cfState.hostname}`)}&folder=${encodeURIComponent(info.targetDir)}`
