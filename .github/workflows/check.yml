@@ -230,6 +230,28 @@ jobs:
           fi
           echo "Effect-TS lint module job result: $MODULE_RESULT"
 
+  e2e-prepare:
+    name: E2E prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Build E2E prebuilt payload
+        run: |
+          bun run --cwd packages/app build:docker-git:reuse-install
+          bun run --cwd packages/app build:web
+      - name: Pack E2E prebuilt artifact
+        run: |
+          mkdir -p artifacts
+          bun scripts/ci/pack-e2e-prebuilt.mjs artifacts/docker-git-e2e-prebuilt.tgz
+      - name: Upload E2E prebuilt artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts/docker-git-e2e-prebuilt.tgz
+
   e2e-local-package:
     name: E2E (Local package CLI)
     runs-on: ubuntu-latest
@@ -243,17 +265,28 @@ jobs:
 
   e2e-browser-command:
     name: E2E (Browser command)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_WEB: "1"
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
       - name: Docker info
@@ -263,17 +296,27 @@ jobs:
 
   e2e-opencode:
     name: E2E (OpenCode)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
       - name: Docker info
@@ -283,17 +326,27 @@ jobs:
 
   e2e-clone-cache:
     name: E2E (Clone cache)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
       - name: Docker info
@@ -303,17 +356,27 @@ jobs:
 
   e2e-login-context:
     name: E2E (Login context)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
       - name: Docker info
@@ -323,17 +386,27 @@ jobs:
 
   e2e-runtime-volumes-ssh:
     name: E2E (Runtime volumes + SSH)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
       - name: Docker info
@@ -343,17 +416,27 @@ jobs:
 
   e2e-clone-auto-open-ssh:
     name: E2E (Clone auto-open SSH)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
       - name: Docker info

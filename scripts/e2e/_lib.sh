@@ -546,12 +546,37 @@ dg_build_docker_git_cli() {
   dg_log_duration "docker-git CLI build" "$started_at"
 }
 
+dg_require_prebuilt_docker_git_cli() {
+  local repo_root="$1"
+  local required_paths=(
+    "$repo_root/packages/app/dist/src/docker-git/main.js"
+    "$repo_root/packages/docker-git-session-sync/dist/docker-git-session-sync.js"
+    "$repo_root/packages/terminal/dist/index.js"
+  )
+  local path
+
+  for path in "${required_paths[@]}"; do
+    if [[ ! -f "$path" ]]; then
+      echo "e2e: prebuilt docker-git CLI artifact is incomplete: missing $path" >&2
+      return 1
+    fi
+  done
+}
+
 dg_prepare_docker_git_cli() {
   local repo_root="$1"
   local bin_dir="$2"
   local started_at
 
   started_at="$(date +%s)"
+
+  dg_ensure_bun
+  if dg_is_truthy "${DOCKER_GIT_E2E_USE_PREBUILT_CLI:-0}"; then
+    dg_require_prebuilt_docker_git_cli "$repo_root"
+    echo "e2e: using prebuilt docker-git CLI artifact" >&2
+    dg_log_duration "prepare docker-git CLI" "$started_at"
+    return 0
+  fi
 
   dg_prepare_bun_workspace "$repo_root" "$bin_dir"
   dg_build_docker_git_cli "$repo_root"
