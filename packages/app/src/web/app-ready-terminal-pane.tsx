@@ -167,8 +167,8 @@ type CfTunnelState =
   | { readonly tag: "ready"; readonly hostname: string; readonly sshPassword: string }
   | { readonly tag: "failed" }
 
-const hostSshConfig = (hostname: string): string =>
-  `Host ${hostname}\n  ProxyCommand cloudflared access ssh --hostname %h\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null`
+const hostSshConfig = (hostname: string, sshUser: string): string =>
+  `Host ${hostname}\n  User ${sshUser}\n  ProxyCommand cloudflared access ssh --hostname %h\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null`
 
 const copyText = (text: string): void => { void navigator.clipboard.writeText(text).catch(() => {}) }
 
@@ -213,7 +213,7 @@ const VsCodeAccessPanel = (
     readonly onRetry: () => void
   }
 ): JSX.Element => {
-  const cfSshConfig = cfState.tag === "ready" ? hostSshConfig(cfState.hostname) : null
+  const cfSshConfig = cfState.tag === "ready" ? hostSshConfig(cfState.hostname, info.sshUser) : null
   const cfSshCommand = cfState.tag === "ready"
     ? `ssh -o "ProxyCommand=cloudflared access ssh --hostname %h" ${info.sshUser}@${cfState.hostname}`
     : null
