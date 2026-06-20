@@ -167,10 +167,8 @@ type CfTunnelState =
   | { readonly tag: "ready"; readonly hostname: string; readonly sshPassword: string }
   | { readonly tag: "failed" }
 
-const WILDCARD_SSH_CONFIG = `Host *.trycloudflare.com
-  ProxyCommand cloudflared access ssh --hostname %h
-  StrictHostKeyChecking no
-  UserKnownHostsFile /dev/null`
+const hostSshConfig = (hostname: string): string =>
+  `Host ${hostname}\n  ProxyCommand cloudflared access ssh --hostname %h\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null`
 
 const copyText = (text: string): void => { void navigator.clipboard.writeText(text).catch(() => {}) }
 
@@ -213,8 +211,9 @@ const VsCodeAccessPanel = (
     readonly onRetry: () => void
   }
 ): JSX.Element => {
+  const cfSshConfig = cfState.tag === "ready" ? hostSshConfig(cfState.hostname) : null
   const cfSshCommand = cfState.tag === "ready"
-    ? `ssh -o "ProxyCommand=cloudflared access ssh --hostname %h" -t ${info.sshUser}@${cfState.hostname} "cd ${info.targetDir} && exec \\$SHELL"`
+    ? `ssh -t ${info.sshUser}@${cfState.hostname} "cd ${info.targetDir} && exec \\$SHELL"`
     : null
   const cfVscodeUri = cfState.tag === "ready"
     ? `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(`${info.sshUser}@${cfState.hostname}`)}&folder=${encodeURIComponent(info.targetDir)}`
@@ -253,13 +252,12 @@ const VsCodeAccessPanel = (
 
       {cfState.tag === "ready" && (
         <>
-          <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold" }}>One-time setup</div>
-          <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>add once to ~/.ssh/config — works for all containers</div>
-          <code style={vsCodePanelCodeStyle}>{WILDCARD_SSH_CONFIG}</code>
-          <button onClick={() => { copyText(WILDCARD_SSH_CONFIG) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+          <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold" }}>Add to ~/.ssh/config</div>
+          <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>requires <code style={{ color: "#a8c8f0" }}>cloudflared</code> installed on your machine</div>
+          <code style={vsCodePanelCodeStyle}>{cfSshConfig}</code>
+          <button onClick={() => { copyText(cfSshConfig as string) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
 
           <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Connect via SSH</div>
-          <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>requires <code style={{ color: "#a8c8f0" }}>cloudflared</code> on your machine</div>
           <code style={vsCodePanelCodeStyle}>{cfSshCommand}</code>
           <button onClick={() => { copyText(cfSshCommand as string) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
 
