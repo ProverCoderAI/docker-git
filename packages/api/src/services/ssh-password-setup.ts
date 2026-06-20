@@ -29,12 +29,14 @@ export const generateSshPassword = (): string => {
 
 const dockerExec = (
   containerName: string,
+  env: Record<string, string>,
   script: string
 ): Effect.Effect<string, ApiInternalError> =>
   Effect.tryPromise({
     catch: (cause) => new ApiInternalError({ message: `docker exec ${containerName} failed`, cause }),
     try: async () => {
-      const { stdout } = await execFileAsync("docker", ["exec", containerName, "sh", "-c", script])
+      const envArgs = Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`])
+      const { stdout } = await execFileAsync("docker", ["exec", ...envArgs, containerName, "sh", "-c", script])
       return stdout
     }
   })
@@ -54,14 +56,11 @@ export const enableContainerPasswordAuth = (
   password: string
 ): Effect.Effect<void, ApiInternalError> => {
   const script = [
-    // Enable password auth in docker-git's custom sshd config
     "sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config.d/dev.conf",
-    // Set password for dev user (chpasswd reads user:password from stdin)
-    `echo 'dev:${password}' | chpasswd`,
-    // Reload sshd without dropping existing connections
+    "printf 'dev:%s' \"$SSHPW\" | chpasswd",
     "kill -HUP $(pgrep -xo sshd) 2>/dev/null || true"
   ].join(" && ")
-  return dockerExec(containerName, script).pipe(Effect.asVoid)
+  return dockerExec(containerName, { SSHPW: password }, script).pipe(Effect.asVoid)
 }
 
 /**
@@ -82,7 +81,7 @@ export const disableContainerPasswordAuth = (
     "passwd -l dev",
     "kill -HUP $(pgrep -xo sshd) 2>/dev/null || true"
   ].join(" && ")
-  return dockerExec(containerName, script).pipe(
+  return dockerExec(containerName, {}, script).pipe(
     Effect.asVoid,
     Effect.orElse(() => Effect.void)
   )

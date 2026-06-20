@@ -1,11 +1,11 @@
 import { Effect, Match } from "effect"
 import { type CSSProperties, type Dispatch, type JSX, type SetStateAction, useEffect, useState } from "react"
 
-import { createProjectTerminalSession, deleteTerminalSessionByPath } from "./api.js"
 import type { ShareLinkInfo } from "./api-share-links.js"
 import { loadShareLink } from "./api-share-links.js"
+import { createProjectTerminalSession, deleteTerminalSessionByPath } from "./api.js"
 import { TerminalPanel } from "./panel-terminal.js"
-import { buildProjectActiveTerminalSession, type ActiveTerminalSession } from "./terminal.js"
+import { type ActiveTerminalSession, buildProjectActiveTerminalSession } from "./terminal.js"
 import type { ViewportLayout } from "./viewport-layout.js"
 
 // CHANGE: standalone share link page – validates token, shows SSH config and web terminal
@@ -20,7 +20,12 @@ type ShareLinkState =
   | { readonly _tag: "Error"; readonly message: string }
   | { readonly _tag: "Info"; readonly info: ShareLinkInfo }
   | { readonly _tag: "Connecting"; readonly info: ShareLinkInfo }
-  | { readonly _tag: "Terminal"; readonly info: ShareLinkInfo; readonly session: ActiveTerminalSession; readonly message: string | null }
+  | {
+    readonly _tag: "Terminal"
+    readonly info: ShareLinkInfo
+    readonly session: ActiveTerminalSession
+    readonly message: string | null
+  }
   | { readonly _tag: "Closed"; readonly info: ShareLinkInfo; readonly closedMessage: string }
 
 export type AppShareLinkProps = {
@@ -80,8 +85,12 @@ const codeBlockStyle: CSSProperties = {
   whiteSpace: "pre"
 }
 
-const copyText = (text: string): void => {
-  void navigator.clipboard.writeText(text).catch(() => {})
+const copyText = async (text: string): Promise<void> => {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // ignore clipboard errors
+  }
 }
 
 const vscodeLinkStyle: CSSProperties = {
@@ -101,7 +110,9 @@ const SshConfigBlock = (
     <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "6px" }}>{label}</div>
     <code style={codeBlockStyle}>{snippet}</code>
     <button
-      onClick={() => copyText(snippet)}
+      onClick={() => {
+        copyText(snippet)
+      }}
       style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }}
       type="button"
     >
@@ -120,18 +131,63 @@ const CfTunnelSetupBlock = (
 ): JSX.Element | null => {
   if (cfHostname === null) return null
   return (
-    <div style={{ background: "#0a1520", border: "1px solid #1a3a5a", borderRadius: "3px", marginTop: "8px", padding: "8px" }}>
-      <div style={{ alignItems: "baseline", display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "space-between" }}>
+    <div
+      style={{
+        background: "#0a1520",
+        border: "1px solid #1a3a5a",
+        borderRadius: "3px",
+        marginTop: "8px",
+        padding: "8px"
+      }}
+    >
+      <div
+        style={{
+          alignItems: "baseline",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "6px",
+          justifyContent: "space-between"
+        }}
+      >
         <div style={{ color: "#7fdfff", fontSize: "0.9em", fontWeight: "bold" }}>One-time setup</div>
-        <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>add once to ~/.ssh/config — works for all share links</div>
+        <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>
+          add once to ~/.ssh/config — works for all share links
+        </div>
       </div>
       <code style={codeBlockStyle}>{WILDCARD_SSH_CONFIG}</code>
-      <button onClick={() => copyText(WILDCARD_SSH_CONFIG)} style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }} type="button">copy</button>
-      <div style={{ color: "#8fa6c4", fontSize: "0.85em", marginTop: "6px" }}>After setup, connect to any container:</div>
+      <button
+        onClick={() => {
+          copyText(WILDCARD_SSH_CONFIG)
+        }}
+        style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }}
+        type="button"
+      >
+        copy
+      </button>
+      <div style={{ color: "#8fa6c4", fontSize: "0.85em", marginTop: "6px" }}>
+        After setup, connect to any container:
+      </div>
       <code style={codeBlockStyle}>{`ssh dev@${cfHostname}`}</code>
-      <button onClick={() => copyText(`ssh dev@${cfHostname}`)} style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }} type="button">copy</button>
+      <button
+        onClick={() => {
+          copyText(`ssh dev@${cfHostname}`)
+        }}
+        style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }}
+        type="button"
+      >
+        copy
+      </button>
       <div style={{ color: "#8fa6c4", fontSize: "0.78em", marginTop: "4px" }}>
-        Requires <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/" rel="noreferrer" style={{ color: "#7fdfff" }} target="_blank">cloudflared</a> installed on your machine
+        Requires{" "}
+        <a
+          href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"
+          rel="noreferrer"
+          style={{ color: "#7fdfff" }}
+          target="_blank"
+        >
+          cloudflared
+        </a>{" "}
+        installed on your machine
       </div>
     </div>
   )
@@ -141,22 +197,48 @@ const SshPasswordBlock = (
   { info }: { readonly info: ShareLinkInfo }
 ): JSX.Element | null => {
   if (info.sshPassword === null) return null
-  const sshHostname = info.sshConfigSnippet.match(/HostName\s+(\S+)/)?.[1] ?? "host"
-  const sshPort = info.sshConfigSnippet.match(/Port\s+(\d+)/)?.[1] ?? "22"
-  const sshUser = info.sshConfigSnippet.match(/User\s+(\S+)/)?.[1] ?? "dev"
+  const sshHostname = /HostName\s+(\S+)/.exec(info.sshConfigSnippet)?.[1] ?? "host"
+  const sshPort = /Port\s+(\d+)/.exec(info.sshConfigSnippet)?.[1] ?? "22"
+  const sshUser = /User\s+(\S+)/.exec(info.sshConfigSnippet)?.[1] ?? "dev"
   const directCmd = `ssh ${sshUser}@${sshHostname} -p ${sshPort}`
   return (
-    <div style={{ background: "#0d1a14", border: "1px solid #2a5a38", borderRadius: "3px", marginTop: "8px", padding: "8px" }}>
+    <div
+      style={{
+        background: "#0d1a14",
+        border: "1px solid #2a5a38",
+        borderRadius: "3px",
+        marginTop: "8px",
+        padding: "8px"
+      }}
+    >
       <div style={{ color: "#56f39a", fontSize: "0.9em", fontWeight: "bold", marginBottom: "4px" }}>SSH password</div>
       <div style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: "6px" }}>
-        <code style={{ ...codeBlockStyle, display: "inline", marginBottom: 0, marginTop: 0 }}>{info.sshPassword as string}</code>
-        <button onClick={() => copyText(info.sshPassword as string)} style={{ ...buttonStyle, color: "#56f39a", fontSize: "0.85em" }} type="button">copy</button>
+        <code style={{ ...codeBlockStyle, display: "inline", marginBottom: 0, marginTop: 0 }}>
+          {info.sshPassword}
+        </code>
+        <button
+          onClick={() => {
+            copyText(info.sshPassword as string)
+          }}
+          style={{ ...buttonStyle, color: "#56f39a", fontSize: "0.85em" }}
+          type="button"
+        >
+          copy
+        </button>
       </div>
       {sshHostname !== "localhost" && (
         <>
           <div style={{ color: "#8fa6c4", fontSize: "0.85em", marginTop: "6px" }}>Direct (LAN):</div>
           <code style={codeBlockStyle}>{directCmd}</code>
-          <button onClick={() => copyText(directCmd)} style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }} type="button">copy</button>
+          <button
+            onClick={() => {
+              copyText(directCmd)
+            }}
+            style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }}
+            type="button"
+          >
+            copy
+          </button>
         </>
       )}
     </div>
@@ -175,14 +257,16 @@ const InfoHeader = (
   }
 ): JSX.Element => (
   <div style={headerStyle}>
-    <div style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "space-between" }}>
+    <div
+      style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "space-between" }}
+    >
       <div style={{ color: "#8be9fd", fontWeight: "bold" }}>{info.displayName}</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
         <a href={info.vscodeUri} style={vscodeLinkStyle}>
           open in VS Code
         </a>
         {info.cfVscodeUri !== null && (
-          <a href={info.cfVscodeUri as string} style={{ ...vscodeLinkStyle, color: "#7fdfff" }}>
+          <a href={info.cfVscodeUri} style={{ ...vscodeLinkStyle, color: "#7fdfff" }}>
             VS Code (CF tunnel)
           </a>
         )}
@@ -252,9 +336,7 @@ const TerminalView = (
         )
       }}
       onMessage={(msg) => {
-        setState((current) =>
-          current._tag === "Terminal" ? { ...current, message: msg } : current
-        )
+        setState((current) => current._tag === "Terminal" ? { ...current, message: msg } : current)
       }}
       session={session}
     />
@@ -306,7 +388,7 @@ const connectTerminalSession = (
         Effect.sync(() => {
           setState((current) =>
             current._tag === "Connecting"
-              ? { _tag: "Closed", closedMessage: String(error), info: current.info }
+              ? { _tag: "Closed", closedMessage: error, info: current.info }
               : current
           )
         })
@@ -414,18 +496,19 @@ export const AppShareLink = (
   const [state, setState] = useState<ShareLinkState>({ _tag: "Loading" })
 
   useEffect(() => {
-    let cancelled = false
-    const clientHost = `${window.location.hostname}${window.location.port !== "" ? `:${window.location.port}` : ""}`
+    let isCancelled = false
+    const portSuffix = location.port === "" ? "" : `:${location.port}`
+    const clientHost = `${location.hostname}${portSuffix}`
     void Effect.runPromise(
       loadShareLink(shareToken, clientHost).pipe(
         Effect.match({
           onFailure: (message) => {
-            if (!cancelled) {
+            if (!isCancelled) {
               setState({ _tag: "Error", message })
             }
           },
           onSuccess: (info) => {
-            if (!cancelled) {
+            if (!isCancelled) {
               setState({ _tag: "Info", info })
             }
           }
@@ -433,7 +516,7 @@ export const AppShareLink = (
       )
     )
     return () => {
-      cancelled = true
+      isCancelled = true
     }
   }, [shareToken])
 

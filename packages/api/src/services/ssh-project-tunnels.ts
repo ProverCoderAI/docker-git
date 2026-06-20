@@ -171,7 +171,7 @@ const waitForHostname = (
   remainingAttempts: number
 ): Effect.Effect<string | null> =>
   Effect.gen(function*(_) {
-    if (record.hostname !== null || record.stopping || remainingAttempts <= 0) {
+    if (record.hostname !== null || record.stopping || record.processClosed || remainingAttempts <= 0) {
       return record.hostname
     }
     yield* _(Effect.sleep(Duration.millis(250)))
@@ -209,7 +209,7 @@ export const startSshProjectTunnel = (
     }
 
     const sshPassword = generateSshPassword()
-    yield* _(enableContainerPasswordAuth(containerName, sshPassword).pipe(Effect.orElse(() => Effect.void)))
+    yield* _(enableContainerPasswordAuth(containerName, sshPassword))
 
     const localhostHost = yield* _(defaultLocalhostHost())
     const sshUrl = `ssh://${localhostHost}:${sshPort}`

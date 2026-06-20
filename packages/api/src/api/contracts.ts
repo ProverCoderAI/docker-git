@@ -821,6 +821,7 @@ export type ShareLinkInfo = {
   readonly vscodeUri: string
   readonly cfVscodeUri: string | null
   readonly workspacePath: string
+  readonly sshPassword: string | null
   readonly createdAt: string
   readonly expiresAt: string
 }

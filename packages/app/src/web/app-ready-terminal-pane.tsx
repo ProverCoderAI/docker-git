@@ -1,8 +1,8 @@
 import { Effect } from "effect"
 import { type CSSProperties, type JSX, useEffect, useState } from "react"
 
-import { deleteTerminalSessionByPath } from "./api.js"
 import { startProjectSshTunnel } from "./api-share-links.js"
+import { deleteTerminalSessionByPath } from "./api.js"
 import { canOpenProjectBrowser } from "./app-ready-browser-openable.js"
 import { TerminalTaskManagerBody } from "./app-ready-terminal-task-manager.js"
 import type { TerminalPaneProps } from "./app-ready-terminal-types.js"
@@ -174,7 +174,13 @@ const hostSshConfig = (hostname: string, sshUser: string): string =>
 const directSshConfig = (host: string, sshPort: number, sshUser: string): string =>
   `Host ${host}-ssh\n  HostName ${host}\n  Port ${sshPort}\n  User ${sshUser}\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null`
 
-const copyText = (text: string): void => { void navigator.clipboard.writeText(text).catch(() => {}) }
+const copyText = async (text: string): Promise<void> => {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // ignore clipboard errors
+  }
+}
 
 const vsCodePanelCodeStyle: CSSProperties = {
   background: "#0b1017",
@@ -222,29 +228,40 @@ const VsCodeAccessPanel = (
     ? `ssh -o "ProxyCommand=cloudflared access ssh --hostname %h" ${info.sshUser}@${cfState.hostname}`
     : null
   const cfVscodeUri = cfState.tag === "ready"
-    ? `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(`${info.sshUser}@${cfState.hostname}`)}&folder=${encodeURIComponent(info.targetDir)}`
+    ? `vscode://ms-vscode-remote.remote-ssh/open?hostName=${
+      encodeURIComponent(`${info.sshUser}@${cfState.hostname}`)
+    }&folder=${encodeURIComponent(info.targetDir)}`
     : null
-  const directHost = window.location.hostname
+  const directHost = location.hostname
   const directConfig = directSshConfig(directHost, info.sshPort, info.sshUser)
-  const directCommand = `ssh -p ${info.sshPort} -t ${info.sshUser}@${directHost} "cd ${info.targetDir} && exec \\$SHELL"`
-  const directVscodeUri = `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(`${directHost}-ssh`)}&folder=${encodeURIComponent(info.targetDir)}`
+  const directCommand = String
+    .raw`ssh -p ${info.sshPort} -t ${info.sshUser}@${directHost} "cd ${info.targetDir} && exec \$SHELL"`
+  const directVscodeUri = `vscode://ms-vscode-remote.remote-ssh/open?hostName=${
+    encodeURIComponent(`${directHost}-ssh`)
+  }&folder=${encodeURIComponent(info.targetDir)}`
   return (
-    <div style={{
-      background: "#0d1520",
-      border: "1px solid #2a4060",
-      borderRadius: "4px",
-      boxSizing: "border-box",
-      height: "100%",
-      overflowY: "auto",
-      padding: "12px 16px"
-    }}>
+    <div
+      style={{
+        background: "#0d1520",
+        border: "1px solid #2a4060",
+        borderRadius: "4px",
+        boxSizing: "border-box",
+        height: "100%",
+        overflowY: "auto",
+        padding: "12px 16px"
+      }}
+    >
       <div style={{ alignItems: "center", display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
         <div style={{ color: "#8be9fd", fontWeight: "bold" }}>VS Code / SSH access</div>
         <div style={{ display: "flex", gap: "4px" }}>
           {cfState.tag === "ready" && (
-            <button onClick={onRefresh} style={{ ...vsCodePanelCopyBtnStyle, color: "#7fdfff" }} type="button">↻ refresh</button>
+            <button onClick={onRefresh} style={{ ...vsCodePanelCopyBtnStyle, color: "#7fdfff" }} type="button">
+              ↻ refresh
+            </button>
           )}
-          <button onClick={onClose} style={{ ...vsCodePanelCopyBtnStyle, color: "#f87171" }} type="button">✕ close</button>
+          <button onClick={onClose} style={{ ...vsCodePanelCopyBtnStyle, color: "#f87171" }} type="button">
+            ✕ close
+          </button>
         </div>
       </div>
 
@@ -255,30 +272,76 @@ const VsCodeAccessPanel = (
       {cfState.tag === "failed" && (
         <div style={{ marginTop: "8px" }}>
           <div style={{ color: "#f87171" }}>Tunnel failed to start.</div>
-          <button onClick={onRetry} style={{ ...vsCodePanelCopyBtnStyle, color: "#7fdfff", marginTop: "4px" }} type="button">Retry</button>
+          <button
+            onClick={onRetry}
+            style={{ ...vsCodePanelCopyBtnStyle, color: "#7fdfff", marginTop: "4px" }}
+            type="button"
+          >
+            Retry
+          </button>
         </div>
       )}
 
       {cfState.tag === "ready" && (
         <>
           <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold" }}>Add to ~/.ssh/config</div>
-          <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>requires <code style={{ color: "#a8c8f0" }}>cloudflared</code> installed on your machine</div>
+          <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>
+            requires <code style={{ color: "#a8c8f0" }}>cloudflared</code> installed on your machine
+          </div>
           <code style={vsCodePanelCodeStyle}>{cfSshConfig}</code>
-          <button onClick={() => { copyText(cfSshConfig as string) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+          <button
+            onClick={() => {
+              copyText(cfSshConfig as string)
+            }}
+            style={vsCodePanelCopyBtnStyle}
+            type="button"
+          >
+            copy
+          </button>
 
-          <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Connect via SSH</div>
+          <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>
+            Connect via SSH
+          </div>
           <code style={vsCodePanelCodeStyle}>{cfSshCommand}</code>
-          <button onClick={() => { copyText(cfSshCommand as string) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+          <button
+            onClick={() => {
+              copyText(cfSshCommand as string)
+            }}
+            style={vsCodePanelCopyBtnStyle}
+            type="button"
+          >
+            copy
+          </button>
 
           <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>SSH password</div>
           <code style={vsCodePanelCodeStyle}>{cfState.sshPassword}</code>
-          <button onClick={() => { copyText(cfState.sshPassword) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+          <button
+            onClick={() => {
+              copyText(cfState.sshPassword)
+            }}
+            style={vsCodePanelCopyBtnStyle}
+            type="button"
+          >
+            copy
+          </button>
 
           {cfVscodeUri !== null && (
             <>
-              <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Open in VS Code</div>
+              <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>
+                Open in VS Code
+              </div>
               <div style={{ marginTop: "4px" }}>
-                <a href={cfVscodeUri} style={{ color: "#56f39a", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit", fontWeight: "bold", textDecoration: "none" }}>
+                <a
+                  href={cfVscodeUri}
+                  style={{
+                    color: "#56f39a",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontSize: "inherit",
+                    fontWeight: "bold",
+                    textDecoration: "none"
+                  }}
+                >
                   open in VS Code (CF tunnel)
                 </a>
               </div>
@@ -293,24 +356,58 @@ const VsCodeAccessPanel = (
       <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold" }}>Add to ~/.ssh/config</div>
       <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>no cloudflared needed — works on same LAN</div>
       <code style={vsCodePanelCodeStyle}>{directConfig}</code>
-      <button onClick={() => { copyText(directConfig) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+      <button
+        onClick={() => {
+          copyText(directConfig)
+        }}
+        style={vsCodePanelCopyBtnStyle}
+        type="button"
+      >
+        copy
+      </button>
 
       <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Connect via SSH</div>
       <code style={vsCodePanelCodeStyle}>{directCommand}</code>
-      <button onClick={() => { copyText(directCommand) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+      <button
+        onClick={() => {
+          copyText(directCommand)
+        }}
+        style={vsCodePanelCopyBtnStyle}
+        type="button"
+      >
+        copy
+      </button>
 
       {cfState.tag === "ready" && (
         <>
           <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>SSH password</div>
           <code style={vsCodePanelCodeStyle}>{cfState.sshPassword}</code>
-          <button onClick={() => { copyText(cfState.sshPassword) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+          <button
+            onClick={() => {
+              copyText(cfState.sshPassword)
+            }}
+            style={vsCodePanelCopyBtnStyle}
+            type="button"
+          >
+            copy
+          </button>
         </>
       )}
 
       <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Open in VS Code</div>
       <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>requires config entry above in ~/.ssh/config</div>
       <div style={{ marginTop: "4px" }}>
-        <a href={directVscodeUri} style={{ color: "#56f39a", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit", fontWeight: "bold", textDecoration: "none" }}>
+        <a
+          href={directVscodeUri}
+          style={{
+            color: "#56f39a",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontSize: "inherit",
+            fontWeight: "bold",
+            textDecoration: "none"
+          }}
+        >
           open in VS Code (direct)
         </a>
       </div>
@@ -409,12 +506,14 @@ const startTunnel = (
   void Effect.runPromise(
     startProjectSshTunnel(projectKey).pipe(
       Effect.match({
-        onFailure: () => { setCfState({ tag: "failed" }) },
+        onFailure: () => {
+          setCfState({ tag: "failed" })
+        },
         onSuccess: ({ hostname, sshPassword }) => {
           setCfState(
-            hostname !== null
-              ? { tag: "ready", hostname, sshPassword }
-              : { tag: "failed" }
+            hostname === null
+              ? { tag: "failed" }
+              : { tag: "ready", hostname, sshPassword }
           )
         }
       })
@@ -423,45 +522,59 @@ const startTunnel = (
 }
 
 export const TerminalPane = (props: TerminalPaneProps): JSX.Element => {
-  const [vsCodePanelOpen, setVsCodePanelOpen] = useState(false)
+  const [isVsCodePanelOpen, setVsCodePanelOpen] = useState(false)
   const [cfState, setCfState] = useState<CfTunnelState>({ tag: "idle" })
   const runtime = resolveTerminalPaneRuntime(props)
 
   useEffect(() => {
-    if (!vsCodePanelOpen || runtime.browserProjectKey === undefined) return
+    if (!isVsCodePanelOpen || runtime.browserProjectKey === undefined) return
     if (cfState.tag === "idle") {
       startTunnel(runtime.browserProjectKey, setCfState)
     }
-  }, [vsCodePanelOpen, runtime.browserProjectKey, cfState.tag])
+  }, [isVsCodePanelOpen, runtime.browserProjectKey, cfState.tag])
 
   // Poll every 30s when panel is open: restart tunnel if process died
   useEffect(() => {
-    if (!vsCodePanelOpen || cfState.tag !== "ready" || runtime.browserProjectKey === undefined) return
+    if (!isVsCodePanelOpen || cfState.tag !== "ready" || runtime.browserProjectKey === undefined) return
     const projectKey = runtime.browserProjectKey
+    let isCancelled = false
     const id = setInterval(() => {
       void Effect.runPromise(
         startProjectSshTunnel(projectKey).pipe(
           Effect.match({
-            onFailure: () => { setCfState({ tag: "failed" }) },
+            onFailure: () => {
+              if (!isCancelled) setCfState({ tag: "failed" })
+            },
             onSuccess: ({ hostname, sshPassword }) => {
-              if (hostname === null) { setCfState({ tag: "failed" }); return }
+              if (isCancelled) return
+              if (hostname === null) {
+                setCfState({ tag: "failed" })
+                return
+              }
               setCfState({ tag: "ready", hostname, sshPassword })
             }
           })
         )
       )
     }, 30_000)
-    return () => { clearInterval(id) }
-  }, [vsCodePanelOpen, cfState.tag, runtime.browserProjectKey])
+    return () => {
+      isCancelled = true
+      clearInterval(id)
+    }
+  }, [isVsCodePanelOpen, cfState.tag, runtime.browserProjectKey])
 
   const vsCodeInfo = buildVsCodeAccessInfo(props.project)
-  const onOpenVsCode = vsCodeInfo !== null ? () => { setVsCodePanelOpen(true) } : undefined
-  const vsCodeBodyContent = vsCodePanelOpen && vsCodeInfo !== null
+  const onOpenVsCode = vsCodeInfo === null ? undefined : () => {
+    setVsCodePanelOpen(true)
+  }
+  const vsCodeBodyContent = isVsCodePanelOpen && vsCodeInfo !== null
     ? (
       <VsCodeAccessPanel
         cfState={cfState}
         info={vsCodeInfo}
-        onClose={() => { setVsCodePanelOpen(false) }}
+        onClose={() => {
+          setVsCodePanelOpen(false)
+        }}
         onRefresh={() => {
           if (runtime.browserProjectKey !== undefined) {
             startTunnel(runtime.browserProjectKey, setCfState)

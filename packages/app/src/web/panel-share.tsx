@@ -1,10 +1,10 @@
 import { Effect } from "effect"
-import { type JSX, useEffect, useState } from "react"
+import { type JSX, useCallback, useEffect, useRef, useState } from "react"
 
 import { Box, Text } from "../ui/primitives.js"
-import type { PanelCloudflareTunnelSession } from "./api.js"
 import type { ShareLinkInfo } from "./api-share-links.js"
 import { createProjectShareLink, deleteProjectShareLink, listProjectShareLinks } from "./api-share-links.js"
+import type { PanelCloudflareTunnelSession } from "./api.js"
 
 type SharePanelProps = {
   readonly onCopyPublicUrl: (publicUrl: string) => void
@@ -142,54 +142,67 @@ const ContainerShareLinksSection = (
   { projectKey }: { readonly projectKey: string }
 ): JSX.Element => {
   const [state, setState] = useState<ShareLinksState>({ _tag: "Idle" })
+  const requestIdRef = useRef(0)
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
+    const id = ++requestIdRef.current
     setState({ _tag: "Loading" })
     void Effect.runPromise(
       listProjectShareLinks(projectKey).pipe(
         Effect.match({
-          onFailure: (msg) => { setState({ _tag: "Error", message: msg }) },
+          onFailure: (msg) => {
+            if (requestIdRef.current === id) setState({ _tag: "Error", message: msg })
+          },
           onSuccess: (links) => {
+            if (requestIdRef.current !== id) return
             setState((s) => ({ _tag: "Loaded", links, newUrl: s._tag === "Loaded" ? s.newUrl : null }))
           }
         })
       )
     )
-  }
+  }, [projectKey])
 
-  const generate = () => {
+  const generate = useCallback(() => {
+    const id = ++requestIdRef.current
     void Effect.runPromise(
       createProjectShareLink(projectKey).pipe(
         Effect.flatMap(({ url }) =>
           listProjectShareLinks(projectKey).pipe(
-            Effect.map((links) => { setState({ _tag: "Loaded", links, newUrl: url }) })
+            Effect.map((links) => {
+              if (requestIdRef.current === id) setState({ _tag: "Loaded", links, newUrl: url })
+            })
           )
         ),
         Effect.catchAll((msg) =>
-          Effect.sync(() => { setState({ _tag: "Error", message: String(msg) }) })
+          Effect.sync(() => {
+            if (requestIdRef.current === id) setState({ _tag: "Error", message: msg })
+          })
         )
       )
     )
-  }
+  }, [projectKey])
 
-  const revoke = (token: string) => {
+  const revoke = useCallback((token: string) => {
+    const id = ++requestIdRef.current
     void Effect.runPromise(
       deleteProjectShareLink(projectKey, token).pipe(
         Effect.flatMap(() => listProjectShareLinks(projectKey)),
         Effect.match({
-          onFailure: (msg) => { setState({ _tag: "Error", message: String(msg) }) },
+          onFailure: (msg) => {
+            if (requestIdRef.current === id) setState({ _tag: "Error", message: msg })
+          },
           onSuccess: (links) => {
+            if (requestIdRef.current !== id) return
             setState((s) => ({ _tag: "Loaded", links, newUrl: s._tag === "Loaded" ? s.newUrl : null }))
           }
         })
       )
     )
-  }
+  }, [projectKey])
 
   useEffect(() => {
     refresh()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectKey])
+  }, [refresh])
 
   return (
     <Box border={true} borderColor="#3a4652" flexDirection="column" gap={1} marginTop={2} padding={1}>
@@ -213,33 +226,44 @@ const ContainerShareLinksSection = (
             <ActionButton
               fg="#7fdfff"
               label="copy"
-              onClick={() => {
-                const url = state._tag === "Loaded" ? state.newUrl : null
+              onClick={async () => {
+                const url = state.newUrl
                 if (url !== null) {
-                  void navigator.clipboard.writeText(url).catch(() => {})
+                  try {
+                    await navigator.clipboard.writeText(url)
+                  } catch {
+                    // ignore clipboard errors
+                  }
                 }
               }}
             />
             <ActionButton
               label="open"
               onClick={() => {
-                const url = state._tag === "Loaded" ? state.newUrl : null
-                if (url !== null) openUrl(url)
+                const url = state.newUrl
+                if (url !== null) {
+                  openUrl(url)
+                }
               }}
             />
           </Box>
         </Box>
       )}
-      {state._tag === "Loaded" && state.links.length === 0 && (
-        <Text fg="#8fa6c4">No active share links.</Text>
-      )}
-      {state._tag === "Loaded" && state.links.map((link) => (
-        <Box key={link.token} alignItems="center" flexWrap="wrap" gap={1} justifyContent="space-between">
-          <Text fg="#a8c0dc" wrap="truncate">{link.token}</Text>
-          <Text fg="#8fa6c4">exp {new Date(link.expiresAt).toLocaleDateString()}</Text>
-          <ActionButton fg="#ff8aa0" label="revoke" onClick={() => { revoke(link.token) }} />
-        </Box>
-      ))}
+      {state._tag === "Loaded" && state.links.length === 0 && <Text fg="#8fa6c4">No active share links.</Text>}
+      {state._tag === "Loaded" &&
+        state.links.map((link) => (
+          <Box key={link.token} alignItems="center" flexWrap="wrap" gap={1} justifyContent="space-between">
+            <Text fg="#a8c0dc" wrap="truncate">{link.token}</Text>
+            <Text fg="#8fa6c4">exp {new Date(link.expiresAt).toLocaleDateString()}</Text>
+            <ActionButton
+              fg="#ff8aa0"
+              label="revoke"
+              onClick={() => {
+                revoke(link.token)
+              }}
+            />
+          </Box>
+        ))}
     </Box>
   )
 }
