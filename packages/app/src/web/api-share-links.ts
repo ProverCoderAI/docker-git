@@ -1,5 +1,5 @@
-import { Effect } from "effect"
 import * as Schema from "@effect/schema/Schema"
+import { Effect } from "effect"
 
 import { requestJson } from "./api-http.js"
 
@@ -50,7 +50,7 @@ export const createProjectShareLink = (
     "POST",
     `/projects/by-key/${encodeURIComponent(projectKey)}/share-links`,
     CreateShareLinkResponseSchema,
-    ttlMs !== undefined ? { ttlMs } : {}
+    ttlMs === undefined ? {} : { ttlMs }
   ).pipe(Effect.map(({ link, url }) => ({ link, url })))
 
 export const listProjectShareLinks = (

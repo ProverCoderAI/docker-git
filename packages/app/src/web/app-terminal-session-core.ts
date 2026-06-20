@@ -1,3 +1,5 @@
+import { Effect } from "effect"
+
 import type { ProjectTerminalSessionLookup } from "./api.js"
 import { type ActiveTerminalSession, buildProjectActiveTerminalSession } from "./terminal.js"
 
@@ -27,24 +29,23 @@ export const readTerminalSessionRoute = (pathname: string): string | null => {
 // COMPLEXITY: O(1)
 const isShareToken = (value: string): boolean => /^[0-9a-f]{16}$/u.test(value)
 
-const safeDecodeSegment = (value: string): string | null => {
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return null
-  }
+const safeDecodeSegment = (value: string): string | null =>
+  Effect.runSync(
+    Effect.try(() => decodeURIComponent(value)).pipe(
+      Effect.catchAll(() => Effect.succeed(null))
+    )
+  )
+
+const tryResolveShareLink = (pathname: string, t: string): WebAppRoute | null => {
+  const rawKey = pathname.slice("/ssh/".length).split("/", 1)[0] ?? ""
+  const projectKey = safeDecodeSegment(rawKey)?.trim() ?? ""
+  return projectKey.length > 0 && isShareToken(t) ? { tag: "ShareLink", projectKey, shareToken: t } : null
 }
 
-export const resolveWebAppRoute = (pathname: string, search: string = ""): WebAppRoute => {
-  if (pathname.startsWith("/ssh/")) {
-    const rawKey = pathname.slice("/ssh/".length).split("/")[0] ?? ""
-    const projectKey = safeDecodeSegment(rawKey)?.trim() ?? ""
-    const t = new URLSearchParams(search).get("t") ?? ""
-    if (projectKey.length > 0 && isShareToken(t)) {
-      return { tag: "ShareLink", projectKey, shareToken: t }
-    }
-  }
-  return { tag: "Dashboard" }
+export const resolveWebAppRoute = (pathname: string, search = ""): WebAppRoute => {
+  if (!pathname.startsWith("/ssh/")) return { tag: "Dashboard" }
+  const t = new URLSearchParams(search).get("t") ?? ""
+  return tryResolveShareLink(pathname, t) ?? { tag: "Dashboard" }
 }
 
 export const buildTerminalOnlyActiveSession = (

@@ -228,9 +228,12 @@ export const App = (): JSX.Element => {
     <AppFrame viewport={viewport}>
       {Match.value(route).pipe(
         Match.when({ tag: "Dashboard" }, () => <AppDashboard viewport={viewport} />),
-        Match.when({ tag: "ShareLink" }, ({ projectKey, shareToken }) => (
-          <AppShareLink projectKey={projectKey} shareToken={shareToken} viewport={viewport} />
-        )),
+        Match.when(
+          { tag: "ShareLink" },
+          ({ projectKey, shareToken }) => (
+            <AppShareLink projectKey={projectKey} shareToken={shareToken} viewport={viewport} />
+          )
+        ),
         Match.exhaustive
       )}
     </AppFrame>

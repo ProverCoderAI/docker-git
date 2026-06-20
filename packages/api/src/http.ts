@@ -1146,15 +1146,15 @@ export const makeRouter = () => {
           ?? resolvePortPublicHost(request)
           ?? "localhost"
         const sshCfHostname = getSshShareLinkTunnelHostname(link.token)
-        const sshAccess = buildShareLinkSshAccess(
-          project.containerName,
-          project.sshUser,
-          project.sshPort,
-          null,
-          project.targetDir,
+        const sshAccess = buildShareLinkSshAccess({
+          containerName: project.containerName,
+          sshUser: project.sshUser,
+          sshPort: project.sshPort,
+          sshKeyPath: null,
+          targetDir: project.targetDir,
           clientHost,
           sshCfHostname
-        )
+        })
         const shareLinkInfo = {
           token: link.token,
           projectKey: link.projectKey,
@@ -1194,15 +1194,15 @@ export const makeRouter = () => {
             Effect.orElse(() => Effect.succeed(null))
           )
         )
-        const sshAccess = buildShareLinkSshAccess(
-          project.containerName,
-          project.sshUser,
-          project.sshPort,
-          null,
-          project.targetDir,
+        const sshAccess = buildShareLinkSshAccess({
+          containerName: project.containerName,
+          sshUser: project.sshUser,
+          sshPort: project.sshPort,
+          sshKeyPath: null,
+          targetDir: project.targetDir,
           clientHost,
           sshCfHostname
-        )
+        })
         const shareLinkInfo = {
           token: link.token,
           projectKey: link.projectKey,
