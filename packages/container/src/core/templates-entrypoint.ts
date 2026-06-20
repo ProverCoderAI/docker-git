@@ -8,6 +8,7 @@ import {
   renderEntrypointHeader,
   renderEntrypointInputRc,
   renderEntrypointPackageCache,
+  renderEntrypointProjectRuntimeEnv,
   renderEntrypointSshd,
   renderEntrypointZshShell,
   renderEntrypointZshUserRc
@@ -39,6 +40,7 @@ import {
 export const renderEntrypoint = (config: TemplateConfig): string =>
   [
     renderEntrypointHeader(config),
+    renderEntrypointProjectRuntimeEnv(),
     renderEntrypointDnsRepair(),
     renderEntrypointPackageCache(config),
     renderEntrypointDockerGitBootstrap(config),

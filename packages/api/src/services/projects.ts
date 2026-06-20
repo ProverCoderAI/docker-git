@@ -414,6 +414,29 @@ const withManagedAuthorizedKeysForCreate = (
       }
     }
 
+const e2eProjectImageEnvKey = "DOCKER_GIT_E2E_PROJECT_IMAGE"
+
+const resolveE2eProjectImageName = (): string | undefined => {
+  const imageName = process.env[e2eProjectImageEnvKey]?.trim() ?? ""
+  return imageName.length === 0 ? undefined : imageName
+}
+
+const withE2eProjectImageForCreate = (
+  command: LibCreateCommand
+): LibCreateCommand => {
+  const imageName = resolveE2eProjectImageName()
+  return imageName === undefined
+    ? command
+    : {
+      ...command,
+      dockerComposeUpBuildMode: "reuse",
+      config: {
+        ...command.config,
+        imageName
+      }
+    }
+}
+
 export const seedAuthorizedKeysForCreate = (
   outDir: string,
   authorizedKeysContents: string | undefined
@@ -520,7 +543,9 @@ const prepareCreateProjectRequest = (
       resolveRequestedAuthorizedKeysContents(requestAuthorizedKeysContents, request.useManagedAuthorizedKeys === true)
     )
 
-    const command = withManagedAuthorizedKeysForCreate(parsedCommand, resolvedAuthorizedKeysContents)
+    const command = withE2eProjectImageForCreate(
+      withManagedAuthorizedKeysForCreate(parsedCommand, resolvedAuthorizedKeysContents)
+    )
 
     yield* _(seedAuthorizedKeysForCreate(command.outDir, resolvedAuthorizedKeysContents))
     yield* _(ensureGithubAuthForCreate(command.config))

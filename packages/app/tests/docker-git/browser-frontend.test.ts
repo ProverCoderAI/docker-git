@@ -159,6 +159,7 @@ describe("browser frontend command", () => {
         yield* _(
           Effect.sync(() => {
             restoreTty()
+            delete process.env["DOCKER_GIT_E2E_USE_PREBUILT_WEB"]
             delete process.env["DOCKER_GIT_WEB_PORT"]
             delete process.env["DOCKER_GIT_WEB_HOST"]
             delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
@@ -179,6 +180,28 @@ describe("browser frontend command", () => {
       expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
       expect(runCommandExitCodeMock).not.toHaveBeenCalled()
       expect(runCommandExitCodeStreamingMock).toHaveBeenCalledTimes(2)
+    }))
+
+  it.effect("uses a prebuilt web artifact when E2E requests it", () =>
+    Effect.gen(function*(_) {
+      process.env["DOCKER_GIT_E2E_USE_PREBUILT_WEB"] = "1"
+
+      yield* _(runBrowserCommandUnderTest)
+
+      expect(runCommandExitCodeMock).toHaveBeenCalledTimes(1)
+      expect(runCommandExitCodeMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ["-c", "test -f packages/app/dist-web/index.html"],
+          command: "sh"
+        })
+      )
+      expect(runCommandExitCodeStreamingMock).toHaveBeenCalledTimes(1)
+      expect(runCommandExitCodeStreamingMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ["run", "--cwd", "packages/app", "serve:web"],
+          command: "bun"
+        })
+      )
     }))
 
   it.effect("prefers the reachable host API URL over a selected Docker bridge URL for the web proxy", () =>

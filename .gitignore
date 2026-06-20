@@ -14,6 +14,9 @@ effect-template1/
 
 # Node / build artifacts
 node_modules/
+.cache/
+.eslintcache*
+packages/*/.eslintcache*
 dist/
 build/
 coverage/

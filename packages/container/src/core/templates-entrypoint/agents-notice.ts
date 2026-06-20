@@ -11,10 +11,10 @@ docker_git_decode_unicode_escapes() {
     printf "%s" "$value"
   fi
 }
-PROJECT_LINE="Рабочая папка проекта (git clone): __TARGET_DIR__"
-WORKSPACES_LINE="Доступные workspace пути: __TARGET_DIR__"
+PROJECT_LINE="Рабочая папка проекта (git clone): $TARGET_DIR"
+WORKSPACES_LINE="Доступные workspace пути: $TARGET_DIR"
 WORKSPACE_INFO_LINE="Контекст workspace: repository"
-FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: __TARGET_DIR__"
+FOCUS_LINE="Фокус задачи: работай только в workspace, который запрашивает пользователь. Текущий workspace: $TARGET_DIR"
 INTERNET_LINE="Доступ к интернету: есть. Если чего-то не знаешь — ищи в интернете или по кодовой базе."
 SUBAGENTS_LINE="Для решения задач обязательно используй subagents. Сам агент обязан выполнять финальную проверку, интеграцию и валидацию результата перед ответом пользователю."
 if [[ "$REPO_REF" == issue-* ]]; then
@@ -134,4 +134,3 @@ export const renderEntrypointAgentsNotice = (config: TemplateConfig): string =>
   entrypointAgentsNoticeTemplate
     .replaceAll("__CODEX_HOME__", () => config.codexHome)
     .replaceAll("__SSH_USER__", () => config.sshUser)
-    .replaceAll("__TARGET_DIR__", () => config.targetDir)

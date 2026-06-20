@@ -444,6 +444,41 @@ describe("projects service", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("applies the E2E prebuilt project image to generated compose files", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const projectId = path.join(projectsRoot, "test-owner", "prebuilt-image")
+
+        yield* _(
+          withEnvVar(
+            "DOCKER_GIT_E2E_PROJECT_IMAGE",
+            "docker-git-e2e-project:latest",
+            withProjectsRoot(
+              projectsRoot,
+              withWorkingDirectory(
+                root,
+                createProjectFromRequest({
+                  repoUrl: "https://git.example.test/test-owner/prebuilt-image.git",
+                  repoRef: "main",
+                  outDir: projectId,
+                  skipGithubAuth: true,
+                  up: false
+                })
+              )
+            )
+          )
+        )
+
+        const compose = yield* _(fs.readFileString(path.join(projectId, "docker-compose.yml")))
+        expect(compose).toContain("    image: 'docker-git-e2e-project:latest'\n")
+        expect(compose).toContain("    pull_policy: never\n")
+        expect(compose).not.toContain("    build: .\n")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("refreshes the state remote before listing projects", () =>
     withTempDir((root) =>
       Effect.gen(function*(_) {

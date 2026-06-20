@@ -63,6 +63,21 @@ docker_git_upsert_ssh_env() {
   chown 1000:1000 "$SSH_ENV_PATH" || true
 }`
 
+export const renderEntrypointProjectRuntimeEnv = (): string =>
+  String.raw`# Publish runtime project identity into login and SSH environments.
+DOCKER_GIT_PROJECT_PROFILE="/etc/profile.d/docker-git-project.sh"
+{
+  printf "export TARGET_DIR=%q\n" "$TARGET_DIR"
+  printf "export REPO_URL=%q\n" "$REPO_URL"
+  printf "export REPO_REF=%q\n" "$REPO_REF"
+  printf "export FORK_REPO_URL=%q\n" "$FORK_REPO_URL"
+} > "$DOCKER_GIT_PROJECT_PROFILE"
+chmod 0644 "$DOCKER_GIT_PROJECT_PROFILE"
+docker_git_upsert_ssh_env "TARGET_DIR" "$TARGET_DIR"
+docker_git_upsert_ssh_env "REPO_URL" "$REPO_URL"
+docker_git_upsert_ssh_env "REPO_REF" "$REPO_REF"
+docker_git_upsert_ssh_env "FORK_REPO_URL" "$FORK_REPO_URL"`
+
 export const renderEntrypointPackageCache = (config: TemplateConfig): string =>
   `# Keep package manager caches inside the project home volume
 PACKAGE_CACHE_ROOT="/home/${config.sshUser}/.docker-git/.cache/packages"

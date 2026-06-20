@@ -12,8 +12,7 @@ const escapeForDoubleQuotes = (value: string): string => {
 
 const entrypointCodexResumeHintTemplate = `# Ensure codex resume hint is shown for interactive shells
 CODEX_HINT_PATH="/etc/profile.d/zz-codex-resume.sh"
-if [[ ! -s "$CODEX_HINT_PATH" ]]; then
-  cat <<'EOF' > "$CODEX_HINT_PATH"
+cat <<'EOF' > "$CODEX_HINT_PATH"
 docker_git_workspace_context_line() {
   REPO_REF_VALUE="\${REPO_REF:-__REPO_REF_DEFAULT__}"
   REPO_URL_VALUE="\${REPO_URL:-__REPO_URL_DEFAULT__}"
@@ -83,8 +82,7 @@ if [ -n "$ZSH_VERSION" ]; then
   fi
 fi
 EOF
-  chmod 0644 "$CODEX_HINT_PATH"
-fi
+chmod 0644 "$CODEX_HINT_PATH"
 if ! grep -q "zz-codex-resume.sh" /etc/bash.bashrc 2>/dev/null; then
   printf "%s\\n" "if [ -f /etc/profile.d/zz-codex-resume.sh ]; then . /etc/profile.d/zz-codex-resume.sh; fi" >> /etc/bash.bashrc
 fi

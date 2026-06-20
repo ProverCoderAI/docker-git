@@ -87,7 +87,8 @@ const TemplateConfigInputSchema = Schema.Struct({
   }),
   bunVersion: Schema.optional(Schema.String),
   pnpmVersion: Schema.optional(Schema.String),
-  clonedOnHostname: Schema.optional(HostnameSchema)
+  clonedOnHostname: Schema.optional(HostnameSchema),
+  imageName: Schema.optional(Schema.String)
 })
 
 type DecodedProjectConfigInput = Schema.Schema.Type<typeof ProjectConfigInputSchema>

@@ -97,7 +97,7 @@ semantics (sub-params on these modes are vendor-specific extensions).
   registered, all suppressed modes consumed, all benign DEC private modes
   pass through, disposal closes every handler).
 - `bun run typecheck` — clean.
-- `vibecode-linter src/web/terminal-query-suppression.ts tests/docker-git/terminal-query-suppression.test.ts`
-  — 0 errors, 0 warnings, 0 duplicates.
+- `eslint src/web/terminal-query-suppression.ts tests/docker-git/terminal-query-suppression.test.ts`
+  — 0 errors, 0 warnings.
 - `eslint --config eslint.effect-ts-check.config.mjs ...` — clean on both
   files.

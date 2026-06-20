@@ -448,6 +448,28 @@ describe("renderEntrypoint clone cache", () => {
     expect(entrypoint).not.toContain("'+refs/merge-requests/*:refs/merge-requests/*'")
   })
 
+  it("rewrites the managed Codex resume hint at container startup", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expect(entrypoint).toContain('cat <<\'EOF\' > "$CODEX_HINT_PATH"')
+    expect(entrypoint).toContain('chmod 0644 "$CODEX_HINT_PATH"')
+    expect(entrypoint).not.toContain('if [[ ! -s "$CODEX_HINT_PATH" ]]; then')
+  })
+
+  it("publishes runtime project identity before Codex resume hints", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    const projectProfileIndex = entrypoint.indexOf('DOCKER_GIT_PROJECT_PROFILE="/etc/profile.d/docker-git-project.sh"')
+    const resumeHintIndex = entrypoint.indexOf('CODEX_HINT_PATH="/etc/profile.d/zz-codex-resume.sh"')
+
+    expect(projectProfileIndex).toBeGreaterThanOrEqual(0)
+    expect(resumeHintIndex).toBeGreaterThan(projectProfileIndex)
+    expect(entrypoint).toContain('printf "export REPO_REF=%q\\n" "$REPO_REF"')
+    expect(entrypoint).toContain('printf "export REPO_URL=%q\\n" "$REPO_URL"')
+    expect(entrypoint).toContain('docker_git_upsert_ssh_env "REPO_REF" "$REPO_REF"')
+    expect(entrypoint).toContain('docker_git_upsert_ssh_env "REPO_URL" "$REPO_URL"')
+  })
+
   it("preserves branch/tag-only clone-cache refspecs for generated configs", () => {
     fc.assert(
       fc.property(generatedTemplateConfigArbitrary, (config) => {
@@ -944,6 +966,8 @@ describe("renderDockerCompose", () => {
     const compose = renderDockerCompose(makeTemplateConfig())
 
     expect(compose).toContain("name: dg-test")
+    expect(compose).toContain("    build: .\n")
+    expect(compose).not.toContain("    pull_policy: never\n")
     expect(compose).toContain("container_name: dg-test")
     expect(compose).toContain("    env_file:\n      - '/workspace/.orch/env/global.env'\n      - '/workspace/.orch/env/project.env'\n")
     expect(compose).not.toContain("restart:")
@@ -955,6 +979,18 @@ describe("renderDockerCompose", () => {
     expect(compose).not.toContain("dg-test-browser")
     expect(compose).not.toContain("/var/run/docker.sock:/var/run/docker.sock")
     expect((compose.match(/\n    dns:\n/g) ?? []).length).toBe(1)
+  })
+
+  it("renders an explicit prebuilt image without a build section", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        imageName: "docker-git-e2e-project:latest"
+      })
+    )
+
+    expect(compose).toContain("    image: 'docker-git-e2e-project:latest'\n")
+    expect(compose).toContain("    pull_policy: never\n")
+    expect(compose).not.toContain("    build: .\n")
   })
 
   it("quotes env_file paths so Windows paths and spaces remain YAML scalars", () => {

@@ -488,4 +488,41 @@ describe("runDockerComposeUpWithPortCheck", () => {
         expect(recorded.some((entry) => isDockerComposeUpWithBuild(entry))).toBe(false)
       })
     ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("does not rebuild when prebuilt-image reuse compose up fails", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const outDir = path.join(root, "project")
+        const targetDir = "/home/dev/workspaces/org/repo"
+        const globalConfig = makeTemplateConfig(root, outDir, path, targetDir)
+        const projectConfig: TemplateConfig = {
+          ...makeTemplateConfig(root, outDir, path, targetDir),
+          imageName: "docker-git-e2e-project:latest"
+        }
+        const recorded: Array<RecordedCommand> = []
+        const executor = makeFakeExecutor(recorded, { failGpuComposeUp: true })
+
+        yield* _(
+          prepareProjectFiles(outDir, root, globalConfig, projectConfig, {
+            force: false,
+            forceEnv: false
+          })
+        )
+
+        const result = yield* _(
+          runDockerComposeUpWithPortCheck(outDir, {
+            buildMode: "reuse",
+            waitForPostStart: false
+          }).pipe(
+            Effect.provideService(CommandExecutor.CommandExecutor, executor),
+            Effect.either
+          )
+        )
+
+        expect(result._tag).toBe("Left")
+        expect(recorded.filter((entry) => isDockerComposeUpReuse(entry)).length).toBe(1)
+        expect(recorded.some((entry) => isDockerComposeUpWithBuild(entry))).toBe(false)
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
 })

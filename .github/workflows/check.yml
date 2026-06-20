@@ -54,109 +54,247 @@ jobs:
       - name: Dist deps prune (lint)
         run: bun run check:dist-deps-prune
 
-  types:
-    name: Types
+  plan-checks:
+    name: Plan affected checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      typecheck_matrix: ${{ steps.plan.outputs.typecheck_matrix }}
+      typecheck_has_work: ${{ steps.plan.outputs.typecheck_has_work }}
+      lint_matrix: ${{ steps.plan.outputs.lint_matrix }}
+      lint_has_work: ${{ steps.plan.outputs.lint_has_work }}
+      test_matrix: ${{ steps.plan.outputs.test_matrix }}
+      test_has_work: ${{ steps.plan.outputs.test_has_work }}
+      lint_effect_matrix: ${{ steps.plan.outputs.lint_effect_matrix }}
+      lint_effect_has_work: ${{ steps.plan.outputs.lint_effect_has_work }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Compute affected module matrices
+        id: plan
+        shell: bash
+        env:
+          DOCKER_GIT_CHANGED_BASE: ${{ github.event.pull_request.base.sha }}
+          DOCKER_GIT_CHANGED_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          write_plan() {
+            local key="$1"
+            local operation="$2"
+            local matrix
+            matrix="$(node scripts/changed-checks.mjs "$operation" --matrix)"
+            echo "${key}_matrix=${matrix}" >> "$GITHUB_OUTPUT"
+            if [[ "$matrix" == '{"include":[]}' ]]; then
+              echo "${key}_has_work=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "${key}_has_work=true" >> "$GITHUB_OUTPUT"
+            fi
+          }
+
+          write_plan typecheck typecheck
+          write_plan lint lint
+          write_plan test test
+          write_plan lint_effect lint:effect
+
+  types-modules:
+    name: Types (${{ matrix.label }})
+    needs: plan-checks
+    if: needs.plan-checks.outputs.typecheck_has_work == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan-checks.outputs.typecheck_matrix) }}
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
-      - name: Typecheck (container)
-        run: bun run --cwd packages/container typecheck
-      - name: Typecheck (terminal)
-        run: bun run --cwd packages/terminal typecheck
-      - name: Typecheck (app)
-        run: bun run --cwd packages/app check
-      - name: Typecheck (session sync)
+      - name: Typecheck module
+        run: bun run --filter "${{ matrix.packageName }}" "${{ matrix.script }}"
+
+  types:
+    name: Types
+    needs: [plan-checks, types-modules]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check typecheck module results
+        env:
+          MODULE_RESULT: ${{ needs.types-modules.result }}
         run: |
-          if [ -f packages/docker-git-session-sync/package.json ]; then
-            bun run --cwd packages/docker-git-session-sync typecheck
-          else
-            echo "packages/docker-git-session-sync is not present; skipping"
+          if [[ "$MODULE_RESULT" == "failure" || "$MODULE_RESULT" == "cancelled" ]]; then
+            echo "Typecheck module job result: $MODULE_RESULT" >&2
+            exit 1
           fi
-      - name: Typecheck (lib)
-        run: bun run --cwd packages/lib typecheck
-      - name: Typecheck (api)
-        run: bun run --cwd packages/api typecheck
+          echo "Typecheck module job result: $MODULE_RESULT"
+
+  lint-modules:
+    name: Lint (${{ matrix.label }})
+    needs: plan-checks
+    if: needs.plan-checks.outputs.lint_has_work == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan-checks.outputs.lint_matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Lint module
+        run: bun run --filter "${{ matrix.packageName }}" "${{ matrix.script }}"
 
   lint:
     name: Lint
+    needs: [plan-checks, lint-modules]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check lint module results
+        env:
+          MODULE_RESULT: ${{ needs.lint-modules.result }}
+        run: |
+          if [[ "$MODULE_RESULT" == "failure" || "$MODULE_RESULT" == "cancelled" ]]; then
+            echo "Lint module job result: $MODULE_RESULT" >&2
+            exit 1
+          fi
+          echo "Lint module job result: $MODULE_RESULT"
+
+  test-modules:
+    name: Test (${{ matrix.label }})
+    needs: plan-checks
+    if: needs.plan-checks.outputs.test_has_work == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan-checks.outputs.test_matrix) }}
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
-      - name: Lint (container)
-        run: bun run --cwd packages/container lint
-      - name: Lint (terminal)
-        run: bun run --cwd packages/terminal lint
-      - name: Lint (app)
-        run: bun run --cwd packages/app lint
-      - name: Lint (session sync)
-        run: |
-          if [ -f packages/docker-git-session-sync/package.json ] && \
-            bun -e "const pkg=JSON.parse(await Bun.file('packages/docker-git-session-sync/package.json').text()); process.exit(pkg.scripts?.lint ? 0 : 1)"; then
-            bun run --cwd packages/docker-git-session-sync lint
-          else
-            echo "packages/docker-git-session-sync lint script is not present; skipping"
-          fi
-      - name: Lint (lib)
-        run: bun run --cwd packages/lib lint
-      - name: Lint (api)
-        run: bun run --cwd packages/api lint
+      - name: Test module
+        run: bun run --filter "${{ matrix.packageName }}" "${{ matrix.script }}"
 
   test:
     name: Test
+    needs: [plan-checks, test-modules]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check test module results
+        env:
+          MODULE_RESULT: ${{ needs.test-modules.result }}
+        run: |
+          if [[ "$MODULE_RESULT" == "failure" || "$MODULE_RESULT" == "cancelled" ]]; then
+            echo "Test module job result: $MODULE_RESULT" >&2
+            exit 1
+          fi
+          echo "Test module job result: $MODULE_RESULT"
+
+  lint-effect-modules:
+    name: Lint Effect-TS (${{ matrix.label }})
+    needs: plan-checks
+    if: needs.plan-checks.outputs.lint_effect_has_work == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan-checks.outputs.lint_effect_matrix) }}
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
         uses: ./.github/actions/setup
-      - name: Test (container)
-        run: bun run --cwd packages/container test
-      - name: Test (terminal)
-        run: bun run --cwd packages/terminal test
-      - name: Test (app)
-        run: bun run --cwd packages/app test
-      - name: Test (session sync)
-        run: |
-          if [ -f packages/docker-git-session-sync/package.json ]; then
-            bun run --cwd packages/docker-git-session-sync test
-          else
-            echo "packages/docker-git-session-sync is not present; skipping"
-          fi
-      - name: Test (lib)
-        run: bun run --cwd packages/lib test
-      - name: Test (api)
-        run: bun run --cwd packages/api test
+      - name: Lint Effect-TS module
+        run: bun run --filter "${{ matrix.packageName }}" "${{ matrix.script }}"
 
   lint-effect:
     name: Lint Effect-TS
+    needs: [plan-checks, lint-effect-modules]
+    if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+    steps:
+      - name: Check Effect-TS lint module results
+        env:
+          MODULE_RESULT: ${{ needs.lint-effect-modules.result }}
+        run: |
+          if [[ "$MODULE_RESULT" == "failure" || "$MODULE_RESULT" == "cancelled" ]]; then
+            echo "Effect-TS lint module job result: $MODULE_RESULT" >&2
+            exit 1
+          fi
+          echo "Effect-TS lint module job result: $MODULE_RESULT"
+
+  e2e-prepare:
+    name: E2E prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
+      DOCKER_GIT_E2E_PROJECT_IMAGE: docker-git-e2e-project:latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
-      - name: Lint Effect-TS (container)
-        run: bun run --cwd packages/container lint:effect
-      - name: Lint Effect-TS (terminal)
-        run: bun run --cwd packages/terminal lint:effect
-      - name: Lint Effect-TS (app)
-        run: bun run --cwd packages/app lint:effect
-      - name: Lint Effect-TS (session sync)
+      - name: Build E2E prebuilt payload
         run: |
-          if [ -f packages/docker-git-session-sync/package.json ] && \
-            bun -e "const pkg=JSON.parse(await Bun.file('packages/docker-git-session-sync/package.json').text()); process.exit(pkg.scripts?.['lint:effect'] ? 0 : 1)"; then
-            bun run --cwd packages/docker-git-session-sync lint:effect
-          else
-            echo "packages/docker-git-session-sync lint:effect script is not present; skipping"
-          fi
-      - name: Lint Effect-TS (lib)
-        run: bun run --cwd packages/lib lint:effect
+          bun run --cwd packages/app build:docker-git:reuse-install
+          bun run --cwd packages/app build:web
+      - name: Free Docker disk
+        uses: ./.github/actions/free-docker-disk
+      - name: Build E2E project image
+        run: |
+          set -euo pipefail
+
+          bun run --cwd packages/lib build
+          bun scripts/ci/build-e2e-project-image.ts "$DOCKER_GIT_E2E_PROJECT_IMAGE"
+
+          mkdir -p artifacts
+          docker save "$DOCKER_GIT_E2E_PROJECT_IMAGE" | gzip -1 > artifacts/docker-git-e2e-project-image.tar.gz
+          ls -lh artifacts/docker-git-e2e-project-image.tar.gz
+      - name: Build E2E controller image
+        run: |
+          set -euo pipefail
+
+          DOCKER_GIT_CONTROLLER_REV="$(bun --cwd packages/app scripts/print-controller-revision.ts "$PWD/docker-compose.yml")"
+          export DOCKER_GIT_CONTROLLER_REV
+
+          echo "Building docker-git controller image revision: ${DOCKER_GIT_CONTROLLER_REV}"
+          docker compose --project-name docker-git -f docker-compose.yml build api
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
+
+          mkdir -p artifacts
+          docker save docker-git-api | gzip -1 > artifacts/docker-git-e2e-controller-image.tar.gz
+          ls -lh artifacts/docker-git-e2e-controller-image.tar.gz
+      - name: Pack E2E prebuilt artifact
+        run: |
+          mkdir -p artifacts
+          bun scripts/ci/pack-e2e-prebuilt.mjs artifacts/docker-git-e2e-prebuilt.tgz
+      - name: Upload E2E prebuilt artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts/docker-git-e2e-prebuilt.tgz
+      - name: Upload E2E controller image artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts/docker-git-e2e-controller-image.tar.gz
+          compression-level: 0
+      - name: Upload E2E project image artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-git-e2e-project-image
+          path: artifacts/docker-git-e2e-project-image.tar.gz
+          compression-level: 0
 
   e2e-local-package:
     name: E2E (Local package CLI)
@@ -171,19 +309,49 @@ jobs:
 
   e2e-browser-command:
     name: E2E (Browser command)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
+      DOCKER_GIT_E2E_PROJECT_IMAGE: docker-git-e2e-project:latest
+      DOCKER_GIT_E2E_USE_PREBUILT_WEB: "1"
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
+      - name: Download E2E project image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-project-image
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E Docker images
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
+          gzip -dc artifacts/docker-git-e2e-project-image.tar.gz | docker load
+          docker image inspect "$DOCKER_GIT_E2E_PROJECT_IMAGE" \
+            -f 'project image={{.Id}}'
       - name: Docker info
         run: docker version && docker compose version
       - name: Browser command startup
@@ -191,19 +359,48 @@ jobs:
 
   e2e-opencode:
     name: E2E (OpenCode)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
+      DOCKER_GIT_E2E_PROJECT_IMAGE: docker-git-e2e-project:latest
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
+      - name: Download E2E project image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-project-image
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E Docker images
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
+          gzip -dc artifacts/docker-git-e2e-project-image.tar.gz | docker load
+          docker image inspect "$DOCKER_GIT_E2E_PROJECT_IMAGE" \
+            -f 'project image={{.Id}}'
       - name: Docker info
         run: docker version && docker compose version
       - name: OpenCode autoconnect
@@ -211,19 +408,48 @@ jobs:
 
   e2e-clone-cache:
     name: E2E (Clone cache)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
+      DOCKER_GIT_E2E_PROJECT_IMAGE: docker-git-e2e-project:latest
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
+      - name: Download E2E project image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-project-image
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E Docker images
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
+          gzip -dc artifacts/docker-git-e2e-project-image.tar.gz | docker load
+          docker image inspect "$DOCKER_GIT_E2E_PROJECT_IMAGE" \
+            -f 'project image={{.Id}}'
       - name: Docker info
         run: docker version && docker compose version
       - name: Clone cache reuse
@@ -231,19 +457,48 @@ jobs:
 
   e2e-login-context:
     name: E2E (Login context)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
+      DOCKER_GIT_E2E_PROJECT_IMAGE: docker-git-e2e-project:latest
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
+      - name: Download E2E project image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-project-image
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E Docker images
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
+          gzip -dc artifacts/docker-git-e2e-project-image.tar.gz | docker load
+          docker image inspect "$DOCKER_GIT_E2E_PROJECT_IMAGE" \
+            -f 'project image={{.Id}}'
       - name: Docker info
         run: docker version && docker compose version
       - name: Login context notice
@@ -251,19 +506,48 @@ jobs:
 
   e2e-runtime-volumes-ssh:
     name: E2E (Runtime volumes + SSH)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
+      DOCKER_GIT_E2E_PROJECT_IMAGE: docker-git-e2e-project:latest
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
+      - name: Download E2E project image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-project-image
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E Docker images
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
+          gzip -dc artifacts/docker-git-e2e-project-image.tar.gz | docker load
+          docker image inspect "$DOCKER_GIT_E2E_PROJECT_IMAGE" \
+            -f 'project image={{.Id}}'
       - name: Docker info
         run: docker version && docker compose version
       - name: Runtime volumes + host SSH CLI
@@ -271,19 +555,48 @@ jobs:
 
   e2e-clone-auto-open-ssh:
     name: E2E (Clone auto-open SSH)
+    needs: e2e-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
-      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+      DOCKER_GIT_E2E_USE_PREBUILT_CLI: "1"
+      DOCKER_GIT_E2E_PROJECT_IMAGE: docker-git-e2e-project:latest
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+      - name: Download E2E prebuilt artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-prebuilt
+          path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
+      - name: Download E2E project image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-project-image
+          path: artifacts
+      - name: Restore E2E prebuilt artifact
+        run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E Docker images
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
+          gzip -dc artifacts/docker-git-e2e-project-image.tar.gz | docker load
+          docker image inspect "$DOCKER_GIT_E2E_PROJECT_IMAGE" \
+            -f 'project image={{.Id}}'
       - name: Docker info
         run: docker version && docker compose version
       - name: Clone auto-open SSH

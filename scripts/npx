@@ -2,7 +2,7 @@
 set -eu
 
 # CHANGE: provide a minimal npx shim for Bun-managed workspaces
-# WHY: some tools (e.g. vibecode-linter) call `npx tsc` and should resolve the local workspace binary through Bun instead of downloading a similarly named package
+# WHY: workspace tools that call `npx tsc` should resolve the local workspace binary through Bun instead of downloading a similarly named package
 # QUOTE(ТЗ): n/a
 # REF: issue-27 (CI/test harness)
 # SOURCE: n/a

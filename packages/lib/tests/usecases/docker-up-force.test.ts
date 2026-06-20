@@ -40,6 +40,11 @@ const isUp = (command: RecordedCommand): boolean =>
   command.command === "docker" &&
   includesArgsInOrder(command.args, ["compose", "up", "-d", "--build"])
 
+const isReuseUp = (command: RecordedCommand): boolean =>
+  command.command === "docker" &&
+  includesArgsInOrder(command.args, ["compose", "up", "-d"]) &&
+  !command.args.includes("--build")
+
 const isRmContainer = (name: string) => (command: RecordedCommand): boolean =>
   command.command === "docker" && includesArgsInOrder(command.args, ["rm", "-f", name])
 
@@ -88,43 +93,45 @@ const makeFakeExecutor = (recorded: Array<RecordedCommand>): CommandExecutor.Com
   return CommandExecutor.makeExecutor(start)
 }
 
+const makeConfig = (resolvedOutDir: string): CreateCommand["config"] => ({
+  containerName: "dg-force-test",
+  serviceName: "dg-force-test",
+  sshUser: "dev",
+  sshPort: 2237,
+  repoUrl: "https://github.com/org/repo.git",
+  repoRef: "main",
+  skipGithubAuth: false,
+  targetDir: "/home/dev/workspaces/org/repo",
+  volumeName: "dg-force-test-home",
+  dockerGitPath: `${resolvedOutDir}/.docker-git`,
+  authorizedKeysPath: "/tmp/authorized_keys",
+  envGlobalPath: `${resolvedOutDir}/.orch/env/global.env`,
+  envProjectPath: `${resolvedOutDir}/docker-git.env`,
+  codexAuthPath: `${resolvedOutDir}/.orch/auth/codex`,
+  codexSharedAuthPath: `${resolvedOutDir}/.orch/auth/codex-shared`,
+  codexHome: "/home/dev/.codex",
+  geminiAuthPath: `${resolvedOutDir}/.orch/auth/gemini`,
+  geminiHome: "/home/dev/.gemini",
+  dockerNetworkMode: "project",
+  dockerSharedNetworkName: "docker-git-shared",
+  enableMcpPlaywright: true,
+  gpu: "none",
+  bunVersion: "1.3.11",
+  agentMode: undefined,
+  agentAuto: false,
+  clonedOnHostname: undefined,
+  forkRepoUrl: undefined,
+  gitTokenLabel: undefined,
+  codexAuthLabel: undefined,
+  claudeAuthLabel: undefined
+})
+
 describe("runDockerUpIfNeeded with force", () => {
   it.effect("wipes compose orphans, removes container, then recreates", () =>
     Effect.gen(function*(_) {
       const commands: Array<RecordedCommand> = []
       const resolvedOutDir = "/tmp/docker-git-force-up"
-      const config: CreateCommand["config"] = {
-        containerName: "dg-force-test",
-        serviceName: "dg-force-test",
-        sshUser: "dev",
-        sshPort: 2237,
-        repoUrl: "https://github.com/org/repo.git",
-        repoRef: "main",
-        skipGithubAuth: false,
-        targetDir: "/home/dev/workspaces/org/repo",
-        volumeName: "dg-force-test-home",
-        dockerGitPath: `${resolvedOutDir}/.docker-git`,
-        authorizedKeysPath: "/tmp/authorized_keys",
-        envGlobalPath: `${resolvedOutDir}/.orch/env/global.env`,
-        envProjectPath: `${resolvedOutDir}/docker-git.env`,
-        codexAuthPath: `${resolvedOutDir}/.orch/auth/codex`,
-        codexSharedAuthPath: `${resolvedOutDir}/.orch/auth/codex-shared`,
-        codexHome: "/home/dev/.codex",
-        geminiAuthPath: `${resolvedOutDir}/.orch/auth/gemini`,
-        geminiHome: "/home/dev/.gemini",
-        dockerNetworkMode: "project",
-        dockerSharedNetworkName: "docker-git-shared",
-        enableMcpPlaywright: true,
-        gpu: "none",
-        bunVersion: "1.3.11",
-        agentMode: undefined,
-        agentAuto: false,
-        clonedOnHostname: undefined,
-        forkRepoUrl: undefined,
-        gitTokenLabel: undefined,
-        codexAuthLabel: undefined,
-        claudeAuthLabel: undefined
-      }
+      const config = makeConfig(resolvedOutDir)
 
       const recordedExecutor = makeFakeExecutor(commands)
       const result = yield* _(
@@ -151,6 +158,38 @@ describe("runDockerUpIfNeeded with force", () => {
       expect(rmMainIndex).toBeGreaterThan(downIndex)
       expect(rmBrowserIndex).toBeGreaterThan(rmMainIndex)
       expect(upIndex).toBeGreaterThan(rmBrowserIndex)
+    })
+  )
+
+  it.effect("uses compose reuse mode after force cleanup when requested", () =>
+    Effect.gen(function*(_) {
+      const commands: Array<RecordedCommand> = []
+      const resolvedOutDir = "/tmp/docker-git-force-up-reuse"
+      const config = makeConfig(resolvedOutDir)
+
+      const recordedExecutor = makeFakeExecutor(commands)
+      yield* _(
+        runDockerUpIfNeeded(resolvedOutDir, config, {
+          runUp: true,
+          waitForClone: false,
+          waitForAgent: false,
+          force: true,
+          forceEnv: false,
+          buildMode: "reuse"
+        }).pipe(
+          Effect.provideService(CommandExecutor.CommandExecutor, recordedExecutor),
+          Effect.provide(NodeContext.layer)
+        )
+      )
+
+      const downIndex = commands.findIndex(isDownWithRemoveOrphans)
+      const rmBrowserIndex = commands.findIndex(isRmContainer("dg-force-test-browser"))
+      const upIndex = commands.findIndex(isReuseUp)
+
+      expect(downIndex).toBeGreaterThanOrEqual(0)
+      expect(rmBrowserIndex).toBeGreaterThan(downIndex)
+      expect(upIndex).toBeGreaterThan(rmBrowserIndex)
+      expect(commands.some(isUp)).toBe(false)
     })
   )
 })
