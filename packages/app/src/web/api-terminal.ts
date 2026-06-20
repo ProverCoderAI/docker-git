@@ -1,128 +1,118 @@
 import { Effect } from "effect"
 
-import {
-  AuthTerminalSessionResponseSchema,
-  ProjectTerminalSessionResponseSchema,
-  ProjectTerminalSessionsResponseSchema,
-  StartProjectTerminalSessionAcceptedResponseSchema,
-  TerminalSessionLookupResponseSchema,
-  TerminalSessionResponseSchema
-} from "./api-schema.js"
-import { openApiJsonSchema, openApiVoid } from "./openapi-client.js"
+import { dockerGitOpenApi, renderDockerGitOpenApiFailure } from "./api-http.js"
+import { normalizeProjectDetails, normalizeTerminalSession } from "./api-normalize.js"
 
 export const createProjectTerminalSession = (projectKey: string) =>
-  openApiJsonSchema(
-    TerminalSessionResponseSchema,
-    (client) =>
-      client.POST("/projects/by-key/{projectKey}/terminal-sessions", {
-        params: { path: { projectKey } }
-      })
-  ).pipe(
-    Effect.map((response) => ({
-      project: response.project,
-      session: response.session
-    }))
+  dockerGitOpenApi.POST("/projects/by-key/{projectKey}/terminal-sessions", {
+    params: { path: { projectKey } }
+  }).pipe(
+    Effect.map(({ body }) => ({
+      project: normalizeProjectDetails(body.project),
+      session: normalizeTerminalSession(body.session)
+    })),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const startProjectTerminalSession = (
   projectKey: string,
   requestId: string
 ) =>
-  openApiJsonSchema(
-    StartProjectTerminalSessionAcceptedResponseSchema,
-    (client) =>
-      client.POST("/projects/by-key/{projectKey}/terminal-sessions/start", {
-        body: { requestId },
-        params: { path: { projectKey } }
-      })
+  dockerGitOpenApi.POST("/projects/by-key/{projectKey}/terminal-sessions/start", {
+    body: { requestId },
+    params: { path: { projectKey } }
+  }).pipe(
+    Effect.map(({ body }) => body),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const createAuthTerminalSession = (
   flow: "ClaudeOauth" | "GeminiOauth" | "GrokOauth",
   label: string | null
 ) =>
-  openApiJsonSchema(AuthTerminalSessionResponseSchema, (client) =>
-    client.POST("/auth/terminal-sessions", {
-      body: { flow, label }
-    })).pipe(
-      Effect.map((response) => response.session)
-    )
+  dockerGitOpenApi.POST("/auth/terminal-sessions", {
+    body: { flow, label }
+  }).pipe(
+    Effect.map(({ body }) => normalizeTerminalSession(body.session)),
+    Effect.mapError(renderDockerGitOpenApiFailure)
+  )
 
 export const deleteProjectTerminalSession = (
   projectKey: string,
   sessionId: string
 ) =>
-  openApiVoid((client) =>
-    client.DELETE("/projects/by-key/{projectKey}/terminal-sessions/{sessionId}", {
-      params: { path: { projectKey, sessionId } }
-    })
+  dockerGitOpenApi.DELETE("/projects/by-key/{projectKey}/terminal-sessions/{sessionId}", {
+    params: { path: { projectKey, sessionId } }
+  }).pipe(
+    Effect.asVoid,
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const deleteAuthTerminalSession = (sessionId: string) =>
-  openApiVoid((client) =>
-    client.DELETE("/auth/terminal-sessions/{sessionId}", {
-      params: { path: { sessionId } }
-    })
+  dockerGitOpenApi.DELETE("/auth/terminal-sessions/{sessionId}", {
+    params: { path: { sessionId } }
+  }).pipe(
+    Effect.asVoid,
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 // WHY: panel UI needs only the sessions array for list rendering.
 // INVARIANT: this helper intentionally projects the full terminal workspace response to sessions.
 export const loadProjectTerminalSessions = (projectKey: string) =>
-  openApiJsonSchema(
-    ProjectTerminalSessionsResponseSchema,
-    (client) =>
-      client.GET("/projects/by-key/{projectKey}/terminal-sessions", {
-        params: { path: { projectKey } }
-      })
-  ).pipe(
-    Effect.map((response) => response.sessions)
+  dockerGitOpenApi.GET("/projects/by-key/{projectKey}/terminal-sessions", {
+    params: { path: { projectKey } }
+  }).pipe(
+    Effect.map(({ body }) => body.sessions.map((session) => normalizeTerminalSession(session))),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 // WHY: SSH-link initialization needs the full terminal workspace, including activeSessionId.
 // INVARIANT: this helper intentionally preserves the complete response shape.
 export const loadProjectTerminalWorkspace = (projectKey: string) =>
-  openApiJsonSchema(
-    ProjectTerminalSessionsResponseSchema,
-    (client) =>
-      client.GET("/projects/by-key/{projectKey}/terminal-sessions", {
-        params: { path: { projectKey } }
-      })
+  dockerGitOpenApi.GET("/projects/by-key/{projectKey}/terminal-sessions", {
+    params: { path: { projectKey } }
+  }).pipe(
+    Effect.map(({ body }) => ({
+      activeSessionId: body.activeSessionId,
+      sessions: body.sessions.map((session) => normalizeTerminalSession(session))
+    })),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const setProjectActiveTerminalSession = (
   projectKey: string,
   sessionId: string
 ) =>
-  openApiJsonSchema(
-    ProjectTerminalSessionResponseSchema,
-    (client) =>
-      client.PUT("/projects/by-key/{projectKey}/terminal-sessions/active", {
-        body: { sessionId },
-        params: { path: { projectKey } }
-      })
-  ).pipe(
-    Effect.map((response) => response.session)
+  dockerGitOpenApi.PUT("/projects/by-key/{projectKey}/terminal-sessions/active", {
+    body: { sessionId },
+    params: { path: { projectKey } }
+  }).pipe(
+    Effect.map(({ body }) => normalizeTerminalSession(body.session)),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const loadProjectTerminalSession = (
   projectKey: string,
   sessionId: string
 ) =>
-  openApiJsonSchema(
-    ProjectTerminalSessionResponseSchema,
-    (client) =>
-      client.GET("/projects/by-key/{projectKey}/terminal-sessions/{sessionId}", {
-        params: { path: { projectKey, sessionId } }
-      })
-  ).pipe(
-    Effect.map((response) => response.session)
+  dockerGitOpenApi.GET("/projects/by-key/{projectKey}/terminal-sessions/{sessionId}", {
+    params: { path: { projectKey, sessionId } }
+  }).pipe(
+    Effect.map(({ body }) => normalizeTerminalSession(body.session)),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const loadTerminalSessionById = (sessionId: string) =>
-  openApiJsonSchema(TerminalSessionLookupResponseSchema, (client) =>
-    client.GET("/terminal-sessions/{sessionId}", {
-      params: { path: { sessionId } }
-    }))
+  dockerGitOpenApi.GET("/terminal-sessions/{sessionId}", {
+    params: { path: { sessionId } }
+  }).pipe(
+    Effect.map(({ body }) => ({
+      projectDisplayName: body.projectDisplayName,
+      projectKey: body.projectKey,
+      session: normalizeTerminalSession(body.session)
+    })),
+    Effect.mapError(renderDockerGitOpenApiFailure)
+  )
 
 const invalidTerminalClosePath = (path: string): string => `Invalid terminal close path: ${path}`
 

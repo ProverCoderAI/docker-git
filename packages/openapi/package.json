@@ -27,9 +27,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@effect/schema": "^0.75.5",
-    "effect": "^3.21.3",
-    "openapi-fetch": "^0.17.0"
+    "@prover-coder-ai/openapi-effect": "^1.0.27"
   },
   "devDependencies": {
     "openapi-typescript": "^7.13.0",

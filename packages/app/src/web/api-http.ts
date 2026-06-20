@@ -2,7 +2,9 @@ import { FetchHttpClient, HttpBody, HttpClient } from "@effect/platform"
 import * as ParseResult from "@effect/schema/ParseResult"
 import * as Schema from "@effect/schema/Schema"
 import * as TreeFormatter from "@effect/schema/TreeFormatter"
-import { Effect, Either } from "effect"
+import { createClient } from "@prover-coder-ai/docker-git-openapi"
+import type { BoundaryError } from "@prover-coder-ai/docker-git-openapi"
+import { Effect, Either, Match } from "effect"
 
 import { type JsonRequest, parseResponseBody, renderJsonPayload } from "../docker-git/api-json.js"
 import { readHttpResponseTextStream } from "../shared/http-response-stream.js"
@@ -17,6 +19,17 @@ type TextStreamRequest = {
   readonly onChunk: (chunk: string) => void
   readonly path: string
 }
+
+type RenderableOpenApiBody = boolean | number | object | string | null | undefined
+
+type RenderableOpenApiHttpError = {
+  readonly _tag: "HttpError"
+  readonly body: RenderableOpenApiBody
+  readonly contentType: string
+  readonly status: number | string
+}
+
+export type RenderableOpenApiFailure = RenderableOpenApiHttpError | BoundaryError
 
 const noCacheHeaders: Readonly<Record<string, string>> = {
   "cache-control": "no-cache, no-store, max-age=0",
@@ -83,6 +96,72 @@ export const resolveApiBaseUrl = (): string => {
     ? defaultApiBaseUrl
     : trimTrailingSlash(configured.trim())
 }
+
+const renderOpenApiBody = (body: RenderableOpenApiBody): string => {
+  if (body === undefined) {
+    return "empty response"
+  }
+  if (typeof body === "string") {
+    return body
+  }
+  return JSON.stringify(body, null, 2)
+}
+
+// CHANGE: Convert direct openapi-effect failures to legacy UI string errors at the web boundary.
+// WHY: app API functions still expose `Effect<_, string>` while transport typing is owned by openapi-effect.
+// QUOTE(ТЗ): "client сам возвращает нужную схему рабочую"
+// REF: user-openapi-effect-direct-client
+// SOURCE: n/a
+// FORMAT THEOREM: forall failure f: render(f) is total and does not alter success values.
+// PURITY: SHELL
+// EFFECT: none
+// INVARIANT: only the error channel is collapsed to string for existing UI callers.
+// COMPLEXITY: O(n)/O(n), where n is rendered body size.
+/**
+ * Renders typed openapi-effect failures for existing UI string error channels.
+ *
+ * @param failure - Typed OpenAPI transport or HTTP failure.
+ * @returns User-facing diagnostic string.
+ *
+ * @pure true - deterministic formatting of immutable failure data.
+ * @effect none.
+ * @invariant success values are never inspected or changed; only failure values are rendered.
+ * @precondition failure was produced by the docker-git OpenAPI client.
+ * @postcondition return value is non-throwing and suitable for legacy `Effect<_, string>` callers.
+ * @complexity O(n)/O(n), where n is rendered response body size.
+ * @throws Never.
+ */
+export const renderDockerGitOpenApiFailure = (failure: RenderableOpenApiFailure): string =>
+  Match.value(failure).pipe(
+    Match.when({ _tag: "HttpError" }, (error) =>
+      String(error.status) === "429"
+        ? "HTTP 429: tunnel or proxy rate limited the request. Retry or request a fresh tunnel URL."
+        : renderOpenApiBody(error.body)),
+    Match.when({ _tag: "TransportError" }, (error) => error.error.message),
+    Match.when({ _tag: "UnexpectedStatus" }, (error) => `HTTP ${error.status}: ${renderOpenApiBody(error.body)}`),
+    Match.when({ _tag: "UnexpectedContentType" }, (error) =>
+      `HTTP ${error.status}: unexpected content type ${error.actual ?? "none"}: ${error.body}`),
+    Match.when({ _tag: "ParseError" }, (error) =>
+      `HTTP ${error.status}: invalid ${error.contentType} response: ${error.error.message}`),
+    Match.when({ _tag: "DecodeError" }, (error) =>
+      `HTTP ${error.status}: invalid decoded response: ${error.error.message}`),
+    Match.exhaustive
+  )
+
+/**
+ * Configured docker-git OpenAPI client for the web HTTP boundary.
+ *
+ * @pure false - binds the shared OpenAPI client to the app-specific base URL resolver.
+ * @effect none during construction; returned client methods perform HTTP IO when their Effects run.
+ * @invariant transport, error rendering, and schema decoding stay owned by the openapi package.
+ * @precondition resolveApiBaseUrl returns a valid docker-git API base URL for the current runtime.
+ * @postcondition app modules depend on one configured OpenAPI client instance.
+ * @complexity O(1)/O(1) for construction, excluding request execution.
+ * @throws Never.
+ */
+export const dockerGitOpenApi = createClient({
+  baseUrl: resolveApiBaseUrl()
+})
 
 export const requestText = (
   method: ApiHttpMethod,

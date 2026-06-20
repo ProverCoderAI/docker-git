@@ -1,8 +1,7 @@
 import { Effect } from "effect"
 
-import { ProjectSkillsResponseSchema, ProjectSkillUpdateResponseSchema } from "./api-schema.js"
-import type { ProjectSkillScope } from "./api-schema.js"
-import { openApiJsonSchema } from "./openapi-client.js"
+import { dockerGitOpenApi, renderDockerGitOpenApiFailure } from "./api-http.js"
+import type { ProjectSkillScope, ProjectSkillsSnapshot } from "./api-schema.js"
 
 const skillScopeIdByScope: Readonly<Record<ProjectSkillScope, string>> = {
   "skills": "skills",
@@ -16,39 +15,36 @@ const skillScopeIdByScope: Readonly<Record<ProjectSkillScope, string>> = {
 
 export const projectSkillScopeToId = (scope: ProjectSkillScope): string => skillScopeIdByScope[scope]
 
-export const loadProjectSkills = (projectId: string) =>
-  openApiJsonSchema(ProjectSkillsResponseSchema, (client) =>
-    client.GET("/projects/{projectId}/skills", {
-      params: { path: { projectId } }
-    })).pipe(
-      Effect.map((response) => response.snapshot)
-    )
+export const loadProjectSkills = (projectId: string): Effect.Effect<ProjectSkillsSnapshot, string> =>
+  dockerGitOpenApi.GET("/projects/{projectId}/skills", {
+    params: { path: { projectId } }
+  }).pipe(
+    Effect.map(({ body }) => body.snapshot),
+    Effect.mapError(renderDockerGitOpenApiFailure)
+  )
 
 export const writeProjectSkill = (
   projectId: string,
   scope: ProjectSkillScope,
   name: string,
   content: string
-) =>
-  openApiJsonSchema(ProjectSkillUpdateResponseSchema, (client) =>
-    client.POST("/projects/{projectId}/skills", {
-      body: { content, name, scope },
-      params: { path: { projectId } }
-    })).pipe(
-      Effect.map((response) => response.snapshot)
-    )
+): Effect.Effect<ProjectSkillsSnapshot, string> =>
+  dockerGitOpenApi.POST("/projects/{projectId}/skills", {
+    body: { content, name, scope },
+    params: { path: { projectId } }
+  }).pipe(
+    Effect.map(({ body }) => body.snapshot),
+    Effect.mapError(renderDockerGitOpenApiFailure)
+  )
 
 export const deleteProjectSkill = (
   projectId: string,
   scope: ProjectSkillScope,
   name: string
-) =>
-  openApiJsonSchema(
-    ProjectSkillsResponseSchema,
-    (client) =>
-      client.DELETE("/projects/{projectId}/skills/{scopeId}/{name}", {
-        params: { path: { name, projectId, scopeId: projectSkillScopeToId(scope) } }
-      })
-  ).pipe(
-    Effect.map((response) => response.snapshot)
+): Effect.Effect<ProjectSkillsSnapshot, string> =>
+  dockerGitOpenApi.DELETE("/projects/{projectId}/skills/{scopeId}/{name}", {
+    params: { path: { name, projectId, scopeId: projectSkillScopeToId(scope) } }
+  }).pipe(
+    Effect.map(({ body }) => body.snapshot),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )

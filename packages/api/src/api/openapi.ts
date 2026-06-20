@@ -782,8 +782,8 @@ export const DockerGitApi = HttpApi.make("docker-git")
 // CHANGE: derive Swagger/OpenAPI from the Effect HttpApi contract.
 // WHY: frontend clients must be generated from one typed REST contract.
 // QUOTE(ТЗ): "Надо сделать REST API нормальный на базе Effect и использовать Swagger."
-// REF: user-message-2026-06-18-openapi-fetch
-// SOURCE: https://openapi-ts.dev/openapi-fetch/
+// REF: user-message-2026-06-19-openapi-effect
+// SOURCE: https://github.com/ProverCoderAI/openapi-effect
 // FORMAT THEOREM: forall endpoint e in DockerGitApi, e is represented in buildDockerGitOpenApi().paths.
 // PURITY: CORE
 // EFFECT: none

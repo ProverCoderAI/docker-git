@@ -9,38 +9,35 @@ type CapturedDeleteRequest = {
   readonly route: string
 }
 
-type MinimalDeleteClient = {
-  readonly DELETE: (
+const capturedDeleteRequests = vi.hoisted((): Array<CapturedDeleteRequest> => [])
+const deleteMock = vi.hoisted(() =>
+  vi.fn((
     route: string,
     options: { readonly params: { readonly path: Readonly<Record<string, string>> } }
-  ) => void
-}
-
-const capturedDeleteRequests = vi.hoisted((): Array<CapturedDeleteRequest> => [])
-const openApiVoidMock = vi.hoisted(() =>
-  vi.fn((request: (client: MinimalDeleteClient) => void) => {
-    const client: MinimalDeleteClient = {
-      DELETE: (route, options) => {
-        capturedDeleteRequests.push({
-          params: options.params.path,
-          route
-        })
-      }
-    }
-    request(client)
-    return Effect.void
+  ) => {
+    capturedDeleteRequests.push({
+      params: options.params.path,
+      route
+    })
+    return Effect.succeed({
+      body: { ok: true },
+      contentType: "application/json",
+      status: 200
+    })
   })
 )
 
-vi.mock("../../src/web/openapi-client.js", () => ({
-  openApiJsonSchema: vi.fn(),
-  openApiVoid: openApiVoidMock
+vi.mock("../../src/web/api-http.js", () => ({
+  dockerGitOpenApi: {
+    DELETE: deleteMock
+  },
+  renderDockerGitOpenApiFailure: vi.fn(String)
 }))
 
 describe("api terminal helpers", () => {
   beforeEach(() => {
     capturedDeleteRequests.length = 0
-    openApiVoidMock.mockClear()
+    deleteMock.mockClear()
   })
 
   it.effect("routes auth terminal close paths through the typed OpenAPI endpoint", () =>
