@@ -167,8 +167,8 @@ type CfTunnelState =
   | { readonly tag: "ready"; readonly hostname: string; readonly sshPassword: string }
   | { readonly tag: "failed" }
 
-const hostSshConfig = (hostname: string): string =>
-  `Host ${hostname}\n  ProxyCommand cloudflared access ssh --hostname %h\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null`
+const hostSshConfig = (hostname: string, targetDir: string): string =>
+  `Host ${hostname}\n  ProxyCommand cloudflared access ssh --hostname %h\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  RemoteCommand cd ${targetDir} && exec $SHELL\n  RequestTTY yes`
 
 const copyText = (text: string): void => { void navigator.clipboard.writeText(text).catch(() => {}) }
 
@@ -211,9 +211,9 @@ const VsCodeAccessPanel = (
     readonly onRetry: () => void
   }
 ): JSX.Element => {
-  const cfSshConfig = cfState.tag === "ready" ? hostSshConfig(cfState.hostname) : null
+  const cfSshConfig = cfState.tag === "ready" ? hostSshConfig(cfState.hostname, info.targetDir) : null
   const cfSshCommand = cfState.tag === "ready"
-    ? `ssh -t ${info.sshUser}@${cfState.hostname} "cd ${info.targetDir} && exec \\$SHELL"`
+    ? `ssh ${info.sshUser}@${cfState.hostname}`
     : null
   const cfVscodeUri = cfState.tag === "ready"
     ? `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(`${info.sshUser}@${cfState.hostname}`)}&folder=${encodeURIComponent(info.targetDir)}`
