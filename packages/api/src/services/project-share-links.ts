@@ -23,6 +23,7 @@ export type ShareLink = {
   readonly projectDir: string
   readonly createdAt: string
   readonly expiresAt: string
+  readonly sshPassword: string | null
 }
 
 type ShareLinksFile = {
@@ -35,7 +36,8 @@ const ShareLinkSchema = Schema.Struct({
   projectKey: Schema.String,
   projectDir: Schema.String,
   createdAt: Schema.String,
-  expiresAt: Schema.String
+  expiresAt: Schema.String,
+  sshPassword: Schema.optionalWith(Schema.NullOr(Schema.String), { default: () => null })
 })
 
 const ShareLinksFileSchema = Schema.Struct({
@@ -100,13 +102,14 @@ export const createShareLink = (
   projectsRoot: string,
   projectDir: string,
   projectKey: string,
+  sshPassword: string | null,
   ttlMs?: number
 ): Effect.Effect<ShareLink, ApiInternalError, FileSystem.FileSystem> =>
   Effect.gen(function*(_) {
     const token = randomBytes(8).toString("hex")
     const now = new Date().toISOString()
     const expiresAt = new Date(Date.now() + (ttlMs ?? defaultTtlMs)).toISOString()
-    const link: ShareLink = { token, projectKey, projectDir, createdAt: now, expiresAt }
+    const link: ShareLink = { token, projectKey, projectDir, createdAt: now, expiresAt, sshPassword }
     const file = yield* _(readShareLinksFile(projectsRoot))
     const activeLinks = file.links.filter((l) => !isExpired(l))
     yield* _(writeShareLinksFile(projectsRoot, { schemaVersion: 1, links: [...activeLinks, link] }))

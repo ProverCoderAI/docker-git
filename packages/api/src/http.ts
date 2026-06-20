@@ -142,6 +142,11 @@ import {
   startSshShareLinkTunnel,
   stopSshShareLinkTunnel
 } from "./services/ssh-share-link-tunnels.js"
+import {
+  disableContainerPasswordAuth,
+  enableContainerPasswordAuth,
+  generateSshPassword
+} from "./services/ssh-password-setup.js"
 import { buildShareLinkSshAccess } from "@effect-template/lib/usecases/ssh-access"
 import {
   deleteProjectDatabaseForward,
@@ -1144,7 +1149,7 @@ export const makeRouter = () => {
           project.containerName,
           project.sshUser,
           project.sshPort,
-          project.sshKeyPath,
+          null,
           project.targetDir,
           clientHost,
           sshCfHostname
@@ -1160,6 +1165,7 @@ export const makeRouter = () => {
           vscodeUri: sshAccess.vscodeUri,
           cfVscodeUri: sshAccess.cfVscodeUri,
           workspacePath: sshAccess.workspacePath,
+          sshPassword: link.sshPassword ?? null,
           createdAt: link.createdAt,
           expiresAt: link.expiresAt
         }
@@ -1174,7 +1180,13 @@ export const makeRouter = () => {
         const body = yield* _(readCreateShareLinkRequest())
         const project = yield* _(getProjectItemByKey(projectKey))
         const projectsRoot = defaultProjectsRoot(process.cwd())
-        const link = yield* _(createShareLink(projectsRoot, project.projectDir, projectKey, body.ttlMs))
+        const sshPassword = generateSshPassword()
+        yield* _(
+          enableContainerPasswordAuth(project.containerName, sshPassword).pipe(
+            Effect.orElse(() => Effect.void)
+          )
+        )
+        const link = yield* _(createShareLink(projectsRoot, project.projectDir, projectKey, sshPassword, body.ttlMs))
         const clientHost = resolvePortPublicHost(request) ?? "localhost"
         const sshCfHostname = yield* _(
           startSshShareLinkTunnel(link.token, project.sshPort).pipe(
@@ -1185,7 +1197,7 @@ export const makeRouter = () => {
           project.containerName,
           project.sshUser,
           project.sshPort,
-          project.sshKeyPath,
+          null,
           project.targetDir,
           clientHost,
           sshCfHostname
@@ -1201,6 +1213,7 @@ export const makeRouter = () => {
           vscodeUri: sshAccess.vscodeUri,
           cfVscodeUri: sshAccess.cfVscodeUri,
           workspacePath: sshAccess.workspacePath,
+          sshPassword,
           createdAt: link.createdAt,
           expiresAt: link.expiresAt
         }
@@ -1232,6 +1245,10 @@ export const makeRouter = () => {
             const projectsRoot = defaultProjectsRoot(process.cwd())
             yield* _(deleteShareLink(projectsRoot, project.projectDir, token))
             yield* _(stopSshShareLinkTunnel(token))
+            const remaining = yield* _(listShareLinks(projectsRoot, project.projectDir))
+            if (remaining.length === 0) {
+              yield* _(disableContainerPasswordAuth(project.containerName))
+            }
           })
         ),
         Effect.flatMap(() => jsonResponse({ ok: true }, 200)),

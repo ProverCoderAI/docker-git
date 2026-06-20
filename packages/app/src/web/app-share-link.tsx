@@ -110,6 +110,46 @@ const SshConfigBlock = (
   </div>
 )
 
+const SshPasswordBlock = (
+  { info }: { readonly info: ShareLinkInfo }
+): JSX.Element | null => {
+  if (info.sshPassword === null) return null
+  const sshHostname = info.sshConfigSnippet.match(/HostName\s+(\S+)/)?.[1] ?? "host"
+  const sshPort = info.sshConfigSnippet.match(/Port\s+(\d+)/)?.[1] ?? "22"
+  const sshUser = info.sshConfigSnippet.match(/User\s+(\S+)/)?.[1] ?? "dev"
+  const directCmd = `ssh ${sshUser}@${sshHostname} -p ${sshPort}`
+  const cfCmd = info.cfSshConfigSnippet !== null
+    ? `ssh -o ProxyCommand="cloudflared access ssh --hostname %h" ${sshUser}@${info.sshConfigSnippet.match(/HostName\s+(\S+)/)?.[1] ?? "host"}`
+    : null
+  const cfHostname = info.cfSshConfigSnippet?.match(/HostName\s+(\S+)/)?.[1]
+  const cfDirectCmd = cfHostname !== null && cfHostname !== undefined
+    ? `ssh -o ProxyCommand="cloudflared access ssh --hostname %h" ${sshUser}@${cfHostname}`
+    : null
+  return (
+    <div style={{ background: "#0d1a14", border: "1px solid #2a5a38", borderRadius: "3px", marginTop: "8px", padding: "8px" }}>
+      <div style={{ color: "#56f39a", fontSize: "0.9em", fontWeight: "bold", marginBottom: "4px" }}>SSH password access</div>
+      <div style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+        <span style={{ color: "#8fa6c4", fontSize: "0.85em" }}>Password:</span>
+        <code style={{ ...codeBlockStyle, display: "inline", marginBottom: 0, marginTop: 0 }}>{info.sshPassword as string}</code>
+        <button onClick={() => copyText(info.sshPassword as string)} style={{ ...buttonStyle, color: "#56f39a", fontSize: "0.85em" }} type="button">copy</button>
+      </div>
+      <div style={{ color: "#8fa6c4", fontSize: "0.85em", marginTop: "6px" }}>Direct SSH command:</div>
+      <code style={codeBlockStyle}>{directCmd}</code>
+      <button onClick={() => copyText(directCmd)} style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }} type="button">copy</button>
+      {cfDirectCmd !== null && (
+        <>
+          <div style={{ color: "#8fa6c4", fontSize: "0.85em", marginTop: "6px" }}>Via Cloudflare tunnel:</div>
+          <code style={codeBlockStyle}>{cfDirectCmd}</code>
+          <button onClick={() => copyText(cfDirectCmd as string)} style={{ ...buttonStyle, color: "#7fdfff", fontSize: "0.85em" }} type="button">copy</button>
+        </>
+      )}
+      <div style={{ color: "#8fa6c4", fontSize: "0.78em", marginTop: "4px" }}>
+        No SSH key needed — use this password when prompted
+      </div>
+    </div>
+  )
+}
+
 const InfoHeader = (
   {
     info,
@@ -147,6 +187,7 @@ const InfoHeader = (
     {info.cfSshConfigSnippet !== null && (
       <SshConfigBlock label="SSH config (Cloudflare tunnel)" snippet={info.cfSshConfigSnippet as string} />
     )}
+    <SshPasswordBlock info={info} />
     <div style={{ color: "#8fa6c4", fontSize: "0.8em", marginTop: "6px" }}>
       expires {new Date(info.expiresAt).toLocaleString()}
     </div>

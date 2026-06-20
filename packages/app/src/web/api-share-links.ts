@@ -14,6 +14,7 @@ const ShareLinkInfoSchema = Schema.Struct({
   vscodeUri: Schema.String,
   cfVscodeUri: Schema.NullOr(Schema.String),
   workspacePath: Schema.String,
+  sshPassword: Schema.NullOr(Schema.String),
   createdAt: Schema.String,
   expiresAt: Schema.String
 })
