@@ -203,11 +203,13 @@ const VsCodeAccessPanel = (
     cfState,
     info,
     onClose,
+    onRefresh,
     onRetry
   }: {
     readonly cfState: CfTunnelState
     readonly info: VsCodeAccessInfo
     readonly onClose: () => void
+    readonly onRefresh: () => void
     readonly onRetry: () => void
   }
 ): JSX.Element => {
@@ -230,13 +232,12 @@ const VsCodeAccessPanel = (
     }}>
       <div style={{ alignItems: "center", display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
         <div style={{ color: "#8be9fd", fontWeight: "bold" }}>VS Code / SSH access</div>
-        <button
-          onClick={onClose}
-          style={{ ...vsCodePanelCopyBtnStyle, color: "#f87171" }}
-          type="button"
-        >
-          ✕ close
-        </button>
+        <div style={{ display: "flex", gap: "4px" }}>
+          {cfState.tag === "ready" && (
+            <button onClick={onRefresh} style={{ ...vsCodePanelCopyBtnStyle, color: "#7fdfff" }} type="button">↻ refresh</button>
+          )}
+          <button onClick={onClose} style={{ ...vsCodePanelCopyBtnStyle, color: "#f87171" }} type="button">✕ close</button>
+        </div>
       </div>
 
       {cfState.tag === "loading" && (
@@ -397,6 +398,28 @@ export const TerminalPane = (props: TerminalPaneProps): JSX.Element => {
     }
   }, [vsCodePanelOpen, runtime.browserProjectKey, cfState.tag])
 
+  // Poll every 30s when panel is open: restart tunnel if process died
+  useEffect(() => {
+    if (!vsCodePanelOpen || cfState.tag !== "ready" || runtime.browserProjectKey === undefined) return
+    const projectKey = runtime.browserProjectKey
+    const id = setInterval(() => {
+      void Effect.runPromise(
+        startProjectSshTunnel(projectKey).pipe(
+          Effect.match({
+            onFailure: () => { setCfState({ tag: "failed" }) },
+            onSuccess: ({ hostname, sshPassword }) => {
+              if (hostname === null) { setCfState({ tag: "failed" }); return }
+              setCfState((prev) =>
+                prev.tag === "ready" && prev.hostname === hostname ? prev : { tag: "ready", hostname, sshPassword }
+              )
+            }
+          })
+        )
+      )
+    }, 30_000)
+    return () => { clearInterval(id) }
+  }, [vsCodePanelOpen, cfState.tag, runtime.browserProjectKey])
+
   const vsCodeInfo = buildVsCodeAccessInfo(props.project)
   const onOpenVsCode = vsCodeInfo !== null ? () => { setVsCodePanelOpen(true) } : undefined
   const vsCodeBodyContent = vsCodePanelOpen && vsCodeInfo !== null
@@ -405,6 +428,11 @@ export const TerminalPane = (props: TerminalPaneProps): JSX.Element => {
         cfState={cfState}
         info={vsCodeInfo}
         onClose={() => { setVsCodePanelOpen(false) }}
+        onRefresh={() => {
+          if (runtime.browserProjectKey !== undefined) {
+            startTunnel(runtime.browserProjectKey, setCfState)
+          }
+        }}
         onRetry={() => {
           if (runtime.browserProjectKey !== undefined) {
             startTunnel(runtime.browserProjectKey, setCfState)

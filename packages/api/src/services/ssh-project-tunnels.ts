@@ -197,7 +197,7 @@ export const startSshProjectTunnel = (
 ): Effect.Effect<string | null, ApiInternalError> =>
   Effect.gen(function*(_) {
     const existing = projectTunnelMap.get(projectKey)
-    if (existing !== undefined && !existing.stopping && existing.hostname !== null) {
+    if (existing !== undefined && !existing.stopping && !existing.processClosed && existing.hostname !== null) {
       return existing.hostname
     }
     if (existing !== undefined) {
