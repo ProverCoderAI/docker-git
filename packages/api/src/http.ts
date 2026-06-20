@@ -1261,18 +1261,12 @@ export const makeRouter = () => {
       Effect.gen(function*(_) {
         const { projectKey } = yield* _(projectKeyParams)
         const project = yield* _(getProjectItemByKey(projectKey))
-        const sshPassword = generateSshPassword()
-        yield* _(
-          enableContainerPasswordAuth(project.containerName, sshPassword).pipe(
-            Effect.orElse(() => Effect.void)
+        const result = yield* _(
+          startSshProjectTunnel(projectKey, project.sshPort, project.containerName).pipe(
+            Effect.orElse(() => Effect.succeed({ hostname: null, sshPassword: "" }))
           )
         )
-        const hostname = yield* _(
-          startSshProjectTunnel(projectKey, project.sshPort).pipe(
-            Effect.orElse(() => Effect.succeed(null))
-          )
-        )
-        return yield* _(jsonResponse({ hostname, sshPassword }, 200))
+        return yield* _(jsonResponse(result, 200))
       }).pipe(Effect.catchAll(errorResponse))
     )
   )

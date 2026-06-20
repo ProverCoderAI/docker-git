@@ -409,9 +409,7 @@ export const TerminalPane = (props: TerminalPaneProps): JSX.Element => {
             onFailure: () => { setCfState({ tag: "failed" }) },
             onSuccess: ({ hostname, sshPassword }) => {
               if (hostname === null) { setCfState({ tag: "failed" }); return }
-              setCfState((prev) =>
-                prev.tag === "ready" && prev.hostname === hostname ? prev : { tag: "ready", hostname, sshPassword }
-              )
+              setCfState({ tag: "ready", hostname, sshPassword })
             }
           })
         )

@@ -19,12 +19,14 @@ import { Duration, Effect, Fiber } from "effect"
 import { ApiInternalError } from "../api/errors.js"
 import { parseTryCloudflareUrl } from "./panel-cloudflare-tunnel-core.js"
 import { parseLinuxDefaultGatewayIp } from "./project-port-proxy-core.js"
+import { generateSshPassword, enableContainerPasswordAuth } from "./ssh-password-setup.js"
 
 type SshTunnelRecord = {
   readonly homeDir: string
   process: ChildProcess | null
   processClosed: boolean
   hostname: string | null
+  sshPassword: string
   stopping: boolean
   stopFiber: Fiber.RuntimeFiber<void> | null
   stdoutRemainder: string
@@ -193,17 +195,21 @@ const waitForHostname = (
  */
 export const startSshProjectTunnel = (
   projectKey: string,
-  sshPort: number
-): Effect.Effect<string | null, ApiInternalError> =>
+  sshPort: number,
+  containerName: string
+): Effect.Effect<{ hostname: string | null; sshPassword: string }, ApiInternalError> =>
   Effect.gen(function*(_) {
     const existing = projectTunnelMap.get(projectKey)
     if (existing !== undefined && !existing.stopping && !existing.processClosed && existing.hostname !== null) {
-      return existing.hostname
+      return { hostname: existing.hostname, sshPassword: existing.sshPassword }
     }
     if (existing !== undefined) {
       yield* _(stopRecord(existing).pipe(Effect.orElse(() => Effect.void)))
       projectTunnelMap.delete(projectKey)
     }
+
+    const sshPassword = generateSshPassword()
+    yield* _(enableContainerPasswordAuth(containerName, sshPassword).pipe(Effect.orElse(() => Effect.void)))
 
     const localhostHost = yield* _(defaultLocalhostHost())
     const sshUrl = `ssh://${localhostHost}:${sshPort}`
@@ -213,6 +219,7 @@ export const startSshProjectTunnel = (
       hostname: null,
       process: null,
       processClosed: false,
+      sshPassword,
       stderrRemainder: "",
       stdoutRemainder: "",
       stopFiber: null,
@@ -239,7 +246,8 @@ export const startSshProjectTunnel = (
       })
     )
 
-    return yield* _(waitForHostname(record, startWaitAttempts))
+    const hostname = yield* _(waitForHostname(record, startWaitAttempts))
+    return { hostname, sshPassword }
   }).pipe(projectTunnelLock.withPermits(1))
 
 /**
