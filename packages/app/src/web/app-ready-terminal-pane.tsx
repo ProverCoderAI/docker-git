@@ -226,7 +226,7 @@ const VsCodeAccessPanel = (
     : null
   const directHost = window.location.hostname
   const directConfig = directSshConfig(directHost, info.sshPort, info.sshUser)
-  const directCommand = `ssh -p ${info.sshPort} ${info.sshUser}@${directHost}`
+  const directCommand = `ssh -p ${info.sshPort} -t ${info.sshUser}@${directHost} "cd ${info.targetDir} && exec \\$SHELL"`
   const directVscodeUri = `vscode://ms-vscode-remote.remote-ssh/open?hostName=${encodeURIComponent(`${directHost}-ssh`)}&folder=${encodeURIComponent(info.targetDir)}`
   return (
     <div style={{
@@ -298,6 +298,14 @@ const VsCodeAccessPanel = (
       <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Connect via SSH</div>
       <code style={vsCodePanelCodeStyle}>{directCommand}</code>
       <button onClick={() => { copyText(directCommand) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+
+      {cfState.tag === "ready" && (
+        <>
+          <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>SSH password</div>
+          <code style={vsCodePanelCodeStyle}>{cfState.sshPassword}</code>
+          <button onClick={() => { copyText(cfState.sshPassword) }} style={vsCodePanelCopyBtnStyle} type="button">copy</button>
+        </>
+      )}
 
       <div style={{ color: "#8be9fd", fontSize: "0.9em", fontWeight: "bold", marginTop: "10px" }}>Open in VS Code</div>
       <div style={{ color: "#8fa6c4", fontSize: "0.78em" }}>requires config entry above in ~/.ssh/config</div>
