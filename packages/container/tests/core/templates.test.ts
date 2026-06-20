@@ -448,6 +448,14 @@ describe("renderEntrypoint clone cache", () => {
     expect(entrypoint).not.toContain("'+refs/merge-requests/*:refs/merge-requests/*'")
   })
 
+  it("rewrites the managed Codex resume hint at container startup", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig())
+
+    expect(entrypoint).toContain('cat <<\'EOF\' > "$CODEX_HINT_PATH"')
+    expect(entrypoint).toContain('chmod 0644 "$CODEX_HINT_PATH"')
+    expect(entrypoint).not.toContain('if [[ ! -s "$CODEX_HINT_PATH" ]]; then')
+  })
+
   it("preserves branch/tag-only clone-cache refspecs for generated configs", () => {
     fc.assert(
       fc.property(generatedTemplateConfigArbitrary, (config) => {
