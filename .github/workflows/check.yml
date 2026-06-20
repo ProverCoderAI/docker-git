@@ -233,15 +233,36 @@ jobs:
   e2e-prepare:
     name: E2E prepare
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    env:
+      DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: true
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Build E2E prebuilt payload
         run: |
           bun run --cwd packages/app build:docker-git:reuse-install
           bun run --cwd packages/app build:web
+      - name: Free Docker disk
+        uses: ./.github/actions/free-docker-disk
+      - name: Build E2E controller image
+        run: |
+          set -euo pipefail
+
+          DOCKER_GIT_CONTROLLER_REV="$(bun --cwd packages/app scripts/print-controller-revision.ts "$PWD/docker-compose.yml")"
+          export DOCKER_GIT_CONTROLLER_REV
+
+          echo "Building docker-git controller image revision: ${DOCKER_GIT_CONTROLLER_REV}"
+          docker compose --project-name docker-git -f docker-compose.yml build api
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
+
+          mkdir -p artifacts
+          docker save docker-git-api | gzip -1 > artifacts/docker-git-e2e-controller-image.tar.gz
+          ls -lh artifacts/docker-git-e2e-controller-image.tar.gz
       - name: Pack E2E prebuilt artifact
         run: |
           mkdir -p artifacts
@@ -251,6 +272,12 @@ jobs:
         with:
           name: docker-git-e2e-prebuilt
           path: artifacts/docker-git-e2e-prebuilt.tgz
+      - name: Upload E2E controller image artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts/docker-git-e2e-controller-image.tar.gz
+          compression-level: 0
 
   e2e-local-package:
     name: E2E (Local package CLI)
@@ -285,10 +312,20 @@ jobs:
         with:
           name: docker-git-e2e-prebuilt
           path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
       - name: Restore E2E prebuilt artifact
         run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E controller image
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
       - name: Docker info
         run: docker version && docker compose version
       - name: Browser command startup
@@ -315,10 +352,20 @@ jobs:
         with:
           name: docker-git-e2e-prebuilt
           path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
       - name: Restore E2E prebuilt artifact
         run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E controller image
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
       - name: Docker info
         run: docker version && docker compose version
       - name: OpenCode autoconnect
@@ -345,10 +392,20 @@ jobs:
         with:
           name: docker-git-e2e-prebuilt
           path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
       - name: Restore E2E prebuilt artifact
         run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E controller image
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
       - name: Docker info
         run: docker version && docker compose version
       - name: Clone cache reuse
@@ -375,10 +432,20 @@ jobs:
         with:
           name: docker-git-e2e-prebuilt
           path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
       - name: Restore E2E prebuilt artifact
         run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E controller image
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
       - name: Docker info
         run: docker version && docker compose version
       - name: Login context notice
@@ -405,10 +472,20 @@ jobs:
         with:
           name: docker-git-e2e-prebuilt
           path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
       - name: Restore E2E prebuilt artifact
         run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E controller image
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
       - name: Docker info
         run: docker version && docker compose version
       - name: Runtime volumes + host SSH CLI
@@ -435,10 +512,20 @@ jobs:
         with:
           name: docker-git-e2e-prebuilt
           path: artifacts
+      - name: Download E2E controller image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker-git-e2e-controller-image
+          path: artifacts
       - name: Restore E2E prebuilt artifact
         run: tar -xzf artifacts/docker-git-e2e-prebuilt.tgz
       - name: Free Docker disk
         uses: ./.github/actions/free-docker-disk
+      - name: Load E2E controller image
+        run: |
+          gzip -dc artifacts/docker-git-e2e-controller-image.tar.gz | docker load
+          docker image inspect docker-git-api \
+            -f 'controller revision={{ index .Config.Labels "io.prover-coder-ai.docker-git.controller-rev" }}'
       - name: Docker info
         run: docker version && docker compose version
       - name: Clone auto-open SSH
