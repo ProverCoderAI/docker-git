@@ -12,7 +12,7 @@
   "scripts": {
     "build": "vite build && bun ../../scripts/mark-executable.mjs dist/docker-git-session-sync.js",
     "check": "bun run typecheck",
-    "lint:effect": "eslint --config eslint.effect-ts-check.config.mjs .",
+    "lint:effect": "eslint --config eslint.effect-ts-check.config.mjs . --cache --cache-location .eslintcache-effect --cache-strategy content",
     "prepack": "bun run build",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit -p tsconfig.json"
