@@ -50,6 +50,8 @@ const syncManagedProjectFiles = (
     yield* _(ensureCodexConfigFile(projectDir, template.codexAuthPath))
   })
 
+const hasPrebuiltProjectImage = (template: TemplateConfig): boolean => (template.imageName?.trim().length ?? 0) > 0
+
 const claudeCliSelfHealScript = `set -eu
 if command -v claude >/dev/null 2>&1; then
   exit 0
@@ -222,7 +224,10 @@ const runProjectComposeUp = (
     ? runDockerComposeUp(projectDir)
     : runDockerComposeUp(projectDir, { buildMode: "reuse" }).pipe(
       Effect.catchTag("DockerCommandError", (error) => {
-        if (gpuModeAfterDockerFailure(template.gpu, error.details) !== template.gpu) {
+        if (
+          gpuModeAfterDockerFailure(template.gpu, error.details) !== template.gpu ||
+          hasPrebuiltProjectImage(template)
+        ) {
           return Effect.fail(error)
         }
 
