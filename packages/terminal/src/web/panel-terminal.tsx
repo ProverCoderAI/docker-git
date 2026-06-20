@@ -16,7 +16,14 @@ import {
   terminalHostStyle,
   terminalPanelStyle
 } from "./panel-terminal-styles.js"
-import type { TerminalPanelProps } from "./panel-terminal-types.js"
+import {
+  type InlineImagePreviewState,
+  type MobileTerminalControlState,
+  type RefState,
+  type TerminalNotificationHandlers,
+  type TerminalPanelLayoutProps,
+  type TerminalPanelProps
+} from "./panel-terminal-types.js"
 import type { MobileTerminalKey } from "./terminal-mobile-controls.js"
 import { isTerminalCompactHeaderMode, isTerminalTypingMode } from "./terminal-mobile-layout.js"
 import {
@@ -27,52 +34,6 @@ import {
   useTerminalSessionLifecycle
 } from "./terminal-panel-runtime.js"
 import { type ActiveTerminalSession, isPendingActiveTerminalSession } from "./terminal.js"
-
-type RefState<T> = { current: T }
-
-type TerminalNotificationHandlers = {
-  readonly notifyAttachFailure: () => void
-  readonly notifyExit: (info: TerminalExitInfo) => void
-  readonly notifyMessage: (message: string) => void
-}
-
-type InlineImagePreviewState = {
-  readonly inlineImagePreviewsEnabled: boolean
-  readonly inlineImagePreviewsEnabledRef: RefState<boolean>
-  readonly toggleInlineImagePreviews: () => void
-}
-
-type MobileTerminalControlState = {
-  readonly handleMobileKeyPress: (key: MobileTerminalKey) => void
-  readonly mobileControlsCollapsed: boolean
-  readonly mobileCtrlArmed: boolean
-  readonly toggleMobileControls: () => void
-  readonly toggleMobileCtrl: () => void
-}
-
-type TerminalPanelLayoutProps =
-  & Pick<
-    TerminalPanelProps,
-    | "bodyContent"
-    | "keyboardOpen"
-    | "mobileMode"
-    | "onApplyProject"
-    | "onOpenBrowser"
-    | "onOpenSkiller"
-    | "onOpenTaskManager"
-    | "onOpenTerminal"
-    | "session"
-  >
-  & InlineImagePreviewState
-  & MobileTerminalControlState
-  & {
-    readonly compactHeaderMode: boolean
-    readonly compactTypingMode: boolean
-    readonly handleDetach: () => void
-    readonly handleKill: () => void
-    readonly hostRef: RefState<HTMLDivElement | null>
-    readonly status: TerminalStatus
-  }
 
 const resolveInitialTerminalStatus = (session: ActiveTerminalSession): TerminalStatus =>
   isPendingActiveTerminalSession(session) && session.pendingConnection.phase === "error" ? "error" : "connecting"
@@ -265,6 +226,7 @@ const TerminalPanelLayout = (props: TerminalPanelLayoutProps): JSX.Element => (
       onOpenSkiller={props.onOpenSkiller}
       onOpenTaskManager={props.onOpenTaskManager}
       onOpenTerminal={props.onOpenTerminal}
+      onOpenVsCode={props.onOpenVsCode}
       onToggleInlineImagePreviews={props.toggleInlineImagePreviews}
       session={props.session}
       status={props.status}

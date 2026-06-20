@@ -392,3 +392,37 @@ export type ProjectPortForwardRequestInput = Schema.Schema.Type<typeof ProjectPo
 export type ProjectDatabaseProfileRequestInput = Schema.Schema.Type<typeof ProjectDatabaseProfileRequestSchema>
 export type CreateAgentRequestInput = Schema.Schema.Type<typeof CreateAgentRequestSchema>
 export type CreateFollowRequestInput = Schema.Schema.Type<typeof CreateFollowRequestSchema>
+
+export const CreateShareLinkRequestSchema = Schema.Struct({
+  ttlMs: Schema.optional(Schema.Number)
+})
+
+export const ShareLinkInfoSchema = Schema.Struct({
+  token: Schema.String,
+  projectKey: Schema.String,
+  projectDir: Schema.String,
+  displayName: Schema.String,
+  sshAlias: Schema.String,
+  sshConfigSnippet: Schema.String,
+  cfSshConfigSnippet: Schema.NullOr(Schema.String),
+  vscodeUri: Schema.String,
+  cfVscodeUri: Schema.NullOr(Schema.String),
+  workspacePath: Schema.String,
+  sshPassword: Schema.NullOr(Schema.String),
+  createdAt: Schema.String,
+  expiresAt: Schema.String
+})
+
+export const ShareLinkInfoResponseSchema = Schema.Struct({
+  link: ShareLinkInfoSchema
+})
+
+export const CreateShareLinkResponseSchema = Schema.Struct({
+  ok: Schema.Literal(true),
+  link: ShareLinkInfoSchema,
+  url: Schema.String
+})
+
+export const ShareLinksListResponseSchema = Schema.Struct({
+  links: Schema.Array(ShareLinkInfoSchema)
+})

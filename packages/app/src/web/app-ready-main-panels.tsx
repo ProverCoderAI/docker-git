@@ -61,6 +61,7 @@ const ShareScreen = (props: MainPanelsProps): JSX.Element => (
         onRefresh={props.onRefreshPanelShareTunnel}
         onStart={props.onStartPanelShareTunnel}
         onStop={props.onStopPanelShareTunnel}
+        selectedProjectKey={props.selectedProjectSummary?.projectKey ?? null}
         tunnel={props.panelCloudflareTunnel}
       />
     </Box>

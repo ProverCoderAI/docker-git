@@ -1,11 +1,19 @@
 import { Effect } from "effect"
-import type { CSSProperties, JSX } from "react"
+import { type CSSProperties, type JSX, useState } from "react"
 
 import { deleteTerminalSessionByPath } from "./api.js"
 import { canOpenProjectBrowser } from "./app-ready-browser-openable.js"
 import { TerminalTaskManagerBody } from "./app-ready-terminal-task-manager.js"
 import type { TerminalPaneProps } from "./app-ready-terminal-types.js"
 import { TerminalPanel } from "./panel-terminal.js"
+import { VsCodeAccessPanel } from "./panel-vscode-access-panel.js"
+import {
+  buildVsCodeAccessInfo,
+  type CfTunnelState,
+  startTunnel,
+  useTunnelAutoStart,
+  useTunnelPolling
+} from "./panel-vscode-access.js"
 import { type BrowserScreen, projectPickerScreen } from "./screen.js"
 import type { TerminalExitInfo } from "./terminal-panel-runtime-types.js"
 import { terminalSessionId } from "./terminal-state.js"
@@ -187,8 +195,14 @@ const openTerminalAction = (props: TerminalPaneProps, runtime: TerminalPaneRunti
 }
 
 const TerminalPanelForPane = (
-  { bodyContent, props, runtime }: {
+  {
+    bodyContent,
+    onOpenVsCode,
+    props,
+    runtime
+  }: {
     readonly bodyContent: JSX.Element | undefined
+    readonly onOpenVsCode: (() => void) | undefined
     readonly props: TerminalPaneProps
     readonly runtime: TerminalPaneRuntime
   }
@@ -222,16 +236,41 @@ const TerminalPanelForPane = (
     onOpenTaskManager={openTaskManagerAction(props, runtime)}
     onOpenTerminal={openTerminalAction(props, runtime)}
     onMessage={props.onTerminalMessage}
+    onOpenVsCode={onOpenVsCode}
     session={props.terminalSession}
   />
 )
 
 export const TerminalPane = (props: TerminalPaneProps): JSX.Element => {
+  const [isVsCodePanelOpen, setVsCodePanelOpen] = useState(false)
+  const [cfState, setCfState] = useState<CfTunnelState>({ tag: "idle" })
   const runtime = resolveTerminalPaneRuntime(props)
-  const bodyContent = terminalBodyContent(props, runtime)
+  useTunnelAutoStart(isVsCodePanelOpen, cfState, runtime.browserProjectKey, setCfState)
+  useTunnelPolling(isVsCodePanelOpen, cfState, runtime.browserProjectKey, setCfState)
+  const vsCodeInfo = buildVsCodeAccessInfo(props.project)
+  const onOpenVsCode = vsCodeInfo === null ? undefined : () => {
+    setVsCodePanelOpen(true)
+  }
+  const refresh = (): void => {
+    if (runtime.browserProjectKey !== undefined) startTunnel(runtime.browserProjectKey, setCfState)
+  }
+  const vsCodeBodyContent = isVsCodePanelOpen && vsCodeInfo !== null
+    ? (
+      <VsCodeAccessPanel
+        cfState={cfState}
+        info={vsCodeInfo}
+        onClose={() => {
+          setVsCodePanelOpen(false)
+        }}
+        onRefresh={refresh}
+        onRetry={refresh}
+      />
+    )
+    : undefined
+  const bodyContent = vsCodeBodyContent ?? terminalBodyContent(props, runtime)
   return (
     <div style={activeTerminalPaneStyle}>
-      <TerminalPanelForPane bodyContent={bodyContent} props={props} runtime={runtime} />
+      <TerminalPanelForPane bodyContent={bodyContent} onOpenVsCode={onOpenVsCode} props={props} runtime={runtime} />
     </div>
   )
 }

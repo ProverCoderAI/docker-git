@@ -26,6 +26,7 @@ type TerminalHeaderProps =
     | "onOpenSkiller"
     | "onOpenTaskManager"
     | "onOpenTerminal"
+    | "onOpenVsCode"
     | "session"
   >
   & {
@@ -168,6 +169,11 @@ const TerminalHeaderActions = (props: TerminalHeaderProps): JSX.Element => (
       inlineImagePreviewsEnabled={props.inlineImagePreviewsEnabled}
       onToggleInlineImagePreviews={props.onToggleInlineImagePreviews}
     />
+    {props.onOpenVsCode !== undefined && (
+      <TerminalActionButton compactTypingMode={props.compactHeaderMode} onClick={props.onOpenVsCode}>
+        VS Code
+      </TerminalActionButton>
+    )}
     <TerminalActionButton compactTypingMode={props.compactHeaderMode} onClick={props.onDetach}>
       Detach
     </TerminalActionButton>
