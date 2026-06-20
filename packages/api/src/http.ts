@@ -137,6 +137,11 @@ import {
   listShareLinks,
   resolveShareLink
 } from "./services/project-share-links.js"
+import {
+  getSshShareLinkTunnelHostname,
+  startSshShareLinkTunnel,
+  stopSshShareLinkTunnel
+} from "./services/ssh-share-link-tunnels.js"
 import { buildShareLinkSshAccess } from "@effect-template/lib/usecases/ssh-access"
 import {
   deleteProjectDatabaseForward,
@@ -1134,12 +1139,7 @@ export const makeRouter = () => {
         const clientHost = new URL(request.url, "http://localhost").searchParams.get("host")
           ?? resolvePortPublicHost(request)
           ?? "localhost"
-        const cfTunnel = yield* _(readPanelCloudflareTunnel())
-        const cfPublicHostname = cfTunnel?.publicUrl !== null && cfTunnel?.publicUrl !== undefined
-          ? (() => {
-            try { return new URL(cfTunnel.publicUrl).hostname } catch { return null }
-          })()
-          : null
+        const sshCfHostname = getSshShareLinkTunnelHostname(link.token)
         const sshAccess = buildShareLinkSshAccess(
           project.containerName,
           project.sshUser,
@@ -1147,7 +1147,7 @@ export const makeRouter = () => {
           project.sshKeyPath,
           project.targetDir,
           clientHost,
-          cfPublicHostname
+          sshCfHostname
         )
         const shareLinkInfo = {
           token: link.token,
@@ -1176,12 +1176,11 @@ export const makeRouter = () => {
         const projectsRoot = defaultProjectsRoot(process.cwd())
         const link = yield* _(createShareLink(projectsRoot, project.projectDir, projectKey, body.ttlMs))
         const clientHost = resolvePortPublicHost(request) ?? "localhost"
-        const cfTunnel = yield* _(readPanelCloudflareTunnel())
-        const cfPublicHostname = cfTunnel?.publicUrl !== null && cfTunnel?.publicUrl !== undefined
-          ? (() => {
-            try { return new URL(cfTunnel.publicUrl).hostname } catch { return null }
-          })()
-          : null
+        const sshCfHostname = yield* _(
+          startSshShareLinkTunnel(link.token, project.sshPort).pipe(
+            Effect.orElse(() => Effect.succeed(null))
+          )
+        )
         const sshAccess = buildShareLinkSshAccess(
           project.containerName,
           project.sshUser,
@@ -1189,7 +1188,7 @@ export const makeRouter = () => {
           project.sshKeyPath,
           project.targetDir,
           clientHost,
-          cfPublicHostname
+          sshCfHostname
         )
         const shareLinkInfo = {
           token: link.token,
@@ -1232,6 +1231,7 @@ export const makeRouter = () => {
             const project = yield* _(getProjectItemByKey(projectKey))
             const projectsRoot = defaultProjectsRoot(process.cwd())
             yield* _(deleteShareLink(projectsRoot, project.projectDir, token))
+            yield* _(stopSshShareLinkTunnel(token))
           })
         ),
         Effect.flatMap(() => jsonResponse({ ok: true }, 200)),

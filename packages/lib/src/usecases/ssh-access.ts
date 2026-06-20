@@ -207,12 +207,15 @@ export const buildShareLinkSshAccess = (
   sshKeyPath: string | null,
   targetDir: string,
   clientHost: string,
-  cfPublicHostname: string | null
+  sshCfHostname: string | null
 ): ShareLinkSshAccess => {
   const alias = sanitizeSshHostAlias(containerName)
+  // clientHost may carry a web port suffix (e.g. "192.168.0.206:4174") — strip it.
+  // SSH port is provided separately via sshPort; HostName must be a bare hostname.
+  const sshHostname = clientHost.includes(":") ? clientHost.slice(0, clientHost.lastIndexOf(":")) : clientHost
   const directLines = [
     `Host ${alias}`,
-    `  HostName ${clientHost}`,
+    `  HostName ${sshHostname}`,
     `  User ${sshUser}`,
     `  Port ${sshPort}`,
     `  LogLevel ERROR`,
@@ -224,11 +227,11 @@ export const buildShareLinkSshAccess = (
   }
 
   const cfAlias = `${alias}-cf`
-  const cfLines = cfPublicHostname === null
+  const cfLines = sshCfHostname === null
     ? null
     : [
       `Host ${cfAlias}`,
-      `  HostName ${cfPublicHostname}`,
+      `  HostName ${sshCfHostname}`,
       `  User ${sshUser}`,
       `  Port 22`,
       `  ProxyCommand cloudflared access ssh --hostname %h`,
@@ -245,8 +248,8 @@ export const buildShareLinkSshAccess = (
   // SOURCE: https://code.visualstudio.com/docs/remote/ssh#_connect-to-a-remote-host
   //   "You can also enter a user@host or user@host:port connection string if you don't want
   //    to use an SSH config file entry."
-  const directHostName = `${sshUser}@${clientHost}:${sshPort}`
-  const cfHostName = cfPublicHostname !== null ? `${sshUser}@${cfPublicHostname}` : null
+  const directHostName = `${sshUser}@${sshHostname}:${sshPort}`
+  const cfHostName = sshCfHostname !== null ? `${sshUser}@${sshCfHostname}` : null
   return {
     alias,
     configSnippet: directLines.join("\n"),

@@ -208,17 +208,26 @@ const ContainerShareLinksSection = (
       {state._tag === "Loaded" && state.newUrl !== null && (
         <Box border={true} borderColor="#56f39a" flexDirection="column" gap={1} padding={1}>
           <Text bold={true} fg="#56f39a">New share link</Text>
-          <Text fg="#7fdfff" wrap="truncate">{state.newUrl}</Text>
-          <ActionButton
-            fg="#7fdfff"
-            label="copy"
-            onClick={() => {
-              const url = state._tag === "Loaded" ? state.newUrl : null
-              if (url !== null) {
-                void navigator.clipboard.writeText(url).catch(() => {})
-              }
-            }}
-          />
+          <Text fg="#7fdfff" wrap="wrap">{state.newUrl}</Text>
+          <Box flexWrap="wrap" gap={1}>
+            <ActionButton
+              fg="#7fdfff"
+              label="copy"
+              onClick={() => {
+                const url = state._tag === "Loaded" ? state.newUrl : null
+                if (url !== null) {
+                  void navigator.clipboard.writeText(url).catch(() => {})
+                }
+              }}
+            />
+            <ActionButton
+              label="open"
+              onClick={() => {
+                const url = state._tag === "Loaded" ? state.newUrl : null
+                if (url !== null) openUrl(url)
+              }}
+            />
+          </Box>
         </Box>
       )}
       {state._tag === "Loaded" && state.links.length === 0 && (
