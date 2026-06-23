@@ -1,8 +1,8 @@
 import { resolveComposeNetworkName, type TemplateConfig } from "../domain.js"
 
-// CHANGE: render an Android emulator sidecar service mirroring the Playwright MCP wiring
+// CHANGE: render an Android emulator sidecar service for the first-party Android MCP wiring
 // WHY: issue-436 asks to connect mcp-android "the same way" Playwright MCP works, exposing
-//      a docker-android emulator as a service reachable over ADB for the mobile-mcp server.
+//      a docker-android emulator as a service reachable over ADB for android-connection.
 //      Extracted into its own module so docker-compose.ts stays under the max-lines budget.
 // QUOTE(ТЗ): "Подключить mcp-android так же как работает MCP PLAYRIGHT"
 // REF: issue-436
@@ -35,7 +35,7 @@ export const buildAndroidFragments = (
   const networkName = resolveComposeNetworkName(config)
 
   const maybeAndroidEnv =
-    `      MCP_ANDROID_ENABLE: "1"\n      DOCKER_GIT_ANDROID_CONTAINER_NAME: "${androidContainerName}"\n      DOCKER_GIT_ANDROID_ADB_ENDPOINT: "\${DOCKER_GIT_ANDROID_ADB_ENDPOINT:-${androidContainerName}:5555}"\n      DOCKER_GIT_ANDROID_EMULATOR_IMAGE: "${androidImageRef}"\n`
+    `      MCP_ANDROID_ENABLE: "1"\n      DOCKER_GIT_ANDROID_PROJECT: "${config.containerName}"\n      DOCKER_GIT_ANDROID_CONTAINER_NAME: "${androidContainerName}"\n      DOCKER_GIT_ANDROID_ADB_ENDPOINT: "\${DOCKER_GIT_ANDROID_ADB_ENDPOINT:-${androidContainerName}:5555}"\n      DOCKER_GIT_ANDROID_EMULATOR_IMAGE: "${androidImageRef}"\n`
 
   const maybeAndroidService = `
   ${config.serviceName}-android:

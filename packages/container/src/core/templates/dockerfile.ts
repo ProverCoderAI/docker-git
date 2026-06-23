@@ -91,21 +91,23 @@ const renderDockerfilePlaywrightRuntime = (config: TemplateConfig): string =>
 # Old browser-vnc + cdp-guard duplication removed per #347`
     : ""
 
-// CHANGE: install the ADB client when Android MCP is enabled
-// WHY: the mobile-mcp server (launched via npx at runtime) drives the docker-android
-//      emulator sidecar over ADB, so the dev container needs an `adb` binary to connect
+// CHANGE: install the first-party Android MCP module when Android MCP is enabled
+// WHY: issue-436 requires a separately proven module instead of an unpinned runtime npx server
 // QUOTE(ТЗ): "Подключить mcp-android так же как работает MCP PLAYRIGHT"
 // REF: issue-436
-// SOURCE: https://github.com/budtmo/docker-android (ADB on 5555)
+// SOURCE: n/a
 // PURITY: CORE (pure template renderer)
 const renderDockerfileAndroidRuntime = (config: TemplateConfig): string =>
   config.enableMcpAndroid === true
-    ? `# Android MCP runtime: ADB client to reach the dg-*-android emulator sidecar.
-# The MCP server itself (@mobilenext/mobile-mcp) is launched on demand via npx (Node 24 above).
+    ? `# Android MCP runtime: ADB client + first-party Rust android-connection module.
+COPY .docker-git-tools/android-connection /opt/docker-git/tools/android-connection
 RUN apt-get update \
   && apt-get install -y --no-install-recommends android-tools-adb \
   && rm -rf /var/lib/apt/lists/* \
-  && adb --version`
+  && adb --version \
+  && cargo install --path /opt/docker-git/tools/android-connection --locked --bins --root /usr/local \
+  && /usr/local/bin/docker-git-android-connection --version \
+  && /usr/local/bin/android-connection --version`
     : ""
 
 /**

@@ -5,7 +5,7 @@
 Add Android MCP integration alongside the existing Playwright MCP support (issue #436).
 
 Projects can now opt into a nested Android emulator sidecar driven by the
-`@mobilenext/mobile-mcp` server, mirroring how Playwright MCP works. Enable it
+first-party Rust `android-connection` MCP server, mirroring how Playwright MCP works. Enable it
 with the new `--mcp-android` / `--no-mcp-android` create flags, the `mcp-android`
 subcommand, the interactive create-flow prompt, or the `enableMcpAndroid` field
 on the web/API create-project request. When enabled, the generated

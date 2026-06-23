@@ -1144,6 +1144,7 @@ describe("renderDockerCompose", () => {
     )
 
     expect(compose).toContain('MCP_ANDROID_ENABLE: "1"')
+    expect(compose).toContain('DOCKER_GIT_ANDROID_PROJECT: "dg-test"')
     expect(compose).toContain('DOCKER_GIT_ANDROID_CONTAINER_NAME: "dg-test-android"')
     expect(compose).toContain(
       'DOCKER_GIT_ANDROID_ADB_ENDPOINT: "${DOCKER_GIT_ANDROID_ADB_ENDPOINT:-dg-test-android:5555}"'
@@ -1171,12 +1172,16 @@ describe("renderDockerCompose", () => {
     expect(compose).not.toContain("/dev/kvm")
   })
 
-  it("installs the ADB client in the Dockerfile only when Android MCP is enabled", () => {
+  it("installs the first-party Android connection module only when Android MCP is enabled", () => {
     const enabled = renderDockerfile(makeTemplateConfig({ enableMcpAndroid: true }))
     const disabled = renderDockerfile(makeTemplateConfig({ enableMcpAndroid: false }))
 
+    expect(enabled).toContain("COPY .docker-git-tools/android-connection")
     expect(enabled).toContain("android-tools-adb")
-    expect(enabled).toContain("adb --version")
+    expect(enabled).toContain("cargo install --path /opt/docker-git/tools/android-connection")
+    expect(enabled).toContain("/usr/local/bin/docker-git-android-connection --version")
+    expect(enabled).toContain("/usr/local/bin/android-connection --version")
+    expect(disabled).not.toContain(".docker-git-tools/android-connection")
     expect(disabled).not.toContain("android-tools-adb")
   })
 
@@ -1186,11 +1191,14 @@ describe("renderDockerCompose", () => {
     expect(entrypoint).toContain('MCP_ANDROID_ENABLE="${MCP_ANDROID_ENABLE:-1}"')
     // Codex (TOML)
     expect(entrypoint).toContain("[mcp_servers.android]")
-    expect(entrypoint).toContain("@mobilenext/mobile-mcp@latest")
+    expect(entrypoint).toContain('command = "android-connection"')
+    expect(entrypoint).toContain('"--endpoint", "$DOCKER_GIT_ANDROID_ADB_ENDPOINT"')
+    expect(entrypoint).not.toContain("@mobilenext/mobile-mcp")
     // Claude / Gemini / Grok (JSON sync helpers)
     expect(entrypoint).toContain("docker_git_sync_claude_android_mcp")
     expect(entrypoint).toContain("docker_git_sync_gemini_android_mcp")
     expect(entrypoint).toContain("docker_git_sync_grok_android_mcp")
+    expect(entrypoint).toContain('command: "android-connection"')
   })
 
   it("defaults MCP_ANDROID_ENABLE to 0 when Android MCP is disabled", () => {

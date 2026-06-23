@@ -227,6 +227,7 @@ describe("applyProjectFiles", () => {
             cpuLimit: "2",
             ramLimit: "4g",
             enableMcpPlaywright: true,
+            enableMcpAndroid: true,
             gpu: "none",
           })
         )
@@ -236,6 +237,7 @@ describe("applyProjectFiles", () => {
         expect(appliedTemplate.cpuLimit).toBe("2")
         expect(appliedTemplate.ramLimit).toBe("4g")
         expect(appliedTemplate.enableMcpPlaywright).toBe(true)
+        expect(appliedTemplate.enableMcpAndroid).toBe(true)
 
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
         expect(composeAfter).toContain('GITHUB_AUTH_LABEL: "AGIEN_MAIN"')
@@ -247,10 +249,17 @@ describe("applyProjectFiles", () => {
         expect(composeAfter).toContain('memswap_limit: "8192m"')
         expect(composeAfter).toContain('MCP_PLAYWRIGHT_ENABLE: "1"')
         expect(composeAfter).toContain("dg-test-browser")
+        expect(composeAfter).toContain('MCP_ANDROID_ENABLE: "1"')
+        expect(composeAfter).toContain('DOCKER_GIT_ANDROID_PROJECT: "dg-test"')
+        expect(composeAfter).toContain("dg-test-android")
+
+        const dockerfileAfter = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
+        expect(dockerfileAfter).toContain("cargo install --path /opt/docker-git/tools/android-connection")
 
         const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         expect(configAfter).toContain('"cpuLimit": "2"')
         expect(configAfter).toContain('"ramLimit": "4g"')
+        expect(configAfter).toContain('"enableMcpAndroid": true')
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

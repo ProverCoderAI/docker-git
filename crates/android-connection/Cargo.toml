@@ -1,0 +1,24 @@
+[package]
+name = "docker-git-android-connection"
+version = "0.1.0"
+edition = "2021"
+description = "First-party Android MCP and lifecycle module for docker-git"
+license = "MIT"
+repository = "https://github.com/ProverCoderAI/docker-git"
+
+[lib]
+name = "docker_git_android_connection"
+path = "src/lib.rs"
+
+[[bin]]
+name = "docker-git-android-connection"
+path = "src/main.rs"
+
+[[bin]]
+name = "android-connection"
+path = "src/bin/android-connection.rs"
+
+[dependencies]
+clap = { version = "4.5.53", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"

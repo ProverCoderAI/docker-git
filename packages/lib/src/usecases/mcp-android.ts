@@ -28,7 +28,7 @@ const enableInTemplate = (template: TemplateConfig): TemplateConfig => ({
 })
 
 // CHANGE: enable Android MCP in an existing docker-git project directory (files only)
-// WHY: allow adding the nested Android emulator sidecar + mobile-mcp server config without wiping env or volumes
+// WHY: allow adding the Android emulator sidecar + android-connection MCP config without wiping env or volumes
 // QUOTE(ТЗ): "Подключить mcp-android так же как работает MCP PLAYRIGHT"
 // REF: issue-436
 // SOURCE: n/a
@@ -85,6 +85,6 @@ export const mcpAndroidUp = (
       return updated
     }
 
-    yield* _(ensureDockerDaemonAccess(process.cwd()))
+    yield* _(ensureDockerDaemonAccess(command.projectDir))
     return yield* _(runDockerComposeUpWithPortCheck(command.projectDir))
   })

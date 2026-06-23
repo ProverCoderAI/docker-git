@@ -11,6 +11,7 @@ import {
   withDefaultResourceLimitIntent
 } from "../core/resource-limits.js"
 import { type FileSpec, planFiles } from "../core/templates.js"
+import { provisionDockerGitAndroidConnectionSource } from "./android-connection-source.js"
 import { resolveDockerEnvValue } from "./docker-auth.js"
 import { FileExistsError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
@@ -214,6 +215,20 @@ const provisionDockerGitSessionSyncTool = (
     )
   })
 
+const provisionDockerGitBuildContext = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  baseDir: string,
+  config: TemplateConfig
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    yield* _(provisionDockerGitScripts(fs, path, baseDir))
+    yield* _(provisionDockerGitSessionSyncTool(fs, path, baseDir))
+    if (config.enableMcpAndroid === true) {
+      yield* _(provisionDockerGitAndroidConnectionSource(fs, path, baseDir))
+    }
+  })
+
 // CHANGE: write generated docker-git files to disk
 // WHY: isolate all filesystem effects in a thin shell
 // QUOTE(ТЗ): "создавать докер образы"
@@ -267,11 +282,7 @@ export const writeProjectFiles = (
       }
     }
 
-    // CHANGE: provision docker-git scripts into project build context
-    // WHY: Dockerfile COPY scripts/ requires scripts to be in the build context
-    // REF: issue-176
-    yield* _(provisionDockerGitScripts(fs, path, baseDir))
-    yield* _(provisionDockerGitSessionSyncTool(fs, path, baseDir))
+    yield* _(provisionDockerGitBuildContext(fs, path, baseDir, normalizedConfig))
 
     return created
   })

@@ -25,10 +25,7 @@ export const renderCreateStepLabel = (step: CreateStep, defaults: CreateInputs):
     ),
     Match.when(
       "mcpAndroid",
-      () =>
-        `Enable Android MCP (nested Android emulator)? [${
-          renderExplicitBooleanChoice(defaults.enableMcpAndroid)
-        }]`
+      () => `Enable Android MCP (nested Android emulator)? [${renderExplicitBooleanChoice(defaults.enableMcpAndroid)}]`
     ),
     Match.when(
       "force",

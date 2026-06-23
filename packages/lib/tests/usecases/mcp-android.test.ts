@@ -121,11 +121,22 @@ describe("enableMcpAndroidProjectFiles", () => {
         const composeAfter = yield* _(fs.readFileString(path.join(outDir, "docker-compose.yml")))
         expect(composeAfter).toContain("dg-test-android")
         expect(composeAfter).toContain('MCP_ANDROID_ENABLE: "1"')
+        expect(composeAfter).toContain('DOCKER_GIT_ANDROID_PROJECT: "dg-test"')
         expect(composeAfter).toContain('DOCKER_GIT_ANDROID_CONTAINER_NAME: "dg-test-android"')
         expect(composeAfter).toContain("/dev/kvm")
 
         const dockerfileAfter = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
         expect(dockerfileAfter).toContain("android-tools-adb")
+        expect(dockerfileAfter).toContain("cargo install --path /opt/docker-git/tools/android-connection")
+        expect(dockerfileAfter).toContain("/usr/local/bin/android-connection --version")
+
+        const androidConnectionCargoToml = path.join(
+          outDir,
+          ".docker-git-tools",
+          "android-connection",
+          "Cargo.toml"
+        )
+        expect(yield* _(fs.exists(androidConnectionCargoToml))).toBe(true)
 
         const configAfterText = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         const configAfter = yield* _(Effect.sync((): unknown => JSON.parse(configAfterText)))

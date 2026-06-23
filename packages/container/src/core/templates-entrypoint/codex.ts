@@ -132,19 +132,27 @@ export const renderEntrypointMcpPlaywright = (config: TemplateConfig): string =>
     .replaceAll("__CODEX_HOME__", () => config.codexHome)
     .replaceAll("__SERVICE_NAME__", () => config.serviceName)
 
-// CHANGE: configure the Android MCP server (mobile-mcp) for Codex, mirroring the Playwright block
+// CHANGE: configure the first-party Android MCP server for Codex, mirroring the Playwright block
 // WHY: issue-436 asks to wire mcp-android "the same way" Playwright MCP works; Codex reads its
 //      MCP servers from config.toml, so we add/remove an [mcp_servers.android] entry to match the build
 // QUOTE(ТЗ): "Подключить mcp-android так же как работает MCP PLAYRIGHT"
 // REF: issue-436
-// SOURCE: https://github.com/mobile-next/mobile-mcp
-const entrypointMcpAndroidTemplate = String.raw`# Optional: configure Android MCP for Codex (mobile-mcp over ADB)
+// SOURCE: n/a
+const entrypointMcpAndroidTemplate = String.raw`# Optional: configure Android MCP for Codex (Rust android-connection)
 CODEX_CONFIG_FILE="__CODEX_HOME__/config.toml"
+DOCKER_GIT_ANDROID_PROJECT="${"$"}{DOCKER_GIT_ANDROID_PROJECT:-${"$"}{DOCKER_GIT_PROJECT_CONTAINER_NAME:-}}"
+if [[ -z "$DOCKER_GIT_ANDROID_PROJECT" ]]; then
+  DOCKER_GIT_ANDROID_PROJECT="$(hostname)"
+fi
+DOCKER_GIT_ANDROID_NETWORK="${"$"}{DOCKER_GIT_ANDROID_NETWORK:-container:$DOCKER_GIT_ANDROID_PROJECT}"
 DOCKER_GIT_ANDROID_ADB_ENDPOINT="${"$"}{DOCKER_GIT_ANDROID_ADB_ENDPOINT:-}"
+if [[ -z "$DOCKER_GIT_ANDROID_ADB_ENDPOINT" ]]; then
+  DOCKER_GIT_ANDROID_ADB_ENDPOINT="$DOCKER_GIT_ANDROID_PROJECT-android:5555"
+fi
 
 # Keep config.toml consistent with the container build.
 # If Android MCP is disabled for this container, remove the block so Codex
-# doesn't try (and fail) to spawn the mobile-mcp server.
+# doesn't try (and fail) to spawn android-connection.
 if [[ "$MCP_ANDROID_ENABLE" != "1" ]]; then
   if [[ -f "$CODEX_CONFIG_FILE" ]] && grep -q "^\[mcp_servers\.android" "$CODEX_CONFIG_FILE" 2>/dev/null; then
     awk '
@@ -200,10 +208,10 @@ EOF
 
   cat <<EOF >> "$CODEX_CONFIG_FILE"
 
-# docker-git: Android MCP (mobile-mcp over ADB)
+# docker-git: Android MCP (rust android-connection)
 [mcp_servers.android]
-command = "bash"
-args = ["-lc", "adb connect $DOCKER_GIT_ANDROID_ADB_ENDPOINT >/dev/null 2>&1 || true; exec npx -y @mobilenext/mobile-mcp@latest"]
+command = "android-connection"
+args = ["--project", "$DOCKER_GIT_ANDROID_PROJECT", "--network", "$DOCKER_GIT_ANDROID_NETWORK", "--endpoint", "$DOCKER_GIT_ANDROID_ADB_ENDPOINT", "--workspace", "$TARGET_DIR"]
 EOF
 fi`
 

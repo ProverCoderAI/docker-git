@@ -28,7 +28,7 @@ Commands:
   open                Open an existing docker-git project by selector, URL, or path
   apply               Apply docker-git config to an existing project/container (current dir by default)
   mcp-playwright      Enable Playwright MCP + nested Chromium browser for an existing project dir
-  mcp-android         Enable Android MCP (mobile-mcp) + nested Android emulator for an existing project dir
+  mcp-android         Enable Android MCP (android-connection) + nested Android emulator for an existing project dir
   attach, tmux        Attach to an existing docker-git project workspace with tmux
   panes, terms        List tmux panes for a docker-git project
   scrap               Export/import project scrap (session snapshot + rebuildable deps)
@@ -80,7 +80,7 @@ Options:
   --up | --no-up            Run docker compose up after init (default: --up)
   --ssh | --no-ssh          Auto-open SSH after create/clone (default: clone=--ssh, create=--no-ssh)
   --mcp-playwright | --no-mcp-playwright  Enable Rust browser MCP + noVNC/CDP session (default: --no-mcp-playwright)
-  --mcp-android | --no-mcp-android  Enable Android MCP (mobile-mcp) + nested Android emulator sidecar (default: --no-mcp-android)
+  --mcp-android | --no-mcp-android  Enable Android MCP (android-connection) + nested Android emulator sidecar (default: --no-mcp-android)
   --auto[=claude|codex|gemini|grok]  Auto-execute an agent; without value picks by auth, random if multiple are available
   -d, --daemon             browser: run the browser frontend server in the background after build
   --active                  apply-all: apply only to currently running containers (skip stopped ones)
