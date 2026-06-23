@@ -55,6 +55,7 @@ export type CreateInputs = {
   readonly gpu: GpuMode
   readonly runUp: boolean
   readonly enableMcpPlaywright: boolean
+  readonly enableMcpAndroid: boolean
   readonly force: boolean
   readonly forceEnv: boolean
 }
@@ -68,6 +69,7 @@ export type CreateStep =
   | "gpu"
   | "runUp"
   | "mcpPlaywright"
+  | "mcpAndroid"
   | "force"
 
 export const orderedCreateSteps: ReadonlyArray<CreateStep> = [
@@ -77,6 +79,7 @@ export const orderedCreateSteps: ReadonlyArray<CreateStep> = [
   "gpu",
   "runUp",
   "mcpPlaywright",
+  "mcpAndroid",
   "force"
 ]
 

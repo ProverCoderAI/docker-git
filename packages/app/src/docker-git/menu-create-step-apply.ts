@@ -41,12 +41,13 @@ const applyGpuStep = (
 
 const applyBooleanStep = (
   input: ApplyCreateStepInput,
-  key: "runUp" | "enableMcpPlaywright" | "force"
+  key: "runUp" | "enableMcpPlaywright" | "enableMcpAndroid" | "force"
 ): Either.Either<Partial<Mutable<CreateInputs>>, ParseError> => {
   const isValue = isYesDefault(input.buffer, input.currentDefaults[key])
   return Match.value(key).pipe(
     Match.when("runUp", () => Either.right({ runUp: isValue })),
     Match.when("enableMcpPlaywright", () => Either.right({ enableMcpPlaywright: isValue })),
+    Match.when("enableMcpAndroid", () => Either.right({ enableMcpAndroid: isValue })),
     Match.when("force", () => Either.right({ force: isValue })),
     Match.exhaustive
   )
@@ -64,6 +65,7 @@ const applyCreateStep = (
     Match.when("gpu", () => applyGpuStep(input)),
     Match.when("runUp", () => applyBooleanStep(input, "runUp")),
     Match.when("mcpPlaywright", () => applyBooleanStep(input, "enableMcpPlaywright")),
+    Match.when("mcpAndroid", () => applyBooleanStep(input, "enableMcpAndroid")),
     Match.when("force", () => applyBooleanStep(input, "force")),
     Match.exhaustive
   )

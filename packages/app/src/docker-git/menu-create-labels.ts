@@ -24,6 +24,13 @@ export const renderCreateStepLabel = (step: CreateStep, defaults: CreateInputs):
         }]`
     ),
     Match.when(
+      "mcpAndroid",
+      () =>
+        `Enable Android MCP (nested Android emulator)? [${
+          renderExplicitBooleanChoice(defaults.enableMcpAndroid)
+        }]`
+    ),
+    Match.when(
       "force",
       () => `Force recreate (overwrite files + wipe volumes)? [${renderExplicitBooleanChoice(defaults.force)}]`
     ),
@@ -56,6 +63,12 @@ export const renderCreateStepLabelWithBufferPreview = (
       return enableMcpPlaywright === null
         ? renderCreateStepLabel(step, defaults)
         : `Enable Playwright MCP (nested Chromium browser)? [${renderExplicitBooleanChoice(enableMcpPlaywright)}]`
+    }),
+    Match.when("mcpAndroid", () => {
+      const enableMcpAndroid = parseExplicitBooleanChoice(buffer)
+      return enableMcpAndroid === null
+        ? renderCreateStepLabel(step, defaults)
+        : `Enable Android MCP (nested Android emulator)? [${renderExplicitBooleanChoice(enableMcpAndroid)}]`
     }),
     Match.when("force", () => {
       const force = parseExplicitBooleanChoice(buffer)

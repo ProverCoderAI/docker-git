@@ -40,6 +40,7 @@ export const validGithubStatus: GithubAuthStatus = {
 const defaultQuickCreateInputs = {
   cpuLimit: "",
   enableMcpPlaywright: false,
+  enableMcpAndroid: false,
   force: false,
   forceEnv: false,
   gpu: "none",

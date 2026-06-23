@@ -247,6 +247,7 @@ export const resolveCreateInputs = (
     gpu: values.gpu ?? defaultTemplateConfig.gpu,
     runUp: values.runUp !== false,
     enableMcpPlaywright: values.enableMcpPlaywright === true,
+    enableMcpAndroid: values.enableMcpAndroid === true,
     force: values.force === true,
     forceEnv: values.forceEnv === true
   }

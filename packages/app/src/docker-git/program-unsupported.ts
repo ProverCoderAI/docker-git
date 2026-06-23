@@ -4,6 +4,7 @@ export type UnsupportedOperationalCommandTag =
   | "ScrapExport"
   | "ScrapImport"
   | "McpPlaywrightUp"
+  | "McpAndroidUp"
   | "Apply"
   | "AuthClaudeStatus"
   | "AuthClaudeLogout"
@@ -21,6 +22,10 @@ export const unsupportedOperationalCommands: Record<
   McpPlaywrightUp: {
     command: "mcp-playwright",
     message: "Playwright browser management is disabled in API-only host mode."
+  },
+  McpAndroidUp: {
+    command: "mcp-android",
+    message: "Android emulator management is disabled in API-only host mode."
   },
   Apply: {
     command: "Apply",

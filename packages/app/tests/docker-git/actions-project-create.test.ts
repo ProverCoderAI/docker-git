@@ -26,6 +26,7 @@ vi.mock("../../src/web/project-events.js", () => ({
 const inputConfig = {
   cpuLimit: "75%",
   enableMcpPlaywright: true,
+  enableMcpAndroid: false,
   force: false,
   forceEnv: false,
   gpu: "none",

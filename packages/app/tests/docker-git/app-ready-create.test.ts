@@ -55,7 +55,8 @@ describe("app-ready-create", () => {
       "ramLimit",
       "gpu",
       "runUp",
-      "mcpPlaywright"
+      "mcpPlaywright",
+      "mcpAndroid"
     ])
     expect(context.setMessage).toHaveBeenCalledWith(null)
   })

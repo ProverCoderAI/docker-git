@@ -8,6 +8,7 @@ import type { CreateProjectRequestDraft } from "../../src/web/api-project-create
 const projectDraft = {
   cpuLimit: "80%",
   enableMcpPlaywright: true,
+  enableMcpAndroid: false,
   force: false,
   forceEnv: false,
   gpu: "none",
@@ -61,6 +62,7 @@ describe("api create project request body", () => {
         async: true,
         cpuLimit: "80%",
         enableMcpPlaywright: true,
+        enableMcpAndroid: false,
         force: false,
         forceEnv: false,
         gpu: "none",

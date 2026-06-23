@@ -7,6 +7,7 @@ import { parseAttach } from "./parser-attach.js"
 import { parseAuth } from "./parser-auth.js"
 import { parseClone } from "./parser-clone.js"
 import { buildCreateCommand } from "./parser-create.js"
+import { parseMcpAndroid } from "./parser-mcp-android.js"
 import { parseMcpPlaywright } from "./parser-mcp-playwright.js"
 import { parseOpen } from "./parser-open.js"
 import { parseRawOptions } from "./parser-options.js"
@@ -93,6 +94,7 @@ export const parseArgs = (args: ReadonlyArray<string>): Either.Either<Command, P
       Match.when("sessions", () => parseSessions(rest)),
       Match.when("scrap", () => parseScrap(rest)),
       Match.when("mcp-playwright", () => parseMcpPlaywright(rest)),
+      Match.when("mcp-android", () => parseMcpAndroid(rest)),
       Match.when("help", () => Either.right(helpCommand)),
       Match.when("ps", () => Either.right(statusCommand)),
       Match.when("status", () => Either.right(statusCommand)),

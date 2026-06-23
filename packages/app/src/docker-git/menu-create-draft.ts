@@ -12,6 +12,7 @@ export const createProjectDraftFromInputs = (
   readonly gpu: GpuMode
   readonly up: boolean
   readonly enableMcpPlaywright: boolean
+  readonly enableMcpAndroid: boolean
   readonly force: boolean
   readonly forceEnv: boolean
 } => ({
@@ -23,6 +24,7 @@ export const createProjectDraftFromInputs = (
   gpu: input.gpu,
   up: input.runUp,
   enableMcpPlaywright: input.enableMcpPlaywright,
+  enableMcpAndroid: input.enableMcpAndroid,
   force: input.force,
   forceEnv: input.forceEnv
 })

@@ -34,10 +34,11 @@ describe("menu-create-shared display settings", () => {
   const cwd = process.cwd()
   const isDisplaySettingStep = (step: CreateStep): step is Exclude<CreateStep, "repoUrl"> => step !== "repoUrl"
   const displaySettingSteps = resolveCreateDisplaySteps().filter(isDisplaySettingStep)
-  const discreteDisplaySteps: ReadonlyArray<"gpu" | "runUp" | "mcpPlaywright" | "force"> = [
+  const discreteDisplaySteps: ReadonlyArray<"gpu" | "runUp" | "mcpPlaywright" | "mcpAndroid" | "force"> = [
     "gpu",
     "runUp",
     "mcpPlaywright",
+    "mcpAndroid",
     "force"
   ]
   const validBufferByStep: Record<CreateStep, string> = {
@@ -45,6 +46,7 @@ describe("menu-create-shared display settings", () => {
     force: "y",
     gpu: "all",
     mcpPlaywright: "y",
+    mcpAndroid: "y",
     outDir: "/home/dev/.docker-git/org/repo-preview",
     ramLimit: "8g",
     repoRef: "main",
@@ -69,6 +71,7 @@ describe("menu-create-shared display settings", () => {
       "gpu",
       "runUp",
       "mcpPlaywright",
+      "mcpAndroid",
       "force"
     ])
   })
@@ -90,7 +93,7 @@ describe("menu-create-shared display settings", () => {
       { ...mcpPlaywrightView, buffer: "y" }
     )))
 
-    expect(next.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
+    expect(next.step).toBe(resolveCreateDisplaySteps().indexOf("mcpAndroid"))
     expect(next.buffer).toBe("")
     expect(next.values.enableMcpPlaywright).toBe(true)
   })
@@ -123,7 +126,7 @@ describe("menu-create-shared display settings", () => {
     const down = moveCreateDisplaySettingsStep(applied, "down")
     const up = moveCreateDisplaySettingsStep(applied, "up")
 
-    expect(down?.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
+    expect(down?.step).toBe(resolveCreateDisplaySteps().indexOf("mcpAndroid"))
     expect(up?.step).toBe(resolveCreateDisplaySteps().indexOf("runUp"))
     expect(down?.buffer).toBe("")
     expect(up?.values.enableMcpPlaywright).toBe(true)

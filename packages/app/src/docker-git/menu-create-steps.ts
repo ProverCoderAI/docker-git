@@ -19,6 +19,7 @@ const isCreateStepSatisfied = (
     Match.when("gpu", () => hasOwn(values, "gpu")),
     Match.when("runUp", () => hasOwn(values, "runUp")),
     Match.when("mcpPlaywright", () => hasOwn(values, "enableMcpPlaywright")),
+    Match.when("mcpAndroid", () => hasOwn(values, "enableMcpAndroid")),
     Match.when("force", () => hasOwn(values, "force")),
     Match.exhaustive
   )
