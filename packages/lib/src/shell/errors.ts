@@ -39,6 +39,8 @@ export type DockerIdentityConflictKind =
   | "serviceName"
   | "volumeName"
   | "browserVolumeName"
+  | "androidContainerName"
+  | "androidVolumeName"
   | "bootstrapVolumeName"
 
 export type DockerIdentityConflict = {

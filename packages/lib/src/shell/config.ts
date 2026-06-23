@@ -85,6 +85,9 @@ const TemplateConfigInputSchema = Schema.Struct({
   enableMcpPlaywright: Schema.optionalWith(Schema.Boolean, {
     default: () => defaultTemplateConfig.enableMcpPlaywright
   }),
+  enableMcpAndroid: Schema.optionalWith(Schema.Boolean, {
+    default: () => defaultTemplateConfig.enableMcpAndroid
+  }),
   bunVersion: Schema.optional(Schema.String),
   pnpmVersion: Schema.optional(Schema.String),
   clonedOnHostname: Schema.optional(HostnameSchema)

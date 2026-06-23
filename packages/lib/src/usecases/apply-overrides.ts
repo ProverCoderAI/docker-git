@@ -12,7 +12,8 @@ const applyOverrideKeys = [
   "playwrightCpuLimit",
   "playwrightRamLimit",
   "gpu",
-  "enableMcpPlaywright"
+  "enableMcpPlaywright",
+  "enableMcpAndroid"
 ] satisfies ReadonlyArray<keyof ApplyCommand>
 
 export const hasApplyOverrides = (command: ApplyCommand): boolean =>
@@ -57,6 +58,9 @@ const applyResourceOverrides = (template: TemplateConfig, command: ApplyCommand)
   }
   if (command.enableMcpPlaywright !== undefined) {
     next = { ...next, enableMcpPlaywright: command.enableMcpPlaywright }
+  }
+  if (command.enableMcpAndroid !== undefined) {
+    next = { ...next, enableMcpAndroid: command.enableMcpAndroid }
   }
   return next
 }

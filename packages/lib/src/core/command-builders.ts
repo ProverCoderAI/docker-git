@@ -200,6 +200,7 @@ type CreateBehavior = {
   readonly force: boolean
   readonly forceEnv: boolean
   readonly enableMcpPlaywright: boolean
+  readonly enableMcpAndroid: boolean
 }
 
 const resolveCreateBehavior = (raw: RawOptions): CreateBehavior => ({
@@ -208,7 +209,8 @@ const resolveCreateBehavior = (raw: RawOptions): CreateBehavior => ({
   skipGithubAuth: raw.skipGithubAuth ?? false,
   force: raw.force ?? false,
   forceEnv: raw.forceEnv ?? false,
-  enableMcpPlaywright: raw.enableMcpPlaywright ?? false
+  enableMcpPlaywright: raw.enableMcpPlaywright ?? false,
+  enableMcpAndroid: raw.enableMcpAndroid ?? false
 })
 
 type TokenLabelConfig = {
@@ -276,6 +278,7 @@ export const buildCreateCommand = (
         ...tokenLabels,
         skipGithubAuth: behavior.skipGithubAuth,
         enableMcpPlaywright: behavior.enableMcpPlaywright,
+        enableMcpAndroid: behavior.enableMcpAndroid,
         agentMode,
         agentAuto: isAgentAuto,
         clonedOnHostname: raw.clonedOnHostname
