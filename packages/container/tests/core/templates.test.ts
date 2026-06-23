@@ -1130,6 +1130,75 @@ describe("renderDockerCompose", () => {
     expect(compose).toContain('DOCKER_GIT_BROWSER_RAM_LIMIT: "${DOCKER_GIT_BROWSER_RAM_LIMIT:-2g}"')
   })
 
+  it("renders the Android emulator sidecar service when Android MCP is enabled", () => {
+    const compose = renderDockerCompose(
+      makeTemplateConfig({
+        enableMcpAndroid: true,
+        gpu: "none",
+      }),
+      {
+        cpuLimit: 1.5,
+        ramLimit: "2g",
+        swapLimit: "4g"
+      }
+    )
+
+    expect(compose).toContain('MCP_ANDROID_ENABLE: "1"')
+    expect(compose).toContain('DOCKER_GIT_ANDROID_CONTAINER_NAME: "dg-test-android"')
+    expect(compose).toContain(
+      'DOCKER_GIT_ANDROID_ADB_ENDPOINT: "${DOCKER_GIT_ANDROID_ADB_ENDPOINT:-dg-test-android:5555}"'
+    )
+    expect(compose).toContain(
+      'DOCKER_GIT_ANDROID_EMULATOR_IMAGE: "${DOCKER_GIT_ANDROID_EMULATOR_IMAGE:-budtmo/docker-android:emulator_14.0}"'
+    )
+    // emulator runs as a real compose service (unlike the externally-managed browser container)
+    expect(compose).toContain("\n  dg-test-android:\n")
+    expect(compose).toContain("      - /dev/kvm")
+    expect(compose).toContain(
+      '- "${DOCKER_GIT_ANDROID_ADB_BIND_HOST:-127.0.0.1}:${DOCKER_GIT_ANDROID_ADB_PORT:-5555}:5555"'
+    )
+    expect(compose).toContain("  dg-test-home-android:")
+    // the sidecar reuses the Playwright sidecar resource budget
+    expect(compose).toContain("    cpus: 1.5\n")
+  })
+
+  it("omits all Android emulator wiring when Android MCP is disabled", () => {
+    const compose = renderDockerCompose(makeTemplateConfig({ enableMcpAndroid: false }))
+
+    expect(compose).not.toContain("MCP_ANDROID_ENABLE")
+    expect(compose).not.toContain("\n  dg-test-android:\n")
+    expect(compose).not.toContain("dg-test-home-android:")
+    expect(compose).not.toContain("/dev/kvm")
+  })
+
+  it("installs the ADB client in the Dockerfile only when Android MCP is enabled", () => {
+    const enabled = renderDockerfile(makeTemplateConfig({ enableMcpAndroid: true }))
+    const disabled = renderDockerfile(makeTemplateConfig({ enableMcpAndroid: false }))
+
+    expect(enabled).toContain("android-tools-adb")
+    expect(enabled).toContain("adb --version")
+    expect(disabled).not.toContain("android-tools-adb")
+  })
+
+  it("configures the Android MCP server for every agent and defaults the enable flag", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig({ enableMcpAndroid: true }))
+
+    expect(entrypoint).toContain('MCP_ANDROID_ENABLE="${MCP_ANDROID_ENABLE:-1}"')
+    // Codex (TOML)
+    expect(entrypoint).toContain("[mcp_servers.android]")
+    expect(entrypoint).toContain("@mobilenext/mobile-mcp@latest")
+    // Claude / Gemini / Grok (JSON sync helpers)
+    expect(entrypoint).toContain("docker_git_sync_claude_android_mcp")
+    expect(entrypoint).toContain("docker_git_sync_gemini_android_mcp")
+    expect(entrypoint).toContain("docker_git_sync_grok_android_mcp")
+  })
+
+  it("defaults MCP_ANDROID_ENABLE to 0 when Android MCP is disabled", () => {
+    const entrypoint = renderEntrypoint(makeTemplateConfig({ enableMcpAndroid: false }))
+
+    expect(entrypoint).toContain('MCP_ANDROID_ENABLE="${MCP_ANDROID_ENABLE:-0}"')
+  })
+
   it("renders explicit anonymous GitHub clone override for public repos", () => {
     const compose = renderDockerCompose(
       makeTemplateConfig({

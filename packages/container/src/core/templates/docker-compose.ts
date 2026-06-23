@@ -23,6 +23,9 @@ type ComposeFragments = {
   readonly maybeDockerSocketMount: string
   readonly maybePlaywrightEnv: string
   readonly maybeBrowserVolume: string
+  readonly maybeAndroidEnv: string
+  readonly maybeAndroidService: string
+  readonly maybeAndroidVolume: string
   readonly maybeBootstrapMounts: string
   readonly forkRepoUrl: string
 }
@@ -33,6 +36,13 @@ type PlaywrightFragments = Pick<
   | "maybeDockerSocketMount"
   | "maybePlaywrightEnv"
   | "maybeBrowserVolume"
+>
+
+type AndroidFragments = Pick<
+  ComposeFragments,
+  | "maybeAndroidEnv"
+  | "maybeAndroidService"
+  | "maybeAndroidVolume"
 >
 
 type AuthEnvFragments = Pick<
@@ -190,6 +200,63 @@ const buildPlaywrightFragments = (
   }
 }
 
+// CHANGE: render an Android emulator sidecar service mirroring the Playwright MCP wiring
+// WHY: issue-436 asks to connect mcp-android "the same way" Playwright MCP works, exposing
+//      a docker-android emulator as a service reachable over ADB for the mobile-mcp server
+// QUOTE(ТЗ): "Подключить mcp-android так же как работает MCP PLAYRIGHT"
+// REF: issue-436
+// SOURCE: https://github.com/budtmo/docker-android
+// PURITY: CORE
+// INVARIANT: only emitted when config.enableMcpAndroid === true; image/ports are env-overridable
+const defaultAndroidEmulatorImage = "budtmo/docker-android:emulator_14.0"
+
+const buildAndroidFragments = (
+  config: TemplateConfig,
+  resourceLimits: ResolvedComposeResourceLimits | undefined
+): AndroidFragments => {
+  if (config.enableMcpAndroid !== true) {
+    return {
+      maybeAndroidEnv: "",
+      maybeAndroidService: "",
+      maybeAndroidVolume: ""
+    }
+  }
+
+  const androidContainerName = `${config.containerName}-android`
+  const androidVolumeName = `${config.volumeName}-android`
+  const androidImageRef = `\${DOCKER_GIT_ANDROID_EMULATOR_IMAGE:-${defaultAndroidEmulatorImage}}`
+  const networkName = resolveComposeNetworkName(config)
+
+  const maybeAndroidEnv =
+    `      MCP_ANDROID_ENABLE: "1"\n      DOCKER_GIT_ANDROID_CONTAINER_NAME: "${androidContainerName}"\n      DOCKER_GIT_ANDROID_ADB_ENDPOINT: "\${DOCKER_GIT_ANDROID_ADB_ENDPOINT:-${androidContainerName}:5555}"\n      DOCKER_GIT_ANDROID_EMULATOR_IMAGE: "${androidImageRef}"\n`
+
+  const maybeAndroidService = `
+  ${config.serviceName}-android:
+    image: "${androidImageRef}"
+    container_name: ${androidContainerName}
+    privileged: true
+    environment:
+      EMULATOR_DEVICE: "\${DOCKER_GIT_ANDROID_DEVICE:-Samsung Galaxy S10}"
+      WEB_VNC: "\${DOCKER_GIT_ANDROID_WEB_VNC:-true}"
+      EMULATOR_HEADLESS: "\${DOCKER_GIT_ANDROID_HEADLESS:-true}"
+    devices:
+      - /dev/kvm
+    ports:
+      - "\${DOCKER_GIT_ANDROID_ADB_BIND_HOST:-127.0.0.1}:\${DOCKER_GIT_ANDROID_ADB_PORT:-5555}:5555"
+      - "\${DOCKER_GIT_ANDROID_NOVNC_BIND_HOST:-127.0.0.1}:\${DOCKER_GIT_ANDROID_NOVNC_PORT:-6080}:6080"
+${renderResourceLimits(resourceLimits)}    volumes:
+      - ${androidVolumeName}:/root/.android
+    networks:
+      - ${networkName}
+`
+
+  return {
+    maybeAndroidEnv,
+    maybeAndroidService,
+    maybeAndroidVolume: `  ${androidVolumeName}:`
+  }
+}
+
 const isResolvedComposeResourceLimits = (
   value: ResolvedComposeResourceLimits | ComposeResourceLimits
 ): value is ResolvedComposeResourceLimits => "cpuLimit" in value && "ramLimit" in value && "swapLimit" in value
@@ -225,6 +292,7 @@ const buildComposeFragments = (
     resourceLimits.playwright,
     options
   )
+  const android = buildAndroidFragments(config, resourceLimits.playwright)
 
   return {
     networkMode,
@@ -236,6 +304,9 @@ const buildComposeFragments = (
     maybeDockerSocketMount: playwright.maybeDockerSocketMount,
     maybePlaywrightEnv: playwright.maybePlaywrightEnv,
     maybeBrowserVolume: playwright.maybeBrowserVolume,
+    maybeAndroidEnv: android.maybeAndroidEnv,
+    maybeAndroidService: android.maybeAndroidService,
+    maybeAndroidVolume: android.maybeAndroidVolume,
     maybeBootstrapMounts: renderBootstrapMounts(),
     forkRepoUrl
   }
@@ -269,7 +340,7 @@ ${fragments.maybeGrokAuthLabelEnv}${fragments.maybeAgentModeEnv}${fragments.mayb
       DOCKER_GIT_PROJECT_DOCKER_HOST: "\${DOCKER_GIT_PROJECT_DOCKER_HOST:-}"
       TARGET_DIR: "${config.targetDir}"
       CODEX_HOME: "${config.codexHome}"
-${fragments.maybePlaywrightEnv}${fragments.maybeDependsOn}    # bootstrap auth/env arrives through docker_git_bootstrap
+${fragments.maybePlaywrightEnv}${fragments.maybeAndroidEnv}${fragments.maybeDependsOn}    # bootstrap auth/env arrives through docker_git_bootstrap
     ports:
       - "\${DOCKER_GIT_PROJECT_SSH_BIND_HOST:-127.0.0.1}:${config.sshPort}:22"
 ${renderResourceLimits(resourceLimits.main)}    volumes:
@@ -286,7 +357,7 @@ ${fragments.maybeDockerSocketMount}
       - 1.1.1.1
     networks:
       - ${fragments.networkName}
-`
+${fragments.maybeAndroidService}`
 
 const renderComposeNetworks = (
   networkMode: TemplateConfig["dockerNetworkMode"],
@@ -302,7 +373,8 @@ const renderComposeNetworks = (
 
 const renderComposeVolumes = (
   config: TemplateConfig,
-  maybeBrowserVolume: string
+  maybeBrowserVolume: string,
+  maybeAndroidVolume: string
 ): string =>
   [
     "volumes:",
@@ -315,7 +387,8 @@ const renderComposeVolumes = (
     `  ${sharedCodexVolumeKey}:`,
     "    external: true",
     `    name: ${dockerGitSharedCodexVolumeName}`,
-    maybeBrowserVolume
+    maybeBrowserVolume,
+    maybeAndroidVolume
   ]
     .filter((entry) => entry.length > 0)
     .join("\n")
@@ -331,6 +404,10 @@ export const renderDockerCompose = (
     `name: ${resolveComposeProjectName(config)}`,
     renderComposeServices(config, fragments, limits),
     renderComposeNetworks(fragments.networkMode, fragments.networkName),
-    renderComposeVolumes(config, fragments.maybeBrowserVolume)
+    renderComposeVolumes(
+      config,
+      fragments.maybeBrowserVolume,
+      fragments.maybeAndroidVolume
+    )
   ].join("\n\n")
 }

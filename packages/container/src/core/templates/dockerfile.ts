@@ -91,6 +91,23 @@ const renderDockerfilePlaywrightRuntime = (config: TemplateConfig): string =>
 # Old browser-vnc + cdp-guard duplication removed per #347`
     : ""
 
+// CHANGE: install the ADB client when Android MCP is enabled
+// WHY: the mobile-mcp server (launched via npx at runtime) drives the docker-android
+//      emulator sidecar over ADB, so the dev container needs an `adb` binary to connect
+// QUOTE(ТЗ): "Подключить mcp-android так же как работает MCP PLAYRIGHT"
+// REF: issue-436
+// SOURCE: https://github.com/budtmo/docker-android (ADB on 5555)
+// PURITY: CORE (pure template renderer)
+const renderDockerfileAndroidRuntime = (config: TemplateConfig): string =>
+  config.enableMcpAndroid === true
+    ? `# Android MCP runtime: ADB client to reach the dg-*-android emulator sidecar.
+# The MCP server itself (@mobilenext/mobile-mcp) is launched on demand via npx (Node 24 above).
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends android-tools-adb \
+  && rm -rf /var/lib/apt/lists/* \
+  && adb --version`
+    : ""
+
 /**
  * Renders /etc/profile.d/bun.sh with a runtime-relative PATH extension.
  *
@@ -241,6 +258,7 @@ export const renderDockerfile = (config: TemplateConfig): string =>
     renderDockerfileNode(),
     renderDockerfileBun(config),
     renderDockerfilePlaywrightRuntime(config),
+    renderDockerfileAndroidRuntime(config),
     renderDockerfileRtk(),
     renderDockerfileOpenCode(),
     renderDockerfileGitleaks(),

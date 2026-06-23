@@ -132,6 +132,86 @@ export const renderEntrypointMcpPlaywright = (config: TemplateConfig): string =>
     .replaceAll("__CODEX_HOME__", () => config.codexHome)
     .replaceAll("__SERVICE_NAME__", () => config.serviceName)
 
+// CHANGE: configure the Android MCP server (mobile-mcp) for Codex, mirroring the Playwright block
+// WHY: issue-436 asks to wire mcp-android "the same way" Playwright MCP works; Codex reads its
+//      MCP servers from config.toml, so we add/remove an [mcp_servers.android] entry to match the build
+// QUOTE(ТЗ): "Подключить mcp-android так же как работает MCP PLAYRIGHT"
+// REF: issue-436
+// SOURCE: https://github.com/mobile-next/mobile-mcp
+const entrypointMcpAndroidTemplate = String.raw`# Optional: configure Android MCP for Codex (mobile-mcp over ADB)
+CODEX_CONFIG_FILE="__CODEX_HOME__/config.toml"
+DOCKER_GIT_ANDROID_ADB_ENDPOINT="${"$"}{DOCKER_GIT_ANDROID_ADB_ENDPOINT:-}"
+
+# Keep config.toml consistent with the container build.
+# If Android MCP is disabled for this container, remove the block so Codex
+# doesn't try (and fail) to spawn the mobile-mcp server.
+if [[ "$MCP_ANDROID_ENABLE" != "1" ]]; then
+  if [[ -f "$CODEX_CONFIG_FILE" ]] && grep -q "^\[mcp_servers\.android" "$CODEX_CONFIG_FILE" 2>/dev/null; then
+    awk '
+      BEGIN { skip=0 }
+      /^# docker-git: Android MCP/ { next }
+      /^\[mcp_servers[.]android([.]|\])/ { skip=1; next }
+      skip==1 && /^\[/ { skip=0 }
+      skip==0 { print }
+    ' "$CODEX_CONFIG_FILE" > "$CODEX_CONFIG_FILE.tmp"
+    mv "$CODEX_CONFIG_FILE.tmp" "$CODEX_CONFIG_FILE"
+  fi
+else
+  if [[ ! -f "$CODEX_CONFIG_FILE" ]]; then
+    mkdir -p "$(dirname "$CODEX_CONFIG_FILE")" || true
+    cat <<'EOF' > "$CODEX_CONFIG_FILE"
+# docker-git codex config
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+plan_mode_reasoning_effort = "xhigh"
+personality = "pragmatic"
+
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+web_search = "live"
+
+[features]
+shell_snapshot = true
+multi_agent = true
+apps = true
+shell_tool = true
+
+[profiles.longcontx]
+model = "gpt-5.5"
+model_context_window = 1050000
+model_auto_compact_token_limit = 945000
+model_reasoning_effort = "xhigh"
+plan_mode_reasoning_effort = "xhigh"
+EOF
+    chown 1000:1000 "$CODEX_CONFIG_FILE" || true
+  fi
+
+  # Replace the docker-git Android MCP block to allow upgrades via --force without manual edits.
+  if grep -q "^\[mcp_servers\.android" "$CODEX_CONFIG_FILE" 2>/dev/null; then
+    awk '
+      BEGIN { skip=0 }
+      /^# docker-git: Android MCP/ { next }
+      /^\[mcp_servers[.]android([.]|\])/ { skip=1; next }
+      skip==1 && /^\[/ { skip=0 }
+      skip==0 { print }
+    ' "$CODEX_CONFIG_FILE" > "$CODEX_CONFIG_FILE.tmp"
+    mv "$CODEX_CONFIG_FILE.tmp" "$CODEX_CONFIG_FILE"
+  fi
+
+  cat <<EOF >> "$CODEX_CONFIG_FILE"
+
+# docker-git: Android MCP (mobile-mcp over ADB)
+[mcp_servers.android]
+command = "bash"
+args = ["-lc", "adb connect $DOCKER_GIT_ANDROID_ADB_ENDPOINT >/dev/null 2>&1 || true; exec npx -y @mobilenext/mobile-mcp@latest"]
+EOF
+fi`
+
+export const renderEntrypointMcpAndroid = (config: TemplateConfig): string =>
+  entrypointMcpAndroidTemplate
+    .replaceAll("__CODEX_HOME__", () => config.codexHome)
+    .replaceAll("__SERVICE_NAME__", () => config.serviceName)
+
 const entrypointProjectCodexSkillsSyncTemplate = String
   .raw`# Mirror project-owned Codex skill trees into CODEX_HOME without overwriting global skills.
 docker_git_sync_project_codex_skills() {

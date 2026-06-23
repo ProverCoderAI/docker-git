@@ -238,6 +238,44 @@ NODE
 
 docker_git_sync_gemini_playwright_mcp`
 
+const renderGeminiMcpAndroidConfig = (): string =>
+  String.raw`# Gemini CLI: keep Android MCP config in sync with container settings
+docker_git_sync_gemini_android_mcp() {
+  local adb_endpoint="${"$"}{DOCKER_GIT_ANDROID_ADB_ENDPOINT:-}"
+  GEMINI_CONFIG_SETTINGS_FILE="$GEMINI_CONFIG_SETTINGS_FILE" MCP_ANDROID_ENABLE="${"$"}{MCP_ANDROID_ENABLE:-0}" DOCKER_GIT_ANDROID_ADB_ENDPOINT="$adb_endpoint" node - <<'NODE'
+const fs = require("node:fs")
+const path = require("node:path")
+const settingsPath = process.env.GEMINI_CONFIG_SETTINGS_FILE
+const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value)
+if (typeof settingsPath !== "string" || settingsPath.length === 0) process.exit(0)
+
+let settings = {}
+try {
+  const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"))
+  if (isRecord(parsed)) settings = parsed
+} catch {}
+
+const adbEndpoint = process.env.DOCKER_GIT_ANDROID_ADB_ENDPOINT || ""
+const connectPrefix = adbEndpoint.length > 0 ? "adb connect " + adbEndpoint + " >/dev/null 2>&1 || true; " : ""
+const nextServers = { ...(isRecord(settings.mcpServers) ? settings.mcpServers : {}) }
+if (process.env.MCP_ANDROID_ENABLE === "1") {
+  nextServers.android = { command: "bash", args: ["-lc", connectPrefix + "exec npx -y @mobilenext/mobile-mcp@latest"], trust: true }
+} else {
+  delete nextServers.android
+}
+
+const nextSettings = { ...settings }
+Object.keys(nextServers).length > 0 ? nextSettings.mcpServers = nextServers : delete nextSettings.mcpServers
+
+if (JSON.stringify(settings) === JSON.stringify(nextSettings)) process.exit(0)
+
+fs.mkdirSync(path.dirname(settingsPath), { recursive: true })
+fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2) + "\n", { mode: 0o600 })
+NODE
+}
+
+docker_git_sync_gemini_android_mcp`
+
 const renderGeminiProfileSetup = (config: TemplateConfig): string =>
   String.raw`GEMINI_PROFILE="/etc/profile.d/gemini-config.sh"
 printf "export GEMINI_AUTH_LABEL=%q\n" "$GEMINI_AUTH_LABEL" > "$GEMINI_PROFILE"
@@ -336,6 +374,7 @@ export const renderEntrypointGeminiConfig = (config: TemplateConfig): string =>
     renderGeminiAuthConfig(config),
     renderGeminiPermissionSettingsConfig(config),
     renderGeminiMcpPlaywrightConfig(),
+    renderGeminiMcpAndroidConfig(),
     renderGeminiSudoConfig(config),
     renderGeminiProfileSetup(config),
     entrypointGeminiNoticeTemplate
