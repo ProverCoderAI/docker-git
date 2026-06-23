@@ -43,6 +43,7 @@ export const CreateProjectRequestSchema = Schema.Struct({
   dockerNetworkMode: OptionalString,
   dockerSharedNetworkName: OptionalString,
   enableMcpPlaywright: OptionalBoolean,
+  enableMcpAndroid: OptionalBoolean,
   outDir: OptionalString,
   gitTokenLabel: OptionalString,
   skipGithubAuth: OptionalBoolean,

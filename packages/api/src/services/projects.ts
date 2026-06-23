@@ -471,6 +471,7 @@ const toCreateRawOptions = (request: CreateProjectRequest): RawOptions => ({
     ? {}
     : { dockerSharedNetworkName: request.dockerSharedNetworkName }),
   ...(request.enableMcpPlaywright === undefined ? {} : { enableMcpPlaywright: request.enableMcpPlaywright }),
+  ...(request.enableMcpAndroid === undefined ? {} : { enableMcpAndroid: request.enableMcpAndroid }),
   ...(request.outDir === undefined ? {} : { outDir: request.outDir }),
   ...(request.gitTokenLabel === undefined ? {} : { gitTokenLabel: request.gitTokenLabel }),
   ...(request.skipGithubAuth === undefined ? {} : { skipGithubAuth: request.skipGithubAuth }),
