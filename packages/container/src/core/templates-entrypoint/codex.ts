@@ -132,6 +132,94 @@ export const renderEntrypointMcpPlaywright = (config: TemplateConfig): string =>
     .replaceAll("__CODEX_HOME__", () => config.codexHome)
     .replaceAll("__SERVICE_NAME__", () => config.serviceName)
 
+// CHANGE: configure the first-party Android MCP server for Codex, mirroring the Playwright block
+// WHY: issue-436 asks to wire mcp-android "the same way" Playwright MCP works; Codex reads its
+//      MCP servers from config.toml, so we add/remove an [mcp_servers.android] entry to match the build
+// QUOTE(ТЗ): "Подключить mcp-android так же как работает MCP PLAYRIGHT"
+// REF: issue-436
+// SOURCE: n/a
+const entrypointMcpAndroidTemplate = String.raw`# Optional: configure Android MCP for Codex (Rust android-connection)
+CODEX_CONFIG_FILE="__CODEX_HOME__/config.toml"
+DOCKER_GIT_ANDROID_PROJECT="${"$"}{DOCKER_GIT_ANDROID_PROJECT:-${"$"}{DOCKER_GIT_PROJECT_CONTAINER_NAME:-}}"
+if [[ -z "$DOCKER_GIT_ANDROID_PROJECT" ]]; then
+  DOCKER_GIT_ANDROID_PROJECT="$(hostname)"
+fi
+DOCKER_GIT_ANDROID_NETWORK="${"$"}{DOCKER_GIT_ANDROID_NETWORK:-container:$DOCKER_GIT_ANDROID_PROJECT}"
+DOCKER_GIT_ANDROID_ADB_ENDPOINT="${"$"}{DOCKER_GIT_ANDROID_ADB_ENDPOINT:-}"
+if [[ -z "$DOCKER_GIT_ANDROID_ADB_ENDPOINT" ]]; then
+  DOCKER_GIT_ANDROID_ADB_ENDPOINT="$DOCKER_GIT_ANDROID_PROJECT-android:5555"
+fi
+
+# Keep config.toml consistent with the container build.
+# If Android MCP is disabled for this container, remove the block so Codex
+# doesn't try (and fail) to spawn android-connection.
+if [[ "$MCP_ANDROID_ENABLE" != "1" ]]; then
+  if [[ -f "$CODEX_CONFIG_FILE" ]] && grep -q "^\[mcp_servers\.android" "$CODEX_CONFIG_FILE" 2>/dev/null; then
+    awk '
+      BEGIN { skip=0 }
+      /^# docker-git: Android MCP/ { next }
+      /^\[mcp_servers[.]android([.]|\])/ { skip=1; next }
+      skip==1 && /^\[/ { skip=0 }
+      skip==0 { print }
+    ' "$CODEX_CONFIG_FILE" > "$CODEX_CONFIG_FILE.tmp"
+    mv "$CODEX_CONFIG_FILE.tmp" "$CODEX_CONFIG_FILE"
+  fi
+else
+  if [[ ! -f "$CODEX_CONFIG_FILE" ]]; then
+    mkdir -p "$(dirname "$CODEX_CONFIG_FILE")" || true
+    cat <<'EOF' > "$CODEX_CONFIG_FILE"
+# docker-git codex config
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+plan_mode_reasoning_effort = "xhigh"
+personality = "pragmatic"
+
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+web_search = "live"
+
+[features]
+shell_snapshot = true
+multi_agent = true
+apps = true
+shell_tool = true
+
+[profiles.longcontx]
+model = "gpt-5.5"
+model_context_window = 1050000
+model_auto_compact_token_limit = 945000
+model_reasoning_effort = "xhigh"
+plan_mode_reasoning_effort = "xhigh"
+EOF
+    chown 1000:1000 "$CODEX_CONFIG_FILE" || true
+  fi
+
+  # Replace the docker-git Android MCP block to allow upgrades via --force without manual edits.
+  if grep -q "^\[mcp_servers\.android" "$CODEX_CONFIG_FILE" 2>/dev/null; then
+    awk '
+      BEGIN { skip=0 }
+      /^# docker-git: Android MCP/ { next }
+      /^\[mcp_servers[.]android([.]|\])/ { skip=1; next }
+      skip==1 && /^\[/ { skip=0 }
+      skip==0 { print }
+    ' "$CODEX_CONFIG_FILE" > "$CODEX_CONFIG_FILE.tmp"
+    mv "$CODEX_CONFIG_FILE.tmp" "$CODEX_CONFIG_FILE"
+  fi
+
+  cat <<EOF >> "$CODEX_CONFIG_FILE"
+
+# docker-git: Android MCP (rust android-connection)
+[mcp_servers.android]
+command = "android-connection"
+args = ["--project", "$DOCKER_GIT_ANDROID_PROJECT", "--network", "$DOCKER_GIT_ANDROID_NETWORK", "--endpoint", "$DOCKER_GIT_ANDROID_ADB_ENDPOINT", "--workspace", "$TARGET_DIR"]
+EOF
+fi`
+
+export const renderEntrypointMcpAndroid = (config: TemplateConfig): string =>
+  entrypointMcpAndroidTemplate
+    .replaceAll("__CODEX_HOME__", () => config.codexHome)
+    .replaceAll("__SERVICE_NAME__", () => config.serviceName)
+
 const entrypointProjectCodexSkillsSyncTemplate = String
   .raw`# Mirror project-owned Codex skill trees into CODEX_HOME without overwriting global skills.
 docker_git_sync_project_codex_skills() {

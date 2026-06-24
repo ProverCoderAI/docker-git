@@ -71,6 +71,7 @@ bun run  docker-git clone https://github.com/ProverCoderAI/docker-git/issues/122
 
 - `--force` пересоздаёт окружение и удаляет volumes проекта.
 - `--mcp-playwright` включает Playwright MCP и Chromium sidecar для браузерной автоматизации.
+- `--mcp-android` включает first-party Android MCP (`android-connection`) и вложенный sidecar с Android-эмулятором (`docker-android`) для мобильной автоматизации.
 
 Автоматический запуск агента:
 

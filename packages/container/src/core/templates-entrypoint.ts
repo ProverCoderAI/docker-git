@@ -17,6 +17,7 @@ import {
   renderEntrypointCodexHome,
   renderEntrypointCodexResumeHint,
   renderEntrypointCodexSharedAuth,
+  renderEntrypointMcpAndroid,
   renderEntrypointMcpPlaywright,
   renderEntrypointProjectCodexSkillsSync
 } from "./templates-entrypoint/codex.js"
@@ -60,6 +61,7 @@ export const renderEntrypoint = (config: TemplateConfig): string =>
     renderEntrypointDockerSocket(config),
     renderEntrypointRustBrowserConnection(),
     renderEntrypointMcpPlaywright(config),
+    renderEntrypointMcpAndroid(config),
     renderEntrypointGitConfig(config),
     renderEntrypointClaudeConfig(config),
     renderEntrypointGeminiConfig(config),

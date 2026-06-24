@@ -58,6 +58,7 @@ describe("menu-create-shared", () => {
       "gpu",
       "runUp",
       "mcpPlaywright",
+      "mcpAndroid",
       "force"
     ])
   })
@@ -87,7 +88,8 @@ describe("menu-create-shared", () => {
       "repoUrl",
       "cpuLimit",
       "ramLimit",
-      "gpu"
+      "gpu",
+      "mcpAndroid"
     ])
   })
 
@@ -110,7 +112,7 @@ describe("menu-create-shared", () => {
     const inputs = expectCreateCompleteInputs(advanceCreateFlow(
       cwd,
       createInitialFlowView(
-        `${featureCreateRepoUrl} --cpu 25% --ram 4g --gpu all --no-up --mcp-playwright --force`
+        `${featureCreateRepoUrl} --cpu 25% --ram 4g --gpu all --no-up --mcp-playwright --mcp-android --force`
       )
     ))
 
@@ -120,6 +122,7 @@ describe("menu-create-shared", () => {
     expect(inputs.gpu).toBe("all")
     expect(inputs.runUp).toBe(false)
     expect(inputs.enableMcpPlaywright).toBe(true)
+    expect(inputs.enableMcpAndroid).toBe(true)
     expect(inputs.force).toBe(true)
   })
 
@@ -304,6 +307,7 @@ describe("menu-create-shared", () => {
     const generatedSettingsArbitrary = fc.record({
       cpuLimit: fc.constantFrom("", "25%", "50%"),
       enableMcpPlaywright: fc.boolean(),
+      enableMcpAndroid: fc.boolean(),
       force: fc.boolean(),
       gpu: fc.constantFrom<CreateInputs["gpu"]>("none", "all"),
       ramLimit: fc.constantFrom("", "2g", "4g"),

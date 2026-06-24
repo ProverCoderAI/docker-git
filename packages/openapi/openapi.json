@@ -1081,6 +1081,9 @@
                   "enableMcpPlaywright": {
                     "type": "boolean"
                   },
+                  "enableMcpAndroid": {
+                    "type": "boolean"
+                  },
                   "outDir": {
                     "type": "string"
                   },

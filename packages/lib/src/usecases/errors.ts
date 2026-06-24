@@ -126,6 +126,8 @@ const formatDockerIdentityConflictKind = (
     serviceName: "compose project name",
     volumeName: "volume name",
     browserVolumeName: "browser volume name",
+    androidContainerName: "android container name",
+    androidVolumeName: "android volume name",
     bootstrapVolumeName: "bootstrap volume name"
   })[kind]
 

@@ -69,6 +69,7 @@ export type CreateProjectDraft = {
   readonly ramLimit: string
   readonly gpu: "none" | "all"
   readonly enableMcpPlaywright: boolean
+  readonly enableMcpAndroid: boolean
   readonly force: boolean
   readonly forceEnv: boolean
   readonly up: boolean

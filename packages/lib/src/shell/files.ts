@@ -214,6 +214,16 @@ const provisionDockerGitSessionSyncTool = (
     )
   })
 
+const provisionDockerGitBuildContext = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  baseDir: string
+): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    yield* _(provisionDockerGitScripts(fs, path, baseDir))
+    yield* _(provisionDockerGitSessionSyncTool(fs, path, baseDir))
+  })
+
 // CHANGE: write generated docker-git files to disk
 // WHY: isolate all filesystem effects in a thin shell
 // QUOTE(ТЗ): "создавать докер образы"
@@ -267,11 +277,7 @@ export const writeProjectFiles = (
       }
     }
 
-    // CHANGE: provision docker-git scripts into project build context
-    // WHY: Dockerfile COPY scripts/ requires scripts to be in the build context
-    // REF: issue-176
-    yield* _(provisionDockerGitScripts(fs, path, baseDir))
-    yield* _(provisionDockerGitSessionSyncTool(fs, path, baseDir))
+    yield* _(provisionDockerGitBuildContext(fs, path, baseDir))
 
     return created
   })

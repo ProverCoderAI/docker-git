@@ -251,6 +251,65 @@ NODE
 docker_git_sync_claude_playwright_mcp
 chown 1000:1000 "$CLAUDE_SETTINGS_FILE" 2>/dev/null || true`
 
+const renderClaudeMcpAndroidConfig = (): string =>
+  String.raw`# Claude Code: keep Android MCP config in sync with container settings
+CLAUDE_SETTINGS_FILE="${"$"}{CLAUDE_HOME_JSON:-$CLAUDE_CONFIG_DIR/.claude.json}"
+docker_git_sync_claude_android_mcp() {
+  local android_project="${"$"}{DOCKER_GIT_ANDROID_PROJECT:-${"$"}{DOCKER_GIT_PROJECT_CONTAINER_NAME:-}}"
+  [[ -n "$android_project" ]] || android_project="$(hostname)"
+  local android_network="${"$"}{DOCKER_GIT_ANDROID_NETWORK:-container:$android_project}"
+  local adb_endpoint="${"$"}{DOCKER_GIT_ANDROID_ADB_ENDPOINT:-}"
+  [[ -n "$adb_endpoint" ]] || adb_endpoint="$android_project-android:5555"
+  CLAUDE_SETTINGS_FILE="$CLAUDE_SETTINGS_FILE" MCP_ANDROID_ENABLE="${"$"}{MCP_ANDROID_ENABLE:-0}" DOCKER_GIT_ANDROID_PROJECT="$android_project" DOCKER_GIT_ANDROID_NETWORK="$android_network" DOCKER_GIT_ANDROID_ADB_ENDPOINT="$adb_endpoint" TARGET_DIR="${"$"}{TARGET_DIR:-}" node - <<'NODE'
+const fs = require("node:fs")
+const path = require("node:path")
+
+const settingsPath = process.env.CLAUDE_SETTINGS_FILE
+if (typeof settingsPath !== "string" || settingsPath.length === 0) process.exit(0)
+
+const enableAndroid = process.env.MCP_ANDROID_ENABLE === "1"
+const androidProject = process.env.DOCKER_GIT_ANDROID_PROJECT || ""
+const androidNetwork = process.env.DOCKER_GIT_ANDROID_NETWORK || (androidProject.length > 0 ? "container:" + androidProject : "")
+const adbEndpoint = process.env.DOCKER_GIT_ANDROID_ADB_ENDPOINT || ""
+const workspace = process.env.TARGET_DIR || ""
+const androidArgs = androidProject.length > 0 && adbEndpoint.length > 0 ? ["--project", androidProject, "--network", androidNetwork, "--endpoint", adbEndpoint] : []
+if (workspace.length > 0) androidArgs.push("--workspace", workspace)
+const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value)
+
+let settings = {}
+try {
+  const raw = fs.readFileSync(settingsPath, "utf8")
+  const parsed = JSON.parse(raw)
+  settings = isRecord(parsed) ? parsed : {}
+} catch { settings = {} }
+
+const currentServers = isRecord(settings.mcpServers) ? settings.mcpServers : {}
+const nextServers = { ...currentServers }
+if (enableAndroid) {
+  nextServers.android = { type: "stdio", command: "android-connection", args: androidArgs, env: {} }
+} else {
+  delete nextServers.android
+}
+
+const nextSettings = { ...settings }
+if (Object.keys(nextServers).length > 0) {
+  nextSettings.mcpServers = nextServers
+} else {
+  delete nextSettings.mcpServers
+}
+
+if (JSON.stringify(settings) === JSON.stringify(nextSettings)) {
+  process.exit(0)
+}
+
+fs.mkdirSync(path.dirname(settingsPath), { recursive: true })
+fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2) + "\n", { mode: 0o600 })
+NODE
+}
+
+docker_git_sync_claude_android_mcp
+chown 1000:1000 "$CLAUDE_SETTINGS_FILE" 2>/dev/null || true`
+
 const renderClaudeProfileSetup = (): string =>
   String.raw`CLAUDE_PROFILE="/etc/profile.d/claude-config.sh"
 printf "export CLAUDE_AUTH_LABEL=%q\n" "$CLAUDE_AUTH_LABEL" > "$CLAUDE_PROFILE"
@@ -277,6 +336,7 @@ export const renderEntrypointClaudeConfig = (config: TemplateConfig): string =>
     renderClaudeCliInstall(),
     renderClaudePermissionSettingsConfig(),
     renderClaudeMcpPlaywrightConfig(),
+    renderClaudeMcpAndroidConfig(),
     renderClaudeGlobalPromptSetup(config),
     renderClaudeWrapperSetup(),
     renderClaudeProfileSetup()

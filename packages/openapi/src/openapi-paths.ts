@@ -1188,6 +1188,7 @@ export interface operations {
                     dockerNetworkMode?: string;
                     dockerSharedNetworkName?: string;
                     enableMcpPlaywright?: boolean;
+                    enableMcpAndroid?: boolean;
                     outDir?: string;
                     gitTokenLabel?: string;
                     skipGithubAuth?: boolean;

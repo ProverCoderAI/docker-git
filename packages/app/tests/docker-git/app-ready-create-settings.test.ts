@@ -124,7 +124,7 @@ describe("app-ready-create settings", () => {
     const enteredView = requireCreateViewValue(enterResult.setCreateViewSpy.mock.calls[0]?.[0])
 
     expect(enterResult.handled).toBe(true)
-    expect(enteredView.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
+    expect(enteredView.step).toBe(resolveCreateDisplaySteps().indexOf("mcpAndroid"))
     expect(enteredView.values.enableMcpPlaywright).toBe(true)
     expect(enteredView.buffer).toBe("")
   })
@@ -135,7 +135,7 @@ describe("app-ready-create settings", () => {
     const nextView = requireCreateViewValue(setCreateViewSpy.mock.calls[0]?.[0])
 
     expect(isHandled).toBe(true)
-    expect(nextView.step).toBe(resolveCreateDisplaySteps().indexOf("force"))
+    expect(nextView.step).toBe(resolveCreateDisplaySteps().indexOf("mcpAndroid"))
     expect(nextView.values.enableMcpPlaywright).toBeUndefined()
     expect(nextView.buffer).toBe("")
   })

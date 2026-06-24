@@ -44,6 +44,7 @@ export type OptionalProjectResourceFieldsBody = Readonly<{
 export type BaseCreateProjectBody = Readonly<{
   readonly cpuLimit: CreateProjectDraft["cpuLimit"]
   readonly enableMcpPlaywright: CreateProjectDraft["enableMcpPlaywright"]
+  readonly enableMcpAndroid: CreateProjectDraft["enableMcpAndroid"]
   readonly force: CreateProjectDraft["force"]
   readonly forceEnv: CreateProjectDraft["forceEnv"]
   readonly gpu: CreateProjectDraft["gpu"]
@@ -94,6 +95,7 @@ export const optionalProjectResourceFields = (
 export const baseCreateProjectBody = (draft: CreateProjectDraft): BaseCreateProjectBody => ({
   cpuLimit: draft.cpuLimit,
   enableMcpPlaywright: draft.enableMcpPlaywright,
+  enableMcpAndroid: draft.enableMcpAndroid,
   force: draft.force,
   forceEnv: draft.forceEnv,
   gpu: draft.gpu,

@@ -476,6 +476,7 @@ export type CreateProjectRequest = {
   readonly dockerNetworkMode?: string | undefined
   readonly dockerSharedNetworkName?: string | undefined
   readonly enableMcpPlaywright?: boolean | undefined
+  readonly enableMcpAndroid?: boolean | undefined
   readonly outDir?: string | undefined
   readonly gitTokenLabel?: string | undefined
   readonly skipGithubAuth?: boolean | undefined

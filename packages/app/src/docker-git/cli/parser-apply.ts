@@ -40,6 +40,7 @@ export const parseApply = (
       playwrightCpuLimit,
       playwrightRamLimit,
       gpu,
-      enableMcpPlaywright: raw.enableMcpPlaywright
+      enableMcpPlaywright: raw.enableMcpPlaywright,
+      enableMcpAndroid: raw.enableMcpAndroid
     }
   })

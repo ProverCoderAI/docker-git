@@ -224,6 +224,7 @@ export const resolveCreateSettingsChoiceBuffer = (
     Match.when("gpu", () => gpuChoiceBuffer(direction)),
     Match.when("runUp", () => booleanChoiceBuffer(direction)),
     Match.when("mcpPlaywright", () => booleanChoiceBuffer(direction)),
+    Match.when("mcpAndroid", () => booleanChoiceBuffer(direction)),
     Match.when("force", () => booleanChoiceBuffer(direction)),
     Match.exhaustive
   )

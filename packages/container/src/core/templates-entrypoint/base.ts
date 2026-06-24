@@ -41,6 +41,7 @@ AGENT_MODE="\${AGENT_MODE:-}"
 AGENT_AUTO="\${AGENT_AUTO:-}"
 MCP_PLAYWRIGHT_ENABLE="\${MCP_PLAYWRIGHT_ENABLE:-${config.enableMcpPlaywright ? "1" : "0"}}"
 MCP_PLAYWRIGHT_ISOLATED="\${MCP_PLAYWRIGHT_ISOLATED:-0}"
+MCP_ANDROID_ENABLE="\${MCP_ANDROID_ENABLE:-${config.enableMcpAndroid === true ? "1" : "0"}}"
 
 SSH_ENV_PATH="/home/${config.sshUser}/.ssh/environment"
 

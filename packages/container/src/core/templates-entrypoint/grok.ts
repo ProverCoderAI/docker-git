@@ -1,4 +1,5 @@
 import type { TemplateConfig } from "../domain.js"
+import { renderGrokMcpAndroidConfig } from "./grok-android-mcp.js"
 
 // CHANGE: add Grok CLI entrypoint configuration
 // WHY: issue #304 requires Grok auth, Playwright MCP and unrestricted agent permissions
@@ -344,6 +345,7 @@ export const renderEntrypointGrokConfig = (config: TemplateConfig): string =>
     renderGrokAuthConfig(config),
     renderGrokPermissionSettingsConfig(config),
     renderGrokMcpPlaywrightConfig(),
+    renderGrokMcpAndroidConfig(),
     renderGrokSudoConfig(config),
     renderGrokProfileSetup(config),
     renderEntrypointGrokNotice(config)

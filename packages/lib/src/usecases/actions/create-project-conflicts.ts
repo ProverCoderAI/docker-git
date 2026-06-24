@@ -16,7 +16,7 @@ type CreateProjectRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.
 
 type DockerIdentityOwner = Pick<
   TemplateConfig,
-  "containerName" | "serviceName" | "volumeName" | "enableMcpPlaywright"
+  "containerName" | "serviceName" | "volumeName" | "enableMcpPlaywright" | "enableMcpAndroid"
 >
 
 type DockerIdentityNamespace = "container" | "composeProject" | "volume"
@@ -52,14 +52,30 @@ const resolveBrowserVolumeClaims = (
     ? [{ namespace: "volume", kind: "browserVolumeName", name: `${config.volumeName}-browser` }]
     : []
 
+const resolveAndroidContainerClaims = (
+  config: DockerIdentityOwner
+): ReadonlyArray<DockerIdentityClaim> =>
+  config.enableMcpAndroid
+    ? [{ namespace: "container", kind: "androidContainerName", name: `${config.containerName}-android` }]
+    : []
+
+const resolveAndroidVolumeClaims = (
+  config: DockerIdentityOwner
+): ReadonlyArray<DockerIdentityClaim> =>
+  config.enableMcpAndroid
+    ? [{ namespace: "volume", kind: "androidVolumeName", name: `${config.volumeName}-android` }]
+    : []
+
 const resolveDockerIdentityClaims = (
   config: DockerIdentityOwner
 ): ReadonlyArray<DockerIdentityClaim> => [
   { namespace: "container", kind: "containerName", name: config.containerName },
   ...resolveBrowserContainerClaims(config),
+  ...resolveAndroidContainerClaims(config),
   { namespace: "composeProject", kind: "serviceName", name: resolveComposeProjectName(config) },
   { namespace: "volume", kind: "volumeName", name: config.volumeName },
   ...resolveBrowserVolumeClaims(config),
+  ...resolveAndroidVolumeClaims(config),
   { namespace: "volume", kind: "bootstrapVolumeName", name: resolveProjectBootstrapVolumeName(config) }
 ]
 

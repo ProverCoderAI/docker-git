@@ -113,6 +113,7 @@ const unsupportedCreatePrefixes = new Set([
   "gists",
   "help",
   "kill-all",
+  "mcp-android",
   "mcp-playwright",
   "menu",
   "open",
@@ -164,6 +165,9 @@ const runUpCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partia
 const playwrightCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
   raw.enableMcpPlaywright === undefined ? {} : { enableMcpPlaywright: command.config.enableMcpPlaywright }
 
+const androidCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
+  raw.enableMcpAndroid === undefined ? {} : { enableMcpAndroid: command.config.enableMcpAndroid ?? false }
+
 const forceCreateInput = (raw: RawCreateOptions, command: CreateCommand): Partial<CreateInputs> =>
   raw.force === undefined ? {} : { force: command.force }
 
@@ -183,6 +187,7 @@ const createInputsFromCommand = (
   ...gpuCreateInput(raw, command),
   ...runUpCreateInput(raw, command),
   ...playwrightCreateInput(raw, command),
+  ...androidCreateInput(raw, command),
   ...forceCreateInput(raw, command),
   ...forceEnvCreateInput(raw, command)
 })

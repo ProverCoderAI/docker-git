@@ -144,6 +144,12 @@ export interface McpPlaywrightUpCommand {
   readonly runUp: boolean
 }
 
+export interface McpAndroidUpCommand {
+  readonly _tag: "McpAndroidUp"
+  readonly projectDir: string
+  readonly runUp: boolean
+}
+
 export interface ApplyCommand {
   readonly _tag: "Apply"
   readonly projectDir: string
@@ -159,6 +165,7 @@ export interface ApplyCommand {
   readonly playwrightRamLimit?: string | undefined
   readonly gpu?: GpuMode | undefined
   readonly enableMcpPlaywright?: boolean | undefined
+  readonly enableMcpAndroid?: boolean | undefined
 }
 
 // CHANGE: add apply-all command to apply docker-git config to every known project; support --active flag
@@ -201,6 +208,7 @@ export type Command =
   | SessionsCommand
   | ScrapCommand
   | McpPlaywrightUpCommand
+  | McpAndroidUpCommand
   | ApplyCommand
   | ApplyAllCommand
   | HelpCommand

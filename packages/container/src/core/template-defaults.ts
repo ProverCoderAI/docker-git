@@ -29,6 +29,7 @@ type DefaultTemplateConfig = Pick<
   | "dockerNetworkMode"
   | "dockerSharedNetworkName"
   | "enableMcpPlaywright"
+  | "enableMcpAndroid"
   | "bunVersion"
 >
 
@@ -74,5 +75,6 @@ export const defaultTemplateConfig = {
   dockerNetworkMode: defaultDockerNetworkMode,
   dockerSharedNetworkName: defaultDockerSharedNetworkName,
   enableMcpPlaywright: false,
+  enableMcpAndroid: false,
   bunVersion: "1.3.11"
 } satisfies DefaultTemplateConfig

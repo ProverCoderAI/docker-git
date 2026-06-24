@@ -33,6 +33,7 @@ export interface RawOptions {
   readonly dockerNetworkMode?: string
   readonly dockerSharedNetworkName?: string
   readonly enableMcpPlaywright?: boolean
+  readonly enableMcpAndroid?: boolean
   readonly archivePath?: string
   readonly scrapMode?: string
   readonly wipe?: boolean

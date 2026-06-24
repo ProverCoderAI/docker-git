@@ -20,6 +20,7 @@ export type BuildTemplateConfigInput = {
   readonly geminiAuthLabel: string | undefined
   readonly grokAuthLabel: string | undefined
   readonly enableMcpPlaywright: boolean
+  readonly enableMcpAndroid: boolean
   readonly agentMode: AgentMode | undefined
   readonly agentAuto: boolean
   /**
@@ -96,6 +97,7 @@ export const buildTemplateConfig = (input: BuildTemplateConfigInput): CreateComm
   dockerNetworkMode: input.dockerNetworkMode,
   dockerSharedNetworkName: input.dockerSharedNetworkName,
   enableMcpPlaywright: input.enableMcpPlaywright,
+  enableMcpAndroid: input.enableMcpAndroid,
   bunVersion: defaultTemplateConfig.bunVersion,
   agentMode: input.agentMode,
   agentAuto: input.agentAuto,

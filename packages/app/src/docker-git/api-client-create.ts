@@ -41,6 +41,7 @@ export const buildCreateProjectRequest = (
     dockerNetworkMode: config.dockerNetworkMode,
     dockerSharedNetworkName: config.dockerSharedNetworkName,
     enableMcpPlaywright: config.enableMcpPlaywright,
+    enableMcpAndroid: config.enableMcpAndroid ?? false,
     outDir: command.outDir,
     gitTokenLabel: config.gitTokenLabel,
     skipGithubAuth: config.skipGithubAuth,

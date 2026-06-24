@@ -14,6 +14,7 @@ const settingsStepArbitrary: fc.Arbitrary<CreateSettingStep> = fc.constantFrom(
   "gpu",
   "runUp",
   "mcpPlaywright",
+  "mcpAndroid",
   "force"
 )
 
@@ -22,12 +23,13 @@ const stepBufferByStep: Readonly<Record<CreateSettingStep, string>> = {
   force: "y",
   gpu: "all",
   mcpPlaywright: "n",
+  mcpAndroid: "n",
   ramLimit: "4g",
   runUp: "y"
 }
 
 const satisfiedCreateSettingsArbitrary = fc.uniqueArray(settingsStepArbitrary, {
-  maxLength: 6
+  maxLength: 7
 })
 
 /**
@@ -60,6 +62,7 @@ const createSatisfiedStepValue = (step: CreateSettingStep): Partial<CreateInputs
     Match.when("gpu", (): Partial<CreateInputs> => ({ gpu: "none" })),
     Match.when("runUp", (): Partial<CreateInputs> => ({ runUp: true })),
     Match.when("mcpPlaywright", (): Partial<CreateInputs> => ({ enableMcpPlaywright: false })),
+    Match.when("mcpAndroid", (): Partial<CreateInputs> => ({ enableMcpAndroid: false })),
     Match.when("force", (): Partial<CreateInputs> => ({ force: false })),
     Match.exhaustive
   )
