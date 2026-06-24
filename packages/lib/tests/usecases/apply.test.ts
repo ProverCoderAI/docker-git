@@ -254,7 +254,9 @@ describe("applyProjectFiles", () => {
         expect(composeAfter).toContain("dg-test-android")
 
         const dockerfileAfter = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
-        expect(dockerfileAfter).toContain("cargo install --path /opt/docker-git/tools/android-connection")
+        expect(dockerfileAfter).toContain(
+          "cargo install --git https://github.com/ProverCoderAI/rust-android-connection --rev 7fd2c8f37fccc2b5fdb3ac53e1c55d168e79d09c --locked --bins --root /usr/local"
+        )
 
         const configAfter = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         expect(configAfter).toContain('"cpuLimit": "2"')

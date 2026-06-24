@@ -11,7 +11,6 @@ import {
   withDefaultResourceLimitIntent
 } from "../core/resource-limits.js"
 import { type FileSpec, planFiles } from "../core/templates.js"
-import { provisionDockerGitAndroidConnectionSource } from "./android-connection-source.js"
 import { resolveDockerEnvValue } from "./docker-auth.js"
 import { FileExistsError } from "./errors.js"
 import { resolveBaseDir } from "./paths.js"
@@ -218,15 +217,11 @@ const provisionDockerGitSessionSyncTool = (
 const provisionDockerGitBuildContext = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
-  baseDir: string,
-  config: TemplateConfig
+  baseDir: string
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function*(_) {
     yield* _(provisionDockerGitScripts(fs, path, baseDir))
     yield* _(provisionDockerGitSessionSyncTool(fs, path, baseDir))
-    if (config.enableMcpAndroid === true) {
-      yield* _(provisionDockerGitAndroidConnectionSource(fs, path, baseDir))
-    }
   })
 
 // CHANGE: write generated docker-git files to disk
@@ -282,7 +277,7 @@ export const writeProjectFiles = (
       }
     }
 
-    yield* _(provisionDockerGitBuildContext(fs, path, baseDir, normalizedConfig))
+    yield* _(provisionDockerGitBuildContext(fs, path, baseDir))
 
     return created
   })

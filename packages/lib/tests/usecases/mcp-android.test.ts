@@ -127,16 +127,11 @@ describe("enableMcpAndroidProjectFiles", () => {
 
         const dockerfileAfter = yield* _(fs.readFileString(path.join(outDir, "Dockerfile")))
         expect(dockerfileAfter).toContain("android-tools-adb")
-        expect(dockerfileAfter).toContain("cargo install --path /opt/docker-git/tools/android-connection")
-        expect(dockerfileAfter).toContain("/usr/local/bin/android-connection --version")
-
-        const androidConnectionCargoToml = path.join(
-          outDir,
-          ".docker-git-tools",
-          "android-connection",
-          "Cargo.toml"
+        expect(dockerfileAfter).toContain(
+          "cargo install --git https://github.com/ProverCoderAI/rust-android-connection --rev 7fd2c8f37fccc2b5fdb3ac53e1c55d168e79d09c --locked --bins --root /usr/local"
         )
-        expect(yield* _(fs.exists(androidConnectionCargoToml))).toBe(true)
+        expect(dockerfileAfter).toContain("/usr/local/bin/android-connection --version")
+        expect(dockerfileAfter).not.toContain(".docker-git-tools/android-connection")
 
         const configAfterText = yield* _(fs.readFileString(path.join(outDir, "docker-git.json")))
         const configAfter = yield* _(Effect.sync((): unknown => JSON.parse(configAfterText)))

@@ -1176,11 +1176,13 @@ describe("renderDockerCompose", () => {
     const enabled = renderDockerfile(makeTemplateConfig({ enableMcpAndroid: true }))
     const disabled = renderDockerfile(makeTemplateConfig({ enableMcpAndroid: false }))
 
-    expect(enabled).toContain("COPY .docker-git-tools/android-connection")
     expect(enabled).toContain("android-tools-adb")
-    expect(enabled).toContain("cargo install --path /opt/docker-git/tools/android-connection")
+    expect(enabled).toContain(
+      "cargo install --git https://github.com/ProverCoderAI/rust-android-connection --rev 7fd2c8f37fccc2b5fdb3ac53e1c55d168e79d09c --locked --bins --root /usr/local"
+    )
     expect(enabled).toContain("/usr/local/bin/docker-git-android-connection --version")
     expect(enabled).toContain("/usr/local/bin/android-connection --version")
+    expect(enabled).not.toContain(".docker-git-tools/android-connection")
     expect(disabled).not.toContain(".docker-git-tools/android-connection")
     expect(disabled).not.toContain("android-tools-adb")
   })
