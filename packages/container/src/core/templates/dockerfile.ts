@@ -83,6 +83,7 @@ RUN set -eu; \
   rtk gain >/dev/null 2>&1 || true`
 
 const dockerGitSessionSyncPackage = "@prover-coder-ai/docker-git-session-sync@latest"
+const rustAndroidConnectionRevision = "7fd2c8f37fccc2b5fdb3ac53e1c55d168e79d09c"
 
 const renderDockerfilePlaywrightRuntime = (config: TemplateConfig): string =>
   config.enableMcpPlaywright
@@ -92,20 +93,19 @@ const renderDockerfilePlaywrightRuntime = (config: TemplateConfig): string =>
     : ""
 
 // CHANGE: install the first-party Android MCP module when Android MCP is enabled
-// WHY: issue-436 requires a separately proven module instead of an unpinned runtime npx server
+// WHY: issue-436 requires a separately proven module instead of an unpinned runtime npx server or vendored source copy
 // QUOTE(ТЗ): "Подключить mcp-android так же как работает MCP PLAYRIGHT"
 // REF: issue-436
-// SOURCE: n/a
+// SOURCE: https://github.com/ProverCoderAI/rust-android-connection/commit/7fd2c8f37fccc2b5fdb3ac53e1c55d168e79d09c
 // PURITY: CORE (pure template renderer)
 const renderDockerfileAndroidRuntime = (config: TemplateConfig): string =>
   config.enableMcpAndroid === true
     ? `# Android MCP runtime: ADB client + first-party Rust android-connection module.
-COPY .docker-git-tools/android-connection /opt/docker-git/tools/android-connection
 RUN apt-get update \
   && apt-get install -y --no-install-recommends android-tools-adb \
   && rm -rf /var/lib/apt/lists/* \
   && adb --version \
-  && cargo install --path /opt/docker-git/tools/android-connection --locked --bins --root /usr/local \
+  && cargo install --git https://github.com/ProverCoderAI/rust-android-connection --rev ${rustAndroidConnectionRevision} --locked --bins --root /usr/local \
   && /usr/local/bin/docker-git-android-connection --version \
   && /usr/local/bin/android-connection --version`
     : ""

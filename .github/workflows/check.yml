@@ -39,26 +39,6 @@ jobs:
       - name: Build (api)
         run: bun run --cwd packages/api build
 
-  rust-android-connection:
-    name: Rust Android connection
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-      - name: Rust version
-        run: |
-          rustc --version
-          cargo --version
-      - name: Format
-        working-directory: crates/android-connection
-        run: cargo fmt --check
-      - name: Test
-        working-directory: crates/android-connection
-        run: cargo test --locked
-      - name: Clippy
-        working-directory: crates/android-connection
-        run: cargo clippy --locked --all-targets -- -D warnings
-
   dist-deps-prune:
     name: Dist deps prune
     runs-on: ubuntu-latest
