@@ -268,14 +268,19 @@ export const authClaudeLogin = (
       yield* _(fs.writeFileString(claudeOauthTokenPath(accountPath), `${token}\n`))
       yield* _(fs.chmod(claudeOauthTokenPath(accountPath), 0o600), Effect.orElseSucceed(() => void 0))
       yield* _(resolveClaudeAuthMethod(fs, path, accountPath))
+      // CHANGE: treat a failing post-login API probe as a warning instead of a hard error
+      // WHY: the OAuth token is already created and persisted; a transient probe failure
+      //      (network hiccup, rate limit, token propagation delay) must not discard a
+      //      successful login. Mirrors authClaudeStatus, which only warns on probe failure.
+      // REF: issue-439
+      // SOURCE: n/a
       const probeExitCode = yield* _(runClaudePingProbeExitCode(cwd, accountPath, token))
       if (probeExitCode !== 0) {
         yield* _(
-          Effect.fail(
-            new CommandFailedError({
-              command: "claude setup-token",
-              exitCode: probeExitCode
-            })
+          Effect.logWarning(
+            `Claude OAuth token saved (${accountLabel}), but the API probe failed (exit=${probeExitCode}). ` +
+              `The token may need a moment to activate, or there was a transient network issue. ` +
+              `Verify later with 'docker-git auth claude status'.`
           )
         )
       }
