@@ -3,7 +3,10 @@ import * as CommandExecutor from "@effect/platform/CommandExecutor"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
-import { claudeOauthTokenFileMode } from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
+import {
+  claudeOauthTokenFileMode,
+  dockerGitClaudeOauthTokenEnvKey
+} from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Logger } from "effect"
 import * as Inspectable from "effect/Inspectable"
@@ -46,13 +49,15 @@ const isPingProbe = (args: ReadonlyArray<string>): boolean => args.includes("-p"
 // REF: issue-439
 const makeFakeExecutor = (
   token: string | null,
-  pingExitCode: number
+  pingExitCode: number,
+  invocations: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }> = []
 ): CommandExecutor.CommandExecutor => {
   const start = (command: Command.Command): Effect.Effect<CommandExecutor.Process, never> =>
     Effect.sync(() => {
       const flattened = Command.flatten(command)
       const invocation = flattened[flattened.length - 1]!
       const args = invocation.args
+      invocations.push({ command: invocation.command, args })
 
       const stdoutText = isSetupToken(args)
         ? token === null
@@ -192,7 +197,12 @@ describe("authClaudeLogin", () => {
   it.effect("persists the OAuth token even when the post-login API probe fails", () =>
     withTempDir((root) =>
       withPatchedEnv(
-        { HOME: root, DOCKER_GIT_STATE_AUTO_SYNC: "0", DOCKER_GIT_PROJECTS_ROOT: undefined },
+        {
+          HOME: root,
+          DOCKER_GIT_STATE_AUTO_SYNC: "0",
+          DOCKER_GIT_PROJECTS_ROOT: undefined,
+          [dockerGitClaudeOauthTokenEnvKey]: undefined
+        },
         Effect.gen(function*(_) {
           const { logs, tokenText } = yield* _(runLoginAndReadToken(root, 7))
           expect(tokenText.trim()).toBe(oauthToken)
@@ -204,7 +214,12 @@ describe("authClaudeLogin", () => {
   it.effect("persists the OAuth token when the post-login API probe succeeds", () =>
     withTempDir((root) =>
       withPatchedEnv(
-        { HOME: root, DOCKER_GIT_STATE_AUTO_SYNC: "0", DOCKER_GIT_PROJECTS_ROOT: undefined },
+        {
+          HOME: root,
+          DOCKER_GIT_STATE_AUTO_SYNC: "0",
+          DOCKER_GIT_PROJECTS_ROOT: undefined,
+          [dockerGitClaudeOauthTokenEnvKey]: undefined
+        },
         Effect.gen(function*(_) {
           const { tokenText } = yield* _(runLoginAndReadToken(root, 0))
           expect(tokenText.trim()).toBe(oauthToken)
@@ -212,10 +227,48 @@ describe("authClaudeLogin", () => {
       )
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("uses a decoded docker-git OAuth env token without running setup-token", () =>
+    withTempDir((root) =>
+      withPatchedEnv(
+        {
+          HOME: root,
+          DOCKER_GIT_STATE_AUTO_SYNC: "0",
+          DOCKER_GIT_PROJECTS_ROOT: undefined,
+          [dockerGitClaudeOauthTokenEnvKey]: ` ${oauthToken} `
+        },
+        Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const invocations: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }> = []
+          const claudeAuthPath = path.join(root, ".docker-git/.orch/auth/claude")
+
+          yield* _(
+            authClaudeLogin({
+              _tag: "AuthClaudeLogin",
+              label: null,
+              claudeAuthPath
+            }).pipe(
+              Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(null, 0, invocations))
+            )
+          )
+
+          const tokenText = yield* _(fs.readFileString(path.join(claudeAuthPath, "default", ".oauth-token")))
+          expect(tokenText.trim()).toBe(oauthToken)
+          expect(invocations.some((invocation) => isSetupToken(invocation.args))).toBe(false)
+          expect(invocations.some((invocation) => isPingProbe(invocation.args))).toBe(true)
+        })
+      )
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("replaces an existing token symlink without writing the secret to the symlink target", () =>
     withTempDir((root) =>
       withPatchedEnv(
-        { HOME: root, DOCKER_GIT_STATE_AUTO_SYNC: "0", DOCKER_GIT_PROJECTS_ROOT: undefined },
+        {
+          HOME: root,
+          DOCKER_GIT_STATE_AUTO_SYNC: "0",
+          DOCKER_GIT_PROJECTS_ROOT: undefined,
+          [dockerGitClaudeOauthTokenEnvKey]: undefined
+        },
         Effect.gen(function*(_) {
           const fs = yield* _(FileSystem.FileSystem)
           const path = yield* _(Path.Path)
@@ -266,7 +319,12 @@ describe("authClaudeLogin", () => {
   it.effect("fails when setup-token completes without a captured OAuth token", () =>
     withTempDir((root) =>
       withPatchedEnv(
-        { HOME: root, DOCKER_GIT_STATE_AUTO_SYNC: "0", DOCKER_GIT_PROJECTS_ROOT: undefined },
+        {
+          HOME: root,
+          DOCKER_GIT_STATE_AUTO_SYNC: "0",
+          DOCKER_GIT_PROJECTS_ROOT: undefined,
+          [dockerGitClaudeOauthTokenEnvKey]: undefined
+        },
         Effect.gen(function*(_) {
           yield* _(runLoginWithoutCapturedToken(root))
         })

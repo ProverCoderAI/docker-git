@@ -9,12 +9,10 @@ import {
   runClaudeDockerOauth
 } from "@prover-coder-ai/docker-git-auth-oauth/claude-docker-oauth"
 import {
-  dockerGitClaudeOauthTokenEnvKey,
   extractClaudeOauthToken,
   flushClaudeOauthTokenRedactionState,
   initialClaudeOauthTokenRedactionState,
-  redactClaudeOauthTokenChunk,
-  readClaudeOauthTokenFromEnv
+  redactClaudeOauthTokenChunk
 } from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
 import { Effect, pipe } from "effect"
 import * as Fiber from "effect/Fiber"
@@ -205,13 +203,13 @@ export const runClaudeOauthLoginWithPrompt = (
   cwd: string,
   accountPath: string,
   options: {
+    readonly envToken: string | null
     readonly image: string
     readonly containerPath: string
   }
 ): Effect.Effect<string, AuthError | CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
-  const envToken = readClaudeOauthTokenFromEnv(process.env, [dockerGitClaudeOauthTokenEnvKey])
-  if (envToken !== null) {
-    return Effect.succeed(envToken)
+  if (options.envToken !== null) {
+    return Effect.succeed(options.envToken)
   }
 
   return Effect.scoped(
