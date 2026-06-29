@@ -50,15 +50,36 @@ const claudeCredentialsPath = (accountPath: string): string => `${accountPath}/$
 const claudeNestedCredentialsPath = (accountPath: string): string =>
   `${accountPath}/${claudeCredentialsDirName}/${claudeCredentialsFileName}`
 
+// CHANGE: persist Claude OAuth tokens through a restricted temporary file and atomic rename
+// WHY: the final token path must never receive secret bytes before 0600 permissions are established
+// QUOTE(ТЗ): "Исправь CI/CD и все правки от Rabbit Coder."
+// REF: issue-439/pr-440
+// SOURCE: n/a
+// FORMAT THEOREM: forall token, path: write(secret, final(path)) only by rename(temp0600, final(path))
+// PURITY: SHELL
+// EFFECT: Effect<void, PlatformError>
+// INVARIANT: final .oauth-token is regular replacement content with mode 0600 after success
+// COMPLEXITY: O(|token|)
 const persistClaudeOauthToken = (
   fs: FileSystem.FileSystem,
+  path: Path.Path,
   accountPath: string,
   token: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
     const tokenPath = claudeOauthTokenPath(accountPath)
-    yield* _(fs.writeFileString(tokenPath, formatClaudeOauthTokenFile(token), { mode: claudeOauthTokenFileMode }))
-    yield* _(fs.chmod(tokenPath, claudeOauthTokenFileMode))
+    const tempDir = yield* _(fs.makeTempDirectory({ directory: accountPath, prefix: ".oauth-token-write-" }))
+    const tempPath = path.join(tempDir, ".oauth-token")
+    yield* _(
+      Effect.gen(function*(_) {
+        yield* _(fs.writeFileString(tempPath, formatClaudeOauthTokenFile(token), { mode: claudeOauthTokenFileMode }))
+        yield* _(fs.chmod(tempPath, claudeOauthTokenFileMode))
+        yield* _(fs.rename(tempPath, tokenPath))
+        yield* _(fs.chmod(tokenPath, claudeOauthTokenFileMode))
+      }).pipe(
+        Effect.ensuring(fs.remove(tempDir, { recursive: true, force: true }).pipe(Effect.orElseSucceed(() => void 0)))
+      )
+    )
   })
 
 const syncClaudeCredentialsFile = (
@@ -264,7 +285,7 @@ export const authClaudeLogin = (
         image: claudeImageName,
         containerPath: claudeContainerHomeDir
       }),
-      persistToken: (token) => persistClaudeOauthToken(fs, accountPath, token),
+      persistToken: (token) => persistClaudeOauthToken(fs, path, accountPath, token),
       normalizeStoredCredentials: resolveClaudeAuthMethod(fs, path, accountPath).pipe(Effect.asVoid),
       probeToken: (token) => runClaudePingProbeExitCode(cwd, accountPath, token),
       syncState: autoSyncState(`chore(state): auth claude ${accountLabel}`)

@@ -3,6 +3,7 @@ import * as CommandExecutor from "@effect/platform/CommandExecutor"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
+import { claudeOauthTokenFileMode } from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Logger } from "effect"
 import * as Inspectable from "effect/Inspectable"
@@ -207,6 +208,57 @@ describe("authClaudeLogin", () => {
         Effect.gen(function*(_) {
           const { tokenText } = yield* _(runLoginAndReadToken(root, 0))
           expect(tokenText.trim()).toBe(oauthToken)
+        })
+      )
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("replaces an existing token symlink without writing the secret to the symlink target", () =>
+    withTempDir((root) =>
+      withPatchedEnv(
+        { HOME: root, DOCKER_GIT_STATE_AUTO_SYNC: "0", DOCKER_GIT_PROJECTS_ROOT: undefined },
+        Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const claudeAuthPath = path.join(root, ".docker-git/.orch/auth/claude")
+          const accountPath = path.join(claudeAuthPath, "default")
+          const tokenPath = path.join(accountPath, ".oauth-token")
+          const outsidePath = path.join(root, "outside-token-target")
+          yield* _(fs.makeDirectory(accountPath, { recursive: true }))
+          yield* _(fs.writeFileString(outsidePath, "outside-sentinel\n"))
+          yield* _(fs.symlink(outsidePath, tokenPath))
+          let finalTokenWrites = 0
+          const guardedFs: FileSystem.FileSystem = {
+            ...fs,
+            writeFileString: (targetPath, data, options) =>
+              (targetPath === tokenPath
+                ? Effect.sync(() => {
+                  finalTokenWrites += 1
+                })
+                : Effect.void).pipe(
+                Effect.zipRight(fs.writeFileString(targetPath, data, options))
+              )
+          }
+
+          yield* _(
+            authClaudeLogin({
+              _tag: "AuthClaudeLogin",
+              label: null,
+              claudeAuthPath
+            }).pipe(
+              Effect.provideService(FileSystem.FileSystem, guardedFs),
+              Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(oauthToken, 0))
+            )
+          )
+
+          const outsideText = yield* _(fs.readFileString(outsidePath))
+          const tokenText = yield* _(fs.readFileString(tokenPath))
+          const tokenInfo = yield* _(fs.stat(tokenPath))
+
+          expect(outsideText).toBe("outside-sentinel\n")
+          expect(tokenText.trim()).toBe(oauthToken)
+          expect(tokenInfo.type).toBe("File")
+          expect(Number(tokenInfo.mode) & 0o777).toBe(claudeOauthTokenFileMode)
+          expect(finalTokenWrites).toBe(0)
         })
       )
     ).pipe(Effect.provide(NodeContext.layer)))
