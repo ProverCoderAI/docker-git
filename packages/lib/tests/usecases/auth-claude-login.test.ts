@@ -29,6 +29,14 @@ const setupTokenOutput = (token: string): string =>
     " Store this token securely. You won't be able to see it again."
   ].join("\n")
 
+const setupTokenOutputWithoutToken = (): string =>
+  [
+    "Welcome to Claude Code",
+    "",
+    " OAuth flow finished without printing a long-lived token.",
+    ""
+  ].join("\n")
+
 const isSetupToken = (args: ReadonlyArray<string>): boolean => args.includes("setup-token")
 const isPingProbe = (args: ReadonlyArray<string>): boolean => args.includes("-p") && args.includes("ping")
 
@@ -36,7 +44,7 @@ const isPingProbe = (args: ReadonlyArray<string>): boolean => args.includes("-p"
 // WHY: reproduce issue-439 where a successful OAuth login was discarded by a failing probe
 // REF: issue-439
 const makeFakeExecutor = (
-  token: string,
+  token: string | null,
   pingExitCode: number
 ): CommandExecutor.CommandExecutor => {
   const start = (command: Command.Command): Effect.Effect<CommandExecutor.Process, never> =>
@@ -45,7 +53,11 @@ const makeFakeExecutor = (
       const invocation = flattened[flattened.length - 1]!
       const args = invocation.args
 
-      const stdoutText = isSetupToken(args) ? setupTokenOutput(token) : ""
+      const stdoutText = isSetupToken(args)
+        ? token === null
+          ? setupTokenOutputWithoutToken()
+          : setupTokenOutput(token)
+        : ""
       const exitCode = isPingProbe(args) ? pingExitCode : 0
       const stdout = stdoutText.length === 0 ? Stream.empty : Stream.succeed(encode(stdoutText))
 
@@ -136,6 +148,34 @@ const runLoginAndReadToken = (
     return yield* _(fs.readFileString(path.join(claudeAuthPath, "default", ".oauth-token")))
   })
 
+const runLoginWithoutCapturedToken = (
+  root: string
+): Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const claudeAuthPath = path.join(root, ".docker-git/.orch/auth/claude")
+    const tokenPath = path.join(claudeAuthPath, "default", ".oauth-token")
+
+    const error = yield* _(
+      authClaudeLogin({
+        _tag: "AuthClaudeLogin",
+        label: null,
+        claudeAuthPath
+      }).pipe(
+        Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(null, 0)),
+        Effect.flip
+      )
+    )
+
+    expect(error._tag).toBe("AuthError")
+    if (error._tag === "AuthError") {
+      expect(error.message).toContain("without a captured token")
+    }
+    const hasTokenFile = yield* _(fs.exists(tokenPath))
+    expect(hasTokenFile).toBe(false)
+  })
+
 describe("authClaudeLogin", () => {
   // Regression for issue-439: a non-zero probe exit must not discard a created token.
   it.effect("persists the OAuth token even when the post-login API probe fails", () =>
@@ -156,6 +196,16 @@ describe("authClaudeLogin", () => {
         Effect.gen(function*(_) {
           const persisted = yield* _(runLoginAndReadToken(root, 0))
           expect(persisted.trim()).toBe(oauthToken)
+        })
+      )
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("fails when setup-token completes without a captured OAuth token", () =>
+    withTempDir((root) =>
+      withPatchedEnv(
+        { HOME: root, DOCKER_GIT_STATE_AUTO_SYNC: "0", DOCKER_GIT_PROJECTS_ROOT: undefined },
+        Effect.gen(function*(_) {
+          yield* _(runLoginWithoutCapturedToken(root))
         })
       )
     ).pipe(Effect.provide(NodeContext.layer)))

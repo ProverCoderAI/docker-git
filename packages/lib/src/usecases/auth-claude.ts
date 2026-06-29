@@ -279,6 +279,7 @@ export const authClaudeLogin = (
         yield* _(
           Effect.logWarning(
             `Claude OAuth token saved (${accountLabel}), but the API probe failed (exit=${probeExitCode}). ` +
+              `Login is complete because the token was captured and persisted; live Claude API access is not yet verified. ` +
               `The token may need a moment to activate, or there was a transient network issue. ` +
               `Verify later with 'docker-git auth claude status'.`
           )
