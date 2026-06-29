@@ -84,7 +84,7 @@ RUN printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
   && chmod 0440 /etc/sudoers.d/zz-all`
 
 const planToGitBranch = "main"
-const planToGitCommitMetadataUrl = `https://api.github.com/repos/ProverCoderAI/plan-to-git/commits/${planToGitBranch}`
+const planToGitCommitPatchUrl = `https://github.com/ProverCoderAI/plan-to-git/commit/${planToGitBranch}.patch`
 
 // CHANGE: install plan-to-git in generated project containers.
 // WHY: issue #397 requires multi-agent plan capture, Claude Code hooks, temp-backed state, and explicit PR sync.
@@ -94,11 +94,11 @@ const planToGitCommitMetadataUrl = `https://api.github.com/repos/ProverCoderAI/p
 // FORMAT THEOREM: image_build_success -> executable(/usr/local/bin/plan-to-git)
 // PURITY: SHELL
 // EFFECT: Docker build downloads and installs the current main branch Rust CLI from GitHub.
-// INVARIANT: plan-to-git is available on PATH with Claude hooks and sync --pr before agent hooks or git post-push actions run; moving main changes the remote ADD input and invalidates the install layer.
+// INVARIANT: plan-to-git is available on PATH with Claude hooks and sync --pr before agent hooks or git post-push actions run; moving main changes the remote patch ADD input and invalidates the install layer without GitHub API quota dependency.
 // COMPLEXITY: O(network + cargo_build)
 const renderDockerfilePlanToGit = (): string =>
   `# Install plan-to-git for multi-agent plan capture and explicit PR sync (issue #397)
-ADD ${planToGitCommitMetadataUrl} /tmp/docker-git-plan-to-git-main.json
+ADD ${planToGitCommitPatchUrl} /tmp/docker-git-plan-to-git-main.patch
 RUN cargo install --git https://github.com/ProverCoderAI/plan-to-git --branch ${planToGitBranch} --locked --bins --root /usr/local \
   && /usr/local/bin/plan-to-git --help >/dev/null \
   && /usr/local/bin/plan-to-git --help | grep -q -- "--repo" \

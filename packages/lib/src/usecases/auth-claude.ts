@@ -70,15 +70,16 @@ const persistClaudeOauthToken = (
     const tokenPath = claudeOauthTokenPath(accountPath)
     const tempDir = yield* _(fs.makeTempDirectory({ directory: accountPath, prefix: ".oauth-token-write-" }))
     const tempPath = path.join(tempDir, ".oauth-token")
+    const cleanupTempDir = fs.remove(tempDir, { recursive: true, force: true }).pipe(
+      Effect.orElseSucceed(() => void 0)
+    )
     yield* _(
       Effect.gen(function*(_) {
         yield* _(fs.writeFileString(tempPath, formatClaudeOauthTokenFile(token), { mode: claudeOauthTokenFileMode }))
         yield* _(fs.chmod(tempPath, claudeOauthTokenFileMode))
         yield* _(fs.rename(tempPath, tokenPath))
         yield* _(fs.chmod(tokenPath, claudeOauthTokenFileMode))
-      }).pipe(
-        Effect.ensuring(fs.remove(tempDir, { recursive: true, force: true }).pipe(Effect.orElseSucceed(() => void 0)))
-      )
+      }).pipe(Effect.ensuring(cleanupTempDir))
     )
   })
 
