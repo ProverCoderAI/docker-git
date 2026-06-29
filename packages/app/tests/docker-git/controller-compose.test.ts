@@ -1,4 +1,5 @@
 import { NodeContext } from "@effect/platform-node"
+import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
@@ -113,6 +114,28 @@ describe("controller compose preparation", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer))
   })
+
+  it.effect("rejects extra compose overlay paths that are directories", () =>
+    withMinimalControllerRoot((rootDir) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const extraComposePath = path.join(rootDir, "docker-compose.auth-claude-login.yml")
+        yield* _(fs.makeDirectory(extraComposePath))
+        yield* _(
+          withControllerEnv([
+            [controllerBuildSkillerEnvKey, "0"],
+            [controllerComposeExtraFileEnvKey, extraComposePath],
+            [controllerDockerRuntimeEnvKey, undefined],
+            [controllerGpuModeEnvKey, undefined]
+          ])
+        )
+
+        const error = yield* _(resolveControllerComposeFiles().pipe(Effect.flip))
+        expect(error._tag).toBe("ControllerBootstrapError")
+        expect(error.message).toContain("regular file")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
 
   it.effect("does not initialize the Skiller submodule when package metadata already exists", () => {
     const startedCommands: Array<string> = []

@@ -177,6 +177,13 @@ const resolveClaudeDockerOauthTokenResult = (
           )
         )
       }
+      if (result.probeStatus._tag === "ClaudeDockerProbeFailed") {
+        yield* _(
+          Effect.logWarning(
+            `claude -p ping failed with exit=${result.probeStatus.exitCode}; OAuth token was saved. Run docker-git auth claude status to verify later.`
+          )
+        )
+      }
       return result.token
     }
     if (result._tag === "ClaudeDockerOauthCommandFailed") {

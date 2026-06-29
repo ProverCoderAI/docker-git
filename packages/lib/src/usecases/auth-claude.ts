@@ -57,7 +57,7 @@ const persistClaudeOauthToken = (
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
     const tokenPath = claudeOauthTokenPath(accountPath)
-    yield* _(fs.writeFileString(tokenPath, formatClaudeOauthTokenFile(token)))
+    yield* _(fs.writeFileString(tokenPath, formatClaudeOauthTokenFile(token), { mode: claudeOauthTokenFileMode }))
     yield* _(fs.chmod(tokenPath, claudeOauthTokenFileMode))
   })
 

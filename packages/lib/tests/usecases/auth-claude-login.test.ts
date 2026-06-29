@@ -4,7 +4,7 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, Logger } from "effect"
 import * as Inspectable from "effect/Inspectable"
 import * as Sink from "effect/Sink"
 import * as Stream from "effect/Stream"
@@ -13,8 +13,7 @@ import { authClaudeLogin } from "../../src/usecases/auth-claude.js"
 
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value)
 
-const oauthTokenPrefix = ["sk", "ant", ""].join("-")
-const oauthToken = `${oauthTokenPrefix}oat01-EXAMPLE0123456789abcdef`
+const oauthToken = "TEST_CLAUDE_OAUTH_TOKEN_EXAMPLE"
 
 // Mirrors the real `claude setup-token` output that the OAuth parser scans for.
 const setupTokenOutput = (token: string): string =>
@@ -130,10 +129,18 @@ const withPatchedEnv = <A, E, R>(
 const runLoginAndReadToken = (
   root: string,
   pingExitCode: number
-): Effect.Effect<string, unknown, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<
+  { readonly logs: ReadonlyArray<string>; readonly tokenText: string },
+  unknown,
+  FileSystem.FileSystem | Path.Path
+> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
+    const logs: Array<string> = []
+    const logger = Logger.make(({ message }) => {
+      logs.push(String(message))
+    })
     const claudeAuthPath = path.join(root, ".docker-git/.orch/auth/claude")
 
     yield* _(
@@ -142,11 +149,13 @@ const runLoginAndReadToken = (
         label: null,
         claudeAuthPath
       }).pipe(
-        Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(oauthToken, pingExitCode))
+        Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(oauthToken, pingExitCode)),
+        Effect.provide(Logger.replace(Logger.defaultLogger, logger))
       )
     )
 
-    return yield* _(fs.readFileString(path.join(claudeAuthPath, "default", ".oauth-token")))
+    const tokenText = yield* _(fs.readFileString(path.join(claudeAuthPath, "default", ".oauth-token")))
+    return { logs, tokenText }
   })
 
 const runLoginWithoutCapturedToken = (
@@ -184,8 +193,9 @@ describe("authClaudeLogin", () => {
       withPatchedEnv(
         { HOME: root, DOCKER_GIT_STATE_AUTO_SYNC: "0", DOCKER_GIT_PROJECTS_ROOT: undefined },
         Effect.gen(function*(_) {
-          const persisted = yield* _(runLoginAndReadToken(root, 7))
-          expect(persisted.trim()).toBe(oauthToken)
+          const { logs, tokenText } = yield* _(runLoginAndReadToken(root, 7))
+          expect(tokenText.trim()).toBe(oauthToken)
+          expect(logs.some((message) => message.includes("claude -p ping failed with exit=7"))).toBe(true)
         })
       )
     ).pipe(Effect.provide(NodeContext.layer)))
@@ -195,8 +205,8 @@ describe("authClaudeLogin", () => {
       withPatchedEnv(
         { HOME: root, DOCKER_GIT_STATE_AUTO_SYNC: "0", DOCKER_GIT_PROJECTS_ROOT: undefined },
         Effect.gen(function*(_) {
-          const persisted = yield* _(runLoginAndReadToken(root, 0))
-          expect(persisted.trim()).toBe(oauthToken)
+          const { tokenText } = yield* _(runLoginAndReadToken(root, 0))
+          expect(tokenText.trim()).toBe(oauthToken)
         })
       )
     ).pipe(Effect.provide(NodeContext.layer)))

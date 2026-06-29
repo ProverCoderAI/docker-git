@@ -16,9 +16,8 @@ import {
   runClaudeLocalEnvTokenLoginFlow
 } from "../../src/usecases/auth-claude-local.js"
 
-const oauthTokenPrefix = ["sk", "ant", ""].join("-")
-const oauthToken = `${oauthTokenPrefix}oat01-LOCAL0123456789abcdef`
-const lowerPriorityToken = `${oauthTokenPrefix}oat01-LOWERPRIORITY0123456789`
+const oauthToken = "TEST_CLAUDE_OAUTH_TOKEN_LOCAL"
+const lowerPriorityToken = "TEST_CLAUDE_OAUTH_TOKEN_LOWER_PRIORITY"
 
 const makeExitCodeExecutor = (
   exitCode: number,

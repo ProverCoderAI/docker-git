@@ -25,10 +25,10 @@ const mapComposePathError = (error: PlatformError): ControllerBootstrapError =>
 // QUOTE(ТЗ): n/a
 // REF: issue-440-review-compose-overlay
 // SOURCE: n/a
-// FORMAT THEOREM: forall p: env(extra)=p and exists(resolve(p)) -> resolve(extra)=Some(resolve(p))
+// FORMAT THEOREM: forall p: env(extra)=p and regular_file(resolve(p)) -> resolve(extra)=Some(resolve(p))
 // PURITY: SHELL
 // EFFECT: Effect<string | null, ControllerBootstrapError, FileSystem | Path>
-// INVARIANT: non-empty extra compose env values either resolve to an existing file or fail before docker compose
+// INVARIANT: non-empty extra compose env values either resolve to a regular file or fail before docker compose
 // COMPLEXITY: O(1)
 export const loadControllerComposeExtraPath = (): Effect.Effect<
   string | null,
@@ -45,12 +45,23 @@ export const loadControllerComposeExtraPath = (): Effect.Effect<
     const path = yield* _(Path.Path)
     const extraOverlayPath = path.resolve(raw)
     const isExists = yield* _(fs.exists(extraOverlayPath).pipe(Effect.mapError(mapComposePathError)))
-    return isExists
+    if (!isExists) {
+      return yield* _(
+        Effect.fail(
+          controllerBootstrapError(
+            `${controllerComposeExtraFileEnvKey} points to ${extraOverlayPath}, but it was not found.`
+          )
+        )
+      )
+    }
+
+    const info = yield* _(fs.stat(extraOverlayPath).pipe(Effect.mapError(mapComposePathError)))
+    return info.type === "File"
       ? extraOverlayPath
       : yield* _(
         Effect.fail(
           controllerBootstrapError(
-            `${controllerComposeExtraFileEnvKey} points to ${extraOverlayPath}, but it was not found.`
+            `${controllerComposeExtraFileEnvKey} points to ${extraOverlayPath}, but it is not a regular file.`
           )
         )
       )

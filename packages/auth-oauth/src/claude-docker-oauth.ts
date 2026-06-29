@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdtemp, mkdir, rename, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -285,8 +285,23 @@ const runDockerProbe = (spec: ClaudeDockerProbeSpec): Promise<number> =>
 
 const writeCapturedToken = async (accountPath: string, token: string): Promise<void> => {
   const tokenPath = claudeOauthTokenPath(accountPath)
-  await writeFile(tokenPath, formatClaudeOauthTokenFile(token), "utf8")
-  await chmod(tokenPath, claudeOauthTokenFileMode)
+  const tempDir = await mkdtemp(join(accountPath, ".oauth-token-write-"))
+  const tempPath = join(tempDir, ".oauth-token")
+  let renamed = false
+  try {
+    await writeFile(tempPath, formatClaudeOauthTokenFile(token), {
+      encoding: "utf8",
+      mode: claudeOauthTokenFileMode
+    })
+    await chmod(tempPath, claudeOauthTokenFileMode)
+    await rename(tempPath, tokenPath)
+    renamed = true
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+    if (!renamed) {
+      await rm(tempPath, { force: true })
+    }
+  }
 }
 
 const dockerProbeStatusFromExitCode = (exitCode: number): ClaudeDockerProbeStatus =>

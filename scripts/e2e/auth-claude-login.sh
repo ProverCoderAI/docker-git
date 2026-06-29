@@ -13,6 +13,7 @@ chmod 0700 "$ROOT"
 KEEP="${KEEP:-0}"
 COMPOSE_OVERRIDE_FILE="$ROOT/docker-compose.auth-claude-login.yml"
 LOGIN_TIMEOUT_SECONDS="${DOCKER_GIT_E2E_AUTH_CLAUDE_LOGIN_TIMEOUT_SECONDS:-900}"
+OAUTH_TOKEN_MARKER="docker-git-e2e-oauth-token-marker"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
@@ -21,11 +22,11 @@ export DOCKER_GIT_PROJECTS_ROOT_VOLUME="docker-git-e2e-auth-claude-$RUN_ID-proje
 export DOCKER_GIT_CONTROLLER_COMPOSE_EXTRA_FILE="$COMPOSE_OVERRIDE_FILE"
 export COMPOSE_PROJECT_NAME="docker-git"
 
-cat > "$COMPOSE_OVERRIDE_FILE" <<'YAML'
+cat > "$COMPOSE_OVERRIDE_FILE" <<YAML
 services:
   api:
     environment:
-      DOCKER_GIT_CLAUDE_OAUTH_TOKEN: docker-git-e2e-oauth-token-marker
+      DOCKER_GIT_CLAUDE_OAUTH_TOKEN: ${OAUTH_TOKEN_MARKER}
 YAML
 
 LOG_FILE="/tmp/docker-git-auth-claude-login-$RUN_ID.log"
@@ -72,6 +73,10 @@ set -e
 if [[ "$login_exit" -ne 0 ]]; then
   cat "$LOG_FILE" >&2 || true
   fail "docker-git auth claude login failed (exit: $login_exit)"
+fi
+
+if grep -Fq -- "$OAUTH_TOKEN_MARKER" "$LOG_FILE"; then
+  fail "expected OAuth token marker to be absent from auth claude login output"
 fi
 
 grep -Fq -- "Claude OAuth token saved" "$LOG_FILE" \

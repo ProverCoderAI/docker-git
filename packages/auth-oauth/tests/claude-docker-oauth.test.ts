@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, stat } from "node:fs/promises"
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -41,12 +41,16 @@ const oauthTokenArbitrary = fc.array(fc.constantFrom(
   maxLength: 64
 }).map((chars) => `${oauthTokenPrefix}${chars.join("")}`)
 
+const temporaryAccountPath = (prefix: string) =>
+  Effect.acquireRelease(
+    Effect.tryPromise(() => mkdtemp(join(tmpdir(), prefix))),
+    (accountPath) => Effect.promise(() => rm(accountPath, { recursive: true, force: true }))
+  )
+
 describe("Claude Docker OAuth runner", () => {
   it.effect("runs Docker setup-token, persists token, then probes through the mounted token file", () =>
-    Effect.gen(function*(_) {
-      const accountPath = yield* _(
-        Effect.tryPromise(() => mkdtemp(join(tmpdir(), "docker-git-auth-oauth-docker-test-")))
-      )
+    Effect.scoped(Effect.gen(function*(_) {
+      const accountPath = yield* _(temporaryAccountPath("docker-git-auth-oauth-docker-test-"))
       const builds: Array<ClaudeDockerBuildSpec> = []
       const setupRuns: Array<ClaudeDockerSetupTokenSpec> = []
       const probeRuns: Array<ClaudeDockerProbeSpec> = []
@@ -96,13 +100,11 @@ describe("Claude Docker OAuth runner", () => {
       expect(probeRuns[0]?.args.slice(-3)).toEqual(["claude-test:latest", "-p", "ping"])
       const tokenMode = yield* _(Effect.tryPromise(() => stat(claudeOauthTokenPath(accountPath))))
       expect(tokenMode.mode & 0o777).toBe(claudeOauthTokenFileMode)
-    }))
+    })))
 
   it.effect("keeps the captured token and file mode when Docker probe fails", () =>
-    Effect.gen(function*(_) {
-      const accountPath = yield* _(
-        Effect.tryPromise(() => mkdtemp(join(tmpdir(), "docker-git-auth-oauth-docker-probe-test-")))
-      )
+    Effect.scoped(Effect.gen(function*(_) {
+      const accountPath = yield* _(temporaryAccountPath("docker-git-auth-oauth-docker-probe-test-"))
       const result = yield* _(
         Effect.tryPromise(() =>
           runClaudeDockerOauth({
@@ -124,7 +126,7 @@ describe("Claude Docker OAuth runner", () => {
       const tokenMode = yield* _(Effect.tryPromise(() => stat(claudeOauthTokenPath(accountPath))))
       expect(tokenFile).toBe(`${oauthToken}\n`)
       expect(tokenMode.mode & 0o777).toBe(claudeOauthTokenFileMode)
-    }))
+    })))
 
   it.effect("returns command failure when setup-token exits non-zero without token", () =>
     Effect.gen(function*(_) {

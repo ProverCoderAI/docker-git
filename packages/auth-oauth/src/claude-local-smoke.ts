@@ -91,7 +91,10 @@ export const persistClaudeLocalOauthToken = async (
   token: string
 ): Promise<void> => {
   const tokenPath = claudeOauthTokenPath(accountPath)
-  await writeFile(tokenPath, formatClaudeOauthTokenFile(token), "utf8")
+  await writeFile(tokenPath, formatClaudeOauthTokenFile(token), {
+    encoding: "utf8",
+    mode: claudeOauthTokenFileMode
+  })
   await chmod(tokenPath, claudeOauthTokenFileMode)
 }
 
