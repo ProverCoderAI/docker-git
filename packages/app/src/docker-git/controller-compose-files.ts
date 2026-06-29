@@ -88,6 +88,16 @@ export const composeFilesToArgs = (composeFiles: ControllerComposeFiles): Readon
     composeFiles.extraOverlayPath
   )
 
+// CHANGE: require the GPU compose overlay path to be a regular file
+// WHY: docker compose accepts file arguments; accepting directories delays the failure past typed bootstrap validation
+// QUOTE(ТЗ): "Исправь CI/CD и все правки от Rabbit Coder."
+// REF: PR-440-CodeRabbit-f31ac99d
+// SOURCE: n/a
+// FORMAT THEOREM: forall p: gpu=all and regular_file(resolve(p)) -> resolve(gpu)=Some(resolve(p))
+// PURITY: SHELL
+// EFFECT: Effect<string, ControllerBootstrapError, FileSystem | Path>
+// INVARIANT: GPU compose overlay resolution returns only existing regular files
+// COMPLEXITY: O(1)
 const requireGpuOverlayPath = (
   composePath: string
 ): Effect.Effect<string, ControllerBootstrapError, FileSystem.FileSystem | Path.Path> =>
@@ -96,11 +106,22 @@ const requireGpuOverlayPath = (
     const path = yield* _(Path.Path)
     const gpuOverlayPath = path.join(path.dirname(composePath), "docker-compose.gpu.yml")
     const isExists = yield* _(fs.exists(gpuOverlayPath).pipe(Effect.mapError(mapComposePathError)))
-    return isExists
+    if (!isExists) {
+      return yield* _(
+        Effect.fail(
+          controllerBootstrapError(`${controllerGpuModeEnvKey}=all requires ${gpuOverlayPath}, but it was not found.`)
+        )
+      )
+    }
+
+    const info = yield* _(fs.stat(gpuOverlayPath).pipe(Effect.mapError(mapComposePathError)))
+    return info.type === "File"
       ? gpuOverlayPath
       : yield* _(
         Effect.fail(
-          controllerBootstrapError(`${controllerGpuModeEnvKey}=all requires ${gpuOverlayPath}, but it was not found.`)
+          controllerBootstrapError(
+            `${controllerGpuModeEnvKey}=all requires ${gpuOverlayPath}, but it is not a regular file.`
+          )
         )
       )
   })

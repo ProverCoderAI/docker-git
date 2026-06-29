@@ -13,3 +13,7 @@ propagation delay) would therefore discard an otherwise successful login.
 The probe failure is now reported as a warning instead of an error, mirroring
 `docker-git auth claude status`. The token is kept, and the user is advised to
 re-check connectivity later with `docker-git auth claude status`.
+
+Controller startup now also rejects `DOCKER_GIT_CONTROLLER_GPU=all` when
+`docker-compose.gpu.yml` exists as a directory instead of a regular file,
+matching the extra compose overlay invariant before invoking Docker Compose.

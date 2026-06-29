@@ -137,6 +137,28 @@ describe("controller compose preparation", () => {
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
+  it.effect("rejects GPU compose overlay paths that are directories", () =>
+    withMinimalControllerRoot((rootDir) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const gpuComposePath = path.join(rootDir, "docker-compose.gpu.yml")
+        yield* _(fs.makeDirectory(gpuComposePath))
+        yield* _(
+          withControllerEnv([
+            [controllerBuildSkillerEnvKey, "0"],
+            [controllerComposeExtraFileEnvKey, undefined],
+            [controllerDockerRuntimeEnvKey, undefined],
+            [controllerGpuModeEnvKey, "all"]
+          ])
+        )
+
+        const error = yield* _(resolveControllerComposeFiles().pipe(Effect.flip))
+        expect(error._tag).toBe("ControllerBootstrapError")
+        expect(error.message).toContain("regular file")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
   it.effect("does not initialize the Skiller submodule when package metadata already exists", () => {
     const startedCommands: Array<string> = []
 
