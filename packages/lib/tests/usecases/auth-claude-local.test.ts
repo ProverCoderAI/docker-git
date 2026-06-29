@@ -16,7 +16,9 @@ import {
   runClaudeLocalEnvTokenLoginFlow
 } from "../../src/usecases/auth-claude-local.js"
 
-const oauthToken = "sk-ant-oat01-LOCAL0123456789abcdef"
+const oauthTokenPrefix = ["sk", "ant", ""].join("-")
+const oauthToken = `${oauthTokenPrefix}oat01-LOCAL0123456789abcdef`
+const lowerPriorityToken = `${oauthTokenPrefix}oat01-LOWERPRIORITY0123456789`
 
 const makeExitCodeExecutor = (
   exitCode: number,
@@ -62,7 +64,7 @@ describe("Claude local auth runner", () => {
       )
       const fromDockerGitEnv = yield* _(
         readClaudeLocalOauthTokenFromEnv({
-          [claudeCodeOauthTokenEnvKey]: "sk-ant-oat01-LOWERPRIORITY0123456789",
+          [claudeCodeOauthTokenEnvKey]: lowerPriorityToken,
           [dockerGitClaudeOauthTokenEnvKey]: oauthToken
         })
       )

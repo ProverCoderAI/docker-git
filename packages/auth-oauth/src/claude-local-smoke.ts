@@ -11,7 +11,11 @@ import {
   classifyClaudeSetupTokenResult,
   dockerGitClaudeOauthTokenEnvKey,
   extractClaudeOauthToken,
+  flushClaudeOauthTokenRedactionState,
   formatClaudeOauthTokenFile,
+  initialClaudeOauthTokenRedactionState,
+  redactClaudeOauthTokenChunk,
+  type ClaudeOauthTokenRedactionState,
   type OAuthEnvironment,
   readClaudeOauthTokenFromEnv
 } from "./claude-oauth-token.js"
@@ -88,11 +92,8 @@ export const persistClaudeLocalOauthToken = async (
 ): Promise<void> => {
   const tokenPath = claudeOauthTokenPath(accountPath)
   await writeFile(tokenPath, formatClaudeOauthTokenFile(token), "utf8")
-  await chmod(tokenPath, claudeOauthTokenFileMode).catch(() => undefined)
+  await chmod(tokenPath, claudeOauthTokenFileMode)
 }
-
-const redactedOauthTokenText = (text: string): string =>
-  text.replaceAll(/sk-ant-[A-Za-z0-9._-]+/gu, "<redacted-oauth-token>")
 
 const defaultClaudeLocalOauthProbe = (spec: ClaudeLocalOauthProbeSpec): Promise<number> =>
   new Promise((resolveExitCode, reject) => {
@@ -125,17 +126,32 @@ const defaultClaudeSetupToken = (
     const decoder = new TextDecoder("utf-8")
     let outputWindow = ""
     let token: string | null = null
+    let stdoutRedactionState: ClaudeOauthTokenRedactionState = initialClaudeOauthTokenRedactionState
+    let stderrRedactionState: ClaudeOauthTokenRedactionState = initialClaudeOauthTokenRedactionState
+
+    const writeOutput = (fd: 1 | 2, output: string): void => {
+      if (output.length === 0) {
+        return
+      }
+      if (fd === 2) {
+        process.stderr.write(output)
+        return
+      }
+      process.stdout.write(output)
+    }
 
     const capture = (chunk: Uint8Array, fd: 1 | 2): void => {
       const text = decoder.decode(chunk)
       outputWindow = appendOutputWindow(outputWindow, text)
       token = token ?? extractClaudeOauthToken(outputWindow)
-      const redacted = redactedOauthTokenText(text)
+      const state = fd === 2 ? stderrRedactionState : stdoutRedactionState
+      const redacted = redactClaudeOauthTokenChunk(state, text)
       if (fd === 2) {
-        process.stderr.write(redacted)
-        return
+        stderrRedactionState = redacted.state
+      } else {
+        stdoutRedactionState = redacted.state
       }
-      process.stdout.write(redacted)
+      writeOutput(fd, redacted.output)
     }
 
     child.stdout?.on("data", (chunk: Uint8Array) => {
@@ -146,6 +162,8 @@ const defaultClaudeSetupToken = (
     })
     child.on("error", reject)
     child.on("close", (code) => {
+      writeOutput(1, flushClaudeOauthTokenRedactionState(stdoutRedactionState))
+      writeOutput(2, flushClaudeOauthTokenRedactionState(stderrRedactionState))
       resolveResult({ exitCode: code ?? 1, token })
     })
   })

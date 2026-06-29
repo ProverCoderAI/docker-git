@@ -8,6 +8,7 @@ import * as fc from "fast-check"
 import { resolveControllerRuntimeOverlayPath } from "../../src/docker-git/controller-compose-runtime.js"
 import {
   controllerBuildSkillerEnvKey,
+  controllerComposeExtraFileEnvKey,
   controllerComposeProjectName,
   controllerGpuModeEnvKey,
   ensureSkillerSubmoduleInitialized,
@@ -60,6 +61,9 @@ const writeMinimalCompose = (rootDir: string) =>
 
 const writeMinimalIsolatedCompose = (rootDir: string) =>
   writeRootFile(rootDir, "docker-compose.isolated.yml", "services:\n  api:\n    volumes: !override []\n")
+
+const writeMinimalExtraCompose = (rootDir: string) =>
+  writeRootFile(rootDir, "docker-compose.auth-claude-login.yml", "services:\n  api:\n    environment: {}\n")
 
 const writeSkillerPackage = (rootDir: string) =>
   writeRootFile(rootDir, skillerPackageRelativePath, "{\"name\":\"skiller-desktop-skills-manager\"}\n")
@@ -159,6 +163,7 @@ const prepareRevisionInTemporaryRoot = ({
       yield* _(
         withControllerEnv([
           [controllerBuildSkillerEnvKey, buildSkillerMode],
+          [controllerComposeExtraFileEnvKey, undefined],
           [controllerDockerRuntimeEnvKey, undefined],
           [controllerGpuModeEnvKey, undefined],
           [controllerRevisionEnvKey, undefined]
@@ -192,6 +197,7 @@ const resolveComposeFilesInTemporaryRoot = (
       yield* _(
         withControllerEnv([
           [controllerBuildSkillerEnvKey, "0"],
+          [controllerComposeExtraFileEnvKey, undefined],
           [controllerDockerRuntimeEnvKey, dockerRuntimeMode],
           [controllerGpuModeEnvKey, undefined]
         ])
@@ -215,6 +221,7 @@ describe("controller compose preparation", () => {
         yield* _(
           withControllerEnv([
             [controllerBuildSkillerEnvKey, "0"],
+            [controllerComposeExtraFileEnvKey, undefined],
             [controllerDockerRuntimeEnvKey, undefined],
             [controllerGpuModeEnvKey, undefined]
           ])
@@ -231,6 +238,42 @@ describe("controller compose preparation", () => {
         )
         expect(composeCommand).toBeDefined()
         expect(composeCommand?.endsWith(" up -d")).toBe(true)
+      })
+    ).pipe(Effect.provide(NodeContext.layer))
+  })
+
+  it.effect("passes the verified extra compose overlay into controller compose commands", () => {
+    const startedCommands: Array<string> = []
+
+    return withMinimalControllerRoot((rootDir) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        yield* _(writeMinimalExtraCompose(rootDir))
+        const extraComposePath = path.join(rootDir, "docker-compose.auth-claude-login.yml")
+        yield* _(
+          withControllerEnv([
+            [controllerBuildSkillerEnvKey, "0"],
+            [controllerComposeExtraFileEnvKey, extraComposePath],
+            [controllerDockerRuntimeEnvKey, undefined],
+            [controllerGpuModeEnvKey, undefined]
+          ])
+        )
+
+        const composeFiles = yield* _(resolveControllerComposeFiles())
+        expect(composeFiles.extraOverlayPath).toBe(extraComposePath)
+
+        const recordedExecutorLayer = recordedCommandExecutorLayer(startedCommands, emptyCommandResult)
+        yield* _(
+          runCompose(["up", "-d"]).pipe(
+            Effect.provide(recordedExecutorLayer)
+          )
+        )
+
+        const composeCommand = startedCommands.find((command) =>
+          command.startsWith(`docker compose --project-name ${controllerComposeProjectName} -f `)
+        )
+        expect(composeCommand).toBeDefined()
+        expect(composeCommand).toContain(` -f ${extraComposePath} up -d`)
       })
     ).pipe(Effect.provide(NodeContext.layer))
   })

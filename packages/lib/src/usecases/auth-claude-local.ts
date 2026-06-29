@@ -15,14 +15,14 @@ export type ClaudeLocalLoginFlowSpec<EStore, ESync, RStore, RSync> = {
   readonly cwd: string
   readonly accountLabel: string
   readonly accountPath: string
-  readonly env?: NodeJS.ProcessEnv
+  readonly env: NodeJS.ProcessEnv
   readonly persistToken: (token: string) => Effect.Effect<void, EStore, RStore>
   readonly normalizeStoredCredentials: Effect.Effect<void, EStore, RStore>
   readonly syncState: Effect.Effect<void, ESync, RSync>
 }
 
 export const readClaudeLocalOauthTokenFromEnv = (
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv
 ): Effect.Effect<string, AuthError> => {
   const token = readClaudeOauthTokenFromEnv(env, [dockerGitClaudeOauthTokenEnvKey, claudeCodeOauthTokenEnvKey])
   return token === null

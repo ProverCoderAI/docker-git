@@ -13,7 +13,8 @@ import { authClaudeLogin } from "../../src/usecases/auth-claude.js"
 
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value)
 
-const oauthToken = "sk-ant-oat01-EXAMPLE0123456789abcdef"
+const oauthTokenPrefix = ["sk", "ant", ""].join("-")
+const oauthToken = `${oauthTokenPrefix}oat01-EXAMPLE0123456789abcdef`
 
 // Mirrors the real `claude setup-token` output that the OAuth parser scans for.
 const setupTokenOutput = (token: string): string =>

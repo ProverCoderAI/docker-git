@@ -1,5 +1,5 @@
 import { normalizeClaudeOauthToken } from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
-import { Effect } from "effect"
+import { Effect, Match } from "effect"
 
 import { AuthError } from "../shell/errors.js"
 
@@ -30,14 +30,17 @@ const warnOnProbeFailure = (
   accountLabel: string,
   status: ClaudeLoginProbeStatus
 ): Effect.Effect<void> =>
-  status._tag === "ClaudeLoginProbeSucceeded"
-    ? Effect.void
-    : Effect.logWarning(
-      `Claude OAuth token saved (${accountLabel}), but the API probe failed (exit=${status.exitCode}). ` +
-        `Login is complete because the token was captured and persisted; live Claude API access is not yet verified. ` +
-        `The token may need a moment to activate, or there was a transient network issue. ` +
-        `Verify later with 'docker-git auth claude status'.`
-    )
+  Match.value(status).pipe(
+    Match.when({ _tag: "ClaudeLoginProbeSucceeded" }, () => Effect.void),
+    Match.when({ _tag: "ClaudeLoginProbeFailed" }, ({ exitCode }) =>
+      Effect.logWarning(
+        `Claude OAuth token saved (${accountLabel}), but the API probe failed (exit=${exitCode}). ` +
+          `Login is complete because the token was captured and persisted; live Claude API access is not yet verified. ` +
+          `The token may need a moment to activate, or there was a transient network issue. ` +
+          `Verify later with 'docker-git auth claude status'.`
+      )),
+    Match.exhaustive
+  )
 
 const ensureClaudeOauthToken = (rawToken: string): Effect.Effect<string, AuthError> => {
   const token = normalizeClaudeOauthToken(rawToken)

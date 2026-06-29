@@ -7,6 +7,7 @@ import {
   claudeOauthTokenPath,
   formatClaudeOauthTokenFile
 } from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
+import { renderClaudeDockerOauthDockerfile } from "@prover-coder-ai/docker-git-auth-oauth/claude-docker-oauth"
 import { Effect } from "effect"
 
 import type { AuthClaudeLoginCommand, AuthClaudeLogoutCommand, AuthClaudeStatusCommand } from "../core/domain.js"
@@ -57,7 +58,7 @@ const persistClaudeOauthToken = (
   Effect.gen(function*(_) {
     const tokenPath = claudeOauthTokenPath(accountPath)
     yield* _(fs.writeFileString(tokenPath, formatClaudeOauthTokenFile(token)))
-    yield* _(fs.chmod(tokenPath, claudeOauthTokenFileMode), Effect.orElseSucceed(() => void 0))
+    yield* _(fs.chmod(tokenPath, claudeOauthTokenFileMode))
   })
 
 const syncClaudeCredentialsFile = (
@@ -166,21 +167,6 @@ const ensureClaudeOrchLayout = (
     claudeAuthPath: ".docker-git/.orch/auth/claude"
   })
 
-const renderClaudeDockerfile = (): string =>
-  String.raw`FROM ubuntu:24.04
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl bsdutils \
-  && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
-  && apt-get install -y --no-install-recommends nodejs \
-  && node -v \
-  && npm -v \
-  && rm -rf /var/lib/apt/lists/*
-RUN npm install -g @anthropic-ai/claude-code@latest
-ENTRYPOINT ["claude"]
-`
-
 const resolveClaudeAccountPath = (path: Path.Path, rootPath: string, label: string | null): {
   readonly accountLabel: string
   readonly accountPath: string
@@ -206,7 +192,7 @@ const withClaudeAuth = <A, E, R>(
         ensureDockerImage(fs, path, cwd, {
           imageName: claudeImageName,
           imageDir: claudeImageDir,
-          dockerfile: renderClaudeDockerfile(),
+          dockerfile: renderClaudeDockerOauthDockerfile(),
           buildLabel: "claude auth"
         })
       )

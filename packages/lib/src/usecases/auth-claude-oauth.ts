@@ -4,12 +4,16 @@ import type { PlatformError } from "@effect/platform/Error"
 import {
   type ClaudeDockerOauthResult,
   type ClaudeDockerProbeSpec,
+  type ClaudeDockerSetupTokenRunResult,
   type ClaudeDockerSetupTokenSpec,
   runClaudeDockerOauth
 } from "@prover-coder-ai/docker-git-auth-oauth/claude-docker-oauth"
 import {
   dockerGitClaudeOauthTokenEnvKey,
   extractClaudeOauthToken,
+  flushClaudeOauthTokenRedactionState,
+  initialClaudeOauthTokenRedactionState,
+  redactClaudeOauthTokenChunk,
   readClaudeOauthTokenFromEnv
 } from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
 import { Effect, pipe } from "effect"
@@ -40,23 +44,26 @@ const startDockerProcess = (
   )
 }
 
-const redactedOauthTokenText = (text: string): string =>
-  text.replaceAll(/sk-ant-[A-Za-z0-9._-]+/gu, "<redacted-oauth-token>")
-
 const pumpDockerOutput = (
   source: Stream.Stream<Uint8Array, PlatformError>,
   fd: number,
   tokenBox: { value: string | null }
 ): Effect.Effect<void, PlatformError> => {
   const decoder = new TextDecoder("utf-8")
+  const encoder = new TextEncoder()
   let outputWindow = ""
+  let redactionState = initialClaudeOauthTokenRedactionState
 
   return pipe(
     source,
     Stream.runForEach((chunk) =>
       Effect.sync(() => {
         const text = decoder.decode(chunk)
-        writeChunkToFd(fd, new TextEncoder().encode(redactedOauthTokenText(text)))
+        const redacted = redactClaudeOauthTokenChunk(redactionState, text)
+        redactionState = redacted.state
+        if (redacted.output.length > 0) {
+          writeChunkToFd(fd, encoder.encode(redacted.output))
+        }
         outputWindow += text
         if (outputWindow.length > outputWindowSize) {
           outputWindow = outputWindow.slice(-outputWindowSize)
@@ -69,6 +76,15 @@ const pumpDockerOutput = (
           tokenBox.value = parsed
         }
       }).pipe(Effect.asVoid)
+    )
+  ).pipe(
+    Effect.zipRight(
+      Effect.sync(() => {
+        const flushed = flushClaudeOauthTokenRedactionState(redactionState)
+        if (flushed.length > 0) {
+          writeChunkToFd(fd, encoder.encode(flushed))
+        }
+      })
     )
   ).pipe(Effect.asVoid)
 }
@@ -89,38 +105,34 @@ const pipeDockerOutputToFd = (
 const runDockerSetupTokenWithExecutor = (
   executor: CommandExecutor.CommandExecutor,
   spec: ClaudeDockerSetupTokenSpec
-) =>
-  Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function*(_) {
-        const proc = yield* _(startDockerProcess(executor, spec.cwd, spec.dockerCommand, spec.args))
-        const tokenBox: { value: string | null } = { value: null }
-        const stdoutFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stdout, 1, tokenBox)))
-        const stderrFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stderr, 2, tokenBox)))
-        const exitCode = yield* _(proc.exitCode.pipe(Effect.map(Number)))
-        yield* _(Fiber.join(stdoutFiber))
-        yield* _(Fiber.join(stderrFiber))
-        return { exitCode, token: tokenBox.value }
-      })
-    )
+): Effect.Effect<ClaudeDockerSetupTokenRunResult, PlatformError> =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const proc = yield* _(startDockerProcess(executor, spec.cwd, spec.dockerCommand, spec.args))
+      const tokenBox: { value: string | null } = { value: null }
+      const stdoutFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stdout, 1, tokenBox)))
+      const stderrFiber = yield* _(Effect.forkScoped(pumpDockerOutput(proc.stderr, 2, tokenBox)))
+      const exitCode = yield* _(proc.exitCode.pipe(Effect.map(Number)))
+      yield* _(Fiber.join(stdoutFiber))
+      yield* _(Fiber.join(stderrFiber))
+      return { exitCode, token: tokenBox.value }
+    })
   )
 
 const runDockerProbeWithExecutor = (
   executor: CommandExecutor.CommandExecutor,
   spec: ClaudeDockerProbeSpec
-) =>
-  Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function*(_) {
-        const proc = yield* _(startDockerProcess(executor, spec.cwd, spec.dockerCommand, spec.args))
-        const stdoutFiber = yield* _(Effect.forkScoped(pipeDockerOutputToFd(proc.stdout, 1)))
-        const stderrFiber = yield* _(Effect.forkScoped(pipeDockerOutputToFd(proc.stderr, 2)))
-        const exitCode = yield* _(proc.exitCode.pipe(Effect.map(Number)))
-        yield* _(Fiber.join(stdoutFiber))
-        yield* _(Fiber.join(stderrFiber))
-        return exitCode
-      })
-    )
+): Effect.Effect<number, PlatformError> =>
+  Effect.scoped(
+    Effect.gen(function*(_) {
+      const proc = yield* _(startDockerProcess(executor, spec.cwd, spec.dockerCommand, spec.args))
+      const stdoutFiber = yield* _(Effect.forkScoped(pipeDockerOutputToFd(proc.stdout, 1)))
+      const stderrFiber = yield* _(Effect.forkScoped(pipeDockerOutputToFd(proc.stderr, 2)))
+      const exitCode = yield* _(proc.exitCode.pipe(Effect.map(Number)))
+      yield* _(Fiber.join(stdoutFiber))
+      yield* _(Fiber.join(stderrFiber))
+      return exitCode
+    })
   )
 
 const runClaudeDockerOauthEffect = (
@@ -144,8 +156,8 @@ const runClaudeDockerOauthEffect = (
         skipBuild: true,
         keepAccountPath: true,
         printToken: false,
-        runSetupToken: (spec) => runDockerSetupTokenWithExecutor(executor, spec),
-        runProbe: (spec) => runDockerProbeWithExecutor(executor, spec)
+        runSetupToken: (spec) => Effect.runPromise(runDockerSetupTokenWithExecutor(executor, spec)),
+        runProbe: (spec) => Effect.runPromise(runDockerProbeWithExecutor(executor, spec))
       }),
     catch: (error) =>
       new AuthError({

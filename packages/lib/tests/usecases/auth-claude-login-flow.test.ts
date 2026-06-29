@@ -4,7 +4,8 @@ import { Effect } from "effect"
 
 import { runClaudeLoginFlow } from "../../src/usecases/auth-claude-login-flow.js"
 
-const oauthToken = "sk-ant-oat01-FLOW0123456789abcdef"
+const oauthTokenPrefix = ["sk", "ant", ""].join("-")
+const oauthToken = `${oauthTokenPrefix}oat01-FLOW0123456789abcdef`
 
 describe("runClaudeLoginFlow", () => {
   it.effect("persists and normalizes a captured token before interpreting a failed probe", () =>

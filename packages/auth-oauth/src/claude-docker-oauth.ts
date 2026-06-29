@@ -5,14 +5,22 @@ import { fileURLToPath } from "node:url"
 import { spawn } from "node:child_process"
 
 import {
+  claudeOauthTokenFileMode,
   claudeOauthTokenPath,
   classifyClaudeSetupTokenResult,
   extractClaudeOauthToken,
-  formatClaudeOauthTokenFile
+  flushClaudeOauthTokenRedactionState,
+  formatClaudeOauthTokenFile,
+  initialClaudeOauthTokenRedactionState,
+  redactClaudeOauthTokenChunk,
+  type ClaudeOauthTokenRedactionState
 } from "./claude-oauth-token.js"
 
 export const defaultClaudeDockerOauthImage = "docker-git-auth-claude:latest"
 export const defaultClaudeDockerOauthContainerHome = "/claude-home"
+export const claudeDockerOauthBaseImage =
+  "node:24-bookworm-slim@sha256:b31e7a42fdf8b8aa5f5ed477c72d694301273f1069c5a2f71d53c6482e99a2fc"
+export const claudeDockerOauthClaudeCodeVersion = "2.1.195"
 
 export type ClaudeDockerOauthOptions = {
   readonly cwd?: string
@@ -81,22 +89,18 @@ export type ClaudeDockerProbeStatus =
 
 const outputWindowSize = 262_144
 
-const claudeDockerfile = String.raw`FROM ubuntu:24.04
+export const renderClaudeDockerOauthDockerfile = (): string =>
+  String.raw`FROM ${claudeDockerOauthBaseImage}
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl bsdutils \
+  && apt-get install -y --no-install-recommends ca-certificates bsdutils \
   && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
-  && apt-get install -y --no-install-recommends nodejs \
-  && node -v \
+RUN node -v \
   && npm -v \
-  && rm -rf /var/lib/apt/lists/*
-RUN npm install -g @anthropic-ai/claude-code@latest
+  && npm install -g --no-audit --no-fund @anthropic-ai/claude-code@${claudeDockerOauthClaudeCodeVersion} \
+  && claude --version
 ENTRYPOINT ["claude"]
 `
-
-const redactedOauthTokenText = (text: string): string =>
-  text.replaceAll(/sk-ant-[A-Za-z0-9._-]+/gu, "<redacted-oauth-token>")
 
 const appendOutputWindow = (outputWindow: string, chunk: string): string => {
   const next = `${outputWindow}${chunk}`
@@ -138,7 +142,7 @@ const ensureClaudeDockerImage = async (
   }
   const contextPath = await mkdtemp(join(tmpdir(), "docker-git-auth-oauth-image-"))
   try {
-    await writeFile(join(contextPath, "Dockerfile"), claudeDockerfile, "utf8")
+    await writeFile(join(contextPath, "Dockerfile"), renderClaudeDockerOauthDockerfile(), "utf8")
     const exitCode = await runBuild({
       dockerCommand,
       args: ["build", "-t", image, contextPath],
@@ -219,17 +223,36 @@ const runDockerSetupToken = (spec: ClaudeDockerSetupTokenSpec): Promise<ClaudeDo
     const decoder = new TextDecoder("utf-8")
     let outputWindow = ""
     let token: string | null = null
+    let stdoutRedactionState: ClaudeOauthTokenRedactionState = initialClaudeOauthTokenRedactionState
+    let stderrRedactionState: ClaudeOauthTokenRedactionState = initialClaudeOauthTokenRedactionState
 
-    const capture = (chunk: Uint8Array, fd: 1 | 2): void => {
-      const text = decoder.decode(chunk)
-      outputWindow = appendOutputWindow(outputWindow, text)
-      token = token ?? extractClaudeOauthToken(outputWindow)
-      const output = spec.redactLiveOutput ? redactedOauthTokenText(text) : text
+    const writeOutput = (fd: 1 | 2, output: string): void => {
+      if (output.length === 0) {
+        return
+      }
       if (fd === 2) {
         process.stderr.write(output)
         return
       }
       process.stdout.write(output)
+    }
+
+    const capture = (chunk: Uint8Array, fd: 1 | 2): void => {
+      const text = decoder.decode(chunk)
+      outputWindow = appendOutputWindow(outputWindow, text)
+      token = token ?? extractClaudeOauthToken(outputWindow)
+      if (!spec.redactLiveOutput) {
+        writeOutput(fd, text)
+        return
+      }
+      const state = fd === 2 ? stderrRedactionState : stdoutRedactionState
+      const redacted = redactClaudeOauthTokenChunk(state, text)
+      if (fd === 2) {
+        stderrRedactionState = redacted.state
+      } else {
+        stdoutRedactionState = redacted.state
+      }
+      writeOutput(fd, redacted.output)
     }
 
     child.stdout?.on("data", (chunk: Uint8Array) => {
@@ -240,6 +263,10 @@ const runDockerSetupToken = (spec: ClaudeDockerSetupTokenSpec): Promise<ClaudeDo
     })
     child.on("error", reject)
     child.on("close", (code) => {
+      if (spec.redactLiveOutput) {
+        writeOutput(1, flushClaudeOauthTokenRedactionState(stdoutRedactionState))
+        writeOutput(2, flushClaudeOauthTokenRedactionState(stderrRedactionState))
+      }
       resolveResult({ exitCode: code ?? 1, token })
     })
   })
@@ -259,7 +286,7 @@ const runDockerProbe = (spec: ClaudeDockerProbeSpec): Promise<number> =>
 const writeCapturedToken = async (accountPath: string, token: string): Promise<void> => {
   const tokenPath = claudeOauthTokenPath(accountPath)
   await writeFile(tokenPath, formatClaudeOauthTokenFile(token), "utf8")
-  await chmod(tokenPath, 0o600).catch(() => undefined)
+  await chmod(tokenPath, claudeOauthTokenFileMode)
 }
 
 const dockerProbeStatusFromExitCode = (exitCode: number): ClaudeDockerProbeStatus =>
@@ -361,7 +388,7 @@ const isDirectExecution = (): boolean => {
 }
 
 if (isDirectExecution()) {
-  const printToken = !process.argv.includes("--no-print-token")
+  const printToken = process.argv.includes("--print-token")
   const accountPath = readFlagValue(process.argv, "--account-path")
   const dockerHostPath = readFlagValue(process.argv, "--docker-host-path")
   const image = readFlagValue(process.argv, "--image")

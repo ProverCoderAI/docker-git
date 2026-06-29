@@ -9,15 +9,24 @@ source "$REPO_ROOT/scripts/e2e/_lib.sh"
 ROOT_BASE="${DOCKER_GIT_E2E_ROOT_BASE:-/tmp/docker-git-e2e-root}"
 mkdir -p "$ROOT_BASE"
 ROOT="$(mktemp -d "$ROOT_BASE/auth-claude-login.XXXXXX")"
-chmod 0777 "$ROOT"
+chmod 0700 "$ROOT"
 KEEP="${KEEP:-0}"
+COMPOSE_OVERRIDE_FILE="$ROOT/docker-compose.auth-claude-login.yml"
+LOGIN_TIMEOUT_SECONDS="${DOCKER_GIT_E2E_AUTH_CLAUDE_LOGIN_TIMEOUT_SECONDS:-900}"
 
 export DOCKER_GIT_PROJECTS_ROOT="$ROOT"
 export DOCKER_GIT_STATE_AUTO_SYNC=0
 export DOCKER_GIT_API_CONTAINER_NAME="docker-git-e2e-auth-claude-$RUN_ID-api"
 export DOCKER_GIT_PROJECTS_ROOT_VOLUME="docker-git-e2e-auth-claude-$RUN_ID-projects"
-export COMPOSE_PROJECT_NAME="docker-git-e2e-auth-claude-$RUN_ID"
-export DOCKER_GIT_CLAUDE_OAUTH_TOKEN="${DOCKER_GIT_CLAUDE_OAUTH_TOKEN:-sk-ant-oat01-DOCKER-GIT-E2E-FAKE-TOKEN-000000000000}"
+export DOCKER_GIT_CONTROLLER_COMPOSE_EXTRA_FILE="$COMPOSE_OVERRIDE_FILE"
+export COMPOSE_PROJECT_NAME="docker-git"
+
+cat > "$COMPOSE_OVERRIDE_FILE" <<'YAML'
+services:
+  api:
+    environment:
+      DOCKER_GIT_CLAUDE_OAUTH_TOKEN: docker-git-e2e-oauth-token-marker
+YAML
 
 LOG_FILE="/tmp/docker-git-auth-claude-login-$RUN_ID.log"
 
@@ -55,7 +64,7 @@ dg_ensure_docker "$ROOT/.e2e-bin"
 dg_prepare_docker_git_cli "$REPO_ROOT" "$ROOT/.e2e-bin"
 
 set +e
-timeout 180s bash -lc 'cd "$1" && bun packages/app/dist/src/docker-git/main.js auth claude login' bash "$REPO_ROOT" \
+timeout "${LOGIN_TIMEOUT_SECONDS}s" bash -lc 'cd "$1" && bun packages/app/dist/src/docker-git/main.js auth claude login' bash "$REPO_ROOT" \
   >"$LOG_FILE" 2>&1
 login_exit=$?
 set -e

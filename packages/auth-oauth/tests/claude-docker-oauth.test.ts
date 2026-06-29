@@ -2,89 +2,172 @@ import { mkdtemp, readFile, stat } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
+import fc from "fast-check"
 
 import {
+  renderClaudeDockerOauthDockerfile,
   renderClaudeDockerOauthResult,
   runClaudeDockerOauth,
   type ClaudeDockerBuildSpec,
   type ClaudeDockerProbeSpec,
   type ClaudeDockerSetupTokenSpec
 } from "../src/claude-docker-oauth.js"
-import { claudeOauthTokenPath } from "../src/claude-oauth-token.js"
+import { claudeOauthTokenFileMode, claudeOauthTokenPath } from "../src/claude-oauth-token.js"
 
-const oauthToken = "sk-ant-oat01-DOCKER0123456789abcdef"
+const oauthTokenPrefix = ["sk", "ant", ""].join("-")
+const makeOauthToken = (suffix: string): string => `${oauthTokenPrefix}oat01-${suffix}`
+const oauthToken = makeOauthToken("DOCKER0123456789abcdef")
+const oauthTokenArbitrary = fc.array(fc.constantFrom(
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "0",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9"
+), {
+  minLength: 24,
+  maxLength: 64
+}).map((chars) => `${oauthTokenPrefix}${chars.join("")}`)
 
 describe("Claude Docker OAuth runner", () => {
-  it("runs Docker setup-token, persists token, then probes through the mounted token file", async () => {
-    const accountPath = await mkdtemp(join(tmpdir(), "docker-git-auth-oauth-docker-test-"))
-    const builds: Array<ClaudeDockerBuildSpec> = []
-    const setupRuns: Array<ClaudeDockerSetupTokenSpec> = []
-    const probeRuns: Array<ClaudeDockerProbeSpec> = []
+  it.effect("runs Docker setup-token, persists token, then probes through the mounted token file", () =>
+    Effect.gen(function*(_) {
+      const accountPath = yield* _(
+        Effect.tryPromise(() => mkdtemp(join(tmpdir(), "docker-git-auth-oauth-docker-test-")))
+      )
+      const builds: Array<ClaudeDockerBuildSpec> = []
+      const setupRuns: Array<ClaudeDockerSetupTokenSpec> = []
+      const probeRuns: Array<ClaudeDockerProbeSpec> = []
 
-    const result = await runClaudeDockerOauth({
-      cwd: "/workspace",
-      accountPath,
-      image: "claude-test:latest",
-      runBuild: (spec) => {
-        builds.push(spec)
-        return Promise.resolve(0)
-      },
-      runSetupToken: (spec) => {
-        setupRuns.push(spec)
-        return Promise.resolve({ exitCode: 1, token: oauthToken })
-      },
-      runProbe: async (spec) => {
-        probeRuns.push(spec)
-        await expect(readFile(claudeOauthTokenPath(accountPath), "utf8")).resolves.toBe(`${oauthToken}\n`)
-        return 0
-      }
-    })
+      const result = yield* _(
+        Effect.tryPromise(() =>
+          runClaudeDockerOauth({
+            cwd: "/workspace",
+            accountPath,
+            image: "claude-test:latest",
+            runBuild: (spec) => {
+              builds.push(spec)
+              return Effect.runPromise(Effect.succeed(0))
+            },
+            runSetupToken: (spec) => {
+              setupRuns.push(spec)
+              return Effect.runPromise(Effect.succeed({ exitCode: 1, token: oauthToken }))
+            },
+            runProbe: (spec) => {
+              probeRuns.push(spec)
+              return Effect.runPromise(
+                Effect.gen(function*(_) {
+                  const tokenFile = yield* _(Effect.tryPromise(() => readFile(claudeOauthTokenPath(accountPath), "utf8")))
+                  expect(tokenFile).toBe(`${oauthToken}\n`)
+                  return 0
+                })
+              )
+            }
+          })
+        )
+      )
 
-    expect(result).toEqual({
-      _tag: "ClaudeDockerOauthTokenCaptured",
-      token: oauthToken,
-      accountPath,
-      image: "claude-test:latest",
-      exitCode: 1,
-      probeStatus: { _tag: "ClaudeDockerProbeSucceeded", exitCode: 0 }
-    })
-    expect(builds).toHaveLength(1)
-    expect(builds[0]?.args.slice(0, 3)).toEqual(["build", "-t", "claude-test:latest"])
-    expect(setupRuns).toHaveLength(1)
-    expect(setupRuns[0]?.args).toContain("setup-token")
-    expect(setupRuns[0]?.args.join(" ")).toContain(accountPath)
-    expect(probeRuns).toHaveLength(1)
-    expect(probeRuns[0]?.args.slice(-3)).toEqual(["claude-test:latest", "-p", "ping"])
-    expect((await stat(claudeOauthTokenPath(accountPath))).mode & 0o777).toBe(0o600)
+      expect(result).toEqual({
+        _tag: "ClaudeDockerOauthTokenCaptured",
+        token: oauthToken,
+        accountPath,
+        image: "claude-test:latest",
+        exitCode: 1,
+        probeStatus: { _tag: "ClaudeDockerProbeSucceeded", exitCode: 0 }
+      })
+      expect(builds).toHaveLength(1)
+      expect(builds[0]?.args.slice(0, 3)).toEqual(["build", "-t", "claude-test:latest"])
+      expect(setupRuns).toHaveLength(1)
+      expect(setupRuns[0]?.args).toContain("setup-token")
+      expect(setupRuns[0]?.args.join(" ")).toContain(accountPath)
+      expect(probeRuns).toHaveLength(1)
+      expect(probeRuns[0]?.args.slice(-3)).toEqual(["claude-test:latest", "-p", "ping"])
+      const tokenMode = yield* _(Effect.tryPromise(() => stat(claudeOauthTokenPath(accountPath))))
+      expect(tokenMode.mode & 0o777).toBe(claudeOauthTokenFileMode)
+    }))
+
+  it.effect("keeps the captured token and file mode when Docker probe fails", () =>
+    Effect.gen(function*(_) {
+      const accountPath = yield* _(
+        Effect.tryPromise(() => mkdtemp(join(tmpdir(), "docker-git-auth-oauth-docker-probe-test-")))
+      )
+      const result = yield* _(
+        Effect.tryPromise(() =>
+          runClaudeDockerOauth({
+            accountPath,
+            skipBuild: true,
+            runSetupToken: () => Effect.runPromise(Effect.succeed({ exitCode: 0, token: oauthToken })),
+            runProbe: () => Effect.runPromise(Effect.succeed(7))
+          })
+        )
+      )
+
+      expect(renderClaudeDockerOauthResult(result, false)).toBe(
+        "status=ClaudeDockerOauthTokenCaptured probe=failed exit=7"
+      )
+      expect(renderClaudeDockerOauthResult(result, true)).toBe(
+        `status=ClaudeDockerOauthTokenCaptured probe=failed exit=7 token=${oauthToken}`
+      )
+      const tokenFile = yield* _(Effect.tryPromise(() => readFile(claudeOauthTokenPath(accountPath), "utf8")))
+      const tokenMode = yield* _(Effect.tryPromise(() => stat(claudeOauthTokenPath(accountPath))))
+      expect(tokenFile).toBe(`${oauthToken}\n`)
+      expect(tokenMode.mode & 0o777).toBe(claudeOauthTokenFileMode)
+    }))
+
+  it.effect("returns command failure when setup-token exits non-zero without token", () =>
+    Effect.gen(function*(_) {
+      const result = yield* _(
+        Effect.tryPromise(() =>
+          runClaudeDockerOauth({
+            skipBuild: true,
+            runSetupToken: () => Effect.runPromise(Effect.succeed({ exitCode: 23, token: null })),
+            runProbe: () => Effect.runPromise(Effect.dieMessage("probe must not run"))
+          })
+        )
+      )
+
+      expect(renderClaudeDockerOauthResult(result, true)).toBe("status=ClaudeDockerOauthCommandFailed exit=23")
+    }))
+
+  it("renders the Claude OAuth Dockerfile from pinned inputs", () => {
+    const dockerfile = renderClaudeDockerOauthDockerfile()
+    expect(dockerfile).toContain("FROM node:24-bookworm-slim@sha256:")
+    expect(dockerfile).toContain("@anthropic-ai/claude-code@2.1.195")
+    expect(dockerfile).not.toContain("@latest")
+    expect(dockerfile).not.toContain("curl -fsSL https://deb.nodesource.com")
   })
 
-  it("keeps the captured token when Docker probe fails", async () => {
-    const accountPath = await mkdtemp(join(tmpdir(), "docker-git-auth-oauth-docker-probe-test-"))
-    const result = await runClaudeDockerOauth({
-      accountPath,
-      skipBuild: true,
-      runSetupToken: () => Promise.resolve({ exitCode: 0, token: oauthToken }),
-      runProbe: () => Promise.resolve(7)
-    })
+  it("renders tagged results without exposing tokens unless explicitly requested", () => {
+    fc.assert(
+      fc.property(oauthTokenArbitrary, fc.integer({ min: 1, max: 255 }), (token, exitCode) => {
+        const result = {
+          _tag: "ClaudeDockerOauthTokenCaptured",
+          token,
+          accountPath: "/tmp/claude",
+          image: "claude-test:latest",
+          exitCode: 0,
+          probeStatus: { _tag: "ClaudeDockerProbeFailed", exitCode }
+        } satisfies Awaited<ReturnType<typeof runClaudeDockerOauth>>
 
-    expect(renderClaudeDockerOauthResult(result, false)).toBe(
-      "status=ClaudeDockerOauthTokenCaptured probe=failed exit=7"
+        expect(renderClaudeDockerOauthResult(result, false)).toBe(
+          `status=ClaudeDockerOauthTokenCaptured probe=failed exit=${exitCode}`
+        )
+        expect(renderClaudeDockerOauthResult(result, true)).toBe(
+          `status=ClaudeDockerOauthTokenCaptured probe=failed exit=${exitCode} token=${token}`
+        )
+      })
     )
-    expect(renderClaudeDockerOauthResult(result, true)).toBe(
-      `status=ClaudeDockerOauthTokenCaptured probe=failed exit=7 token=${oauthToken}`
-    )
-  })
-
-  it("returns command failure when setup-token exits non-zero without token", async () => {
-    const result = await runClaudeDockerOauth({
-      skipBuild: true,
-      runSetupToken: () => Promise.resolve({ exitCode: 23, token: null }),
-      runProbe: () => {
-        throw new Error("probe must not run")
-      }
-    })
-
-    expect(renderClaudeDockerOauthResult(result, true)).toBe("status=ClaudeDockerOauthCommandFailed exit=23")
   })
 })

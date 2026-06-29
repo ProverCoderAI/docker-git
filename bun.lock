@@ -114,7 +114,10 @@
       "name": "@prover-coder-ai/docker-git-auth-oauth",
       "version": "0.0.0",
       "devDependencies": {
+        "@effect/vitest": "^0.29.0",
         "@types/node": "^25.9.3",
+        "effect": "^3.21.3",
+        "fast-check": "^4.8.0",
         "typescript": "^6.0.3",
         "vitest": "^4.1.9",
       },
