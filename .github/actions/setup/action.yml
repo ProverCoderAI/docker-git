@@ -57,4 +57,15 @@ runs:
       run: npm install -g node-gyp
     - name: Install dependencies
       shell: bash
-      run: bun install --frozen-lockfile
+      run: |
+        for attempt in 1 2 3; do
+          if bun install --frozen-lockfile; then
+            exit 0
+          fi
+          if [[ "$attempt" == "3" ]]; then
+            echo "bun install failed after retries" >&2
+            exit 1
+          fi
+          echo "bun install attempt ${attempt} failed; retrying..." >&2
+          sleep $((attempt * 2))
+        done
