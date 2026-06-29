@@ -227,14 +227,14 @@ describe("authClaudeLogin", () => {
       )
     ).pipe(Effect.provide(NodeContext.layer)))
 
-  it.effect("uses a decoded docker-git OAuth env token without running setup-token", () =>
+  it.effect("ignores docker-git OAuth env token and captures setup-token output", () =>
     withTempDir((root) =>
       withPatchedEnv(
         {
           HOME: root,
           DOCKER_GIT_STATE_AUTO_SYNC: "0",
           DOCKER_GIT_PROJECTS_ROOT: undefined,
-          [dockerGitClaudeOauthTokenEnvKey]: ` ${oauthToken} `
+          [dockerGitClaudeOauthTokenEnvKey]: "ENV_CLAUDE_OAUTH_TOKEN_SHOULD_NOT_WIN"
         },
         Effect.gen(function*(_) {
           const fs = yield* _(FileSystem.FileSystem)
@@ -248,13 +248,14 @@ describe("authClaudeLogin", () => {
               label: null,
               claudeAuthPath
             }).pipe(
-              Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(null, 0, invocations))
+              Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(oauthToken, 0, invocations))
             )
           )
 
           const tokenText = yield* _(fs.readFileString(path.join(claudeAuthPath, "default", ".oauth-token")))
           expect(tokenText.trim()).toBe(oauthToken)
-          expect(invocations.some((invocation) => isSetupToken(invocation.args))).toBe(false)
+          expect(tokenText.trim()).not.toBe("ENV_CLAUDE_OAUTH_TOKEN_SHOULD_NOT_WIN")
+          expect(invocations.some((invocation) => isSetupToken(invocation.args))).toBe(true)
           expect(invocations.some((invocation) => isPingProbe(invocation.args))).toBe(true)
         })
       )

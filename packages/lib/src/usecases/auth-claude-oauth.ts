@@ -203,16 +203,11 @@ export const runClaudeOauthLoginWithPrompt = (
   cwd: string,
   accountPath: string,
   options: {
-    readonly envToken: string | null
     readonly image: string
     readonly containerPath: string
   }
-): Effect.Effect<string, AuthError | CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> => {
-  if (options.envToken !== null) {
-    return Effect.succeed(options.envToken)
-  }
-
-  return Effect.scoped(
+): Effect.Effect<string, AuthError | CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
+  Effect.scoped(
     Effect.gen(function*(_) {
       const executor = yield* _(CommandExecutor.CommandExecutor)
       const hostPath = yield* _(resolveDockerVolumeHostPath(cwd, accountPath))
@@ -220,4 +215,3 @@ export const runClaudeOauthLoginWithPrompt = (
       return yield* _(resolveClaudeDockerOauthTokenResult(result))
     })
   )
-}

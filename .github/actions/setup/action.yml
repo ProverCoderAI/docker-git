@@ -58,8 +58,25 @@ runs:
     - name: Install dependencies
       shell: bash
       run: |
+        run_bun_install() {
+          local timeout_seconds=$((20 * 60))
+          bun install --frozen-lockfile &
+          local install_pid="$!"
+          (
+            sleep "$timeout_seconds"
+            echo "bun install exceeded 20 minutes; terminating" >&2
+            kill "$install_pid" 2>/dev/null || true
+          ) &
+          local timeout_pid="$!"
+          local status=0
+          wait "$install_pid" || status="$?"
+          kill "$timeout_pid" 2>/dev/null || true
+          wait "$timeout_pid" 2>/dev/null || true
+          return "$status"
+        }
+
         for attempt in 1 2 3; do
-          if bun install --frozen-lockfile; then
+          if run_bun_install; then
             exit 0
           fi
           if [[ "$attempt" == "3" ]]; then

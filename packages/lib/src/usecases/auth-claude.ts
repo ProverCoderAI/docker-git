@@ -12,7 +12,6 @@ import { Effect } from "effect"
 
 import type { AuthClaudeLoginCommand, AuthClaudeLogoutCommand, AuthClaudeStatusCommand } from "../core/domain.js"
 import { defaultTemplateConfig } from "../core/domain.js"
-import { readDockerGitClaudeOauthTokenFromProcessEnv } from "../shell/claude-oauth-env.js"
 import { runDockerAuth, runDockerAuthExitCode } from "../shell/docker-auth.js"
 import type { AuthError } from "../shell/errors.js"
 import { CommandFailedError } from "../shell/errors.js"
@@ -284,7 +283,6 @@ export const authClaudeLogin = (
     runClaudeLoginFlow({
       accountLabel,
       captureToken: runClaudeOauthLoginWithPrompt(cwd, accountPath, {
-        envToken: readDockerGitClaudeOauthTokenFromProcessEnv(),
         image: claudeImageName,
         containerPath: claudeContainerHomeDir
       }),
