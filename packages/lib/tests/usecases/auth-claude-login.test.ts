@@ -13,7 +13,7 @@ import * as Inspectable from "effect/Inspectable"
 import * as Sink from "effect/Sink"
 import * as Stream from "effect/Stream"
 
-import { authClaudeLogin } from "../../src/usecases/auth-claude.js"
+import { authClaudeLogin, authClaudeStatus } from "../../src/usecases/auth-claude.js"
 
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value)
 
@@ -43,6 +43,8 @@ const setupTokenOutputWithoutToken = (): string =>
 
 const isSetupToken = (args: ReadonlyArray<string>): boolean => args.includes("setup-token")
 const isPingProbe = (args: ReadonlyArray<string>): boolean => args.includes("-p") && args.includes("ping")
+const dockerEnvEntries = (args: ReadonlyArray<string>): ReadonlyArray<string> =>
+  args.flatMap((arg, index) => args[index - 1] === "-e" ? [arg] : [])
 
 // CHANGE: fake docker executor that captures a setup-token and lets the ping probe fail
 // WHY: reproduce issue-439 where a successful OAuth login was discarded by a failing probe
@@ -257,6 +259,102 @@ describe("authClaudeLogin", () => {
           expect(tokenText.trim()).not.toBe("ENV_CLAUDE_OAUTH_TOKEN_SHOULD_NOT_WIN")
           expect(invocations.some((invocation) => isSetupToken(invocation.args))).toBe(true)
           expect(invocations.some((invocation) => isPingProbe(invocation.args))).toBe(true)
+        })
+      )
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("runs the OAuth probe with a clean config dir instead of account permission settings", () =>
+    withTempDir((root) =>
+      withPatchedEnv(
+        {
+          HOME: root,
+          DOCKER_GIT_STATE_AUTO_SYNC: "0",
+          DOCKER_GIT_PROJECTS_ROOT: undefined,
+          [dockerGitClaudeOauthTokenEnvKey]: undefined
+        },
+        Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const invocations: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }> = []
+          const claudeAuthPath = path.join(root, ".docker-git/.orch/auth/claude")
+          const accountPath = path.join(claudeAuthPath, "default")
+
+          yield* _(fs.makeDirectory(accountPath, { recursive: true }))
+          yield* _(
+            fs.writeFileString(
+              path.join(accountPath, "settings.json"),
+              JSON.stringify({ permissions: { defaultMode: "bypassPermissions" } }, null, 2)
+            )
+          )
+
+          yield* _(
+            authClaudeLogin({
+              _tag: "AuthClaudeLogin",
+              label: null,
+              claudeAuthPath
+            }).pipe(
+              Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(oauthToken, 0, invocations))
+            )
+          )
+
+          const pingInvocation = invocations.find((invocation) =>
+            isPingProbe(invocation.args) &&
+            dockerEnvEntries(invocation.args).includes(`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`)
+          )
+          expect(pingInvocation).toBeDefined()
+          if (pingInvocation === undefined) {
+            return
+          }
+
+          const envEntries = dockerEnvEntries(pingInvocation.args)
+          expect(envEntries).toContain(`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`)
+          expect(envEntries).toContain("HOME=/tmp/docker-git-claude-probe")
+          expect(envEntries).toContain("CLAUDE_CONFIG_DIR=/tmp/docker-git-claude-probe")
+          expect(envEntries).not.toContain("HOME=/claude-home")
+          expect(envEntries).not.toContain("CLAUDE_CONFIG_DIR=/claude-home")
+        })
+      )
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("keeps Claude AI session status probes on the mounted account config", () =>
+    withTempDir((root) =>
+      withPatchedEnv(
+        {
+          HOME: root,
+          DOCKER_GIT_STATE_AUTO_SYNC: "0",
+          DOCKER_GIT_PROJECTS_ROOT: undefined,
+          [dockerGitClaudeOauthTokenEnvKey]: undefined
+        },
+        Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const invocations: Array<{ readonly command: string; readonly args: ReadonlyArray<string> }> = []
+          const claudeAuthPath = path.join(root, ".docker-git/.orch/auth/claude")
+          const accountPath = path.join(claudeAuthPath, "default")
+
+          yield* _(fs.makeDirectory(accountPath, { recursive: true }))
+          yield* _(fs.writeFileString(path.join(accountPath, ".credentials.json"), "{\"session\":\"ok\"}\n"))
+
+          yield* _(
+            authClaudeStatus({
+              _tag: "AuthClaudeStatus",
+              label: null,
+              claudeAuthPath
+            }).pipe(
+              Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(oauthToken, 0, invocations))
+            )
+          )
+
+          const pingInvocation = invocations.find((invocation) => isPingProbe(invocation.args))
+          expect(pingInvocation).toBeDefined()
+          if (pingInvocation === undefined) {
+            return
+          }
+
+          const envEntries = dockerEnvEntries(pingInvocation.args)
+          expect(envEntries).toContain("HOME=/claude-home")
+          expect(envEntries).toContain("CLAUDE_CONFIG_DIR=/claude-home")
+          expect(envEntries.some((entry) => entry.startsWith("CLAUDE_CODE_OAUTH_TOKEN="))).toBe(false)
         })
       )
     ).pipe(Effect.provide(NodeContext.layer)))

@@ -40,6 +40,8 @@ const oauthTokenArbitrary = fc.array(fc.constantFrom(
   minLength: 24,
   maxLength: 64
 }).map((chars) => `${oauthTokenPrefix}${chars.join("")}`)
+const dockerEnvEntries = (args: ReadonlyArray<string>): ReadonlyArray<string> =>
+  args.flatMap((arg, index) => args[index - 1] === "-e" ? [arg] : [])
 
 const temporaryAccountPath = (prefix: string) =>
   Effect.acquireRelease(
@@ -98,6 +100,13 @@ describe("Claude Docker OAuth runner", () => {
       expect(setupRuns[0]?.args.join(" ")).toContain(accountPath)
       expect(probeRuns).toHaveLength(1)
       expect(probeRuns[0]?.args.slice(-3)).toEqual(["claude-test:latest", "-p", "ping"])
+      expect(dockerEnvEntries(probeRuns[0]?.args ?? [])).toEqual(
+        expect.arrayContaining([
+          "CLAUDE_CONFIG_DIR=/tmp/docker-git-claude-probe",
+          "HOME=/tmp/docker-git-claude-probe",
+          `CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`
+        ])
+      )
       const tokenMode = yield* _(Effect.tryPromise(() => stat(claudeOauthTokenPath(accountPath))))
       expect(tokenMode.mode & 0o777).toBe(claudeOauthTokenFileMode)
     })))

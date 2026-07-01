@@ -8,7 +8,7 @@ import {
   formatClaudeOauthTokenFile
 } from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
 import { renderClaudeDockerOauthDockerfile } from "@prover-coder-ai/docker-git-auth-oauth/claude-docker-oauth"
-import { Effect } from "effect"
+import { Effect, Match } from "effect"
 
 import type { AuthClaudeLoginCommand, AuthClaudeLogoutCommand, AuthClaudeStatusCommand } from "../core/domain.js"
 import { defaultTemplateConfig } from "../core/domain.js"
@@ -27,6 +27,9 @@ import { readFileStringIfPresent, writeFileStringEnsuringParent } from "./volati
 
 type ClaudeRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 type ClaudeAuthMethod = "none" | "oauth-token" | "claude-ai-session"
+type ClaudeProbeAuth =
+  | { readonly _tag: "ClaudeProbeAccountConfig" }
+  | { readonly _tag: "ClaudeProbeOauthToken"; readonly token: string }
 
 type ClaudeAccountContext = {
   readonly accountLabel: string
@@ -41,6 +44,7 @@ export const claudeAuthRoot = ".docker-git/.orch/auth/claude"
 const claudeImageName = "docker-git-auth-claude:latest"
 const claudeImageDir = ".docker-git/.orch/auth/claude/.image"
 const claudeContainerHomeDir = "/claude-home"
+const claudeProbeConfigDir = "/tmp/docker-git-claude-probe"
 const claudeConfigFileName = ".claude.json"
 const claudeCredentialsFileName = ".credentials.json"
 const claudeCredentialsDirName = ".claude"
@@ -178,6 +182,26 @@ const buildClaudeAuthEnv = (
   ...(oauthToken === null ? [] : [`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`])
 ]
 
+// CHANGE: isolate non-interactive Claude OAuth probes from account settings
+// WHY: account settings may intentionally use bypassPermissions for real sessions, but Claude rejects that mode under root/sudo probe contexts
+// QUOTE(ТЗ): "почему не работает команда bun run docker-git auth claude login"
+// REF: user-report-2026-07-01-claude-auth-login
+// SOURCE: n/a
+// FORMAT THEOREM: forall token: probe(token) reads token env and not account(settings.json)
+// PURITY: CORE
+// INVARIANT: probe uses the persisted OAuth token without inheriting account permission settings
+// COMPLEXITY: O(1)
+const buildClaudeProbeEnv = (auth: ClaudeProbeAuth): ReadonlyArray<string> =>
+  Match.value(auth).pipe(
+    Match.when({ _tag: "ClaudeProbeAccountConfig" }, () => buildClaudeAuthEnv(false)),
+    Match.when({ _tag: "ClaudeProbeOauthToken" }, ({ token }) => [
+      `HOME=${claudeProbeConfigDir}`,
+      `CLAUDE_CONFIG_DIR=${claudeProbeConfigDir}`,
+      `CLAUDE_CODE_OAUTH_TOKEN=${token}`
+    ]),
+    Match.exhaustive
+  )
+
 const ensureClaudeOrchLayout = (
   cwd: string
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem | Path.Path> =>
@@ -252,7 +276,7 @@ const runClaudeLogout = (
 const runClaudePingProbeExitCode = (
   cwd: string,
   accountPath: string,
-  oauthToken: string | null
+  auth: ClaudeProbeAuth
 ): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
   runDockerAuthExitCode(
     buildDockerAuthSpec({
@@ -260,7 +284,7 @@ const runClaudePingProbeExitCode = (
       image: claudeImageName,
       hostPath: accountPath,
       containerPath: claudeContainerHomeDir,
-      env: buildClaudeAuthEnv(false, oauthToken),
+      env: buildClaudeProbeEnv(auth),
       args: ["-p", "ping"],
       interactive: false
     })
@@ -288,7 +312,10 @@ export const authClaudeLogin = (
       }),
       persistToken: (token) => persistClaudeOauthToken(fs, path, accountPath, token),
       normalizeStoredCredentials: resolveClaudeAuthMethod(fs, path, accountPath).pipe(Effect.asVoid),
-      probeToken: (token) => runClaudePingProbeExitCode(cwd, accountPath, token),
+      probeToken: (token) => runClaudePingProbeExitCode(cwd, accountPath, {
+        _tag: "ClaudeProbeOauthToken",
+        token
+      }),
       syncState: autoSyncState(`chore(state): auth claude ${accountLabel}`)
     }).pipe(Effect.asVoid))
 
@@ -314,7 +341,10 @@ export const authClaudeStatus = (
       }
 
       const oauthToken = method === "oauth-token" ? yield* _(readOauthToken(fs, accountPath)) : null
-      const probeExitCode = yield* _(runClaudePingProbeExitCode(cwd, accountPath, oauthToken))
+      const probeAuth: ClaudeProbeAuth = method === "oauth-token" && oauthToken !== null
+        ? { _tag: "ClaudeProbeOauthToken", token: oauthToken }
+        : { _tag: "ClaudeProbeAccountConfig" }
+      const probeExitCode = yield* _(runClaudePingProbeExitCode(cwd, accountPath, probeAuth))
       if (probeExitCode === 0) {
         yield* _(Effect.log(`Claude connected (${accountLabel}, ${method}).`))
         return

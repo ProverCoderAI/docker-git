@@ -42,7 +42,24 @@ import { withStateGitLock } from "./state-repo/lock.js"
 
 type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 const resolveStateRoot = (path: Path.Path, cwd: string): string => path.resolve(defaultProjectsRoot(cwd))
+const resolveGitIndexLockPath = (path: Path.Path, root: string): string => path.join(root, ".git", "index.lock")
 const managedRepositoryCachePaths: ReadonlyArray<string> = [".cache/git-mirrors", ".cache/packages"]
+
+const renderStateSyncFailure = (error: CommandFailedError | PlatformError): string =>
+  error._tag === "CommandFailedError"
+    ? `${error.command} (exit ${error.exitCode})`
+    : String(error)
+
+const logStateAutoSyncFailure = (
+  error: CommandFailedError | PlatformError
+): Effect.Effect<void> =>
+  Effect.logWarning(`State auto-sync failed: ${renderStateSyncFailure(error)}`)
+
+const logStateAutoPullFailure = (
+  error: CommandFailedError | PlatformError
+): Effect.Effect<void> =>
+  Effect.logWarning(`State auto-pull failed: ${renderStateSyncFailure(error)}`)
+
 const ensureStateIgnoreAndUntrackCaches = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
@@ -107,6 +124,7 @@ export const stateSync = (message: string | null) => withStateGitLock(stateSyncR
 
 const autoSyncStateRaw = (message: string): Effect.Effect<void, never, StateRepoEnv> =>
   Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const root = resolveStateRoot(path, process.cwd())
     const isRepoOk = yield* _(isGitRepo(root))
@@ -120,6 +138,18 @@ const autoSyncStateRaw = (message: string): Effect.Effect<void, never, StateRepo
     }
     const strictValue = process.env[autoSyncStrictEnvKey]
     const isStrict = strictValue !== undefined && strictValue.trim().length > 0 ? isTruthyEnv(strictValue) : false
+    if (!isStrict) {
+      const indexLockPath = resolveGitIndexLockPath(path, root)
+      const hasIndexLock = yield* _(fs.exists(indexLockPath))
+      if (hasIndexLock) {
+        yield* _(
+          Effect.logWarning(
+            `State auto-sync skipped: git index lock exists at ${indexLockPath}. Another git process may be running; retry later.`
+          )
+        )
+        return
+      }
+    }
     const effect = stateSyncRaw(message)
     if (isStrict) {
       yield* _(effect)
@@ -128,14 +158,7 @@ const autoSyncStateRaw = (message: string): Effect.Effect<void, never, StateRepo
     yield* _(
       effect.pipe(
         Effect.matchEffect({
-          onFailure: (error) =>
-            Effect.logWarning(
-              `State auto-sync failed: ${
-                error._tag === "CommandFailedError"
-                  ? `${error.command} (exit ${error.exitCode})`
-                  : String(error)
-              }`
-            ),
+          onFailure: logStateAutoSyncFailure,
           onSuccess: () => Effect.void
         })
       )
@@ -184,15 +207,28 @@ const autoPullStateRaw: Effect.Effect<void, never, StateRepoEnv> = Effect.gen(fu
   )
 }).pipe(
   Effect.matchEffect({
-    onFailure: (error) => Effect.logWarning(`State auto-pull failed: ${String(error)}`),
+    onFailure: logStateAutoPullFailure,
     onSuccess: () => Effect.void
   }),
   Effect.asVoid
 )
 
-export const autoSyncState = (message: string) => withStateGitLock(autoSyncStateRaw(message))
+export const autoSyncState = (message: string): Effect.Effect<void, never, StateRepoEnv> =>
+  withStateGitLock(autoSyncStateRaw(message)).pipe(
+    Effect.matchEffect({
+      onFailure: logStateAutoSyncFailure,
+      onSuccess: () => Effect.void
+    }),
+    Effect.asVoid
+  )
 
-export const autoPullState: Effect.Effect<void, never, StateRepoEnv> = withStateGitLock(autoPullStateRaw)
+export const autoPullState: Effect.Effect<void, never, StateRepoEnv> = withStateGitLock(autoPullStateRaw).pipe(
+  Effect.matchEffect({
+    onFailure: logStateAutoPullFailure,
+    onSuccess: () => Effect.void
+  }),
+  Effect.asVoid
+)
 
 // Internal pull that takes an already-resolved root, reusing auth logic from pull-push.
 const statePullInternal = (

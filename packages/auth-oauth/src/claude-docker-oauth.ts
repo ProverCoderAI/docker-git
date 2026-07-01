@@ -18,6 +18,7 @@ import {
 
 export const defaultClaudeDockerOauthImage = "docker-git-auth-claude:latest"
 export const defaultClaudeDockerOauthContainerHome = "/claude-home"
+const claudeDockerOauthProbeConfigDir = "/tmp/docker-git-claude-probe"
 export const claudeDockerOauthBaseImage =
   "node:24-bookworm-slim@sha256:b31e7a42fdf8b8aa5f5ed477c72d694301273f1069c5a2f71d53c6482e99a2fc"
 export const claudeDockerOauthClaudeCodeVersion = "2.1.195"
@@ -186,10 +187,20 @@ const buildDockerSetupTokenArgs = (
   return args
 }
 
+// CHANGE: probe captured OAuth tokens without reading persisted account settings
+// WHY: account settings may enable bypassPermissions for real sessions, but Claude rejects that mode in privileged probe contexts
+// QUOTE(ТЗ): "почему не работает команда bun run docker-git auth claude login"
+// REF: user-report-2026-07-01-claude-auth-login
+// SOURCE: n/a
+// FORMAT THEOREM: forall token: probe(token) uses env(token) and not account(settings.json)
+// PURITY: CORE
+// INVARIANT: setup-token validation cannot fail because of account permission settings
+// COMPLEXITY: O(1)
 const buildDockerProbeArgs = (
   image: string,
   hostPath: string,
-  containerPath: string
+  containerPath: string,
+  oauthToken: string
 ): ReadonlyArray<string> => {
   const args: Array<string> = [
     "run",
@@ -204,9 +215,11 @@ const buildDockerProbeArgs = (
   }
   args.push(
     "-e",
-    `CLAUDE_CONFIG_DIR=${containerPath}`,
+    `CLAUDE_CONFIG_DIR=${claudeDockerOauthProbeConfigDir}`,
     "-e",
-    `HOME=${containerPath}`,
+    `HOME=${claudeDockerOauthProbeConfigDir}`,
+    "-e",
+    `CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`,
     image,
     "-p",
     "ping"
@@ -341,7 +354,7 @@ export const runClaudeDockerOauth = async (
       await writeCapturedToken(accountPath, result.token)
       const probeExitCode = await (options.runProbe ?? runDockerProbe)({
         dockerCommand,
-        args: buildDockerProbeArgs(image, dockerHostPath, containerPath),
+        args: buildDockerProbeArgs(image, dockerHostPath, containerPath, result.token),
         cwd
       })
       return {
