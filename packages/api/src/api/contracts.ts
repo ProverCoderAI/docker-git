@@ -299,6 +299,14 @@ export type CodexAuthStatus = {
   readonly account: string | null
 }
 
+export type ClaudeAuthStatus = {
+  readonly label: string
+  readonly message: string
+  readonly connected: boolean
+  readonly authPath: string
+  readonly method: "none" | "oauth-token" | "claude-ai-session"
+}
+
 export type GrokAuthStatus = {
   readonly label: string
   readonly message: string

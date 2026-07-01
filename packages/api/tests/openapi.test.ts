@@ -32,11 +32,12 @@ describe("openapi contract", () => {
       expect(paths["/auth/git/status"]).toBeDefined()
       expect(paths["/auth/gitlab/status"]).toBeDefined()
       expect(paths["/auth/codex/status"]).toBeDefined()
+      expect(paths["/auth/claude/status"]).toBeDefined()
       expect(paths["/auth/grok/status"]).toBeDefined()
       expect(paths["/auth/codex/login"]).toBeUndefined()
       expect(paths["/projects/{projectId}/auth/menu"]).toBeDefined()
       expect(paths["/projects/{projectId}/auth"]).toBeUndefined()
-      expect(Object.keys(paths)).toHaveLength(54)
+      expect(Object.keys(paths)).toHaveLength(55)
     }))
 
   it.effect("documents real HTTP success status codes for create and async endpoints", () =>

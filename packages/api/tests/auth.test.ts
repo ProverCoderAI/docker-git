@@ -19,6 +19,7 @@ import {
   logoutCodexAuth,
   logoutGitAuth,
   logoutGrokAuth,
+  readClaudeAuthStatus,
   readCodexAuthStatus,
   readGitAuthStatus,
   readGrokAuthStatus,
@@ -511,6 +512,108 @@ describe("api auth", () => {
         expect(status.method).toBe("api-key")
         expect(status.authPath).toBe(accountDir)
         expect(status.message).toBe("Grok connected (team-a, api-key).")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("reads labeled Claude OAuth status from controller state", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const accountDir = path.join(projectsRoot, ".orch", "auth", "claude", "team-a")
+
+        yield* _(fs.makeDirectory(accountDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(accountDir, ".oauth-token"), "sk-ant-oat01-test\n"))
+
+        const status = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(root, readClaudeAuthStatus("team-a"))
+          )
+        )
+
+        expect(status.connected).toBe(true)
+        expect(status.label).toBe("team-a")
+        expect(status.method).toBe("oauth-token")
+        expect(status.authPath).toBe(accountDir)
+        expect(status.message).toBe("Claude connected (team-a, oauth-token).")
+        expect(JSON.stringify(status)).not.toContain("sk-ant-oat01-test")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("reads labeled Claude root session credentials from controller state", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const accountDir = path.join(projectsRoot, ".orch", "auth", "claude", "team-a")
+
+        yield* _(fs.makeDirectory(accountDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(accountDir, ".credentials.json"), "{\"session\":\"ok\"}\n"))
+
+        const status = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(root, readClaudeAuthStatus("team-a"))
+          )
+        )
+
+        expect(status.connected).toBe(true)
+        expect(status.label).toBe("team-a")
+        expect(status.method).toBe("claude-ai-session")
+        expect(status.authPath).toBe(accountDir)
+        expect(status.message).toBe("Claude connected (team-a, claude-ai-session).")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("reads labeled Claude nested session credentials from controller state", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const accountDir = path.join(projectsRoot, ".orch", "auth", "claude", "team-a")
+        const nestedDir = path.join(accountDir, ".claude")
+
+        yield* _(fs.makeDirectory(nestedDir, { recursive: true }))
+        yield* _(fs.writeFileString(path.join(nestedDir, ".credentials.json"), "{\"session\":\"ok\"}\n"))
+
+        const status = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(root, readClaudeAuthStatus("team-a"))
+          )
+        )
+
+        expect(status.connected).toBe(true)
+        expect(status.label).toBe("team-a")
+        expect(status.method).toBe("claude-ai-session")
+        expect(status.authPath).toBe(accountDir)
+        expect(status.message).toBe("Claude connected (team-a, claude-ai-session).")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("reports missing default Claude auth from controller state", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        const path = yield* _(Path.Path)
+        const projectsRoot = path.join(root, ".docker-git")
+        const accountDir = path.join(projectsRoot, ".orch", "auth", "claude", "default")
+
+        const status = yield* _(
+          withProjectsRoot(
+            projectsRoot,
+            withWorkingDirectory(root, readClaudeAuthStatus(null))
+          )
+        )
+
+        expect(status.connected).toBe(false)
+        expect(status.label).toBe("default")
+        expect(status.method).toBe("none")
+        expect(status.authPath).toBe(accountDir)
+        expect(status.message).toBe("Claude not connected (default).")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

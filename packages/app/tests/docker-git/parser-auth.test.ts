@@ -50,6 +50,17 @@ describe("parse auth commands", () => {
       expect(command.codexAuthPath).toBe(".docker-git/.orch/auth/codex")
     }))
 
+  it.effect("parses claude auth status into the controller-owned auth directory", () =>
+    Effect.sync(() => {
+      const command = parseOrThrow(["auth", "claude", "status", "--label", "Team A"])
+      expect(command._tag).toBe("AuthClaudeStatus")
+      if (command._tag !== "AuthClaudeStatus") {
+        throw new Error("expected AuthClaudeStatus command")
+      }
+      expect(command.label).toBe("Team A")
+      expect(command.claudeAuthPath).toBe(".docker-git/.orch/auth/claude")
+    }))
+
   it.effect("parses gitlab token login", () =>
     expectGitlabLoginCommand(["auth", "gitlab", "login", "--label", "Team A", "--token", "glpat-token"], (command) => {
       expect(command.label).toBe("Team A")

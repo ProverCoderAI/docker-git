@@ -22,6 +22,7 @@ import type {
   AuthCodexLoginCommand,
   AuthCodexLogoutCommand,
   AuthCodexStatusCommand,
+  AuthClaudeStatusCommand,
   AuthGithubLoginCommand,
   AuthGithubLogoutCommand,
   AuthGithubStatusCommand,
@@ -201,6 +202,11 @@ export const codexImport = (command: AuthCodexImportCommand) =>
 export const codexStatus = (command: AuthCodexStatusCommand) => {
   const query = command.label === null ? "" : `?label=${encodeURIComponent(command.label)}`
   return request("GET", `/auth/codex/status${query}`)
+}
+
+export const claudeStatus = (command: AuthClaudeStatusCommand) => {
+  const query = command.label === null ? "" : `?label=${encodeURIComponent(command.label)}`
+  return request("GET", `/auth/claude/status${query}`)
 }
 
 export const grokStatus = (command: AuthGrokStatusCommand) => {

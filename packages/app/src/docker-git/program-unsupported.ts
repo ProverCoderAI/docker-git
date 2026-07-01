@@ -5,7 +5,6 @@ export type UnsupportedOperationalCommandTag =
   | "ScrapImport"
   | "McpPlaywrightUp"
   | "Apply"
-  | "AuthClaudeStatus"
   | "AuthClaudeLogout"
   | "AuthGeminiStatus"
   | "AuthGeminiLogout"
@@ -25,10 +24,6 @@ export const unsupportedOperationalCommands: Record<
   Apply: {
     command: "Apply",
     message: "Command Apply is not available in API-only host mode."
-  },
-  AuthClaudeStatus: {
-    command: "auth claude status",
-    message: "Claude status is not routed through the controller in host API mode."
   },
   AuthClaudeLogout: {
     command: "auth claude logout",
