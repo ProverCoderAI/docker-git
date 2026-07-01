@@ -12,6 +12,7 @@ const runBrowserFrontendCommandMock = vi.hoisted(
 const runMenuCallMock = vi.hoisted(() => vi.fn(() => {}))
 const readCommandMock = vi.hoisted(() => vi.fn<() => Command>())
 const codexLoginMock = vi.hoisted(() => vi.fn(() => Effect.void))
+const claudeStatusMock = vi.hoisted(() => vi.fn(() => Effect.succeed({ status: { connected: false } })))
 const createAuthTerminalSessionMock = vi.hoisted(() => vi.fn())
 const attachTerminalSessionMock = vi.hoisted(() => vi.fn(() => Effect.void))
 const gitlabLoginMock = vi.hoisted(() => vi.fn(() => Effect.succeed({ ok: true })))
@@ -43,6 +44,11 @@ const claudeLoginCommand: Extract<Command, { readonly _tag: "AuthClaudeLogin" }>
   label: "work",
   claudeAuthPath: ".docker-git/.orch/auth/claude"
 }
+const claudeStatusCommand: Extract<Command, { readonly _tag: "AuthClaudeStatus" }> = {
+  _tag: "AuthClaudeStatus",
+  label: "work",
+  claudeAuthPath: ".docker-git/.orch/auth/claude"
+}
 const geminiLoginCommand: Extract<Command, { readonly _tag: "AuthGeminiLogin" }> = {
   _tag: "AuthGeminiLogin",
   label: null,
@@ -71,6 +77,7 @@ vi.mock("../../src/docker-git/api-client.js", () => ({
   codexImport: vi.fn(() => Effect.succeed({ ok: true })),
   codexLogout: vi.fn(() => Effect.void),
   codexStatus: vi.fn(() => Effect.succeed({ ok: true })),
+  claudeStatus: claudeStatusMock,
   createAuthTerminalSession: createAuthTerminalSessionMock,
   createProject: vi.fn(() => Effect.succeed(null)),
   downAllProjects: vi.fn(() => Effect.void),
@@ -122,6 +129,8 @@ describe("program menu dispatch", () => {
     readCommandMock.mockReturnValue(menuCommand)
     codexLoginMock.mockReset()
     codexLoginMock.mockImplementation(() => Effect.void)
+    claudeStatusMock.mockReset()
+    claudeStatusMock.mockImplementation(() => Effect.succeed({ status: { connected: false } }))
     createAuthTerminalSessionMock.mockReset()
     createAuthTerminalSessionMock.mockImplementation(() =>
       Effect.succeed({
@@ -209,6 +218,16 @@ describe("program menu dispatch", () => {
       expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
       expect(createAuthTerminalSessionMock).toHaveBeenCalledWith("ClaudeOauth", "work")
       expect(attachTerminalSessionMock).toHaveBeenCalledTimes(1)
+      expect(process.exitCode ?? 0).toBe(0)
+    }))
+
+  it.effect("routes claude status through the controller API", () =>
+    Effect.gen(function*(_) {
+      readCommandMock.mockReturnValue(claudeStatusCommand)
+      yield* _(runProgram())
+
+      expect(ensureControllerReadyMock).toHaveBeenCalledTimes(1)
+      expect(claudeStatusMock).toHaveBeenCalledWith(claudeStatusCommand)
       expect(process.exitCode ?? 0).toBe(0)
     }))
 

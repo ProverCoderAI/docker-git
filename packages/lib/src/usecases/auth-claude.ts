@@ -19,7 +19,7 @@ import { autoSyncState } from "./state-repo.js"
 import { readFileStringIfPresent, writeFileStringEnsuringParent } from "./volatile-files.js"
 
 type ClaudeRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
-type ClaudeAuthMethod = "none" | "oauth-token" | "claude-ai-session"
+export type ClaudeAuthMethod = "none" | "oauth-token" | "claude-ai-session"
 
 type ClaudeAccountContext = {
   readonly accountLabel: string
@@ -113,7 +113,7 @@ const readOauthToken = (
     return token.length > 0 ? token : null
   })
 
-const resolveClaudeAuthMethod = (
+export const resolveClaudeAuthMethod = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
   accountPath: string
@@ -166,7 +166,7 @@ RUN npm install -g @anthropic-ai/claude-code@latest
 ENTRYPOINT ["claude"]
 `
 
-const resolveClaudeAccountPath = (path: Path.Path, rootPath: string, label: string | null): {
+export const resolveClaudeAccountPath = (path: Path.Path, rootPath: string, label: string | null): {
   readonly accountLabel: string
   readonly accountPath: string
 } => {

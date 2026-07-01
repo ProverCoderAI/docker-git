@@ -59,6 +59,7 @@ import {
   logoutGitAuth,
   logoutGitlabAuth,
   logoutGithubAuth,
+  readClaudeAuthStatus,
   readCodexAuthStatus,
   readGrokAuthStatus,
   readGitAuthStatus,
@@ -1135,6 +1136,15 @@ export const makeRouter = () => {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
         const label = new URL(request.url, "http://localhost").searchParams.get("label")
         const status = yield* _(readGrokAuthStatus(label))
+        return yield* _(jsonResponse({ status }, 200))
+      }).pipe(Effect.catchAll(errorResponse))
+    ),
+    HttpRouter.get(
+      "/auth/claude/status",
+      Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        const label = new URL(request.url, "http://localhost").searchParams.get("label")
+        const status = yield* _(readClaudeAuthStatus(label))
         return yield* _(jsonResponse({ status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
     ),

@@ -6,6 +6,11 @@ import { defaultTemplateConfig } from "@effect-template/lib/core/template-defaul
 import { parseGithubRepoUrl, parseGitlabRepoUrl } from "@effect-template/lib/core/repo"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { authCodexLogin as runCodexLogin } from "@effect-template/lib/usecases/auth-codex"
+import {
+  claudeAuthRoot,
+  resolveClaudeAccountPath,
+  resolveClaudeAuthMethod
+} from "@effect-template/lib/usecases/auth-claude"
 import { authGrokLogout as runGrokLogout } from "@effect-template/lib/usecases/auth-grok-logout"
 import { authGitLogin as runGitLogin, authGitLogout as runGitLogout, listGitConnections } from "@effect-template/lib/usecases/auth-git"
 import { authGitlabLogin as runGitlabLogin, authGitlabLogout as runGitlabLogout, listGitlabTokens } from "@effect-template/lib/usecases/auth-gitlab"
@@ -37,6 +42,7 @@ import type {
   CodexAuthLoginRequest,
   CodexAuthLogoutRequest,
   CodexAuthStatus,
+  ClaudeAuthStatus,
   GrokAuthLogoutRequest,
   GrokAuthStatus,
   GitAuthLoginRequest,
@@ -65,6 +71,7 @@ export const gitlabAuthRequiredMessage = [
 ].join("\n")
 export const githubAuthEnvGlobalPath = defaultTemplateConfig.envGlobalPath
 export const codexAuthPath = defaultTemplateConfig.codexAuthPath
+export const claudeAuthPath = claudeAuthRoot
 export const grokAuthPath = defaultTemplateConfig.grokAuthPath
 
 const githubTokenKey = "GITHUB_TOKEN"
@@ -503,6 +510,20 @@ const codexAuthStatus = (
   account
 })
 
+const claudeAuthStatus = (
+  label: string,
+  authPath: string,
+  method: ClaudeAuthStatus["method"]
+): ClaudeAuthStatus => ({
+  label,
+  message: method === "none"
+    ? `Claude not connected (${label}).`
+    : `Claude connected (${label}, ${method}).`,
+  connected: method !== "none",
+  authPath,
+  method
+})
+
 const grokAuthStatus = (
   label: string,
   authPath: string,
@@ -516,6 +537,18 @@ const grokAuthStatus = (
   authPath,
   method
 })
+
+export const readClaudeAuthStatus = (
+  label?: string | null | undefined
+): Effect.Effect<ClaudeAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const rootPath = resolvePathFromCwd(path, process.cwd(), claudeAuthPath)
+    const { accountLabel, accountPath } = resolveClaudeAccountPath(path, rootPath, label ?? null)
+    const method = yield* _(resolveClaudeAuthMethod(fs, path, accountPath))
+    return claudeAuthStatus(accountLabel, accountPath, method)
+  })
 
 export const readGrokAuthStatus = (
   label?: string | null | undefined

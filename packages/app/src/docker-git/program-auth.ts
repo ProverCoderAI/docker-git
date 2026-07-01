@@ -6,6 +6,7 @@ import {
   codexLogin,
   codexLogout,
   codexStatus,
+  claudeStatus,
   createAuthTerminalSession,
   githubLogin,
   githubLogout,
@@ -52,6 +53,7 @@ export type RoutedAuthCommand = Extract<
       | "AuthCodexImport"
       | "AuthCodexStatus"
       | "AuthCodexLogout"
+      | "AuthClaudeStatus"
   }
 >
 
@@ -77,6 +79,7 @@ const routedAuthTags: Readonly<Record<string, true>> = {
   AuthGithubLogout: true,
   AuthGithubStatus: true,
   AuthClaudeLogin: true,
+  AuthClaudeStatus: true,
   AuthGeminiLogin: true,
   AuthGrokLogin: true,
   AuthGrokLogout: true,
@@ -156,6 +159,10 @@ const handleClaudeLoginCommand = (
     )
   )
 
+const handleClaudeStatusCommand = (
+  command: Extract<OperationalCommand, { readonly _tag: "AuthClaudeStatus" }>
+) => withControllerReady(pipe(claudeStatus(command), Effect.flatMap((payload) => renderAuthPayload(payload))))
+
 const handleGeminiLoginCommand = (
   command: Extract<OperationalCommand, { readonly _tag: "AuthGeminiLogin" }>
 ) =>
@@ -214,6 +221,7 @@ export const dispatchRoutedAuthCommand = (
     Match.when({ _tag: "AuthGitStatus" }, handleGitStatusCommand),
     Match.when({ _tag: "AuthGitLogout" }, handleGitLogoutCommand),
     Match.when({ _tag: "AuthClaudeLogin" }, handleClaudeLoginCommand),
+    Match.when({ _tag: "AuthClaudeStatus" }, handleClaudeStatusCommand),
     Match.when({ _tag: "AuthGeminiLogin" }, handleGeminiLoginCommand),
     Match.when({ _tag: "AuthGrokLogin" }, handleGrokLoginCommand),
     Match.when({ _tag: "AuthGrokStatus" }, handleGrokStatusCommand),
