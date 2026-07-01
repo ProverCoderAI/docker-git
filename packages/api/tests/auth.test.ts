@@ -525,6 +525,12 @@ describe("api auth", () => {
 
         yield* _(fs.makeDirectory(accountDir, { recursive: true }))
         yield* _(fs.writeFileString(path.join(accountDir, ".oauth-token"), "sk-ant-oat01-test\n"))
+        yield* _(
+          fs.writeFileString(
+            path.join(accountDir, ".claude.json"),
+            JSON.stringify({ oauthAccount: { emailAddress: "team@example.com", accountUuid: "acc-1" } }, null, 2)
+          )
+        )
 
         const status = yield* _(
           withProjectsRoot(
@@ -535,9 +541,10 @@ describe("api auth", () => {
 
         expect(status.connected).toBe(true)
         expect(status.label).toBe("team-a")
+        expect(status.account).toBe("team@example.com")
         expect(status.method).toBe("oauth-token")
         expect(status.authPath).toBe(accountDir)
-        expect(status.message).toBe("Claude connected (team-a, oauth-token).")
+        expect(status.message).toBe("Claude connected (team-a, oauth-token, account: team@example.com).")
         expect(JSON.stringify(status)).not.toContain("sk-ant-oat01-test")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
@@ -551,7 +558,12 @@ describe("api auth", () => {
         const accountDir = path.join(projectsRoot, ".orch", "auth", "claude", "team-a")
 
         yield* _(fs.makeDirectory(accountDir, { recursive: true }))
-        yield* _(fs.writeFileString(path.join(accountDir, ".credentials.json"), "{\"session\":\"ok\"}\n"))
+        yield* _(
+          fs.writeFileString(
+            path.join(accountDir, ".credentials.json"),
+            JSON.stringify({ claudeAiOauth: { displayName: "Team Claude" } }, null, 2)
+          )
+        )
 
         const status = yield* _(
           withProjectsRoot(
@@ -562,9 +574,10 @@ describe("api auth", () => {
 
         expect(status.connected).toBe(true)
         expect(status.label).toBe("team-a")
+        expect(status.account).toBe("Team Claude")
         expect(status.method).toBe("claude-ai-session")
         expect(status.authPath).toBe(accountDir)
-        expect(status.message).toBe("Claude connected (team-a, claude-ai-session).")
+        expect(status.message).toBe("Claude connected (team-a, claude-ai-session, account: Team Claude).")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -589,9 +602,10 @@ describe("api auth", () => {
 
         expect(status.connected).toBe(true)
         expect(status.label).toBe("team-a")
+        expect(status.account).toBeNull()
         expect(status.method).toBe("claude-ai-session")
         expect(status.authPath).toBe(accountDir)
-        expect(status.message).toBe("Claude connected (team-a, claude-ai-session).")
+        expect(status.message).toBe("Claude connected (team-a, claude-ai-session, account unavailable).")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 
@@ -611,6 +625,7 @@ describe("api auth", () => {
 
         expect(status.connected).toBe(false)
         expect(status.label).toBe("default")
+        expect(status.account).toBeNull()
         expect(status.method).toBe("none")
         expect(status.authPath).toBe(accountDir)
         expect(status.message).toBe("Claude not connected (default).")

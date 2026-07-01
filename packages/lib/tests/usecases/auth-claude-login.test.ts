@@ -308,8 +308,8 @@ describe("authClaudeLogin", () => {
 
           const envEntries = dockerEnvEntries(pingInvocation.args)
           expect(envEntries).toContain(`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`)
-          expect(envEntries).toContain("HOME=/tmp/docker-git-claude-probe")
-          expect(envEntries).toContain("CLAUDE_CONFIG_DIR=/tmp/docker-git-claude-probe")
+          expect(envEntries).toContain("HOME=/claude-probe-home")
+          expect(envEntries).toContain("CLAUDE_CONFIG_DIR=/claude-probe-home")
           expect(envEntries).not.toContain("HOME=/claude-home")
           expect(envEntries).not.toContain("CLAUDE_CONFIG_DIR=/claude-home")
         })

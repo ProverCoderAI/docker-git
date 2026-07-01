@@ -304,6 +304,7 @@ export type ClaudeAuthStatus = {
   readonly message: string
   readonly connected: boolean
   readonly authPath: string
+  readonly account: string | null
   readonly method: "none" | "oauth-token" | "claude-ai-session"
 }
 

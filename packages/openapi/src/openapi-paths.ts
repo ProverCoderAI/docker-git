@@ -5180,6 +5180,7 @@ export interface operations {
                     "application/json": {
                         ok?: boolean;
                         status: {
+                            account: string | null;
                             authPath: string;
                             connected: boolean;
                             label: string;

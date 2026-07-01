@@ -252,6 +252,7 @@ export const CodexStatusResponseSchema = Schema.Struct({
 })
 
 export const ClaudeAuthStatusSchema = Schema.Struct({
+  account: NullableStringSchema,
   authPath: Schema.String,
   connected: Schema.Boolean,
   label: Schema.String,

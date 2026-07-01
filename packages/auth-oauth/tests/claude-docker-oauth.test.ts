@@ -102,8 +102,8 @@ describe("Claude Docker OAuth runner", () => {
       expect(probeRuns[0]?.args.slice(-3)).toEqual(["claude-test:latest", "-p", "ping"])
       expect(dockerEnvEntries(probeRuns[0]?.args ?? [])).toEqual(
         expect.arrayContaining([
-          "CLAUDE_CONFIG_DIR=/tmp/docker-git-claude-probe",
-          "HOME=/tmp/docker-git-claude-probe",
+          "CLAUDE_CONFIG_DIR=/claude-probe-home",
+          "HOME=/claude-probe-home",
           `CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`
         ])
       )

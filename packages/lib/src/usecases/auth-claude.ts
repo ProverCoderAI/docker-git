@@ -2,12 +2,8 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
-import {
-  claudeOauthTokenFileMode,
-  claudeOauthTokenPath,
-  formatClaudeOauthTokenFile
-} from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
 import { renderClaudeDockerOauthDockerfile } from "@prover-coder-ai/docker-git-auth-oauth/claude-docker-oauth"
+import { claudeOauthTokenPath } from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
 import { Effect, Match } from "effect"
 
 import type { AuthClaudeLoginCommand, AuthClaudeLogoutCommand, AuthClaudeStatusCommand } from "../core/domain.js"
@@ -15,18 +11,24 @@ import { defaultTemplateConfig } from "../core/domain.js"
 import { runDockerAuth, runDockerAuthExitCode } from "../shell/docker-auth.js"
 import type { AuthError } from "../shell/errors.js"
 import { CommandFailedError } from "../shell/errors.js"
+import {
+  claudeConfigPath,
+  claudeCredentialsPath,
+  claudeNestedCredentialsPath,
+  persistClaudeOauthToken,
+  readOauthToken,
+  resolveClaudeAuthMethod
+} from "./auth-claude-credentials.js"
 import { runClaudeLoginFlow } from "./auth-claude-login-flow.js"
 import { runClaudeOauthLoginWithPrompt } from "./auth-claude-oauth.js"
-import { buildDockerAuthSpec, isRegularFile, normalizeAccountLabel } from "./auth-helpers.js"
+import { buildDockerAuthSpec, normalizeAccountLabel } from "./auth-helpers.js"
 import { migrateLegacyOrchLayout } from "./auth-sync.js"
 import { ensureDockerImage } from "./docker-image.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 import { autoSyncState } from "./state-repo.js"
-import { readFileStringIfPresent, writeFileStringEnsuringParent } from "./volatile-files.js"
 
 type ClaudeRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
-type ClaudeAuthMethod = "none" | "oauth-token" | "claude-ai-session"
 type ClaudeProbeAuth =
   | { readonly _tag: "ClaudeProbeAccountConfig" }
   | { readonly _tag: "ClaudeProbeOauthToken"; readonly token: string }
@@ -44,133 +46,7 @@ export const claudeAuthRoot = ".docker-git/.orch/auth/claude"
 const claudeImageName = "docker-git-auth-claude:latest"
 const claudeImageDir = ".docker-git/.orch/auth/claude/.image"
 const claudeContainerHomeDir = "/claude-home"
-const claudeProbeConfigDir = "/tmp/docker-git-claude-probe"
-const claudeConfigFileName = ".claude.json"
-const claudeCredentialsFileName = ".credentials.json"
-const claudeCredentialsDirName = ".claude"
-
-const claudeConfigPath = (accountPath: string): string => `${accountPath}/${claudeConfigFileName}`
-const claudeCredentialsPath = (accountPath: string): string => `${accountPath}/${claudeCredentialsFileName}`
-const claudeNestedCredentialsPath = (accountPath: string): string =>
-  `${accountPath}/${claudeCredentialsDirName}/${claudeCredentialsFileName}`
-
-// CHANGE: persist Claude OAuth tokens through a restricted temporary file and atomic rename
-// WHY: the final token path must never receive secret bytes before 0600 permissions are established
-// QUOTE(ТЗ): "Исправь CI/CD и все правки от Rabbit Coder."
-// REF: issue-439/pr-440
-// SOURCE: n/a
-// FORMAT THEOREM: forall token, path: write(secret, final(path)) only by rename(temp0600, final(path))
-// PURITY: SHELL
-// EFFECT: Effect<void, PlatformError>
-// INVARIANT: final .oauth-token is regular replacement content with mode 0600 after success
-// COMPLEXITY: O(|token|)
-const persistClaudeOauthToken = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  accountPath: string,
-  token: string
-): Effect.Effect<void, PlatformError> =>
-  Effect.gen(function*(_) {
-    const tokenPath = claudeOauthTokenPath(accountPath)
-    const tempDir = yield* _(fs.makeTempDirectory({ directory: accountPath, prefix: ".oauth-token-write-" }))
-    const tempPath = path.join(tempDir, ".oauth-token")
-    const cleanupTempDir = fs.remove(tempDir, { recursive: true, force: true }).pipe(
-      Effect.orElseSucceed(() => void 0)
-    )
-    yield* _(
-      Effect.gen(function*(_) {
-        yield* _(fs.writeFileString(tempPath, formatClaudeOauthTokenFile(token), { mode: claudeOauthTokenFileMode }))
-        yield* _(fs.chmod(tempPath, claudeOauthTokenFileMode))
-        yield* _(fs.rename(tempPath, tokenPath))
-        yield* _(fs.chmod(tokenPath, claudeOauthTokenFileMode))
-      }).pipe(Effect.ensuring(cleanupTempDir))
-    )
-  })
-
-const syncClaudeCredentialsFile = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  accountPath: string
-): Effect.Effect<void, PlatformError> =>
-  Effect.gen(function*(_) {
-    const nestedPath = claudeNestedCredentialsPath(accountPath)
-    const rootPath = claudeCredentialsPath(accountPath)
-    const isNestedExists = yield* _(isRegularFile(fs, nestedPath))
-    if (isNestedExists) {
-      const nestedText = yield* _(readFileStringIfPresent(fs, nestedPath))
-      if (nestedText !== null) {
-        yield* _(writeFileStringEnsuringParent(fs, path, rootPath, nestedText))
-        yield* _(fs.chmod(rootPath, 0o600), Effect.orElseSucceed(() => void 0))
-      }
-      return
-    }
-
-    const isRootExists = yield* _(isRegularFile(fs, rootPath))
-    if (isRootExists) {
-      const rootText = yield* _(readFileStringIfPresent(fs, rootPath))
-      if (rootText === null) {
-        return
-      }
-      yield* _(writeFileStringEnsuringParent(fs, path, nestedPath, rootText))
-      yield* _(fs.chmod(nestedPath, 0o600), Effect.orElseSucceed(() => void 0))
-    }
-  })
-
-const clearClaudeSessionCredentials = (
-  fs: FileSystem.FileSystem,
-  accountPath: string
-): Effect.Effect<void, PlatformError> =>
-  Effect.gen(function*(_) {
-    yield* _(fs.remove(claudeCredentialsPath(accountPath), { force: true }))
-    yield* _(fs.remove(claudeNestedCredentialsPath(accountPath), { force: true }))
-  })
-
-const hasNonEmptyOauthToken = (
-  fs: FileSystem.FileSystem,
-  accountPath: string
-): Effect.Effect<boolean, PlatformError> =>
-  Effect.gen(function*(_) {
-    const tokenPath = claudeOauthTokenPath(accountPath)
-    const hasToken = yield* _(isRegularFile(fs, tokenPath))
-    if (!hasToken) {
-      return false
-    }
-    const tokenText = yield* _(fs.readFileString(tokenPath), Effect.orElseSucceed(() => ""))
-    return tokenText.trim().length > 0
-  })
-
-const readOauthToken = (
-  fs: FileSystem.FileSystem,
-  accountPath: string
-): Effect.Effect<string | null, PlatformError> =>
-  Effect.gen(function*(_) {
-    const tokenPath = claudeOauthTokenPath(accountPath)
-    const hasToken = yield* _(isRegularFile(fs, tokenPath))
-    if (!hasToken) {
-      return null
-    }
-
-    const tokenText = yield* _(fs.readFileString(tokenPath), Effect.orElseSucceed(() => ""))
-    const token = tokenText.trim()
-    return token.length > 0 ? token : null
-  })
-
-const resolveClaudeAuthMethod = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  accountPath: string
-): Effect.Effect<ClaudeAuthMethod, PlatformError> =>
-  Effect.gen(function*(_) {
-    const hasOauthToken = yield* _(hasNonEmptyOauthToken(fs, accountPath))
-    if (hasOauthToken) {
-      yield* _(clearClaudeSessionCredentials(fs, accountPath))
-      return "oauth-token"
-    }
-
-    yield* _(syncClaudeCredentialsFile(fs, path, accountPath))
-    const hasCredentials = yield* _(isRegularFile(fs, claudeCredentialsPath(accountPath)))
-    return hasCredentials ? "claude-ai-session" : "none"
-  })
+const claudeProbeConfigDir = "/claude-probe-home"
 
 const buildClaudeAuthEnv = (
   isInteractive: boolean,
@@ -312,10 +188,11 @@ export const authClaudeLogin = (
       }),
       persistToken: (token) => persistClaudeOauthToken(fs, path, accountPath, token),
       normalizeStoredCredentials: resolveClaudeAuthMethod(fs, path, accountPath).pipe(Effect.asVoid),
-      probeToken: (token) => runClaudePingProbeExitCode(cwd, accountPath, {
-        _tag: "ClaudeProbeOauthToken",
-        token
-      }),
+      probeToken: (token) =>
+        runClaudePingProbeExitCode(cwd, accountPath, {
+          _tag: "ClaudeProbeOauthToken",
+          token
+        }),
       syncState: autoSyncState(`chore(state): auth claude ${accountLabel}`)
     }).pipe(Effect.asVoid))
 

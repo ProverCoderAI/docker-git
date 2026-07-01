@@ -10489,6 +10489,7 @@
                     "status": {
                       "type": "object",
                       "required": [
+                        "account",
                         "authPath",
                         "connected",
                         "label",
@@ -10496,6 +10497,16 @@
                         "method"
                       ],
                       "properties": {
+                        "account": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "authPath": {
                           "type": "string"
                         },

@@ -3,16 +3,9 @@ import type { PlatformError } from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Effect } from "effect"
-import { runCommandExitCode } from "../shell/command-runner.js"
 import { CommandFailedError } from "../shell/errors.js"
 import { defaultProjectsRoot } from "./menu-helpers.js"
-import { adoptRemoteHistoryIfOrphan } from "./state-repo/adopt-remote.js"
-import {
-  resolveGitlabTokenForOrigin,
-  selectStateInitEffect,
-  selectStatePullEffect,
-  selectStateSyncEffect
-} from "./state-repo/auth-effects.js"
+import { resolveGitlabTokenForOrigin, selectStatePullEffect, selectStateSyncEffect } from "./state-repo/auth-effects.js"
 import {
   autoPullEnvKey,
   autoSyncEnvKey,
@@ -35,9 +28,9 @@ import {
   normalizeOriginUrlIfNeeded,
   shouldLogGithubAuthHintForStateSyncFailure
 } from "./state-repo/github-auth-state.js"
-import type { GitAuthEnv } from "./state-repo/github-auth.js"
 import { resolveGithubToken } from "./state-repo/github-auth.js"
 import { ensureStateGitignore } from "./state-repo/gitignore.js"
+import { type StateInitInput, stateInitRaw } from "./state-repo/init.js"
 import { withStateGitLock } from "./state-repo/lock.js"
 
 type StateRepoEnv = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
@@ -52,13 +45,11 @@ const renderStateSyncFailure = (error: CommandFailedError | PlatformError): stri
 
 const logStateAutoSyncFailure = (
   error: CommandFailedError | PlatformError
-): Effect.Effect<void> =>
-  Effect.logWarning(`State auto-sync failed: ${renderStateSyncFailure(error)}`)
+): Effect.Effect<void> => Effect.logWarning(`State auto-sync failed: ${renderStateSyncFailure(error)}`)
 
 const logStateAutoPullFailure = (
   error: CommandFailedError | PlatformError
-): Effect.Effect<void> =>
-  Effect.logWarning(`State auto-pull failed: ${renderStateSyncFailure(error)}`)
+): Effect.Effect<void> => Effect.logWarning(`State auto-pull failed: ${renderStateSyncFailure(error)}`)
 
 const ensureStateIgnoreAndUntrackCaches = (
   fs: FileSystem.FileSystem,
@@ -263,117 +254,6 @@ const statePullInternal = (
     const effect = selectStatePullEffect(root, originUrl, branch, githubToken, gitlabToken)
     yield* _(effect)
   }).pipe(Effect.asVoid)
-
-type StateInitInput = {
-  readonly repoUrl: string
-  readonly repoRef: string
-  readonly token?: string
-}
-
-const cloneStateRepo = (
-  root: string,
-  input: StateInitInput,
-  env: GitAuthEnv
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  Effect.gen(function*(_) {
-    const cloneWithBranch = ["clone", "--branch", input.repoRef, input.repoUrl, root]
-    const cloneBranchExit = yield* _(
-      runCommandExitCode({ cwd: root, command: "git", args: cloneWithBranch, env })
-    )
-    if (cloneBranchExit === successExitCode) {
-      return
-    }
-
-    // Empty remotes (no branch yet) and remotes without the requested branch can fail here.
-    // Fall back to cloning the default branch so we can still set up the repo and create the branch locally.
-    yield* _(
-      Effect.logWarning(
-        `git clone --branch ${input.repoRef} failed (exit ${cloneBranchExit}); retrying without --branch`
-      )
-    )
-    const cloneDefault = ["clone", input.repoUrl, root]
-    const cloneDefaultExit = yield* _(
-      runCommandExitCode({ cwd: root, command: "git", args: cloneDefault, env })
-    )
-    if (cloneDefaultExit !== successExitCode) {
-      return yield* _(Effect.fail(new CommandFailedError({ command: "git clone", exitCode: cloneDefaultExit })))
-    }
-  }).pipe(Effect.asVoid)
-
-const initRepoIfNeeded = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  root: string,
-  input: StateInitInput,
-  env: GitAuthEnv
-): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
-  Effect.gen(function*(_) {
-    yield* _(fs.makeDirectory(root, { recursive: true }))
-
-    const gitDir = path.join(root, ".git")
-    const hasGit = yield* _(fs.exists(gitDir))
-    if (hasGit) {
-      return
-    }
-
-    const entries = yield* _(fs.readDirectory(root))
-    if (entries.length === 0) {
-      yield* _(cloneStateRepo(root, input, env))
-      yield* _(Effect.log(`State dir cloned: ${root}`))
-      return
-    }
-
-    yield* _(git(root, ["init", "--initial-branch=main"], env))
-  }).pipe(Effect.asVoid)
-
-const ensureOriginRemote = (
-  root: string,
-  repoUrl: string,
-  env: GitAuthEnv
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  Effect.gen(function*(_) {
-    const urlExitCode = yield* _(gitExitCode(root, ["remote", "set-url", "origin", repoUrl], env))
-    if (urlExitCode === successExitCode) {
-      return
-    }
-    yield* _(git(root, ["remote", "add", "origin", repoUrl], env))
-  })
-
-const checkoutBranchBestEffort = (
-  root: string,
-  repoRef: string,
-  env: GitAuthEnv
-): Effect.Effect<void, CommandFailedError | PlatformError, CommandExecutor.CommandExecutor> =>
-  Effect.gen(function*(_) {
-    const checkoutExit = yield* _(gitExitCode(root, ["checkout", "-B", repoRef], env))
-    if (checkoutExit === successExitCode) {
-      return
-    }
-    yield* _(Effect.logWarning(`git checkout -B ${repoRef} failed (exit ${checkoutExit})`))
-  })
-
-const stateInitRaw = (
-  input: StateInitInput
-): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> => {
-  const doInit = (env: GitAuthEnv) =>
-    Effect.gen(function*(_) {
-      const fs = yield* _(FileSystem.FileSystem)
-      const path = yield* _(Path.Path)
-      const root = resolveStateRoot(path, process.cwd())
-
-      yield* _(initRepoIfNeeded(fs, path, root, input, env))
-      yield* _(ensureOriginRemote(root, input.repoUrl, env))
-      yield* _(adoptRemoteHistoryIfOrphan(root, input.repoRef, env))
-      yield* _(checkoutBranchBestEffort(root, input.repoRef, env))
-      yield* _(ensureStateGitignore(fs, path, root))
-
-      yield* _(Effect.log(`State dir ready: ${root}`))
-      yield* _(Effect.log(`Remote: ${input.repoUrl}`))
-    }).pipe(Effect.asVoid)
-
-  const token = input.token?.trim() ?? ""
-  return selectStateInitEffect(input.repoUrl, token, doInit)
-}
 
 export const stateInit = (input: StateInitInput) => withStateGitLock(stateInitRaw(input))
 
