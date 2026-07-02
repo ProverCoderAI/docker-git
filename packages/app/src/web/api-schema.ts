@@ -5,6 +5,8 @@ import { NullableString } from "./api-project-schema.js"
 export {
   AuthSnapshotResponseSchema,
   AuthSnapshotSchema,
+  CodexAuthStatusSchema,
+  CodexStatusResponseSchema,
   GithubAuthStatusSchema,
   GithubStatusResponseSchema,
   GithubTokenStatusSchema,

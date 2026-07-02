@@ -26,7 +26,17 @@ export type ProjectSummary = {
   readonly sshSessions: number
   readonly startedAtIso: string | null
   readonly startedAtEpochMs: number | null
-  readonly clonedOnHostname?: string | undefined
+  /**
+   * Hostname of the machine where the project was originally cloned, when known.
+   *
+   * @pure true - immutable API DTO field.
+   * @effect none
+   * @invariant if present, the value was decoded by the API/config hostname schema.
+   * @precondition producers omit the field when clone host identity is unknown.
+   * @postcondition consumers can group projects by clone-origin host without reading OS state.
+   * @complexity O(1)/O(1)
+   */
+  readonly clonedOnHostname?: string
 }
 
 export type ProjectDetails = ProjectSummary & {
@@ -289,6 +299,15 @@ export type CodexAuthStatus = {
   readonly account: string | null
 }
 
+export type ClaudeAuthStatus = {
+  readonly label: string
+  readonly message: string
+  readonly connected: boolean
+  readonly authPath: string
+  readonly account: string | null
+  readonly method: "none" | "oauth-token" | "claude-ai-session"
+}
+
 export type GrokAuthStatus = {
   readonly label: string
   readonly message: string
@@ -480,6 +499,24 @@ export type CreateProjectRequest = {
   readonly forceEnv?: boolean | undefined
   readonly waitForClone?: boolean | undefined
   readonly async?: boolean | undefined
+  /**
+   * Hostname of the machine where the project was cloned.
+   *
+   * CHANGE: add explicit clone-origin hostname to the create-project contract.
+   * WHY: keeps command builders pure by passing host identity as immutable input instead of reading OS state.
+   * QUOTE(ТЗ): "CORE: Исключительно чистые функции, неизменяемые данные, математические операции"
+   * REF: pr-420-coderabbit-review-4518791377
+   * SOURCE: n/a
+   * FORMAT THEOREM: ∀h ∈ Hostname: request(h) -> build(request).config.clonedOnHostname = h
+   * PURITY: CORE - immutable request data.
+   * @pure true - immutable API request DTO field.
+   * @effect none
+   * INVARIANT: if present, value satisfies API HostnameSchema.
+   * @precondition callers omit the field when clone host identity is unknown.
+   * @postcondition command builders receive host identity as data, not by reading OS state.
+   * COMPLEXITY: O(1)/O(1)
+   */
+  readonly clonedOnHostname?: string
 }
 
 export type AgentEnvVar = {

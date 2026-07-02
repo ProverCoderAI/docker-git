@@ -60,6 +60,19 @@ describe("api schemas", () => {
       })
     }))
 
+  it.effect("validates create project clonedOnHostname as RFC1123 hostname", () =>
+    Effect.sync(() => {
+      const valid = Schema.decodeUnknownEither(CreateProjectRequestSchema)({
+        clonedOnHostname: "host-01.example.test"
+      })
+      const invalid = Schema.decodeUnknownEither(CreateProjectRequestSchema)({
+        clonedOnHostname: "host\ninjected"
+      })
+
+      expect(Either.isRight(valid)).toBe(true)
+      expect(Either.isLeft(invalid)).toBe(true)
+    }))
+
   it.effect("decodes apply project playwright resource limits", () =>
     Effect.sync(() => {
       const result = Schema.decodeUnknownEither(ApplyProjectRequestSchema)({

@@ -57,4 +57,32 @@ runs:
       run: npm install -g node-gyp
     - name: Install dependencies
       shell: bash
-      run: bun install --frozen-lockfile
+      run: |
+        run_bun_install() {
+          local timeout_seconds=$((20 * 60))
+          bun install --frozen-lockfile &
+          local install_pid="$!"
+          (
+            sleep "$timeout_seconds"
+            echo "bun install exceeded 20 minutes; terminating" >&2
+            kill "$install_pid" 2>/dev/null || true
+          ) &
+          local timeout_pid="$!"
+          local status=0
+          wait "$install_pid" || status="$?"
+          kill "$timeout_pid" 2>/dev/null || true
+          wait "$timeout_pid" 2>/dev/null || true
+          return "$status"
+        }
+
+        for attempt in 1 2 3; do
+          if run_bun_install; then
+            exit 0
+          fi
+          if [[ "$attempt" == "3" ]]; then
+            echo "bun install failed after retries" >&2
+            exit 1
+          fi
+          echo "bun install attempt ${attempt} failed; retrying..." >&2
+          sleep $((attempt * 2))
+        done

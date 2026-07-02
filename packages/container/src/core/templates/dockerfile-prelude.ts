@@ -83,21 +83,23 @@ RUN cargo install --git https://github.com/ProverCoderAI/rust-browser-connection
 RUN printf "%s\\n" "ALL ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zz-all \
   && chmod 0440 /etc/sudoers.d/zz-all`
 
-const planToGitRevision = "4e58e315d3a06db3f9e75682455be315cd29d7c8"
+const planToGitBranch = "main"
+const planToGitCommitPatchUrl = `https://github.com/ProverCoderAI/plan-to-git/commit/${planToGitBranch}.patch`
 
 // CHANGE: install plan-to-git in generated project containers.
 // WHY: issue #397 requires multi-agent plan capture, Claude Code hooks, temp-backed state, and explicit PR sync.
 // QUOTE(ТЗ): "подключение новое версии plan-to-git и настройки hooks для claude code и настройки что бы всё уходило на гитхаб автоматически"
 // REF: issue-397
-// SOURCE: https://github.com/ProverCoderAI/plan-to-git/tree/4e58e315d3a06db3f9e75682455be315cd29d7c8
+// SOURCE: https://github.com/ProverCoderAI/plan-to-git/tree/main
 // FORMAT THEOREM: image_build_success -> executable(/usr/local/bin/plan-to-git)
 // PURITY: SHELL
-// EFFECT: Docker build downloads and installs a pinned Rust CLI from GitHub.
-// INVARIANT: plan-to-git is available on PATH with Claude hooks and sync --pr before agent hooks or git post-push actions run.
+// EFFECT: Docker build downloads and installs the current main branch Rust CLI from GitHub.
+// INVARIANT: plan-to-git is available on PATH with Claude hooks and sync --pr before agent hooks or git post-push actions run; moving main changes the remote patch ADD input and invalidates the install layer without GitHub API quota dependency.
 // COMPLEXITY: O(network + cargo_build)
 const renderDockerfilePlanToGit = (): string =>
   `# Install plan-to-git for multi-agent plan capture and explicit PR sync (issue #397)
-RUN cargo install --git https://github.com/ProverCoderAI/plan-to-git --rev ${planToGitRevision} --locked --bins --root /usr/local \
+ADD ${planToGitCommitPatchUrl} /tmp/docker-git-plan-to-git-main.patch
+RUN cargo install --git https://github.com/ProverCoderAI/plan-to-git --branch ${planToGitBranch} --locked --bins --root /usr/local \
   && /usr/local/bin/plan-to-git --help >/dev/null \
   && /usr/local/bin/plan-to-git --help | grep -q -- "--repo" \
   && /usr/local/bin/plan-to-git hook --help | grep -q -- "claude" \

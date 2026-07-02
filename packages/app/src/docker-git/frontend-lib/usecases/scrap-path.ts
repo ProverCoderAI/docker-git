@@ -1,19 +1,10 @@
 /* jscpd:ignore-start */
 import { Either } from "effect"
 
+import { expandContainerHome } from "../core/command-builders-shared.js"
 import { ScrapTargetDirUnsupportedError } from "../shell/errors.js"
 
 const normalizeContainerPath = (value: string): string => value.replaceAll("\\", "/").trim()
-
-export const expandContainerHome = (sshUser: string, value: string): string => {
-  if (value === "~") {
-    return `/home/${sshUser}`
-  }
-  if (value.startsWith("~/")) {
-    return `/home/${sshUser}${value.slice(1)}`
-  }
-  return value
-}
 
 const trimTrailingPosixSlashes = (value: string): string => {
   let end = value.length
@@ -70,3 +61,5 @@ export const deriveScrapWorkspaceRelativePath = (
   return Either.right(relative)
 }
 /* jscpd:ignore-end */
+
+export { expandContainerHome } from "../core/command-builders-shared.js"

@@ -2,12 +2,15 @@ import { recordProjectRuntimeActivity } from "@effect-template/lib"
 import { runCommandWithExitCodes } from "@effect-template/lib/shell/command-runner"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { defaultProjectsRoot } from "@effect-template/lib/usecases/path-helpers"
+import type { PlatformError } from "@effect/platform/Error"
+import * as FileSystem from "@effect/platform/FileSystem"
 import { NodeContext } from "@effect/platform-node"
-import { Effect } from "effect"
+import { Effect, Either } from "effect"
+import * as ParseResult from "effect/ParseResult"
+import * as Schema from "effect/Schema"
 import { spawn, type ChildProcess } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { promises as fs } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 
 import type {
   AgentLogLine,
@@ -15,6 +18,7 @@ import type {
   CreateAgentRequest,
   ProjectDetails
 } from "../api/contracts.js"
+import { AgentSessionSchema } from "../api/schema.js"
 import { ApiBadRequestError, ApiConflictError, ApiNotFoundError } from "../api/errors.js"
 import { emitProjectEvent } from "./events.js"
 
@@ -31,10 +35,57 @@ type SnapshotFile = {
   readonly sessions: ReadonlyArray<AgentSession>
 }
 
+// Schema.Array already decodes to ReadonlyArray in effect@3.21.x; Schema.ReadonlyArray is not exported.
+const SnapshotSessionsSchema: Schema.Schema<ReadonlyArray<AgentSession>> = Schema.Array(AgentSessionSchema)
+
+const SnapshotFileSchema: Schema.Schema<SnapshotFile> = Schema.Struct({
+  sessions: SnapshotSessionsSchema
+})
+
+const SnapshotFileJsonSchema = Schema.parseJson(SnapshotFileSchema)
+
 const records: Map<string, AgentRecord> = new Map()
 const projectIndex: Map<string, Set<string>> = new Map()
 const maxLogLines = 5000
 let initialized = false
+
+const waitForProcessExit = (child: ChildProcess): Effect.Effect<void> =>
+  Effect.async((resume) => {
+    const finish = (): void => {
+      clearTimeout(timeout)
+      child.off("exit", finish)
+      child.off("close", finish)
+      resume(Effect.void)
+    }
+    const timeout = setTimeout(finish, 1_000)
+    if (child.exitCode !== null || child.signalCode !== null) {
+      finish()
+      return
+    }
+    child.once("exit", finish)
+    child.once("close", finish)
+  })
+
+export const clearAgentRuntimeForTest = (): Effect.Effect<void> =>
+  Effect.gen(function*(_) {
+    const children = [...records.values()]
+      .map((record) => record.process)
+      .filter((process): process is ChildProcess => process !== null)
+
+    for (const child of children) {
+      if (!child.killed) {
+        child.kill("SIGTERM")
+      }
+    }
+
+    yield* _(Effect.forEach(children, waitForProcessExit, {
+      concurrency: "unbounded",
+      discard: true
+    }))
+    records.clear()
+    projectIndex.clear()
+    initialized = false
+  })
 
 const nowIso = (): string => new Date().toISOString()
 
@@ -184,19 +235,35 @@ export const buildAgentDockerExecArgs = (
 const trimLogs = (logs: Array<AgentLogLine>): Array<AgentLogLine> =>
   logs.length <= maxLogLines ? logs : logs.slice(logs.length - maxLogLines)
 
-const persistSnapshot = async (): Promise<void> => {
-  const filePath = stateFilePath()
-  await fs.mkdir(join(filePath, ".."), { recursive: true })
-  const payload: SnapshotFile = {
-    sessions: [...records.values()].map((record) => record.session)
-  }
-  await fs.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8")
-}
+const emptySnapshotFile = (): SnapshotFile => ({
+  sessions: []
+})
+
+const decodeSnapshotFile = (input: string): SnapshotFile | null =>
+  Either.match(ParseResult.decodeUnknownEither(SnapshotFileJsonSchema)(input), {
+    onLeft: () => null,
+    onRight: (value) => value
+  })
+
+const persistSnapshot = (): Effect.Effect<void, PlatformError, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const filePath = stateFilePath()
+    const payload: SnapshotFile = {
+      sessions: [...records.values()].map((record) => record.session)
+    }
+    yield* _(fs.makeDirectory(dirname(filePath), { recursive: true }))
+    yield* _(fs.writeFileString(filePath, `${JSON.stringify(payload, null, 2)}\n`))
+  })
+
+const logSnapshotPersistenceFailure = (error: PlatformError): Effect.Effect<void> =>
+  Effect.logWarning(`[agents] persistSnapshotBestEffort failed: ${String(error)}`)
 
 const persistSnapshotBestEffort = (): void => {
-  void persistSnapshot().catch(() => {
-    // best effort snapshot persistence
-  })
+  Effect.runFork(persistSnapshot().pipe(
+    Effect.provide(NodeContext.layer),
+    Effect.catchAll(logSnapshotPersistenceFailure)
+  ))
 }
 
 const recordAgentActivityBestEffort = (projectId: string): void => {
@@ -321,50 +388,60 @@ const killAgentScript = (sessionId: string): string => {
   ].join("\n")
 }
 
-const hydrateFromSnapshot = async (): Promise<void> => {
-  const filePath = stateFilePath()
-  const exists = await fs.stat(filePath).then(() => true).catch(() => false)
-  if (!exists) {
-    return
-  }
-
-  const raw = await fs.readFile(filePath, "utf8")
-  const parsed = JSON.parse(raw) as SnapshotFile
-  for (const session of parsed.sessions ?? []) {
-    const restored: AgentSession = {
-      ...session,
-      status: endedStatuses.has(session.status) ? session.status : "exited",
-      hostPid: null,
-      stoppedAt: session.stoppedAt ?? nowIso(),
-      updatedAt: nowIso()
+const readSnapshotFile = (): Effect.Effect<SnapshotFile, never, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const filePath = stateFilePath()
+    const fileExists = yield* _(fs.exists(filePath).pipe(
+      Effect.orElse(() => Effect.succeed(false))
+    ))
+    if (!fileExists) {
+      return emptySnapshotFile()
     }
+    const contents = yield* _(fs.readFileString(filePath).pipe(
+      Effect.orElse(() => Effect.succeed(""))
+    ))
+    return decodeSnapshotFile(contents) ?? emptySnapshotFile()
+  }).pipe(Effect.catchAll(() => Effect.succeed(emptySnapshotFile())))
 
-    const record: AgentRecord = {
-      session: restored,
-      projectDir: "",
-      logs: [],
-      process: null,
-      stdoutRemainder: "",
-      stderrRemainder: ""
+const hydrateFromSnapshot = (): Effect.Effect<void, never, FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const parsed = yield* _(readSnapshotFile())
+    for (const session of parsed.sessions) {
+      const restored: AgentSession = {
+        ...session,
+        status: endedStatuses.has(session.status) ? session.status : "exited",
+        hostPid: null,
+        stoppedAt: session.stoppedAt ?? nowIso(),
+        updatedAt: nowIso()
+      }
+
+      // Hydrated sessions are restart metadata only; projectDir is available
+      // only when new operations receive a live ProjectDetails argument.
+      const record: AgentRecord = {
+        session: restored,
+        projectDir: "",
+        logs: [],
+        process: null,
+        stdoutRemainder: "",
+        stderrRemainder: ""
+      }
+
+      records.set(restored.id, record)
+      upsertProjectIndex(restored.projectId, restored.id)
     }
-
-    records.set(restored.id, record)
-    upsertProjectIndex(restored.projectId, restored.id)
-  }
-}
+  })
 
 export const initializeAgentState = () =>
-  Effect.tryPromise({
-    try: async () => {
-      if (initialized) {
-        return
-      }
-      await hydrateFromSnapshot()
-      initialized = true
-    },
-    catch: (error) => new Error(String(error))
+  Effect.gen(function*(_) {
+    if (initialized) {
+      return
+    }
+    yield* _(hydrateFromSnapshot())
+    initialized = true
   }).pipe(
     Effect.catchAll(() => Effect.void),
+    Effect.provide(NodeContext.layer),
     Effect.asVoid
   )
 

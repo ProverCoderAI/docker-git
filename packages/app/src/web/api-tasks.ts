@@ -1,38 +1,44 @@
 import { Effect } from "effect"
 
-import { requestJson, requestText } from "./api-http.js"
-import { ContainerTaskSnapshotResponseSchema, OutputResponseSchema } from "./api-schema.js"
+import { dockerGitOpenApi, renderDockerGitOpenApiFailure } from "./api-http.js"
+import type { ContainerTaskSnapshot } from "./api-schema.js"
 
-const projectTasksPath = (projectId: string, shouldIncludeDefault: boolean): string =>
-  `/projects/${encodeURIComponent(projectId)}/tasks${shouldIncludeDefault ? "?includeDefault=true" : ""}`
-
-export const loadProjectTasks = (projectId: string, shouldIncludeDefault = false) =>
-  requestJson(
-    "GET",
-    projectTasksPath(projectId, shouldIncludeDefault),
-    ContainerTaskSnapshotResponseSchema
-  ).pipe(
-    Effect.map((response) => response.snapshot)
+export const loadProjectTasks = (
+  projectId: string,
+  shouldIncludeDefault = false
+): Effect.Effect<ContainerTaskSnapshot, string> =>
+  dockerGitOpenApi.GET("/projects/{projectId}/tasks", {
+    params: {
+      path: { projectId },
+      query: shouldIncludeDefault ? { includeDefault: "true" } : {}
+    }
+  }).pipe(
+    Effect.map(({ body }) => body.snapshot),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )
 
 export const stopProjectTask = (
   projectId: string,
   pid: number
-) =>
-  requestText(
-    "POST",
-    `/projects/${encodeURIComponent(projectId)}/tasks/${pid}/stop`
-  ).pipe(Effect.asVoid)
+): Effect.Effect<void, string> =>
+  dockerGitOpenApi.POST("/projects/{projectId}/tasks/{pid}/stop", {
+    params: { path: { pid: String(pid), projectId } }
+  }).pipe(
+    Effect.asVoid,
+    Effect.mapError(renderDockerGitOpenApiFailure)
+  )
 
 export const loadProjectTaskLogs = (
   projectId: string,
   pid: number,
   lines = 200
-) =>
-  requestJson(
-    "GET",
-    `/projects/${encodeURIComponent(projectId)}/tasks/${pid}/logs?lines=${lines}`,
-    OutputResponseSchema
-  ).pipe(
-    Effect.map((response) => response.output)
+): Effect.Effect<string, string> =>
+  dockerGitOpenApi.GET("/projects/{projectId}/tasks/{pid}/logs", {
+    params: {
+      path: { pid: String(pid), projectId },
+      query: { lines: String(lines) }
+    }
+  }).pipe(
+    Effect.map(({ body }) => body.output),
+    Effect.mapError(renderDockerGitOpenApiFailure)
   )

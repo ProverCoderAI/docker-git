@@ -249,6 +249,27 @@ jobs:
       - name: Login context notice
         run: bash scripts/e2e/login-context.sh
 
+  e2e-auth-claude-login:
+    name: E2E (Claude auth login)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
+      DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Free Docker disk
+        uses: ./.github/actions/free-docker-disk
+      - name: Docker info
+        run: docker version && docker compose version
+      - name: Claude auth login warning path
+        run: bash scripts/e2e/auth-claude-login.sh
+
   e2e-runtime-volumes-ssh:
     name: E2E (Runtime volumes + SSH)
     runs-on: ubuntu-latest

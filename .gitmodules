@@ -1,3 +1,6 @@
 [submodule "third_party/skiller-desktop-skills-manager"]
 	path = third_party/skiller-desktop-skills-manager
 	url = https://github.com/beautyfree/skiller-desktop-skills-manager.git
+[submodule "third_party/effect-ts-skills"]
+	path = third_party/effect-ts-skills
+	url = https://github.com/ProverCoderAI/effect-ts-skills.git

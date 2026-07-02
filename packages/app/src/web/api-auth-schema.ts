@@ -23,6 +23,41 @@ export const GithubStatusResponseSchema = Schema.Struct({
   status: GithubAuthStatusSchema
 })
 
+/**
+ * Boundary schema for the controller Codex authentication status.
+ *
+ * @pure true - describes immutable response data only.
+ * @effect none
+ * @invariant account may be null, while authPath, label, message, and present are always typed.
+ * @precondition input is an unknown JSON value received from the API boundary.
+ * @postcondition successful decoding yields the UI-safe Codex auth status shape.
+ * @complexity O(1) schema construction; O(n) decode where n is the response size.
+ * @throws Never.
+ */
+export const CodexAuthStatusSchema = Schema.Struct({
+  account: NullableString,
+  authPath: Schema.String,
+  label: Schema.String,
+  message: Schema.String,
+  present: Schema.Boolean
+})
+
+/**
+ * Boundary schema for the Codex status API response envelope.
+ *
+ * @pure true - describes immutable response data only.
+ * @effect none
+ * @invariant status is always present; ok is an optional compatibility flag.
+ * @precondition input is an unknown JSON value received from the API boundary.
+ * @postcondition successful decoding yields a response with a validated CodexAuthStatusSchema status.
+ * @complexity O(1) schema construction; O(n) decode where n is the response size.
+ * @throws Never.
+ */
+export const CodexStatusResponseSchema = Schema.Struct({
+  ok: Schema.optional(Schema.Boolean),
+  status: CodexAuthStatusSchema
+})
+
 const AuthProviderSnapshotFields = {
   claudeAuthEntries: Schema.Number,
   claudeAuthPath: Schema.String,

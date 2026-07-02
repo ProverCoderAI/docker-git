@@ -120,6 +120,13 @@ describe("API Dockerfile controller tooling install", () => {
       expect(contents).toContain("test \"$(bun --version)\" = \"1.3.11\"")
       expect(contents).toContain("node-gyp --version")
     }))
+
+  it.effect("copies generated OpenAPI package metadata into workspace dependency install stage", () =>
+    Effect.gen(function*(_) {
+      const contents = yield* _(readComposeFile("packages/api/Dockerfile"))
+      expect(contents).toContain("packages/openapi")
+      expect(contents).toContain("COPY packages/openapi/package.json ./packages/openapi/package.json")
+    }))
 })
 
 describe("OpenCode E2E auth bootstrap", () => {

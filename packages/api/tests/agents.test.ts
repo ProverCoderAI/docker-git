@@ -1,6 +1,46 @@
-import { describe, expect, it } from "vitest"
+import { Effect } from "effect"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import os from "node:os"
+import path from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { buildAgentDockerExecArgs, buildAgentScript, buildCommand } from "../src/services/agents.js"
+import {
+  buildAgentDockerExecArgs,
+  buildAgentScript,
+  buildCommand,
+  clearAgentRuntimeForTest,
+  initializeAgentState,
+  listAgents
+} from "../src/services/agents.js"
+
+const writeAgentSnapshot = (projectsRoot: string, content: string): void => {
+  const stateDir = path.join(projectsRoot, ".orch", "state")
+  mkdirSync(stateDir, { recursive: true })
+  writeFileSync(path.join(stateDir, "api-agents.json"), content, "utf8")
+}
+
+let projectsRoot = ""
+let previousProjectsRoot: string | undefined
+
+beforeEach(() => {
+  previousProjectsRoot = process.env["DOCKER_GIT_PROJECTS_ROOT"]
+  projectsRoot = mkdtempSync(path.join(os.tmpdir(), "docker-git-agents-"))
+  process.env["DOCKER_GIT_PROJECTS_ROOT"] = projectsRoot
+  return Effect.runPromise(clearAgentRuntimeForTest())
+})
+
+afterEach(() => {
+  return Effect.runPromise(clearAgentRuntimeForTest().pipe(
+    Effect.ensuring(Effect.sync(() => {
+      if (previousProjectsRoot === undefined) {
+        delete process.env["DOCKER_GIT_PROJECTS_ROOT"]
+      } else {
+        process.env["DOCKER_GIT_PROJECTS_ROOT"] = previousProjectsRoot
+      }
+      rmSync(projectsRoot, { recursive: true, force: true })
+    }))
+  ))
+})
 
 describe("agent service", () => {
   it("starts default Codex agents with isolated Playwright MCP", () => {
@@ -102,4 +142,56 @@ describe("agent service", () => {
       "echo ok"
     ])
   })
+
+  it("hydrates persisted agent sessions through typed snapshot decoding", () =>
+    Effect.runPromise(
+      Effect.sync(() => {
+        writeAgentSnapshot(projectsRoot, JSON.stringify({
+          sessions: [
+            {
+              id: "agent-1",
+              projectId: "project-1",
+              provider: "codex",
+              label: "Codex",
+              command: "codex",
+              containerName: "project-container",
+              status: "running",
+              source: "provider:codex",
+              pidFile: "/tmp/docker-git-agent-agent-1.pid",
+              hostPid: 1234,
+              startedAt: "2026-06-17T00:00:00.000Z",
+              updatedAt: "2026-06-17T00:00:00.000Z"
+            }
+          ]
+        }))
+      }).pipe(
+        Effect.zipRight(initializeAgentState()),
+        Effect.tap(() =>
+          Effect.sync(() => {
+            expect(listAgents("project-1")).toMatchObject([
+              {
+                id: "agent-1",
+                hostPid: null,
+                status: "exited",
+                stoppedAt: expect.any(String)
+              }
+            ])
+          })
+        )
+      )
+    ))
+
+  it("treats invalid persisted agent snapshots as empty best-effort state", () =>
+    Effect.runPromise(
+      Effect.sync(() => {
+        writeAgentSnapshot(projectsRoot, "{ invalid json")
+      }).pipe(
+        Effect.zipRight(initializeAgentState()),
+        Effect.tap(() =>
+          Effect.sync(() => {
+            expect(listAgents("project-1")).toEqual([])
+          })
+        )
+      )
+    ))
 })

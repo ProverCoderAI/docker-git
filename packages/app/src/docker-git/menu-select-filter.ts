@@ -1,6 +1,16 @@
 import type { ProjectItem } from "./project-item.js"
 
 export type SelectSearchAccessors<A> = {
+  /**
+   * Reads the clone-origin hostname from a selectable item.
+   *
+   * @pure true - accessor contract for immutable item data.
+   * @effect none
+   * @invariant accessor returns undefined exactly when host identity is unavailable.
+   * @precondition item belongs to the project selection domain.
+   * @postcondition search can match host affinity without direct OS access.
+   * @complexity O(1)/O(1)
+   */
   readonly clonedOnHostname: (item: A) => string | undefined
   readonly containerName: (item: A) => string | undefined
   readonly displayName: (item: A) => string

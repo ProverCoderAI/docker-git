@@ -70,6 +70,29 @@ export const trimTrailingPathSeparators = (value: string): string => {
 }
 
 /**
+ * Expands POSIX home shorthand for paths inside the generated project container.
+ *
+ * @param sshUser - Validated container user name.
+ * @param value - Raw target path candidate.
+ * @returns The path with `~` expanded to `/home/${sshUser}`.
+ * @pure true
+ * @effect none; CORE helper only transforms provided strings.
+ * @invariant result is a deterministic function of `(sshUser, value)`.
+ * @precondition sshUser was validated by parseSshUser.
+ * @postcondition `~` and `~/x` no longer contain home shorthand.
+ * @complexity O(n) time / O(n) space where n = |value|.
+ */
+export const expandContainerHome = (sshUser: string, value: string): string => {
+  if (value === "~") {
+    return `/home/${sshUser}`
+  }
+  if (value.startsWith("~/")) {
+    return `/home/${sshUser}${value.slice(1)}`
+  }
+  return value
+}
+
+/**
  * Parses a raw SSH port value into the valid Docker host-port range.
  *
  * @param value - Raw textual value for `--ssh-port`.

@@ -11,6 +11,16 @@ export type ApiProjectSummary = {
   readonly sshSessions: number
   readonly startedAtIso: string | null
   readonly startedAtEpochMs: number | null
+  /**
+   * Hostname of the clone-origin machine, if the API supplied it.
+   *
+   * @pure true - immutable decoded API field.
+   * @effect none
+   * @invariant if present, codec preserves the API hostname string unchanged.
+   * @precondition API response may omit the value for older projects.
+   * @postcondition web UI can filter or display clone-origin host without local OS reads.
+   * @complexity O(1)/O(1)
+   */
   readonly clonedOnHostname?: string | undefined
 }
 

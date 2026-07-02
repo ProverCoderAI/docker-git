@@ -1,9 +1,8 @@
 import { Either } from "effect"
-import { hostname } from "node:os"
 
-import { expandContainerHome } from "../usecases/scrap-path.js"
 import { resolveAutoAgentFlags } from "./auto-agent-flags.js"
 import {
+  expandContainerHome,
   nonEmpty,
   parseDockerNetworkMode,
   parseGpuMode,
@@ -24,6 +23,15 @@ import {
 import { resolveResourceLimitsIntent } from "./resource-limits.js"
 import { normalizeAuthLabel, normalizeGitTokenLabel } from "./token-labels.js"
 
+// CHANGE: clonedOnHostname is explicit input instead of an OS hostname() read.
+// WHY: buildCreateCommand belongs to FUNCTIONAL CORE and must be deterministic for identical RawOptions.
+// QUOTE(ТЗ): "CORE: Исключительно чистые функции, неизменяемые данные, математические операции"
+// REF: pr-420-coderabbit-review-4518791377
+// SOURCE: n/a
+// FORMAT THEOREM: ∀raw: buildCreateCommand(raw) is independent of host OS state.
+// PURITY: CORE
+// INVARIANT: clone-origin host identity flows through raw.clonedOnHostname only.
+// COMPLEXITY: O(1)/O(1)
 export { nonEmpty } from "./command-builders-shared.js"
 
 const normalizeSecretsRoot = trimTrailingPathSeparators
@@ -270,7 +278,7 @@ export const buildCreateCommand = (
         enableMcpPlaywright: behavior.enableMcpPlaywright,
         agentMode,
         agentAuto: isAgentAuto,
-        clonedOnHostname: hostname()
+        clonedOnHostname: raw.clonedOnHostname
       })
     }
   })

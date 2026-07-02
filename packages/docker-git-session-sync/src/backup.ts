@@ -2,6 +2,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { spawn, spawnSync } from "node:child_process"
+import { Effect, Either } from "effect"
 
 import {
   buildBlobUrl,
@@ -33,7 +34,12 @@ import {
   updatePrComment,
   uploadSnapshot
 } from "./shell.js"
-import { errorMessage, isRecord, numberField, recordField, stringField } from "./json.js"
+import { errorMessage } from "./json.js"
+import {
+  decodeBackgroundReadyState,
+  decodeSessionUploadContext,
+  type BackgroundReadyState
+} from "./schemas.js"
 import type { GhEnv, Log, PrComment, SessionFile, SourceInfo, UploadEntry } from "./types.js"
 
 export interface BackupOptions {
@@ -334,7 +340,7 @@ export const collectSessionFiles = (dirPath: string, baseName: string, verbose: 
 
 type PrContext = { readonly repo: string; readonly prNumber: number }
 
-type PrCommentContext = {
+export type PrCommentContext = {
   readonly repo: string
   readonly comment: PrComment
 }
@@ -357,75 +363,21 @@ export type SessionUploadContext = {
   readonly verbose: boolean
 }
 
-const nullableStringField = (value: unknown, key: string): string | null | undefined => {
-  if (!isRecord(value)) {
-    return undefined
-  }
-  const field = value[key]
-  return typeof field === "string" || field === null ? field : undefined
-}
-
-const nullableNumberField = (value: unknown, key: string): number | null | undefined => {
-  if (!isRecord(value)) {
-    return undefined
-  }
-  const field = value[key]
-  return typeof field === "number" || field === null ? field : undefined
-}
-
-const booleanField = (value: unknown, key: string): boolean | null => {
-  if (!isRecord(value)) {
-    return null
-  }
-  const field = value[key]
-  return typeof field === "boolean" ? field : null
-}
-
-const parseSourceInfo = (value: unknown): SourceInfo | null => {
-  const repo = stringField(value, "repo")
-  const branch = stringField(value, "branch")
-  const prNumber = nullableNumberField(value, "prNumber")
-  const commitSha = stringField(value, "commitSha")
-  const createdAt = stringField(value, "createdAt")
-  return repo === null || branch === null || prNumber === undefined || commitSha === null || createdAt === null
-    ? null
-    : { repo, branch, prNumber, commitSha, createdAt }
-}
-
-const parsePrCommentContext = (value: unknown): PrCommentContext | null => {
-  if (value === null) {
-    return null
-  }
-  const repo = stringField(value, "repo")
-  const comment = recordField(value, "comment")
-  const id = numberField(comment, "id")
-  const url = stringField(comment, "url")
-  return repo === null || id === null || url === null ? null : { repo, comment: { id, url } }
-}
-
-export const parseUploadContext = (value: unknown): SessionUploadContext | null => {
-  const version = numberField(value, "version")
-  const cwd = stringField(value, "cwd")
-  const sessionDir = nullableStringField(value, "sessionDir")
-  const source = parseSourceInfo(recordField(value, "source"))
-  const snapshotRef = stringField(value, "snapshotRef")
-  const gitStatus = nullableStringField(value, "gitStatus")
-  const prComment = parsePrCommentContext(isRecord(value) ? value["prComment"] : undefined)
-  const verbose = booleanField(value, "verbose")
-  if (
-    version !== 1 ||
-    cwd === null ||
-    sessionDir === undefined ||
-    source === null ||
-    snapshotRef === null ||
-    gitStatus === undefined ||
-    prComment === null && isRecord(value) && value["prComment"] !== null ||
-    verbose === null
-  ) {
-    return null
-  }
-  return { version, cwd, sessionDir, source, snapshotRef, gitStatus, prComment, verbose }
-}
+// CHANGE: Keep the historical parser API while delegating validation to the schema boundary.
+// WHY: CLI/tests import parseUploadContext; preserving the wrapper avoids churn outside the decoder module.
+// QUOTE(ТЗ): "parseUploadContext wrapper comment or removal"
+// REF: user-request-pr-420-coderabbit-session-sync
+// SOURCE: n/a
+// FORMAT THEOREM: parseUploadContext(x)=decodeSessionUploadContext(x)
+// PURITY: SHELL
+// EFFECT: none
+// INVARIANT: invalid upload context returns null; valid context preserves all decoded fields.
+// COMPLEXITY: O(n)/O(n), where n is the encoded context field count.
+export const parseUploadContext = (value: unknown): SessionUploadContext | null =>
+  Either.match(Effect.runSync(Effect.either(decodeSessionUploadContext(value))), {
+    onLeft: () => null,
+    onRight: (context) => context
+  })
 
 const resolveBackupContext = (
   options: BackupOptions,
@@ -504,7 +456,8 @@ const createQueuedComment = (
     resolved.prContext.repo,
     resolved.prContext.prNumber,
     buildCommentBody({ source: resolved.source, upload: { state: "queued" }, gitStatus: resolved.gitStatus }),
-    ghEnv
+    ghEnv,
+    (message) => output.err(`[session-backup] ${message}`)
   )
   if (comment === null) {
     output.err("[session-backup] Failed to post PR comment with git status")
@@ -639,10 +592,6 @@ const currentEntrypointPath = (): string | null => {
   return entrypoint === undefined || entrypoint.length === 0 ? null : entrypoint
 }
 
-type BackgroundReadyState =
-  | { readonly state: "started" }
-  | { readonly state: "failed"; readonly message: string }
-
 const backgroundReadyTimeoutMs = 10_000
 const backgroundReadyPollMs = 50
 
@@ -662,38 +611,38 @@ const writeBackgroundReadyState = (readyFilePath: string | null, state: Backgrou
   }
 }
 
-const parseBackgroundReadyState = (value: unknown): BackgroundReadyState | null => {
-  const state = stringField(value, "state")
-  if (state === "started") {
-    return { state }
-  }
-  if (state === "failed") {
-    const message = stringField(value, "message")
-    return message === null ? null : { state, message }
-  }
-  return null
-}
+const readBackgroundReadyState = (
+  readyFilePath: string
+): Effect.Effect<BackgroundReadyState | null, never> =>
+  Effect.try({
+    try: (): unknown => JSON.parse(fs.readFileSync(readyFilePath, "utf8")),
+    catch: errorMessage
+  }).pipe(
+    Effect.flatMap(decodeBackgroundReadyState),
+    Effect.catchAll(() => Effect.succeed(null))
+  )
 
-const readBackgroundReadyState = (readyFilePath: string): BackgroundReadyState | null => {
-  try {
-    return parseBackgroundReadyState(JSON.parse(fs.readFileSync(readyFilePath, "utf8")))
-  } catch {
-    return null
-  }
-}
+const waitForBackgroundReady = (readyFilePath: string): Effect.Effect<BackgroundReadyState | null, never> => {
+  const continuePolling = (deadline: number): Effect.Effect<BackgroundReadyState | null, never> =>
+    Effect.sync(() => {
+      sleepSync(Math.min(backgroundReadyPollMs, Math.max(1, deadline - Date.now())))
+    }).pipe(
+      Effect.zipRight(Effect.suspend(() => poll(deadline)))
+    )
 
-const waitForBackgroundReady = (readyFilePath: string): BackgroundReadyState | null => {
-  const deadline = Date.now() + backgroundReadyTimeoutMs
-  while (Date.now() < deadline) {
-    if (fs.existsSync(readyFilePath)) {
-      const state = readBackgroundReadyState(readyFilePath)
-      if (state !== null) {
-        return state
-      }
+  const poll = (deadline: number): Effect.Effect<BackgroundReadyState | null, never> => {
+    if (Date.now() >= deadline) {
+      return Effect.succeed(null)
     }
-    sleepSync(Math.min(backgroundReadyPollMs, Math.max(1, deadline - Date.now())))
+    if (!fs.existsSync(readyFilePath)) {
+      return continuePolling(deadline)
+    }
+    return readBackgroundReadyState(readyFilePath).pipe(
+      Effect.flatMap((state) => state === null ? continuePolling(deadline) : Effect.succeed(state))
+    )
   }
-  return null
+
+  return Effect.suspend(() => poll(Date.now() + backgroundReadyTimeoutMs))
 }
 
 const spawnBackgroundUpload = (context: SessionUploadContext, output: Output): boolean => {
@@ -717,7 +666,7 @@ const spawnBackgroundUpload = (context: SessionUploadContext, output: Output): b
     child.once("error", (error) => {
       output.err(`[session-backup] Background upload process error: ${errorMessage(error)}`)
     })
-    const readyState = waitForBackgroundReady(readyFilePath)
+    const readyState = Effect.runSync(waitForBackgroundReady(readyFilePath))
     fs.rmSync(readyFilePath, { force: true })
     if (readyState === null) {
       output.err("[session-backup] Background upload did not report readiness")

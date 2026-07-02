@@ -12,6 +12,11 @@ export {
 const OptionalString = Schema.optional(Schema.String)
 const OptionalBoolean = Schema.optional(Schema.Boolean)
 const OptionalNullableString = Schema.optional(Schema.NullOr(Schema.String))
+const HostnameSchema = Schema.String.pipe(
+  Schema.minLength(1),
+  Schema.maxLength(253),
+  Schema.pattern(/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/u)
+)
 
 export const CreateProjectRequestSchema = Schema.Struct({
   repoUrl: OptionalString,
@@ -51,7 +56,8 @@ export const CreateProjectRequestSchema = Schema.Struct({
   force: OptionalBoolean,
   forceEnv: OptionalBoolean,
   waitForClone: OptionalBoolean,
-  async: OptionalBoolean
+  async: OptionalBoolean,
+  clonedOnHostname: Schema.optional(HostnameSchema)
 })
 
 export const GithubAuthLoginRequestSchema = Schema.Struct({

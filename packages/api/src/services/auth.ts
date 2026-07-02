@@ -37,6 +37,7 @@ import type {
   CodexAuthLoginRequest,
   CodexAuthLogoutRequest,
   CodexAuthStatus,
+  ClaudeAuthStatus,
   GrokAuthLogoutRequest,
   GrokAuthStatus,
   GitAuthLoginRequest,
@@ -64,6 +65,7 @@ export const gitlabAuthRequiredMessage = [
   "If the repository requires access, run: docker-git auth gitlab login"
 ].join("\n")
 export const githubAuthEnvGlobalPath = defaultTemplateConfig.envGlobalPath
+export const claudeAuthPath = ".docker-git/.orch/auth/claude"
 export const codexAuthPath = defaultTemplateConfig.codexAuthPath
 export const grokAuthPath = defaultTemplateConfig.grokAuthPath
 
@@ -80,6 +82,7 @@ type JsonRecord = Readonly<Record<string, unknown>>
 type CodexRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 type CodexCommandError = CommandFailedError | PlatformError
 type GrokCommandError = CommandFailedError | PlatformError
+type ClaudeAuthMethod = ClaudeAuthStatus["method"]
 
 const labelFromKey = (key: string): string =>
   key.startsWith(githubTokenPrefix) ? key.slice(githubTokenPrefix.length) : "default"
@@ -516,6 +519,203 @@ const grokAuthStatus = (
   authPath,
   method
 })
+
+const claudeAuthStatus = (
+  label: string,
+  authPath: string,
+  method: ClaudeAuthMethod,
+  account: string | null
+): ClaudeAuthStatus => ({
+  label,
+  message: method === "none"
+    ? `Claude not connected (${label}).`
+    : account === null
+      ? `Claude connected (${label}, ${method}, account unavailable).`
+      : `Claude connected (${label}, ${method}, account: ${account}).`,
+  connected: method !== "none",
+  authPath,
+  account,
+  method
+})
+
+const resolveClaudeAccountPath = (
+  path: Path.Path,
+  label: string | null | undefined
+): {
+  readonly accountLabel: string
+  readonly accountPath: string
+} => {
+  const rootPath = resolvePathFromCwd(path, process.cwd(), claudeAuthPath)
+  const accountLabel = normalizeAccountLabel(label ?? null, "default")
+  return {
+    accountLabel,
+    accountPath: path.join(rootPath, accountLabel)
+  }
+}
+
+const readNonEmptyFile = (
+  fs: FileSystem.FileSystem,
+  filePath: string
+): Effect.Effect<boolean, PlatformError> =>
+  fs.readFileString(filePath).pipe(
+    Effect.map((text) => text.trim().length > 0),
+    Effect.orElseSucceed(() => false)
+  )
+
+const resolveClaudeAuthMethod = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  accountPath: string
+): Effect.Effect<ClaudeAuthMethod, PlatformError> =>
+  Effect.gen(function*(_) {
+    const hasOauthToken = yield* _(readNonEmptyFile(fs, path.join(accountPath, ".oauth-token")))
+    if (hasOauthToken) {
+      return "oauth-token"
+    }
+
+    const hasRootCredentials = yield* _(readNonEmptyFile(fs, path.join(accountPath, ".credentials.json")))
+    if (hasRootCredentials) {
+      return "claude-ai-session"
+    }
+
+    const hasNestedCredentials = yield* _(readNonEmptyFile(fs, path.join(accountPath, ".claude", ".credentials.json")))
+    return hasNestedCredentials ? "claude-ai-session" : "none"
+  })
+
+const readJsonRecordFile = (
+  fs: FileSystem.FileSystem,
+  filePath: string
+): Effect.Effect<JsonRecord | null, PlatformError> =>
+  fs.readFileString(filePath).pipe(
+    Effect.flatMap((text) =>
+      Effect.try({
+        try: (): unknown => JSON.parse(text),
+        catch: () => null
+      }).pipe(
+        Effect.map((parsed) => isRecord(parsed) ? parsed : null),
+        Effect.catchAll(() => Effect.succeed(null))
+      )
+    ),
+    Effect.orElseSucceed(() => null)
+  )
+
+const readFirstString = (
+  record: JsonRecord,
+  keys: ReadonlyArray<string>
+): string | null => {
+  for (const key of keys) {
+    const value = readString(record, key)
+    if (value !== null) {
+      return value
+    }
+  }
+  return null
+}
+
+const accountIdentityKeys: ReadonlyArray<string> = [
+  "emailAddress",
+  "email",
+  "preferred_username",
+  "displayName",
+  "name",
+  "accountUuid",
+  "account_id",
+  "accountId",
+  "userID",
+  "userId",
+  "organizationUuid"
+]
+
+const accountContainerKeys: ReadonlyArray<string> = [
+  "oauthAccount",
+  "claudeAiOauth",
+  "account",
+  "user",
+  "profile"
+]
+
+const jwtTokenKeys: ReadonlyArray<string> = [
+  "idToken",
+  "id_token",
+  "accessToken",
+  "access_token"
+]
+
+const extractClaudeAccountFromRecord = (record: JsonRecord): string | null => {
+  const direct = readFirstString(record, accountIdentityKeys)
+  if (direct !== null) {
+    return direct
+  }
+
+  const token = readFirstString(record, jwtTokenKeys)
+  const claims = decodeJwtClaims(token)
+  if (claims !== null) {
+    const claimAccount = readFirstString(claims, accountIdentityKeys)
+    if (claimAccount !== null) {
+      return claimAccount
+    }
+  }
+
+  for (const key of accountContainerKeys) {
+    const nested = record[key]
+    if (isRecord(nested)) {
+      const account = extractClaudeAccountFromRecord(nested)
+      if (account !== null) {
+        return account
+      }
+    }
+  }
+
+  return null
+}
+
+const readClaudeAuthAccount = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  accountPath: string
+): Effect.Effect<string | null, PlatformError> =>
+  Effect.gen(function*(_) {
+    const candidates: ReadonlyArray<string> = [
+      path.join(accountPath, ".claude.json"),
+      path.join(accountPath, ".credentials.json"),
+      path.join(accountPath, ".claude", ".credentials.json")
+    ]
+
+    for (const candidate of candidates) {
+      const record = yield* _(readJsonRecordFile(fs, candidate))
+      if (record === null) {
+        continue
+      }
+      const account = extractClaudeAccountFromRecord(record)
+      if (account !== null) {
+        return account
+      }
+    }
+
+    return null
+  })
+
+// CHANGE: expose Claude auth status through the controller without running the Claude CLI
+// WHY: host API mode must route `docker-git auth claude status`; status should inspect controller state like Grok/Codex
+// QUOTE(ТЗ): "Можешь сделать что бы работал claude status?"
+// REF: user-report-2026-07-01-claude-status-api-mode
+// SOURCE: n/a
+// FORMAT THEOREM: forall label: status(label) = connected iff persisted Claude credential exists
+// PURITY: SHELL
+// EFFECT: Effect<ClaudeAuthStatus, PlatformError, FileSystem | Path>
+// INVARIANT: secrets are never returned; only method/label/path are exposed
+// COMPLEXITY: O(1)
+export const readClaudeAuthStatus = (
+  label?: string | null | undefined
+): Effect.Effect<ClaudeAuthStatus, PlatformError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    const path = yield* _(Path.Path)
+    const { accountLabel, accountPath } = resolveClaudeAccountPath(path, label)
+    const method = yield* _(resolveClaudeAuthMethod(fs, path, accountPath))
+    const account = method === "none" ? null : yield* _(readClaudeAuthAccount(fs, path, accountPath))
+    return claudeAuthStatus(accountLabel, accountPath, method, account)
+  })
 
 export const readGrokAuthStatus = (
   label?: string | null | undefined

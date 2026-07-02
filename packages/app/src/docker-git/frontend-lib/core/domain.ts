@@ -117,6 +117,16 @@ export interface TemplateConfig {
   readonly bunVersion: string
   readonly agentMode?: AgentMode | undefined
   readonly agentAuto?: boolean | undefined
+  /**
+   * Hostname of the machine where the project was cloned, when available.
+   *
+   * @pure true - immutable project config field.
+   * @effect none
+   * @invariant if present, UI/domain consumers preserve this value as data only.
+   * @precondition omitted when clone host identity is unknown.
+   * @postcondition UI can show clone-origin hints without reading OS hostname.
+   * @complexity O(1)/O(1)
+   */
   readonly clonedOnHostname?: string | undefined
 }
 

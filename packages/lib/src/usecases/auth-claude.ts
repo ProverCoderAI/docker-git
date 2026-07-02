@@ -2,24 +2,36 @@ import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as FileSystem from "@effect/platform/FileSystem"
 import type * as Path from "@effect/platform/Path"
-import { Effect } from "effect"
+import { renderClaudeDockerOauthDockerfile } from "@prover-coder-ai/docker-git-auth-oauth/claude-docker-oauth"
+import { claudeOauthTokenPath } from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
+import { Effect, Match } from "effect"
 
 import type { AuthClaudeLoginCommand, AuthClaudeLogoutCommand, AuthClaudeStatusCommand } from "../core/domain.js"
 import { defaultTemplateConfig } from "../core/domain.js"
 import { runDockerAuth, runDockerAuthExitCode } from "../shell/docker-auth.js"
 import type { AuthError } from "../shell/errors.js"
 import { CommandFailedError } from "../shell/errors.js"
+import {
+  claudeConfigPath,
+  claudeCredentialsPath,
+  claudeNestedCredentialsPath,
+  persistClaudeOauthToken,
+  readOauthToken,
+  resolveClaudeAuthMethod
+} from "./auth-claude-credentials.js"
+import { runClaudeLoginFlow } from "./auth-claude-login-flow.js"
 import { runClaudeOauthLoginWithPrompt } from "./auth-claude-oauth.js"
-import { buildDockerAuthSpec, isRegularFile, normalizeAccountLabel } from "./auth-helpers.js"
+import { buildDockerAuthSpec, normalizeAccountLabel } from "./auth-helpers.js"
 import { migrateLegacyOrchLayout } from "./auth-sync.js"
 import { ensureDockerImage } from "./docker-image.js"
 import { resolvePathFromCwd } from "./path-helpers.js"
 import { withFsPathContext } from "./runtime.js"
 import { autoSyncState } from "./state-repo.js"
-import { readFileStringIfPresent, writeFileStringEnsuringParent } from "./volatile-files.js"
 
 type ClaudeRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
-type ClaudeAuthMethod = "none" | "oauth-token" | "claude-ai-session"
+type ClaudeProbeAuth =
+  | { readonly _tag: "ClaudeProbeAccountConfig" }
+  | { readonly _tag: "ClaudeProbeOauthToken"; readonly token: string }
 
 type ClaudeAccountContext = {
   readonly accountLabel: string
@@ -34,101 +46,7 @@ export const claudeAuthRoot = ".docker-git/.orch/auth/claude"
 const claudeImageName = "docker-git-auth-claude:latest"
 const claudeImageDir = ".docker-git/.orch/auth/claude/.image"
 const claudeContainerHomeDir = "/claude-home"
-const claudeOauthTokenFileName = ".oauth-token"
-const claudeConfigFileName = ".claude.json"
-const claudeCredentialsFileName = ".credentials.json"
-const claudeCredentialsDirName = ".claude"
-
-const claudeOauthTokenPath = (accountPath: string): string => `${accountPath}/${claudeOauthTokenFileName}`
-const claudeConfigPath = (accountPath: string): string => `${accountPath}/${claudeConfigFileName}`
-const claudeCredentialsPath = (accountPath: string): string => `${accountPath}/${claudeCredentialsFileName}`
-const claudeNestedCredentialsPath = (accountPath: string): string =>
-  `${accountPath}/${claudeCredentialsDirName}/${claudeCredentialsFileName}`
-
-const syncClaudeCredentialsFile = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  accountPath: string
-): Effect.Effect<void, PlatformError> =>
-  Effect.gen(function*(_) {
-    const nestedPath = claudeNestedCredentialsPath(accountPath)
-    const rootPath = claudeCredentialsPath(accountPath)
-    const isNestedExists = yield* _(isRegularFile(fs, nestedPath))
-    if (isNestedExists) {
-      const nestedText = yield* _(readFileStringIfPresent(fs, nestedPath))
-      if (nestedText !== null) {
-        yield* _(writeFileStringEnsuringParent(fs, path, rootPath, nestedText))
-        yield* _(fs.chmod(rootPath, 0o600), Effect.orElseSucceed(() => void 0))
-      }
-      return
-    }
-
-    const isRootExists = yield* _(isRegularFile(fs, rootPath))
-    if (isRootExists) {
-      const rootText = yield* _(readFileStringIfPresent(fs, rootPath))
-      if (rootText === null) {
-        return
-      }
-      yield* _(writeFileStringEnsuringParent(fs, path, nestedPath, rootText))
-      yield* _(fs.chmod(nestedPath, 0o600), Effect.orElseSucceed(() => void 0))
-    }
-  })
-
-const clearClaudeSessionCredentials = (
-  fs: FileSystem.FileSystem,
-  accountPath: string
-): Effect.Effect<void, PlatformError> =>
-  Effect.gen(function*(_) {
-    yield* _(fs.remove(claudeCredentialsPath(accountPath), { force: true }))
-    yield* _(fs.remove(claudeNestedCredentialsPath(accountPath), { force: true }))
-  })
-
-const hasNonEmptyOauthToken = (
-  fs: FileSystem.FileSystem,
-  accountPath: string
-): Effect.Effect<boolean, PlatformError> =>
-  Effect.gen(function*(_) {
-    const tokenPath = claudeOauthTokenPath(accountPath)
-    const hasToken = yield* _(isRegularFile(fs, tokenPath))
-    if (!hasToken) {
-      return false
-    }
-    const tokenText = yield* _(fs.readFileString(tokenPath), Effect.orElseSucceed(() => ""))
-    return tokenText.trim().length > 0
-  })
-
-const readOauthToken = (
-  fs: FileSystem.FileSystem,
-  accountPath: string
-): Effect.Effect<string | null, PlatformError> =>
-  Effect.gen(function*(_) {
-    const tokenPath = claudeOauthTokenPath(accountPath)
-    const hasToken = yield* _(isRegularFile(fs, tokenPath))
-    if (!hasToken) {
-      return null
-    }
-
-    const tokenText = yield* _(fs.readFileString(tokenPath), Effect.orElseSucceed(() => ""))
-    const token = tokenText.trim()
-    return token.length > 0 ? token : null
-  })
-
-const resolveClaudeAuthMethod = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  accountPath: string
-): Effect.Effect<ClaudeAuthMethod, PlatformError> =>
-  Effect.gen(function*(_) {
-    const hasOauthToken = yield* _(hasNonEmptyOauthToken(fs, accountPath))
-    if (hasOauthToken) {
-      yield* _(clearClaudeSessionCredentials(fs, accountPath))
-      return "oauth-token"
-    }
-
-    yield* _(syncClaudeCredentialsFile(fs, path, accountPath))
-    const hasCredentials = yield* _(isRegularFile(fs, claudeCredentialsPath(accountPath)))
-    return hasCredentials ? "claude-ai-session" : "none"
-  })
+const claudeProbeConfigDir = "/claude-probe-home"
 
 const buildClaudeAuthEnv = (
   isInteractive: boolean,
@@ -139,6 +57,26 @@ const buildClaudeAuthEnv = (
     : [`HOME=${claudeContainerHomeDir}`, `CLAUDE_CONFIG_DIR=${claudeContainerHomeDir}`]),
   ...(oauthToken === null ? [] : [`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`])
 ]
+
+// CHANGE: isolate non-interactive Claude OAuth probes from account settings
+// WHY: account settings may intentionally use bypassPermissions for real sessions, but Claude rejects that mode under root/sudo probe contexts
+// QUOTE(ТЗ): "почему не работает команда bun run docker-git auth claude login"
+// REF: user-report-2026-07-01-claude-auth-login
+// SOURCE: n/a
+// FORMAT THEOREM: forall token: probe(token) reads token env and not account(settings.json)
+// PURITY: CORE
+// INVARIANT: probe uses the persisted OAuth token without inheriting account permission settings
+// COMPLEXITY: O(1)
+const buildClaudeProbeEnv = (auth: ClaudeProbeAuth): ReadonlyArray<string> =>
+  Match.value(auth).pipe(
+    Match.when({ _tag: "ClaudeProbeAccountConfig" }, () => buildClaudeAuthEnv(false)),
+    Match.when({ _tag: "ClaudeProbeOauthToken" }, ({ token }) => [
+      `HOME=${claudeProbeConfigDir}`,
+      `CLAUDE_CONFIG_DIR=${claudeProbeConfigDir}`,
+      `CLAUDE_CODE_OAUTH_TOKEN=${token}`
+    ]),
+    Match.exhaustive
+  )
 
 const ensureClaudeOrchLayout = (
   cwd: string
@@ -151,21 +89,6 @@ const ensureClaudeOrchLayout = (
     claudeAuthPath: ".docker-git/.orch/auth/claude"
   })
 
-const renderClaudeDockerfile = (): string =>
-  String.raw`FROM ubuntu:24.04
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl bsdutils \
-  && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
-  && apt-get install -y --no-install-recommends nodejs \
-  && node -v \
-  && npm -v \
-  && rm -rf /var/lib/apt/lists/*
-RUN npm install -g @anthropic-ai/claude-code@latest
-ENTRYPOINT ["claude"]
-`
-
 const resolveClaudeAccountPath = (path: Path.Path, rootPath: string, label: string | null): {
   readonly accountLabel: string
   readonly accountPath: string
@@ -175,12 +98,12 @@ const resolveClaudeAccountPath = (path: Path.Path, rootPath: string, label: stri
   return { accountLabel, accountPath }
 }
 
-const withClaudeAuth = <A, E>(
+const withClaudeAuth = <A, E, R>(
   command: AuthClaudeLoginCommand | AuthClaudeLogoutCommand | AuthClaudeStatusCommand,
   run: (
     context: ClaudeAccountContext
-  ) => Effect.Effect<A, E, CommandExecutor.CommandExecutor>
-): Effect.Effect<A, E | PlatformError | CommandFailedError, ClaudeRuntime> =>
+  ) => Effect.Effect<A, E, R>
+): Effect.Effect<A, E | PlatformError | CommandFailedError, ClaudeRuntime | R> =>
   withFsPathContext(({ cwd, fs, path }) =>
     Effect.gen(function*(_) {
       yield* _(ensureClaudeOrchLayout(cwd))
@@ -191,7 +114,7 @@ const withClaudeAuth = <A, E>(
         ensureDockerImage(fs, path, cwd, {
           imageName: claudeImageName,
           imageDir: claudeImageDir,
-          dockerfile: renderClaudeDockerfile(),
+          dockerfile: renderClaudeDockerOauthDockerfile(),
           buildLabel: "claude auth"
         })
       )
@@ -229,7 +152,7 @@ const runClaudeLogout = (
 const runClaudePingProbeExitCode = (
   cwd: string,
   accountPath: string,
-  oauthToken: string | null
+  auth: ClaudeProbeAuth
 ): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
   runDockerAuthExitCode(
     buildDockerAuthSpec({
@@ -237,7 +160,7 @@ const runClaudePingProbeExitCode = (
       image: claudeImageName,
       hostPath: accountPath,
       containerPath: claudeContainerHomeDir,
-      env: buildClaudeAuthEnv(false, oauthToken),
+      env: buildClaudeProbeEnv(auth),
       args: ["-p", "ping"],
       interactive: false
     })
@@ -255,34 +178,23 @@ const runClaudePingProbeExitCode = (
 // COMPLEXITY: O(command)
 export const authClaudeLogin = (
   command: AuthClaudeLoginCommand
-): Effect.Effect<void, AuthError | CommandFailedError | PlatformError, ClaudeRuntime> => {
-  const accountLabel = normalizeAccountLabel(command.label, "default")
-  return withClaudeAuth(command, ({ accountPath, cwd, fs, path }) =>
-    Effect.gen(function*(_) {
-      const token = yield* _(
-        runClaudeOauthLoginWithPrompt(cwd, accountPath, {
-          image: claudeImageName,
-          containerPath: claudeContainerHomeDir
-        })
-      )
-      yield* _(fs.writeFileString(claudeOauthTokenPath(accountPath), `${token}\n`))
-      yield* _(fs.chmod(claudeOauthTokenPath(accountPath), 0o600), Effect.orElseSucceed(() => void 0))
-      yield* _(resolveClaudeAuthMethod(fs, path, accountPath))
-      const probeExitCode = yield* _(runClaudePingProbeExitCode(cwd, accountPath, token))
-      if (probeExitCode !== 0) {
-        yield* _(
-          Effect.fail(
-            new CommandFailedError({
-              command: "claude setup-token",
-              exitCode: probeExitCode
-            })
-          )
-        )
-      }
-    })).pipe(
-      Effect.zipRight(autoSyncState(`chore(state): auth claude ${accountLabel}`))
-    )
-}
+): Effect.Effect<void, AuthError | CommandFailedError | PlatformError, ClaudeRuntime> =>
+  withClaudeAuth(command, ({ accountLabel, accountPath, cwd, fs, path }) =>
+    runClaudeLoginFlow({
+      accountLabel,
+      captureToken: runClaudeOauthLoginWithPrompt(cwd, accountPath, {
+        image: claudeImageName,
+        containerPath: claudeContainerHomeDir
+      }),
+      persistToken: (token) => persistClaudeOauthToken(fs, path, accountPath, token),
+      normalizeStoredCredentials: resolveClaudeAuthMethod(fs, path, accountPath).pipe(Effect.asVoid),
+      probeToken: (token) =>
+        runClaudePingProbeExitCode(cwd, accountPath, {
+          _tag: "ClaudeProbeOauthToken",
+          token
+        }),
+      syncState: autoSyncState(`chore(state): auth claude ${accountLabel}`)
+    }).pipe(Effect.asVoid))
 
 // CHANGE: show Claude Code auth status for a given label
 // WHY: allow verifying OAuth cache presence without exposing credentials
@@ -306,7 +218,10 @@ export const authClaudeStatus = (
       }
 
       const oauthToken = method === "oauth-token" ? yield* _(readOauthToken(fs, accountPath)) : null
-      const probeExitCode = yield* _(runClaudePingProbeExitCode(cwd, accountPath, oauthToken))
+      const probeAuth: ClaudeProbeAuth = method === "oauth-token" && oauthToken !== null
+        ? { _tag: "ClaudeProbeOauthToken", token: oauthToken }
+        : { _tag: "ClaudeProbeAccountConfig" }
+      const probeExitCode = yield* _(runClaudePingProbeExitCode(cwd, accountPath, probeAuth))
       if (probeExitCode === 0) {
         yield* _(Effect.log(`Claude connected (${accountLabel}, ${method}).`))
         return

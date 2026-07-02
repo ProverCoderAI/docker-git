@@ -160,7 +160,7 @@ const withProjectRuntime = (
       sshSessions: runtime.sshSessions,
       startedAtIso: runtime.startedAtIso,
       startedAtEpochMs: runtime.startedAtEpochMs,
-      clonedOnHostname: project.clonedOnHostname
+      ...(project.clonedOnHostname === undefined ? {} : { clonedOnHostname: project.clonedOnHostname })
     }))
   )
 
@@ -191,7 +191,7 @@ const dbProjectSummary = (
   sshSessions: 0,
   startedAtIso: project.lastStartedAtIso,
   startedAtEpochMs: project.lastStartedAtEpochMs,
-  clonedOnHostname: project.clonedOnHostname
+  ...(project.clonedOnHostname === undefined ? {} : { clonedOnHostname: project.clonedOnHostname })
 })
 
 const toProjectDetails = (
@@ -482,7 +482,8 @@ const toCreateRawOptions = (request: CreateProjectRequest): RawOptions => ({
   ...(request.up === undefined ? {} : { up: request.up }),
   ...(request.openSsh === undefined ? {} : { openSsh: request.openSsh }),
   ...(request.force === undefined ? {} : { force: request.force }),
-  ...(request.forceEnv === undefined ? {} : { forceEnv: request.forceEnv })
+  ...(request.forceEnv === undefined ? {} : { forceEnv: request.forceEnv }),
+  ...(request.clonedOnHostname === undefined ? {} : { clonedOnHostname: request.clonedOnHostname })
 })
 
 const parseCreateCommandRequest = (
