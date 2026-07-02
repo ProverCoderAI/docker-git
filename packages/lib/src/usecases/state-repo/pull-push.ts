@@ -16,14 +16,14 @@ const resolveStateRoot = (path: Path.Path, cwd: string): string => path.resolve(
 type StateRepoRuntime = FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
 type StateRepoError = CommandFailedError | PlatformError
 
-const statePullRaw: Effect.Effect<
+const statePullRaw = (cwd: string): Effect.Effect<
   void,
   StateRepoError,
   StateRepoRuntime
-> = Effect.gen(function*(_) {
+> => Effect.gen(function*(_) {
   const fs = yield* _(FileSystem.FileSystem)
   const path = yield* _(Path.Path)
-  const root = resolveStateRoot(path, process.cwd())
+  const root = resolveStateRoot(path, cwd)
   const originUrlExit = yield* _(gitExitCode(root, ["remote", "get-url", "origin"], gitBaseEnv))
   if (originUrlExit !== successExitCode) {
     yield* _(git(root, ["pull", "--rebase"], gitBaseEnv))
@@ -60,16 +60,18 @@ export const statePull: Effect.Effect<
   void,
   StateRepoError,
   StateRepoRuntime
-> = withStateGitLock(statePullRaw)
+> = Effect.sync(() => process.cwd()).pipe(
+  Effect.flatMap((cwd) => withStateGitLock(cwd, statePullRaw(cwd)))
+)
 
-const statePushRaw: Effect.Effect<
+const statePushRaw = (cwd: string): Effect.Effect<
   void,
   StateRepoError,
   StateRepoRuntime
-> = Effect.gen(function*(_) {
+> => Effect.gen(function*(_) {
   const fs = yield* _(FileSystem.FileSystem)
   const path = yield* _(Path.Path)
-  const root = resolveStateRoot(path, process.cwd())
+  const root = resolveStateRoot(path, cwd)
   const originUrlExit = yield* _(gitExitCode(root, ["remote", "get-url", "origin"], gitBaseEnv))
   if (originUrlExit !== successExitCode) {
     yield* _(git(root, ["push", "-u", "origin", "HEAD"], gitBaseEnv))
@@ -115,4 +117,6 @@ export const statePush: Effect.Effect<
   void,
   StateRepoError,
   StateRepoRuntime
-> = withStateGitLock(statePushRaw)
+> = Effect.sync(() => process.cwd()).pipe(
+  Effect.flatMap((cwd) => withStateGitLock(cwd, statePushRaw(cwd)))
+)

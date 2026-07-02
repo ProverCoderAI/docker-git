@@ -19,6 +19,8 @@ import {
 export const defaultClaudeDockerOauthImage = "docker-git-auth-claude:latest"
 export const defaultClaudeDockerOauthContainerHome = "/claude-home"
 const claudeDockerOauthProbeConfigDir = "/claude-probe-home"
+const claudeDockerOauthProbeTmpfs = `${claudeDockerOauthProbeConfigDir}:rw,size=16m,mode=1777`
+const claudeDockerProbeEnvFileMode = 0o600
 export const claudeDockerOauthBaseImage =
   "node:24-bookworm-slim@sha256:b31e7a42fdf8b8aa5f5ed477c72d694301273f1069c5a2f71d53c6482e99a2fc"
 export const claudeDockerOauthClaudeCodeVersion = "2.1.195"
@@ -200,14 +202,18 @@ const buildDockerProbeArgs = (
   image: string,
   hostPath: string,
   containerPath: string,
-  oauthToken: string
+  envFilePath: string
 ): ReadonlyArray<string> => {
   const args: Array<string> = [
     "run",
     "--rm",
     "-i",
     "--mount",
-    buildDockerBindMountArg(hostPath, containerPath)
+    buildDockerBindMountArg(hostPath, containerPath),
+    "--tmpfs",
+    claudeDockerOauthProbeTmpfs,
+    "--env-file",
+    envFilePath
   ]
   const dockerUser = resolveDefaultDockerUser()
   if (dockerUser !== null) {
@@ -218,8 +224,6 @@ const buildDockerProbeArgs = (
     `CLAUDE_CONFIG_DIR=${claudeDockerOauthProbeConfigDir}`,
     "-e",
     `HOME=${claudeDockerOauthProbeConfigDir}`,
-    "-e",
-    `CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`,
     image,
     "-p",
     "ping"
@@ -317,6 +321,20 @@ const writeCapturedToken = async (accountPath: string, token: string): Promise<v
   }
 }
 
+const writeProbeEnvFile = async (
+  accountPath: string,
+  token: string
+): Promise<{ readonly envDir: string; readonly envFilePath: string }> => {
+  const envDir = await mkdtemp(join(accountPath, ".claude-probe-env-"))
+  const envFilePath = join(envDir, "probe.env")
+  await writeFile(envFilePath, `CLAUDE_CODE_OAUTH_TOKEN=${token}\n`, {
+    encoding: "utf8",
+    mode: claudeDockerProbeEnvFileMode
+  })
+  await chmod(envFilePath, claudeDockerProbeEnvFileMode)
+  return { envDir, envFilePath }
+}
+
 const dockerProbeStatusFromExitCode = (exitCode: number): ClaudeDockerProbeStatus =>
   exitCode === 0
     ? { _tag: "ClaudeDockerProbeSucceeded", exitCode }
@@ -352,11 +370,17 @@ export const runClaudeDockerOauth = async (
     const result = classifyClaudeSetupTokenResult(setup.token, setup.exitCode)
     if (result._tag === "ClaudeSetupTokenCaptured") {
       await writeCapturedToken(accountPath, result.token)
-      const probeExitCode = await (options.runProbe ?? runDockerProbe)({
-        dockerCommand,
-        args: buildDockerProbeArgs(image, dockerHostPath, containerPath, result.token),
-        cwd
-      })
+      const probeEnv = await writeProbeEnvFile(accountPath, result.token)
+      let probeExitCode = 1
+      try {
+        probeExitCode = await (options.runProbe ?? runDockerProbe)({
+          dockerCommand,
+          args: buildDockerProbeArgs(image, dockerHostPath, containerPath, probeEnv.envFilePath),
+          cwd
+        })
+      } finally {
+        await rm(probeEnv.envDir, { recursive: true, force: true })
+      }
       return {
         _tag: "ClaudeDockerOauthTokenCaptured",
         token: result.token,
@@ -388,15 +412,13 @@ export const runClaudeDockerOauth = async (
 
 export const renderClaudeDockerOauthResult = (
   result: ClaudeDockerOauthResult,
-  printToken: boolean
+  _printToken: boolean
 ): string => {
   if (result._tag === "ClaudeDockerOauthTokenCaptured") {
     const probe = result.probeStatus._tag === "ClaudeDockerProbeSucceeded"
       ? "probe=ok"
       : `probe=failed exit=${result.probeStatus.exitCode}`
-    return printToken
-      ? `status=ClaudeDockerOauthTokenCaptured ${probe} token=${result.token}`
-      : `status=ClaudeDockerOauthTokenCaptured ${probe}`
+    return `status=ClaudeDockerOauthTokenCaptured ${probe}`
   }
   if (result._tag === "ClaudeDockerOauthCommandFailed") {
     return `status=ClaudeDockerOauthCommandFailed exit=${result.exitCode}`

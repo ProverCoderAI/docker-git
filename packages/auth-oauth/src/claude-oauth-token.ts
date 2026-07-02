@@ -34,8 +34,8 @@ const ansiEscape = "\u{1B}"
 const ansiBell = "\u{7}"
 const tokenMarker = "Your OAuth token (valid for 1 year):"
 const tokenFooterMarker = "Store this token securely."
-const oauthTokenRegex = /([A-Za-z0-9][A-Za-z0-9._-]{20,})/u
 const oauthLiveOutputTokenPrefix = ["sk", "ant", ""].join("-")
+const oauthTokenRegex = /(sk-ant-[A-Za-z0-9._-]{20,})/u
 const oauthLiveOutputTokenCharacters = new Set(
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-".split("")
 )
@@ -107,6 +107,8 @@ export const normalizeClaudeOauthToken = (rawToken: string): string | null => {
   const token = rawToken.trim()
   return token.length > 0 ? token : null
 }
+
+export const isClaudeOauthToken = (token: string): boolean => oauthTokenRegex.test(token.trim())
 
 export const claudeOauthTokenPath = (accountPath: string): string =>
   `${accountPath}/${claudeOauthTokenFileName}`

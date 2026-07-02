@@ -6,7 +6,7 @@ describe("GitHub auth login stream", () => {
   it("renders post-login state logs before the success marker", () => {
     const output = renderGithubPostLoginOutput([
       "Initializing state repository: https://github.com/octocat/.docker-git.git",
-      "State dir ready: /home/dev/.docker-git"
+      "State dir ready."
     ], "ok")
 
     expect(output).toContain("Initializing state repository")

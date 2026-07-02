@@ -80,6 +80,7 @@ services:
 YAML
 
 LOG_FILE="/tmp/docker-git-auth-claude-login-$RUN_ID.log"
+STATUS_LOG_FILE="/tmp/docker-git-auth-claude-status-$RUN_ID.log"
 
 fail() {
   echo "e2e/auth-claude-login: $*" >&2
@@ -100,10 +101,12 @@ cleanup() {
   if [[ "$KEEP" == "1" ]]; then
     echo "e2e/auth-claude-login: KEEP=1 set; preserving temp dir: $ROOT" >&2
     echo "e2e/auth-claude-login: log file: $LOG_FILE" >&2
+    echo "e2e/auth-claude-login: status log file: $STATUS_LOG_FILE" >&2
     return
   fi
   rm -rf "$ROOT" >/dev/null 2>&1 || true
   rm -f "$LOG_FILE" >/dev/null 2>&1 || true
+  rm -f "$STATUS_LOG_FILE" >/dev/null 2>&1 || true
 }
 
 trap 'on_error $LINENO' ERR
@@ -115,14 +118,14 @@ dg_ensure_docker "$ROOT/.e2e-bin"
 dg_prepare_docker_git_cli "$REPO_ROOT" "$ROOT/.e2e-bin"
 
 set +e
-timeout "${LOGIN_TIMEOUT_SECONDS}s" bash -lc 'cd "$1" && bun packages/app/dist/src/docker-git/main.js auth claude login' bash "$REPO_ROOT" \
+timeout "${LOGIN_TIMEOUT_SECONDS}s" bash -lc 'cd "$1" && bun packages/app/dist/src/docker-git/main.js auth claude login --web' bash "$REPO_ROOT" \
   >"$LOG_FILE" 2>&1
 login_exit=$?
 set -e
 
 if [[ "$login_exit" -ne 0 ]]; then
   cat "$LOG_FILE" >&2 || true
-  fail "docker-git auth claude login failed (exit: $login_exit)"
+  fail "docker-git auth claude login --web failed (exit: $login_exit)"
 fi
 
 if grep -Fq -- "$OAUTH_TOKEN_MARKER" "$LOG_FILE"; then
@@ -139,4 +142,22 @@ docker exec "$DOCKER_GIT_API_CONTAINER_NAME" \
   test -s "$ROOT/.orch/auth/claude/default/.oauth-token" \
   || fail "expected persisted Claude OAuth token in controller state"
 
-echo "e2e/auth-claude-login: docker-backed Claude login warning path verified" >&2
+set +e
+timeout "${LOGIN_TIMEOUT_SECONDS}s" bash -lc 'cd "$1" && bun packages/app/dist/src/docker-git/main.js auth claude status' bash "$REPO_ROOT" \
+  >"$STATUS_LOG_FILE" 2>&1
+status_exit=$?
+set -e
+
+if [[ "$status_exit" -ne 0 ]]; then
+  cat "$STATUS_LOG_FILE" >&2 || true
+  fail "docker-git auth claude status failed (exit: $status_exit)"
+fi
+
+if grep -Fq -- "$OAUTH_TOKEN_MARKER" "$STATUS_LOG_FILE"; then
+  fail "expected OAuth token marker to be absent from auth claude status output"
+fi
+
+grep -Fq -- "Claude connected (default, oauth-token" "$STATUS_LOG_FILE" \
+  || fail "expected connected OAuth status after auth claude login --web"
+
+echo "e2e/auth-claude-login: docker-backed Claude login --web and status warning path verified" >&2

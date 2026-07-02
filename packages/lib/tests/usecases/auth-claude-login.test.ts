@@ -17,7 +17,7 @@ import { authClaudeLogin, authClaudeStatus } from "../../src/usecases/auth-claud
 
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value)
 
-const oauthToken = "TEST_CLAUDE_OAUTH_TOKEN_EXAMPLE"
+const oauthToken = "sk-ant-oat01-TESTCLAUDEOAUTH0123456789"
 
 // Mirrors the real `claude setup-token` output that the OAuth parser scans for.
 const setupTokenOutput = (token: string): string =>
@@ -45,6 +45,10 @@ const isSetupToken = (args: ReadonlyArray<string>): boolean => args.includes("se
 const isPingProbe = (args: ReadonlyArray<string>): boolean => args.includes("-p") && args.includes("ping")
 const dockerEnvEntries = (args: ReadonlyArray<string>): ReadonlyArray<string> =>
   args.flatMap((arg, index) => args[index - 1] === "-e" ? [arg] : [])
+const dockerEnvFileEntries = (args: ReadonlyArray<string>): ReadonlyArray<string> =>
+  args.flatMap((arg, index) => args[index - 1] === "--env-file" ? [arg] : [])
+const dockerTmpfsEntries = (args: ReadonlyArray<string>): ReadonlyArray<string> =>
+  args.flatMap((arg, index) => args[index - 1] === "--tmpfs" ? [arg] : [])
 
 // CHANGE: fake docker executor that captures a setup-token and lets the ping probe fail
 // WHY: reproduce issue-439 where a successful OAuth login was discarded by a failing probe
@@ -297,19 +301,19 @@ describe("authClaudeLogin", () => {
             )
           )
 
-          const pingInvocation = invocations.find((invocation) =>
-            isPingProbe(invocation.args) &&
-            dockerEnvEntries(invocation.args).includes(`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`)
-          )
+          const pingInvocation = invocations.find((invocation) => isPingProbe(invocation.args))
           expect(pingInvocation).toBeDefined()
           if (pingInvocation === undefined) {
             return
           }
 
           const envEntries = dockerEnvEntries(pingInvocation.args)
-          expect(envEntries).toContain(`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`)
           expect(envEntries).toContain("HOME=/claude-probe-home")
           expect(envEntries).toContain("CLAUDE_CONFIG_DIR=/claude-probe-home")
+          expect(envEntries.some((entry) => entry.startsWith("CLAUDE_CODE_OAUTH_TOKEN="))).toBe(false)
+          expect(dockerEnvFileEntries(pingInvocation.args)).toHaveLength(1)
+          expect(dockerTmpfsEntries(pingInvocation.args)).toContain("/claude-probe-home:rw,size=16m,mode=1777")
+          expect(pingInvocation.args.join(" ")).not.toContain(oauthToken)
           expect(envEntries).not.toContain("HOME=/claude-home")
           expect(envEntries).not.toContain("CLAUDE_CONFIG_DIR=/claude-home")
         })

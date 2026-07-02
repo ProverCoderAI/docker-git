@@ -4,6 +4,7 @@ import {
 } from "@prover-coder-ai/docker-git-auth-oauth/claude-oauth-token"
 import * as Command from "@effect/platform/Command"
 import * as CommandExecutor from "@effect/platform/CommandExecutor"
+import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as Inspectable from "effect/Inspectable"
@@ -80,13 +81,14 @@ describe("Claude local auth runner", () => {
       expect(error.message).toContain(claudeCodeOauthTokenEnvKey)
     }))
 
-  it("builds an isolated local Claude CLI environment without exposing unrelated env", () => {
-    expect(buildClaudeLocalEnv("/tmp/claude-account", oauthToken)).toEqual({
-      CLAUDE_CONFIG_DIR: "/tmp/claude-account",
-      CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
-      HOME: "/tmp/claude-account"
-    })
-  })
+  it.effect("builds an isolated local Claude CLI probe environment without using account settings", () =>
+    Effect.sync(() => {
+      expect(buildClaudeLocalEnv("/tmp/claude-account", oauthToken)).toEqual({
+        CLAUDE_CONFIG_DIR: "/tmp/claude-account/.probe-home",
+        CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
+        HOME: "/tmp/claude-account/.probe-home"
+      })
+    }))
 
   it.effect("runs the shared login flow through the local Claude probe runner", () =>
     Effect.gen(function*(_) {
@@ -104,7 +106,8 @@ describe("Claude local auth runner", () => {
           normalizeStoredCredentials: Effect.void,
           syncState: Effect.void
         }).pipe(
-          Effect.provideService(CommandExecutor.CommandExecutor, makeExitCodeExecutor(7, invocations))
+          Effect.provideService(CommandExecutor.CommandExecutor, makeExitCodeExecutor(7, invocations)),
+          Effect.provide(NodeContext.layer)
         )
       )
 

@@ -5,12 +5,14 @@ import { NodeContext } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import * as Scope from "effect/Scope"
+import fc from "fast-check"
 import { vi } from "vitest"
 
 import { githubRepoAccessMessage } from "@effect-template/lib/usecases/github-token-preflight"
 import { gitlabRepoAccessMessage } from "@effect-template/lib/usecases/gitlab-token-preflight"
 
 import { ApiAuthRequiredError } from "../src/api/errors.js"
+import { isLoopbackRemoteAddress } from "../src/http.js"
 import {
   ensureGithubAuthForCreate,
   ensureGitlabAuthForCreate,
@@ -60,6 +62,13 @@ const withWorkingDirectory = <A, E, R>(
         })
     ).pipe(Effect.flatMap(() => effect))
   )
+
+const labelChars = ["a", "b", "c", "d", "e", "f", "0", "1", "2", "3", "-", "_"] as const
+const claudeLabelArbitrary = fc.option(
+  fc.array(fc.constantFrom(...labelChars), { minLength: 1, maxLength: 12 }).map((chars) => chars.join("")),
+  { nil: null }
+)
+const claudeStatusScenarioArbitrary = fc.constantFrom("none", "oauth-token", "root-session", "nested-session")
 
 const resolveFetchUrl = (input: Parameters<typeof globalThis.fetch>[0]): string =>
   typeof input === "string"
@@ -631,6 +640,110 @@ describe("api auth", () => {
         expect(status.message).toBe("Claude not connected (default).")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("preserves Claude auth status invariants for generated labels and methods", () =>
+    withTempDir((root) =>
+      Effect.gen(function*(_) {
+        let caseIndex = 0
+        yield* _(
+          Effect.promise(() =>
+            fc.assert(
+              fc.asyncProperty(
+                claudeLabelArbitrary,
+                claudeStatusScenarioArbitrary,
+                (label, scenario) => {
+                  const localCaseIndex = caseIndex++
+                  return Effect.runPromise(
+                    Effect.gen(function*(_) {
+                      const fs = yield* _(FileSystem.FileSystem)
+                      const path = yield* _(Path.Path)
+                      const caseRoot = path.join(root, `claude-status-${localCaseIndex}`)
+                      const projectsRoot = path.join(caseRoot, ".docker-git")
+                      const accountLabel = label ?? "default"
+                      const accountDir = path.join(projectsRoot, ".orch", "auth", "claude", accountLabel)
+                      const token = `sk-ant-oat01-property-${localCaseIndex}`
+
+                      yield* _(fs.makeDirectory(caseRoot, { recursive: true }))
+                      if (scenario !== "none") {
+                        yield* _(fs.makeDirectory(accountDir, { recursive: true }))
+                      }
+                      if (scenario === "oauth-token") {
+                        yield* _(fs.writeFileString(path.join(accountDir, ".oauth-token"), `${token}\n`))
+                        yield* _(
+                          fs.writeFileString(
+                            path.join(accountDir, ".claude.json"),
+                            JSON.stringify({ oauthAccount: { emailAddress: `team-${localCaseIndex}@example.test` } })
+                          )
+                        )
+                      }
+                      if (scenario === "root-session") {
+                        yield* _(
+                          fs.writeFileString(
+                            path.join(accountDir, ".credentials.json"),
+                            JSON.stringify({ claudeAiOauth: { displayName: `Team ${localCaseIndex}` } })
+                          )
+                        )
+                      }
+                      if (scenario === "nested-session") {
+                        const nestedDir = path.join(accountDir, ".claude")
+                        yield* _(fs.makeDirectory(nestedDir, { recursive: true }))
+                        yield* _(fs.writeFileString(path.join(nestedDir, ".credentials.json"), "{\"session\":\"ok\"}\n"))
+                      }
+
+                      const status = yield* _(
+                        withProjectsRoot(
+                          projectsRoot,
+                          withWorkingDirectory(caseRoot, readClaudeAuthStatus(label))
+                        )
+                      )
+                      const statusByNormalizedLabel = yield* _(
+                        withProjectsRoot(
+                          projectsRoot,
+                          withWorkingDirectory(caseRoot, readClaudeAuthStatus(status.label))
+                        )
+                      )
+
+                      return { status, statusByNormalizedLabel, token }
+                    }).pipe(
+                      Effect.tap((result) =>
+                        Effect.sync(() => {
+                          expect(result.status.connected).toBe(result.status.method !== "none")
+                          expect(result.statusByNormalizedLabel.label).toBe(result.status.label)
+                          expect(JSON.stringify(result.status)).not.toContain(result.token)
+                        })
+                      ),
+                      Effect.asVoid,
+                      Effect.provide(NodeContext.layer)
+                    )
+                  )
+                }
+              ),
+              { numRuns: 25 }
+            )
+          )
+        )
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("classifies auth status loopback clients without accepting non-loopback remotes", () =>
+    Effect.sync(() => {
+      fc.assert(
+        fc.property(
+          fc.constantFrom("127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost", "[::1]:3334"),
+          (address) => {
+            expect(isLoopbackRemoteAddress(address)).toBe(true)
+          }
+        )
+      )
+      fc.assert(
+        fc.property(
+          fc.constantFrom("", "0.0.0.0", "10.0.0.2", "172.18.0.3", "192.168.1.10", "example.test"),
+          (address) => {
+            expect(isLoopbackRemoteAddress(address)).toBe(false)
+          }
+        )
+      )
+    }))
 
   it.effect("removes labeled Grok auth from controller state", () =>
     withTempDir((root) =>

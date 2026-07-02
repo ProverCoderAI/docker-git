@@ -16,6 +16,8 @@ export type DockerAuthSpec = {
   readonly network?: string
   readonly entrypoint?: string
   readonly user?: string
+  readonly tmpfs?: string | ReadonlyArray<string>
+  readonly envFile?: string | ReadonlyArray<string>
   readonly env?: string | ReadonlyArray<string>
   readonly args: ReadonlyArray<string>
   readonly interactive: boolean
@@ -213,6 +215,16 @@ const appendEnvArgs = (base: Array<string>, env: string | ReadonlyArray<string>)
   }
 }
 
+const appendRepeatedOptionArgs = (base: Array<string>, name: string, value: string | ReadonlyArray<string>) => {
+  const values = typeof value === "string" ? [value] : value
+  for (const entry of values) {
+    const normalized = normalizeDockerArgValue(entry)
+    if (normalized !== null) {
+      base.push(name, normalized)
+    }
+  }
+}
+
 const normalizeDockerArgValue = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim() ?? ""
   return trimmed.length > 0 ? trimmed : null
@@ -236,6 +248,12 @@ const appendDockerRunOptions = (base: Array<string>, spec: DockerAuthSpec) => {
   }
   appendOptionArg(base, "--entrypoint", spec.entrypoint)
   base.push("--mount", buildDockerBindMountArg(spec.volume))
+  if (spec.tmpfs !== undefined) {
+    appendRepeatedOptionArgs(base, "--tmpfs", spec.tmpfs)
+  }
+  if (spec.envFile !== undefined) {
+    appendRepeatedOptionArgs(base, "--env-file", spec.envFile)
+  }
   if (spec.env !== undefined) {
     appendEnvArgs(base, spec.env)
   }

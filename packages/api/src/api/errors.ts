@@ -19,6 +19,10 @@ export class ApiConflictError extends Data.TaggedError("ApiConflictError")<{
   readonly message: string
 }> {}
 
+export class ApiForbiddenError extends Data.TaggedError("ApiForbiddenError")<{
+  readonly message: string
+}> {}
+
 export class ApiInternalError extends Data.TaggedError("ApiInternalError")<{
   readonly message: string
   readonly cause?: unknown
@@ -29,6 +33,7 @@ export type ApiKnownError =
   | ApiBadRequestError
   | ApiNotFoundError
   | ApiConflictError
+  | ApiForbiddenError
   | ApiInternalError
 
 export const describeUnknown = (error: unknown): string =>

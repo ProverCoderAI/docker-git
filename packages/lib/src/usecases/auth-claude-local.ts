@@ -1,5 +1,6 @@
 import type * as CommandExecutor from "@effect/platform/CommandExecutor"
 import type { PlatformError } from "@effect/platform/Error"
+import * as FileSystem from "@effect/platform/FileSystem"
 import {
   claudeCodeOauthTokenEnvKey,
   dockerGitClaudeOauthTokenEnvKey,
@@ -39,21 +40,27 @@ export const buildClaudeLocalEnv = (
   accountPath: string,
   oauthToken: string
 ): Readonly<Record<string, string>> => ({
-  CLAUDE_CONFIG_DIR: accountPath,
+  CLAUDE_CONFIG_DIR: `${accountPath}/.probe-home`,
   CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
-  HOME: accountPath
+  HOME: `${accountPath}/.probe-home`
 })
 
 export const runClaudeLocalPingProbeExitCode = (
   cwd: string,
   accountPath: string,
   oauthToken: string
-): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
-  runCommandExitCode({
-    cwd,
-    command: "claude",
-    args: ["-p", "ping"],
-    env: buildClaudeLocalEnv(accountPath, oauthToken)
+): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor | FileSystem.FileSystem> =>
+  Effect.gen(function*(_) {
+    const fs = yield* _(FileSystem.FileSystem)
+    yield* _(fs.makeDirectory(`${accountPath}/.probe-home`, { recursive: true }))
+    return yield* _(
+      runCommandExitCode({
+        cwd,
+        command: "claude",
+        args: ["-p", "ping"],
+        env: buildClaudeLocalEnv(accountPath, oauthToken)
+      })
+    )
   })
 
 // CHANGE: provide a no-Docker Claude auth smoke runner
@@ -70,7 +77,7 @@ export const runClaudeLocalEnvTokenLoginFlow = <EStore, ESync, RStore, RSync>(
 ): Effect.Effect<
   ClaudeLoginFlowResult,
   AuthError | PlatformError | EStore | ESync,
-  CommandExecutor.CommandExecutor | RStore | RSync
+  CommandExecutor.CommandExecutor | FileSystem.FileSystem | RStore | RSync
 > =>
   runClaudeLoginFlow({
     accountLabel: spec.accountLabel,

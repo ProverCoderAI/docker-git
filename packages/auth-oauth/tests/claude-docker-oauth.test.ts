@@ -42,6 +42,10 @@ const oauthTokenArbitrary = fc.array(fc.constantFrom(
 }).map((chars) => `${oauthTokenPrefix}${chars.join("")}`)
 const dockerEnvEntries = (args: ReadonlyArray<string>): ReadonlyArray<string> =>
   args.flatMap((arg, index) => args[index - 1] === "-e" ? [arg] : [])
+const dockerEnvFileEntries = (args: ReadonlyArray<string>): ReadonlyArray<string> =>
+  args.flatMap((arg, index) => args[index - 1] === "--env-file" ? [arg] : [])
+const dockerTmpfsEntries = (args: ReadonlyArray<string>): ReadonlyArray<string> =>
+  args.flatMap((arg, index) => args[index - 1] === "--tmpfs" ? [arg] : [])
 
 const temporaryAccountPath = (prefix: string) =>
   Effect.acquireRelease(
@@ -76,6 +80,14 @@ describe("Claude Docker OAuth runner", () => {
               return Effect.runPromise(
                 Effect.gen(function*(_) {
                   const tokenFile = yield* _(Effect.tryPromise(() => readFile(claudeOauthTokenPath(accountPath), "utf8")))
+                  const envFilePath = dockerEnvFileEntries(spec.args)[0]
+                  expect(envFilePath).toBeDefined()
+                  if (envFilePath !== undefined) {
+                    const envFile = yield* _(Effect.tryPromise(() => readFile(envFilePath, "utf8")))
+                    const envMode = yield* _(Effect.tryPromise(() => stat(envFilePath)))
+                    expect(envFile).toBe(`CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}\n`)
+                    expect(envMode.mode & 0o777).toBe(0o600)
+                  }
                   expect(tokenFile).toBe(`${oauthToken}\n`)
                   return 0
                 })
@@ -103,10 +115,13 @@ describe("Claude Docker OAuth runner", () => {
       expect(dockerEnvEntries(probeRuns[0]?.args ?? [])).toEqual(
         expect.arrayContaining([
           "CLAUDE_CONFIG_DIR=/claude-probe-home",
-          "HOME=/claude-probe-home",
-          `CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`
+          "HOME=/claude-probe-home"
         ])
       )
+      expect(dockerEnvEntries(probeRuns[0]?.args ?? []).some((entry) => entry.startsWith("CLAUDE_CODE_OAUTH_TOKEN="))).toBe(false)
+      expect(dockerEnvFileEntries(probeRuns[0]?.args ?? [])).toHaveLength(1)
+      expect(dockerTmpfsEntries(probeRuns[0]?.args ?? [])).toContain("/claude-probe-home:rw,size=16m,mode=1777")
+      expect(probeRuns[0]?.args.join(" ")).not.toContain(oauthToken)
       const tokenMode = yield* _(Effect.tryPromise(() => stat(claudeOauthTokenPath(accountPath))))
       expect(tokenMode.mode & 0o777).toBe(claudeOauthTokenFileMode)
     })))
@@ -129,7 +144,7 @@ describe("Claude Docker OAuth runner", () => {
         "status=ClaudeDockerOauthTokenCaptured probe=failed exit=7"
       )
       expect(renderClaudeDockerOauthResult(result, true)).toBe(
-        `status=ClaudeDockerOauthTokenCaptured probe=failed exit=7 token=${oauthToken}`
+        "status=ClaudeDockerOauthTokenCaptured probe=failed exit=7"
       )
       const tokenFile = yield* _(Effect.tryPromise(() => readFile(claudeOauthTokenPath(accountPath), "utf8")))
       const tokenMode = yield* _(Effect.tryPromise(() => stat(claudeOauthTokenPath(accountPath))))
@@ -160,7 +175,7 @@ describe("Claude Docker OAuth runner", () => {
     expect(dockerfile).not.toContain("curl -fsSL https://deb.nodesource.com")
   })
 
-  it("renders tagged results without exposing tokens unless explicitly requested", () => {
+  it("renders tagged results without exposing tokens even when explicitly requested", () => {
     fc.assert(
       fc.property(oauthTokenArbitrary, fc.integer({ min: 1, max: 255 }), (token, exitCode) => {
         const result = {
@@ -176,8 +191,9 @@ describe("Claude Docker OAuth runner", () => {
           `status=ClaudeDockerOauthTokenCaptured probe=failed exit=${exitCode}`
         )
         expect(renderClaudeDockerOauthResult(result, true)).toBe(
-          `status=ClaudeDockerOauthTokenCaptured probe=failed exit=${exitCode} token=${token}`
+          `status=ClaudeDockerOauthTokenCaptured probe=failed exit=${exitCode}`
         )
+        expect(renderClaudeDockerOauthResult(result, true)).not.toContain(token)
       })
     )
   })

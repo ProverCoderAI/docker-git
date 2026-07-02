@@ -8,8 +8,10 @@ import { Effect, Logger } from "effect"
 import * as Inspectable from "effect/Inspectable"
 import * as Sink from "effect/Sink"
 import * as Stream from "effect/Stream"
+import fc from "fast-check"
 
 import { autoSyncState } from "../../src/usecases/state-repo.js"
+import { stateGitLockStaleAfterMillis } from "../../src/usecases/state-repo/lock.js"
 
 type RecordedCommand = {
   readonly command: string
@@ -132,6 +134,7 @@ describe("state repo auto sync", () => {
 
           expect(recorded.filter(isMutatingSyncGitCommand)).toEqual([])
           expect(logs.some((message) => message.includes("State auto-sync skipped: git index lock exists"))).toBe(true)
+          expect(logs.every((message) => !message.includes(indexLockPath))).toBe(true)
           expect(yield* _(fs.exists(`${root}.lock`))).toBe(false)
         })
       )
@@ -176,4 +179,86 @@ describe("state repo auto sync", () => {
         })
       )
     ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("reclaims stale state lock directories before auto-sync", () =>
+    withTempDir((home) =>
+      withPatchedEnv(
+        {
+          HOME: home,
+          DOCKER_GIT_PROJECTS_ROOT: undefined,
+          DOCKER_GIT_STATE_AUTO_SYNC: "1",
+          DOCKER_GIT_STATE_AUTO_SYNC_STRICT: undefined
+        },
+        Effect.gen(function*(_) {
+          const fs = yield* _(FileSystem.FileSystem)
+          const path = yield* _(Path.Path)
+          const root = path.join(home, ".docker-git")
+          const lockPath = `${root}.lock`
+          const recorded: Array<RecordedCommand> = []
+          const staleCreatedAt = Date.now() - stateGitLockStaleAfterMillis - 1000
+
+          yield* _(fs.makeDirectory(path.join(root, ".git"), { recursive: true }))
+          yield* _(fs.makeDirectory(lockPath, { recursive: true }))
+          yield* _(fs.writeFileString(path.join(lockPath, "created-at-ms"), `${staleCreatedAt}\n`))
+
+          yield* _(
+            autoSyncState("chore(state): test").pipe(
+              Effect.provideService(CommandExecutor.CommandExecutor, makeFakeExecutor(recorded))
+            )
+          )
+
+          expect(recorded.some((command) => command.command === "git")).toBe(true)
+          expect(yield* _(fs.exists(lockPath))).toBe(false)
+        })
+      )
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("preserves auto-sync locking invariants for generated index and git failures", () =>
+    Effect.tryPromise({
+      catch: (cause) => cause,
+      try: () =>
+        fc.assert(
+          fc.asyncProperty(fc.boolean(), fc.integer({ min: 0, max: 3 }), (hasIndexLock, rmExitCode) =>
+            Effect.runPromise(
+              withTempDir((home) =>
+                withPatchedEnv(
+                  {
+                    HOME: home,
+                    DOCKER_GIT_PROJECTS_ROOT: undefined,
+                    DOCKER_GIT_STATE_AUTO_SYNC: "1",
+                    DOCKER_GIT_STATE_AUTO_SYNC_STRICT: undefined
+                  },
+                  Effect.gen(function*(_) {
+                    const fs = yield* _(FileSystem.FileSystem)
+                    const path = yield* _(Path.Path)
+                    const root = path.join(home, ".docker-git")
+                    const recorded: Array<RecordedCommand> = []
+
+                    yield* _(fs.makeDirectory(path.join(root, ".git"), { recursive: true }))
+                    if (hasIndexLock) {
+                      yield* _(fs.writeFileString(path.join(root, ".git", "index.lock"), "locked\n"))
+                    }
+
+                    yield* _(
+                      autoSyncState("chore(state): property").pipe(
+                        Effect.provideService(
+                          CommandExecutor.CommandExecutor,
+                          makeFakeExecutor(recorded, (command) =>
+                            command.command === "git" && command.args[0] === "rm" ? rmExitCode : 0
+                          )
+                        )
+                      )
+                    )
+
+                    if (hasIndexLock) {
+                      expect(recorded.filter(isMutatingSyncGitCommand)).toEqual([])
+                    }
+                    expect(yield* _(fs.exists(`${root}.lock`))).toBe(false)
+                  })
+                )
+              ).pipe(Effect.provide(NodeContext.layer))
+            )),
+          { numRuns: 20 }
+        )
+    }))
 })

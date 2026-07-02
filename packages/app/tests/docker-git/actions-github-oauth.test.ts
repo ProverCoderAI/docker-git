@@ -51,11 +51,11 @@ describe("web GitHub OAuth action", () => {
       loginGithubStreamMock.mockImplementation((_label: string | null, onChunk: (chunk: string) => void) =>
         Effect.sync(() => {
           onChunk("Copy your one-time code: ABCD-1234\n")
-          onChunk("State dir ready: /home/dev/.docker-git\n")
+          onChunk("State dir ready.\n")
           onChunk(`${githubLoginStreamMarkers.success}\n`)
           return [
             "Copy your one-time code: ABCD-1234",
-            "State dir ready: /home/dev/.docker-git",
+            "State dir ready.",
             githubLoginStreamMarkers.success
           ].join("\n")
         })
@@ -76,7 +76,7 @@ describe("web GitHub OAuth action", () => {
         expect(reloadDashboard).toHaveBeenCalledTimes(1)
       }))
 
-      expect(output()).toBe("Copy your one-time code: ABCD-1234\nState dir ready: /home/dev/.docker-git\n")
+      expect(output()).toBe("Copy your one-time code: ABCD-1234\nState dir ready.\n")
       expect(context.setActionPrompt).toHaveBeenCalledWith(null)
       expect(context.setAuthSnapshot).toHaveBeenCalledWith(authSnapshot)
       expect(context.setGithubStatus).toHaveBeenCalledWith(githubStatus)

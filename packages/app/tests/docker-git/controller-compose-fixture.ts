@@ -108,7 +108,7 @@ export type PreparedRevision = {
   readonly revision: string
 }
 
-export type ControllerBuildSkillerFixtureMode = "0" | "1" | undefined
+export type ControllerBuildSkillerFixtureMode = "0" | "1" | "false" | "true" | undefined
 export type ControllerDockerRuntimeEnvFixtureMode = "host" | "isolated" | undefined
 
 export type PrepareRevisionFixture = {
@@ -119,7 +119,9 @@ export type PrepareRevisionFixture = {
 const controllerBuildSkillerFixtureModeArbitrary = fc.constantFrom<ControllerBuildSkillerFixtureMode>(
   undefined,
   "0",
-  "1"
+  "1",
+  "false",
+  "true"
 )
 export const controllerDockerRuntimeEnvFixtureModeArbitrary = fc.constantFrom<ControllerDockerRuntimeEnvFixtureMode>(
   undefined,
@@ -131,7 +133,9 @@ export const prepareRevisionFixtureArbitrary: fc.Arbitrary<PrepareRevisionFixtur
     buildSkillerMode: controllerBuildSkillerFixtureModeArbitrary,
     includeSkillerPackage: fc.boolean()
   })
-  .filter(({ buildSkillerMode, includeSkillerPackage }) => buildSkillerMode === "0" || includeSkillerPackage)
+  .filter(({ buildSkillerMode, includeSkillerPackage }) =>
+    buildSkillerMode === "0" || buildSkillerMode === "false" || includeSkillerPackage
+  )
 export const controllerRevisionPattern = /^[a-f0-9]{16}-host-none-skiller[01]$/u
 
 export const withMinimalControllerRoot = <A, E, R>(

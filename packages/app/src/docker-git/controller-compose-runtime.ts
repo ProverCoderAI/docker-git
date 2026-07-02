@@ -10,8 +10,8 @@ import {
 } from "./controller-runtime.js"
 import { type ControllerBootstrapError, controllerBootstrapError } from "./host-errors.js"
 
-const mapComposePathError = (error: PlatformError): ControllerBootstrapError =>
-  controllerBootstrapError(`Failed to resolve docker-compose.yml path.\nDetails: ${String(error)}`)
+const mapRuntimeOverlayPathError = (error: PlatformError): ControllerBootstrapError =>
+  controllerBootstrapError(`Failed to resolve isolated controller compose overlay path.\nDetails: ${String(error)}`)
 
 export const loadControllerDockerRuntime = (): Effect.Effect<ControllerDockerRuntime, ControllerBootstrapError> => {
   const raw = process.env[controllerDockerRuntimeEnvKey]
@@ -54,13 +54,24 @@ export const resolveControllerRuntimeOverlayPath = (
         path.dirname(composePath),
         overlayFileName
       )
-      const isExists = yield* _(fs.exists(runtimeOverlayPath).pipe(Effect.mapError(mapComposePathError)))
-      return isExists
+      const isExists = yield* _(fs.exists(runtimeOverlayPath).pipe(Effect.mapError(mapRuntimeOverlayPathError)))
+      if (!isExists) {
+        return yield* _(
+          Effect.fail(
+            controllerBootstrapError(
+              `${controllerDockerRuntimeEnvKey}=isolated requires ${runtimeOverlayPath}, but it was not found.`
+            )
+          )
+        )
+      }
+
+      const info = yield* _(fs.stat(runtimeOverlayPath).pipe(Effect.mapError(mapRuntimeOverlayPathError)))
+      return info.type === "File"
         ? runtimeOverlayPath
         : yield* _(
           Effect.fail(
             controllerBootstrapError(
-              `${controllerDockerRuntimeEnvKey}=isolated requires ${runtimeOverlayPath}, but it was not found.`
+              `${controllerDockerRuntimeEnvKey}=isolated requires ${runtimeOverlayPath}, but it is not a regular file.`
             )
           )
         )

@@ -11,7 +11,7 @@ import { Effect } from "effect"
 import { isRegularFile } from "./auth-helpers.js"
 import { readFileStringIfPresent, writeFileStringEnsuringParent } from "./volatile-files.js"
 
-type ClaudeAuthMethod = "none" | "oauth-token" | "claude-ai-session"
+export type ClaudeAuthMethod = "none" | "oauth-token" | "claude-ai-session"
 
 const claudeConfigFileName = ".claude.json"
 const claudeCredentialsFileName = ".credentials.json"
@@ -61,6 +61,7 @@ const syncClaudeCredentialsFile = (
   accountPath: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
+    // Keep both Claude credential layouts equivalent without exposing session bytes outside the auth directory.
     const nestedPath = claudeNestedCredentialsPath(accountPath)
     const rootPath = claudeCredentialsPath(accountPath)
     const isNestedExists = yield* _(isRegularFile(fs, nestedPath))
@@ -89,23 +90,18 @@ const clearClaudeSessionCredentials = (
   accountPath: string
 ): Effect.Effect<void, PlatformError> =>
   Effect.gen(function*(_) {
+    // OAuth token auth wins over session files; stale session files would make status/probes ambiguous.
     yield* _(fs.remove(claudeCredentialsPath(accountPath), { force: true }))
     yield* _(fs.remove(claudeNestedCredentialsPath(accountPath), { force: true }))
   })
 
-const hasNonEmptyOauthToken = (
+const readNonEmptyClaudeFile = (
   fs: FileSystem.FileSystem,
-  accountPath: string
+  filePath: string
 ): Effect.Effect<boolean, PlatformError> =>
-  Effect.gen(function*(_) {
-    const tokenPath = claudeOauthTokenPath(accountPath)
-    const hasToken = yield* _(isRegularFile(fs, tokenPath))
-    if (!hasToken) {
-      return false
-    }
-    const tokenText = yield* _(fs.readFileString(tokenPath), Effect.orElseSucceed(() => ""))
-    return tokenText.trim().length > 0
-  })
+  readFileStringIfPresent(fs, filePath).pipe(
+    Effect.map((text) => text !== null && text.trim().length > 0)
+  )
 
 export const readOauthToken = (
   fs: FileSystem.FileSystem,
@@ -123,19 +119,38 @@ export const readOauthToken = (
     return token.length > 0 ? token : null
   })
 
-export const resolveClaudeAuthMethod = (
+export const readClaudeAuthMethod = (
+  fs: FileSystem.FileSystem,
+  accountPath: string
+): Effect.Effect<ClaudeAuthMethod, PlatformError> =>
+  Effect.gen(function*(_) {
+    const oauthToken = yield* _(readOauthToken(fs, accountPath))
+    if (oauthToken !== null) {
+      return "oauth-token"
+    }
+
+    const hasRootCredentials = yield* _(readNonEmptyClaudeFile(fs, claudeCredentialsPath(accountPath)))
+    if (hasRootCredentials) {
+      return "claude-ai-session"
+    }
+
+    const hasNestedCredentials = yield* _(readNonEmptyClaudeFile(fs, claudeNestedCredentialsPath(accountPath)))
+    return hasNestedCredentials ? "claude-ai-session" : "none"
+  })
+
+export const normalizeAndResolveClaudeAuthMethod = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
   accountPath: string
 ): Effect.Effect<ClaudeAuthMethod, PlatformError> =>
   Effect.gen(function*(_) {
-    const hasOauthToken = yield* _(hasNonEmptyOauthToken(fs, accountPath))
-    if (hasOauthToken) {
+    // The normalizing variant is used by login/status flows that are allowed to repair legacy Claude layouts.
+    const oauthToken = yield* _(readOauthToken(fs, accountPath))
+    if (oauthToken !== null) {
       yield* _(clearClaudeSessionCredentials(fs, accountPath))
       return "oauth-token"
     }
 
     yield* _(syncClaudeCredentialsFile(fs, path, accountPath))
-    const hasCredentials = yield* _(isRegularFile(fs, claudeCredentialsPath(accountPath)))
-    return hasCredentials ? "claude-ai-session" : "none"
+    return yield* _(readClaudeAuthMethod(fs, accountPath))
   })

@@ -75,12 +75,23 @@ export const claudeLocalOauthSmokeEnvKeys = [
   claudeCodeOauthTokenEnvKey
 ] as const
 
+const withoutClaudeOauthEnv = (baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+  const next: NodeJS.ProcessEnv = {}
+  for (const [key, value] of Object.entries(baseEnv)) {
+    if (key === dockerGitClaudeOauthTokenEnvKey || key === claudeCodeOauthTokenEnvKey) {
+      continue
+    }
+    next[key] = value
+  }
+  return next
+}
+
 export const buildClaudeLocalOauthEnv = (
   baseEnv: NodeJS.ProcessEnv,
   accountPath: string,
   oauthToken: string
 ): NodeJS.ProcessEnv => ({
-  ...baseEnv,
+  ...withoutClaudeOauthEnv(baseEnv),
   CLAUDE_CONFIG_DIR: accountPath,
   CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
   HOME: accountPath
@@ -178,7 +189,7 @@ const buildClaudeSetupTokenEnv = (
   baseEnv: NodeJS.ProcessEnv,
   accountPath: string
 ): NodeJS.ProcessEnv => ({
-  ...baseEnv,
+  ...withoutClaudeOauthEnv(baseEnv),
   CLAUDE_CONFIG_DIR: accountPath,
   HOME: accountPath
 })

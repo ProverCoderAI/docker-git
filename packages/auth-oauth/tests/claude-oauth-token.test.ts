@@ -153,6 +153,20 @@ describe("Claude OAuth token helpers", () => {
     expect(extractClaudeOauthToken("Long-lived authentication token created successfully")).toBeNull()
   })
 
+  it("returns null when setup-token output contains marker text but no OAuth token", () => {
+    expect(
+      extractClaudeOauthToken([
+        "Welcome to Claude Code",
+        "",
+        " Your OAuth token (valid for 1 year):",
+        "",
+        " OAuth flow finished without printing a long-lived token.",
+        "",
+        " Store this token securely."
+      ].join("\n"))
+    ).toBeNull()
+  })
+
   it("normalizes token whitespace", () => {
     expect(normalizeClaudeOauthToken(`\n${oauthToken}\n`)).toBe(oauthToken)
     expect(normalizeClaudeOauthToken(" \n ")).toBeNull()

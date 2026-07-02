@@ -6,6 +6,7 @@ import { defaultTemplateConfig } from "@effect-template/lib/core/template-defaul
 import { parseGithubRepoUrl, parseGitlabRepoUrl } from "@effect-template/lib/core/repo"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
 import { authCodexLogin as runCodexLogin } from "@effect-template/lib/usecases/auth-codex"
+import { readClaudeAuthMethod } from "@effect-template/lib/usecases/auth-claude-credentials"
 import { authGrokLogout as runGrokLogout } from "@effect-template/lib/usecases/auth-grok-logout"
 import { authGitLogin as runGitLogin, authGitLogout as runGitLogout, listGitConnections } from "@effect-template/lib/usecases/auth-git"
 import { authGitlabLogin as runGitlabLogin, authGitlabLogout as runGitlabLogout, listGitlabTokens } from "@effect-template/lib/usecases/auth-gitlab"
@@ -553,35 +554,6 @@ const resolveClaudeAccountPath = (
   }
 }
 
-const readNonEmptyFile = (
-  fs: FileSystem.FileSystem,
-  filePath: string
-): Effect.Effect<boolean, PlatformError> =>
-  fs.readFileString(filePath).pipe(
-    Effect.map((text) => text.trim().length > 0),
-    Effect.orElseSucceed(() => false)
-  )
-
-const resolveClaudeAuthMethod = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  accountPath: string
-): Effect.Effect<ClaudeAuthMethod, PlatformError> =>
-  Effect.gen(function*(_) {
-    const hasOauthToken = yield* _(readNonEmptyFile(fs, path.join(accountPath, ".oauth-token")))
-    if (hasOauthToken) {
-      return "oauth-token"
-    }
-
-    const hasRootCredentials = yield* _(readNonEmptyFile(fs, path.join(accountPath, ".credentials.json")))
-    if (hasRootCredentials) {
-      return "claude-ai-session"
-    }
-
-    const hasNestedCredentials = yield* _(readNonEmptyFile(fs, path.join(accountPath, ".claude", ".credentials.json")))
-    return hasNestedCredentials ? "claude-ai-session" : "none"
-  })
-
 const readJsonRecordFile = (
   fs: FileSystem.FileSystem,
   filePath: string
@@ -712,7 +684,7 @@ export const readClaudeAuthStatus = (
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const { accountLabel, accountPath } = resolveClaudeAccountPath(path, label)
-    const method = yield* _(resolveClaudeAuthMethod(fs, path, accountPath))
+    const method = yield* _(readClaudeAuthMethod(fs, accountPath))
     const account = method === "none" ? null : yield* _(readClaudeAuthAccount(fs, path, accountPath))
     return claudeAuthStatus(accountLabel, accountPath, method, account)
   })

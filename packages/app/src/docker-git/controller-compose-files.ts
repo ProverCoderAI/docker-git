@@ -17,8 +17,8 @@ export type ControllerComposeFiles = {
   readonly runtimeOverlayPath: string | null
 }
 
-const mapComposePathError = (error: PlatformError): ControllerBootstrapError =>
-  controllerBootstrapError(`Failed to resolve docker-compose.yml path.\nDetails: ${String(error)}`)
+const mapComposePathError = (target: string) => (error: PlatformError): ControllerBootstrapError =>
+  controllerBootstrapError(`Failed to resolve ${target} path.\nDetails: ${String(error)}`)
 
 // CHANGE: add a verified controller compose overlay boundary for E2E/runtime callers
 // WHY: temporary compose overrides must be part of the explicit docker compose argument vector
@@ -44,7 +44,9 @@ export const loadControllerComposeExtraPath = (): Effect.Effect<
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const extraOverlayPath = path.resolve(raw)
-    const isExists = yield* _(fs.exists(extraOverlayPath).pipe(Effect.mapError(mapComposePathError)))
+    const isExists = yield* _(
+      fs.exists(extraOverlayPath).pipe(Effect.mapError(mapComposePathError("extra controller compose overlay")))
+    )
     if (!isExists) {
       return yield* _(
         Effect.fail(
@@ -55,7 +57,9 @@ export const loadControllerComposeExtraPath = (): Effect.Effect<
       )
     }
 
-    const info = yield* _(fs.stat(extraOverlayPath).pipe(Effect.mapError(mapComposePathError)))
+    const info = yield* _(
+      fs.stat(extraOverlayPath).pipe(Effect.mapError(mapComposePathError("extra controller compose overlay")))
+    )
     return info.type === "File"
       ? extraOverlayPath
       : yield* _(
@@ -105,7 +109,9 @@ const requireGpuOverlayPath = (
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
     const gpuOverlayPath = path.join(path.dirname(composePath), "docker-compose.gpu.yml")
-    const isExists = yield* _(fs.exists(gpuOverlayPath).pipe(Effect.mapError(mapComposePathError)))
+    const isExists = yield* _(
+      fs.exists(gpuOverlayPath).pipe(Effect.mapError(mapComposePathError("GPU controller compose overlay")))
+    )
     if (!isExists) {
       return yield* _(
         Effect.fail(
@@ -114,7 +120,7 @@ const requireGpuOverlayPath = (
       )
     }
 
-    const info = yield* _(fs.stat(gpuOverlayPath).pipe(Effect.mapError(mapComposePathError)))
+    const info = yield* _(fs.stat(gpuOverlayPath).pipe(Effect.mapError(mapComposePathError("GPU controller compose overlay"))))
     return info.type === "File"
       ? gpuOverlayPath
       : yield* _(

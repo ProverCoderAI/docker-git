@@ -17,13 +17,13 @@ import {
 import { runCompose } from "../../src/docker-git/controller-docker.js"
 import { controllerDockerRuntimeEnvKey } from "../../src/docker-git/controller-runtime.js"
 import {
-  type ControllerBuildSkillerFixtureMode,
-  type PrepareRevisionFixture,
-  type PreparedRevision,
   assertControllerComposeProperty,
+  type ControllerBuildSkillerFixtureMode,
   controllerDockerRuntimeEnvFixtureModeArbitrary,
   controllerRevisionPattern,
   expectedSkillerSubmoduleCommand,
+  type PreparedRevision,
+  type PrepareRevisionFixture,
   prepareRevisionFixtureArbitrary,
   prepareRevisionInTemporaryRoot,
   recordedCommandExecutorLayer,
@@ -42,7 +42,7 @@ const expectPreparedRevision = (prepared: PreparedRevision, pattern: RegExp): vo
 }
 
 const expectedSkillerSuffixForMode = (buildSkillerMode: ControllerBuildSkillerFixtureMode): string =>
-  buildSkillerMode === "0" ? "skiller0" : "skiller1"
+  buildSkillerMode === "0" || buildSkillerMode === "false" ? "skiller0" : "skiller1"
 
 const expectPreparedRevisionInvariants = (fixture: PrepareRevisionFixture, prepared: PreparedRevision): void => {
   expectPreparedRevision(prepared, controllerRevisionPattern)
@@ -233,6 +233,29 @@ describe("controller compose preparation", () => {
         )
         expect(error._tag).toBe("ControllerBootstrapError")
         expect(error.message).toContain(".yml or .yaml")
+      })
+    ).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("rejects isolated runtime overlay paths that are directories", () =>
+    withMinimalControllerRoot((rootDir) =>
+      Effect.gen(function*(_) {
+        const fs = yield* _(FileSystem.FileSystem)
+        const path = yield* _(Path.Path)
+        const runtimeComposePath = path.join(rootDir, "docker-compose.isolated.yml")
+        yield* _(fs.remove(runtimeComposePath, { force: true }))
+        yield* _(fs.makeDirectory(runtimeComposePath))
+        yield* _(
+          withControllerEnv([
+            [controllerBuildSkillerEnvKey, "0"],
+            [controllerComposeExtraFileEnvKey, undefined],
+            [controllerDockerRuntimeEnvKey, "isolated"],
+            [controllerGpuModeEnvKey, undefined]
+          ])
+        )
+
+        const error = yield* _(resolveControllerComposeFiles().pipe(Effect.flip))
+        expect(error._tag).toBe("ControllerBootstrapError")
+        expect(error.message).toContain("regular file")
       })
     ).pipe(Effect.provide(NodeContext.layer)))
 

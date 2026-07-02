@@ -71,7 +71,7 @@ const initRepoIfNeeded = (
     const entries = yield* _(fs.readDirectory(root))
     if (entries.length === 0) {
       yield* _(cloneStateRepo(root, input, env))
-      yield* _(Effect.log(`State dir cloned: ${root}`))
+      yield* _(Effect.log("State dir cloned."))
       return
     }
 
@@ -105,13 +105,14 @@ const checkoutBranchBestEffort = (
   })
 
 export const stateInitRaw = (
-  input: StateInitInput
+  input: StateInitInput,
+  cwd: string
 ): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> => {
   const doInit = (env: GitAuthEnv) =>
     Effect.gen(function*(_) {
       const fs = yield* _(FileSystem.FileSystem)
       const path = yield* _(Path.Path)
-      const root = resolveStateRoot(path, process.cwd())
+      const root = resolveStateRoot(path, cwd)
 
       yield* _(initRepoIfNeeded(fs, path, root, input, env))
       yield* _(ensureOriginRemote(root, input.repoUrl, env))
@@ -119,8 +120,8 @@ export const stateInitRaw = (
       yield* _(checkoutBranchBestEffort(root, input.repoRef, env))
       yield* _(ensureStateGitignore(fs, path, root))
 
-      yield* _(Effect.log(`State dir ready: ${root}`))
-      yield* _(Effect.log(`Remote: ${input.repoUrl}`))
+      yield* _(Effect.log("State dir ready."))
+      yield* _(Effect.log("Remote configured."))
     }).pipe(Effect.asVoid)
 
   const token = input.token?.trim() ?? ""

@@ -15,9 +15,9 @@ import {
   claudeConfigPath,
   claudeCredentialsPath,
   claudeNestedCredentialsPath,
+  normalizeAndResolveClaudeAuthMethod,
   persistClaudeOauthToken,
-  readOauthToken,
-  resolveClaudeAuthMethod
+  readOauthToken
 } from "./auth-claude-credentials.js"
 import { runClaudeLoginFlow } from "./auth-claude-login-flow.js"
 import { runClaudeOauthLoginWithPrompt } from "./auth-claude-oauth.js"
@@ -47,6 +47,8 @@ const claudeImageName = "docker-git-auth-claude:latest"
 const claudeImageDir = ".docker-git/.orch/auth/claude/.image"
 const claudeContainerHomeDir = "/claude-home"
 const claudeProbeConfigDir = "/claude-probe-home"
+const claudeProbeTmpfs = `${claudeProbeConfigDir}:rw,size=16m,mode=1777`
+const claudeProbeEnvFileMode = 0o600
 
 const buildClaudeAuthEnv = (
   isInteractive: boolean,
@@ -70,13 +72,34 @@ const buildClaudeAuthEnv = (
 const buildClaudeProbeEnv = (auth: ClaudeProbeAuth): ReadonlyArray<string> =>
   Match.value(auth).pipe(
     Match.when({ _tag: "ClaudeProbeAccountConfig" }, () => buildClaudeAuthEnv(false)),
-    Match.when({ _tag: "ClaudeProbeOauthToken" }, ({ token }) => [
+    Match.when({ _tag: "ClaudeProbeOauthToken" }, () => [
       `HOME=${claudeProbeConfigDir}`,
-      `CLAUDE_CONFIG_DIR=${claudeProbeConfigDir}`,
-      `CLAUDE_CODE_OAUTH_TOKEN=${token}`
+      `CLAUDE_CONFIG_DIR=${claudeProbeConfigDir}`
     ]),
     Match.exhaustive
   )
+
+const withClaudeProbeTokenEnvFile = <A, E, R>(
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  accountPath: string,
+  token: string,
+  use: (envFilePath: string) => Effect.Effect<A, E, R>
+): Effect.Effect<A, E | PlatformError, R> =>
+  Effect.gen(function*(_) {
+    const envDir = yield* _(fs.makeTempDirectory({ directory: accountPath, prefix: ".claude-probe-env-" }))
+    const envFilePath = path.join(envDir, "probe.env")
+    const cleanup = fs.remove(envDir, { recursive: true, force: true }).pipe(
+      Effect.orElseSucceed(() => void 0)
+    )
+    return yield* _(
+      Effect.gen(function*(_) {
+        yield* _(fs.writeFileString(envFilePath, `CLAUDE_CODE_OAUTH_TOKEN=${token}\n`, { mode: claudeProbeEnvFileMode }))
+        yield* _(fs.chmod(envFilePath, claudeProbeEnvFileMode))
+        return yield* _(use(envFilePath))
+      }).pipe(Effect.ensuring(cleanup))
+    )
+  })
 
 const ensureClaudeOrchLayout = (
   cwd: string
@@ -152,18 +175,39 @@ const runClaudeLogout = (
 const runClaudePingProbeExitCode = (
   cwd: string,
   accountPath: string,
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
   auth: ClaudeProbeAuth
 ): Effect.Effect<number, PlatformError, CommandExecutor.CommandExecutor> =>
-  runDockerAuthExitCode(
-    buildDockerAuthSpec({
-      cwd,
-      image: claudeImageName,
-      hostPath: accountPath,
-      containerPath: claudeContainerHomeDir,
-      env: buildClaudeProbeEnv(auth),
-      args: ["-p", "ping"],
-      interactive: false
-    })
+  Match.value(auth).pipe(
+    Match.when({ _tag: "ClaudeProbeAccountConfig" }, () =>
+      runDockerAuthExitCode(
+        buildDockerAuthSpec({
+          cwd,
+          image: claudeImageName,
+          hostPath: accountPath,
+          containerPath: claudeContainerHomeDir,
+          env: buildClaudeProbeEnv(auth),
+          args: ["-p", "ping"],
+          interactive: false
+        })
+      )),
+    Match.when({ _tag: "ClaudeProbeOauthToken" }, ({ token }) =>
+      withClaudeProbeTokenEnvFile(fs, path, accountPath, token, (envFilePath) =>
+        runDockerAuthExitCode(
+          buildDockerAuthSpec({
+            cwd,
+            image: claudeImageName,
+            hostPath: accountPath,
+            containerPath: claudeContainerHomeDir,
+            tmpfs: claudeProbeTmpfs,
+            envFile: envFilePath,
+            env: buildClaudeProbeEnv(auth),
+            args: ["-p", "ping"],
+            interactive: false
+          })
+        ))),
+    Match.exhaustive
   )
 
 // CHANGE: login to Claude Code CLI via interactive `claude setup-token` in isolated container
@@ -187,9 +231,9 @@ export const authClaudeLogin = (
         containerPath: claudeContainerHomeDir
       }),
       persistToken: (token) => persistClaudeOauthToken(fs, path, accountPath, token),
-      normalizeStoredCredentials: resolveClaudeAuthMethod(fs, path, accountPath).pipe(Effect.asVoid),
+      normalizeStoredCredentials: normalizeAndResolveClaudeAuthMethod(fs, path, accountPath).pipe(Effect.asVoid),
       probeToken: (token) =>
-        runClaudePingProbeExitCode(cwd, accountPath, {
+        runClaudePingProbeExitCode(cwd, accountPath, fs, path, {
           _tag: "ClaudeProbeOauthToken",
           token
         }),
@@ -211,7 +255,7 @@ export const authClaudeStatus = (
 ): Effect.Effect<void, CommandFailedError | PlatformError, ClaudeRuntime> =>
   withClaudeAuth(command, ({ accountLabel, accountPath, cwd, fs, path }) =>
     Effect.gen(function*(_) {
-      const method = yield* _(resolveClaudeAuthMethod(fs, path, accountPath))
+      const method = yield* _(normalizeAndResolveClaudeAuthMethod(fs, path, accountPath))
       if (method === "none") {
         yield* _(Effect.log(`Claude not connected (${accountLabel}).`))
         return
@@ -221,7 +265,7 @@ export const authClaudeStatus = (
       const probeAuth: ClaudeProbeAuth = method === "oauth-token" && oauthToken !== null
         ? { _tag: "ClaudeProbeOauthToken", token: oauthToken }
         : { _tag: "ClaudeProbeAccountConfig" }
-      const probeExitCode = yield* _(runClaudePingProbeExitCode(cwd, accountPath, probeAuth))
+      const probeExitCode = yield* _(runClaudePingProbeExitCode(cwd, accountPath, fs, path, probeAuth))
       if (probeExitCode === 0) {
         yield* _(Effect.log(`Claude connected (${accountLabel}, ${method}).`))
         return

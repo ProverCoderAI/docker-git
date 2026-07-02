@@ -11,6 +11,8 @@ type DockerAuthSpecInput = {
   readonly hostPath: string
   readonly containerPath: string
   readonly entrypoint?: string
+  readonly tmpfs?: string | ReadonlyArray<string>
+  readonly envFile?: string | ReadonlyArray<string>
   readonly env?: string | ReadonlyArray<string>
   readonly args: ReadonlyArray<string>
   readonly interactive: boolean
@@ -50,6 +52,8 @@ export const buildDockerAuthSpec = (input: DockerAuthSpecInput): DockerAuthSpec 
   image: input.image,
   volume: { hostPath: input.hostPath, containerPath: input.containerPath },
   ...((typeof input.entrypoint === "string") && { entrypoint: input.entrypoint }),
+  ...(input.tmpfs !== undefined && { tmpfs: input.tmpfs }),
+  ...(input.envFile !== undefined && { envFile: input.envFile }),
   ...(input.env !== undefined && { env: input.env }),
   args: input.args,
   interactive: input.interactive

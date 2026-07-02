@@ -1,4 +1,4 @@
-import { Chunk, Duration, Effect, Match, Ref } from "effect"
+import { Chunk, Duration, Effect, Match, Option, Ref } from "effect"
 import * as Stream from "effect/Stream"
 import type { PlatformError } from "@effect/platform/Error"
 import type * as HttpBody from "@effect/platform/HttpBody"
@@ -10,7 +10,15 @@ import * as ParseResult from "effect/ParseResult"
 import * as Schema from "effect/Schema"
 import { renderError, type AppError } from "@effect-template/lib/usecases/errors"
 
-import { ApiAuthRequiredError, ApiBadRequestError, ApiConflictError, ApiInternalError, ApiNotFoundError, describeUnknown } from "./api/errors.js"
+import {
+  ApiAuthRequiredError,
+  ApiBadRequestError,
+  ApiConflictError,
+  ApiForbiddenError,
+  ApiInternalError,
+  ApiNotFoundError,
+  describeUnknown
+} from "./api/errors.js"
 import { federationJsonLdResponseContentType, type ApplyProjectRequest } from "./api/contracts.js"
 import {
   AuthMenuRequestSchema,
@@ -251,6 +259,7 @@ type ApiError =
   | ApiBadRequestError
   | ApiNotFoundError
   | ApiConflictError
+  | ApiForbiddenError
   | ApiInternalError
   | ParseResult.ParseError
   | HttpBody.HttpBodyError
@@ -465,6 +474,10 @@ const errorResponse = (error: ApiError | unknown) => {
     return jsonResponse({ error: { type: error._tag, message: error.message } }, 409)
   }
 
+  if (error instanceof ApiForbiddenError) {
+    return jsonResponse({ error: { type: error._tag, message: error.message } }, 403)
+  }
+
   if (error instanceof ApiInternalError) {
     return jsonResponse({ error: { type: error._tag, message: error.message } }, 500)
   }
@@ -650,6 +663,27 @@ const firstCommaValue = (value: string | undefined): string | undefined => {
   }
   const first = value.split(",")[0]?.trim()
   return first && first.length > 0 ? first : undefined
+}
+
+export const isLoopbackRemoteAddress = (remoteAddress: string): boolean => {
+  const normalized = remoteAddress.trim().toLowerCase()
+  if (normalized.length === 0) {
+    return false
+  }
+  const withoutBrackets = normalized.startsWith("[") && normalized.includes("]")
+    ? normalized.slice(1, normalized.indexOf("]"))
+    : normalized
+  const host = withoutBrackets.startsWith("::ffff:") ? withoutBrackets.slice("::ffff:".length) : withoutBrackets
+  return host === "127.0.0.1" || host === "::1" || host === "localhost"
+}
+
+const requireLoopbackAuthStatusRequest = (
+  request: HttpServerRequest.HttpServerRequest
+): Effect.Effect<void, ApiForbiddenError> => {
+  const remoteAddress = Option.getOrElse(request.remoteAddress, () => "")
+  return isLoopbackRemoteAddress(remoteAddress)
+    ? Effect.void
+    : Effect.fail(new ApiForbiddenError({ message: "Auth status is only available from loopback clients." }))
 }
 
 const resolveRequestOrigin = (request: HttpServerRequest.HttpServerRequest): string => {
@@ -1112,6 +1146,8 @@ export const makeRouter = () => {
     HttpRouter.get(
       "/auth/github/status",
       Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        yield* _(requireLoopbackAuthStatusRequest(request))
         const status = yield* _(readGithubAuthStatus())
         return yield* _(jsonResponse({ status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
@@ -1119,6 +1155,8 @@ export const makeRouter = () => {
     HttpRouter.get(
       "/auth/gitlab/status",
       Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        yield* _(requireLoopbackAuthStatusRequest(request))
         const status = yield* _(readGitlabAuthStatus())
         return yield* _(jsonResponse({ status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
@@ -1126,6 +1164,8 @@ export const makeRouter = () => {
     HttpRouter.get(
       "/auth/git/status",
       Effect.gen(function*(_) {
+        const request = yield* _(HttpServerRequest.HttpServerRequest)
+        yield* _(requireLoopbackAuthStatusRequest(request))
         const status = yield* _(readGitAuthStatus())
         return yield* _(jsonResponse({ status }, 200))
       }).pipe(Effect.catchAll(errorResponse))
@@ -1134,6 +1174,7 @@ export const makeRouter = () => {
       "/auth/grok/status",
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
+        yield* _(requireLoopbackAuthStatusRequest(request))
         const label = new URL(request.url, "http://localhost").searchParams.get("label")
         const status = yield* _(readGrokAuthStatus(label))
         return yield* _(jsonResponse({ status }, 200))
@@ -1143,6 +1184,7 @@ export const makeRouter = () => {
       "/auth/claude/status",
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
+        yield* _(requireLoopbackAuthStatusRequest(request))
         const label = new URL(request.url, "http://localhost").searchParams.get("label")
         const status = yield* _(readClaudeAuthStatus(label))
         return yield* _(jsonResponse({ status }, 200))
@@ -1292,6 +1334,7 @@ export const makeRouter = () => {
       "/auth/codex/status",
       Effect.gen(function*(_) {
         const request = yield* _(HttpServerRequest.HttpServerRequest)
+        yield* _(requireLoopbackAuthStatusRequest(request))
         const label = new URL(request.url, "http://localhost").searchParams.get("label")
         const status = yield* _(readCodexAuthStatus(label))
         return yield* _(jsonResponse({ status }, 200))

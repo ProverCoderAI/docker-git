@@ -59,13 +59,35 @@ runs:
       shell: bash
       run: |
         run_bun_install() {
-          local timeout_seconds=$((20 * 60))
-          bun install --frozen-lockfile &
+          local timeout_seconds=180
+          local use_process_group=0
+          if command -v setsid >/dev/null 2>&1; then
+            setsid bun install --frozen-lockfile &
+            use_process_group=1
+          else
+            bun install --frozen-lockfile &
+          fi
           local install_pid="$!"
           (
             sleep "$timeout_seconds"
-            echo "bun install exceeded 20 minutes; terminating" >&2
-            kill "$install_pid" 2>/dev/null || true
+            if kill -0 "$install_pid" 2>/dev/null; then
+              echo "bun install exceeded ${timeout_seconds}s; terminating" >&2
+              if [[ "$use_process_group" == "1" ]]; then
+                kill -TERM "-$install_pid" 2>/dev/null || true
+                sleep 5
+                kill -KILL "-$install_pid" 2>/dev/null || true
+              else
+                if command -v pkill >/dev/null 2>&1; then
+                  pkill -TERM -P "$install_pid" 2>/dev/null || true
+                fi
+                kill -TERM "$install_pid" 2>/dev/null || true
+                sleep 5
+                if command -v pkill >/dev/null 2>&1; then
+                  pkill -KILL -P "$install_pid" 2>/dev/null || true
+                fi
+                kill -KILL "$install_pid" 2>/dev/null || true
+              fi
+            fi
           ) &
           local timeout_pid="$!"
           local status=0

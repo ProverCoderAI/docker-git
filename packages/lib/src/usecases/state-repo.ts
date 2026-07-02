@@ -41,7 +41,7 @@ const managedRepositoryCachePaths: ReadonlyArray<string> = [".cache/git-mirrors"
 const renderStateSyncFailure = (error: CommandFailedError | PlatformError): string =>
   error._tag === "CommandFailedError"
     ? `${error.command} (exit ${error.exitCode})`
-    : String(error)
+    : error._tag
 
 const logStateAutoSyncFailure = (
   error: CommandFailedError | PlatformError
@@ -70,15 +70,16 @@ export const statePath: Effect.Effect<void, PlatformError, Path.Path> = Effect.g
 }).pipe(Effect.asVoid)
 
 const stateSyncRaw = (
+  cwd: string,
   message: string | null
 ): Effect.Effect<void, CommandFailedError | PlatformError, StateRepoEnv> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
-    const root = resolveStateRoot(path, process.cwd())
+    const root = resolveStateRoot(path, cwd)
     const repoExit = yield* _(gitExitCode(root, ["rev-parse", "--is-inside-work-tree"], gitBaseEnv))
     if (repoExit !== successExitCode) {
-      yield* _(Effect.logWarning(`State dir is not a git repository: ${root}`))
+      yield* _(Effect.logWarning("State dir is not a git repository."))
       yield* _(Effect.logWarning(`Run: docker-git state init --repo-url <url>`))
       return yield* _(
         Effect.fail(new CommandFailedError({ command: "git rev-parse --is-inside-work-tree", exitCode: repoExit }))
@@ -87,7 +88,7 @@ const stateSyncRaw = (
     yield* _(ensureStateIgnoreAndUntrackCaches(fs, path, root))
     const originUrlExit = yield* _(gitExitCode(root, ["remote", "get-url", "origin"], gitBaseEnv))
     if (originUrlExit !== successExitCode) {
-      yield* _(Effect.logWarning(`State dir has no origin remote: ${root}`))
+      yield* _(Effect.logWarning("State dir has no origin remote."))
       yield* _(Effect.logWarning(`Run: docker-git state init --repo-url <url>`))
       return yield* _(
         Effect.fail(new CommandFailedError({ command: "git remote get-url origin", exitCode: originUrlExit }))
@@ -111,13 +112,16 @@ const stateSyncRaw = (
     )
   }).pipe(Effect.asVoid)
 
-export const stateSync = (message: string | null) => withStateGitLock(stateSyncRaw(message))
+export const stateSync = (message: string | null) =>
+  Effect.sync(() => process.cwd()).pipe(
+    Effect.flatMap((cwd) => withStateGitLock(cwd, stateSyncRaw(cwd, message)))
+  )
 
-const autoSyncStateRaw = (message: string): Effect.Effect<void, never, StateRepoEnv> =>
+const autoSyncStateRaw = (cwd: string, message: string): Effect.Effect<void, never, StateRepoEnv> =>
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
-    const root = resolveStateRoot(path, process.cwd())
+    const root = resolveStateRoot(path, cwd)
     const isRepoOk = yield* _(isGitRepo(root))
     if (!isRepoOk) {
       return
@@ -135,13 +139,13 @@ const autoSyncStateRaw = (message: string): Effect.Effect<void, never, StateRepo
       if (hasIndexLock) {
         yield* _(
           Effect.logWarning(
-            `State auto-sync skipped: git index lock exists at ${indexLockPath}. Another git process may be running; retry later.`
+            "State auto-sync skipped: git index lock exists. Another git process may be running; retry later."
           )
         )
         return
       }
     }
-    const effect = stateSyncRaw(message)
+    const effect = stateSyncRaw(cwd, message)
     if (isStrict) {
       yield* _(effect)
       return
@@ -156,7 +160,7 @@ const autoSyncStateRaw = (message: string): Effect.Effect<void, never, StateRepo
     )
   }).pipe(
     Effect.matchEffect({
-      onFailure: (error) => Effect.logWarning(`State auto-sync failed: ${String(error)}`),
+      onFailure: logStateAutoSyncFailure,
       onSuccess: () => Effect.void
     }),
     Effect.asVoid
@@ -170,10 +174,10 @@ const autoSyncStateRaw = (message: string): Effect.Effect<void, never, StateRepo
 // EFFECT: Effect<void, never, StateRepoEnv>
 // INVARIANT: never fails — errors are logged as warnings; does not block CLI execution
 // COMPLEXITY: O(1) network round-trip
-const autoPullStateRaw: Effect.Effect<void, never, StateRepoEnv> = Effect.gen(function*(_) {
+const autoPullStateRaw = (cwd: string): Effect.Effect<void, never, StateRepoEnv> => Effect.gen(function*(_) {
   const fs = yield* _(FileSystem.FileSystem)
   const path = yield* _(Path.Path)
-  const root = resolveStateRoot(path, process.cwd())
+  const root = resolveStateRoot(path, cwd)
   const isRootExists = yield* _(fs.exists(root))
   if (!isRootExists) {
     return
@@ -205,7 +209,8 @@ const autoPullStateRaw: Effect.Effect<void, never, StateRepoEnv> = Effect.gen(fu
 )
 
 export const autoSyncState = (message: string): Effect.Effect<void, never, StateRepoEnv> =>
-  withStateGitLock(autoSyncStateRaw(message)).pipe(
+  Effect.sync(() => process.cwd()).pipe(
+    Effect.flatMap((cwd) => withStateGitLock(cwd, autoSyncStateRaw(cwd, message))),
     Effect.matchEffect({
       onFailure: logStateAutoSyncFailure,
       onSuccess: () => Effect.void
@@ -213,7 +218,8 @@ export const autoSyncState = (message: string): Effect.Effect<void, never, State
     Effect.asVoid
   )
 
-export const autoPullState: Effect.Effect<void, never, StateRepoEnv> = withStateGitLock(autoPullStateRaw).pipe(
+export const autoPullState: Effect.Effect<void, never, StateRepoEnv> = Effect.sync(() => process.cwd()).pipe(
+  Effect.flatMap((cwd) => withStateGitLock(cwd, autoPullStateRaw(cwd))),
   Effect.matchEffect({
     onFailure: logStateAutoPullFailure,
     onSuccess: () => Effect.void
@@ -255,7 +261,10 @@ const statePullInternal = (
     yield* _(effect)
   }).pipe(Effect.asVoid)
 
-export const stateInit = (input: StateInitInput) => withStateGitLock(stateInitRaw(input))
+export const stateInit = (input: StateInitInput) =>
+  Effect.sync(() => process.cwd()).pipe(
+    Effect.flatMap((cwd) => withStateGitLock(cwd, stateInitRaw(input, cwd)))
+  )
 
 export { stateCommit, stateStatus } from "./state-repo/local-ops.js"
 export { statePull, statePush } from "./state-repo/pull-push.js"

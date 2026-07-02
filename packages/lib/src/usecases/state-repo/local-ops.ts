@@ -25,16 +25,19 @@ const ensureStateIgnoreAndUntrackCaches = (
     yield* _(git(root, ["rm", "-r", "--cached", "--ignore-unmatch", ...managedRepositoryCachePaths], gitBaseEnv))
   }).pipe(Effect.asVoid)
 
-const stateStatusRaw = Effect.gen(function*(_) {
+const stateStatusRaw = (cwd: string) => Effect.gen(function*(_) {
   const path = yield* _(Path.Path)
-  const root = resolveStateRoot(path, process.cwd())
+  const root = resolveStateRoot(path, cwd)
   const output = yield* _(gitCapture(root, ["status", "-sb", "--porcelain=v1"], gitBaseEnv))
   yield* _(Effect.log(output.trim().length > 0 ? output.trimEnd() : "(clean)"))
 }).pipe(Effect.asVoid)
 
-export const stateStatus = withStateGitLock(stateStatusRaw)
+export const stateStatus = Effect.sync(() => process.cwd()).pipe(
+  Effect.flatMap((cwd) => withStateGitLock(cwd, stateStatusRaw(cwd)))
+)
 
 const stateCommitRaw = (
+  cwd: string,
   message: string
 ): Effect.Effect<
   void,
@@ -44,7 +47,7 @@ const stateCommitRaw = (
   Effect.gen(function*(_) {
     const fs = yield* _(FileSystem.FileSystem)
     const path = yield* _(Path.Path)
-    const root = resolveStateRoot(path, process.cwd())
+    const root = resolveStateRoot(path, cwd)
     yield* _(ensureStateIgnoreAndUntrackCaches(fs, path, root))
     yield* _(git(root, ["add", "-A"], gitBaseEnv))
     const diffExit = yield* _(gitExitCode(root, ["diff", "--cached", "--quiet"], gitBaseEnv))
@@ -61,4 +64,7 @@ export const stateCommit = (
   void,
   CommandFailedError | PlatformError,
   FileSystem.FileSystem | Path.Path | CommandExecutor.CommandExecutor
-> => withStateGitLock(stateCommitRaw(message))
+> =>
+  Effect.sync(() => process.cwd()).pipe(
+    Effect.flatMap((cwd) => withStateGitLock(cwd, stateCommitRaw(cwd, message)))
+  )
