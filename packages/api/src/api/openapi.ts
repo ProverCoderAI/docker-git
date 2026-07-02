@@ -251,6 +251,20 @@ export const CodexStatusResponseSchema = Schema.Struct({
   status: CodexAuthStatusSchema
 })
 
+export const ClaudeAuthStatusSchema = Schema.Struct({
+  account: NullableStringSchema,
+  authPath: Schema.String,
+  connected: Schema.Boolean,
+  label: Schema.String,
+  message: Schema.String,
+  method: Schema.Literal("none", "oauth-token", "claude-ai-session")
+})
+
+export const ClaudeStatusResponseSchema = Schema.Struct({
+  ok: OptionalOkSchema,
+  status: ClaudeAuthStatusSchema
+})
+
 export const GrokAuthStatusSchema = Schema.Struct({
   authPath: Schema.String,
   connected: Schema.Boolean,
@@ -600,6 +614,11 @@ const AuthGroup = HttpApiGroup.make("auth")
     endpoint.get("codexStatus", "/auth/codex/status")
       .setUrlParams(QueryLabelSchema)
       .addSuccess(CodexStatusResponseSchema)
+  )
+  .add(
+    endpoint.get("claudeStatus", "/auth/claude/status")
+      .setUrlParams(QueryLabelSchema)
+      .addSuccess(ClaudeStatusResponseSchema)
   )
   .add(
     endpoint.post("githubLogin", "/auth/github/login")

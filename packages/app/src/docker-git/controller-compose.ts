@@ -4,24 +4,31 @@ import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
 import { Duration, Effect } from "effect"
 
+import {
+  type ControllerComposeFiles,
+  type ControllerGpuMode,
+  composeFilesForGpuMode,
+  controllerGpuModeEnvKey,
+  loadControllerComposeExtraPath
+} from "./controller-compose-files.js"
 import { loadControllerDockerRuntime, resolveControllerRuntimeOverlayPath } from "./controller-compose-runtime.js"
 import { computeLocalControllerRevision, controllerRevisionEnvKey } from "./controller-revision.js"
 import type { ControllerDockerRuntime } from "./controller-runtime.js"
 import { runCommandWithCapturedOutput } from "./frontend-lib/shell/command-runner.js"
 import { findExistingUpwards } from "./frontend-lib/usecases/path-helpers.js"
-import type { ControllerBootstrapError } from "./host-errors.js"
+import { type ControllerBootstrapError, controllerBootstrapError } from "./host-errors.js"
 
-export const controllerGpuModeEnvKey = "DOCKER_GIT_CONTROLLER_GPU"
 export const controllerBuildSkillerEnvKey = "DOCKER_GIT_CONTROLLER_BUILD_SKILLER"
 
-export type ControllerGpuMode = "none" | "all"
 export type ControllerBuildSkillerMode = "0" | "1"
 
-export type ControllerComposeFiles = {
-  readonly composePath: string
-  readonly gpuOverlayPath: string | null
-  readonly runtimeOverlayPath: string | null
-}
+export {
+  composeFilesForMode,
+  composeFilesToArgs,
+  controllerComposeExtraFileEnvKey,
+  controllerGpuModeEnvKey
+} from "./controller-compose-files.js"
+export type { ControllerComposeFiles, ControllerGpuMode } from "./controller-compose-files.js"
 
 export const controllerComposeProjectName = "docker-git"
 
@@ -42,11 +49,6 @@ export const controllerComposeProjectArgs: ReadonlyArray<string> = [
 
 const skillerSubmodulePath = "third_party/skiller-desktop-skills-manager"
 const skillerPackagePath = `${skillerSubmodulePath}/package.json`
-
-const controllerBootstrapError = (message: string): ControllerBootstrapError => ({
-  _tag: "ControllerBootstrapError",
-  message
-})
 
 export const parseControllerGpuMode = (raw?: string): ControllerGpuMode | null => {
   const trimmed = raw?.trim() ?? ""
@@ -206,51 +208,6 @@ export const ensureSkillerSubmoduleInitialized = (
     )
   })
 
-export const composeFilesForMode = (
-  composePath: string,
-  gpuOverlayPath: string | null,
-  runtimeOverlayPath: string | null = null
-): ReadonlyArray<string> => [
-  "-f",
-  composePath,
-  ...(runtimeOverlayPath === null ? [] : ["-f", runtimeOverlayPath]),
-  ...(gpuOverlayPath === null ? [] : ["-f", gpuOverlayPath])
-]
-
-export const composeFilesToArgs = (composeFiles: ControllerComposeFiles): ReadonlyArray<string> =>
-  composeFilesForMode(
-    composeFiles.composePath,
-    composeFiles.gpuOverlayPath,
-    composeFiles.runtimeOverlayPath
-  )
-
-const requireGpuOverlayPath = (
-  composePath: string
-): Effect.Effect<string, ControllerBootstrapError, FileSystem.FileSystem | Path.Path> =>
-  Effect.gen(function*(_) {
-    const fs = yield* _(FileSystem.FileSystem)
-    const path = yield* _(Path.Path)
-    const gpuOverlayPath = path.join(path.dirname(composePath), "docker-compose.gpu.yml")
-    const isExists = yield* _(fs.exists(gpuOverlayPath).pipe(Effect.mapError(mapComposePathError)))
-    return isExists
-      ? gpuOverlayPath
-      : yield* _(
-        Effect.fail(
-          controllerBootstrapError(`${controllerGpuModeEnvKey}=all requires ${gpuOverlayPath}, but it was not found.`)
-        )
-      )
-  })
-
-const composeFilesForGpuMode = (
-  composePath: string,
-  gpuMode: ControllerGpuMode
-): Effect.Effect<ControllerComposeFiles, ControllerBootstrapError, FileSystem.FileSystem | Path.Path> =>
-  gpuMode === "none"
-    ? Effect.succeed({ composePath, gpuOverlayPath: null, runtimeOverlayPath: null })
-    : requireGpuOverlayPath(composePath).pipe(
-      Effect.map((gpuOverlayPath) => ({ composePath, gpuOverlayPath, runtimeOverlayPath: null }))
-    )
-
 type ComposePathAndGpuMode = {
   readonly composePath: string
   readonly dockerRuntime: ControllerDockerRuntime
@@ -286,8 +243,9 @@ export const resolveControllerComposeFiles = (): Effect.Effect<
   withComposePathAndGpuMode(({ composePath, dockerRuntime, gpuMode }) =>
     Effect.gen(function*(_) {
       const composeFiles = yield* _(composeFilesForGpuMode(composePath, gpuMode))
+      const extraOverlayPath = yield* _(loadControllerComposeExtraPath())
       const runtimeOverlayPath = yield* _(resolveControllerRuntimeOverlayPath(composePath, dockerRuntime))
-      return { ...composeFiles, runtimeOverlayPath }
+      return { ...composeFiles, extraOverlayPath, runtimeOverlayPath }
     })
   )
 

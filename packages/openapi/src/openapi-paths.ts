@@ -452,6 +452,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/claude/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth.claudeStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/github/login": {
         parameters: {
             query?: never;
@@ -5048,6 +5064,129 @@ export interface operations {
                             label: string;
                             message: string;
                             present: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description The request did not match the expected schema */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpApiDecodeError"] | {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+            /** @description Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            command?: string;
+                            /** unknown */
+                            details?: unknown;
+                            message: string;
+                            provider?: string;
+                            type: string;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    "auth.claudeStatus": {
+        parameters: {
+            query?: {
+                label?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: boolean;
+                        status: {
+                            account: string | null;
+                            authPath: string;
+                            connected: boolean;
+                            label: string;
+                            message: string;
+                            /** @enum {string} */
+                            method: "none" | "oauth-token" | "claude-ai-session";
                         };
                     };
                 };

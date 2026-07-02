@@ -7,6 +7,7 @@
   "workspaces": [
     "packages/api",
     "packages/app",
+    "packages/auth-oauth",
     "packages/container",
     "packages/docker-git-session-sync",
     "packages/lib",
@@ -15,13 +16,13 @@
   ],
   "scripts": {
     "setup:pre-commit-hook": "bun scripts/setup-pre-commit-hook.js",
-    "build": "bun run --filter @prover-coder-ai/docker-git-session-sync build && bun run --filter @prover-coder-ai/docker-git-terminal build && bun run --filter @prover-coder-ai/docker-git build",
+    "build": "bun run --filter @prover-coder-ai/docker-git-auth-oauth build && bun run --filter @prover-coder-ai/docker-git-session-sync build && bun run --filter @prover-coder-ai/docker-git-terminal build && bun run --filter @prover-coder-ai/docker-git build",
     "api:build": "bun run --filter @effect-template/api build",
     "api:start": "bun run --filter @effect-template/api start",
     "api:dev": "bun run --filter @effect-template/api dev",
     "api:test": "bun run --filter @effect-template/api test",
     "api:typecheck": "bun run --filter @effect-template/api typecheck",
-    "check": "bun run --filter @prover-coder-ai/docker-git-session-sync check && bun run --filter @prover-coder-ai/docker-git-terminal check && bun run --filter @prover-coder-ai/docker-git-openapi check && bun run --filter @prover-coder-ai/docker-git check && bun run --filter @effect-template/lib typecheck",
+    "check": "bun run --filter @prover-coder-ai/docker-git-auth-oauth check && bun run --filter @prover-coder-ai/docker-git-session-sync check && bun run --filter @prover-coder-ai/docker-git-terminal check && bun run --filter @prover-coder-ai/docker-git-openapi check && bun run --filter @prover-coder-ai/docker-git check && bun run --filter @effect-template/lib typecheck",
     "check:dist-deps-prune": "bun node_modules/@prover-coder-ai/dist-deps-prune/dist/main.js scan --package ./packages/app/package.json --prune-dev true --silent",
     "changeset": "changeset",
     "changeset-publish": "bun -e \"if (!process.env.NPM_TOKEN) { console.log('Skipping publish: NPM_TOKEN is not set'); process.exit(0); }\" && changeset publish",
@@ -52,8 +53,8 @@
     "lint:effect": "bun run --filter @prover-coder-ai/docker-git-session-sync lint:effect && bun run --filter @prover-coder-ai/docker-git-terminal lint:effect && bun run --filter @prover-coder-ai/docker-git lint:effect && bun run --filter @prover-coder-ai/docker-git-container lint:effect && bun run --filter @effect-template/lib lint:effect && bun run --filter @effect-template/api lint:effect",
     "effect:skill:init": "git submodule update --init --checkout third_party/effect-ts-skills",
     "effect:skill:check": "bun run effect:skill:init && bash .codex/skills/effect-ts-guide/scripts/run-effect-ts-check.sh packages/app/src/web/api-create-project.ts packages/app/src/web/api-database.ts packages/app/src/web/api-http.ts packages/app/src/web/api-prompts.ts packages/app/src/web/api-skills.ts packages/app/src/web/api-tasks.ts packages/openapi/src --profile strict",
-    "test": "bun run --filter @prover-coder-ai/docker-git-session-sync test && bun run --filter @prover-coder-ai/docker-git-terminal test && bun run --filter @prover-coder-ai/docker-git test && bun run --filter @effect-template/lib test",
-    "typecheck": "bun run --filter @prover-coder-ai/docker-git-session-sync typecheck && bun run --filter @prover-coder-ai/docker-git-terminal typecheck && bun run --filter @prover-coder-ai/docker-git-openapi typecheck && bun run --filter @prover-coder-ai/docker-git typecheck && bun run --filter @effect-template/lib typecheck",
+    "test": "bun run --filter @prover-coder-ai/docker-git-auth-oauth test && bun run --filter @prover-coder-ai/docker-git-session-sync test && bun run --filter @prover-coder-ai/docker-git-terminal test && bun run --filter @prover-coder-ai/docker-git test && bun run --filter @effect-template/lib test",
+    "typecheck": "bun run --filter @prover-coder-ai/docker-git-auth-oauth typecheck && bun run --filter @prover-coder-ai/docker-git-session-sync typecheck && bun run --filter @prover-coder-ai/docker-git-terminal typecheck && bun run --filter @prover-coder-ai/docker-git-openapi typecheck && bun run --filter @prover-coder-ai/docker-git typecheck && bun run --filter @effect-template/lib typecheck",
     "start": "bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js"
   },
   "devDependencies": {

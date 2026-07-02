@@ -1,3 +1,5 @@
+export * from "./auth-claude-local.js"
+export * from "./auth-claude-login-flow.js"
 export * from "./auth-claude.js"
 export * from "./auth-codex.js"
 export * from "./auth-gemini.js"

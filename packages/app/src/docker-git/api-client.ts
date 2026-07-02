@@ -28,6 +28,7 @@ export {
   codexLogin,
   codexLogout,
   codexStatus,
+  claudeStatus,
   githubLogin,
   githubLogout,
   githubStatus,

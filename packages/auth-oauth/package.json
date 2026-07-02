@@ -1,0 +1,60 @@
+{
+  "name": "@prover-coder-ai/docker-git-auth-oauth",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pure OAuth token helpers for docker-git auth flows",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "packageManager": "bun@1.3.11",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "bun run typecheck",
+    "auth:claude:docker": "bun src/claude-docker-oauth.ts",
+    "smoke:claude": "bun src/claude-local-smoke.ts --mode=env-token",
+    "smoke:claude:setup-token": "bun src/claude-local-smoke.ts --mode=setup-token",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProverCoderAI/docker-git.git"
+  },
+  "keywords": [
+    "docker-git",
+    "auth",
+    "oauth"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ProverCoderAI/docker-git/issues"
+  },
+  "homepage": "https://github.com/ProverCoderAI/docker-git#readme",
+  "devDependencies": {
+    "@effect/vitest": "^0.29.0",
+    "@types/node": "^25.9.3",
+    "effect": "^3.21.3",
+    "fast-check": "^4.8.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./claude-docker-oauth": {
+      "types": "./dist/claude-docker-oauth.d.ts",
+      "import": "./dist/claude-docker-oauth.js"
+    },
+    "./claude-local-smoke": {
+      "types": "./dist/claude-local-smoke.d.ts",
+      "import": "./dist/claude-local-smoke.js"
+    },
+    "./claude-oauth-token": {
+      "types": "./dist/claude-oauth-token.d.ts",
+      "import": "./dist/claude-oauth-token.js"
+    }
+  }
+}

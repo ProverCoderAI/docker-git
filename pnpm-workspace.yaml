@@ -1,6 +1,7 @@
 packages:
   - packages/api
   - packages/app
+  - packages/auth-oauth
   - packages/container
   - packages/docker-git-session-sync
   - packages/lib
