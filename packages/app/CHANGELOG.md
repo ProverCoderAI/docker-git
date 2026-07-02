@@ -1,5 +1,25 @@
 # @prover-coder-ai/docker-git
 
+## 1.3.15
+
+### Patch Changes
+
+- [#441](https://github.com/ProverCoderAI/docker-git/pull/441) [`72bf8eb`](https://github.com/ProverCoderAI/docker-git/commit/72bf8eb51db6747358832d032b5e7e05ae2509ec) Thanks [@skulidropek](https://github.com/skulidropek)! - Fix `docker-git auth claude login` failing after a successful OAuth login.
+
+  After `claude setup-token` created and persisted the OAuth token, the login
+  command ran a verification probe (`claude -p ping`) and treated any non-zero
+  exit as a hard failure, exiting with code 1 even though the token was already
+  saved. A transient probe failure (network hiccup, rate limit, or token
+  propagation delay) would therefore discard an otherwise successful login.
+
+  The probe failure is now reported as a warning instead of an error, mirroring
+  `docker-git auth claude status`. The token is kept, and the user is advised to
+  re-check connectivity later with `docker-git auth claude status`.
+
+  Controller startup now also rejects `DOCKER_GIT_CONTROLLER_GPU=all` when
+  `docker-compose.gpu.yml` exists as a directory instead of a regular file,
+  matching the extra compose overlay invariant before invoking Docker Compose.
+
 ## 1.3.14
 
 ### Patch Changes
