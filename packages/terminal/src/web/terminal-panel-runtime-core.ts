@@ -31,6 +31,7 @@ export const createLifecycleState = (): TerminalLifecycleState => ({
   disposed: false,
   inlineImageDisposables: [],
   inlineImageObjectUrls: new Map<string, string>(),
+  inlineImageRenderedPaths: new Set<string>(),
   outputQueue: [],
   outputWriting: false,
   readyNotified: false,

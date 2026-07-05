@@ -14,18 +14,12 @@ const terminalInlineImagePreviewColumns = 16
 const terminalInlineImagePreviewHeightPx = 56
 const terminalInlineImagePreviewWidthPx = 96
 
-export type TerminalInlineImageEntry =
-  | {
-    readonly _tag: "AvailableTerminalInlineImage"
-    readonly displayUrl: string
-    readonly fetchUrl: string
-    readonly path: string
-  }
-  | {
-    readonly _tag: "UnavailableTerminalInlineImage"
-    readonly fetchUrl: string
-    readonly path: string
-  }
+export type TerminalInlineImageEntry = {
+  readonly _tag: "AvailableTerminalInlineImage"
+  readonly displayUrl: string
+  readonly fetchUrl: string
+  readonly path: string
+}
 
 type TerminalInlineImageObjectUrlCache = Map<string, string>
 
@@ -36,15 +30,6 @@ const availableTerminalInlineImageEntry = (
 ): TerminalInlineImageEntry => ({
   _tag: "AvailableTerminalInlineImage",
   displayUrl,
-  fetchUrl,
-  path
-})
-
-export const unavailableTerminalInlineImageEntry = (
-  path: string,
-  fetchUrl: string
-): TerminalInlineImageEntry => ({
-  _tag: "UnavailableTerminalInlineImage",
   fetchUrl,
   path
 })
@@ -101,18 +86,12 @@ export const revokeTerminalInlineImageObjectUrlCache = (
   cache.clear()
 }
 
-const terminalInlineImageLinkUrl = (entry: TerminalInlineImageEntry): string =>
-  entry._tag === "AvailableTerminalInlineImage" ? entry.displayUrl : entry.fetchUrl
-
-const terminalInlineImageTitle = (entry: TerminalInlineImageEntry): string =>
-  entry._tag === "AvailableTerminalInlineImage" ? entry.path : `${entry.path} unavailable`
-
 const createTerminalInlineImageLink = (entry: TerminalInlineImageEntry): HTMLAnchorElement => {
   const link = document.createElement("a")
-  link.href = terminalInlineImageLinkUrl(entry)
+  link.href = entry.displayUrl
   link.rel = "noreferrer"
   link.target = "_blank"
-  link.title = terminalInlineImageTitle(entry)
+  link.title = entry.path
   link.style.alignItems = "center"
   link.style.background = "#0d1218"
   link.style.border = "1px solid #3a4652"
@@ -129,9 +108,9 @@ const createTerminalInlineImageLink = (entry: TerminalInlineImageEntry): HTMLAnc
   return link
 }
 
-const appendAvailableTerminalInlineImage = (
+const appendTerminalInlineImageContent = (
   link: HTMLAnchorElement,
-  entry: Extract<TerminalInlineImageEntry, { readonly _tag: "AvailableTerminalInlineImage" }>
+  entry: TerminalInlineImageEntry
 ): void => {
   const image = document.createElement("img")
   image.alt = entry.path
@@ -142,30 +121,6 @@ const appendAvailableTerminalInlineImage = (
   image.style.objectFit = "contain"
   image.style.width = "100%"
   link.append(image)
-}
-
-const appendUnavailableTerminalInlineImage = (link: HTMLAnchorElement): void => {
-  const label = document.createElement("span")
-  label.textContent = "unavailable"
-  label.style.color = "#9aa8b6"
-  label.style.fontFamily = "'IBM Plex Mono', ui-monospace, monospace"
-  label.style.fontSize = "11px"
-  label.style.lineHeight = "1"
-  label.style.overflow = "hidden"
-  label.style.textOverflow = "ellipsis"
-  label.style.whiteSpace = "nowrap"
-  link.append(label)
-}
-
-const appendTerminalInlineImageContent = (
-  link: HTMLAnchorElement,
-  entry: TerminalInlineImageEntry
-): void => {
-  if (entry._tag === "AvailableTerminalInlineImage") {
-    appendAvailableTerminalInlineImage(link, entry)
-    return
-  }
-  appendUnavailableTerminalInlineImage(link)
 }
 
 const openImage = (fetchUrl: string): void => {
@@ -191,7 +146,7 @@ const renderInlineImageElement = (
   element: HTMLElement,
   entry: TerminalInlineImageEntry
 ): void => {
-  if (element.dataset["path"] === entry.path && element.dataset["tag"] === entry._tag) {
+  if (element.dataset["path"] === entry.path) {
     return
   }
 
@@ -199,7 +154,6 @@ const renderInlineImageElement = (
   appendTerminalInlineImageContent(link, entry)
 
   element.dataset["path"] = entry.path
-  element.dataset["tag"] = entry._tag
   element.style.pointerEvents = "none"
   element.replaceChildren(link)
 }
