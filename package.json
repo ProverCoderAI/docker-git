@@ -80,5 +80,8 @@
     "url": "https://github.com/ProverCoderAI/docker-git/issues"
   },
   "homepage": "https://github.com/ProverCoderAI/docker-git#readme",
-  "license": "MIT"
+  "license": "MIT",
+  "patchedDependencies": {
+    "@prover-coder-ai/openapi-effect@1.0.27": "patches/@prover-coder-ai%2Fopenapi-effect@1.0.27.patch"
+  }
 }

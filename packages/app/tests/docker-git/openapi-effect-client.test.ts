@@ -3,6 +3,7 @@ import { createClient } from "@prover-coder-ai/docker-git-openapi"
 import type { ApiFailure } from "@prover-coder-ai/docker-git-openapi"
 import { Effect } from "effect"
 import * as fc from "fast-check"
+import { afterEach, vi } from "vitest"
 
 import type { JsonValue } from "../../src/shared/json-schema.js"
 import { renderDockerGitOpenApiFailure } from "../../src/web/api-http.js"
@@ -94,6 +95,11 @@ const assertOpenApiClientProperty = <PropertyArgs>(property: fc.IAsyncProperty<P
     catch: (error) => (error instanceof Error ? error : new Error(String(error))),
     try: () => fc.assert(property, { numRuns: 25 })
   })
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 describe("docker-git OpenAPI Effect client", () => {
   it.effect("executes typed GET requests directly through openapi-effect", () =>
@@ -222,5 +228,71 @@ describe("docker-git OpenAPI Effect client", () => {
       expect(requests).toHaveLength(1)
       expect(requests[0]?.method).toBe("POST")
       expect(new URL(requests[0]?.url ?? "").pathname).toBe("/projects/down-all")
+    }))
+
+  it.effect("falls back to getRandomValues when randomUUID is unavailable", () =>
+    Effect.gen(function*(_) {
+      const requests: Array<CapturedRequest> = []
+      const capturedIds: Array<string> = []
+      vi.stubGlobal("crypto", {
+        getRandomValues: (values: Uint8Array): Uint8Array => {
+          values.set([0x10, 0x32, 0x54, 0x76, 0x98])
+          return values
+        }
+      })
+
+      const api = createClient({
+        baseUrl: "https://docker-git.example.test",
+        fetch: createMockFetch(
+          requests,
+          createJsonResponse(200, {
+            cwd: "/workspace",
+            ok: true,
+            projectsRoot: "/workspace/projects",
+            revision: null
+          })
+        )
+      })
+      api.use({
+        onRequest: ({ id }) => {
+          capturedIds.push(id)
+        }
+      })
+
+      const success = yield* _(api.GET("/health"))
+
+      expect(success.status).toBe(200)
+      expect(capturedIds).toEqual(["103254769"])
+      expect(requests).toHaveLength(1)
+    }))
+
+  it.effect("falls back to a clock-based request id when Web Crypto is missing", () =>
+    Effect.gen(function*(_) {
+      const capturedIds: Array<string> = []
+      vi.stubGlobal("crypto", undefined)
+      vi.spyOn(Date, "now").mockReturnValue(0x1234567)
+
+      const api = createClient({
+        baseUrl: "https://docker-git.example.test",
+        fetch: createMockFetch(
+          [],
+          createJsonResponse(200, {
+            cwd: "/workspace",
+            ok: true,
+            projectsRoot: "/workspace/projects",
+            revision: null
+          })
+        )
+      })
+      api.use({
+        onRequest: ({ id }) => {
+          capturedIds.push(id)
+        }
+      })
+
+      const success = yield* _(api.GET("/health"))
+
+      expect(success.status).toBe(200)
+      expect(capturedIds).toEqual(["123456700"])
     }))
 })

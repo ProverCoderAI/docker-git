@@ -76,6 +76,7 @@ RUN set -eu; \
 FROM controller-base AS workspace-deps
 
 COPY package.json bun.lock bunfig.toml tsconfig.base.json tsconfig.json ./
+COPY patches ./patches
 RUN mkdir -p packages/api packages/app packages/auth-oauth packages/container packages/docker-git-session-sync packages/lib packages/openapi packages/terminal
 COPY packages/api/package.json ./packages/api/package.json
 COPY packages/app/package.json ./packages/app/package.json
@@ -108,7 +109,6 @@ RUN set -eu; \
 
 FROM workspace-deps AS workspace-static
 
-COPY patches ./patches
 COPY scripts ./scripts
 COPY packages/container ./packages/container
 COPY packages/auth-oauth ./packages/auth-oauth
