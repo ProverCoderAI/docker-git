@@ -32,6 +32,7 @@ export const cleanupTerminalResources = (
   }
   args.lifecycle.inlineImageDisposables = []
   revokeTerminalInlineImageObjectUrlCache(args.lifecycle.inlineImageObjectUrls)
+  args.lifecycle.inlineImageRenderedPaths.clear()
   args.lifecycle.outputQueue = []
   args.lifecycle.outputWriting = false
   args.removeImageLinks()

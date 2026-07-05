@@ -6,14 +6,14 @@ import { resolveTerminalImageFetchUrl } from "./terminal-image-url.js"
 import {
   splitTerminalInlineImageOutput,
   type TerminalInlineImageOutputSegment,
+  writeTerminalInlineImagePreviews,
   writeTerminalOutputSegment
 } from "./terminal-inline-images-core.js"
 import {
   cachedTerminalInlineImageEntry,
   cacheTerminalInlineImageBlob,
   didAppendTerminalInlineImagePreview,
-  terminalInlineImageSpacer,
-  unavailableTerminalInlineImageEntry
+  terminalInlineImageSpacer
 } from "./terminal-inline-images.js"
 import type { TerminalInlineImageEntry } from "./terminal-inline-images.js"
 import type { TerminalMessageHandlers } from "./terminal-panel-runtime-types.js"
@@ -34,14 +34,6 @@ const terminalInlineImageMaxBytes = 10 * 1024 * 1024
 const emptyTerminalInlineImageBufferState: TerminalInlineImageBufferState = {
   chunks: [],
   size: 0
-}
-
-const terminalImageEntry = (
-  handlers: TerminalMessageHandlers,
-  path: string
-): TerminalInlineImageEntry | null => {
-  const fetchUrl = resolveTerminalImageFetchUrl(handlers.session.websocketPath, path)
-  return cachedTerminalInlineImageEntry(handlers.lifecycle.inlineImageObjectUrls, path, fetchUrl)
 }
 
 const terminalInlineImageFetchError = (message: string): TerminalInlineImageFetchError => ({
@@ -136,7 +128,7 @@ const fetchTerminalInlineImageBlob = (
 const loadTerminalImageEntry = (
   handlers: TerminalMessageHandlers,
   path: string,
-  onComplete: (entry: TerminalInlineImageEntry) => void
+  onComplete: (entry: TerminalInlineImageEntry | null) => void
 ): void => {
   const fetchUrl = resolveTerminalImageFetchUrl(handlers.session.websocketPath, path)
   const cached = cachedTerminalInlineImageEntry(handlers.lifecycle.inlineImageObjectUrls, path, fetchUrl)
@@ -147,7 +139,7 @@ const loadTerminalImageEntry = (
   Effect.runFork(
     fetchTerminalInlineImageBlob(fetchUrl).pipe(
       Effect.match({
-        onFailure: () => unavailableTerminalInlineImageEntry(path, fetchUrl),
+        onFailure: () => null,
         onSuccess: (blob) =>
           handlers.lifecycle.disposed
             ? null
@@ -155,7 +147,7 @@ const loadTerminalImageEntry = (
       }),
       Effect.flatMap((entry) =>
         Effect.sync(() => {
-          if (entry === null || handlers.lifecycle.disposed) {
+          if (handlers.lifecycle.disposed) {
             return
           }
           onComplete(entry)
@@ -170,21 +162,6 @@ const writePreviewSpacer = (
   onComplete: () => void
 ): void => {
   handlers.terminal.write(terminalInlineImageSpacer, onComplete)
-}
-
-const writeInlineImagePreview = (
-  handlers: TerminalMessageHandlers,
-  path: string,
-  onComplete: () => void
-): void => {
-  const cached = terminalImageEntry(handlers, path)
-  if (cached !== null) {
-    writeInlineImagePreviewEntry(handlers, cached, onComplete)
-    return
-  }
-  loadTerminalImageEntry(handlers, path, (entry) => {
-    writeInlineImagePreviewEntry(handlers, entry, onComplete)
-  })
 }
 
 const writeInlineImagePreviewEntry = (
@@ -206,32 +183,25 @@ const writeInlineImagePreviewEntry = (
 
 const writeInlineImagePreviews = (
   handlers: TerminalMessageHandlers,
-  paths: ReadonlyArray<string>,
-  onComplete: () => void
-): void => {
-  let index = 0
-  const writeNext = (): void => {
-    const path = paths[index]
-    if (path === undefined) {
-      onComplete()
-      return
-    }
-    index += 1
-    writeInlineImagePreview(handlers, path, writeNext)
-  }
-  writeNext()
-}
-
-const writeLineBreakBeforePreview = (
-  handlers: TerminalMessageHandlers,
   segment: TerminalInlineImageOutputSegment,
   onComplete: () => void
 ): void => {
-  if (segment.endedWithLineBreak) {
-    onComplete()
-    return
-  }
-  handlers.terminal.write("\r\n", onComplete)
+  writeTerminalInlineImagePreviews({
+    needsLeadingLineBreak: !segment.endedWithLineBreak,
+    paths: segment.imagePaths,
+    renderedPaths: handlers.lifecycle.inlineImageRenderedPaths,
+    writer: {
+      loadEntry: (path, onEntry) => {
+        loadTerminalImageEntry(handlers, path, onEntry)
+      },
+      renderPreview: (entry, onRendered) => {
+        writeInlineImagePreviewEntry(handlers, entry, onRendered)
+      },
+      writeLineBreak: (onWritten) => {
+        handlers.terminal.write("\r\n", onWritten)
+      }
+    }
+  }, onComplete)
 }
 
 const flushTerminalOutputQueue = (handlers: TerminalMessageHandlers): void => {
@@ -248,11 +218,8 @@ const flushTerminalOutputQueue = (handlers: TerminalMessageHandlers): void => {
     inlineImagePreviewsEnabledRef: handlers.inlineImagePreviewsEnabledRef,
     segment,
     writer: {
-      writePreviewLineBreak: (outputSegment, onComplete) => {
-        writeLineBreakBeforePreview(handlers, outputSegment, onComplete)
-      },
-      writePreviews: (paths, onComplete) => {
-        writeInlineImagePreviews(handlers, paths, onComplete)
+      writePreviews: (outputSegment, onComplete) => {
+        writeInlineImagePreviews(handlers, outputSegment, onComplete)
       },
       writeText: (text, onComplete) => {
         handlers.terminal.write(text, onComplete)
