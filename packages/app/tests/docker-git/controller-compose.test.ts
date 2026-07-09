@@ -17,13 +17,13 @@ import {
 import { runCompose } from "../../src/docker-git/controller-docker.js"
 import { controllerDockerRuntimeEnvKey } from "../../src/docker-git/controller-runtime.js"
 import {
-  type ControllerBuildSkillerFixtureMode,
-  type PrepareRevisionFixture,
-  type PreparedRevision,
   assertControllerComposeProperty,
+  type ControllerBuildSkillerFixtureMode,
   controllerDockerRuntimeEnvFixtureModeArbitrary,
   controllerRevisionPattern,
   expectedSkillerSubmoduleCommand,
+  type PreparedRevision,
+  type PrepareRevisionFixture,
   prepareRevisionFixtureArbitrary,
   prepareRevisionInTemporaryRoot,
   recordedCommandExecutorLayer,

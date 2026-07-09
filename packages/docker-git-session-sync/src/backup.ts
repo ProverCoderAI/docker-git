@@ -15,6 +15,8 @@ import {
   isPathWithinParent,
   isChatTranscriptPath,
   sessionDirNames,
+  sessionRootCandidatePaths,
+  sessionRootSpecs,
   sessionWalkIgnoreDirNames,
   shouldIgnoreSessionPath,
   sortSessionFiles,
@@ -235,9 +237,16 @@ const allowedSessionRootDescription = sessionDirNames.map((dirName) => `~/${dirN
 
 const getAllowedSessionRoots = (): ReadonlyArray<SessionDir> => {
   const homeDir = os.homedir()
-  return sessionDirNames
-    .map((dirName) => ({ name: dirName, path: path.join(homeDir, dirName) }))
-    .filter((entry) => fs.existsSync(entry.path))
+  const roots: Array<SessionDir> = []
+  for (const spec of sessionRootSpecs) {
+    const existing = sessionRootCandidatePaths(spec, homeDir, process.env).find((candidatePath) =>
+      fs.existsSync(candidatePath)
+    )
+    if (existing !== undefined) {
+      roots.push({ name: spec.name, path: existing })
+    }
+  }
+  return roots
 }
 
 const resolveAllowedSessionDir = (

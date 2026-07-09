@@ -24,11 +24,11 @@ import type {
 import type { ApiRequestError } from "./host-errors.js"
 
 export {
+  claudeStatus,
   codexImport,
   codexLogin,
   codexLogout,
   codexStatus,
-  claudeStatus,
   githubLogin,
   githubLogout,
   githubStatus,

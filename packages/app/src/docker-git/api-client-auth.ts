@@ -18,11 +18,11 @@ import { request, requestTextStream, requestVoid } from "./api-http.js"
 import { asObject, type JsonRequest, type JsonValue } from "./api-json.js"
 import type { ControllerRuntime } from "./controller.js"
 import type {
+  AuthClaudeStatusCommand,
   AuthCodexImportCommand,
   AuthCodexLoginCommand,
   AuthCodexLogoutCommand,
   AuthCodexStatusCommand,
-  AuthClaudeStatusCommand,
   AuthGithubLoginCommand,
   AuthGithubLogoutCommand,
   AuthGithubStatusCommand,

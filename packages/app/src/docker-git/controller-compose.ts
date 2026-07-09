@@ -5,9 +5,9 @@ import * as Path from "@effect/platform/Path"
 import { Duration, Effect } from "effect"
 
 import {
+  composeFilesForGpuMode,
   type ControllerComposeFiles,
   type ControllerGpuMode,
-  composeFilesForGpuMode,
   controllerGpuModeEnvKey,
   loadControllerComposeExtraPath
 } from "./controller-compose-files.js"

@@ -2,11 +2,11 @@ import { Effect, Match, pipe } from "effect"
 
 import {
   type ApiTerminalSession,
+  claudeStatus,
   codexImport,
   codexLogin,
   codexLogout,
   codexStatus,
-  claudeStatus,
   createAuthTerminalSession,
   githubLogin,
   githubLogout,

@@ -11,6 +11,8 @@ import {
   formatTokenReduction,
   isChatTranscriptPath,
   maxRepoFileSize,
+  sessionRootCandidatePaths,
+  sessionRootSpecs,
   shouldIgnoreSessionPath,
   summarizeTokenReduction
 } from "../src/core.js"
@@ -143,6 +145,61 @@ describe("session path filtering", () => {
     expect(isChatTranscriptPath(".codex/history.jsonl")).toBe(false)
     expect(isChatTranscriptPath(".claude/projects/-workspace/settings.json")).toBe(false)
     expect(isChatTranscriptPath(".gemini/sessions/chat.jsonl")).toBe(false)
+  })
+})
+
+describe("session root resolution", () => {
+  const codexSpec = sessionRootSpecs.find((spec) => spec.name === ".codex/sessions")
+  const claudeSpec = sessionRootSpecs.find((spec) => spec.name === ".claude/projects")
+
+  it("resolves Claude session roots from CLAUDE_CONFIG_DIR (issue #422)", () => {
+    expect(claudeSpec).toBeDefined()
+    if (claudeSpec === undefined) {
+      return
+    }
+    const configDir = path.join(tmpDir, ".docker-git", ".orch", "auth", "claude", "default")
+    const candidates = sessionRootCandidatePaths(claudeSpec, "/home/dev", {
+      CLAUDE_CONFIG_DIR: configDir
+    })
+
+    // The env override wins, but the home-relative path stays as a fallback.
+    expect(candidates).toEqual([
+      path.join(configDir, "projects"),
+      path.join("/home/dev", ".claude", "projects")
+    ])
+  })
+
+  it("falls back to the home directory when the env override is empty", () => {
+    expect(codexSpec).toBeDefined()
+    if (codexSpec === undefined || claudeSpec === undefined) {
+      return
+    }
+    expect(sessionRootCandidatePaths(codexSpec, "/home/dev", {})).toEqual([
+      path.join("/home/dev", ".codex", "sessions")
+    ])
+    expect(sessionRootCandidatePaths(claudeSpec, "/home/dev", { CLAUDE_CONFIG_DIR: "   " })).toEqual([
+      path.join("/home/dev", ".claude", "projects")
+    ])
+  })
+
+  it("resolves Codex session roots from CODEX_HOME", () => {
+    if (codexSpec === undefined) {
+      return
+    }
+    const codexHome = path.join(tmpDir, "codex-home")
+    expect(sessionRootCandidatePaths(codexSpec, "/home/dev", { CODEX_HOME: codexHome })).toEqual([
+      path.join(codexHome, "sessions"),
+      path.join("/home/dev", ".codex", "sessions")
+    ])
+  })
+
+  it("collapses to a single candidate when the override matches the home path", () => {
+    if (claudeSpec === undefined) {
+      return
+    }
+    expect(
+      sessionRootCandidatePaths(claudeSpec, "/home/dev", { CLAUDE_CONFIG_DIR: "/home/dev/.claude" })
+    ).toEqual([path.join("/home/dev", ".claude", "projects")])
   })
 })
 

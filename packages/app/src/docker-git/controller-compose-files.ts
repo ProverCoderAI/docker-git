@@ -133,5 +133,10 @@ export const composeFilesForGpuMode = (
   gpuMode === "none"
     ? Effect.succeed({ composePath, extraOverlayPath: null, gpuOverlayPath: null, runtimeOverlayPath: null })
     : requireGpuOverlayPath(composePath).pipe(
-      Effect.map((gpuOverlayPath) => ({ composePath, extraOverlayPath: null, gpuOverlayPath, runtimeOverlayPath: null }))
+      Effect.map((gpuOverlayPath) => ({
+        composePath,
+        extraOverlayPath: null,
+        gpuOverlayPath,
+        runtimeOverlayPath: null
+      }))
     )
