@@ -7,6 +7,7 @@ import { makeRouter } from "./http.js"
 import { initializeAgentState } from "./services/agents.js"
 import { attachAuthTerminalWebSocketServer } from "./services/auth-terminal-sessions.js"
 import { initializeFederationState, startOutboxPolling } from "./services/federation.js"
+import { resolveProjectAutoDeleteConfig, startProjectAutoDeleteLoop } from "./services/project-auto-delete.js"
 import { resolveProjectAutoSuspendConfig, startProjectAutoSuspendLoop } from "./services/project-auto-suspend.js"
 import { attachProjectBrowserWebSocketServer } from "./services/project-browser.js"
 import { attachProjectDatabaseWebSocketServer } from "./services/project-databases.js"
@@ -63,6 +64,7 @@ export const program = (() => {
   
   const pollingInterval = parseInt(process.env["DOCKER_GIT_OUTBOX_POLLING_INTERVAL_MS"] ?? "5000", 10)
   const autoSuspendConfig = resolveProjectAutoSuspendConfig()
+  const autoDeleteConfig = resolveProjectAutoDeleteConfig()
 
   return Effect.scoped(
     Console.log(`docker-git api boot port=${port}`).pipe(
@@ -81,6 +83,14 @@ export const program = (() => {
       ),
       Effect.zipRight(
         Effect.fork(startProjectAutoSuspendLoop(autoSuspendConfig).pipe(Effect.provide(NodeContext.layer)))
+      ),
+      Effect.zipRight(
+        Console.log(
+          `docker-git auto-delete (closed issue/PR) enabled=${autoDeleteConfig.enabled} scanMs=${autoDeleteConfig.scanIntervalMs}`
+        )
+      ),
+      Effect.zipRight(
+        Effect.fork(startProjectAutoDeleteLoop(autoDeleteConfig).pipe(Effect.provide(NodeContext.layer)))
       ),
       Effect.zipRight(Layer.launch(Layer.provide(app, serverLayer)))
     )

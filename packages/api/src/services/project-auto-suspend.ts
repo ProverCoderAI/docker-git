@@ -2,14 +2,10 @@ import { listProjectItems, readProjectRuntimeState, recordProjectRuntimeActivity
 import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import { Duration, Effect, Match, Schedule } from "effect"
 
-import { activeAgents } from "./container-tasks-core.js"
-import { readContainerTaskSnapshot } from "./container-tasks.js"
-import { hasLiveProjectBrowserSession } from "./project-browser.js"
+import { projectHasActiveAgent, projectHasLiveInteractiveSession } from "./project-activity.js"
 import { decideProjectIdleAction } from "./project-idle-policy.js"
 import { applyProjectResourceProfile, suspendProjectRuntime } from "./project-lifecycle-resources.js"
 import { loadProjectRuntimeByProject, runtimeForProject } from "./project-runtime.js"
-import { hasLiveProjectSkillerSession } from "./skiller.js"
-import { hasLiveProjectTerminalSession } from "./terminal-sessions.js"
 
 export type ProjectAutoSuspendConfig = {
   readonly enabled: boolean
@@ -62,30 +58,6 @@ export const resolveProjectAutoSuspendConfig = (): ProjectAutoSuspendConfig => (
     defaultInteractiveIdleCpuFactor
   )
 })
-
-const snapshotHasAgentTask = (
-  project: ProjectItem
-) =>
-  readContainerTaskSnapshot(project.projectDir, false).pipe(
-    Effect.map((snapshot) =>
-      activeAgents(snapshot.agents).length > 0 || snapshot.tasks.some((task) => task.kind === "agent")
-    ),
-    Effect.catchAll(() => Effect.succeed(false))
-  )
-
-const projectHasActiveAgent = (
-  project: ProjectItem
-) =>
-  snapshotHasAgentTask(project)
-
-const projectHasLiveInteractiveSession = (
-  project: ProjectItem,
-  sshSessions: number
-): boolean =>
-  sshSessions > 0 ||
-  hasLiveProjectTerminalSession(project.projectDir) ||
-  hasLiveProjectBrowserSession(project.projectDir) ||
-  hasLiveProjectSkillerSession(project.projectDir)
 
 const runProjectIdleDecision = (
   project: ProjectItem,
