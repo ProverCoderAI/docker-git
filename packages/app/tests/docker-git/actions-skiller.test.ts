@@ -173,6 +173,38 @@ describe("web Skiller actions", () => {
       expect(openedWindow.focus).toHaveBeenCalledOnce()
     }))
 
+  it.effect("opens external Skiller Web launch URLs returned by the backend", () =>
+    Effect.gen(function*(_) {
+      const backendUrl = ["http", "://192.168.0.206:4174/api"].join("")
+      const appPath = "/api/skiller/external-launch/launch-proof"
+      openSkillerMock.mockImplementation(() =>
+        Effect.succeed({
+          ...skillerLaunch({
+            appPath,
+            scope: proofScope,
+            trpcBasePath: "https://skiller-web-henna.vercel.app/trpc"
+          }),
+          backendUrl,
+          mode: "external",
+          pid: null
+        })
+      )
+      const { context, setMessage } = makeBrowserActionContext()
+
+      openSkillerApp(context, "abc123", "terminal-proof")
+
+      yield* _(waitForAssertion(() => {
+        expect(openSkillerMock).toHaveBeenCalledWith("abc123", "terminal-proof")
+      }))
+      yield* _(waitForAssertion(() => {
+        expect(openedWindow.location.href).toBe(appPath)
+        expect(openedWindow.focus).toHaveBeenCalledOnce()
+        expect(setMessage).toHaveBeenCalledWith(
+          `Skiller Web opened. Container FS: dg-project:/home/dev/app. Opened ${appPath}.`
+        )
+      }))
+    }))
+
   it.effect("closes the prepared Skiller popup when launch fails", () =>
     Effect.gen(function*(_) {
       openSkillerMock.mockImplementation(() => Effect.fail("Skiller failed"))

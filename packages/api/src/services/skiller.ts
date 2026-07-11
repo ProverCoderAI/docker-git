@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process"
+import { randomUUID } from "node:crypto"
 import { chmodSync, chownSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync } from "node:fs"
 import { createServer } from "node:net"
 import { homedir } from "node:os"
@@ -6,7 +7,6 @@ import { dirname, join, resolve } from "node:path"
 import { recordProjectRuntimeActivity } from "@effect-template/lib"
 import { runCommandCapture } from "@effect-template/lib/shell/command-runner"
 import { CommandFailedError } from "@effect-template/lib/shell/errors"
-import type { ProjectItem } from "@effect-template/lib/usecases/projects"
 import type { ListProjectsContext } from "@effect-template/lib/usecases/projects-list"
 import { NodeContext } from "@effect/platform-node"
 import type { PlatformError } from "@effect/platform/Error"
@@ -18,7 +18,10 @@ import * as Stream from "effect/Stream"
 
 import { ApiConflictError, ApiInternalError, ApiNotFoundError } from "../api/errors.js"
 import {
+  activeSkillerConnectProjects,
   containerCodexSkillsPath,
+  externalSkillerLaunchWrapperHtml,
+  externalSkillerLaunchWrapperPath,
   externalSkillerLaunchUrl,
   parseDockerMountLines,
   remapContainerPathToMountedHost,
@@ -101,14 +104,39 @@ type SkillerBrowserScopeSelection = {
   readonly sessionId: string | null
 }
 
+type ExternalSkillerLaunchRecord = {
+  readonly expiresAtEpochMs: number
+  readonly targetUrl: string
+}
+
+type SkillerConnectProject = {
+  readonly containerName: string
+  readonly envGlobalPath: string
+  readonly projectDir: string
+  readonly projectKey: string
+  readonly sshUser: string
+  readonly status: "running" | "stopped" | "unknown"
+  readonly targetDir: string
+}
+
+type SkillerScopeProject = {
+  readonly containerName: string
+  readonly envGlobalPath: string
+  readonly projectDir: string
+  readonly sshUser: string
+  readonly targetDir: string
+}
+
 const submoduleRelativePath = join("third_party", "skiller-desktop-skills-manager")
 const launchLogPath = join(homedir(), ".docker-git", "logs", "skiller.log")
 const skillerAppPath = "/api/skiller/app/"
 const skillerTrpcBasePath = "/api/skiller"
 const skillerPreferredTrpcPort = 17888
+const externalSkillerLaunchTtlMs = 60 * 60 * 1_000
 
 let currentProcess: SkillerProcess | null = null
 const sessionScopes = new Map<string, SkillerContainerScope | null>()
+const externalSkillerLaunches = new Map<string, ExternalSkillerLaunchRecord>()
 
 const isRunning = (process: ChildProcess): boolean =>
   process.exitCode === null && process.signalCode === null && !process.killed
@@ -313,7 +341,7 @@ const containerHomePath = (sshUser: string): string => `/home/${sshUser}`
 
 const inspectContainerMounts = (
   containerName: string
-): Effect.Effect<ReturnType<typeof parseDockerMountLines>, ApiInternalError> =>
+): Effect.Effect<ReturnType<typeof parseDockerMountLines>, ApiConflictError | ApiInternalError> =>
   dockerCapture(
     [
       "inspect",
@@ -322,7 +350,14 @@ const inspectContainerMounts = (
       containerName
     ],
     "docker inspect mounts"
-  ).pipe(Effect.map(parseDockerMountLines))
+  ).pipe(
+    Effect.mapError(() =>
+      new ApiConflictError({
+        message: `Skiller cannot inspect Docker container ${containerName}. Start or recreate the project before connecting Skiller.`
+      })
+    ),
+    Effect.map(parseDockerMountLines)
+  )
 
 const requireAccessibleDirectory = (
   path: string,
@@ -341,7 +376,7 @@ const requireAccessibleDirectory = (
 
 const resolveSkillerScope = (
   projectKey: string,
-  project: ProjectItem
+  project: SkillerScopeProject
 ): Effect.Effect<SkillerContainerScope, ApiConflictError | ApiInternalError> =>
   Effect.gen(function*(_) {
     const mounts = yield* _(inspectContainerMounts(project.containerName))
@@ -395,6 +430,37 @@ const resolveRequestedSkillerScope = (
       Effect.flatMap((project) => resolveSkillerScope(projectKey, project))
     )
 
+/**
+ * Filters the external Skiller project picker to projects that can actually be mounted.
+ *
+ * @param projects - Docker-git API project summaries.
+ * @returns Effect containing only projects whose current Docker container can be inspected and mapped.
+ *
+ * @pure false
+ * @effect Runs `docker inspect` and filesystem access checks for candidate running projects.
+ * @invariant every returned project has status = running and resolveSkillerScope succeeds at filter time.
+ * @precondition projects are decoded API DTOs with stable project keys and container names.
+ * @postcondition stale `last known: running` projects with missing containers are not offered to Skiller Web.
+ * @complexity O(n * docker inspect) time for n candidate projects; O(n) space.
+ * @throws Never - inaccessible candidates are represented by absence from the returned array.
+ */
+export const inspectableSkillerConnectProjects = <Project extends SkillerConnectProject>(
+  projects: ReadonlyArray<Project>
+): Effect.Effect<ReadonlyArray<Project>, never> =>
+  Effect.forEach(
+    activeSkillerConnectProjects(projects),
+    (project) =>
+      resolveSkillerScope(project.projectKey, project).pipe(
+        Effect.as(project),
+        Effect.catchAll(() => Effect.succeed(null))
+      ),
+    { concurrency: 8 }
+  ).pipe(
+    Effect.map((projectsOrNulls) =>
+      projectsOrNulls.filter((project): project is Project => project !== null)
+    )
+  )
+
 export const readSkillerProjectContext = (
   projectKey: string,
   sessionId: string | null
@@ -447,7 +513,7 @@ const prepareLaunchScript = [
   "DOCKER_GIT_SKILLER_PATCH_MARKER=out/.docker-git-browser-folder-picker.patch",
   "if [ -f ../../scripts/skiller-apply-docker-git-patches.mjs ]; then bun ../../scripts/skiller-apply-docker-git-patches.mjs; fi",
   "if [ ! -d node_modules ]; then bun install --frozen-lockfile; fi",
-  "if [ ! -f out/main/index.js ] || [ ! -f out/renderer/index.html ] || { [ -f \"$DOCKER_GIT_SKILLER_PATCH\" ] && [ ! -f \"$DOCKER_GIT_SKILLER_PATCH_MARKER\" ]; } || { [ -f \"$DOCKER_GIT_SKILLER_PATCH\" ] && [ \"$DOCKER_GIT_SKILLER_PATCH\" -nt \"$DOCKER_GIT_SKILLER_PATCH_MARKER\" ]; }; then",
+  "if [ ! -f out/main/index.js ] || [ ! -f out/renderer/index.html ] || { [ -f \"$DOCKER_GIT_SKILLER_PATCH\" ] && [ ! -f \"$DOCKER_GIT_SKILLER_PATCH_MARKER\" ]; }; then",
   "  bun run build",
   "  mkdir -p out",
   "  touch \"$DOCKER_GIT_SKILLER_PATCH_MARKER\"",
@@ -825,6 +891,46 @@ const rememberSessionScope = (sessionId: string | undefined, scope: SkillerConta
   }
 }
 
+const pruneExternalSkillerLaunches = (nowEpochMs: number): void => {
+  for (const [launchId, record] of externalSkillerLaunches) {
+    if (record.expiresAtEpochMs <= nowEpochMs) {
+      externalSkillerLaunches.delete(launchId)
+    }
+  }
+}
+
+const registerExternalSkillerLaunch = (targetUrl: string, nowEpochMs: number): string => {
+  pruneExternalSkillerLaunches(nowEpochMs)
+  const launchId = randomUUID()
+  externalSkillerLaunches.set(launchId, {
+    expiresAtEpochMs: nowEpochMs + externalSkillerLaunchTtlMs,
+    targetUrl
+  })
+  return externalSkillerLaunchWrapperPath(launchId)
+}
+
+export const readExternalSkillerLaunchTarget = (
+  launchId: string
+): Effect.Effect<string, ApiNotFoundError> =>
+  Effect.sync(() => {
+    const nowEpochMs = Date.now()
+    pruneExternalSkillerLaunches(nowEpochMs)
+    return externalSkillerLaunches.get(launchId)?.targetUrl ?? null
+  }).pipe(
+    Effect.flatMap((targetUrl) =>
+      targetUrl === null
+        ? Effect.fail(new ApiNotFoundError({ message: "Skiller launch link expired or was not found." }))
+        : Effect.succeed(targetUrl)
+    )
+  )
+
+export const readExternalSkillerLaunchHtml = (
+  launchId: string
+): Effect.Effect<string, ApiNotFoundError> =>
+  readExternalSkillerLaunchTarget(launchId).pipe(
+    Effect.map((targetUrl) => externalSkillerLaunchWrapperHtml({ targetUrl }))
+  )
+
 const touchSkillerActivity = (
   scope: SkillerContainerScope | null
 ): Effect.Effect<void, never, never> =>
@@ -854,23 +960,25 @@ const externalSkillerLaunch = (
   if (config._tag === "Invalid") {
     return Effect.fail(new ApiInternalError({ message: config.message }))
   }
-  const appPath = externalSkillerLaunchUrl({
-    backendUrl,
-    projectKey,
-    sessionId,
-    skillerWebUrl: config.baseUrl
-  })
-  return Effect.succeed({
-    alreadyRunning: true,
-    appPath,
-    backendUrl,
-    logPath: "",
-    mode: "external",
-    pid: null,
-    scope,
-    startedAtIso: new Date().toISOString(),
-    trpcBasePath: `${config.baseUrl}/trpc`,
-    trpcPort: 0
+  return Effect.sync(() => {
+    const targetUrl = externalSkillerLaunchUrl({
+      backendUrl,
+      projectKey,
+      sessionId,
+      skillerWebUrl: config.baseUrl
+    })
+    return {
+      alreadyRunning: true,
+      appPath: registerExternalSkillerLaunch(targetUrl, Date.now()),
+      backendUrl,
+      logPath: "",
+      mode: "external",
+      pid: null,
+      scope,
+      startedAtIso: new Date().toISOString(),
+      trpcBasePath: `${config.baseUrl}/trpc`,
+      trpcPort: 0
+    }
   })
 }
 

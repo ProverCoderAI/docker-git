@@ -90,6 +90,21 @@ describe("project browser", () => {
         [0],
         expect.any(Function)
       )
+      expect(runCommandCaptureMock).toHaveBeenCalledWith(
+        {
+          args: [
+            "exec",
+            browserContainerName,
+            "bash",
+            "-lc",
+            expect.stringMatching(/docker-git-chromium-launch[\s\S]*--hide-crash-restore-bubble[\s\S]*--display=:99/u)
+          ],
+          command: "docker",
+          cwd: projectDir
+        },
+        [0],
+        expect.any(Function)
+      )
       expect(runCommandCaptureMock).toHaveBeenLastCalledWith(
         {
           args: ["inspect", "-f", "{{.Id}}\t{{.State.Running}}\t{{.State.Status}}", browserContainerName],
@@ -114,5 +129,31 @@ describe("project browser", () => {
         expect(result.left).toBeInstanceOf(ApiConflictError)
         expect(result.left.message).toContain("Playwright MCP is enabled")
       }
+    }).pipe(Effect.provide(NodeContext.layer)))
+
+  it.effect("restarts the browser container after repairing the sidecar supervisor config", () =>
+    Effect.gen(function*(_) {
+      runCommandCaptureMock.mockImplementation((command: { readonly args: ReadonlyArray<string> }) => {
+        if (command.args[0] === "inspect") {
+          return Effect.succeed("browser-container-id\ttrue\trunning")
+        }
+        if (command.args[0] === "exec" && command.args[1] === browserContainerName) {
+          return Effect.succeed("changed\n")
+        }
+        return Effect.succeed("Browser started")
+      })
+
+      const browser = yield* _(startProjectBrowserSession(projectId, "http://127.0.0.1:3334"))
+
+      expect(browser.status).toBe("running")
+      expect(runCommandCaptureMock).toHaveBeenCalledWith(
+        {
+          args: ["restart", browserContainerName],
+          command: "docker",
+          cwd: projectDir
+        },
+        [0],
+        expect.any(Function)
+      )
     }).pipe(Effect.provide(NodeContext.layer)))
 })

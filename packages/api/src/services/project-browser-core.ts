@@ -25,7 +25,7 @@ export const renderProjectBrowserNoVncPath = (projectId: string): string => {
   const projectKey = projectShortKey(projectId)
   const params = new URLSearchParams({
     autoconnect: "true",
-    resize: "remote",
+    resize: "scale",
     path: `b/${projectKey}/websockify`
   })
   return `/b/${projectKey}/vnc.html?${params.toString()}`

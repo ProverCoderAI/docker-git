@@ -5,6 +5,7 @@ import { Effect } from "effect"
 import {
   openSkiller,
   parseSkillerRoute,
+  readExternalSkillerLaunchTarget,
   resolveSkillerBrowserScopeSelection,
   resolveSkillerRouteScopeSelection,
   runProcess,
@@ -86,10 +87,16 @@ describe("skiller routes", () => {
       const launch = await Effect.runPromise(
         openSkiller(undefined, undefined, "https://docker-git.example").pipe(Effect.provide(NodeContext.layer))
       )
-      const launchUrl = new URL(launch.appPath)
+      const launchId = launch.appPath.split("/").at(-1)
+      if (launchId === undefined) {
+        throw new Error("Expected external Skiller launch id.")
+      }
+      const targetUrl = await Effect.runPromise(readExternalSkillerLaunchTarget(decodeURIComponent(launchId)))
+      const launchUrl = new URL(targetUrl)
 
       expect(launch.mode).toBe("external")
       expect(launch.alreadyRunning).toBe(true)
+      expect(launch.appPath).toMatch(/^\/api\/skiller\/external-launch\/[0-9a-f-]+$/u)
       expect(launch.backendUrl).toBe("https://docker-git.example")
       expect(launch.pid).toBeNull()
       expect(launch.trpcPort).toBe(0)

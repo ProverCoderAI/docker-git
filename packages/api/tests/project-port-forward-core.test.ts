@@ -144,6 +144,7 @@ describe("project port forward core", () => {
       expect(renderProjectBrowserProxyPath("a/b")).toBe(`/b/${key}/`)
       expect(renderProjectBrowserCdpPath("a/b")).toBe(`/b/${key}/cdp/json/version`)
       expect(renderProjectBrowserNoVncPath("a/b")).toContain(`/b/${key}/vnc.html?`)
+      expect(renderProjectBrowserNoVncPath("a/b")).toContain("resize=scale")
       expect(renderProjectBrowserNoVncPath("a/b")).toContain(`path=b%2F${key}%2Fwebsockify`)
     }))
 
