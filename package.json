@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Monorepo workspace for docker-git",
-  "packageManager": "bun@1.3.11",
+  "packageManager": "bun@1.4.2",
   "workspaces": [
     "packages/api",
     "packages/app",
@@ -58,8 +58,8 @@
     "start": "bun run --cwd packages/app build:docker-git && bun ./packages/app/dist/src/docker-git/main.js"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.0",
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.2",
     "@prover-coder-ai/dist-deps-prune": "^1.0.17"
   },
   "trustedDependencies": [
