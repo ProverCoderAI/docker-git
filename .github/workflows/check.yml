@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Build (container package)
@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install dependencies
         uses: ./.github/actions/setup
         with:
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Typecheck (container)
@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Lint (container)
@@ -112,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Test (container)
@@ -138,7 +138,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Lint Effect-TS (container)
@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install dependencies
         uses: ./.github/actions/setup
       - name: Pack and run local package via Bun
@@ -177,7 +177,7 @@ jobs:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
       DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install dependencies
@@ -197,7 +197,7 @@ jobs:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
       DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install dependencies
@@ -217,7 +217,7 @@ jobs:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
       DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install dependencies
@@ -237,7 +237,7 @@ jobs:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
       DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install dependencies
@@ -278,7 +278,7 @@ jobs:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
       DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install dependencies
@@ -298,7 +298,7 @@ jobs:
       DOCKER_GIT_CONTROLLER_BUILD_SKILLER: "0"
       DOCKER_GIT_E2E_REUSE_WORKSPACE_INSTALL: "1"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install dependencies
