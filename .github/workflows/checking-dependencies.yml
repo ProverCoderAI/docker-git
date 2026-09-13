@@ -11,7 +11,7 @@ jobs:
   dist-deps-prune:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
         with:
           node-version: 24.14.0
