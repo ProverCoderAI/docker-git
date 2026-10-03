@@ -4,7 +4,7 @@
   "private": true,
   "description": "Generated docker-git OpenAPI artifacts",
   "type": "module",
-  "packageManager": "bun@1.3.11",
+  "packageManager": "bun@1.4.2",
   "types": "./src/index.ts",
   "exports": {
     ".": {
@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "openapi-typescript": "^7.13.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "repository": {
     "type": "git",
