@@ -23,7 +23,7 @@
   "dependencies": {
     "@effect-template/lib": "workspace:*",
     "@prover-coder-ai/docker-git-terminal": "workspace:*",
-    "@effect/platform": "^0.96.1",
+    "@effect/platform": "^0.97.2",
     "@effect/platform-node": "^0.107.0",
     "@effect/schema": "^0.75.5",
     "@fedify/fedify": "^2.2.5",
